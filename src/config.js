@@ -1,7 +1,14 @@
 // Tous les réglages du jeu au même endroit : modifie-les pour équilibrer la difficulté.
 export const CONFIG = {
   map: 'strasbourg', // 'strasbourg' (lieu réel OpenStreetMap) ou 'arena' (arène de test)
-  mapHalf: 60,      // Strasbourg : zone de jeu de 120 x 120 m
+  // Strasbourg : toute la Grande Île (données dans public/data/area.json, voir tools/fetch-osm.mjs)
+  startHint: { x: -221, z: -156 }, // point de départ souhaité (place Kléber), en mètres depuis le centre des données
+  zones: {
+    cutsX: [-420, 170],   // lignes de coupe est-ouest entre les 3 colonnes de zones
+    cutZ: -60,            // ligne de coupe nord-sud entre les 2 rangées
+    basePrice: 750,       // prix de la première porte
+    priceStep: 500,       // supplément par zone plus éloignée
+  },
   arenaHalf: 30,    // arène de test : 60 x 60 m
 
   player: {

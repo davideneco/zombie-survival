@@ -382,10 +382,14 @@ export class Player {
       const sy = (Math.random() - 0.5) * 2 * cfg.spread * mul;
       this.rc.setFromCamera({ x: sx, y: sy }, this.camera);
       this.rc.far = cfg.range;
-      const hits = this.rc.intersectObjects(this.game.hitTargets(), false);
+      // Grande carte : les murs sont testés par la grille de collision (rapide), seuls les zombies par maillage.
+      const fast = !!this.world.rayHit;
+      const hits = this.rc.intersectObjects(fast ? this.game.zombieTargets() : this.game.hitTargets(), false);
+      const ro = this.rc.ray.origin, rd = this.rc.ray.direction;
+      const wallT = fast ? this.world.rayHit(ro.x, ro.y, ro.z, rd.x, rd.y, rd.z, cfg.range) : cfg.range;
 
       let end;
-      if (hits.length) {
+      if (hits.length && (!fast || hits[0].distance <= wallT)) {
         const h = hits[0];
         end = h.point;
         const z = h.object.userData.zombie;
@@ -395,7 +399,8 @@ export class Player {
           this.game.impact(h.point);
         }
       } else {
-        end = this.rc.ray.origin.clone().addScaledVector(this.rc.ray.direction, cfg.range);
+        end = ro.clone().addScaledVector(rd, wallT);
+        if (fast && wallT < cfg.range) this.game.impact(end);
       }
       this.game.tracer(origin, end);
       this.game.onPlayerShot?.(origin, end, cfg.id);

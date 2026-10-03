@@ -1,8 +1,9 @@
 // Collisions cercle (joueur / zombie) contre des segments (murs de bâtiments,
 // côtés de caisses) et des cercles (arbres, lampadaires). Accélérées par une grille.
 export class Collision {
-  constructor(half, cell = 4) {
-    this.half = half;
+  constructor(halfX, halfZ = halfX, cell = 4) {
+    this.halfX = halfX;
+    this.halfZ = halfZ;
     this.cell = cell;
     this.segs = [];
     this.circles = [];
@@ -10,18 +11,23 @@ export class Collision {
     this.stamp = 0;
   }
 
-  addSegment(ax, az, bx, bz) { this.segs.push({ ax, az, bx, bz, stamp: 0 }); }
+  // h : hauteur de l'obstacle (les balles passent au-dessus). off : obstacle désactivé (porte ouverte).
+  addSegment(ax, az, bx, bz, h = Infinity) {
+    const s = { ax, az, bx, bz, h, off: false, stamp: 0 };
+    this.segs.push(s);
+    return s;
+  }
 
-  addCircle(x, z, r) { this.circles.push({ x, z, r, stamp: 0 }); }
+  addCircle(x, z, r, h = 4) { this.circles.push({ x, z, r, h, off: false, stamp: 0 }); }
 
   // Boîte orientée (caisses, voitures, barrières) = 4 segments
-  addBox(x, z, w, d, rot = 0) {
+  addBox(x, z, w, d, rot = 0, h = Infinity) {
     const c = Math.cos(rot), s = Math.sin(rot);
     const pts = [[-w / 2, -d / 2], [w / 2, -d / 2], [w / 2, d / 2], [-w / 2, d / 2]]
       .map(([px, pz]) => [x + px * c - pz * s, z + px * s + pz * c]);
     for (let i = 0; i < 4; i++) {
       const a = pts[i], b = pts[(i + 1) % 4];
-      this.addSegment(a[0], a[1], b[0], b[1]);
+      this.addSegment(a[0], a[1], b[0], b[1], h);
     }
   }
 
@@ -62,7 +68,7 @@ export class Collision {
           const arr = this.grid.get(this._key(ix, iz));
           if (!arr) continue;
           for (const it of arr) {
-            if (it.stamp === this.stamp) continue;
+            if (it.stamp === this.stamp || it.off) continue;
             it.stamp = this.stamp;
             let cx, cz, rr = radius;
             if (it.r !== undefined) {
@@ -90,8 +96,61 @@ export class Collision {
         }
       }
     }
-    const lim = this.half - radius;
-    pos.x = Math.max(-lim, Math.min(lim, pos.x));
-    pos.z = Math.max(-lim, Math.min(lim, pos.z));
+    const limX = this.halfX - radius, limZ = this.halfZ - radius;
+    pos.x = Math.max(-limX, Math.min(limX, pos.x));
+    pos.z = Math.max(-limZ, Math.min(limZ, pos.z));
+  }
+
+  // Lancer de rayon 3D contre les obstacles (murs, arbres, voitures) + le sol.
+  // Retourne la distance t (en mètres) du premier obstacle, ou maxT. Remplace le raycast sur les maillages
+  // de bâtiments, beaucoup trop lent avec plusieurs milliers de bâtiments.
+  rayHit(ox, oy, oz, dx, dy, dz, maxT) {
+    let best = maxT;
+    if (dy < -1e-6) best = Math.min(best, oy / -dy); // sol
+    const h2 = Math.hypot(dx, dz);
+    if (h2 < 1e-9) return best;
+    const ux = dx / h2, uz = dz / h2; // direction horizontale unitaire ; la distance 3D = t2d / h2
+    const range2d = best * h2;
+    const c = this.cell;
+    let ix = Math.floor(ox / c), iz = Math.floor(oz / c);
+    const sx = ux > 0 ? 1 : -1, sz = uz > 0 ? 1 : -1;
+    const tdx = Math.abs(ux) > 1e-9 ? Math.abs(c / ux) : Infinity, tdz = Math.abs(uz) > 1e-9 ? Math.abs(c / uz) : Infinity;
+    let tx = Math.abs(ux) > 1e-9 ? ((ux > 0 ? (ix + 1) * c - ox : ox - ix * c)) / Math.abs(ux) : Infinity;
+    let tz = Math.abs(uz) > 1e-9 ? ((uz > 0 ? (iz + 1) * c - oz : oz - iz * c)) / Math.abs(uz) : Infinity;
+    this.stamp++;
+    let best2d = range2d;
+    for (let guard = 0; guard < 4000; guard++) {
+      const arr = this.grid.get(this._key(ix, iz));
+      if (arr) {
+        for (const it of arr) {
+          if (it.stamp === this.stamp || it.off) continue;
+          it.stamp = this.stamp;
+          let t = -1;
+          if (it.r !== undefined) { // cercle
+            const fx = it.x - ox, fz = it.z - oz;
+            const proj = fx * ux + fz * uz;
+            const d2 = fx * fx + fz * fz - proj * proj;
+            if (d2 < it.r * it.r && proj > 0) t = proj - Math.sqrt(it.r * it.r - d2);
+          } else { // segment
+            const ex = it.bx - it.ax, ez = it.bz - it.az;
+            const den = ux * ez - uz * ex;
+            if (Math.abs(den) > 1e-9) {
+              const ax = it.ax - ox, az = it.az - oz;
+              const tt = (ax * ez - az * ex) / den;
+              const uu = (ax * uz - az * ux) / den;
+              if (tt > 0 && uu >= 0 && uu <= 1) t = tt;
+            }
+          }
+          if (t > 0 && t < best2d) {
+            const y = oy + dy * (t / h2);
+            if (y >= 0 && y <= it.h) best2d = t;
+          }
+        }
+      }
+      const tNext = Math.min(tx, tz);
+      if (tNext > best2d) break;
+      if (tx < tz) { tx += tdx; ix += sx; } else { tz += tdz; iz += sz; }
+    }
+    return best2d / h2;
   }
 }

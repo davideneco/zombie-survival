@@ -105,6 +105,13 @@ const game = {
     return list;
   },
 
+  // Zombies seuls (les murs sont gérés par world.rayHit sur la grande carte)
+  zombieTargets() {
+    const list = [];
+    for (const z of this.zombies) if (z.targetable) list.push(...z.meshes);
+    return list;
+  },
+
   addPoints(n, cls = '') {
     this.points += n;
     hud.popup(`+${n}`, cls);
@@ -116,7 +123,7 @@ const game = {
       fx.blood(point.x, point.y, point.z, false);
       sfx.hit(head);
       hud.hitMarker(false);
-      this.net.send({
+      this.net?.send({
         t: 'z_hit',
         zid: z.id,
         head,
@@ -143,7 +150,7 @@ const game = {
 
     if (fromPid != null) {
       // Récompense pour un client distant
-      this.net.send({ t: 'pts', pts: award, head: killed && head, kill: killed }, fromPid);
+      this.net?.send({ t: 'pts', pts: award, head: killed && head, kill: killed }, fromPid);
     } else {
       // Récompense pour l'hôte
       if (killed) {
@@ -157,7 +164,7 @@ const game = {
 
     if (killed) {
       if (this.isMultiplayer) {
-        this.net.send({ t: 'z_dead', id: z.id, head, px: point.x, py: point.y, pz: point.z });
+        this.net?.send({ t: 'z_dead', id: z.id, head, px: point.x, py: point.y, pz: point.z });
       }
       // Chance d'apparition d'un bonus COD
       if (Math.random() < CONFIG.powerups.dropChance) {
@@ -180,7 +187,7 @@ const game = {
 
   onPlayerShot(origin, end, weaponId) {
     if (!this.isMultiplayer) return;
-    this.net.send({
+    this.net?.send({
       t: 'p_shot',
       origin: { x: origin.x, y: origin.y, z: origin.z },
       end: { x: end.x, y: end.y, z: end.z },
@@ -190,7 +197,7 @@ const game = {
 
   onPlayerDowned() {
     if (!this.isMultiplayer) return;
-    this.net.send({ t: 'p_down' });
+    this.net?.send({ t: 'p_down' });
     this.checkTeamWipe();
   },
 
@@ -244,7 +251,7 @@ const game = {
     this.powerups.push(pu);
 
     if (this.isHost) {
-      this.net.send({ t: 'pu_spawn', id: puid, type, x: pos.x, z: pos.z });
+      this.net?.send({ t: 'pu_spawn', id: puid, type, x: pos.x, z: pos.z });
     }
     return pu;
   },
@@ -271,7 +278,7 @@ const game = {
         for (const z of this.zombies) {
           if (z.dead) continue;
           z.damage(999999, false);
-          if (this.isMultiplayer) this.net.send({ t: 'z_dead', id: z.id, head: false });
+          if (this.isMultiplayer) this.net?.send({ t: 'z_dead', id: z.id, head: false });
         }
       }
     } else if (p.type === 'double_points') {
@@ -281,7 +288,7 @@ const game = {
     }
 
     if (this.isHost && !byRemote) {
-      this.net.send({ t: 'pu_collect', id: p.id, type: p.type });
+      this.net?.send({ t: 'pu_collect', id: p.id, type: p.type });
     }
   },
 
@@ -304,7 +311,17 @@ const game = {
       return;
     }
 
-    // 3) Armes au mur
+    // 3) Porte payante
+    const door = this.nearDoor();
+    if (door && !this.nearWallWeapon()) {
+      if (this.points < door.price) { sfx.deny(); return; }
+      this.points -= door.price;
+      this.openDoor(door.id);
+      if (this.isMultiplayer) this.net?.send({ t: 'door_open', id: door.id });
+      return;
+    }
+
+    // 4) Armes au mur
     const ww = this.nearWallWeapon();
     if (ww) {
       const has = p.hasWeapon(ww.id);
@@ -327,8 +344,33 @@ const game = {
   },
 
   nearStation() {
-    const p = this.player.pos, s = world.stationPos;
-    return Math.hypot(p.x - s.x, p.z - s.z) < 3.2;
+    const p = this.player.pos;
+    for (const s of world.stations || [world.stationPos]) {
+      if (Math.hypot(p.x - s.x, p.z - s.z) < 3.2) return true;
+    }
+    return false;
+  },
+
+  // Porte verrouillée à portée (n'importe quel point de la barrière)
+  nearDoor() {
+    if (!world.doors) return null;
+    const p = this.player.pos;
+    let best = null, bestD = 3.4;
+    for (const d of world.doors) {
+      if (d.open) continue;
+      for (const pt of d.points) {
+        const dist = Math.hypot(p.x - pt.x, p.z - pt.z);
+        if (dist < bestD) { bestD = dist; best = d; }
+      }
+    }
+    return best;
+  },
+
+  openDoor(id, announce = true) {
+    if (!world.openDoor(id)) return;
+    const d = world.doors[id];
+    sfx.buy();
+    if (announce) hud.announce('PORTE OUVERTE', `Accès à ${d.name}`, 2500);
   },
 
   nearWallWeapon() {
@@ -366,12 +408,26 @@ const game = {
     if (this.player.downed || this.player.dead) this.player.revive();
 
     if (this.isHost) {
-      this.net.send({ t: 'round_start', r, toSpawn: this.toSpawn });
+      this.net?.send({ t: 'round_start', r, toSpawn: this.toSpawn });
     }
   },
 
   pickSpawn() {
-    const pp = this.player.pos;
+    // Les zombies apparaissent autour d'un joueur vivant tiré au hasard (hôte ou coéquipier).
+    const alive = [this.player, ...this.remotes.values()].filter((pl) => !pl.dead && !pl.downed);
+    const pool = alive.length ? alive : [this.player];
+    const pp = pool[Math.floor(Math.random() * pool.length)].pos;
+    if (world.pickWindow) {
+      if (Math.random() < 0.65) {
+        const w = world.pickWindow(pp.x, pp.z, 11, 60, this.time);
+        if (w) { w.busyUntil = this.time + 4; return w; }
+      }
+      const g = world.pickGround(pp.x, pp.z, 18, 50);
+      if (g) return { type: 'ground', pos: g };
+      const w = world.pickWindow(pp.x, pp.z, 6, 80, this.time);
+      if (w) { w.busyUntil = this.time + 4; return w; }
+      return { type: 'ground', pos: new THREE.Vector3(pp.x + 15, 0, pp.z) };
+    }
     const wins = world.windowSpawns;
     if (wins && wins.length && Math.random() < 0.65) {
       for (let tries = 0; tries < 25; tries++) {
@@ -408,10 +464,10 @@ const game = {
     this.toSpawn--;
 
     if (this.isHost) {
-      const wi = spawn.type === 'window' ? world.windowSpawns.indexOf(spawn) : -1;
+      const wi = spawn.type === 'window' ? (spawn.index ?? world.windowSpawns.indexOf(spawn)) : -1;
       const sx = spawn.type === 'window' ? spawn.outside.x : spawn.pos.x;
       const sz = spawn.type === 'window' ? spawn.outside.z : spawn.pos.z;
-      this.net.send({
+      this.net?.send({
         t: 'z_spawn',
         id: z.id,
         st: spawn.type,
@@ -463,7 +519,7 @@ const game = {
     hud.showOverlay('ÉQUIPE ÉLIMINÉE', subtitle, btnLabel);
 
     if (this.isHost) {
-      this.net.send({ t: 'game_over', round: this.round, kills: this.kills });
+      this.net?.send({ t: 'game_over', round: this.round, kills: this.kills });
     }
   },
 
@@ -482,6 +538,8 @@ const game = {
     // Buffs temporaires
     if (this.buffs.instaKill > 0) this.buffs.instaKill = Math.max(0, this.buffs.instaKill - dt);
     if (this.buffs.doublePoints > 0) this.buffs.doublePoints = Math.max(0, this.buffs.doublePoints - dt);
+
+    world.update?.(p.pos.x, p.pos.z, dt);
 
     // Lumière de lune suivant le joueur
     moon.target.position.set(Math.round(p.pos.x), 0, Math.round(p.pos.z));
@@ -510,7 +568,7 @@ const game = {
         this.intermission = 6;
         sfx.roundEnd();
         hud.announce('MANCHE TERMINÉE', 'La prochaine arrive…', 4000);
-        if (this.isHost) this.net.send({ t: 'round_end' });
+        if (this.isHost) this.net?.send({ t: 'round_end' });
       }
       if (this.intermission > 0) {
         this.intermission -= dt;
@@ -547,7 +605,7 @@ const game = {
       const d = Math.hypot(p.pos.x - pu.grp.position.x, p.pos.z - pu.grp.position.z);
       if (d < 1.7) {
         if (this.isClient) {
-          if (!pu.pending) { pu.pending = true; this.net.send({ t: 'pu_pickup', id: pu.id }); }
+          if (!pu.pending) { pu.pending = true; this.net?.send({ t: 'pu_pickup', id: pu.id }); }
           pu.grp.visible = false;
           continue;
         }
@@ -592,9 +650,9 @@ const game = {
           downedTeammate.dead = false;
           downedTeammate.downed = false;
           downedTeammate.health = 50;
-          this.net.send({ t: 'revive', id: downedTeammate.id });
+          this.net?.send({ t: 'revive', id: downedTeammate.id });
         } else {
-          this.net.send({ t: 'revive_req', id: downedTeammate.id });
+          this.net?.send({ t: 'revive_req', id: downedTeammate.id });
         }
       }
     } else {
@@ -609,7 +667,7 @@ const game = {
         this.netTimer = 0.05; // 20 fois par seconde
 
         // Envoi de la position et de l'état du joueur local
-        this.net.send({
+        this.net?.send({
           t: 'p_state',
           x: Math.round(p.pos.x * 100) / 100,
           y: Math.round(p.pos.y * 100) / 100,
@@ -635,13 +693,16 @@ const game = {
               z.attacking ? 1 : 0,
             ]);
           }
-          this.net.send({ t: 'z_tick', z: zdata });
+          this.net?.send({ t: 'z_tick', z: zdata });
         }
       }
     }
 
     // Radar tactique
-    const pois = [{ x: world.stationPos.x, z: world.stationPos.z, color: '#33ff77' }];
+    const pois = (world.stations || [world.stationPos]).map((s) => ({ x: s.x, z: s.z, color: '#33ff77' }));
+    if (world.doors) {
+      for (const d of world.doors) if (!d.open) for (const pt of d.points) pois.push({ x: pt.x, z: pt.z, color: '#ff5533' });
+    }
     if (world.wallWeapons) {
       for (const ww of world.wallWeapons) pois.push({ x: ww.pos.x, z: ww.pos.z, color: '#ffaa33' });
     }
@@ -674,6 +735,9 @@ const game = {
       promptText = curW.reserve >= curCfg.maxReserve
         ? 'Munitions au maximum'
         : `[E] Munitions ${curCfg.name} (${curCfg.ammoPrice} pts)`;
+    } else if (this.nearDoor() && !this.nearWallWeapon()) {
+      const d = this.nearDoor();
+      promptText = `[E] Ouvrir la porte vers ${d.name} (${d.price} pts)`;
     } else {
       const ww = this.nearWallWeapon();
       if (ww) {
@@ -760,10 +824,11 @@ function setupNetworkHandlers(net) {
         toSpawn: game.toSpawn,
         intermission: game.intermission,
         buffs: game.buffs,
+        doors: (world.doors || []).filter((d) => d.open).map((d) => d.id),
         zombies: game.zombies.map((z) => ({
           id: z.id,
           st: z.spawnType,
-          wi: z.spawnType === 'window' ? world.windowSpawns.indexOf(z.spawn) : -1,
+          wi: z.spawnType === 'window' ? (z.spawn.index ?? world.windowSpawns.indexOf(z.spawn)) : -1,
           x: z.pos.x,
           z: z.pos.z,
           hp: z.health,
@@ -852,6 +917,9 @@ function setupNetworkHandlers(net) {
     }
   });
 
+  // Portes payantes : achetées par un joueur, ouvertes pour tout le monde
+  net.on('door_open', (m) => { game.openDoor(m.id); });
+
   // Bonus
   net.on('pu_spawn', (m) => {
     game.spawnPowerup(new THREE.Vector3(m.x, 0, m.z), m.id, m.type);
@@ -917,6 +985,7 @@ function setupNetworkHandlers(net) {
     game.toSpawn = m.toSpawn;
     hud.setRound(m.round);
     game.buffs = m.buffs || game.buffs;
+    for (const id of m.doors || []) game.openDoor(id, false);
 
     // Supprimer d'éventuels zombies locaux existants
     for (const z of game.zombies) z.dispose();
@@ -979,7 +1048,7 @@ function lockAndPlay() {
   if (game.over) {
     if (game.isHost || !game.isMultiplayer) {
       game.reset(true);
-      if (game.isHost) game.net.send({ t: 'restart' });
+      if (game.isHost) game.net?.send({ t: 'restart' });
     }
   }
   const req = canvas.requestPointerLock();

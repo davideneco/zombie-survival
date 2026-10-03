@@ -1,35 +1,30 @@
 // Télécharge les données OpenStreetMap autour d'un point et les convertit en JSON
 // local (mètres) utilisable par le jeu.
 //
-// Usage :  node tools/fetch-osm.mjs <lat> <lon> [demi-taille en mètres]
+// Usage :  node tools/fetch-osm.mjs <lat> <lon> [demi-largeur E-O en m] [demi-hauteur N-S en m]
 // Exemple : node tools/fetch-osm.mjs 48.5825207 7.7485590 110
+//           node tools/fetch-osm.mjs 48.5822 7.7485 820 560   (Grande Île de Strasbourg)
 import fs from 'node:fs';
 
-const [lat0, lon0, halfArg] = process.argv.slice(2);
+const [lat0, lon0, halfArg, halfZArg] = process.argv.slice(2);
 if (!lat0 || !lon0) {
   console.error('Usage: node tools/fetch-osm.mjs <lat> <lon> [demi-taille en m]');
   process.exit(1);
 }
-const LAT = parseFloat(lat0), LON = parseFloat(lon0), HALF = parseFloat(halfArg || 110);
+const LAT = parseFloat(lat0), LON = parseFloat(lon0), HALF = parseFloat(halfArg || 110), HALFZ = parseFloat(halfZArg || HALF);
 
 const mPerDegLat = 111320;
 const mPerDegLon = 111320 * Math.cos((LAT * Math.PI) / 180);
-const dLat = HALF / mPerDegLat, dLon = HALF / mPerDegLon;
+const dLat = HALFZ / mPerDegLat, dLon = HALF / mPerDegLon;
 const bbox = `${LAT - dLat},${LON - dLon},${LAT + dLat},${LON + dLon}`;
 
-const query = `[out:json][timeout:60];(
+const query = `[out:json][timeout:180][maxsize:536870912];(
   way["building"](${bbox});
   relation["building"](${bbox});
-  way["highway"](${bbox});
   way["waterway"](${bbox});
   way["natural"="water"](${bbox});
   relation["natural"="water"](${bbox});
-  way["man_made"="bridge"](${bbox});
-  way["leisure"](${bbox});
-  way["landuse"](${bbox});
-  way["barrier"](${bbox});
   node["natural"="tree"](${bbox});
-  node["amenity"~"bench|waste_basket"](${bbox});
   node["highway"="street_lamp"](${bbox});
 );out geom;`;
 
@@ -68,9 +63,8 @@ const ring = (geom) => geom.map(toLocal);
 
 const raw = await fetchOverpass();
 fs.mkdirSync('data', { recursive: true });
-fs.writeFileSync('data/osm_raw.json', JSON.stringify(raw));
 
-const out = { center: { lat: LAT, lon: LON }, half: HALF, buildings: [], roads: [], water: [], trees: [], lamps: [], benches: [], parks: [], barriers: [] };
+const out = { center: { lat: LAT, lon: LON }, half: HALF, halfZ: HALFZ, buildings: [], roads: [], water: [], trees: [], lamps: [], benches: [], parks: [], barriers: [] };
 
 const heightOf = (t = {}) => {
   if (t.height) { const h = parseFloat(t.height); if (!isNaN(h)) return h; }

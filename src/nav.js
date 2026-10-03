@@ -4,25 +4,35 @@
 const INF = 0x3fffffff;
 
 export class NavGrid {
-  constructor(half, collision, polygons, cell = 0.5, margin = 0.5) {
-    this.half = half;
+  // Zone rectangulaire de demi-dimensions halfX x halfZ. Le champ de flux est borné (maxCost) :
+  // sur une grande carte on ne calcule que le voisinage des joueurs.
+  constructor(halfX, halfZ, collision, polygons, cell = 0.5, margin = 0.5, maxCost = Infinity) {
+    this.halfX = halfX;
+    this.halfZ = halfZ;
     this.cell = cell;
-    this.n = Math.round((half * 2) / cell);
+    this.nx = Math.round((halfX * 2) / cell);
+    this.nz = Math.round((halfZ * 2) / cell);
     this.margin = margin;
+    this.maxCost = maxCost;
     this.col = collision;
     this.polys = polygons; // [{pts:[[x,z],...]}]
-    this.blocked = new Uint8Array(this.n * this.n);
-    this.dist = new Int32Array(this.n * this.n).fill(INF);
-    this.lastTarget = -1;
+    this.blocked = new Uint8Array(this.nx * this.nz);
+    this.dist = new Int32Array(this.nx * this.nz).fill(INF);
+    this.touched = [];
+    this.lastTargetKey = null;
+    this.outside = null; // (x, z) => true si hors de la zone jouable
   }
 
   // ---- conversions ----
-  cx(x) { return Math.floor((x + this.half) / this.cell); }
-  cz(z) { return Math.floor((z + this.half) / this.cell); }
-  idx(ix, iz) { return iz * this.n + ix; }
-  inside(ix, iz) { return ix >= 0 && iz >= 0 && ix < this.n && iz < this.n; }
-  worldX(ix) { return (ix + 0.5) * this.cell - this.half; }
-  worldZ(iz) { return (iz + 0.5) * this.cell - this.half; }
+  cx(x) { return Math.floor((x + this.halfX) / this.cell); }
+  cz(z) { return Math.floor((z + this.halfZ) / this.cell); }
+  idx(ix, iz) { return iz * this.nx + ix; }
+  inside(ix, iz) { return ix >= 0 && iz >= 0 && ix < this.nx && iz < this.nz; }
+  worldX(ix) { return (ix + 0.5) * this.cell - this.halfX; }
+  worldZ(iz) { return (iz + 0.5) * this.cell - this.halfZ; }
+
+  // À appeler quand l'état des obstacles change (porte ouverte) : force le recalcul du champ.
+  invalidate() { this.lastTargetKey = null; }
 
   isBlockedAt(x, z) {
     const ix = this.cx(x), iz = this.cz(z);
@@ -31,7 +41,7 @@ export class NavGrid {
 
   // ---- construction de la grille d'obstacles ----
   build() {
-    const { n, cell, half, margin } = this;
+    const { nx, nz, cell, margin } = this;
     const b = this.blocked;
     b.fill(0);
 
@@ -40,8 +50,8 @@ export class NavGrid {
       const pts = poly.pts;
       let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
       for (const [x, z] of pts) { minX = Math.min(minX, x); maxX = Math.max(maxX, x); minZ = Math.min(minZ, z); maxZ = Math.max(maxZ, z); }
-      const ix0 = Math.max(0, this.cx(minX)), ix1 = Math.min(n - 1, this.cx(maxX));
-      const iz0 = Math.max(0, this.cz(minZ)), iz1 = Math.min(n - 1, this.cz(maxZ));
+      const ix0 = Math.max(0, this.cx(minX)), ix1 = Math.min(nx - 1, this.cx(maxX));
+      const iz0 = Math.max(0, this.cz(minZ)), iz1 = Math.min(nz - 1, this.cz(maxZ));
       for (let iz = iz0; iz <= iz1; iz++) {
         for (let ix = ix0; ix <= ix1; ix++) {
           if (pointInPoly(this.worldX(ix), this.worldZ(iz), pts)) b[this.idx(ix, iz)] = 1;
@@ -51,8 +61,8 @@ export class NavGrid {
 
     // 2) marge autour de tous les segments et cercles (rayon du zombie)
     const mark = (ax, az, bx, bz, r) => {
-      const ix0 = Math.max(0, this.cx(Math.min(ax, bx) - r)), ix1 = Math.min(n - 1, this.cx(Math.max(ax, bx) + r));
-      const iz0 = Math.max(0, this.cz(Math.min(az, bz) - r)), iz1 = Math.min(n - 1, this.cz(Math.max(az, bz) + r));
+      const ix0 = Math.max(0, this.cx(Math.min(ax, bx) - r)), ix1 = Math.min(nx - 1, this.cx(Math.max(ax, bx) + r));
+      const iz0 = Math.max(0, this.cz(Math.min(az, bz) - r)), iz1 = Math.min(nz - 1, this.cz(Math.max(az, bz) + r));
       const abx = bx - ax, abz = bz - az, len2 = abx * abx + abz * abz;
       for (let iz = iz0; iz <= iz1; iz++) {
         for (let ix = ix0; ix <= ix1; ix++) {
@@ -64,18 +74,21 @@ export class NavGrid {
         }
       }
     };
-    for (const s of this.col.segs) mark(s.ax, s.az, s.bx, s.bz, margin);
+    for (const s of this.col.segs) if (!s.off) mark(s.ax, s.az, s.bx, s.bz, margin);
     for (const c of this.col.circles) mark(c.x, c.z, c.x, c.z, c.r + margin);
 
     // 3) bord de la zone de jeu
     const m = Math.ceil(margin / cell);
-    for (let i = 0; i < n; i++) {
-      for (let k = 0; k < m; k++) {
-        b[this.idx(i, k)] = 1; b[this.idx(i, n - 1 - k)] = 1;
-        b[this.idx(k, i)] = 1; b[this.idx(n - 1 - k, i)] = 1;
+    for (let i = 0; i < nx; i++) for (let k = 0; k < m; k++) { b[this.idx(i, k)] = 1; b[this.idx(i, nz - 1 - k)] = 1; }
+    for (let i = 0; i < nz; i++) for (let k = 0; k < m; k++) { b[this.idx(k, i)] = 1; b[this.idx(nx - 1 - k, i)] = 1; }
+
+    // 4) hors de la zone jouable (eau, autre rive)
+    if (this.outside) {
+      for (let iz = 0; iz < nz; iz++) for (let ix = 0; ix < nx; ix++) {
+        if (this.outside(this.worldX(ix), this.worldZ(iz))) b[iz * nx + ix] = 1;
       }
     }
-    this.lastTarget = -1;
+    this.lastTargetKey = null;
   }
 
   // Case libre la plus proche (recherche en spirale)
@@ -112,26 +125,28 @@ export class NavGrid {
     const key = starts.slice().sort().join(',');
     if (key === this.lastTargetKey) return true;
     this.lastTargetKey = key;
-    const { n, dist, blocked } = this;
-    dist.fill(INF);
-    for (const s of starts) dist[s] = 0;
+    const { nx, nz, dist, blocked, touched, maxCost } = this;
+    for (let k = 0; k < touched.length; k++) dist[touched[k]] = INF; // remise à zéro locale (pas de fill global)
+    touched.length = 0;
+    for (const s of starts) { dist[s] = 0; touched.push(s); }
     const buckets = [starts.slice()];
     const NB = [[1, 0, 10], [-1, 0, 10], [0, 1, 10], [0, -1, 10], [1, 1, 14], [1, -1, 14], [-1, 1, 14], [-1, -1, 14]];
-    for (let d = 0; d < buckets.length; d++) {
+    for (let d = 0; d < buckets.length && d <= maxCost; d++) {
       const bucket = buckets[d];
       if (!bucket) continue;
       for (let bi = 0; bi < bucket.length; bi++) {
         const i = bucket[bi];
         if (dist[i] !== d) continue;
-        const ix = i % n, iz = (i / n) | 0;
+        const ix = i % nx, iz = (i / nx) | 0;
         for (const [dx, dz, c] of NB) {
           const jx = ix + dx, jz = iz + dz;
-          if (jx < 0 || jz < 0 || jx >= n || jz >= n) continue;
-          const j = jz * n + jx;
+          if (jx < 0 || jz < 0 || jx >= nx || jz >= nz) continue;
+          const j = jz * nx + jx;
           if (blocked[j]) continue;
-          if (dx !== 0 && dz !== 0 && (blocked[iz * n + jx] || blocked[jz * n + ix])) continue; // pas de coin coupé
+          if (dx !== 0 && dz !== 0 && (blocked[iz * nx + jx] || blocked[jz * nx + ix])) continue; // pas de coin coupé
           const nd = d + c;
           if (nd < dist[j]) {
+            if (dist[j] >= INF) touched.push(j);
             dist[j] = nd;
             (buckets[nd] || (buckets[nd] = [])).push(j);
           }
@@ -166,14 +181,14 @@ export class NavGrid {
   steer(x, z, out) {
     const ix = this.cx(x), iz = this.cz(z);
     if (!this.inside(ix, iz)) return null;
-    const { n, dist } = this;
+    const { nx, nz, dist } = this;
     let best = dist[this.idx(ix, iz)], bx = ix, bz = iz;
-    const R = 4; // regarde ~2 m devant pour un mouvement fluide
+    const R = Math.max(2, Math.round(2 / this.cell)); // regarde ~2 m devant pour un mouvement fluide
     for (let dz = -R; dz <= R; dz++) {
       for (let dx = -R; dx <= R; dx++) {
         const jx = ix + dx, jz = iz + dz;
-        if (jx < 0 || jz < 0 || jx >= n || jz >= n) continue;
-        const d = dist[jz * n + jx];
+        if (jx < 0 || jz < 0 || jx >= nx || jz >= nz) continue;
+        const d = dist[jz * nx + jx];
         // favorise les cases les plus avancées vers la cible
         if (d < best) { best = d; bx = jx; bz = jz; }
       }
