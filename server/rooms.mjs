@@ -16,7 +16,13 @@ function makeCode() {
 }
 
 const send = (ws, msg) => { if (ws.readyState === 1) ws.send(JSON.stringify(msg)); };
-const peersOf = (room) => [...room.members.values()].map((m) => ({ id: m.id, name: m.name }));
+const peersOf = (room) => [...room.members.values()].map((m) => ({ id: m.id, name: m.name, slot: m.slot }));
+// Plus petit emplacement (0-3) libre : détermine la couleur / le skin du joueur, identique pour tout le monde.
+const freeSlot = (room) => {
+  const used = new Set([...room.members.values()].map((m) => m.slot));
+  for (let i = 0; i < MAX_PLAYERS; i++) if (!used.has(i)) return i;
+  return 0;
+};
 
 function leave(ws) {
   const room = rooms.get(ws.room);
@@ -40,10 +46,10 @@ function onMessage(ws, raw) {
     if (ws.room) leave(ws);
     const code = makeCode();
     const room = { code, host: ws.pid, started: false, members: new Map() };
-    room.members.set(ws.pid, { id: ws.pid, name, ws });
+    room.members.set(ws.pid, { id: ws.pid, name, ws, slot: 0 });
     rooms.set(code, room);
     ws.room = code;
-    send(ws, { t: 'joined', id: ws.pid, code, host: ws.pid, started: false, peers: peersOf(room) });
+    send(ws, { t: 'joined', id: ws.pid, slot: 0, code, host: ws.pid, started: false, peers: peersOf(room) });
     return;
   }
 
@@ -53,10 +59,11 @@ function onMessage(ws, raw) {
     const room = rooms.get(code);
     if (!room) return send(ws, { t: 'error', msg: 'Salon introuvable.' });
     if (room.members.size >= MAX_PLAYERS) return send(ws, { t: 'error', msg: 'Salon complet (4 joueurs max).' });
-    room.members.set(ws.pid, { id: ws.pid, name, ws });
+    const slot = freeSlot(room);
+    room.members.set(ws.pid, { id: ws.pid, name, ws, slot });
     ws.room = code;
-    send(ws, { t: 'joined', id: ws.pid, code, host: room.host, started: room.started, peers: peersOf(room) });
-    for (const m of room.members.values()) if (m.id !== ws.pid) send(m.ws, { t: 'peer', id: ws.pid, name });
+    send(ws, { t: 'joined', id: ws.pid, slot, code, host: room.host, started: room.started, peers: peersOf(room) });
+    for (const m of room.members.values()) if (m.id !== ws.pid) send(m.ws, { t: 'peer', id: ws.pid, name, slot });
     return;
   }
 

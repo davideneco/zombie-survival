@@ -25,6 +25,9 @@ export class Hud {
       roomBadge: $('roomBadge'),
       teammates: $('teammates'),
       menuPanel: $('menuPanel'),
+      titlePanel: $('titlePanel'),
+      pausePanel: $('pausePanel'),
+      optionsPanel: $('optionsPanel'),
       playerName: $('playerName'),
       btnSolo: $('btnSolo'),
       btnHost: $('btnHost'),
@@ -270,18 +273,25 @@ export class Hud {
     }
   }
 
+  // Affiche un seul panneau du menu (titlePanel, menuPanel, pausePanel, optionsPanel) ou aucun.
+  showPanel(name) {
+    for (const k of ['titlePanel', 'menuPanel', 'pausePanel', 'optionsPanel']) {
+      this.el[k].classList.toggle('hidden', k !== name);
+    }
+  }
+
   showMenu(title, text) {
     this.el.ovTitle.textContent = title;
     this.el.ovText.innerHTML = text;
     this.el.ovBtn.classList.add('hidden');
-    this.el.menuPanel.classList.remove('hidden');
+    this.showPanel('titlePanel');
     this.el.overlay.classList.remove('hidden');
   }
 
   showOverlay(title, text, btn) {
     this.el.ovTitle.textContent = title;
     this.el.ovText.innerHTML = text;
-    this.el.menuPanel.classList.add('hidden');
+    this.showPanel(null);
     if (btn) {
       this.el.ovBtn.textContent = btn;
       this.el.ovBtn.classList.remove('hidden');

@@ -1,8 +1,7 @@
 import * as THREE from 'three';
 import { CONFIG } from './config.js';
 
-const BASE_FOV = 75;
-const ADS_FOV = 55;
+const ADS_DELTA = 20; // réduction du FOV en visée
 
 export class Player {
   constructor(camera, scene, world, game) {
@@ -67,7 +66,7 @@ export class Player {
     this.bobT = 0;
     this.mouseDown = false;
     this.flashlight.visible = true;
-    this.camera.fov = BASE_FOV;
+    this.camera.fov = this.game.settings.fov;
     this.camera.updateProjectionMatrix();
   }
 
@@ -148,7 +147,7 @@ export class Player {
     document.addEventListener('contextmenu', (e) => e.preventDefault());
     document.addEventListener('mousemove', (e) => {
       if (!this.game.playing) return;
-      const sens = 0.0022 * (this.aim > 0.5 ? 0.6 : 1);
+      const sens = 0.0022 * this.game.settings.sens * (this.aim > 0.5 ? 0.6 : 1);
       this.yaw -= e.movementX * sens;
       this.pitch -= e.movementY * sens;
       this.pitch = Math.max(-Math.PI / 2 + 0.05, Math.min(Math.PI / 2 - 0.05, this.pitch));
@@ -294,7 +293,7 @@ export class Player {
 
     // ---- visée (ADS) ----
     this.aim += ((this.aiming && !this.downed ? 1 : 0) - this.aim) * Math.min(1, dt * 12);
-    const fov = BASE_FOV + (ADS_FOV - BASE_FOV) * this.aim;
+    const fov = this.game.settings.fov - ADS_DELTA * this.aim;
     if (Math.abs(fov - this.camera.fov) > 0.01) {
       this.camera.fov = fov;
       this.camera.updateProjectionMatrix();

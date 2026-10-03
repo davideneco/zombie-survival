@@ -3,12 +3,22 @@ export class Sfx {
   constructor() {
     this.ctx = null;
     this.noiseBuf = null;
+    this.master = null;
+    this.volume = 1;
+  }
+
+  setVolume(v) {
+    this.volume = v;
+    if (this.master) this.master.gain.value = v;
   }
 
   // À appeler après une interaction utilisateur (clic).
   init() {
     if (this.ctx) { this.ctx.resume(); return; }
     this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+    this.master = this.ctx.createGain();
+    this.master.gain.value = this.volume;
+    this.master.connect(this.ctx.destination);
     const len = this.ctx.sampleRate;
     this.noiseBuf = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
     const d = this.noiseBuf.getChannelData(0);
@@ -25,7 +35,7 @@ export class Sfx {
     const g = c.createGain();
     g.gain.setValueAtTime(vol, c.currentTime);
     g.gain.exponentialRampToValueAtTime(0.001, c.currentTime + dur);
-    src.connect(f).connect(g).connect(c.destination);
+    src.connect(f).connect(g).connect(this.master);
     src.start(c.currentTime, Math.random() * 0.5);
     src.stop(c.currentTime + dur);
   }
@@ -39,7 +49,7 @@ export class Sfx {
     const g = c.createGain();
     g.gain.setValueAtTime(vol, c.currentTime);
     g.gain.exponentialRampToValueAtTime(0.001, c.currentTime + dur);
-    o.connect(g).connect(c.destination);
+    o.connect(g).connect(this.master);
     o.start();
     o.stop(c.currentTime + dur);
   }
@@ -157,7 +167,7 @@ export class Sfx {
     g.gain.setValueAtTime(0.0001, c.currentTime);
     g.gain.linearRampToValueAtTime(volume * 0.3, c.currentTime + 0.15);
     g.gain.exponentialRampToValueAtTime(0.001, c.currentTime + 0.8);
-    o.connect(f).connect(g).connect(c.destination);
+    o.connect(f).connect(g).connect(this.master);
     o.start();
     o.stop(c.currentTime + 0.85);
   }

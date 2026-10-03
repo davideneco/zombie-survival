@@ -8,7 +8,9 @@ import { Hud } from './hud.js';
 import { Sfx } from './audio.js';
 import { fx } from './fx.js';
 import { Net } from './net.js';
-import { RemotePlayer } from './remote.js';
+import { RemotePlayer, slotColor } from './remote.js';
+
+document.getElementById('version').textContent = __GAME_VERSION__;
 
 // ---------------------------------------------------------------- Rendu
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -27,7 +29,8 @@ scene.fog = new THREE.FogExp2(0x0b121c, CONFIG.map === 'arena' ? 0.022 : 0.028);
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.05, 400);
 
 // Ambiance nocturne réaliste
-scene.add(new THREE.HemisphereLight(0x6677aa, 0x222018, 1.1));
+const hemi = new THREE.HemisphereLight(0x6677aa, 0x222018, 1.1);
+scene.add(hemi);
 const moon = new THREE.DirectionalLight(0x9fb4ff, 1.4);
 moon.position.set(25, 55, 15);
 moon.castShadow = true;
@@ -37,6 +40,17 @@ moon.shadow.bias = -0.0004;
 moon.shadow.normalBias = 0.03;
 scene.add(moon, moon.target);
 const MOON_OFFSET = new THREE.Vector3(25, 55, 15);
+
+// ------------------------------------------------------- Options (client)
+const DEFAULT_SETTINGS = { brightness: 1.4, fov: 80, sens: 1, volume: 1 };
+const settings = { ...DEFAULT_SETTINGS };
+try { Object.assign(settings, JSON.parse(localStorage.getItem('zombie_settings') || '{}')); } catch {}
+
+function applyVisualSettings() {
+  renderer.toneMappingExposure = 1.3 * settings.brightness;
+  hemi.intensity = 1.1 * settings.brightness;
+}
+applyVisualSettings();
 
 window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
@@ -69,7 +83,7 @@ const game = {
   effects: [],
   powerups: [],
   buffs: { instaKill: 0, doublePoints: 0 },
-  sfx, hud, world,
+  sfx, hud, world, settings,
   player: null,
 
   // Multijoueur
@@ -78,6 +92,7 @@ const game = {
   isClient: false,
   isMultiplayer: false,
   roomCode: null,
+  mySlot: 0,
   playerName: localStorage.getItem('zombie_name') || 'Joueur',
   remotes: new Map(), // pid -> RemotePlayer
   netTimer: 0,
@@ -643,7 +658,7 @@ const game = {
 
     // Liste des coéquipiers
     if (this.isMultiplayer) {
-      const teamList = [{ name: this.playerName, points: this.points, health: p.health, dead: p.downed || p.dead, color: '#3a7bd5' }];
+      const teamList = [{ name: this.playerName, points: this.points, health: p.health, dead: p.downed || p.dead, color: slotColor(game.mySlot) }];
       for (const r of this.remotes.values()) {
         teamList.push({ name: r.name, points: r.points, health: r.health, dead: r.dead || r.downed, color: r.color });
       }
@@ -677,6 +692,7 @@ const game = {
   },
 };
 
+sfx.setVolume(settings.volume);
 game.player = new Player(camera, scene, world, game);
 hud.setWeapon(game.player.curCfg.name);
 
@@ -730,7 +746,7 @@ function setupNetworkHandlers(net) {
 
   // Nouveau joueur
   net.on('peer', (m) => {
-    addRemote(m.id, m.name, game.remotes.size + 1);
+    addRemote(m.id, m.name, m.slot);
     refreshLobby();
     sfx.buy();
     hud.announce('COÉQUIPIER', `${m.name} a rejoint !`, 2500);
@@ -761,7 +777,7 @@ function setupNetworkHandlers(net) {
   // État des autres joueurs
   net.on('p_state', (m) => {
     let rp = game.remotes.get(m.from);
-    if (!rp) rp = addRemote(m.from, `Joueur ${m.from}`, game.remotes.size + 1);
+    if (!rp) rp = addRemote(m.from, `Joueur ${m.from}`, m.from);
     const wasOut = rp.dead || rp.downed;
     rp.setState(m);
     if (game.isHost && !wasOut && (rp.dead || rp.downed)) game.checkTeamWipe();
@@ -1014,6 +1030,7 @@ hud.el.btnHost.addEventListener('click', async (e) => {
 
     net.on('joined', (m) => {
       net.id = m.id;
+      game.mySlot = m.slot || 0;
       net.hostId = m.host;
       game.isHost = true;
       game.isClient = false;
@@ -1049,6 +1066,7 @@ hud.el.btnJoin.addEventListener('click', async (e) => {
 
     net.on('joined', (m) => {
       net.id = m.id;
+      game.mySlot = m.slot || 0;
       net.hostId = m.host;
       game.isHost = false;
       game.isClient = true;
@@ -1067,7 +1085,7 @@ hud.el.btnJoin.addEventListener('click', async (e) => {
 
       // Crée les coéquipiers déjà présents
       for (const p of m.peers) {
-        if (p.id !== net.id) addRemote(p.id, p.name, game.remotes.size + 1);
+        if (p.id !== net.id) addRemote(p.id, p.name, p.slot);
       }
 
       if (m.started) {
@@ -1106,8 +1124,59 @@ document.addEventListener('pointerlockchange', () => {
   } else if (game.started && !game.over) {
     game.playing = false;
     game.player.releaseInputs();
-    hud.showOverlay('PAUSE', 'Cliquez pour reprendre.', 'REPRENDRE');
+    hud.showOverlay('PAUSE', game.isMultiplayer ? 'La partie continue pour vos coéquipiers.' : 'Jeu en pause.', null);
+    hud.showPanel('pausePanel');
   }
+});
+
+// --------------------------------------------- Menus : titre / options / pause
+let optionsBack = 'titlePanel';
+
+const optInputs = {
+  brightness: document.getElementById('optBrightness'),
+  fov: document.getElementById('optFov'),
+  sens: document.getElementById('optSens'),
+  volume: document.getElementById('optVolume'),
+};
+const optFormat = {
+  brightness: (v) => `${Math.round(v * 100)}%`,
+  fov: (v) => `${Math.round(v)}°`,
+  sens: (v) => `${(+v).toFixed(2)}x`,
+  volume: (v) => `${Math.round(v * 100)}%`,
+};
+for (const [key, input] of Object.entries(optInputs)) {
+  input.value = settings[key];
+  input.nextElementSibling.textContent = optFormat[key](settings[key]);
+  input.addEventListener('input', () => {
+    settings[key] = parseFloat(input.value);
+    input.nextElementSibling.textContent = optFormat[key](settings[key]);
+    applyVisualSettings();
+    sfx.setVolume(settings.volume);
+    try { localStorage.setItem('zombie_settings', JSON.stringify(settings)); } catch {}
+  });
+}
+
+function openOptions(back) {
+  optionsBack = back;
+  hud.showPanel('optionsPanel');
+}
+
+hud.el.titlePanel.addEventListener('click', (e) => e.stopPropagation());
+hud.el.pausePanel.addEventListener('click', (e) => e.stopPropagation());
+hud.el.optionsPanel.addEventListener('click', (e) => e.stopPropagation());
+document.getElementById('btnPlay').addEventListener('click', () => hud.showPanel('menuPanel'));
+document.getElementById('btnOptions').addEventListener('click', () => openOptions('titlePanel'));
+document.getElementById('btnPauseOptions').addEventListener('click', () => openOptions('pausePanel'));
+document.getElementById('btnOptBack').addEventListener('click', () => hud.showPanel(optionsBack));
+document.getElementById('btnResume').addEventListener('click', () => lockAndPlay());
+document.getElementById('btnModeBack').addEventListener('click', (e) => {
+  e.stopPropagation();
+  // Un salon déjà créé/rejoint doit être quitté avant de revenir au menu principal.
+  if (game.net) { game.net.close(); location.reload(); return; }
+  hud.showPanel('titlePanel');
+});
+document.getElementById('btnQuit').addEventListener('click', () => {
+  if (confirm('Quitter la partie et revenir au menu principal ?')) location.reload();
 });
 
 game.reset(true);
@@ -1159,7 +1228,9 @@ const clock = new THREE.Clock();
 function frame() {
   requestAnimationFrame(frame);
   const dt = Math.min(clock.getDelta(), 0.05);
-  if (game.started && !game.over) game.update(dt);
+  // Solo : le menu pause fige le jeu. En multijoueur la partie continue.
+  const frozen = !game.isMultiplayer && !game.playing && game.started && !game.over && !q.has('debug');
+  if (game.started && !game.over && !frozen) game.update(dt);
   hud.update(dt);
   renderer.render(scene, camera);
 }

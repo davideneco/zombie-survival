@@ -103,8 +103,8 @@ function assets() {
       upperArm: new THREE.CapsuleGeometry(0.052, 0.2, 3, 8),
       foreArm: new THREE.CapsuleGeometry(0.045, 0.2, 3, 8),
       hand: new THREE.SphereGeometry(0.055, 8, 6),
-      hitHead: new THREE.SphereGeometry(0.2, 8, 6),
-      hitBody: new THREE.BoxGeometry(0.62, 1.2, 0.45),
+      hitHead: new THREE.SphereGeometry(0.3, 8, 6),
+      hitBody: new THREE.BoxGeometry(1.0, 1.65, 0.8),
     },
     eyeMat: new THREE.MeshBasicMaterial({ color: 0xffc01a }),
     shoeMat: new THREE.MeshStandardMaterial({ color: 0x15130f, roughness: 0.9 }),
@@ -218,7 +218,7 @@ export class Zombie {
     }
 
     // Hitbox du corps
-    const hitBody = mesh(A.geo.hitBody, A.hitMat, this.group, 0, 0.62, 0);
+    const hitBody = mesh(A.geo.hitBody, A.hitMat, this.group, 0, 0.82, 0);
     hitBody.userData = { zombie: this, head: false };
     this.meshes.push(hitBody);
 
