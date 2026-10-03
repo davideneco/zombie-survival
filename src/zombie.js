@@ -113,6 +113,12 @@ function assets() {
   return ASSETS;
 }
 
+// Toutes les textures de zombies (pour les envoyer à la carte graphique pendant le chargement)
+export function zombieTextures() {
+  const A = assets();
+  return [...A.skins, ...A.shirts, ...A.pants];
+}
+
 let nextZombieId = 1;
 
 // --------------------------------------------------------------- Classe

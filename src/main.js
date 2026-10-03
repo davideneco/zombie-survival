@@ -3,7 +3,7 @@ import { CONFIG } from './config.js';
 import { buildWorld } from './world.js';
 import { buildRealWorld } from './realworld.js';
 import { Player } from './player.js';
-import { Zombie } from './zombie.js';
+import { Zombie, zombieTextures } from './zombie.js';
 import { Hud } from './hud.js';
 import { Sfx } from './audio.js';
 import { fx } from './fx.js';
@@ -65,6 +65,12 @@ const sfx = new Sfx();
 const world = CONFIG.map === 'arena' ? buildWorld(scene) : await buildRealWorld(scene, renderer);
 
 let nextPuId = 1;
+
+// Géométries / matériaux partagés (créer un matériau en pleine partie coûte une initialisation de shader)
+const HALO_GEO = new THREE.SphereGeometry(0.6, 12, 10);
+const NADE_GEO = new THREE.SphereGeometry(0.09, 10, 8);
+const NADE_MAT = new THREE.MeshStandardMaterial({ color: 0x2f3b1f, roughness: 0.6, metalness: 0.4 });
+const TRACER_MATS = new Map();
 
 const game = {
   started: false,
@@ -183,9 +189,11 @@ const game = {
 
   tracer(from, to, color = 0xffdd88) {
     const geo = new THREE.BufferGeometry().setFromPoints([from, to]);
-    const line = new THREE.Line(geo, new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.75 }));
+    let mat = TRACER_MATS.get(color);
+    if (!mat) { mat = new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.75 }); TRACER_MATS.set(color, mat); }
+    const line = new THREE.Line(geo, mat);
     scene.add(line);
-    this.effects.push({ obj: line, life: 0.05, max: 0.05 });
+    this.effects.push({ obj: line, life: 0.05, max: 0.05, sharedMat: true });
   },
 
   onPlayerShot(origin, end, weaponId) {
@@ -256,9 +264,10 @@ const game = {
     const m = new THREE.Mesh(baseGeo, baseMat);
     grp.add(m);
 
-    const light = new THREE.PointLight(col, 15, 6, 2);
-    light.position.y = 0.2;
-    grp.add(light);
+    // halo lumineux (pas de PointLight : ajouter/cacher une lumière fait recompiler tous les shaders)
+    const halo = new THREE.Mesh(HALO_GEO, new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.35, blending: THREE.AdditiveBlending, depthWrite: false }));
+    halo.scale.setScalar(0.9);
+    grp.add(halo);
 
     grp.position.set(pos.x, 0.9, pos.z);
     scene.add(grp);
@@ -467,7 +476,7 @@ const game = {
 
   // ---------------------------------------------------------- Grenades / explosions
   throwGrenade(origin, vel, mine, fromPid = null) {
-    const mesh = new THREE.Mesh(new THREE.SphereGeometry(0.09, 10, 8), new THREE.MeshStandardMaterial({ color: 0x2f3b1f, roughness: 0.6, metalness: 0.4 }));
+    const mesh = new THREE.Mesh(NADE_GEO, NADE_MAT);
     mesh.position.copy(origin);
     mesh.castShadow = true;
     scene.add(mesh);
@@ -499,7 +508,7 @@ const game = {
       g.mesh.rotation.x += dt * 8;
       if (Number.isNaN(before.x)) g.t = 0;
       if (g.t <= 0) {
-        scene.remove(g.mesh); g.mesh.geometry.dispose(); g.mesh.material.dispose();
+        scene.remove(g.mesh);
         this.grenadesLive.splice(i, 1);
         this.explode(g.pos, CONFIG.grenade.radius, CONFIG.grenade.damage, g.mine ? null : g.owner, 0xff8a2a, true);
       }
@@ -859,7 +868,7 @@ const game = {
       if (e.life <= 0) {
         scene.remove(e.obj);
         e.obj.geometry.dispose();
-        e.obj.material.dispose();
+        if (!e.sharedMat) e.obj.material.dispose();
         this.effects.splice(i, 1);
       }
     }
@@ -1504,6 +1513,43 @@ document.getElementById('btnQuit').addEventListener('click', () => {
   if (confirm('Quitter la partie et revenir au menu principal ?')) location.reload();
 });
 
+// Précompilation de tous les shaders pendant le chargement : sinon chaque nouvel objet (zombie rampant,
+// arme sortie de la boîte, grenade, bonus…) fait compiler son shader en pleine partie et le jeu saccade.
+function precompileShaders() {
+  const temp = [];
+  const add = (o) => { scene.add(o); temp.push(o); };
+  const sp = { type: 'ground', pos: world.startPos.clone() };
+  const zs = [new Zombie(scene, sp, 100, 1, () => {}), new Zombie(scene, sp, 100, 1, () => {}, null, { crawler: true })];
+  add(new THREE.Mesh(NADE_GEO, NADE_MAT));
+  add(new THREE.Mesh(HALO_GEO, new THREE.MeshBasicMaterial({ transparent: true, blending: THREE.AdditiveBlending, depthWrite: false })));
+  add(new THREE.Mesh(new THREE.DodecahedronGeometry(0.35), new THREE.MeshStandardMaterial({ color: 0x22ff66, emissive: 0x22ff66, emissiveIntensity: 1.2, roughness: 0.3 })));
+  add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3(0, 1, 0)]), new THREE.LineBasicMaterial({ transparent: true })));
+  const tagTex = new THREE.CanvasTexture(document.createElement('canvas'));
+  add(new THREE.Sprite(new THREE.SpriteMaterial({ map: tagTex, depthTest: false, transparent: true })));
+  if (world.windowSpawns?.length) world.windowSpawns[0].getQuad();
+  // les objets cachés (autres armes, zombies en attente…) sont rendus visibles le temps de la compilation ;
+  // pas les lumières, pour compiler avec le vrai nombre de lumières
+  const hidden = [], culled = [];
+  scene.traverse((o) => {
+    if (!o.visible && !o.isLight) { hidden.push(o); o.visible = true; }
+    if (o.frustumCulled) { culled.push(o); o.frustumCulled = false; }
+  });
+  renderer.compile(scene, camera);
+  for (const t of zombieTextures()) renderer.initTexture(t);
+  // vrai rendu (avec les ombres), à l'écran derrière le menu : envoie textures et géométries à la carte
+  // graphique et force le pilote à finir la compilation, sinon c'est le premier affichage en jeu qui saccade.
+  // (pas dans une cible hors écran : three.js y utilise d'autres variantes de shaders, sans tone mapping)
+  renderer.render(scene, camera);
+  for (const o of hidden) o.visible = false;
+  for (const o of culled) o.frustumCulled = true;
+  // on retire les zombies témoins SANS libérer leurs matériaux : un shader dont plus aucun matériau ne se sert
+  // est détruit par three.js, et serait recompilé au premier zombie de la manche suivante
+  for (const z of zs) { scene.remove(z.group); if (z.mound) scene.remove(z.mound); }
+  for (const o of temp) scene.remove(o);
+  tagTex.dispose();
+}
+precompileShaders();
+
 game.reset(true);
 hud.showMenu('ZOMBIE SURVIVAL', `${world.mapName}<br>Survivez seul ou en coopération.`);
 
@@ -1563,3 +1609,5 @@ frame();
 
 window.game = game;
 game.scene = scene; // accès console / outils de test
+game.renderer = renderer;
+game.camera = camera;

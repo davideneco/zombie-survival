@@ -90,7 +90,7 @@ export class Player {
     this.aim = 0;
     this.bobT = 0;
     this.mouseDown = false;
-    this.flashlight.visible = true;
+    this.setTorch(true);
     this.camera.fov = this.game.settings.fov;
     this.camera.updateProjectionMatrix();
   }
@@ -187,7 +187,7 @@ export class Player {
       if (!this.game.playing) return;
       if (e.code === 'KeyR') this.reload();
       if (e.code === 'KeyE') this.game.interact();
-      if (e.code === 'KeyF') this.flashlight.visible = !this.flashlight.visible;
+      if (e.code === 'KeyF') this.setTorch(!this.torchOn);
       if (e.code === 'KeyG') this.throwGrenade();
       if (e.code === 'Digit1') this.switchWeapon(0);
       if (e.code === 'Digit2') this.switchWeapon(1);
@@ -220,6 +220,13 @@ export class Player {
       this.pitch = Math.max(-Math.PI / 2 + 0.05, Math.min(Math.PI / 2 - 0.05, this.pitch));
     });
     this.aiming = false;
+  }
+
+  // Allumer / éteindre la torche en changeant l'intensité : changer le nombre de lumières visibles
+  // obligerait three.js à recompiler tous les shaders (gros ralentissement).
+  setTorch(on) {
+    this.torchOn = on;
+    this.flashlight.intensity = on ? 110 : 0;
   }
 
   releaseInputs() {
@@ -409,7 +416,8 @@ export class Player {
       this.camera.updateProjectionMatrix();
     }
     // lunette : on cache l'arme quand on vise au fusil de précision
-    this.vm.visible = !(cfg.adsFov && this.aim > 0.8);
+    // (on cache le modèle de l'arme, pas le groupe entier qui contient la lumière de tir)
+    this.vms[w.id].visible = !(cfg.adsFov && this.aim > 0.8);
 
     // ---- tir & rechargement ----
     if (this.downed || this.dead) {
