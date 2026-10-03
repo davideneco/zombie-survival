@@ -21,6 +21,7 @@ export class NavGrid {
     this.touched = [];
     this.lastTargetKey = null;
     this.outside = null; // (x, z) => true si hors de la zone jouable
+    this.carve = null;   // (blocked) => libère les cases des passages sous immeubles
   }
 
   // ---- conversions ----
@@ -58,6 +59,9 @@ export class NavGrid {
         }
       }
     }
+
+    // 1b) couloirs creusés dans les bâtiments (passages sous immeubles)
+    if (this.carve) this.carve(b);
 
     // 2) marge autour de tous les segments et cercles (rayon du zombie)
     const mark = (ax, az, bx, bz, r) => {

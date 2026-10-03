@@ -4,10 +4,10 @@ export const CONFIG = {
   // Strasbourg : toute la Grande Île (données dans public/data/area.json, voir tools/fetch-osm.mjs)
   startHint: { x: 4.3, z: -35.7 }, // point de départ (place du Marché-Neuf, centre de l'ancienne carte), en mètres depuis le centre des données
   cityHint: { x: -221, z: -156 }, // un point du réseau de rues principal (place Kléber)
-  breaches: 3,                     // nombre de passages (portes payantes) ouverts depuis la place de départ
+  breaches: 3,                     // secours : bâtiments à effondrer si aucun passage sous immeuble ne relie la place à la ville
   zones: {
     cutsX: [-420, 170],   // lignes de coupe est-ouest entre les 3 colonnes de zones
-    cutZ: -60,            // ligne de coupe nord-sud entre les 2 rangées
+    cutZ: 0,              // ligne de coupe nord-sud entre les 2 rangées (au sud de la place du Marché-Neuf et de ses passages)
     basePrice: 750,       // prix de la première porte
     priceStep: 500,       // supplément par zone plus éloignée
   },

@@ -1,6 +1,6 @@
-// Le quartier de départ (place du Marché-Neuf) est entièrement fermé par des bâtiments dans les données OSM.
-// On choisit quelques petits bâtiments qui séparent la place du reste de la ville : ils seront "effondrés"
-// (retirés de la carte) et leurs brèches fermées par des portes payantes.
+// Le quartier de départ (place du Marché-Neuf) n'est relié à la ville que par des passages sous immeubles.
+// On calcule ici la place elle-même (masque de la zone de départ). Si aucun passage ne la relie à la ville
+// (données incomplètes), on choisit quelques petits bâtiments à "effondrer" pour ouvrir des brèches.
 import { Collision } from './collision.js';
 import { NavGrid } from './nav.js';
 
@@ -26,7 +26,7 @@ function flood(nav, x, z) {
  * start : point de départ ; city : point situé dans le réseau de rues principal
  * Retourne { removed: Set(indices de rings), startMask: Uint8Array (cases de la place sur une grille nav identique) }
  */
-export function findBreaches(rings, halfX, halfZ, start, city, count, cell, margin) {
+export function findBreaches(rings, halfX, halfZ, start, city, count, cell, margin, passages = []) {
   const col = new Collision(halfX, halfZ);
   const polys = rings.map((pts) => ({ pts }));
   for (const pts of rings) {
@@ -43,6 +43,22 @@ export function findBreaches(rings, halfX, halfZ, start, city, count, cell, marg
   const at = (m, x, z) => { const i = nav.cx(x), j = nav.cz(z); return nav.inside(i, j) && m[nav.idx(i, j)] === 1; };
   // Déjà connectée à la ville : rien à ouvrir
   if (at(B, start.x, start.z)) return { removed, startMask: A };
+  // Un vrai passage sous immeuble relie déjà la place à la ville : pas besoin de démolir
+  for (const it of passages || []) {
+    let touchA = false, touchB = false;
+    for (let k = 0; k + 1 < it.pts.length; k++) {
+      const [px, pz] = it.pts[k], [qx, qz] = it.pts[k + 1];
+      const l = Math.hypot(qx - px, qz - pz) || 1;
+      for (let s = 0; s <= l; s += 0.5) {
+        const x = px + ((qx - px) * s) / l, z = pz + ((qz - pz) * s) / l;
+        for (const [ox, oz] of [[0, 0], [1.5, 0], [-1.5, 0], [0, 1.5], [0, -1.5]]) {
+          if (at(A, x + ox, z + oz)) touchA = true;
+          if (at(B, x + ox, z + oz)) touchB = true;
+        }
+      }
+    }
+    if (touchA && touchB) return { removed, startMask: A };
+  }
 
   const cands = [];
   rings.forEach((pts, k) => {

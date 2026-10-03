@@ -4,6 +4,7 @@ import { Collision } from './collision.js';
 import { NavGrid } from './nav.js';
 import { computeIsland, stitchRings } from './island.js';
 import { findBreaches } from './breach.js';
+import { preparePassages, cutIntervals, insideRuns, distToPassage } from './passage.js';
 
 // =====================================================================
 //  Monde réel : la Grande Île de Strasbourg (données OpenStreetMap)
@@ -140,6 +141,15 @@ function polyArea(pts) {
   return s / 2;
 }
 
+function pointInPoly(x, z, pts) {
+  let inside = false;
+  for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+    const xi = pts[i][0], zi = pts[i][1], xj = pts[j][0], zj = pts[j][1];
+    if ((zi > z) !== (zj > z) && x < ((xj - xi) * (z - zi)) / (zj - zi) + xi) inside = !inside;
+  }
+  return inside;
+}
+
 function cleanRing(pts) {
   const r = pts.slice();
   if (r.length > 1 && r[0][0] === r[r.length - 1][0] && r[0][1] === r[r.length - 1][1]) r.pop();
@@ -212,6 +222,7 @@ function rippleNormalMap() {
 
 // Zones 0-5 : grille 3 x 2 de l'île ; zone 6 : le quartier de départ (ancienne carte du Marché-Neuf)
 const NAV_CELL = 0.75, NAV_MARGIN = 0.4;
+const PASSAGE_H = 3.6; // hauteur sous plafond des passages sous immeubles
 
 const ZONE_NAMES = ['Nord-Ouest', 'Place Kléber', 'Nord-Est', 'Petite France', 'Cathédrale', 'Quartier Est', 'Marché-Neuf'];
 const NZONES = ZONE_NAMES.length;
@@ -319,8 +330,34 @@ export async function buildRealWorld(scene, renderer) {
     if (area < 0) pts.reverse();
     blds.push({ pts, h: bld.h });
   }
-  // Brèches : bâtiments effondrés qui relieront la place de départ au reste de la ville (derrière des portes)
-  const breach = findBreaches(blds.map((b) => b.pts), halfX, halfZ, CONFIG.startHint, CONFIG.cityHint, CONFIG.breaches, NAV_CELL, NAV_MARGIN);
+  // Passages sous immeubles : on repère les portions d'axe qui passent dans un bâtiment
+  const passages = preparePassages(data.passages);
+  const BG = 20, bGrid = new Map();
+  blds.forEach((b, k) => {
+    let minX = Infinity, minZ = Infinity, maxX = -Infinity, maxZ = -Infinity;
+    for (const [x, z] of b.pts) { minX = Math.min(minX, x); maxX = Math.max(maxX, x); minZ = Math.min(minZ, z); maxZ = Math.max(maxZ, z); }
+    b.box = [minX, minZ, maxX, maxZ];
+    for (let gx = Math.floor(minX / BG); gx <= Math.floor(maxX / BG); gx++) for (let gz = Math.floor(minZ / BG); gz <= Math.floor(maxZ / BG); gz++) {
+      const key = gx * 4096 + gz;
+      if (!bGrid.has(key)) bGrid.set(key, []);
+      bGrid.get(key).push(k);
+    }
+  });
+  const insideBuilding = (x, z) => {
+    const arr = bGrid.get(Math.floor(x / BG) * 4096 + Math.floor(z / BG));
+    return !!arr && arr.some((k) => { const [a, b, c, d] = blds[k].box; return x >= a && x <= c && z >= b && z <= d && pointInPoly(x, z, blds[k].pts); });
+  };
+  // l'axe d'un passage tracé sur un mur mitoyen n'est "dans" aucun des deux bâtiments : on teste autour
+  const axisInside = (x, z) => insideBuilding(x, z) || insideBuilding(x + 0.3, z) || insideBuilding(x - 0.3, z) || insideBuilding(x, z + 0.3) || insideBuilding(x, z - 0.3);
+  const passageRuns = insideRuns(passages, axisInside);
+  for (const r of passageRuns) { // prolonge un peu pour rejoindre la façade
+    const ext = (a, b) => { const dx = a[0] - b[0], dz = a[1] - b[1], l = Math.hypot(dx, dz) || 1; return [a[0] + (dx / l) * 0.5, a[1] + (dz / l) * 0.5]; };
+    r.pts[0] = ext(r.pts[0], r.pts[1]);
+    r.pts[r.pts.length - 1] = ext(r.pts[r.pts.length - 1], r.pts[r.pts.length - 2]);
+  }
+
+  // Place de départ ; brèches (bâtiments effondrés) seulement si aucun passage ne la relie à la ville
+  const breach = findBreaches(blds.map((b) => b.pts), halfX, halfZ, CONFIG.startHint, CONFIG.cityHint, CONFIG.breaches, NAV_CELL, NAV_MARGIN, passages);
   const rubble = [];
   for (const [k, bld] of blds.entries()) {
     const pts = bld.pts;
@@ -336,19 +373,29 @@ export async function buildRealWorld(scene, renderer) {
 
     for (let i = 0; i < pts.length; i++) {
       const [ax, az] = pts[i], [bx, bz] = pts[(i + 1) % pts.length];
-      collision.addSegment(ax, az, bx, bz);
       const dx = bx - ax, dz = bz - az, len = Math.hypot(dx, dz);
+      // ouvertures des passages sous immeubles : pas de mur en bas, seulement le linteau au-dessus
+      const cuts = len >= 0.05 ? cutIntervals(passages, ax, az, bx, bz, axisInside) : [];
+      const solid = [];
+      let t = 0;
+      for (const [t0, t1] of cuts) { if (t0 > t) solid.push([t, t0]); t = t1; }
+      if (t < 1) solid.push([t, 1]);
+      for (const [t0, t1] of solid) if ((t1 - t0) * len > 0.05) collision.addSegment(ax + dx * t0, az + dz * t0, ax + dx * t1, az + dz * t1);
       if (len < 0.3) continue;
       const nx = dz / len, nz = -dx / len;
       const bays = Math.max(1, Math.round(len / BAY_W));
       facadeSegs.push([ax, az, bx, bz, nx, nz, bays, len]);
-      const base = bk.pos.length / 3;
-      bk.pos.push(ax, 0, az, bx, 0, bz, bx, H, bz, ax, H, az);
-      for (let k = 0; k < 4; k++) bk.nor.push(nx, 0, nz);
-      bk.uv.push(0, 0, bays, 0, bays, floors, 0, floors);
-      tmpC.copy(tint).multiplyScalar(dirt * 0.55); bk.col.push(tmpC.r, tmpC.g, tmpC.b, tmpC.r, tmpC.g, tmpC.b);
-      tmpC.copy(tint).multiplyScalar(dirt); bk.col.push(tmpC.r, tmpC.g, tmpC.b, tmpC.r, tmpC.g, tmpC.b);
-      bk.idx.push(base, base + 2, base + 1, base, base + 3, base + 2);
+      const quad = (t0, t1, y0, y1) => {
+        const base = bk.pos.length / 3;
+        const x0 = ax + dx * t0, z0 = az + dz * t0, x1 = ax + dx * t1, z1 = az + dz * t1;
+        bk.pos.push(x0, y0, z0, x1, y0, z1, x1, y1, z1, x0, y1, z0);
+        for (let k = 0; k < 4; k++) bk.nor.push(nx, 0, nz);
+        bk.uv.push(bays * t0, (floors * y0) / H, bays * t1, (floors * y0) / H, bays * t1, (floors * y1) / H, bays * t0, (floors * y1) / H);
+        for (const y of [y0, y0, y1, y1]) { tmpC.copy(tint).multiplyScalar(dirt * (0.55 + (0.45 * y) / H)); bk.col.push(tmpC.r, tmpC.g, tmpC.b); }
+        bk.idx.push(base, base + 2, base + 1, base, base + 3, base + 2);
+      };
+      for (const [t0, t1] of solid) quad(t0, t1, 0, H);
+      for (const [t0, t1] of cuts) if (H > PASSAGE_H) quad(t0, t1, PASSAGE_H, H);
     }
 
     // toit (plat, triangulé)
@@ -389,6 +436,56 @@ export async function buildRealWorld(scene, renderer) {
     const m = new THREE.Mesh(toGeo(roofBucket, false), roofMat);
     m.castShadow = m.receiveShadow = true;
     scene.add(m);
+  }
+
+  // ---------------------------------------------------------------- Intérieur des passages sous immeubles
+  {
+    const pos = [], nor = [], uv = [], idx = [];
+    const quad = (p0, p1, p2, p3, n, u0, u1, v0, v1) => {
+      const base = pos.length / 3;
+      pos.push(...p0, ...p1, ...p2, ...p3);
+      for (let k = 0; k < 4; k++) nor.push(...n);
+      uv.push(u0, v0, u1, v0, u1, v1, u0, v1);
+      idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
+    };
+    for (const r of passageRuns) {
+      const P = r.pts, hw = r.hw;
+      let dist = 0;
+      const sides = { L: [], R: [] };
+      for (let k = 0; k < P.length; k++) {
+        const a = P[Math.max(0, k - 1)], b = P[Math.min(P.length - 1, k + 1)];
+        const dx = b[0] - a[0], dz = b[1] - a[1], l = Math.hypot(dx, dz) || 1;
+        const nx = -dz / l, nz = dx / l;
+        sides.L.push([P[k][0] + nx * hw, P[k][1] + nz * hw, nx, nz]);
+        sides.R.push([P[k][0] - nx * hw, P[k][1] - nz * hw, -nx, -nz]);
+      }
+      for (let k = 0; k + 1 < P.length; k++) {
+        const seg = Math.hypot(P[k + 1][0] - P[k][0], P[k + 1][1] - P[k][1]);
+        const u0 = dist / 2, u1 = (dist + seg) / 2;
+        dist += seg;
+        for (const side of ['L', 'R']) {
+          const a = sides[side][k], b = sides[side][k + 1];
+          collision.addSegment(a[0], a[1], b[0], b[1]);
+          // murs latéraux (normales vers l'axe du passage)
+          quad([a[0], 0, a[1]], [b[0], 0, b[1]], [b[0], PASSAGE_H, b[1]], [a[0], PASSAGE_H, a[1]], [-a[2], 0, -a[3]], u0, u1, 0, PASSAGE_H / 2);
+        }
+        const l0 = sides.L[k], l1 = sides.L[k + 1], r0 = sides.R[k], r1 = sides.R[k + 1];
+        quad([l0[0], PASSAGE_H, l0[1]], [l1[0], PASSAGE_H, l1[1]], [r1[0], PASSAGE_H, r1[1]], [r0[0], PASSAGE_H, r0[1]], [0, -1, 0], u0, u1, 0, hw);
+      }
+      const mid = P[Math.floor(P.length / 2)];
+      lightSources.push({ x: mid[0], y: PASSAGE_H - 0.4, z: mid[1], color: 0xffb867, intensity: 10, dist: 8 });
+    }
+    if (pos.length) {
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+      g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+      g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+      g.setIndex(idx);
+      g.computeBoundingSphere();
+      const m = new THREE.Mesh(g, tiled(plaster, 1, 1, { color: 0x8a8070, side: THREE.DoubleSide }));
+      m.castShadow = m.receiveShadow = true;
+      scene.add(m);
+    }
   }
 
   // ---------------------------------------------------------------- Limites de l'île
@@ -487,6 +584,22 @@ export async function buildRealWorld(scene, renderer) {
   collision.build();
   const nav = new NavGrid(halfX, halfZ, collision, polygons, NAV_CELL, NAV_MARGIN, 1300);
   nav.outside = (x, z) => !onIsland(x, z);
+  nav.carve = (b) => {
+    for (const r of passageRuns) {
+      for (let k = 0; k + 1 < r.pts.length; k++) {
+        const [ax, az] = r.pts[k], [bx, bz] = r.pts[k + 1];
+        const ix0 = Math.max(0, nav.cx(Math.min(ax, bx) - r.hw)), ix1 = Math.min(nav.nx - 1, nav.cx(Math.max(ax, bx) + r.hw));
+        const iz0 = Math.max(0, nav.cz(Math.min(az, bz) - r.hw)), iz1 = Math.min(nav.nz - 1, nav.cz(Math.max(az, bz) + r.hw));
+        const abx = bx - ax, abz = bz - az, l2 = abx * abx + abz * abz;
+        for (let iz = iz0; iz <= iz1; iz++) for (let ix = ix0; ix <= ix1; ix++) {
+          const px = nav.worldX(ix), pz = nav.worldZ(iz);
+          let t = l2 > 0 ? ((px - ax) * abx + (pz - az) * abz) / l2 : 0;
+          t = t < 0 ? 0 : t > 1 ? 1 : t;
+          if (Math.hypot(px - ax - abx * t, pz - az - abz * t) < r.hw) b[iz * nav.nx + ix] = 0;
+        }
+      }
+    }
+  };
   nav.build();
 
   const clearance = (ix, iz, r) => {
@@ -626,6 +739,7 @@ export async function buildRealWorld(scene, renderer) {
       for (let k = 0; k < bays; k += 2) { // une travée sur deux : suffisant et plus léger
         const u = (k + 0.5) / bays;
         const px = ax + (bx - ax) * u, pz = az + (bz - az) * u;
+        if (distToPassage(passages, px, pz) < 3.2) continue;
         const ox = px + nx * 1.2, oz = pz + nz * 1.2;
         const ix = nav.cx(ox), iz = nav.cz(oz);
         if (!nav.inside(ix, iz) || nav.blocked[nav.idx(ix, iz)] || !reach[nav.idx(ix, iz)]) continue;

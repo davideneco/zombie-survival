@@ -24,6 +24,8 @@ const query = `[out:json][timeout:180][maxsize:536870912];(
   way["waterway"](${bbox});
   way["natural"="water"](${bbox});
   relation["natural"="water"](${bbox});
+  way["tunnel"="building_passage"](${bbox});
+  way["highway"]["covered"="yes"](${bbox});
   node["natural"="tree"](${bbox});
   node["highway"="street_lamp"](${bbox});
 );out geom;`;
@@ -64,7 +66,7 @@ const ring = (geom) => geom.map(toLocal);
 const raw = await fetchOverpass();
 fs.mkdirSync('data', { recursive: true });
 
-const out = { center: { lat: LAT, lon: LON }, half: HALF, halfZ: HALFZ, buildings: [], roads: [], water: [], trees: [], lamps: [], benches: [], parks: [], barriers: [] };
+const out = { center: { lat: LAT, lon: LON }, half: HALF, halfZ: HALFZ, buildings: [], passages: [], roads: [], water: [], trees: [], lamps: [], benches: [], parks: [], barriers: [] };
 
 const heightOf = (t = {}) => {
   if (t.height) { const h = parseFloat(t.height); if (!isNaN(h)) return h; }
@@ -83,7 +85,8 @@ for (const el of raw.elements) {
   }
   if (el.type === 'way' && el.geometry) {
     const pts = ring(el.geometry);
-    if (t.building) out.buildings.push({ pts, h: heightOf(t), name: t.name || null });
+    if (t.tunnel === 'building_passage' || (t.highway && t.covered === 'yes')) out.passages.push({ pts, width: parseFloat(t.width) || null, name: t.name || null });
+    else if (t.building) out.buildings.push({ pts, h: heightOf(t), name: t.name || null });
     else if (t.highway) out.roads.push({ pts, type: t.highway, width: parseFloat(t.width) || null, bridge: !!t.bridge, area: t.area === 'yes' });
     else if (t.waterway || t.natural === 'water') out.water.push({ pts, line: !!t.waterway, width: parseFloat(t.width) || null });
     else if (t.barrier) out.barriers.push({ pts, type: t.barrier });
@@ -101,4 +104,4 @@ for (const el of raw.elements) {
 
 fs.mkdirSync('public/data', { recursive: true });
 fs.writeFileSync('public/data/area.json', JSON.stringify(out));
-console.log(`OK : ${out.buildings.length} bâtiments, ${out.roads.length} routes, ${out.water.length} eau, ${out.trees.length} arbres, ${out.lamps.length} lampadaires, ${out.parks.length} zones vertes, ${out.barriers.length} barrières`);
+console.log(`OK : ${out.buildings.length} bâtiments, ${out.passages.length} passages sous immeubles, ${out.roads.length} routes, ${out.water.length} eau, ${out.trees.length} arbres, ${out.lamps.length} lampadaires, ${out.parks.length} zones vertes, ${out.barriers.length} barrières`);
