@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Zombie Survival – Strasbourg Place du Marché-Neuf</title>
+  <title>Zombie Survival – Strasbourg</title>
   <style>
     * { box-sizing: border-box; }
     html, body { margin: 0; height: 100%; overflow: hidden; background: #000; font-family: "Impact", "Arial Narrow", sans-serif; color: #eee; user-select: none; }
@@ -57,6 +57,22 @@
     #ammo span { font-size: 28px; color: #aaa; }
     #healthbar { width: 260px; height: 12px; margin-top: 8px; background: rgba(0,0,0,.6); border: 1px solid #555; margin-left: auto; }
     #healthfill { height: 100%; width: 100%; background: #c22; transition: width .1s; }
+    #nades { font-size: 16px; color: #9fd27a; letter-spacing: 1px; margin-top: 4px; }
+
+    /* Atouts actifs */
+    #perks { position: absolute; left: 24px; bottom: 178px; display: flex; gap: 6px; }
+    .perk { width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 17px; color: #fff; border: 2px solid rgba(255,255,255,0.8); box-shadow: 0 0 8px rgba(0,0,0,0.8); text-shadow: 0 0 3px #000; }
+
+    /* Boussole + zone */
+    #compassWrap { position: absolute; left: 50%; top: 10px; transform: translateX(-50%); text-align: center; }
+    #compass { width: 420px; height: 30px; background: rgba(5,12,18,0.6); border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; }
+    #zoneName { margin-top: 3px; font-size: 16px; letter-spacing: 3px; color: #ffd24a; text-shadow: 0 0 4px #000; }
+    #mapHint { font-family: Arial, sans-serif; font-size: 11px; color: #999; margin-top: 1px; }
+
+    /* Carte plein écran (touche M) */
+    #mapOverlay { position: fixed; inset: 0; background: rgba(0,0,0,0.82); display: none; pointer-events: none; }
+    #mapOverlay.show { display: block; }
+    #mapCanvas { width: 100%; height: 100%; }
 
     #prompt { position: absolute; left: 50%; top: 62%; transform: translateX(-50%); font-size: 22px; text-shadow: 0 0 4px #000; background: rgba(0,0,0,0.5); padding: 4px 16px; border-radius: 4px; display: none; }
     #announce { position: absolute; left: 50%; top: 22%; transform: translateX(-50%); text-align: center; font-size: 64px; color: #b01818; text-shadow: 0 0 10px #000; opacity: 0; transition: opacity .6s; }
@@ -136,11 +152,20 @@
       <div id="inv">1: FUSIL &nbsp;·&nbsp; 2: POMPE &nbsp;·&nbsp; 3: PM</div>
       <div id="ammo">30 <span>/ 120</span></div>
       <div id="healthbar"><div id="healthfill"></div></div>
+      <div id="nades"></div>
+    </div>
+    <div id="perks"></div>
+    <div id="compassWrap">
+      <canvas id="compass" width="420" height="30"></canvas>
+      <div id="zoneName"></div>
+      <div id="mapHint">[M] carte</div>
     </div>
 
     <div id="prompt"></div>
     <div id="announce"></div>
   </div>
+
+  <div id="mapOverlay"><canvas id="mapCanvas"></canvas></div>
 
   <div id="overlay">
     <h1 id="ovTitle">ZOMBIE SURVIVAL</h1>
@@ -198,7 +223,7 @@
 
     <div id="controls">
       <b>ZQSD / WASD</b> se déplacer &nbsp;·&nbsp; <b>Souris</b> viser &nbsp;·&nbsp; <b>Clic gauche</b> tirer &nbsp;·&nbsp; <b>Clic droit</b> viser (ADS)<br />
-      <b>1 / 2 / 3 / Molette</b> changer d'arme &nbsp;·&nbsp; <b>R</b> recharger &nbsp;·&nbsp; <b>E</b> acheter / ouvrir une porte / réanimer &nbsp;·&nbsp; <b>Shift</b> sprint &nbsp;·&nbsp; <b>F</b> lampe
+      <b>1 / 2 / 3 / Molette</b> changer d'arme &nbsp;·&nbsp; <b>G</b> grenade &nbsp;·&nbsp; <b>M</b> carte &nbsp;·&nbsp; <b>R</b> recharger &nbsp;·&nbsp; <b>E</b> acheter / ouvrir une porte / réanimer &nbsp;·&nbsp; <b>Shift</b> sprint &nbsp;·&nbsp; <b>F</b> lampe
     </div>
   </div>
 

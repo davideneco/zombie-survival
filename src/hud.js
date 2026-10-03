@@ -1,4 +1,6 @@
 const $ = (id) => document.getElementById(id);
+const SHORT = { rifle: 'FUSIL', shotgun: 'POMPE', smg: 'PM', lmg: 'RPK', sniper: 'SNIPER', magnum: '.357', raygun: 'RAYONS' };
+const CARDINALS = [['N', 0], ['NE', 45], ['E', 90], ['SE', 135], ['S', 180], ['SO', 225], ['O', 270], ['NO', 315]];
 
 export class Hud {
   constructor() {
@@ -37,7 +39,14 @@ export class Hud {
       lobbyStatus: $('lobbyStatus'),
       lobbyPlayers: $('lobbyPlayers'),
       btnStartGame: $('btnStartGame'),
+      nades: $('nades'),
+      perks: $('perks'),
+      compass: $('compass'),
+      zoneName: $('zoneName'),
+      mapOverlay: $('mapOverlay'),
+      mapCanvas: $('mapCanvas'),
     };
+    this.compassCtx = this.el.compass ? this.el.compass.getContext('2d') : null;
     this.radarCtx = this.el.radar ? this.el.radar.getContext('2d') : null;
     this.damageFlash = 0;
     this.nukeFlash = 0;
@@ -82,11 +91,11 @@ export class Hud {
   }
 
   setInventory(inventory, activeIdx) {
-    const key = inventory.map((w, i) => `${i === activeIdx ? '*' : ''}${w.id}`).join(',');
+    const key = inventory.map((w, i) => `${i === activeIdx ? '*' : ''}${w.id}${w.pap ? '+' : ''}`).join(',');
     this._set('inv', key, () => {
       this.el.inv.innerHTML = inventory
         .map((w, i) => {
-          const name = w.id === 'rifle' ? 'FUSIL' : w.id === 'shotgun' ? 'POMPE' : 'PM';
+          const name = (SHORT[w.id] || w.id) + (w.pap ? '+' : '');
           const isAct = i === activeIdx;
           return `<span style="color:${isAct ? '#ffd24a' : '#777'};font-weight:${isAct ? 'bold' : 'normal'}">${i + 1}: ${name}</span>`;
         })
@@ -178,8 +187,8 @@ export class Hud {
       const dx = poi.x - player.pos.x;
       const dz = poi.z - player.pos.z;
       // Rotation relative au joueur
-      const rx = dx * cosY - dz * sinY;
-      const rz = dx * sinY + dz * cosY;
+      const rx = dx * cosY + dz * sinY;
+      const rz = -dx * sinY + dz * cosY;
       const d = Math.hypot(rx, rz);
       if (d > maxRange) continue;
       const px = cx + (rx / maxRange) * r;
@@ -195,8 +204,8 @@ export class Hud {
       if (!tm) continue;
       const dx = tm.pos.x - player.pos.x;
       const dz = tm.pos.z - player.pos.z;
-      const rx = dx * cosY - dz * sinY;
-      const rz = dx * sinY + dz * cosY;
+      const rx = dx * cosY + dz * sinY;
+      const rz = -dx * sinY + dz * cosY;
       const d = Math.hypot(rx, rz);
       if (d > maxRange) continue;
       const px = cx + (rx / maxRange) * r;
@@ -213,8 +222,8 @@ export class Hud {
       if (z.dead || z.spawnT > 0.5) continue;
       const dx = z.pos.x - player.pos.x;
       const dz = z.pos.z - player.pos.z;
-      const rx = dx * cosY - dz * sinY;
-      const rz = dx * sinY + dz * cosY;
+      const rx = dx * cosY + dz * sinY;
+      const rz = -dx * sinY + dz * cosY;
       const d = Math.hypot(rx, rz);
       if (d > maxRange) continue;
       const px = cx + (rx / maxRange) * r;
@@ -232,6 +241,114 @@ export class Hud {
     ctx.lineTo(cx + 3.5, cy + 4);
     ctx.closePath();
     ctx.fill();
+  }
+
+  setNades(n) {
+    this._set('nades', n, () => { this.el.nades.textContent = `GRENADES [G] ${'● '.repeat(n)}${n ? '' : '—'}`; });
+  }
+
+  setPerks(perks, defs) {
+    const ids = Object.keys(perks).filter((k) => perks[k]);
+    this._set('perks', ids.join(','), () => {
+      this.el.perks.innerHTML = ids.map((id) => `<div class="perk" title="${defs[id].name}" style="background:${defs[id].color}">${defs[id].letter}</div>`).join('');
+    });
+  }
+
+  setZone(name) {
+    this._set('zone', name, () => { this.el.zoneName.textContent = name || ''; });
+  }
+
+  // Boussole : cap 0 = nord (-z), 90 = est (+x)
+  drawCompass(yaw) {
+    const ctx = this.compassCtx;
+    if (!ctx) return;
+    const W = 420, H = 30, span = 120; // degrés visibles
+    const heading = ((-yaw * 180) / Math.PI % 360 + 360) % 360;
+    ctx.clearRect(0, 0, W, H);
+    ctx.textAlign = 'center';
+    for (let d = Math.ceil((heading - span / 2) / 15) * 15; d <= heading + span / 2; d += 15) {
+      const x = W / 2 + ((d - heading) / span) * W;
+      const deg = ((d % 360) + 360) % 360;
+      const card = CARDINALS.find((c) => c[1] === deg);
+      ctx.fillStyle = card ? (card[0] === 'N' ? '#ff5544' : '#fff') : 'rgba(255,255,255,0.45)';
+      if (card) { ctx.font = 'bold 15px Arial'; ctx.fillText(card[0], x, 20); }
+      else { ctx.fillRect(x - 0.5, 18, 1, 8); }
+    }
+    ctx.fillStyle = '#ffd24a';
+    ctx.beginPath(); ctx.moveTo(W / 2 - 6, 0); ctx.lineTo(W / 2 + 6, 0); ctx.lineTo(W / 2, 7); ctx.fill();
+  }
+
+  toggleMap(show) {
+    this.mapOpen = show ?? !this.mapOpen;
+    this.el.mapOverlay.classList.toggle('show', this.mapOpen);
+  }
+
+  // Carte plein écran : plan de l'île + zones, portes, machines, joueurs
+  drawMap(world, player, teammates, myColor) {
+    if (!this.mapOpen || !world.mapImage) return;
+    const cv = this.el.mapCanvas;
+    const W = window.innerWidth, H = window.innerHeight;
+    if (cv.width !== W || cv.height !== H) { cv.width = W; cv.height = H; }
+    const ctx = cv.getContext('2d');
+    ctx.clearRect(0, 0, W, H);
+    const img = world.mapImage, mv = world.mapView;
+    const k = Math.min((W - 60) / img.width, (H - 110) / img.height);
+    const ox = (W - img.width * k) / 2, oy = 50 + (H - 110 - img.height * k) / 2;
+    ctx.drawImage(img, ox, oy, img.width * k, img.height * k);
+    const P = (x, z) => [ox + (x + mv.halfX) * mv.scale * k, oy + (z + mv.halfZ) * mv.scale * k];
+
+    // zones
+    ctx.textAlign = 'center';
+    const here = world.zoneOf(player.pos.x, player.pos.z);
+    world.zoneCenters.forEach((c, i) => {
+      if (!c) return;
+      const [x, y] = P(c.x, c.z);
+      ctx.font = `bold ${i === here ? 22 : 18}px Impact, Arial`;
+      ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(0,0,0,0.85)';
+      ctx.strokeText(c.name.toUpperCase(), x, y);
+      ctx.fillStyle = i === here ? '#ffd24a' : 'rgba(255,255,255,0.8)';
+      ctx.fillText(c.name.toUpperCase(), x, y);
+    });
+    // portes
+    for (const d of world.doors) {
+      ctx.fillStyle = d.open ? 'rgba(80,220,120,0.6)' : '#ff4433';
+      for (const pt of d.points) { const [x, y] = P(pt.x, pt.z); ctx.fillRect(x - 2, y - 2, 4, 4); }
+      if (!d.open && d.points.length) {
+        const pt = d.points[Math.floor(d.points.length / 2)], [x, y] = P(pt.x, pt.z);
+        ctx.font = 'bold 12px Arial'; ctx.lineWidth = 3; ctx.strokeStyle = '#000';
+        ctx.strokeText(`🔒 ${d.price}`, x, y - 7); ctx.fillStyle = '#ffb0a0'; ctx.fillText(`🔒 ${d.price}`, x, y - 7);
+      }
+    }
+    // machines, armes, munitions
+    const icon = (x, z, color, label) => {
+      const [px, py] = P(x, z);
+      ctx.fillStyle = color; ctx.beginPath(); ctx.arc(px, py, 7, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = '#000'; ctx.lineWidth = 1.5; ctx.stroke();
+      ctx.fillStyle = '#fff'; ctx.font = 'bold 10px Arial'; ctx.fillText(label, px, py + 3.5);
+    };
+    for (const s of world.stations || []) icon(s.x, s.z, '#2a9d4a', '⁍');
+    for (const w of world.wallWeapons || []) icon(w.pos.x, w.pos.z, '#d98a2b', '⌐');
+    for (const m of world.machines || []) icon(m.pos.x, m.pos.z, m.type === 'box' ? '#3f8fd8' : m.color, m.type === 'box' ? '?' : m.type === 'pap' ? 'P' : (m.letter || m.name[0]));
+    // coéquipiers
+    for (const tm of teammates) {
+      const [x, y] = P(tm.pos.x, tm.pos.z);
+      ctx.fillStyle = tm.dead || tm.downed ? '#ff3333' : tm.color;
+      ctx.beginPath(); ctx.arc(x, y, 6, 0, Math.PI * 2); ctx.fill();
+      ctx.font = 'bold 12px Arial'; ctx.fillStyle = '#fff'; ctx.fillText(tm.name, x, y - 9);
+    }
+    // joueur : flèche orientée
+    const [px, py] = P(player.pos.x, player.pos.z);
+    ctx.save(); ctx.translate(px, py); ctx.rotate(-player.yaw);
+    ctx.fillStyle = myColor || '#66ff99'; ctx.strokeStyle = '#000'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(0, -12); ctx.lineTo(-8, 9); ctx.lineTo(0, 4); ctx.lineTo(8, 9); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.restore();
+
+    // titre + légende
+    ctx.textAlign = 'left';
+    ctx.font = 'bold 26px Impact, Arial'; ctx.fillStyle = '#ffd24a';
+    ctx.fillText('GRANDE ÎLE DE STRASBOURG', 30, 36);
+    ctx.font = '13px Arial'; ctx.fillStyle = '#ccc';
+    ctx.fillText('▲ vous   ● vert : munitions   ● orange : arme murale   ● bleu ? : boîte mystère   P : Pack-a-Punch   ● couleurs : atouts   ■ rouge : porte verrouillée   — doré : passage sous immeuble   N ↑', 30, H - 18);
   }
 
   setRoomBadge(code) {

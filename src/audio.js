@@ -132,6 +132,25 @@ export class Sfx {
     this._noise(1.2, 0.9, 800, 'lowpass');
     this._tone('sine', 150, 25, 1.4, 0.7);
   }
+  explosion(v = 1) {
+    if (!this.ctx || v < 0.03) return;
+    this._noise(1.1, 0.95 * v, 600, 'lowpass');
+    this._noise(0.3, 0.6 * v, 2500, 'lowpass');
+    this._tone('sine', 110, 30, 0.9, 0.7 * v);
+  }
+  ray() {
+    if (!this.ctx) return;
+    this._tone('square', 1400, 300, 0.18, 0.12);
+    this._tone('sine', 900, 1800, 0.12, 0.1);
+  }
+  pap() {
+    if (!this.ctx) return;
+    [220, 277, 330, 440, 554, 660].forEach((f, i) => setTimeout(() => this.ctx && this._tone('sawtooth', f, f * 1.01, 0.3, 0.12), i * 110));
+  }
+  jingle() {
+    if (!this.ctx) return;
+    [523, 659, 784, 659, 523].forEach((f, i) => setTimeout(() => this.ctx && this._tone('triangle', f, f, 0.18, 0.18), i * 140));
+  }
   knock(v = 1) {
     if (!this.ctx || v < 0.03) return;
     this._noise(0.09, 0.6 * v, 260, 'lowpass');

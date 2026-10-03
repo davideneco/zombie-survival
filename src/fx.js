@@ -69,6 +69,30 @@ class Fx {
       this.decals.push({ mesh: m, life: 0 });
     }
     this.decalCursor = 0;
+
+    // Boules de feu des explosions (une lumière unique réutilisée : le nombre de lumières reste constant)
+    this.booms = [];
+    this.boomGeo = new THREE.SphereGeometry(1, 16, 12);
+    this.boomLight = new THREE.PointLight(0xffa040, 0, 18, 2);
+    scene.add(this.boomLight);
+  }
+
+  // Explosion : boule de feu, débris, fumée, éclair lumineux, trace au sol
+  explosion(x, y, z, radius = 5, color = 0xff8a2a) {
+    if (!this.scene) return;
+    const mat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false });
+    const m = new THREE.Mesh(this.boomGeo, mat);
+    m.position.set(x, Math.max(0.4, y), z);
+    m.scale.setScalar(0.3);
+    this.scene.add(m);
+    this.booms.push({ mesh: m, life: 0.45, max: 0.45, r: radius * 0.45 });
+    this.boomLight.color.setHex(color);
+    this.boomLight.position.set(x, Math.max(1, y + 0.8), z);
+    this.boomLight.intensity = 140;
+    this.boomLightT = 0.35;
+    this.emit(x, y + 0.3, z, { count: 34, color: [0x2b2621, 0x3d342b, 0x1a1714], speed: 7, up: 7, size: 0.09, life: 1.4, spread: 0.8 });
+    this.emit(x, y + 0.3, z, { count: 18, color: [color, 0xffd27a], speed: 5, up: 4, size: 0.05, life: 0.6, grav: 4 });
+    this.decal(x, z, radius * 0.5, 0x0d0b09);
   }
 
   // Émet `count` particules autour de (x,y,z).
@@ -108,7 +132,7 @@ class Fx {
     this.emit(x, y, z, { count: 36, color: [0xbfd6e6, 0x8fb0c4, 0xdbe8f0], speed: 1.6, up: 2.2, size: 0.07, life: 1.4, nx, nz, push: 3.2, spread: 0.9 });
   }
 
-  decal(x, z, size = 1.6) {
+  decal(x, z, size = 1.6, color = 0x4a0707) {
     if (!this.scene) return;
     const d = this.decals[this.decalCursor];
     this.decalCursor = (this.decalCursor + 1) % DECALS;
@@ -118,6 +142,7 @@ class Fx {
     d.mesh.rotation.z = Math.random() * Math.PI * 2;
     d.mesh.scale.setScalar(size * (0.8 + Math.random() * 0.5));
     d.mesh.material.opacity = 0.85;
+    d.mesh.material.color.setHex(color);
   }
 
   update(dt) {
@@ -139,6 +164,18 @@ class Fx {
         this.mesh.setMatrixAt(i, _m);
       }
       this.mesh.instanceMatrix.needsUpdate = true;
+    }
+    for (let i = this.booms.length - 1; i >= 0; i--) {
+      const b = this.booms[i];
+      b.life -= dt;
+      const t = 1 - Math.max(0, b.life) / b.max;
+      b.mesh.scale.setScalar(0.3 + b.r * Math.sqrt(t));
+      b.mesh.material.opacity = 0.9 * (1 - t);
+      if (b.life <= 0) { this.scene.remove(b.mesh); b.mesh.material.dispose(); this.booms.splice(i, 1); }
+    }
+    if (this.boomLightT > 0) {
+      this.boomLightT -= dt;
+      this.boomLight.intensity = Math.max(0, this.boomLightT / 0.35) * 140;
     }
     for (const d of this.decals) {
       if (d.life <= 0) continue;

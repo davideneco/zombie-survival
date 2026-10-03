@@ -221,7 +221,7 @@ function rippleNormalMap() {
 }
 
 // Zones 0-5 : grille 3 x 2 de l'île ; zone 6 : le quartier de départ (ancienne carte du Marché-Neuf)
-const NAV_CELL = 0.75, NAV_MARGIN = 0.4;
+const NAV_CELL = 0.75, NAV_MARGIN = 0.5; // marge > rayon des zombies (0,4) : ils ne frôlent plus les murs
 const PASSAGE_H = 3.6; // hauteur sous plafond des passages sous immeubles
 
 const ZONE_NAMES = ['Nord-Ouest', 'Place Kléber', 'Nord-Est', 'Petite France', 'Cathédrale', 'Quartier Est', 'Marché-Neuf'];
@@ -994,6 +994,138 @@ export async function buildRealWorld(scene, renderer) {
   });
   if (!stations.length) stations.push(new THREE.Vector3(startPos.x + 6, 0, startPos.z));
 
+  // ---------------------------------------------------------------- Machines : atouts, Pack-a-Punch, boîtes mystère
+  // Répartition par zone : on découvre de quoi s'améliorer en ouvrant la ville.
+  const machines = [];
+  {
+    const placed = [...stations.map((v) => [v.x, v.z]), ...wallWeapons.map((w) => [w.pos.x, w.pos.z])];
+    const spotIn = (zi) => {
+      const a = anchors[zi];
+      if (!a) return null;
+      const inZone = (c) => zoneOf(c[0], c[1]) === zi && placed.every((p) => Math.hypot(p[0] - c[0], p[1] - c[1]) > 5);
+      const c = shuffle(candidatesNear(a[0], a[1], 3, 4, zi === startZone ? 30 : 45).filter(inZone))[0];
+      if (c) placed.push(c);
+      return c || null;
+    };
+    const signTex = (title, sub, color) => {
+      const cv = document.createElement('canvas'); cv.width = 512; cv.height = 160;
+      const x = cv.getContext('2d');
+      x.fillStyle = '#0d0d10'; x.fillRect(0, 0, 512, 160);
+      x.strokeStyle = color; x.lineWidth = 8; x.strokeRect(6, 6, 500, 148);
+      x.textAlign = 'center';
+      x.fillStyle = color; x.font = 'bold 50px Impact, Arial, sans-serif'; x.fillText(title, 256, 72);
+      x.fillStyle = '#ffd24a'; x.font = 'bold 38px Arial, sans-serif'; x.fillText(sub, 256, 128);
+      const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace;
+      return t;
+    };
+    const addMachine = (type, id, spot, zi) => {
+      if (!spot) return;
+      const [x, z] = spot;
+      const zc = zoneCells[zi];
+      const fx = zi === startZone ? startPos.x : zc.sx / zc.n, fz = zi === startZone ? startPos.z : zc.sz / zc.n;
+      const g = new THREE.Group();
+      let name, price, color, w, h, d;
+      if (type === 'perk') {
+        const P = CONFIG.perks[id];
+        name = P.name; price = P.price; color = P.color; w = 1.1; h = 2.3; d = 0.8;
+        const body = new THREE.Mesh(worldBox(w, h, d, 1), new THREE.MeshStandardMaterial({ color, roughness: 0.4, metalness: 0.3 }));
+        body.position.y = h / 2; g.add(body);
+        const glass = new THREE.Mesh(new THREE.BoxGeometry(0.8, 1.0, 0.05), new THREE.MeshStandardMaterial({ color: 0x111111, emissive: color, emissiveIntensity: 0.7 }));
+        glass.position.set(0, 1.05, d / 2 + 0.02); g.add(glass);
+        for (let i = 0; i < 3; i++) { // bouteilles
+          const b = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.07, 0.3, 8), new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 1.2 }));
+          b.position.set(-0.22 + i * 0.22, 1.0, d / 2 + 0.06); g.add(b);
+        }
+      } else if (type === 'pap') {
+        name = 'PACK-A-PUNCH'; price = CONFIG.papPrice; color = '#b24bff'; w = 1.8; h = 1.6; d = 1.2;
+        const body = new THREE.Mesh(worldBox(w, h, d, 1), new THREE.MeshStandardMaterial({ color: 0x2a2233, roughness: 0.5, metalness: 0.7 }));
+        body.position.y = h / 2; g.add(body);
+        const core = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.4, 0.06), new THREE.MeshStandardMaterial({ color: 0x220033, emissive: 0xb24bff, emissiveIntensity: 2 }));
+        core.position.set(0, 0.9, d / 2 + 0.03); g.add(core);
+      } else {
+        name = 'BOÎTE MYSTÈRE'; price = CONFIG.box.price; color = '#5fb8ff'; w = 1.7; h = 0.75; d = 0.85;
+        const wood = new THREE.MeshStandardMaterial({ color: 0x5a3b22, roughness: 0.8 });
+        const body = new THREE.Mesh(worldBox(w, h, d, 1), wood);
+        body.position.y = h / 2; g.add(body);
+        const lid = new THREE.Group(); lid.position.set(0, h, -d / 2); g.add(lid);
+        const lidMesh = new THREE.Mesh(new THREE.BoxGeometry(w, 0.12, d), wood);
+        lidMesh.position.set(0, 0.06, d / 2); lid.add(lidMesh);
+        const q = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 0.5), new THREE.MeshBasicMaterial({ map: signTex('?', '', '#5fb8ff'), transparent: true }));
+        q.position.set(0, 0.38, d / 2 + 0.01); g.add(q);
+        const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.25, 30, 12, 1, true), new THREE.MeshBasicMaterial({ color: 0x5fb8ff, transparent: true, opacity: 0.12, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
+        beam.position.y = 15; g.add(beam);
+        g.userData.lid = lid;
+      }
+      const sign = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 0.47), new THREE.MeshBasicMaterial({ map: signTex(name, `${price} PTS`, color) }));
+      sign.position.set(0, h + 0.45, d / 2);
+      g.add(sign);
+      g.position.set(x, 0, z);
+      g.rotation.y = Math.atan2(fx - x, fz - z);
+      g.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+      scene.add(g);
+      collision.addBox(x, z, w, d, -g.rotation.y, h);
+      lightSources.push({ x, y: h + 0.8, z, color: new THREE.Color(color).getHex(), intensity: 22, dist: 9 });
+      machines.push({ type, id, name, price, color, letter: type === 'perk' ? CONFIG.perks[id].letter : null, zone: zi, pos: new THREE.Vector3(x, 0, z), group: g });
+    };
+    // une boîte et/ou des atouts par zone ; le Pack-a-Punch au bout de la ville (Petite France)
+    const LAYOUT = {
+      6: [['perk', 'quickrevive'], ['box']],
+      1: [['perk', 'juggernog'], ['perk', 'speedcola']],
+      4: [['perk', 'doubletap'], ['box']],
+      0: [['perk', 'mulekick'], ['wall', 'sniper']],
+      2: [['perk', 'staminup'], ['box']],
+      3: [['pap'], ['box']],
+      5: [['wall', 'lmg'], ['box']],
+    };
+    for (const [zs, items] of Object.entries(LAYOUT)) {
+      const zi = Number(zs);
+      if (!anchors[zi] || !Number.isFinite(door_depth[zi])) continue;
+      for (const [type, id] of items) {
+        const spot = spotIn(zi);
+        if (type === 'wall') {
+          const W = CONFIG.weapons[id];
+          const zc = zoneCells[zi];
+          addWallBuy(id, W.name, W.price, W.ammoPrice, id === 'sniper' ? 0x88ccff : 0xff5533, spot, zc.sx / zc.n, zc.sz / zc.n);
+        } else addMachine(type, id, spot, zi);
+      }
+    }
+  }
+
+  // ---------------------------------------------------------------- Plan de la ville (pour la carte plein écran)
+  const MAP_SCALE = 0.7; // pixels par mètre
+  const mapImage = document.createElement('canvas');
+  {
+    const W = Math.round(halfX * 2 * MAP_SCALE), Hh = Math.round(halfZ * 2 * MAP_SCALE);
+    mapImage.width = W; mapImage.height = Hh;
+    const x = mapImage.getContext('2d');
+    const img = x.createImageData(W, Hh);
+    for (let py = 0; py < Hh; py++) for (let px = 0; px < W; px++) {
+      const wx = px / MAP_SCALE - halfX, wz = py / MAP_SCALE - halfZ;
+      const i = Math.floor((wx + isl.hx) / isl.cell), j = Math.floor((wz + isl.hz) / isl.cell);
+      const c = j * isl.nx + i;
+      const col = isl.island[c] ? [52, 56, 62] : isl.rawWater[c] ? [16, 52, 82] : [22, 24, 28];
+      const o = (py * W + px) * 4;
+      img.data[o] = col[0]; img.data[o + 1] = col[1]; img.data[o + 2] = col[2]; img.data[o + 3] = 255;
+    }
+    x.putImageData(img, 0, 0);
+    x.fillStyle = '#7a6a55';
+    x.beginPath();
+    for (const b of blds) {
+      b.pts.forEach(([bx, bz], k) => { const X = (bx + halfX) * MAP_SCALE, Y = (bz + halfZ) * MAP_SCALE; if (k) x.lineTo(X, Y); else x.moveTo(X, Y); });
+      x.closePath();
+    }
+    x.fill();
+    x.strokeStyle = '#c9a65a'; x.lineWidth = 2.2; x.lineCap = 'round';
+    for (const r of passageRuns) {
+      x.beginPath();
+      r.pts.forEach(([px, pz], k) => { const X = (px + halfX) * MAP_SCALE, Y = (pz + halfZ) * MAP_SCALE; if (k) x.lineTo(X, Y); else x.moveTo(X, Y); });
+      x.stroke();
+    }
+  }
+  const zoneCenters = zoneCells.map((zc, i) => (zc.n ? { name: ZONE_NAMES[i], x: zc.sx / zc.n, z: zc.sz / zc.n } : null));
+  // le centre de la place de départ : la position de départ (plus lisible)
+  if (zoneCenters[startZone]) { zoneCenters[startZone].x = startPos.x; zoneCenters[startZone].z = startPos.z; }
+
   // ---------------------------------------------------------------- Lampadaires (instanciés, 6 à 8 vraies lumières mobiles)
   {
     const poleMat = new THREE.MeshStandardMaterial({ color: 0x1d1f22, roughness: 0.5, metalness: 0.7 });
@@ -1025,7 +1157,7 @@ export async function buildRealWorld(scene, renderer) {
     const concrete = new THREE.MeshStandardMaterial({ color: 0x8d8b85, roughness: 0.95 });
     const wood = new THREE.MeshStandardMaterial({ color: 0x6b4a2b, roughness: 0.85 });
     const spots = [...shuffle(candidatesNear(startPos.x, startPos.z, 4, 6, 55).filter((c) => zoneOf(c[0], c[1]) === startZone)).slice(0, 30), ...randomSpots(110, 4)];
-    const used = [startPos];
+    const used = [startPos, ...stations, ...machines.map((m) => m.pos), ...wallWeapons.map((w) => w.pos)];
     const take = (minGap) => {
       for (let i = 0; i < spots.length; i++) {
         const [x, z] = spots[i];
@@ -1166,7 +1298,8 @@ export async function buildRealWorld(scene, renderer) {
   const stationPos = stations[0];
   return {
     half: Math.max(halfX, halfZ), blockers, spawnPoints: [], windowSpawns, pickWindow, pickGround,
-    stationPos, stations, wallWeapons, doors, openDoor, zoneOf, startPos, nav, collision,
+    stationPos, stations, wallWeapons, doors, openDoor, zoneOf, startPos, nav, collision, machines,
+    zoneNames: ZONE_NAMES, zoneCenters, startZone, mapImage, mapView: { halfX, halfZ, scale: MAP_SCALE },
     collide: (pos, r) => collision.resolve(pos, r),
     rayHit: (ox, oy, oz, dx, dy, dz, maxT) => collision.rayHit(ox, oy, oz, dx, dy, dz, maxT),
     update(px, pz, dt) {

@@ -121,7 +121,7 @@ export class Zombie {
    * spawn : { type:'ground', pos } ou { type:'window', inside, outside, yaw, nx, nz, center, getQuad() }
    * onEvent(name, zombie) : 'knock' | 'glass' | 'rumble' | 'emerge'
    */
-  constructor(scene, spawn, health, speed, onEvent, id = null) {
+  constructor(scene, spawn, health, speed, onEvent, id = null, opts = {}) {
     const A = assets();
     this.id = id != null ? id : (nextZombieId++);
     this.scene = scene;
@@ -145,6 +145,8 @@ export class Zombie {
     this._steer = { x: 0, z: 0 };
     this.limp = Math.random() < 0.3;
     this.runner = speed > 3.2;
+    this.crawler = false;
+    this.noProgress = 0; // secondes passées sans réussir à avancer (coincé)
 
     // Matériaux (clonés : le flash de dégâts est propre à chaque zombie)
     const mk = (tex) => new THREE.MeshStandardMaterial({ map: tex, bumpMap: tex, bumpScale: 0.6, roughness: 0.85 });
@@ -221,6 +223,7 @@ export class Zombie {
     const hitBody = mesh(A.geo.hitBody, A.hitMat, this.group, 0, 0.82, 0);
     hitBody.userData = { zombie: this, head: false };
     this.meshes.push(hitBody);
+    this.hitBody = hitBody;
 
     // ---- Apparition ----
     this.pos = this.group.position;
@@ -255,6 +258,38 @@ export class Zombie {
     this.spawnT = this.total;
     this.group.rotation.y = this.yaw;
     scene.add(this.group);
+    if (opts.crawler) this.makeCrawler();
+  }
+
+  // Zombie rampant : jambes arrachées, se traîne au sol sur les bras, plus lent
+  makeCrawler() {
+    if (this.crawler) return;
+    this.crawler = true;
+    for (const l of this.legs) l.hip.visible = false;
+    this.speed *= 0.45;
+    this.runner = false;
+    this.limp = false;
+    // hitbox couchée
+    this.hitBody.position.set(0, 0.3, 0.35);
+    this.hitBody.scale.set(1.0, 0.42, 1.5);
+  }
+
+  _poseCrawl(walk, attacking) {
+    const s = Math.sin(walk);
+    this.hips.position.y = 0.2 + Math.abs(s) * 0.04;
+    this.spine.rotation.x = 1.42 + s * 0.04;
+    this.spine.rotation.z = s * 0.1;
+    this.headGroup.rotation.x = attacking ? -0.9 : -1.15;
+    this.headGroup.rotation.z = Math.sin(walk * 0.8) * 0.15;
+    this.headGroup.rotation.y = 0;
+    this.jaw.rotation.x = 0.25 + (Math.sin(walk * 1.3) * 0.5 + 0.5) * 0.3;
+    this.arms.forEach((a, i) => {
+      const ph = i === 0 ? 0 : Math.PI;
+      const pull = Math.sin(walk + ph);
+      a.shoulder.rotation.x = (attacking ? -2.5 : -2.15) + pull * 0.55;
+      a.shoulder.rotation.z = a.side * 0.25;
+      a.elbow.rotation.x = -0.25 - Math.max(0, -pull) * 0.7;
+    });
   }
 
   // Peut-on lui tirer dessus ? (visible et pas encore sorti = déjà touchable à moitié)
@@ -443,10 +478,12 @@ export class Zombie {
       d = Math.atan2(Math.sin(d), Math.cos(d));
       this.yaw += d * k;
       this.group.rotation.set(0, this.yaw, 0);
+      if (Math.hypot(n.x - this.pos.x, n.z - this.pos.z) > 8) { this.pos.x = n.x; this.pos.z = n.z; } // téléporté par l'hôte
       const moving = Math.hypot(this.pos.x - bx, this.pos.z - bz) > this.speed * dt * 0.3;
       this.walkT += dt * (moving ? this.speed * (this.runner ? 2.6 : 3.2) : 1.2);
       const lean = this.runner ? 0.5 : 0.28;
       const att = n.atk;
+      if (this.crawler) { this._poseCrawl(this.walkT, att); return; }
       this._pose(this.walkT, moving ? (this.runner ? 1.25 : 1) : 0.15, att ? 1.5 : 0.85, att ? lean + 0.3 : lean, att ? 0.4 : 0.18);
       return;
     }
@@ -457,8 +494,8 @@ export class Zombie {
     if (Array.isArray(player)) {
       let bestDist = Infinity;
       target = null;
-      const standing = player.filter((pl) => pl && !pl.dead && !pl.downed);
-      const candidates = standing.length > 0 ? standing : player.filter((pl) => pl && !pl.dead);
+      // seulement les joueurs debout : on ignore les joueurs à terre ou morts
+      const candidates = player.filter((pl) => pl && !pl.dead && !pl.downed);
       for (const pl of candidates) {
         const d = Math.hypot(pl.pos.x - this.pos.x, pl.pos.z - this.pos.z);
         if (d < bestDist) {
@@ -467,7 +504,13 @@ export class Zombie {
         }
       }
     }
-    if (!target) return;
+    if (!target) { // personne à poursuivre : il titube sur place
+      this.walkT += dt * 1.2;
+      this.attacking = false;
+      if (this.crawler) this._poseCrawl(this.walkT, false);
+      else this._pose(this.walkT, 0.15, 0.85, this.runner ? 0.5 : 0.28, 0.18);
+      return;
+    }
 
     const dx = target.pos.x - this.pos.x;
     const dz = target.pos.z - this.pos.z;
@@ -522,6 +565,8 @@ export class Zombie {
       world.collide(this.pos, Z.radius);
 
       const moved = Math.hypot(this.pos.x - bx, this.pos.z - bz);
+      if (moved < sp * dt * 0.25) this.noProgress += dt;
+      else this.noProgress = Math.max(0, this.noProgress - dt * 2);
       if (moved < sp * dt * 0.4) {
         this.stuckT += dt;
         if (this.stuckT > 0.4 && this.sidestepT <= 0) {
@@ -554,6 +599,7 @@ export class Zombie {
     // ----- Pose -----
     const attacking = this.attackWindup >= 0;
     this.attacking = attacking;
+    if (this.crawler) { this._poseCrawl(this.walkT, attacking); return; }
     const lean = this.runner ? 0.5 : 0.28;
     this._pose(this.walkT, moving ? (this.runner ? 1.25 : 1) : 0.15, attacking ? 1.5 : 0.85, attacking ? lean + 0.3 : lean, attacking ? 0.4 : 0.18);
   }

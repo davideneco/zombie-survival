@@ -82,6 +82,9 @@ const game = {
   zombies: [],
   effects: [],
   powerups: [],
+  grenadesLive: [],
+  boxState: null,
+  relocateTimer: 0,
   buffs: { instaKill: 0, doublePoints: 0 },
   sfx, hud, world, settings,
   player: null,
@@ -178,9 +181,9 @@ const game = {
     else fx.blood(point.x, point.y, point.z, false);
   },
 
-  tracer(from, to) {
+  tracer(from, to, color = 0xffdd88) {
     const geo = new THREE.BufferGeometry().setFromPoints([from, to]);
-    const line = new THREE.Line(geo, new THREE.LineBasicMaterial({ color: 0xffdd88, transparent: true, opacity: 0.65 }));
+    const line = new THREE.Line(geo, new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.75 }));
     scene.add(line);
     this.effects.push({ obj: line, life: 0.05, max: 0.05 });
   },
@@ -209,6 +212,26 @@ const game = {
       if (!r.dead && !r.downed) return; // Au moins un coéquipier est debout
     }
     this.gameOver();
+  },
+
+  // Zombies coincés dans le décor ou partis trop loin : on les fait réapparaître près des joueurs (hôte)
+  relocateZombies(dt, targets) {
+    this.relocateTimer -= dt;
+    if (this.relocateTimer > 0 || !targets.length || !world.pickGround) return;
+    this.relocateTimer = 1;
+    for (const z of this.zombies) {
+      if (z.dead || z.spawnT > 0) continue;
+      let near = Infinity;
+      for (const t of targets) near = Math.min(near, Math.hypot(t.pos.x - z.pos.x, t.pos.z - z.pos.z));
+      z.farT = near > 90 ? (z.farT || 0) + 1 : 0;
+      const stuck = z.noProgress > 5 && near > 12;
+      if (!stuck && z.farT < 4) continue;
+      const t = targets[Math.floor(Math.random() * targets.length)];
+      const g = world.pickGround(t.pos.x, t.pos.z, 22, 45);
+      if (!g) continue;
+      z.pos.set(g.x, 0, g.z);
+      z.noProgress = 0; z.farT = 0;
+    }
   },
 
   // ------------------------------------------------------------- Bonus (Power-ups COD)
@@ -260,8 +283,9 @@ const game = {
     sfx.powerup();
     if (p.type === 'max_ammo') {
       for (const w of this.player.inventory) {
-        w.reserve = CONFIG.weapons[w.id].maxReserve;
+        w.reserve = this.player.statsOf(w).maxReserve;
       }
+      this.player.grenades = CONFIG.grenade.max;
       hud.announce('MUNITIONS MAX !', 'Réserves pleines pour toute l’équipe', 2500);
       hud.popup('MUNITIONS MAX', 'bonus');
     } else if (p.type === 'insta_kill') {
@@ -311,27 +335,21 @@ const game = {
       return;
     }
 
-    // 3) Porte payante
-    const door = this.nearDoor();
-    if (door && !this.nearWallWeapon()) {
-      if (this.points < door.price) { sfx.deny(); return; }
-      this.points -= door.price;
-      this.openDoor(door.id);
-      if (this.isMultiplayer) this.net?.send({ t: 'door_open', id: door.id });
-      return;
-    }
+    // 3) Machines : atouts, Pack-a-Punch, boîte mystère
+    const m = this.nearMachine();
+    if (m) { this.useMachine(m); return; }
 
-    // 4) Armes au mur
+    // 4) Armes au mur (prioritaires sur une porte toute proche)
     const ww = this.nearWallWeapon();
     if (ww) {
-      const has = p.hasWeapon(ww.id);
-      if (has) {
-        const cfg = CONFIG.weapons[ww.id];
-        const cur = p.inventory.find((w) => w.id === ww.id);
-        if (cur.reserve >= cfg.maxReserve) return;
-        if (this.points < ww.ammoPrice) { sfx.deny(); return; }
-        this.points -= ww.ammoPrice;
-        cur.reserve = cfg.maxReserve;
+      const cur = p.inventory.find((w) => w.id === ww.id);
+      if (cur) {
+        const max = p.statsOf(cur).maxReserve;
+        if (cur.reserve >= max) return;
+        const price = cur.pap ? ww.ammoPrice * 3 : ww.ammoPrice;
+        if (this.points < price) { sfx.deny(); return; }
+        this.points -= price;
+        cur.reserve = max;
         sfx.buy();
       } else {
         if (this.points < ww.price) { sfx.deny(); return; }
@@ -340,7 +358,203 @@ const game = {
         sfx.buy();
         hud.announce(ww.name, 'Arme acquise !', 2000);
       }
+      return;
     }
+
+    // 5) Porte payante
+    const door = this.nearDoor();
+    if (door) {
+      if (this.points < door.price) { sfx.deny(); return; }
+      this.points -= door.price;
+      this.openDoor(door.id);
+      if (this.isMultiplayer) this.net?.send({ t: 'door_open', id: door.id });
+    }
+  },
+
+  reviveTime() { return this.player.perks.quickrevive ? 1.2 : 2.5; },
+
+  nearMachine() {
+    if (!world.machines) return null;
+    const p = this.player.pos;
+    for (const m of world.machines) if (Math.hypot(p.x - m.pos.x, p.z - m.pos.z) < 2.6) return m;
+    return null;
+  },
+
+  perkPrice(id) {
+    const P = CONFIG.perks[id];
+    return !this.isMultiplayer && P.soloPrice ? P.soloPrice : P.price;
+  },
+
+  machinePrompt(m) {
+    const p = this.player;
+    if (m.type === 'perk') {
+      if (p.perks[m.id]) return `${m.name} (déjà acquis)`;
+      return `[E] ${m.name} — ${CONFIG.perks[m.id].desc} (${this.perkPrice(m.id)} pts)`;
+    }
+    if (m.type === 'pap') {
+      if (this.boxState?.machine === m) return 'Amélioration en cours…';
+      if (p.curW.pap) return `${p.curCfg.name} est déjà amélioré`;
+      return `[E] Pack-a-Punch : améliorer ${p.curCfg.name} (${CONFIG.papPrice} pts)`;
+    }
+    if (this.boxState) return this.boxState.machine === m ? 'La boîte tourne…' : 'Une boîte mystère est déjà en cours';
+    const full = p.inventory.length >= p.maxWeapons;
+    return `[E] Boîte mystère : arme au hasard (${CONFIG.box.price} pts)${full ? ' — remplace l’arme en main' : ''}`;
+  },
+
+  useMachine(m) {
+    const p = this.player;
+    if (m.type === 'perk') {
+      if (p.perks[m.id]) return;
+      const price = this.perkPrice(m.id);
+      if (this.points < price) { sfx.deny(); return; }
+      this.points -= price;
+      p.addPerk(m.id);
+      sfx.jingle();
+      hud.announce(m.name, CONFIG.perks[m.id].desc, 2500);
+      return;
+    }
+    if (this.boxState) return;
+    if (m.type === 'pap') {
+      if (p.curW.pap) return;
+      if (this.points < CONFIG.papPrice) { sfx.deny(); return; }
+      this.points -= CONFIG.papPrice;
+      sfx.pap();
+      // l'arme est "dans la machine" quelques secondes
+      this.boxState = { machine: m, t: 2.5, weaponIdx: p.weaponIdx };
+      return;
+    }
+    if (this.points < CONFIG.box.price) { sfx.deny(); return; }
+    this.points -= CONFIG.box.price;
+    sfx.jingle();
+    // tirage pondéré, sans les armes déjà possédées
+    const pool = Object.entries(CONFIG.box.pool).filter(([id]) => !p.hasWeapon(id));
+    const total = pool.reduce((s2, [, w]) => s2 + w, 0);
+    let r = Math.random() * total, pick = pool[0]?.[0] || 'smg';
+    for (const [id, w] of pool) { if ((r -= w) <= 0) { pick = id; break; } }
+    this.boxState = { machine: m, t: CONFIG.box.spin, result: pick, spin: 0 };
+  },
+
+  updateBox(dt) {
+    const b = this.boxState;
+    if (!b) return;
+    b.t -= dt;
+    const lid = b.machine.group.userData.lid;
+    if (lid) lid.rotation.x = -Math.min(1.2, (CONFIG.box.spin - b.t) * 3);
+    if (b.result) {
+      // noms qui défilent pendant le tirage
+      b.spin -= dt;
+      if (b.spin <= 0 && b.t > 0.3) {
+        b.spin = 0.12;
+        const ids = Object.keys(CONFIG.box.pool);
+        hud.prompt(`? ${CONFIG.weapons[ids[Math.floor(Math.random() * ids.length)]].name} ?`);
+      }
+    }
+    if (b.t > 0) return;
+    const p = this.player;
+    if (b.result) {
+      p.giveWeapon(b.result);
+      sfx.powerup();
+      hud.announce(CONFIG.weapons[b.result].name, 'Boîte mystère', 2500);
+    } else {
+      // Pack-a-Punch terminé : on récupère l'arme améliorée
+      if (p.inventory[b.weaponIdx]) p.switchWeapon(b.weaponIdx);
+      p.upgradeCurrent();
+      hud.announce(p.curCfg.name, 'Arme améliorée au Pack-a-Punch !', 2800);
+    }
+    if (lid) lid.rotation.x = 0;
+    this.boxState = null;
+  },
+
+  // ---------------------------------------------------------- Grenades / explosions
+  throwGrenade(origin, vel, mine, fromPid = null) {
+    const mesh = new THREE.Mesh(new THREE.SphereGeometry(0.09, 10, 8), new THREE.MeshStandardMaterial({ color: 0x2f3b1f, roughness: 0.6, metalness: 0.4 }));
+    mesh.position.copy(origin);
+    mesh.castShadow = true;
+    scene.add(mesh);
+    this.grenadesLive.push({ mesh, pos: origin.clone(), vel: vel.clone(), t: CONFIG.grenade.fuse, mine, owner: mine ? null : fromPid });
+    if (mine && this.isMultiplayer) {
+      this.net?.send({ t: 'nade', o: { x: origin.x, y: origin.y, z: origin.z }, v: { x: vel.x, y: vel.y, z: vel.z } });
+    }
+  },
+
+  updateGrenades(dt) {
+    const G = 18;
+    for (let i = this.grenadesLive.length - 1; i >= 0; i--) {
+      const g = this.grenadesLive[i];
+      g.t -= dt;
+      g.vel.y -= G * dt;
+      const before = g.pos.clone();
+      g.pos.addScaledVector(g.vel, dt);
+      // rebonds sur les murs : on se sert de la collision du monde pour trouver la normale
+      const pushed = g.pos.clone();
+      world.collide(pushed, 0.12);
+      const nx = pushed.x - g.pos.x, nz = pushed.z - g.pos.z, l = Math.hypot(nx, nz);
+      if (l > 1e-4) {
+        const ux = nx / l, uz = nz / l, dot = g.vel.x * ux + g.vel.z * uz;
+        if (dot < 0) { g.vel.x -= 1.6 * dot * ux; g.vel.z -= 1.6 * dot * uz; }
+        g.pos.x = pushed.x; g.pos.z = pushed.z;
+      }
+      if (g.pos.y < 0.09) { g.pos.y = 0.09; g.vel.y = Math.abs(g.vel.y) * 0.35; g.vel.x *= 0.6; g.vel.z *= 0.6; if (g.vel.y < 0.6) g.vel.y = 0; }
+      g.mesh.position.copy(g.pos);
+      g.mesh.rotation.x += dt * 8;
+      if (Number.isNaN(before.x)) g.t = 0;
+      if (g.t <= 0) {
+        scene.remove(g.mesh); g.mesh.geometry.dispose(); g.mesh.material.dispose();
+        this.grenadesLive.splice(i, 1);
+        this.explode(g.pos, CONFIG.grenade.radius, CONFIG.grenade.damage, g.mine ? null : g.owner, 0xff8a2a, true);
+      }
+    }
+  },
+
+  // Explosion : effets pour tout le monde ; dégâts aux zombies calculés par l'hôte (ou en solo).
+  // owner : id du joueur distant à récompenser, null = joueur local.
+  explode(pos, radius, damage, owner, color, hurtsPlayers) {
+    fx.explosion(pos.x, pos.y, pos.z, radius, color);
+    const p = this.player;
+    const d = Math.hypot(p.pos.x - pos.x, p.pos.z - pos.z);
+    sfx.explosion?.(Math.max(0.1, 1 - d / 60));
+    if (d < radius * 1.8) p.recoil += 0.04 * (1 - d / (radius * 1.8));
+    if (hurtsPlayers && d < radius && !p.downed && !p.dead) p.hurt(CONFIG.grenade.selfDamage * (1 - d / radius));
+    if (this.isClient) return;
+    this.areaDamage(pos, radius, damage, owner);
+  },
+
+  // Dégâts de zone sur les zombies (hôte / solo) ; les survivants peuvent perdre leurs jambes
+  areaDamage(pos, radius, damage, owner) {
+    let kills = 0, pts = 0;
+    const mult = this.buffs.doublePoints > 0 ? 2 : 1;
+    for (const z of this.zombies) {
+      if (z.dead || z.spawnT > 0) continue;
+      const d = Math.hypot(z.pos.x - pos.x, z.pos.z - pos.z);
+      if (d > radius) continue;
+      const dmg = this.buffs.instaKill > 0 ? 999999 : damage * Math.pow(1 - d / radius, 0.6);
+      const killed = z.damage(dmg, false);
+      fx.blood(z.pos.x, 1, z.pos.z, killed);
+      if (killed) {
+        kills++; pts += 60 * mult;
+        if (this.isMultiplayer) this.net?.send({ t: 'z_dead', id: z.id, head: false });
+        if (Math.random() < CONFIG.powerups.dropChance) this.spawnPowerup(z.pos);
+      } else {
+        pts += 10 * mult;
+        if (!z.crawler && Math.random() < CONFIG.zombie.legBlowChance) {
+          z.makeCrawler();
+          if (this.isMultiplayer) this.net?.send({ t: 'z_crawl', id: z.id });
+        }
+      }
+    }
+    if (!pts) return;
+    if (owner != null) this.net?.send({ t: 'pts', pts, kill: kills > 0, kills }, owner);
+    else { this.kills += kills; if (kills) sfx.kill(); this.addPoints(pts); }
+  },
+
+  // Impact explosif d'une arme (pistol à rayons)
+  splash(point, radius, damage) {
+    fx.explosion(point.x, point.y, point.z, radius, 0x44ff66);
+    if (this.isClient) {
+      this.net?.send({ t: 'splash', pt: { x: point.x, y: point.y, z: point.z }, r: radius, dmg: damage });
+      return;
+    }
+    this.areaDamage(point, radius, damage, null);
   },
 
   nearStation() {
@@ -406,6 +620,7 @@ const game = {
 
     // Réanime le joueur s'il était à terre lors de la manche précédente
     if (this.player.downed || this.player.dead) this.player.revive();
+    this.player.grenades = Math.min(CONFIG.grenade.max, this.player.grenades + CONFIG.grenade.perRound);
 
     if (this.isHost) {
       this.net?.send({ t: 'round_start', r, toSpawn: this.toSpawn });
@@ -459,7 +674,9 @@ const game = {
       else if (name === 'rumble') sfx.rumble(v);
       else if (name === 'emerge') { sfx.dirt(v); sfx.groan(Math.min(1, v * 1.4)); }
     };
-    const z = new Zombie(scene, spawn, this.zombieHealth, speed, onEvent);
+    const Zc = CONFIG.zombie;
+    const crawl = this.round >= Zc.crawlerRound && Math.random() < Zc.crawlerChance;
+    const z = new Zombie(scene, spawn, this.zombieHealth, speed, onEvent, null, { crawler: crawl });
     this.zombies.push(z);
     this.toSpawn--;
 
@@ -476,6 +693,7 @@ const game = {
         z: sz,
         hp: z.health,
         spd: speed,
+        crawl: crawl ? 1 : 0,
       });
     }
   },
@@ -488,6 +706,10 @@ const game = {
     this.effects = [];
     for (const pu of this.powerups) scene.remove(pu.grp);
     this.powerups = [];
+    for (const g of this.grenadesLive) scene.remove(g.mesh);
+    this.grenadesLive = [];
+    if (this.boxState?.machine.group.userData.lid) this.boxState.machine.group.userData.lid.rotation.x = 0;
+    this.boxState = null;
     fx.clear();
 
     this.over = false;
@@ -546,14 +768,20 @@ const game = {
     moon.position.copy(moon.target.position).add(MOON_OFFSET);
 
     // Pathfinding / champ de flux multi-joueurs (Hôte ou Solo uniquement)
+    // (calculé par tranches à chaque image sur toute la carte, uniquement vers les joueurs debout)
     if (world.nav && (this.isHost || !this.isMultiplayer)) {
-      this.navTimer = (this.navTimer ?? 0) - dt;
-      if (this.navTimer <= 0) {
-        const targets = [p, ...this.remotes.values()].filter((pl) => !pl.dead);
-        world.nav.computeField(targets);
-        this.navTimer = 0.15;
+      const targets = [p, ...this.remotes.values()].filter((pl) => !pl.dead && !pl.downed);
+      if (targets.length) {
+        if (world.nav.updateField) world.nav.updateField(targets, 25000);
+        else {
+          this.navTimer = (this.navTimer ?? 0) - dt;
+          if (this.navTimer <= 0) { world.nav.computeField(targets); this.navTimer = 0.15; }
+        }
       }
+      this.relocateZombies(dt, targets);
     }
+    this.updateGrenades(dt);
+    this.updateBox(dt);
 
     // Gestion des manches (Hôte ou Solo UNIQUEMENT)
     if (this.isHost || !this.isMultiplayer) {
@@ -641,7 +869,7 @@ const game = {
     if (downedTeammate && !p.downed && !p.dead && p.keys['KeyE']) {
       this.reviveTarget = downedTeammate;
       this.reviveTimer += dt;
-      if (this.reviveTimer >= 2.5) {
+      if (this.reviveTimer >= this.reviveTime()) {
         this.reviveTimer = 0;
         this.reviveTarget = null;
         this.addPoints(250, 'bonus');
@@ -711,7 +939,12 @@ const game = {
     // HUD
     const curW = p.curW;
     const curCfg = p.curCfg;
-    hud.setHealth(p.health, CONFIG.player.maxHealth);
+    hud.setHealth(p.health, p.maxHealth);
+    hud.setNades(p.grenades);
+    hud.setPerks(p.perks, CONFIG.perks);
+    hud.drawCompass(p.yaw);
+    if (world.zoneOf) hud.setZone(world.zoneNames[world.zoneOf(p.pos.x, p.pos.z)]);
+    hud.drawMap(world, p, [...this.remotes.values()], this.isMultiplayer ? slotColor(this.mySlot) : '#66ff99');
     hud.setAmmo(curW.ammo, curW.reserve, curW.reloading);
     hud.setPoints(this.points);
     hud.setInventory(p.inventory, p.weaponIdx);
@@ -729,30 +962,32 @@ const game = {
     // Prompt contextuel
     let promptText = null;
     if (downedTeammate) {
-      const left = Math.max(0, 2.5 - this.reviveTimer).toFixed(1);
+      const left = Math.max(0, this.reviveTime() - this.reviveTimer).toFixed(1);
       promptText = `[E] Maintenir pour réanimer ${downedTeammate.name} (${left}s)`;
     } else if (this.nearStation()) {
       promptText = curW.reserve >= curCfg.maxReserve
         ? 'Munitions au maximum'
         : `[E] Munitions ${curCfg.name} (${curCfg.ammoPrice} pts)`;
-    } else if (this.nearDoor() && !this.nearWallWeapon()) {
+    } else if (this.nearMachine()) {
+      promptText = this.machinePrompt(this.nearMachine());
+    } else if (this.nearWallWeapon()) {
+      const ww = this.nearWallWeapon();
+      const wState = p.inventory.find((w) => w.id === ww.id);
+      if (wState) {
+        const price = wState.pap ? ww.ammoPrice * 3 : ww.ammoPrice;
+        promptText = wState.reserve >= p.statsOf(wState).maxReserve
+          ? `${ww.name} (Munitions pleines)`
+          : `[E] Munitions ${ww.name} (${price} pts)`;
+      } else {
+        const full = p.inventory.length >= p.maxWeapons;
+        promptText = `[E] Acheter ${ww.name} (${ww.price} pts)${full ? ' — remplace l’arme en main' : ''}`;
+      }
+    } else if (this.nearDoor()) {
       const d = this.nearDoor();
       promptText = `[E] Ouvrir la porte vers ${d.name} (${d.price} pts)`;
-    } else {
-      const ww = this.nearWallWeapon();
-      if (ww) {
-        const has = p.hasWeapon(ww.id);
-        const wState = has ? p.inventory.find((w) => w.id === ww.id) : null;
-        if (has) {
-          promptText = wState.reserve >= CONFIG.weapons[ww.id].maxReserve
-            ? `${ww.name} (Munitions pleines)`
-            : `[E] Munitions ${ww.name} (${ww.ammoPrice} pts)`;
-        } else {
-          promptText = `[E] Acheter ${ww.name} (${ww.price} pts)`;
-        }
-      }
     }
-    hud.prompt(promptText);
+    // pendant le tirage de la boîte, le prompt affiche les armes qui défilent
+    if (!(this.boxState && this.boxState.result && this.nearMachine() === this.boxState.machine)) hud.prompt(promptText);
   },
 };
 
@@ -832,8 +1067,9 @@ function setupNetworkHandlers(net) {
           x: z.pos.x,
           z: z.pos.z,
           hp: z.health,
-          spd: z.speed,
+          spd: z.crawler ? z.speed / 0.45 : z.speed,
           spawnT: z.spawnT,
+          crawl: z.crawler ? 1 : 0,
         })),
       }, m.id);
     }
@@ -869,7 +1105,7 @@ function setupNetworkHandlers(net) {
   // Points reçus (client)
   net.on('pts', (m) => {
     game.addPoints(m.pts, m.head ? 'head' : '');
-    if (m.kill) { game.kills++; sfx.kill(); }
+    if (m.kill) { game.kills += m.kills || 1; sfx.kill(); }
   });
 
   // Zombies (spécifique client)
@@ -888,7 +1124,7 @@ function setupNetworkHandlers(net) {
       else if (name === 'rumble') sfx.rumble(v);
       else if (name === 'emerge') { sfx.dirt(v); sfx.groan(Math.min(1, v * 1.4)); }
     };
-    const z = new Zombie(scene, spawn, m.hp, m.spd, onEvent, m.id);
+    const z = new Zombie(scene, spawn, m.hp, m.spd, onEvent, m.id, { crawler: !!m.crawl });
     z.net = { x: m.x, z: m.z, yaw: 0, atk: false };
     game.zombies.push(z);
   });
@@ -915,6 +1151,20 @@ function setupNetworkHandlers(net) {
     if (z) {
       game.hitZombie(z, m.head, m.pt, m.dmg, m.mult, m.from);
     }
+  });
+
+  // Grenades lancées par un coéquipier : simulées localement (effets + dégâts côté hôte)
+  net.on('nade', (m) => {
+    game.throwGrenade(new THREE.Vector3(m.o.x, m.o.y, m.o.z), new THREE.Vector3(m.v.x, m.v.y, m.v.z), false, m.from);
+  });
+  // Impact explosif d'un coéquipier (pistolet à rayons) : dégâts appliqués par l'hôte
+  net.on('splash', (m) => {
+    if (!game.isHost) return;
+    game.areaDamage(m.pt, m.r, m.dmg, m.from);
+  });
+  net.on('z_crawl', (m) => {
+    const z = game.zombies.find((zb) => zb.id === m.id);
+    if (z && !z.dead) z.makeCrawler();
   });
 
   // Portes payantes : achetées par un joueur, ouvertes pour tout le monde
@@ -952,6 +1202,7 @@ function setupNetworkHandlers(net) {
     sfx.roundStart();
     hud.announce(`MANCHE ${m.r}`, `${m.toSpawn} zombies`);
     if (game.player.downed || game.player.dead) game.player.revive();
+    game.player.grenades = Math.min(CONFIG.grenade.max, game.player.grenades + CONFIG.grenade.perRound);
   });
   net.on('round_end', () => {
     sfx.roundEnd();
@@ -998,7 +1249,7 @@ function setupNetworkHandlers(net) {
       } else {
         spawn = { type: 'ground', pos: new THREE.Vector3(zd.x, 0, zd.z) };
       }
-      const z = new Zombie(scene, spawn, zd.hp, zd.spd, () => {}, zd.id);
+      const z = new Zombie(scene, spawn, zd.hp, zd.spd, () => {}, zd.id, { crawler: !!zd.crawl });
       z.pos.set(zd.x, 0, zd.z);
       if (zd.spawnT <= 0) z.skipSpawn();
       z.net = { x: zd.x, z: zd.z, yaw: 0, atk: false };
@@ -1066,6 +1317,11 @@ canvas.addEventListener('click', () => {
 hud.el.ovBtn.addEventListener('click', (e) => {
   e.stopPropagation();
   lockAndPlay();
+});
+
+// Carte plein écran (M)
+window.addEventListener('keydown', (e) => {
+  if (e.code === 'KeyM' && game.started) hud.toggleMap();
 });
 
 // Nom du joueur

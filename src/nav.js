@@ -2,6 +2,7 @@
 // la distance de marche jusqu'au joueur. Les zombies descendent ce gradient, ce qui
 // leur permet de contourner les bâtiments dans les rues étroites.
 const INF = 0x3fffffff;
+const NEIGHBORS = [[1, 0, 10], [-1, 0, 10], [0, 1, 10], [0, -1, 10], [1, 1, 14], [1, -1, 14], [-1, 1, 14], [-1, -1, 14]];
 
 export class NavGrid {
   // Zone rectangulaire de demi-dimensions halfX x halfZ. Le champ de flux est borné (maxCost) :
@@ -159,6 +160,62 @@ export class NavGrid {
       buckets[d] = null;
     }
     return true;
+  }
+
+  // ---- champ global incrémental (double tampon) ----
+  // Calcule le champ de flux sur toute la carte accessible, par tranches de `budget` cases par appel,
+  // puis l'échange avec le champ courant : les zombies trouvent leur chemin même très loin des joueurs.
+  updateField(targets, budget = 50000) {
+    if (!this.job) {
+      const starts = [];
+      for (const t of targets) {
+        if (!t) continue;
+        const src = this.nearestFree(t.pos ? t.pos.x : t.x, t.pos ? t.pos.z : t.z);
+        if (src) { const id = this.idx(src[0], src[1]); if (!starts.includes(id)) starts.push(id); }
+      }
+      if (!starts.length) return;
+      if (!this.distB) { this.distB = new Int32Array(this.nx * this.nz).fill(INF); this.touchedB = []; }
+      const { distB, touchedB } = this;
+      for (let k = 0; k < touchedB.length; k++) distB[touchedB[k]] = INF;
+      touchedB.length = 0;
+      for (const s of starts) { distB[s] = 0; touchedB.push(s); }
+      this.job = { buckets: [starts.slice()], d: 0, bi: 0 };
+    }
+    const job = this.job, { nx, nz, blocked } = this, dist = this.distB, touched = this.touchedB;
+    const NB = NEIGHBORS;
+    let ops = 0;
+    while (job.d < job.buckets.length) {
+      const bucket = job.buckets[job.d];
+      if (!bucket) { job.d++; job.bi = 0; continue; }
+      while (job.bi < bucket.length) {
+        const i = bucket[job.bi++];
+        const d = job.d;
+        if (dist[i] !== d) continue;
+        const ix = i % nx, iz = (i / nx) | 0;
+        for (let k = 0; k < 8; k++) {
+          const dx = NB[k][0], dz = NB[k][1];
+          const jx = ix + dx, jz = iz + dz;
+          if (jx < 0 || jz < 0 || jx >= nx || jz >= nz) continue;
+          const j = jz * nx + jx;
+          if (blocked[j]) continue;
+          if (dx !== 0 && dz !== 0 && (blocked[iz * nx + jx] || blocked[jz * nx + ix])) continue;
+          const nd = d + NB[k][2];
+          if (nd < dist[j]) {
+            if (dist[j] >= INF) touched.push(j);
+            dist[j] = nd;
+            (job.buckets[nd] || (job.buckets[nd] = [])).push(j);
+          }
+        }
+        if (++ops >= budget) return;
+      }
+      job.buckets[job.d] = null;
+      job.d++; job.bi = 0;
+    }
+    // terminé : on échange les tampons
+    [this.dist, this.distB] = [this.distB, this.dist];
+    [this.touched, this.touchedB] = [this.touchedB, this.touched];
+    this.lastTargetKey = null;
+    this.job = null;
   }
 
   // Distance de marche (en mètres) depuis la case de (x,z) jusqu'à la cible, ou Infinity

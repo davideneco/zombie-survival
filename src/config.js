@@ -76,7 +76,98 @@ export const CONFIG = {
       price: 1000,
       ammoPrice: 500,
     },
+    lmg: {
+      id: 'lmg',
+      name: 'MITRAILLEUSE RPK',
+      type: 'auto',
+      damage: 44,
+      headMult: 2,
+      magSize: 75,
+      startReserve: 300,
+      maxReserve: 450,
+      fireRate: 10.5,
+      reloadTime: 3.6,
+      spread: 0.028,
+      range: 90,
+      price: 2500,
+      ammoPrice: 1000,
+    },
+    sniper: {
+      id: 'sniper',
+      name: 'FUSIL DE PRÉCISION',
+      type: 'semi',
+      damage: 340,
+      headMult: 3.5,
+      magSize: 5,
+      startReserve: 30,
+      maxReserve: 45,
+      fireRate: 1.1,
+      reloadTime: 2.8,
+      spread: 0.0015,
+      range: 200,
+      pierce: 4,          // traverse jusqu'à 4 zombies
+      adsFov: 25,         // lunette
+      price: 1750,
+      ammoPrice: 700,
+    },
+    magnum: {
+      id: 'magnum',
+      name: 'REVOLVER .357',
+      type: 'semi',
+      damage: 190,
+      headMult: 3,
+      magSize: 6,
+      startReserve: 48,
+      maxReserve: 72,
+      fireRate: 3.2,
+      reloadTime: 2.2,
+      spread: 0.006,
+      range: 80,
+      pierce: 2,
+      boxOnly: true,
+      ammoPrice: 500,
+    },
+    raygun: {
+      id: 'raygun',
+      name: 'PISTOLET À RAYONS',
+      type: 'semi',
+      damage: 700,
+      headMult: 1.5,
+      magSize: 20,
+      startReserve: 160,
+      maxReserve: 200,
+      fireRate: 4.2,
+      reloadTime: 2.6,
+      spread: 0.008,
+      range: 100,
+      splash: { radius: 2.8, damage: 500 }, // explosion à l'impact
+      tracer: 0x33ff55,
+      boxOnly: true,
+      ammoPrice: 1500,
+    },
   },
+
+  // Noms des armes améliorées au Pack-a-Punch
+  papNames: {
+    rifle: 'M4 ÉCLIPSE', shotgun: 'LE BROYEUR', smg: 'PM INFERNAL', lmg: 'RPK DÉVASTATEUR',
+    sniper: 'ŒIL DU DÉMON', magnum: 'LE VENGEUR', raygun: 'PORTE-TONNERRE',
+  },
+
+  // Boîte mystère : arme au hasard (poids = chance relative)
+  box: { price: 950, spin: 2.6, pool: { shotgun: 3, smg: 3, lmg: 2, sniper: 2, magnum: 2, raygun: 1 } },
+
+  // Atouts (machines) : prix et effet décrit dans le jeu
+  perks: {
+    juggernog: { name: 'MASTODONTE', desc: 'Santé max 250', price: 2500, color: '#d0242c', letter: 'M' },
+    speedcola: { name: 'SPEED COLA', desc: 'Rechargement 2x plus rapide', price: 3000, color: '#2db34a', letter: 'S' },
+    doubletap: { name: 'DOUBLE TAP', desc: 'Cadence +33 %, dégâts +25 %', price: 2000, color: '#e0a21a', letter: 'D' },
+    quickrevive: { name: 'RÉANIMATION RAPIDE', desc: 'Solo : se relève seul · Co-op : réanime 2x plus vite', price: 1500, soloPrice: 500, color: '#3aa6ff', letter: 'R' },
+    mulekick: { name: 'MULE KICK', desc: 'Porter 3 armes', price: 4000, color: '#3f7d3a', letter: 'K' },
+    staminup: { name: 'STAMIN-UP', desc: 'Course plus rapide', price: 2000, color: '#e8d24a', letter: 'E' },
+  },
+  papPrice: 5000,
+
+  grenade: { start: 2, max: 4, perRound: 2, fuse: 2.2, radius: 6.5, damage: 900, selfDamage: 60 },
 
   powerups: {
     dropChance: 0.05,
@@ -90,5 +181,8 @@ export const CONFIG = {
     damage: 20,
     attackCooldown: 1.0,
     maxAlive: 22,
+    crawlerChance: 0.12,   // à partir de la manche 4 : part de zombies rampants (sans jambes)
+    crawlerRound: 4,
+    legBlowChance: 0.5,    // un zombie qui survit à une explosion perd ses jambes
   },
 };

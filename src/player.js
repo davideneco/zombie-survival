@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { CONFIG } from './config.js';
 
 const ADS_DELTA = 20; // réduction du FOV en visée
+const PAP_TINT = 0x6a1fa8; // reflet violet des armes améliorées
 
 export class Player {
   constructor(camera, scene, world, game) {
@@ -15,6 +16,8 @@ export class Player {
     this.mouseDown = false;
     this.rc = new THREE.Raycaster();
     this._v = new THREE.Vector3();
+    this.perks = {};
+    this.statsVersion = 0; // incrémenté quand les atouts changent (invalide le cache des stats d'arme)
 
     camera.rotation.order = 'YXZ';
     scene.add(camera);
@@ -31,31 +34,53 @@ export class Player {
   }
 
   get curW() { return this.inventory[this.weaponIdx]; }
-  get curCfg() { return CONFIG.weapons[this.curW.id]; }
+  get curCfg() { return this.statsOf(this.curW); }
+  get maxHealth() { return this.perks.juggernog ? 250 : CONFIG.player.maxHealth; }
+  get maxWeapons() { return this.perks.mulekick ? 3 : 2; }
+
+  // Statistiques effectives d'une arme : base + Pack-a-Punch + atouts
+  statsOf(w) {
+    const key = `${w.pap ? 1 : 0}|${this.statsVersion}`;
+    if (w._statsKey === key) return w._stats;
+    const base = CONFIG.weapons[w.id];
+    const s = { ...base };
+    if (w.pap) {
+      s.pap = true;
+      s.name = CONFIG.papNames[w.id] || `${base.name} +`;
+      s.damage = base.damage * (w.id === 'raygun' ? 1.6 : 2.5);
+      s.magSize = Math.round(base.magSize * 1.5);
+      s.maxReserve = Math.round(base.maxReserve * 1.5);
+      s.headMult = base.headMult * 1.2;
+      s.tracer = 0xc070ff;
+      if (base.splash) s.splash = { radius: base.splash.radius * 1.3, damage: base.splash.damage * 2 };
+      if (base.pierce) s.pierce = base.pierce + 2;
+      else s.pierce = 2;
+    }
+    if (this.perks.doubletap) { s.fireRate *= 1.33; s.damage *= 1.25; }
+    if (this.perks.speedcola) s.reloadTime *= 0.5;
+    w._statsKey = key;
+    w._stats = s;
+    return s;
+  }
 
   reset() {
-    const P = CONFIG.player;
     this.pos.copy(this.world.startPos);
     this.vel.set(0, 0, 0);
     this.vy = 0;
     this.yaw = 0;
     this.pitch = 0;
     this.recoil = 0;
-    this.health = P.maxHealth;
+    this.perks = {};
+    this.statsVersion++;
+    this.health = this.maxHealth;
     this.downed = false;
     this.dead = false;
     this.bleedout = 0;
+    this.selfRevive = 0;
+    this.grenades = CONFIG.grenade.start;
 
     // Inventaire d'armes
-    this.inventory = [
-      {
-        id: 'rifle',
-        ammo: CONFIG.weapons.rifle.magSize,
-        reserve: CONFIG.weapons.rifle.startReserve,
-        reloading: false,
-        reloadT: 0,
-      },
-    ];
+    this.inventory = [this.newWeapon('rifle')];
     this.weaponIdx = 0;
     this.switchWeapon(0);
 
@@ -70,40 +95,80 @@ export class Player {
     this.camera.updateProjectionMatrix();
   }
 
+  newWeapon(id) {
+    const cfg = CONFIG.weapons[id];
+    return { id, ammo: cfg.magSize, reserve: cfg.startReserve, reloading: false, reloadT: 0, pap: false };
+  }
+
+  // ---------------------------------------------------------------- Atouts
+  addPerk(id) {
+    this.perks[id] = true;
+    this.statsVersion++;
+    if (id === 'juggernog') this.health = this.maxHealth;
+  }
+
+  clearPerks() {
+    this.perks = {};
+    this.statsVersion++;
+    this.health = Math.min(this.health, this.maxHealth);
+    if (this.inventory.length > this.maxWeapons) { // Mule Kick perdu : on perd la 3e arme
+      this.inventory.length = this.maxWeapons;
+      if (this.weaponIdx >= this.inventory.length) this.weaponIdx = 0;
+      this.switchWeapon(this.weaponIdx);
+    }
+  }
+
   // ---------------------------------------------------------------- Inventaire
   hasWeapon(id) {
     return this.inventory.some((w) => w.id === id);
   }
 
+  // Nouvelle arme : prend un emplacement libre, sinon remplace l'arme en main
   giveWeapon(id) {
     const cfg = CONFIG.weapons[id];
     if (!cfg) return;
     const existing = this.inventory.findIndex((w) => w.id === id);
     if (existing >= 0) {
-      // Recharger les munitions au maximum
-      this.inventory[existing].reserve = cfg.maxReserve;
+      const w = this.inventory[existing];
+      w.reserve = this.statsOf(w).maxReserve;
       this.switchWeapon(existing);
-    } else {
-      // Nouvelle arme
-      this.inventory.push({
-        id,
-        ammo: cfg.magSize,
-        reserve: cfg.startReserve,
-        reloading: false,
-        reloadT: 0,
-      });
-      this.switchWeapon(this.inventory.length - 1);
+      return;
     }
+    const w = this.newWeapon(id);
+    if (this.inventory.length < this.maxWeapons) {
+      this.inventory.push(w);
+      this.switchWeapon(this.inventory.length - 1);
+    } else {
+      this.inventory[this.weaponIdx] = w;
+      this.switchWeapon(this.weaponIdx);
+    }
+  }
+
+  // Pack-a-Punch : améliore l'arme en main (chargeur et réserve pleins)
+  upgradeCurrent() {
+    const w = this.curW;
+    if (w.pap) return false;
+    w.pap = true;
+    const s = this.statsOf(w);
+    w.ammo = s.magSize;
+    w.reserve = s.maxReserve;
+    w.reloading = false;
+    this.switchWeapon(this.weaponIdx);
+    return true;
   }
 
   switchWeapon(idx) {
     if (idx < 0 || idx >= this.inventory.length) return;
     if (this.curW) this.curW.reloading = false;
     this.weaponIdx = idx;
-    const curId = this.curW.id;
-
+    const w = this.curW;
     for (const [id, grp] of Object.entries(this.vms)) {
-      grp.visible = id === curId;
+      grp.visible = id === w.id;
+      if (grp.visible) {
+        grp.traverse((o) => {
+          if (o.isMesh && !o.userData.skin && !o.userData.glow) { o.material.emissive.setHex(w.pap ? PAP_TINT : 0x000000); o.material.emissiveIntensity = w.pap ? 0.35 : 1; }
+        });
+      }
     }
     this.game.hud.setWeapon(this.curCfg.name);
   }
@@ -123,6 +188,7 @@ export class Player {
       if (e.code === 'KeyR') this.reload();
       if (e.code === 'KeyE') this.game.interact();
       if (e.code === 'KeyF') this.flashlight.visible = !this.flashlight.visible;
+      if (e.code === 'KeyG') this.throwGrenade();
       if (e.code === 'Digit1') this.switchWeapon(0);
       if (e.code === 'Digit2') this.switchWeapon(1);
       if (e.code === 'Digit3') this.switchWeapon(2);
@@ -147,7 +213,8 @@ export class Player {
     document.addEventListener('contextmenu', (e) => e.preventDefault());
     document.addEventListener('mousemove', (e) => {
       if (!this.game.playing) return;
-      const sens = 0.0022 * this.game.settings.sens * (this.aim > 0.5 ? 0.6 : 1);
+      const zoom = this.aim > 0.5 ? (this.curCfg.adsFov ? 0.3 : 0.6) : 1;
+      const sens = 0.0022 * this.game.settings.sens * zoom;
       this.yaw -= e.movementX * sens;
       this.pitch -= e.movementY * sens;
       this.pitch = Math.max(-Math.PI / 2 + 0.05, Math.min(Math.PI / 2 - 0.05, this.pitch));
@@ -163,10 +230,12 @@ export class Player {
 
   // ------------------------------------------------------------ Viewmodels
   buildViewmodels() {
-    const dark = new THREE.MeshStandardMaterial({ color: 0x1b1b1d, roughness: 0.45, metalness: 0.7 });
-    const wood = new THREE.MeshStandardMaterial({ color: 0x4a3220, roughness: 0.8 });
-    const skin = new THREE.MeshStandardMaterial({ color: 0xc9a07a, roughness: 0.8 });
-    const grey = new THREE.MeshStandardMaterial({ color: 0x33363b, roughness: 0.5, metalness: 0.6 });
+    const mats = () => ({
+      dark: new THREE.MeshStandardMaterial({ color: 0x1b1b1d, roughness: 0.45, metalness: 0.7 }),
+      wood: new THREE.MeshStandardMaterial({ color: 0x4a3220, roughness: 0.8 }),
+      skin: new THREE.MeshStandardMaterial({ color: 0xc9a07a, roughness: 0.8 }),
+      grey: new THREE.MeshStandardMaterial({ color: 0x33363b, roughness: 0.5, metalness: 0.6 }),
+    });
 
     this.vm = new THREE.Group();
     this.vms = {};
@@ -177,52 +246,86 @@ export class Player {
       parent.add(m);
       return m;
     };
-
-    // 1) FUSIL D'ASSAUT
-    {
+    const hands = (grp, M, front, back) => {
+      addBox(grp, 0.09, 0.09, 0.14, front[0], front[1], front[2], M.skin).userData.skin = true;
+      addBox(grp, 0.09, 0.09, 0.1, back[0], back[1], back[2], M.skin).userData.skin = true;
+    };
+    const weapon = (id, build) => {
       const grp = new THREE.Group();
-      addBox(grp, 0.06, 0.09, 0.5, 0, 0, 0, dark);
-      addBox(grp, 0.025, 0.025, 0.35, 0, 0.015, -0.4, dark);
-      addBox(grp, 0.05, 0.12, 0.07, 0, -0.1, 0.02, dark).rotation.x = 0.2;
-      addBox(grp, 0.05, 0.1, 0.22, 0, -0.02, 0.35, wood);
-      addBox(grp, 0.04, 0.12, 0.05, 0, -0.09, 0.15, dark).rotation.x = -0.2;
-      addBox(grp, 0.015, 0.03, 0.015, 0, 0.07, -0.5, dark);
-      addBox(grp, 0.09, 0.09, 0.14, 0.02, -0.06, -0.12, skin);
-      addBox(grp, 0.09, 0.09, 0.1, 0.0, -0.12, 0.16, skin);
-      this.vm.add(grp);
-      this.vms.rifle = grp;
-    }
-
-    // 2) FUSIL À POMPE
-    {
-      const grp = new THREE.Group();
-      addBox(grp, 0.07, 0.08, 0.45, 0, 0, 0, dark);          // culasse
-      addBox(grp, 0.032, 0.032, 0.45, 0, 0.02, -0.42, grey); // double canon lourd
-      addBox(grp, 0.028, 0.028, 0.38, 0, -0.018, -0.38, grey); // tube magasin
-      addBox(grp, 0.07, 0.07, 0.18, 0, -0.018, -0.26, wood); // pompe bois
-      addBox(grp, 0.055, 0.11, 0.26, 0, -0.03, 0.35, wood);  // crosse massive
-      addBox(grp, 0.09, 0.09, 0.14, 0.02, -0.03, -0.26, skin); // main pompe
-      addBox(grp, 0.09, 0.09, 0.1, 0.0, -0.12, 0.16, skin);    // main détente
+      build(grp, mats());
       grp.visible = false;
       this.vm.add(grp);
-      this.vms.shotgun = grp;
-    }
+      this.vms[id] = grp;
+    };
 
-    // 3) PISTOLET-MITRAILLEUR (MP40 / Thompson style)
-    {
-      const grp = new THREE.Group();
-      addBox(grp, 0.05, 0.07, 0.38, 0, 0, 0, dark);
-      addBox(grp, 0.022, 0.022, 0.28, 0, 0.01, -0.32, grey); // canon ventilé
-      addBox(grp, 0.03, 0.18, 0.045, 0, -0.12, -0.05, dark); // long chargeur droit
-      addBox(grp, 0.035, 0.09, 0.045, 0, -0.07, -0.14, wood); // poignée avant
-      addBox(grp, 0.04, 0.1, 0.045, 0, -0.08, 0.12, dark).rotation.x = -0.2;
-      addBox(grp, 0.04, 0.07, 0.18, 0, -0.02, 0.28, wood); // crosse compacte
-      addBox(grp, 0.08, 0.08, 0.12, 0.01, -0.06, -0.14, skin);
-      addBox(grp, 0.08, 0.08, 0.1, 0.0, -0.11, 0.13, skin);
-      grp.visible = false;
-      this.vm.add(grp);
-      this.vms.smg = grp;
-    }
+    // FUSIL D'ASSAUT
+    weapon('rifle', (grp, M) => {
+      addBox(grp, 0.06, 0.09, 0.5, 0, 0, 0, M.dark);
+      addBox(grp, 0.025, 0.025, 0.35, 0, 0.015, -0.4, M.dark);
+      addBox(grp, 0.05, 0.12, 0.07, 0, -0.1, 0.02, M.dark).rotation.x = 0.2;
+      addBox(grp, 0.05, 0.1, 0.22, 0, -0.02, 0.35, M.wood);
+      addBox(grp, 0.04, 0.12, 0.05, 0, -0.09, 0.15, M.dark).rotation.x = -0.2;
+      addBox(grp, 0.015, 0.03, 0.015, 0, 0.07, -0.5, M.dark);
+      hands(grp, M, [0.02, -0.06, -0.12], [0, -0.12, 0.16]);
+    });
+    // FUSIL À POMPE
+    weapon('shotgun', (grp, M) => {
+      addBox(grp, 0.07, 0.08, 0.45, 0, 0, 0, M.dark);
+      addBox(grp, 0.032, 0.032, 0.45, 0, 0.02, -0.42, M.grey);
+      addBox(grp, 0.028, 0.028, 0.38, 0, -0.018, -0.38, M.grey);
+      addBox(grp, 0.07, 0.07, 0.18, 0, -0.018, -0.26, M.wood);
+      addBox(grp, 0.055, 0.11, 0.26, 0, -0.03, 0.35, M.wood);
+      hands(grp, M, [0.02, -0.03, -0.26], [0, -0.12, 0.16]);
+    });
+    // PISTOLET-MITRAILLEUR
+    weapon('smg', (grp, M) => {
+      addBox(grp, 0.05, 0.07, 0.38, 0, 0, 0, M.dark);
+      addBox(grp, 0.022, 0.022, 0.28, 0, 0.01, -0.32, M.grey);
+      addBox(grp, 0.03, 0.18, 0.045, 0, -0.12, -0.05, M.dark);
+      addBox(grp, 0.035, 0.09, 0.045, 0, -0.07, -0.14, M.wood);
+      addBox(grp, 0.04, 0.1, 0.045, 0, -0.08, 0.12, M.dark).rotation.x = -0.2;
+      addBox(grp, 0.04, 0.07, 0.18, 0, -0.02, 0.28, M.wood);
+      hands(grp, M, [0.01, -0.06, -0.14], [0, -0.11, 0.13]);
+    });
+    // MITRAILLEUSE RPK : long canon, bipied, chargeur tambour
+    weapon('lmg', (grp, M) => {
+      addBox(grp, 0.08, 0.1, 0.55, 0, 0, 0, M.dark);
+      addBox(grp, 0.03, 0.03, 0.5, 0, 0.02, -0.5, M.grey);
+      addBox(grp, 0.1, 0.12, 0.12, 0, -0.1, -0.02, M.grey);
+      addBox(grp, 0.06, 0.12, 0.3, 0, -0.03, 0.38, M.wood);
+      addBox(grp, 0.01, 0.12, 0.01, 0.03, -0.07, -0.6, M.grey).rotation.z = 0.3;
+      addBox(grp, 0.01, 0.12, 0.01, -0.03, -0.07, -0.6, M.grey).rotation.z = -0.3;
+      hands(grp, M, [0.02, -0.06, -0.22], [0, -0.13, 0.17]);
+    });
+    // FUSIL DE PRÉCISION : lunette
+    weapon('sniper', (grp, M) => {
+      addBox(grp, 0.055, 0.08, 0.6, 0, 0, 0, M.dark);
+      addBox(grp, 0.022, 0.022, 0.45, 0, 0.012, -0.5, M.grey);
+      addBox(grp, 0.045, 0.045, 0.26, 0, 0.08, -0.02, M.grey);
+      addBox(grp, 0.055, 0.055, 0.03, 0, 0.08, -0.16, M.dark);
+      addBox(grp, 0.055, 0.12, 0.26, 0, -0.03, 0.38, M.wood);
+      hands(grp, M, [0.02, -0.06, -0.18], [0, -0.12, 0.17]);
+    });
+    // REVOLVER
+    weapon('magnum', (grp, M) => {
+      addBox(grp, 0.04, 0.06, 0.12, 0, 0, -0.05, M.grey);
+      addBox(grp, 0.05, 0.05, 0.06, 0, -0.005, -0.03, M.dark);
+      addBox(grp, 0.022, 0.022, 0.2, 0, 0.012, -0.2, M.grey);
+      addBox(grp, 0.035, 0.11, 0.05, 0, -0.08, 0.04, M.wood).rotation.x = -0.25;
+      hands(grp, M, [0.0, -0.09, 0.04], [0, -0.11, 0.08]);
+    });
+    // PISTOLET À RAYONS : corps rouge, ailettes, bulbe vert lumineux
+    weapon('raygun', (grp, M) => {
+      const red = new THREE.MeshStandardMaterial({ color: 0x9a2a1e, roughness: 0.4, metalness: 0.6 });
+      const glow = new THREE.MeshStandardMaterial({ color: 0x55ff77, emissive: 0x33ff55, emissiveIntensity: 2 });
+      addBox(grp, 0.07, 0.08, 0.22, 0, 0, -0.05, red);
+      for (let i = 0; i < 3; i++) addBox(grp, 0.12, 0.012, 0.03, 0, 0.0, -0.08 - i * 0.05, M.grey);
+      const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.035, 10, 8), glow);
+      bulb.position.set(0, 0, -0.2); bulb.userData.glow = true;
+      grp.add(bulb);
+      addBox(grp, 0.035, 0.11, 0.05, 0, -0.08, 0.05, M.dark).rotation.x = -0.25;
+      hands(grp, M, [0.0, -0.09, 0.05], [0, -0.11, 0.09]);
+    });
 
     this.muzzle = new THREE.Object3D();
     this.muzzle.position.set(0, 0.015, -0.6);
@@ -251,12 +354,17 @@ export class Player {
     const w = this.curW;
     const cfg = this.curCfg;
 
-    // État à terre (co-op)
+    // État à terre (co-op) ; en solo avec Réanimation rapide, on se relève seul
     if (this.downed) {
-      this.bleedout = Math.max(0, this.bleedout - dt);
-      if (this.bleedout <= 0 && !this.dead) {
-        this.dead = true;
-        this.game.checkTeamWipe?.();
+      if (this.selfRevive > 0) {
+        this.selfRevive -= dt;
+        if (this.selfRevive <= 0) this.revive();
+      } else {
+        this.bleedout = Math.max(0, this.bleedout - dt);
+        if (this.bleedout <= 0 && !this.dead) {
+          this.dead = true;
+          this.game.checkTeamWipe?.();
+        }
       }
     }
 
@@ -265,7 +373,8 @@ export class Player {
     let mz = (K.KeyW || K.ArrowUp ? 1 : 0) - (K.KeyS || K.ArrowDown ? 1 : 0);
     const moving = (mx !== 0 || mz !== 0) && !this.dead;
     const sprinting = !this.downed && !!K.ShiftLeft && mz > 0 && !this.aiming;
-    let speed = this.downed ? 1.2 : (sprinting ? P.sprintSpeed : P.walkSpeed);
+    const stamin = this.perks.staminup ? 1.3 : 1;
+    let speed = this.downed ? 1.2 : (sprinting ? P.sprintSpeed * stamin : P.walkSpeed * (this.perks.staminup ? 1.1 : 1));
     if (this.aiming && !this.downed) speed *= 0.6;
     if (moving) { const l = Math.hypot(mx, mz); mx /= l; mz /= l; }
     const sin = Math.sin(this.yaw), cos = Math.cos(this.yaw);
@@ -287,17 +396,20 @@ export class Player {
     this.world.collide(this.pos, P.radius);
 
     // ---- régénération ----
-    if (!this.downed && this.health < P.maxHealth && now - this.lastHurt > P.regenDelay) {
-      this.health = Math.min(P.maxHealth, this.health + P.regenRate * dt);
+    if (!this.downed && this.health < this.maxHealth && now - this.lastHurt > P.regenDelay) {
+      this.health = Math.min(this.maxHealth, this.health + P.regenRate * dt);
     }
 
     // ---- visée (ADS) ----
     this.aim += ((this.aiming && !this.downed ? 1 : 0) - this.aim) * Math.min(1, dt * 12);
-    const fov = this.game.settings.fov - ADS_DELTA * this.aim;
+    const base = this.game.settings.fov;
+    const fov = base - (cfg.adsFov ? base - cfg.adsFov : ADS_DELTA) * this.aim;
     if (Math.abs(fov - this.camera.fov) > 0.01) {
       this.camera.fov = fov;
       this.camera.updateProjectionMatrix();
     }
+    // lunette : on cache l'arme quand on vise au fusil de précision
+    this.vm.visible = !(cfg.adsFov && this.aim > 0.8);
 
     // ---- tir & rechargement ----
     if (this.downed || this.dead) {
@@ -314,6 +426,7 @@ export class Player {
       if (w.ammo > 0) this.shoot(now, moving);
       else if (w.reserve > 0) this.reload();
       else { this.nextShot = now + 0.3; this.game.sfx.empty(); }
+      if (cfg.type === 'semi') this.mouseDown = false; // une balle par clic
     }
 
     // ---- caméra ----
@@ -328,7 +441,7 @@ export class Player {
     this.kick *= Math.max(0, 1 - dt * 14);
     const a = this.aim;
     let x = 0.22 * (1 - a), y = -0.22 + 0.06 * a, z = -0.45 + 0.05 * a;
-    let rx = this.kick * (cfg.type === 'shotgun' ? 0.22 : 0.12);
+    let rx = this.kick * (cfg.type === 'shotgun' || cfg.type === 'semi' ? 0.22 : 0.12);
     if (w.reloading) {
       const p = w.reloadT / cfg.reloadTime;
       const dip = Math.sin(Math.min(1, p) * Math.PI);
@@ -356,24 +469,27 @@ export class Player {
     this.kick = 1;
 
     // Recul
-    this.recoil += (cfg.type === 'shotgun' ? 0.016 : 0.005) + Math.random() * 0.004;
+    const heavy = cfg.type === 'shotgun' || cfg.type === 'semi';
+    this.recoil += (heavy ? 0.016 : 0.005) + Math.random() * 0.004;
     this.yaw += (Math.random() - 0.5) * 0.002;
 
     // Sons
-    if (cfg.type === 'shotgun') this.game.sfx.shotgun();
+    if (cfg.type === 'shotgun' || cfg.id === 'sniper' || cfg.id === 'magnum') this.game.sfx.shotgun();
     else if (cfg.id === 'smg') this.game.sfx.smg();
+    else if (cfg.id === 'raygun') this.game.sfx.ray?.() ?? this.game.sfx.shot();
     else this.game.sfx.shot();
 
     // Muzzle flash
     this.flash.visible = true;
+    this.flash.material.color.setHex(cfg.id === 'raygun' ? 0x66ff88 : cfg.pap ? 0xd28cff : 0xffcc66);
     this.flash.rotation.z = Math.random() * Math.PI;
-    this.flash.scale.setScalar(cfg.type === 'shotgun' ? 1.4 : 0.8 + Math.random() * 0.5);
-    this.flashLight.intensity = cfg.type === 'shotgun' ? 40 : 25;
+    this.flash.scale.setScalar(heavy ? 1.4 : 0.8 + Math.random() * 0.5);
+    this.flashLight.intensity = heavy ? 40 : 25;
     this.flashT = 0.045;
 
     // Raycast(s)
     this.camera.updateMatrixWorld(true);
-    const mul = (this.aiming ? 0.4 : 1) * (moving ? 1.8 : 1);
+    const mul = (this.aiming ? (cfg.adsFov ? 0.05 : 0.4) : 1) * (moving ? 1.8 : 1);
     const origin = this.muzzle.getWorldPosition(this._v.set(0, 0, 0)).clone();
     const pellets = cfg.pellets || 1;
 
@@ -388,21 +504,25 @@ export class Player {
       const ro = this.rc.ray.origin, rd = this.rc.ray.direction;
       const wallT = fast ? this.world.rayHit(ro.x, ro.y, ro.z, rd.x, rd.y, rd.z, cfg.range) : cfg.range;
 
-      let end;
-      if (hits.length && (!fast || hits[0].distance <= wallT)) {
-        const h = hits[0];
-        end = h.point;
+      // les balles perforantes traversent plusieurs zombies (une seule touche par zombie)
+      let end = null, budget = cfg.pierce || 1, stopped = false;
+      const seen = new Set();
+      for (const h of hits) {
+        if (fast && h.distance > wallT) break;
         const z = h.object.userData.zombie;
-        if (z) {
-          this.game.hitZombie(z, h.object.userData.head, h.point, cfg.damage, cfg.headMult);
-        } else {
-          this.game.impact(h.point);
-        }
-      } else {
+        if (!z) { end = h.point; this.game.impact(h.point); stopped = true; break; }
+        if (seen.has(z)) continue;
+        seen.add(z);
+        this.game.hitZombie(z, h.object.userData.head, h.point, cfg.damage, cfg.headMult);
+        end = h.point;
+        if (--budget <= 0) { stopped = true; break; }
+      }
+      if (!stopped) {
         end = ro.clone().addScaledVector(rd, wallT);
         if (fast && wallT < cfg.range) this.game.impact(end);
       }
-      this.game.tracer(origin, end);
+      if (cfg.splash) this.game.splash(end, cfg.splash.radius, cfg.splash.damage);
+      this.game.tracer(origin, end, cfg.tracer);
       this.game.onPlayerShot?.(origin, end, cfg.id);
     }
   }
@@ -416,6 +536,16 @@ export class Player {
     this.game.sfx.reload();
   }
 
+  throwGrenade() {
+    if (this.downed || this.dead || this.grenades <= 0) return;
+    this.grenades--;
+    this.camera.updateMatrixWorld(true);
+    const dir = new THREE.Vector3(0, 0, -1).applyQuaternion(this.camera.quaternion);
+    const o = this.camera.position.clone().addScaledVector(dir, 0.6);
+    const v = dir.multiplyScalar(15).add(new THREE.Vector3(0, 3, 0)).add(new THREE.Vector3(this.vel.x, 0, this.vel.z));
+    this.game.throwGrenade(o, v, true);
+  }
+
   // -------------------------------------------------------------- Dégâts
   hurt(amount) {
     if (this.downed || this.dead) return;
@@ -425,7 +555,7 @@ export class Player {
     this.game.sfx.hurt();
     if (this.health <= 0) {
       this.health = 0;
-      if (this.game.isMultiplayer) {
+      if (this.game.isMultiplayer || this.perks.quickrevive) {
         this.down();
       } else {
         this.game.gameOver();
@@ -434,9 +564,17 @@ export class Player {
   }
 
   down() {
+    const solo = !this.game.isMultiplayer;
+    const hadQR = !!this.perks.quickrevive;
     this.downed = true;
     this.bleedout = 45;
     this.health = 0;
+    this.clearPerks(); // à terre : on perd tous ses atouts
+    if (solo && hadQR) {
+      this.selfRevive = 4;
+      this.game.hud.announce('À TERRE !', 'Réanimation rapide : vous vous relevez…', 3500);
+      return;
+    }
     this.game.hud.announce('VOUS ÊTES À TERRE !', 'Attendez un coéquipier…', 4000);
     this.game.onPlayerDowned?.();
   }
@@ -444,7 +582,8 @@ export class Player {
   revive() {
     this.downed = false;
     this.dead = false;
-    this.health = 50;
+    this.selfRevive = 0;
+    this.health = Math.min(50, this.maxHealth);
     this.lastHurt = this.game.time;
     this.game.hud.announce('RÉANIMÉ !', 'Reprenez le combat !', 2500);
   }
