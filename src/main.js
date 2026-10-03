@@ -254,7 +254,9 @@ const game = {
       this.addPoints(400, 'bonus');
       if (!this.isClient) {
         for (const z of this.zombies) {
-          if (!z.dead) z.damage(999999, false);
+          if (z.dead) continue;
+          z.damage(999999, false);
+          if (this.isMultiplayer) this.net.send({ t: 'z_dead', id: z.id, head: false });
         }
       }
     } else if (p.type === 'double_points') {
@@ -524,16 +526,17 @@ const game = {
       pu.grp.rotation.y += dt * 2.8;
       pu.grp.position.y = pu.baseY + Math.sin(this.time * 3) * 0.12;
 
-      if (pu.life < 6) pu.grp.visible = Math.floor(pu.life * 6) % 2 === 0;
+      if (!pu.pending && pu.life < 6) pu.grp.visible = Math.floor(pu.life * 6) % 2 === 0;
 
       // Ramassage par le joueur local
       const d = Math.hypot(p.pos.x - pu.grp.position.x, p.pos.z - pu.grp.position.z);
       if (d < 1.7) {
         if (this.isClient) {
-          this.net.send({ t: 'pu_pickup', id: pu.id });
-        } else {
-          this.collectPowerup(pu);
+          if (!pu.pending) { pu.pending = true; this.net.send({ t: 'pu_pickup', id: pu.id }); }
+          pu.grp.visible = false;
+          continue;
         }
+        this.collectPowerup(pu);
         scene.remove(pu.grp);
         this.powerups.splice(i, 1);
         continue;
@@ -693,18 +696,27 @@ function removeRemote(id) {
   }
 }
 
+const esc = (t) => String(t).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
 function updateLobbyUI(peers) {
   const box = hud.el.lobbyPlayers;
   if (!box) return;
   box.innerHTML = peers.map((p) => `
-    <div>● <b>${p.name}</b> ${p.id === game.net?.hostId ? '<span style="color:#ffd24a">(Hôte)</span>' : ''}</div>
+    <div>● <b>${esc(p.name)}</b> ${p.id === game.net?.hostId ? '<span style="color:#ffd24a">(Hôte)</span>' : ''}</div>
   `).join('');
+}
+
+function refreshLobby() {
+  const peers = [{ id: game.net.id, name: game.playerName }];
+  for (const r of game.remotes.values()) peers.push({ id: r.id, name: r.name });
+  updateLobbyUI(peers);
 }
 
 function setupNetworkHandlers(net) {
   // Déconnexion
   net.on('disconnect', () => {
     hud.announce('DÉCONNECTÉ', 'Perte de connexion au serveur', 4000);
+    if (game.isMultiplayer) setTimeout(() => { alert('Connexion au serveur perdue.'); location.reload(); }, 1500);
   });
   net.on('closed', () => {
     alert("L'hôte a fermé la partie.");
@@ -712,12 +724,14 @@ function setupNetworkHandlers(net) {
   });
   net.on('left', (m) => {
     removeRemote(m.id);
+    refreshLobby();
     game.checkTeamWipe();
   });
 
   // Nouveau joueur
   net.on('peer', (m) => {
     addRemote(m.id, m.name, game.remotes.size + 1);
+    refreshLobby();
     sfx.buy();
     hud.announce('COÉQUIPIER', `${m.name} a rejoint !`, 2500);
 
@@ -748,7 +762,9 @@ function setupNetworkHandlers(net) {
   net.on('p_state', (m) => {
     let rp = game.remotes.get(m.from);
     if (!rp) rp = addRemote(m.from, `Joueur ${m.from}`, game.remotes.size + 1);
+    const wasOut = rp.dead || rp.downed;
     rp.setState(m);
+    if (game.isHost && !wasOut && (rp.dead || rp.downed)) game.checkTeamWipe();
   });
 
   // Tirs des coéquipiers (traçantes + sons)

@@ -250,7 +250,7 @@ export class Hud {
       return `
         <div class="tm-card ${isDown ? 'tm-down' : ''}">
           <div class="tm-header">
-            <span class="tm-name" style="color:${col}">● ${p.name}</span>
+            <span class="tm-name" style="color:${col}">● ${String(p.name).replace(/[&<>"']/g, (c) => '&#' + c.charCodeAt(0) + ';')}</span>
             <span class="tm-pts">${p.points || 0} pts</span>
           </div>
           <div class="tm-bar"><div class="tm-fill" style="width:${isDown ? 100 : pct}%; background:${isDown ? '#f33' : col}"></div></div>
