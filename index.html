@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Zombie Survival – Strasbourg Place du Marché-Neuf</title>
+  <style>
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; overflow: hidden; background: #000; font-family: "Impact", "Arial Narrow", sans-serif; color: #eee; user-select: none; }
+    canvas { display: block; }
+
+    /* ---------- HUD ---------- */
+    #hud { position: fixed; inset: 0; pointer-events: none; }
+    #vignette { position: absolute; inset: 0; opacity: 0; background: radial-gradient(ellipse at center, rgba(0,0,0,0) 40%, rgba(160,0,0,.85) 100%); transition: opacity .15s; }
+    #nukeflash { position: absolute; inset: 0; opacity: 0; background: #fff; pointer-events: none; transition: opacity .6s ease-out; }
+
+    /* Radar */
+    #radarContainer { position: absolute; left: 24px; top: 24px; width: 120px; height: 120px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.25); background: rgba(5,12,18,0.7); box-shadow: 0 0 12px rgba(0,0,0,0.8); overflow: hidden; }
+    #radarCanvas { width: 100%; height: 100%; }
+
+    #crosshair { position: absolute; left: 50%; top: 50%; width: 0; height: 0; }
+    #crosshair i { position: absolute; background: #fff; box-shadow: 0 0 2px #000; }
+    #crosshair i:nth-child(1) { left: -1px; top: -14px; width: 2px; height: 8px; }
+    #crosshair i:nth-child(2) { left: -1px; top: 6px;   width: 2px; height: 8px; }
+    #crosshair i:nth-child(3) { left: -14px; top: -1px; width: 8px; height: 2px; }
+    #crosshair i:nth-child(4) { left: 6px;  top: -1px;  width: 8px; height: 2px; }
+
+    #hitmarker { position: absolute; left: 50%; top: 50%; width: 0; height: 0; opacity: 0; }
+    #hitmarker i { position: absolute; left: -10px; top: -1px; width: 20px; height: 2px; background: #fff; }
+    #hitmarker i:nth-child(1) { transform: rotate(45deg); }
+    #hitmarker i:nth-child(2) { transform: rotate(-45deg); }
+    #hitmarker.show { animation: hm .18s ease-out; }
+    #hitmarker.kill i { background: #f33; }
+    @keyframes hm { 0% { opacity: 1; transform: scale(1.4); } 100% { opacity: 0; transform: scale(.9); } }
+
+    .popup { position: absolute; left: calc(50% + 40px); top: calc(50% - 10px); font-size: 22px; color: #ffd24a; text-shadow: 0 0 4px #000; animation: pop .9s ease-out forwards; }
+    .popup.head { color: #ff5a3a; font-weight: bold; }
+    .popup.bonus { color: #55ff77; font-weight: bold; }
+    @keyframes pop { 0% { opacity: 1; transform: translateY(0); } 100% { opacity: 0; transform: translateY(-50px); } }
+
+    /* Powerups actifs */
+    #powerupBar { position: absolute; left: 50%; bottom: 85px; transform: translateX(-50%); display: flex; gap: 16px; font-size: 20px; letter-spacing: 1px; text-shadow: 0 0 6px #000; }
+    .buff { padding: 4px 14px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.3); animation: pulse 1s infinite alternate; }
+    .buff.insta { background: rgba(180,20,20,0.65); color: #ff7777; border-color: #ff3333; }
+    .buff.double { background: rgba(180,140,20,0.65); color: #ffe666; border-color: #ffd24a; }
+    @keyframes pulse { 0% { opacity: 0.85; transform: scale(0.98); } 100% { opacity: 1; transform: scale(1.03); } }
+
+    #round { position: absolute; left: 24px; bottom: 18px; font-size: 80px; color: #a31616; text-shadow: 0 0 8px #000; letter-spacing: 2px; }
+    #round small { display: block; font-size: 16px; color: #ccc; letter-spacing: 3px; margin-bottom: -14px; }
+
+    #points { position: absolute; left: 24px; bottom: 130px; font-size: 34px; color: #ffd24a; text-shadow: 0 0 4px #000; }
+
+    #stats { position: absolute; right: 28px; bottom: 20px; text-align: right; text-shadow: 0 0 4px #000; }
+    #weapon { font-size: 18px; letter-spacing: 2px; color: #bbb; }
+    #inv { font-size: 13px; color: #888; font-family: Arial, sans-serif; letter-spacing: 1px; margin-bottom: 2px; }
+    #ammo { font-size: 56px; }
+    #ammo span { font-size: 28px; color: #aaa; }
+    #healthbar { width: 260px; height: 12px; margin-top: 8px; background: rgba(0,0,0,.6); border: 1px solid #555; margin-left: auto; }
+    #healthfill { height: 100%; width: 100%; background: #c22; transition: width .1s; }
+
+    #prompt { position: absolute; left: 50%; top: 62%; transform: translateX(-50%); font-size: 22px; text-shadow: 0 0 4px #000; background: rgba(0,0,0,0.5); padding: 4px 16px; border-radius: 4px; display: none; }
+    #announce { position: absolute; left: 50%; top: 22%; transform: translateX(-50%); text-align: center; font-size: 64px; color: #b01818; text-shadow: 0 0 10px #000; opacity: 0; transition: opacity .6s; }
+    #announce small { display: block; font-size: 22px; color: #ddd; letter-spacing: 3px; }
+    #announce.show { opacity: 1; }
+
+    /* ---------- Overlay (menu / pause / game over) ---------- */
+    #overlay { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; flex-direction: column; background: rgba(0,0,0,.76); text-align: center; cursor: pointer; }
+    #overlay h1 { font-size: 68px; margin: 0 0 10px; color: #b01818; letter-spacing: 4px; text-shadow: 0 0 12px #000; }
+    #overlay p { margin: 4px 0; font-size: 18px; color: #ccc; font-family: Arial, sans-serif; }
+    #overlay .btn { margin-top: 22px; padding: 14px 44px; font-size: 26px; background: #b01818; color: #fff; border: 0; cursor: pointer; font-family: inherit; letter-spacing: 2px; }
+    #overlay .btn:hover { background: #d22; }
+    #controls { margin-top: 18px; font-family: Arial, sans-serif; font-size: 15px; color: #aaa; line-height: 1.7; }
+    #controls b { color: #fff; }
+    .hidden { display: none !important; }
+
+    /* Multijoueur / HUD */
+    #roomBadge { position: absolute; left: 160px; top: 32px; background: rgba(10,20,30,0.85); border: 1px solid #3a7bd5; padding: 6px 14px; border-radius: 4px; font-size: 18px; letter-spacing: 2px; color: #7cb9ff; display: none; text-shadow: 0 0 6px #000; }
+    #teammates { position: absolute; left: 24px; top: 156px; display: flex; flex-direction: column; gap: 8px; font-family: Arial, sans-serif; pointer-events: none; }
+    .tm-card { background: rgba(5,12,18,0.75); border: 1px solid rgba(255,255,255,0.15); padding: 5px 10px; border-radius: 4px; min-width: 140px; font-size: 13px; text-shadow: 0 0 2px #000; }
+    .tm-card.tm-down { border-color: #ff3333; animation: pulse 0.8s infinite alternate; }
+    .tm-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 3px; }
+    .tm-name { font-weight: bold; color: #fff; }
+    .tm-pts { color: #ffd24a; font-size: 12px; }
+    .tm-bar { width: 100%; height: 6px; background: rgba(0,0,0,0.6); border-radius: 2px; overflow: hidden; }
+    .tm-fill { height: 100%; transition: width 0.15s; }
+
+    /* Menu Panel */
+    .menu-box { margin-top: 14px; display: flex; flex-direction: column; align-items: center; gap: 12px; width: 100%; max-width: 460px; }
+    .input-row { display: flex; align-items: center; gap: 10px; font-size: 18px; color: #bbb; }
+    .input-row input, .join-row input { background: rgba(0,0,0,0.6); border: 1px solid #666; color: #fff; padding: 8px 12px; font-size: 18px; font-family: inherit; letter-spacing: 1px; text-align: center; border-radius: 4px; outline: none; }
+    .input-row input:focus, .join-row input:focus { border-color: #b01818; }
+    .btn-row { display: flex; gap: 14px; }
+    .join-row { display: flex; gap: 8px; align-items: center; }
+    .join-row input { width: 170px; text-transform: uppercase; }
+    #overlay .btn-main { padding: 12px 24px; font-size: 20px; margin: 0; }
+    #overlay .btn-sub { padding: 8px 18px; font-size: 18px; margin: 0; background: #2b4c7e; }
+    #overlay .btn-sub:hover { background: #3b6cb5; }
+    #overlay .btn-go { padding: 12px 36px; font-size: 22px; margin-top: 10px; background: #228833; }
+    #overlay .btn-go:hover { background: #2eb845; }
+    #lobbyBox { background: rgba(0,0,0,0.5); border: 1px solid #444; border-radius: 6px; padding: 12px 20px; width: 100%; }
+    #lobbyStatus { font-size: 20px; color: #ffd24a; letter-spacing: 1px; }
+    #lobbyPlayers { margin-top: 8px; font-family: Arial, sans-serif; font-size: 14px; line-height: 1.6; color: #ddd; }
+  </style>
+</head>
+<body>
+  <div id="hud">
+    <div id="vignette"></div>
+    <div id="nukeflash"></div>
+
+    <div id="radarContainer">
+      <canvas id="radarCanvas" width="120" height="120"></canvas>
+    </div>
+
+    <div id="roomBadge"></div>
+    <div id="teammates"></div>
+
+    <div id="crosshair"><i></i><i></i><i></i><i></i></div>
+    <div id="hitmarker"><i></i><i></i></div>
+    <div id="powerupBar"></div>
+
+    <div id="round"><small>MANCHE</small><span id="roundNum">1</span></div>
+    <div id="points">0</div>
+
+    <div id="stats">
+      <div id="weapon">FUSIL D'ASSAUT</div>
+      <div id="inv">1: FUSIL &nbsp;·&nbsp; 2: POMPE &nbsp;·&nbsp; 3: PM</div>
+      <div id="ammo">30 <span>/ 120</span></div>
+      <div id="healthbar"><div id="healthfill"></div></div>
+    </div>
+
+    <div id="prompt"></div>
+    <div id="announce"></div>
+  </div>
+
+  <div id="overlay">
+    <h1 id="ovTitle">ZOMBIE SURVIVAL</h1>
+    <p id="ovText">Chargement de la carte…</p>
+
+    <!-- Menu Solo / Multijoueur -->
+    <div id="menuPanel" class="menu-box hidden">
+      <div class="input-row">
+        <label for="playerName">PSEUDO :</label>
+        <input type="text" id="playerName" maxlength="12" value="Joueur" autocomplete="off" />
+      </div>
+
+      <div class="btn-row">
+        <button class="btn btn-main" id="btnSolo">SOLO</button>
+        <button class="btn btn-main" id="btnHost">CRÉER SALON CO-OP</button>
+      </div>
+
+      <div class="join-row">
+        <input type="text" id="joinCode" maxlength="4" placeholder="CODE (ABCD)" autocomplete="off" />
+        <button class="btn btn-sub" id="btnJoin">REJOINDRE</button>
+      </div>
+
+      <div id="lobbyBox" class="hidden">
+        <div id="lobbyStatus"></div>
+        <div id="lobbyPlayers"></div>
+        <button class="btn btn-go hidden" id="btnStartGame">LANCER LA PARTIE</button>
+      </div>
+    </div>
+
+    <button class="btn hidden" id="ovBtn">JOUER</button>
+
+    <div id="controls">
+      <b>ZQSD / WASD</b> se déplacer &nbsp;·&nbsp; <b>Souris</b> viser &nbsp;·&nbsp; <b>Clic gauche</b> tirer &nbsp;·&nbsp; <b>Clic droit</b> viser (ADS)<br />
+      <b>1 / 2 / 3 / Molette</b> changer d'arme &nbsp;·&nbsp; <b>R</b> recharger &nbsp;·&nbsp; <b>E</b> acheter / interagir / réanimer &nbsp;·&nbsp; <b>Shift</b> sprint &nbsp;·&nbsp; <b>F</b> lampe
+    </div>
+  </div>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
