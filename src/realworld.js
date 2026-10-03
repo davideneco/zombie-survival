@@ -2,7 +2,8 @@ import * as THREE from 'three';
 import { CONFIG } from './config.js';
 import { Collision } from './collision.js';
 import { NavGrid } from './nav.js';
-import { computeIsland } from './island.js';
+import { computeIsland, stitchRings } from './island.js';
+import { findBreaches } from './breach.js';
 
 // =====================================================================
 //  Monde réel : la Grande Île de Strasbourg (données OpenStreetMap)
@@ -156,7 +157,64 @@ function instanced(geo, mat, matrices, colors = null, shadow = true) {
   return m;
 }
 
-const ZONE_NAMES = ['Nord-Ouest', 'Place Kléber', 'Nord-Est', 'Petite France', 'Cathédrale', 'Quartier Est'];
+// Boîte dont les UV suivent les dimensions réelles (1 répétition de texture tous les `tile` mètres)
+function worldBox(w, h, d, tile = 2) {
+  const g = new THREE.BoxGeometry(w, h, d);
+  const uv = g.attributes.uv;
+  // ordre des faces de BoxGeometry : +x, -x, +y, -y, +z, -z (4 sommets chacune)
+  const dims = [[d, h], [d, h], [w, d], [w, d], [w, h], [w, h]];
+  for (let f = 0; f < 6; f++) for (let k = 0; k < 4; k++) {
+    const i = f * 4 + k;
+    uv.setXY(i, (uv.getX(i) * dims[f][0]) / tile, (uv.getY(i) * dims[f][1]) / tile);
+  }
+  return g;
+}
+
+// Fusionne des géométries indexées (position / normal / uv) en une seule
+function mergeGeometries(list) {
+  const pos = [], nor = [], uv = [], idx = [];
+  for (const g of list) {
+    const base = pos.length / 3;
+    pos.push(...g.attributes.position.array);
+    nor.push(...g.attributes.normal.array);
+    uv.push(...g.attributes.uv.array);
+    for (const i of g.index.array) idx.push(base + i);
+    g.dispose();
+  }
+  const out = new THREE.BufferGeometry();
+  out.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  out.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+  out.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  out.setIndex(idx);
+  out.computeBoundingSphere();
+  return out;
+}
+
+// Normal map procédurale de vaguelettes pour l'eau
+function rippleNormalMap() {
+  const N = 256, c = document.createElement('canvas'); c.width = c.height = N;
+  const x = c.getContext('2d'), img = x.createImageData(N, N);
+  const hgt = (u, v) => {
+    const a = (u / N) * Math.PI * 2, b = (v / N) * Math.PI * 2;
+    return Math.sin(a * 3 + b * 2) * 0.5 + Math.sin(a * 7 - b * 5) * 0.3 + Math.sin(a * 13 + b * 11) * 0.15 + Math.sin(-a * 2 + b * 9) * 0.25;
+  };
+  for (let v = 0; v < N; v++) for (let u = 0; u < N; u++) {
+    const dx = hgt(u + 1, v) - hgt(u - 1, v), dz = hgt(u, v + 1) - hgt(u, v - 1);
+    const nx = -dx * 2, nz = -dz * 2, ny = 1, l = Math.hypot(nx, ny, nz);
+    const i = (v * N + u) * 4;
+    img.data[i] = ((nx / l) * 0.5 + 0.5) * 255; img.data[i + 1] = ((nz / l) * 0.5 + 0.5) * 255; img.data[i + 2] = ((ny / l) * 0.5 + 0.5) * 255; img.data[i + 3] = 255;
+  }
+  x.putImageData(img, 0, 0);
+  const t = new THREE.CanvasTexture(c);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  return t;
+}
+
+// Zones 0-5 : grille 3 x 2 de l'île ; zone 6 : le quartier de départ (ancienne carte du Marché-Neuf)
+const NAV_CELL = 0.75, NAV_MARGIN = 0.4;
+
+const ZONE_NAMES = ['Nord-Ouest', 'Place Kléber', 'Nord-Est', 'Petite France', 'Cathédrale', 'Quartier Est', 'Marché-Neuf'];
+const NZONES = ZONE_NAMES.length;
 
 export async function buildRealWorld(scene, renderer) {
   const rnd = seeded(20240611);
@@ -164,10 +222,14 @@ export async function buildRealWorld(scene, renderer) {
   const halfX = data.half, halfZ = data.halfZ || data.half;
   const Z = CONFIG.zones;
 
-  const [cobble, plaster, roofP, metalP, barkP, plasterImg] = await Promise.all([
+  const [cobble, plaster, roofP, metalP, barkP, sandP, plasterImg] = await Promise.all([
     loadPBR('cobble', renderer), loadPBR('plaster', renderer), loadPBR('roof', renderer),
-    loadPBR('metal', renderer), loadPBR('bark', renderer), loadImg('/textures/plaster/diff.jpg'),
+    loadPBR('metal', renderer), loadPBR('bark', renderer), loadPBR('sandstone', renderer), loadImg('/textures/plaster/diff.jpg'),
   ]);
+
+  // Anneaux OSM découpés en plusieurs morceaux : on les recolle (sinon murs fantômes / façades à l'envers)
+  data.buildings = stitchRings(data.buildings);
+  data.water = [...data.water.filter((w) => w.line), ...stitchRings(data.water.filter((w) => !w.line))];
 
   // ---------------------------------------------------------------- Île jouable (délimitée par l'eau)
   const isl = computeIsland(data, CONFIG.startHint.x, CONFIG.startHint.z);
@@ -199,12 +261,17 @@ export async function buildRealWorld(scene, renderer) {
   }
 
   // ---------------------------------------------------------------- Eau (rivière Ill et canaux)
+  let waterNormal = null;
   {
+    waterNormal = rippleNormalMap();
+    waterNormal.repeat.set(1 / 6, 1 / 6);
     const waterMat = new THREE.MeshStandardMaterial({
-      color: 0x0d2233, roughness: 0.12, metalness: 0.55, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2,
+      color: 0x0f2a3c, roughness: 0.08, metalness: 0.6, normalMap: waterNormal, normalScale: new THREE.Vector2(0.6, 0.6),
+      side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2,
     });
     const pos = [], idx = [];
-    const addTri = (a, b, c) => { const base = pos.length / 3; pos.push(a[0], 0.04, a[1], b[0], 0.04, b[1], c[0], 0.04, c[1]); idx.push(base, base + 2, base + 1); };
+    const uvs = [];
+    const addTri = (a, b, c) => { const base = pos.length / 3; pos.push(a[0], 0.04, a[1], b[0], 0.04, b[1], c[0], 0.04, c[1]); uvs.push(a[0], a[1], b[0], b[1], c[0], c[1]); idx.push(base, base + 2, base + 1); };
     for (const w of data.water) {
       if (!w.line) {
         const pts = cleanRing(w.pts);
@@ -225,6 +292,7 @@ export async function buildRealWorld(scene, renderer) {
     }
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    g.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
     g.setIndex(idx);
     g.computeVertexNormals();
     // normales vers le haut quel que soit l'enroulement
@@ -242,12 +310,21 @@ export async function buildRealWorld(scene, renderer) {
   const tmpC = new THREE.Color();
 
   const facadeSegs = []; // [ax,az,bx,bz,nx,nz,bays,len] : pour placer les fenêtres d'apparition
+  const blds = [];
   for (const bld of data.buildings) {
-    let pts = cleanRing(bld.pts);
+    const pts = cleanRing(bld.pts);
     if (pts.length < 3) continue;
-    let area = polyArea(pts);
+    const area = polyArea(pts);
     if (Math.abs(area) < 3) continue;
-    if (area < 0) { pts.reverse(); area = -area; }
+    if (area < 0) pts.reverse();
+    blds.push({ pts, h: bld.h });
+  }
+  // Brèches : bâtiments effondrés qui relieront la place de départ au reste de la ville (derrière des portes)
+  const breach = findBreaches(blds.map((b) => b.pts), halfX, halfZ, CONFIG.startHint, CONFIG.cityHint, CONFIG.breaches, NAV_CELL, NAV_MARGIN);
+  const rubble = [];
+  for (const [k, bld] of blds.entries()) {
+    const pts = bld.pts;
+    if (breach.removed.has(k)) { rubble.push(pts); continue; }
 
     const floors = Math.max(2, Math.round(bld.h / FLOOR_H));
     const H = floors * FLOOR_H;
@@ -300,86 +377,85 @@ export async function buildRealWorld(scene, renderer) {
   };
   buckets.forEach((bk, i) => {
     if (!bk.pos.length) return;
+    facadeMats[i].side = THREE.DoubleSide;
     const m = new THREE.Mesh(toGeo(bk, true), facadeMats[i]);
     m.castShadow = m.receiveShadow = true;
     scene.add(m);
   });
   {
     const roofMat = new THREE.MeshStandardMaterial({
-      map: roofP.map, normalMap: roofP.normalMap, roughnessMap: roofP.roughnessMap, color: 0x9a8f88,
+      map: roofP.map, normalMap: roofP.normalMap, roughnessMap: roofP.roughnessMap, color: 0x9a8f88, side: THREE.DoubleSide,
     });
     const m = new THREE.Mesh(toGeo(roofBucket, false), roofMat);
     m.castShadow = m.receiveShadow = true;
     scene.add(m);
   }
 
-  // ---------------------------------------------------------------- Limites de l'île (collision + barrières sur les ponts)
+  // ---------------------------------------------------------------- Limites de l'île
+  // Contour lissé (marching squares) : parapet de quai en grès côté eau, grille côté terre (ponts).
+  // Chaque mur qui bloque le joueur est donc visible.
   {
     const { cell, nx, nz, hx, hz } = isl;
-    const isIsl = (i, j) => i >= 0 && j >= 0 && i < nx && j < nz && isl.island[j * nx + i] === 1;
-    // Une arête est "pont" si aucune eau d'origine ne se trouve juste derrière : on matérialise alors une barrière.
-    const nearWater = (i, j) => {
-      for (let dj = -2; dj <= 2; dj++) for (let di = -2; di <= 2; di++) {
-        const a = i + di, b = j + dj;
-        if (a >= 0 && b >= 0 && a < nx && b < nz && isl.rawWater[b * nx + a]) return true;
-      }
-      return false;
-    };
-    const fenceMat = tiled(metalP, 1, 1, { color: 0x77776f, metalness: 0.5 });
-    const fence = []; // [x, z, w, d]
-    const edge = (ax, az, bx, bz, bridge) => {
+    const val = (i, j) => (i >= 0 && j >= 0 && i < nx && j < nz && isl.island[j * nx + i] === 1 ? 1 : 0);
+    const isWater = (i, j) => i < 0 || j < 0 || i >= nx || j >= nz || isl.rawWater[j * nx + i] === 1;
+    const PH = 1.1, PT = 0.5, FH = 3.2, FT = 0.25;
+    const parapets = [], fences = [];
+    const wall = (ax, az, bx, bz, water) => {
       collision.addSegment(ax, az, bx, bz);
-      if (bridge) fence.push([(ax + bx) / 2, (az + bz) / 2, Math.abs(bx - ax) + 0.4, Math.abs(bz - az) + 0.4]);
+      const len = Math.hypot(bx - ax, bz - az);
+      const h = water ? PH : FH, t = water ? PT : FT;
+      const g = worldBox(len + t * 0.6, h, t, water ? 1.5 : 2.2);
+      g.rotateY(-Math.atan2(bz - az, bx - ax));
+      g.translate((ax + bx) / 2, h / 2, (az + bz) / 2);
+      (water ? parapets : fences).push(g);
     };
-    // arêtes horizontales (nord / sud) fusionnées par rangée
-    for (let dirN = 0; dirN < 2; dirN++) {
-      const d = dirN ? 1 : -1;
-      for (let j = 0; j < nz; j++) {
-        let start = -1, bridge = false;
-        for (let i = 0; i <= nx; i++) {
-          const on = i < nx && isIsl(i, j) && !isIsl(i, j + d);
-          const br = on && !nearWater(i, j + d);
-          if (on && (start < 0 || br !== bridge)) {
-            if (start >= 0) { const z0 = (j + (d > 0 ? 1 : 0)) * cell - hz; edge(start * cell - hx, z0, i * cell - hx, z0, bridge); }
-            start = i; bridge = br;
-          } else if (!on && start >= 0) {
-            const z0 = (j + (d > 0 ? 1 : 0)) * cell - hz;
-            edge(start * cell - hx, z0, i * cell - hx, z0, bridge);
-            start = -1;
-          }
-        }
+    // coins = centres des cases ; milieux d'arêtes : haut, droite, bas, gauche
+    const SEGS = {
+      1: [['L', 'B']], 2: [['B', 'R']], 3: [['L', 'R']], 4: [['T', 'R']], 5: [['L', 'T'], ['B', 'R']],
+      6: [['T', 'B']], 7: [['L', 'T']], 8: [['L', 'T']], 9: [['T', 'B']], 10: [['T', 'R'], ['L', 'B']],
+      11: [['T', 'R']], 12: [['L', 'R']], 13: [['B', 'R']], 14: [['L', 'B']],
+    };
+    for (let j = -1; j < nz; j++) {
+      for (let i = -1; i < nx; i++) {
+        const a = val(i, j), b = val(i + 1, j), c = val(i + 1, j + 1), d = val(i, j + 1);
+        const k = a * 8 + b * 4 + c * 2 + d;
+        if (k === 0 || k === 15) continue;
+        const x0 = (i + 0.5) * cell - hx, z0 = (j + 0.5) * cell - hz, x1 = x0 + cell, z1 = z0 + cell;
+        const P = { T: [(x0 + x1) / 2, z0], R: [x1, (z0 + z1) / 2], B: [(x0 + x1) / 2, z1], L: [x0, (z0 + z1) / 2] };
+        // côté extérieur : eau si un des coins hors de l'île est de l'eau
+        const water = (!a && isWater(i, j)) || (!b && isWater(i + 1, j)) || (!c && isWater(i + 1, j + 1)) || (!d && isWater(i, j + 1));
+        for (const [u, v] of SEGS[k]) wall(P[u][0], P[u][1], P[v][0], P[v][1], water);
       }
     }
-    // arêtes verticales (ouest / est)
-    for (let dirE = 0; dirE < 2; dirE++) {
-      const d = dirE ? 1 : -1;
-      for (let i = 0; i < nx; i++) {
-        let start = -1, bridge = false;
-        for (let j = 0; j <= nz; j++) {
-          const on = j < nz && isIsl(i, j) && !isIsl(i + d, j);
-          const br = on && !nearWater(i + d, j);
-          if (on && (start < 0 || br !== bridge)) {
-            if (start >= 0) { const x0 = (i + (d > 0 ? 1 : 0)) * cell - hx; edge(x0, start * cell - hz, x0, j * cell - hz, bridge); }
-            start = j; bridge = br;
-          } else if (!on && start >= 0) {
-            const x0 = (i + (d > 0 ? 1 : 0)) * cell - hx;
-            edge(x0, start * cell - hz, x0, j * cell - hz, bridge);
-            start = -1;
-          }
+    if (parapets.length) {
+      const m = new THREE.Mesh(mergeGeometries(parapets), tiled(sandP, 1, 1, { color: 0xb07a6a }));
+      m.castShadow = m.receiveShadow = true;
+      scene.add(m);
+    }
+    if (fences.length) {
+      const m = new THREE.Mesh(mergeGeometries(fences), tiled(metalP, 1, 1, { color: 0x77776f, metalness: 0.5 }));
+      m.castShadow = m.receiveShadow = true;
+      scene.add(m);
+    }
+  }
+
+  // ---------------------------------------------------------------- Gravats des bâtiments effondrés
+  {
+    const mat = new THREE.MeshStandardMaterial({ color: 0x8f8574, roughness: 1, flatShading: true });
+    const geo = new THREE.DodecahedronGeometry(1, 0);
+    for (const pts of rubble) {
+      for (let i = 0; i < pts.length; i++) {
+        const [x, z] = pts[i];
+        for (let k = 0; k < 2; k++) {
+          const r = rand(0.35, 0.8);
+          const m = new THREE.Mesh(geo, mat);
+          m.position.set(x + rand(-0.6, 0.6), r * 0.4, z + rand(-0.6, 0.6));
+          m.scale.set(r, r * 0.7, r * rand(0.8, 1.3));
+          m.rotation.set(rand(0, 3), rand(0, 3), rand(0, 3));
+          m.castShadow = m.receiveShadow = true;
+          scene.add(m);
         }
       }
-    }
-    // barrières visibles aux endroits sans eau (ponts, extrémités)
-    const FH = 3.2;
-    const mats = [];
-    for (const [x, z, w, d] of fence) {
-      const m = new THREE.Matrix4().compose(new THREE.Vector3(x, FH / 2, z), new THREE.Quaternion(), new THREE.Vector3(w, FH, d));
-      mats.push(m);
-    }
-    if (mats.length) {
-      const f = instanced(new THREE.BoxGeometry(1, 1, 1), fenceMat, mats);
-      f.receiveShadow = true;
-      scene.add(f);
     }
   }
 
@@ -409,7 +485,7 @@ export async function buildRealWorld(scene, renderer) {
 
   // ---------------------------------------------------------------- Navigation de base (pour placer les props)
   collision.build();
-  const nav = new NavGrid(halfX, halfZ, collision, polygons, 0.75, 0.4, 1300);
+  const nav = new NavGrid(halfX, halfZ, collision, polygons, NAV_CELL, NAV_MARGIN, 1300);
   nav.outside = (x, z) => !onIsland(x, z);
   nav.build();
 
@@ -454,15 +530,18 @@ export async function buildRealWorld(scene, renderer) {
   const reachAt = (x, z) => { const ix = nav.cx(x), iz = nav.cz(z); return nav.inside(ix, iz) && reach[nav.idx(ix, iz)] === 1; };
 
   // ---------------------------------------------------------------- Zones
+  // zone 6 = la place de départ (même grille que la navigation), sinon grille 3 x 2
   const zoneOf = (x, z) => {
+    const ix = nav.cx(x), iz = nav.cz(z);
+    if (nav.inside(ix, iz) && breach.startMask[nav.idx(ix, iz)]) return 6;
     const col = x < Z.cutsX[0] ? 0 : x < Z.cutsX[1] ? 1 : 2;
     const row = z < Z.cutZ ? 0 : 1;
     return col + 3 * row;
   };
   const startZone = zoneOf(startPos.x, startPos.z);
-  const zoneOpen = new Array(6).fill(false);
+  const zoneOpen = new Array(NZONES).fill(false);
   zoneOpen[startZone] = true;
-  const zoneCells = Array.from({ length: 6 }, () => ({ n: 0, sx: 0, sz: 0 }));
+  const zoneCells = Array.from({ length: NZONES }, () => ({ n: 0, sx: 0, sz: 0 }));
   for (let iz = 0; iz < nav.nz; iz += 3) for (let ix = 0; ix < nav.nx; ix += 3) {
     if (!reach[nav.idx(ix, iz)]) continue;
     const x = nav.worldX(ix), z = nav.worldZ(iz), zc = zoneCells[zoneOf(x, z)];
@@ -606,10 +685,9 @@ export async function buildRealWorld(scene, renderer) {
     if (!zc.n) return null;
     if (zi === startZone) return [startPos.x, startPos.z];
     const cx = zc.sx / zc.n, cz = zc.sz / zc.n;
-    const c = candidatesNear(cx, cz, 3, 0, 120).sort((a, b) => Math.hypot(a[0] - cx, a[1] - cz) - Math.hypot(b[0] - cx, b[1] - cz))[0];
+    const c = candidatesNear(cx, cz, 3, 0, 160).filter((p) => zoneOf(p[0], p[1]) === zi).sort((a, b) => Math.hypot(a[0] - cx, a[1] - cz) - Math.hypot(b[0] - cx, b[1] - cz))[0];
     return c || null;
   };
-  const anchors = Array.from({ length: 6 }, (_, zi) => zoneAnchor(zi));
 
   const addStation = (x, z, faceX, faceZ) => {
     const g = new THREE.Group();
@@ -653,53 +731,76 @@ export async function buildRealWorld(scene, renderer) {
   };
 
   // ---------------------------------------------------------------- Portes payantes entre les zones
-  // On cherche, le long de chaque ligne de coupe entre deux zones, les passages libres (rues, ruelles) et on les barre.
+  // Partout où deux cases accessibles voisines appartiennent à deux zones différentes, on pose une barrière ;
+  // les barrières d'une même paire de zones forment une seule porte (un seul achat).
   const doors = [];
   let door_depth;
   {
-    const cell = nav.cell;
+    const cell = nav.cell, ext = cell + 0.3;
     const groups = new Map(); // "a-b" -> { a, b, runs: [{x0,z0,x1,z1}] }
-    const group = (a, b) => {
+    const addRun = (a, b, r) => {
       const k = a < b ? `${a}-${b}` : `${b}-${a}`;
       if (!groups.has(k)) groups.set(k, { a: Math.min(a, b), b: Math.max(a, b), runs: [] });
-      return groups.get(k);
+      groups.get(k).runs.push(r);
     };
-    const scanVertical = (x, zFrom, zTo) => {
-      const ix = nav.cx(x);
-      let start = -1;
-      const iz0 = Math.max(0, nav.cz(zFrom)), iz1 = Math.min(nav.nz - 1, nav.cz(zTo));
-      for (let iz = iz0; iz <= iz1 + 1; iz++) {
-        const free = iz <= iz1 && reach[nav.idx(ix, iz)] === 1;
-        if (free && start < 0) start = iz;
-        if (!free && start >= 0) {
-          const wx = nav.worldX(ix), z0 = nav.worldZ(start) - cell, z1 = nav.worldZ(iz - 1) + cell;
-          group(zoneOf(x - 2, (z0 + z1) / 2), zoneOf(x + 2, (z0 + z1) / 2)).runs.push({ x0: wx, z0, x1: wx, z1 });
-          start = -1;
+    // arêtes verticales : entre (ix, iz) et (ix + 1, iz)
+    for (let ix = 0; ix < nav.nx - 1; ix++) {
+      const ex = nav.worldX(ix) + cell / 2;
+      let start = -1, pa = -1, pb = -1;
+      for (let iz = 0; iz <= nav.nz; iz++) {
+        let a = -1, b = -1;
+        if (iz < nav.nz) {
+          const i = nav.idx(ix, iz);
+          if (reach[i] && reach[i + 1]) {
+            a = zoneOf(nav.worldX(ix), nav.worldZ(iz)); b = zoneOf(nav.worldX(ix + 1), nav.worldZ(iz));
+            if (a === b) a = b = -1;
+          }
         }
+        if (start >= 0 && (a !== pa || b !== pb)) { addRun(pa, pb, { x0: ex, z0: nav.worldZ(start) - ext, x1: ex, z1: nav.worldZ(iz - 1) + ext }); start = -1; }
+        if (a >= 0 && start < 0) { start = iz; pa = a; pb = b; }
       }
-    };
-    const scanHorizontal = (z, xFrom, xTo) => {
-      const iz = nav.cz(z);
-      let start = -1;
-      const ix0 = Math.max(0, nav.cx(xFrom)), ix1 = Math.min(nav.nx - 1, nav.cx(xTo));
-      for (let ix = ix0; ix <= ix1 + 1; ix++) {
-        const free = ix <= ix1 && reach[nav.idx(ix, iz)] === 1;
-        if (free && start < 0) start = ix;
-        if (!free && start >= 0) {
-          const wz = nav.worldZ(iz), x0 = nav.worldX(start) - cell, x1 = nav.worldX(ix - 1) + cell;
-          group(zoneOf((x0 + x1) / 2, z - 2), zoneOf((x0 + x1) / 2, z + 2)).runs.push({ x0, z0: wz, x1, z1: wz });
-          start = -1;
+    }
+    // arêtes horizontales : entre (ix, iz) et (ix, iz + 1)
+    for (let iz = 0; iz < nav.nz - 1; iz++) {
+      const ez = nav.worldZ(iz) + cell / 2;
+      let start = -1, pa = -1, pb = -1;
+      for (let ix = 0; ix <= nav.nx; ix++) {
+        let a = -1, b = -1;
+        if (ix < nav.nx) {
+          const i = nav.idx(ix, iz);
+          if (reach[i] && reach[i + nav.nx]) {
+            a = zoneOf(nav.worldX(ix), nav.worldZ(iz)); b = zoneOf(nav.worldX(ix), nav.worldZ(iz + 1));
+            if (a === b) a = b = -1;
+          }
         }
+        if (start >= 0 && (a !== pa || b !== pb)) { addRun(pa, pb, { x0: nav.worldX(start) - ext, z0: ez, x1: nav.worldX(ix - 1) + ext, z1: ez }); start = -1; }
+        if (a >= 0 && start < 0) { start = ix; pa = a; pb = b; }
       }
-    };
-    for (const cx of Z.cutsX) { scanVertical(cx, -halfZ, Z.cutZ - 0.01); scanVertical(cx, Z.cutZ + 0.01, halfZ); }
-    scanHorizontal(Z.cutZ, -halfX, Z.cutsX[0] - 0.01);
-    scanHorizontal(Z.cutZ, Z.cutsX[0] + 0.01, Z.cutsX[1] - 0.01);
-    scanHorizontal(Z.cutZ, Z.cutsX[1] + 0.01, halfX);
+    }
 
     // profondeur de chaque zone (nombre de portes depuis le départ) -> prix
-    const links = [...groups.values()].filter((g) => g.a !== g.b && g.runs.length);
-    const depth = new Array(6).fill(Infinity);
+    // Depuis la place de départ : une porte par brèche (barrières proches < 12 m).
+    // Entre deux autres zones : une seule porte pour toute la limite (un achat ouvre toutes les rues).
+    const links = [];
+    for (const g of groups.values()) {
+      if (g.a !== startZone && g.b !== startZone) { links.push(g); continue; }
+      const left = g.runs.slice();
+      while (left.length) {
+        const cluster = [left.pop()];
+        for (let grown = true; grown;) {
+          grown = false;
+          for (let i = left.length - 1; i >= 0; i--) {
+            const r = left[i];
+            const close = cluster.some((c) => Math.min(
+              Math.hypot(c.x0 - r.x0, c.z0 - r.z0), Math.hypot(c.x0 - r.x1, c.z0 - r.z1),
+              Math.hypot(c.x1 - r.x0, c.z1 - r.z0), Math.hypot(c.x1 - r.x1, c.z1 - r.z1)) < 12);
+            if (close) { cluster.push(r); left.splice(i, 1); grown = true; }
+          }
+        }
+        links.push({ a: g.a, b: g.b, runs: cluster });
+      }
+    }
+    const depth = new Array(NZONES).fill(Infinity);
     depth[startZone] = 0;
     for (let changed = true; changed;) {
       changed = false;
@@ -708,28 +809,27 @@ export async function buildRealWorld(scene, renderer) {
         if (depth[g.b] + 1 < depth[g.a]) { depth[g.a] = depth[g.b] + 1; changed = true; }
       }
     }
-    zoneCells.forEach((zc, i) => { if (!zc.n) depth[i] = Infinity; });
 
-    const doorMat = tiled(metalP, 2, 1, { color: 0x8a5a44, metalness: 0.6 });
+    const longestRun = (runs) => runs.reduce((best, r) => (Math.hypot(r.x1 - r.x0, r.z1 - r.z0) > Math.hypot(best.x1 - best.x0, best.z1 - best.z0) ? r : best), runs[0]);
+    const doorMat = tiled(metalP, 1, 1, { color: 0x8a5a44, metalness: 0.6 });
     const FH = 3.4;
     links.forEach((g, di) => {
       const far = depth[g.a] > depth[g.b] ? g.a : g.b;
       const price = Z.basePrice + Z.priceStep * Math.max(0, depth[far] - 1);
       const door = { id: di, price, a: g.a, b: g.b, toZone: far, name: ZONE_NAMES[far], open: false, points: [], segs: [], meshes: [], cells: [] };
-      let longest = null;
+      // les barrières assez proches les unes des autres partagent un panneau ; on en met un par ouverture de rue (>= 2,5 m)
       for (const r of g.runs) {
         const len = Math.hypot(r.x1 - r.x0, r.z1 - r.z0);
+        const vertical = r.x0 === r.x1;
         door.segs.push(collision.addSegment(r.x0, r.z0, r.x1, r.z1, FH));
-        const m = new THREE.Mesh(new THREE.BoxGeometry(r.x0 === r.x1 ? 0.35 : len, FH, r.z0 === r.z1 ? 0.35 : len), doorMat);
+        const m = new THREE.Mesh(worldBox(vertical ? 0.35 : len, FH, vertical ? len : 0.35, 2), doorMat);
         m.position.set((r.x0 + r.x1) / 2, FH / 2, (r.z0 + r.z1) / 2);
         m.castShadow = m.receiveShadow = true;
         scene.add(m);
         door.meshes.push(m);
         for (let s = 0; s <= len; s += 3) door.points.push({ x: r.x0 + ((r.x1 - r.x0) * s) / len, z: r.z0 + ((r.z1 - r.z0) * s) / len });
-        if (!longest || len > longest.len) longest = { ...r, len };
-      }
-      // panneau de prix au milieu de la plus grande ouverture (visible des deux côtés)
-      if (longest) {
+        if (len < 3.5 && !(r === longestRun(g.runs) && !g.runs.some((q) => Math.hypot(q.x1 - q.x0, q.z1 - q.z0) >= 3.5))) continue;
+        // panneau de prix au milieu de l'ouverture (visible des deux côtés) ; au moins un par porte
         const cv = document.createElement('canvas'); cv.width = 512; cv.height = 192;
         const x = cv.getContext('2d');
         x.fillStyle = '#1a0d0a'; x.fillRect(0, 0, 512, 192);
@@ -737,10 +837,9 @@ export async function buildRealWorld(scene, renderer) {
         x.textAlign = 'center';
         x.fillStyle = '#fff'; x.font = 'bold 34px Arial, sans-serif'; x.fillText('PORTE VERROUILLÉE', 256, 62);
         x.fillStyle = '#ffd24a'; x.font = 'bold 54px Arial, sans-serif'; x.fillText(`${price} PTS`, 256, 126);
-        x.fillStyle = '#aaa'; x.font = '24px Arial, sans-serif'; x.fillText(`vers ${ZONE_NAMES[far]}`, 256, 164);
+        x.fillStyle = '#aaa'; x.font = '24px Arial, sans-serif'; x.fillText(`${ZONE_NAMES[g.a]} ↔ ${ZONE_NAMES[g.b]}`, 256, 164);
         const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace;
-        const cx0 = (longest.x0 + longest.x1) / 2, cz0 = (longest.z0 + longest.z1) / 2;
-        const vertical = longest.x0 === longest.x1;
+        const cx0 = (r.x0 + r.x1) / 2, cz0 = (r.z0 + r.z1) / 2;
         for (const side of [-1, 1]) {
           const sign = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 0.98), new THREE.MeshBasicMaterial({ map: tex }));
           sign.position.set(cx0 + (vertical ? side * 0.2 : 0), 2.1, cz0 + (vertical ? 0 : side * 0.2));
@@ -748,31 +847,36 @@ export async function buildRealWorld(scene, renderer) {
           scene.add(sign);
           door.meshes.push(sign);
         }
-        lightSources.push({ x: cx0, y: 2.6, z: cz0, color: 0xff7733, intensity: 25, dist: 10 });
+        lightSources.push({ x: cx0, y: 2.6, z: cz0, color: 0xff7733, intensity: 18, dist: 9, door });
       }
       doors.push(door);
     });
-
-    // Cases de navigation bloquées par chaque porte (on ne les marque qu'après la construction finale de la grille)
     door_depth = depth;
   }
 
-  // Stations et armes : la zone de départ vend le fusil à pompe, la suivante le PM, etc.
+  // Stations et armes : le quartier de départ a sa borne et les deux armes (comme l'ancienne carte),
+  // chaque autre zone a une borne et une arme (fusil à pompe / PM en alternance).
   const weaponCycle = [
     ['shotgun', 'FUSIL A POMPE', 750, 350, 0xff8833],
     ['smg', 'PM MP40', 1000, 500, 0x3399ff],
   ];
-  const zoneOrder = [...Array(6).keys()].filter((zi) => anchors[zi] && Number.isFinite(door_depth[zi])).sort((a, b) => door_depth[a] - door_depth[b]);
+  const anchors = Array.from({ length: NZONES }, (_, zi) => zoneAnchor(zi));
+  const zoneOrder = [...Array(NZONES).keys()].filter((zi) => anchors[zi] && Number.isFinite(door_depth[zi])).sort((a, b) => door_depth[a] - door_depth[b]);
   zoneOrder.forEach((zi, k) => {
     const [ax, az] = anchors[zi];
     const zc = zoneCells[zi];
-    const fx = zc.sx / zc.n, fz = zc.sz / zc.n;
-    const st = shuffle(candidatesNear(ax, az, 3, zi === startZone ? 7 : 3, zi === startZone ? 14 : 20));
+    const fx = zi === startZone ? startPos.x : zc.sx / zc.n, fz = zi === startZone ? startPos.z : zc.sz / zc.n;
+    const inZone = (c) => zoneOf(c[0], c[1]) === zi;
+    const st = shuffle(candidatesNear(ax, az, 3, zi === startZone ? 7 : 3, zi === startZone ? 14 : 20).filter(inZone));
     const [sx, sz] = st[0] || [ax + 5, az];
     addStation(sx, sz, fx, fz);
-    const [id, name, price, ammoPrice, col] = weaponCycle[k % weaponCycle.length];
-    const ww = shuffle(candidatesNear(sx, sz, 2, 6, 18));
-    addWallBuy(id, name, price, ammoPrice, col, ww[0], fx, fz);
+    const ww = shuffle(candidatesNear(ax, az, 2, 6, 26).filter(inZone)).filter((c) => Math.hypot(c[0] - sx, c[1] - sz) > 4);
+    if (zi === startZone) {
+      addWallBuy(...weaponCycle[0], ww[0], fx, fz);
+      addWallBuy(...weaponCycle[1], ww.find((c) => Math.hypot(c[0] - ww[0][0], c[1] - ww[0][1]) > 6) || ww[1], fx, fz);
+    } else {
+      addWallBuy(...weaponCycle[k % 2], ww[0], fx, fz);
+    }
   });
   if (!stations.length) stations.push(new THREE.Vector3(startPos.x + 6, 0, startPos.z));
 
@@ -806,7 +910,7 @@ export async function buildRealWorld(scene, renderer) {
     const tyre = new THREE.MeshStandardMaterial({ color: 0x0e0e0e, roughness: 0.9 });
     const concrete = new THREE.MeshStandardMaterial({ color: 0x8d8b85, roughness: 0.95 });
     const wood = new THREE.MeshStandardMaterial({ color: 0x6b4a2b, roughness: 0.85 });
-    const spots = randomSpots(110, 4);
+    const spots = [...shuffle(candidatesNear(startPos.x, startPos.z, 4, 6, 55).filter((c) => zoneOf(c[0], c[1]) === startZone)).slice(0, 30), ...randomSpots(110, 4)];
     const used = [startPos];
     const take = (minGap) => {
       for (let i = 0; i < spots.length; i++) {
@@ -918,6 +1022,7 @@ export async function buildRealWorld(scene, renderer) {
     for (const i of d.cells) nav.blocked[i] = 0;
     nav.invalidate();
     zoneOpen[d.a] = zoneOpen[d.b] = true;
+    lightTimer = 0;
     return true;
   }
 
@@ -932,6 +1037,7 @@ export async function buildRealWorld(scene, renderer) {
   let lightTimer = 0;
   const assignLights = (px, pz) => {
     const sorted = lightSources
+      .filter((s) => !(s.door && s.door.open))
       .map((s) => ({ s, d: (s.x - px) ** 2 + (s.z - pz) ** 2 }))
       .sort((a, b) => a.d - b.d)
       .slice(0, LIGHTS);
@@ -946,11 +1052,12 @@ export async function buildRealWorld(scene, renderer) {
   const stationPos = stations[0];
   return {
     half: Math.max(halfX, halfZ), blockers, spawnPoints: [], windowSpawns, pickWindow, pickGround,
-    stationPos, stations, wallWeapons, doors, openDoor, zoneOf, startPos, nav,
+    stationPos, stations, wallWeapons, doors, openDoor, zoneOf, startPos, nav, collision,
     collide: (pos, r) => collision.resolve(pos, r),
     rayHit: (ox, oy, oz, dx, dy, dz, maxT) => collision.rayHit(ox, oy, oz, dx, dy, dz, maxT),
     update(px, pz, dt) {
       sky.position.set(px, 0, pz);
+      if (waterNormal) { waterNormal.offset.x += dt * 0.004; waterNormal.offset.y += dt * 0.0025; }
       lightTimer -= dt;
       if (lightTimer <= 0) { lightTimer = 0.4; assignLights(px, pz); }
     },

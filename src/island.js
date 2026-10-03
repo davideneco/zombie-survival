@@ -101,5 +101,38 @@ export function computeIsland(data, startX, startZ, cell = 2) {
     if (z > 0 && !island[c - nx] && !water[c - nx]) { island[c - nx] = 1; stack.push(c - nx); }
     if (z < nz - 1 && !island[c + nx] && !water[c + nx]) { island[c + nx] = 1; stack.push(c + nx); }
   }
+  // La fermeture a aussi "mangé" des bandes de terre près de l'eau (quais, îlots de la Petite France).
+  // On les rend à l'île : terre (hors eau réelle) à moins de CLOSE_RADIUS cases de l'île et connectée à elle.
+  const near = morph(island, nx, nz, CLOSE_RADIUS, false);
+  for (let c = 0; c < island.length; c++) if (island[c]) stack.push(c);
+  while (stack.length) {
+    const c = stack.pop(), x = c % nx, z = (c / nx) | 0;
+    const grow = (j) => { if (!island[j] && near[j] && !rawWater[j]) { island[j] = 1; stack.push(j); } };
+    if (x > 0) grow(c - 1);
+    if (x < nx - 1) grow(c + 1);
+    if (z > 0) grow(c - nx);
+    if (z < nz - 1) grow(c + nx);
+  }
   return { cell, nx, nz, hx, hz, water, rawWater, island };
+}
+
+// Les anneaux de multipolygones OSM arrivent parfois en plusieurs morceaux (une "way" par morceau) :
+// on recolle les morceaux ouverts qui partagent une extrémité. items : [{ pts, ... }]
+export function stitchRings(items) {
+  const same = (a, b) => Math.abs(a[0] - b[0]) < 0.05 && Math.abs(a[1] - b[1]) < 0.05;
+  const closed = [], open = [];
+  for (const it of items) (it.pts.length > 2 && same(it.pts[0], it.pts[it.pts.length - 1]) ? closed : open).push({ ...it, pts: it.pts.slice() });
+  while (open.length) {
+    const cur = open.pop();
+    for (let guard = 0; guard < 200 && !same(cur.pts[0], cur.pts[cur.pts.length - 1]); guard++) {
+      const end = cur.pts[cur.pts.length - 1];
+      const k = open.findIndex((o) => same(o.pts[0], end) || same(o.pts[o.pts.length - 1], end));
+      if (k < 0) break;
+      const o = open.splice(k, 1)[0];
+      const pts = same(o.pts[0], end) ? o.pts : o.pts.slice().reverse();
+      cur.pts.push(...pts.slice(1));
+    }
+    closed.push(cur);
+  }
+  return closed;
 }

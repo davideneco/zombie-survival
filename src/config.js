@@ -2,7 +2,9 @@
 export const CONFIG = {
   map: 'strasbourg', // 'strasbourg' (lieu réel OpenStreetMap) ou 'arena' (arène de test)
   // Strasbourg : toute la Grande Île (données dans public/data/area.json, voir tools/fetch-osm.mjs)
-  startHint: { x: -221, z: -156 }, // point de départ souhaité (place Kléber), en mètres depuis le centre des données
+  startHint: { x: 4.3, z: -35.7 }, // point de départ (place du Marché-Neuf, centre de l'ancienne carte), en mètres depuis le centre des données
+  cityHint: { x: -221, z: -156 }, // un point du réseau de rues principal (place Kléber)
+  breaches: 3,                     // nombre de passages (portes payantes) ouverts depuis la place de départ
   zones: {
     cutsX: [-420, 170],   // lignes de coupe est-ouest entre les 3 colonnes de zones
     cutZ: -60,            // ligne de coupe nord-sud entre les 2 rangées

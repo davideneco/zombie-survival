@@ -1306,3 +1306,4 @@ function frame() {
 frame();
 
 window.game = game;
+game.scene = scene; // accès console / outils de test
