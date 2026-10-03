@@ -53,6 +53,7 @@ const world = CONFIG.map === 'arena' ? buildWorld(scene) : await buildRealWorld(
 let nextPuId = 1;
 
 const game = {
+  started: false,
   playing: false,
   over: false,
   time: 0,
@@ -179,10 +180,11 @@ const game = {
   },
 
   checkTeamWipe() {
+    if (this.isClient) return; // Seul l'hôte arbitre la défaite d'équipe
     const localDown = this.player.downed || this.player.dead;
     if (!localDown) return;
     for (const r of this.remotes.values()) {
-      if (!r.dead) return; // Au moins un coéquipier est debout
+      if (!r.dead && !r.downed) return; // Au moins un coéquipier est debout
     }
     this.gameOver();
   },
@@ -325,7 +327,7 @@ const game = {
     if (!this.isMultiplayer) return null;
     const p = this.player.pos;
     for (const tm of this.remotes.values()) {
-      if (tm.dead && Math.hypot(p.x - tm.pos.x, p.z - tm.pos.z) < 2.6) return tm;
+      if ((tm.dead || tm.downed) && Math.hypot(p.x - tm.pos.x, p.z - tm.pos.z) < 2.6) return tm;
     }
     return null;
   },
@@ -334,7 +336,7 @@ const game = {
   startRound() {
     this.round++;
     const r = this.round;
-    const countMult = this.isMultiplayer ? 1 + (this.remotes.size) * 0.75 : 1;
+    const countMult = this.isMultiplayer ? 1 + this.remotes.size * 0.75 : 1;
     this.toSpawn = Math.round((4 + r * 3) * countMult);
     this.zombieHealth = r < 10 ? 70 + r * 30 : Math.round(340 * Math.pow(1.1, r - 9));
     this.zombieSpeed = Math.min(1.6 + r * 0.2, 4.2);
@@ -343,7 +345,7 @@ const game = {
     sfx.roundStart();
     hud.announce(`MANCHE ${r}`, `${this.toSpawn} zombies`);
 
-    // Réanime les joueurs tombés lors de la manche précédente
+    // Réanime le joueur s'il était à terre lors de la manche précédente
     if (this.player.downed || this.player.dead) this.player.revive();
 
     if (this.isHost) {
@@ -390,13 +392,15 @@ const game = {
 
     if (this.isHost) {
       const wi = spawn.type === 'window' ? world.windowSpawns.indexOf(spawn) : -1;
+      const sx = spawn.type === 'window' ? spawn.outside.x : spawn.pos.x;
+      const sz = spawn.type === 'window' ? spawn.outside.z : spawn.pos.z;
       this.net.send({
         t: 'z_spawn',
         id: z.id,
         st: spawn.type,
         wi,
-        x: z.pos.x,
-        z: z.pos.z,
+        x: sx,
+        z: sz,
         hp: z.health,
         spd: speed,
       });
@@ -420,7 +424,7 @@ const game = {
       this.kills = 0;
       this.round = 0;
     }
-    this.intermission = 2;
+    this.intermission = (this.isHost || !this.isMultiplayer) ? 2 : 0;
     this.toSpawn = 0;
     this.buffs.instaKill = 0;
     this.buffs.doublePoints = 0;
@@ -430,15 +434,17 @@ const game = {
   gameOver() {
     if (this.over) return;
     this.over = true;
-    this.playing = false;
     this.player.releaseInputs();
     document.exitPointerLock();
     hud.prompt(null);
-    hud.showOverlay(
-      'ÉQUIPE ÉLIMINÉE',
-      `Vous avez survécu jusqu'à la <b style="color:#fff">manche ${this.round}</b><br>${this.kills} zombies tués`,
-      'REJOUER'
-    );
+
+    const btnLabel = (this.isHost || !this.isMultiplayer) ? 'REJOUER' : null;
+    const subtitle = (this.isHost || !this.isMultiplayer)
+      ? `Vous avez survécu jusqu'à la <b style="color:#fff">manche ${this.round}</b><br>${this.kills} zombies tués`
+      : `Vous avez survécu jusqu'à la <b style="color:#fff">manche ${this.round}</b><br>En attente que l'hôte relance…`;
+
+    hud.showOverlay('ÉQUIPE ÉLIMINÉE', subtitle, btnLabel);
+
     if (this.isHost) {
       this.net.send({ t: 'game_over', round: this.round, kills: this.kills });
     }
@@ -448,6 +454,9 @@ const game = {
   update(dt) {
     this.time += dt;
     const p = this.player;
+
+    // Le joueur local n'est contrôlable que si le pointer lock est actif
+    this.player.active = this.playing;
     p.update(dt, this.time);
 
     // Mise à jour des coéquipiers
@@ -461,8 +470,8 @@ const game = {
     moon.target.position.set(Math.round(p.pos.x), 0, Math.round(p.pos.z));
     moon.position.copy(moon.target.position).add(MOON_OFFSET);
 
-    // Pathfinding / champ de flux multi-joueurs
-    if (world.nav && !this.isClient) {
+    // Pathfinding / champ de flux multi-joueurs (Hôte ou Solo uniquement)
+    if (world.nav && (this.isHost || !this.isMultiplayer)) {
       this.navTimer = (this.navTimer ?? 0) - dt;
       if (this.navTimer <= 0) {
         const targets = [p, ...this.remotes.values()].filter((pl) => !pl.dead);
@@ -471,8 +480,8 @@ const game = {
       }
     }
 
-    // Gestion des manches (Hôte ou Solo)
-    if (!this.isClient) {
+    // Gestion des manches (Hôte ou Solo UNIQUEMENT)
+    if (this.isHost || !this.isMultiplayer) {
       const alive = this.zombies.filter((z) => !z.dead).length;
       if (this.toSpawn > 0) {
         this.spawnTimer -= dt;
@@ -551,7 +560,7 @@ const game = {
       }
     }
 
-    // Réanimation en continu (touche E maintenue)
+    // Réanimation en continu (touche E maintenue par un joueur vivant)
     const downedTeammate = this.nearDownedTeammate();
     if (downedTeammate && !p.downed && !p.dead && p.keys['KeyE']) {
       this.reviveTarget = downedTeammate;
@@ -563,6 +572,7 @@ const game = {
         hud.announce('RÉANIMATION !', '+250 points', 2000);
         if (this.isHost) {
           downedTeammate.dead = false;
+          downedTeammate.downed = false;
           downedTeammate.health = 50;
           this.net.send({ t: 'revive', id: downedTeammate.id });
         } else {
@@ -580,7 +590,7 @@ const game = {
       if (this.netTimer <= 0) {
         this.netTimer = 0.05; // 20 fois par seconde
 
-        // Envoi de la position du joueur local
+        // Envoi de la position et de l'état du joueur local
         this.net.send({
           t: 'p_state',
           x: Math.round(p.pos.x * 100) / 100,
@@ -589,7 +599,8 @@ const game = {
           yaw: Math.round(p.yaw * 100) / 100,
           pitch: Math.round(p.pitch * 100) / 100,
           hp: Math.round(p.health),
-          dead: p.downed || p.dead,
+          downed: p.downed,
+          dead: p.dead,
           pts: this.points,
           w: p.curW.id,
         });
@@ -631,7 +642,7 @@ const game = {
     if (this.isMultiplayer) {
       const teamList = [{ name: this.playerName, points: this.points, health: p.health, dead: p.downed || p.dead, color: '#3a7bd5' }];
       for (const r of this.remotes.values()) {
-        teamList.push({ name: r.name, points: r.points, health: r.health, dead: r.dead, color: r.color });
+        teamList.push({ name: r.name, points: r.points, health: r.health, dead: r.dead || r.downed, color: r.color });
       }
       hud.setTeammates(teamList);
     }
@@ -685,7 +696,7 @@ function removeRemote(id) {
 function updateLobbyUI(peers) {
   const box = hud.el.lobbyPlayers;
   if (!box) return;
-  box.innerHTML = peers.map((p, idx) => `
+  box.innerHTML = peers.map((p) => `
     <div>● <b>${p.name}</b> ${p.id === game.net?.hostId ? '<span style="color:#ffd24a">(Hôte)</span>' : ''}</div>
   `).join('');
 }
@@ -701,6 +712,7 @@ function setupNetworkHandlers(net) {
   });
   net.on('left', (m) => {
     removeRemote(m.id);
+    game.checkTeamWipe();
   });
 
   // Nouveau joueur
@@ -713,6 +725,7 @@ function setupNetworkHandlers(net) {
     if (game.isHost) {
       net.send({
         t: 'sync',
+        started: game.started,
         round: game.round,
         toSpawn: game.toSpawn,
         intermission: game.intermission,
@@ -852,7 +865,7 @@ function setupNetworkHandlers(net) {
       game.player.revive();
     } else {
       const r = game.remotes.get(m.id);
-      if (r) { r.dead = false; r.health = 50; }
+      if (r) { r.dead = false; r.downed = false; r.health = 50; }
     }
     net.send({ t: 'revive', id: m.id });
   });
@@ -862,7 +875,7 @@ function setupNetworkHandlers(net) {
       game.player.revive();
     } else {
       const r = game.remotes.get(m.id);
-      if (r) { r.dead = false; r.health = 50; }
+      if (r) { r.dead = false; r.downed = false; r.health = 50; }
     }
   });
 
@@ -872,6 +885,10 @@ function setupNetworkHandlers(net) {
     game.toSpawn = m.toSpawn;
     hud.setRound(m.round);
     game.buffs = m.buffs || game.buffs;
+
+    // Supprimer d'éventuels zombies locaux existants
+    for (const z of game.zombies) z.dispose();
+    game.zombies = [];
 
     for (const zd of m.zombies) {
       let spawn;
@@ -888,14 +905,37 @@ function setupNetworkHandlers(net) {
     }
   });
 
+  // Démarrage par l'hôte
   net.on('start', () => {
-    hud.hideOverlay();
+    game.started = true;
     game.reset(false);
-    lockAndPlay();
+    hud.showOverlay(
+      'PARTIE LANCÉE !',
+      "L'hôte a lancé le combat.<br><b style='color:#ffd24a;'>Cliquez sur le bouton pour entrer en jeu !</b>",
+      'COMBATTRE'
+    );
   });
 
-  net.on('game_over', () => {
-    game.gameOver();
+  net.on('restart', () => {
+    game.started = true;
+    game.reset(true);
+    hud.showOverlay(
+      'NOUVELLE PARTIE',
+      "L'hôte a relancé la partie.<br><b style='color:#ffd24a;'>Cliquez pour continuer !</b>",
+      'REPRENDRE'
+    );
+  });
+
+  net.on('game_over', (m) => {
+    game.over = true;
+    game.player.releaseInputs();
+    document.exitPointerLock();
+    hud.prompt(null);
+    hud.showOverlay(
+      'ÉQUIPE ÉLIMINÉE',
+      `Vous avez survécu jusqu'à la <b style="color:#fff">manche ${m.round || game.round}</b><br>En attente que l'hôte relance…`,
+      null
+    );
   });
 }
 
@@ -904,12 +944,24 @@ const canvas = renderer.domElement;
 
 function lockAndPlay() {
   sfx.init();
-  if (game.over) game.reset();
+  if (game.over) {
+    if (game.isHost || !game.isMultiplayer) {
+      game.reset(true);
+      if (game.isHost) game.net.send({ t: 'restart' });
+    }
+  }
   const req = canvas.requestPointerLock();
   if (req && req.catch) req.catch(() => {});
 }
 
-// Clics sur l'overlay
+// Clic direct sur le canvas en cours de partie pour reprendre le contrôle
+canvas.addEventListener('click', () => {
+  if (game.started && !game.over && document.pointerLockElement !== canvas) {
+    lockAndPlay();
+  }
+});
+
+// Clics sur le bouton d'overlay (PAUSE / REJOUER / ENTRER EN JEU)
 hud.el.ovBtn.addEventListener('click', (e) => {
   e.stopPropagation();
   lockAndPlay();
@@ -926,8 +978,12 @@ hud.el.playerName.addEventListener('input', (e) => {
 hud.el.btnSolo.addEventListener('click', (e) => {
   e.stopPropagation();
   game.isMultiplayer = false;
+  game.isHost = true;
+  game.isClient = false;
+  game.started = true;
   hud.setRoomBadge(null);
   hud.hideOverlay();
+  game.reset(true);
   lockAndPlay();
 });
 
@@ -944,6 +1000,7 @@ hud.el.btnHost.addEventListener('click', async (e) => {
       net.id = m.id;
       net.hostId = m.host;
       game.isHost = true;
+      game.isClient = false;
       game.isMultiplayer = true;
       game.roomCode = m.code;
 
@@ -982,20 +1039,30 @@ hud.el.btnJoin.addEventListener('click', async (e) => {
       game.isMultiplayer = true;
       game.roomCode = m.code;
 
+      // Vide les zombies locaux
+      for (const z of game.zombies) z.dispose();
+      game.zombies = [];
+
       hud.setRoomBadge(m.code);
       hud.el.lobbyBox.classList.remove('hidden');
       hud.el.lobbyStatus.innerHTML = `SALON REJOINT : <b style="color:#fff;">${m.code}</b>`;
       hud.el.btnStartGame.classList.add('hidden');
       updateLobbyUI(m.peers);
 
-      // Crée les joueurs déjà présents
+      // Crée les coéquipiers déjà présents
       for (const p of m.peers) {
         if (p.id !== net.id) addRemote(p.id, p.name, game.remotes.size + 1);
       }
 
       if (m.started) {
-        hud.hideOverlay();
-        lockAndPlay();
+        game.started = true;
+        hud.showOverlay(
+          'PARTIE EN COURS',
+          "Le combat a déjà commencé !<br><b style='color:#ffd24a'>Cliquez pour rejoindre vos coéquipiers !</b>",
+          'REJOINDRE LE COMBAT'
+        );
+      } else {
+        hud.el.lobbyStatus.innerHTML += `<div style="font-size:15px; color:#aaa; margin-top:6px;">En attente que l'hôte lance la partie…</div>`;
       }
     });
 
@@ -1009,6 +1076,7 @@ hud.el.btnJoin.addEventListener('click', async (e) => {
 hud.el.btnStartGame.addEventListener('click', (e) => {
   e.stopPropagation();
   if (!game.isHost) return;
+  game.started = true;
   game.net.send({ t: 'start' });
   hud.hideOverlay();
   game.reset(false);
@@ -1019,14 +1087,14 @@ document.addEventListener('pointerlockchange', () => {
   if (document.pointerLockElement === canvas) {
     game.playing = true;
     hud.hideOverlay();
-  } else if (!game.over) {
+  } else if (game.started && !game.over) {
     game.playing = false;
     game.player.releaseInputs();
     hud.showOverlay('PAUSE', 'Cliquez pour reprendre.', 'REPRENDRE');
   }
 });
 
-game.reset();
+game.reset(true);
 hud.showMenu('ZOMBIE SURVIVAL', `${world.mapName}<br>Survivez seul ou en coopération.`);
 
 // Mode debug : ?debug&x=0&z=0&yaw=0&pitch=0
@@ -1037,6 +1105,7 @@ if (q.has('debug')) {
   if (q.has('z')) pl.pos.z = parseFloat(q.get('z'));
   if (q.has('yaw')) pl.yaw = parseFloat(q.get('yaw'));
   if (q.has('pitch')) pl.pitch = parseFloat(q.get('pitch'));
+  game.started = true;
   game.playing = true;
   hud.hideOverlay();
   console.log('[DBG] windowSpawns=', world.windowSpawns?.length, 'groundSpawns=', world.spawnPoints.length);
@@ -1074,7 +1143,7 @@ const clock = new THREE.Clock();
 function frame() {
   requestAnimationFrame(frame);
   const dt = Math.min(clock.getDelta(), 0.05);
-  if (game.playing) game.update(dt);
+  if (game.started && !game.over) game.update(dt);
   hud.update(dt);
   renderer.render(scene, camera);
 }

@@ -63,6 +63,7 @@ export class RemotePlayer {
     this.health = s.hp;
     this.points = s.pts;
     this.weapon = s.w;
+    this.downed = !!s.downed;
     this.dead = !!s.dead;
   }
 
@@ -77,10 +78,11 @@ export class RemotePlayer {
     this.group.position.copy(this.pos);
     this.group.rotation.y = this.yaw;
     this.pitchG.rotation.x = this.pitch;
-    // à terre : allongé
-    this.group.rotation.x += ((this.dead ? -Math.PI / 2 : 0) - this.group.rotation.x) * k;
-    this.group.position.y += this.dead ? 0.25 : 0;
-    this.tag.visible = !this.dead || true;
+    // à terre : allongé au sol
+    const isDown = this.downed || this.dead;
+    this.group.rotation.x += ((isDown ? -Math.PI / 2 : 0) - this.group.rotation.x) * k;
+    this.group.position.y += isDown ? 0.25 : 0;
+    this.tag.visible = true;
   }
 
   dispose() {

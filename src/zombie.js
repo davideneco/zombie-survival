@@ -457,8 +457,9 @@ export class Zombie {
     if (Array.isArray(player)) {
       let bestDist = Infinity;
       target = null;
-      for (const pl of player) {
-        if (!pl || pl.dead) continue;
+      const standing = player.filter((pl) => pl && !pl.dead && !pl.downed);
+      const candidates = standing.length > 0 ? standing : player.filter((pl) => pl && !pl.dead);
+      for (const pl of candidates) {
         const d = Math.hypot(pl.pos.x - this.pos.x, pl.pos.z - this.pos.z);
         if (d < bestDist) {
           bestDist = d;

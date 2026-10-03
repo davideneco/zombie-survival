@@ -66,7 +66,8 @@ function onMessage(ws, raw) {
   if (msg.t === 'start' && room.host === ws.pid) room.started = true;
   msg.from = ws.pid;
   if (msg.to != null && msg.to !== '*') {
-    const m = room.members.get(msg.to);
+    const toId = Number(msg.to);
+    const m = room.members.get(toId) || room.members.get(msg.to);
     if (m) send(m.ws, msg);
   } else {
     for (const m of room.members.values()) if (m.id !== ws.pid) send(m.ws, msg);
