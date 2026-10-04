@@ -1,0 +1,31 @@
+﻿Type;Nom;Zone;Prix (pts);x (m, vers l'est);z (m, vers le sud)
+Borne de munitions;Munitions;Marché-Neuf;;-7;-36
+Arme au mur;FUSIL À POMPE;Marché-Neuf;750;-1;-45
+Arme au mur;PISTOLET-MITRAILLEUR;Marché-Neuf;1000;-18;-32
+Atout;RÉANIMATION RAPIDE;Marché-Neuf;1500;-22;-49
+Boîte mystère;BOÎTE MYSTÈRE;Marché-Neuf;950;-4;-22
+Départ;Place du Marché-Neuf;Marché-Neuf;;-1;-31
+Borne de munitions;Munitions;Place Kléber;;-97;-234
+Arme au mur;PISTOLET-MITRAILLEUR;Place Kléber;1000;-130;-234
+Atout;MASTODONTE;Place Kléber;2500;-82;-202
+Atout;SPEED COLA;Place Kléber;3000;-84;-260
+Borne de munitions;Munitions;Cathédrale;;-99;201
+Arme au mur;FUSIL À POMPE;Cathédrale;750;-117;192
+Atout;DOUBLE TAP;Cathédrale;2000;-92;218
+Boîte mystère;BOÎTE MYSTÈRE;Cathédrale;950;-116;197
+Borne de munitions;Munitions;Nord-Ouest;;-564;-116
+Arme au mur;FUSIL À POMPE;Nord-Ouest;750;-535;-124
+Arme au mur;FUSIL DE PRÉCISION;Nord-Ouest;1750;-596;-99
+Atout;MULE KICK;Nord-Ouest;4000;-580;-110
+Borne de munitions;Munitions;Nord-Est;;374;-239
+Arme au mur;PISTOLET-MITRAILLEUR;Nord-Est;1000;352;-259
+Atout;STAMIN-UP;Nord-Est;2000;329;-276
+Boîte mystère;BOÎTE MYSTÈRE;Nord-Est;950;348;-255
+Borne de munitions;Munitions;Petite France;;-594;57
+Arme au mur;PISTOLET-MITRAILLEUR;Petite France;1000;-592;49
+Pack-a-Punch;PACK-A-PUNCH;Petite France;5000;-616;53
+Boîte mystère;BOÎTE MYSTÈRE;Petite France;950;-599;64
+Borne de munitions;Munitions;Quartier Est;;303;86
+Arme au mur;FUSIL À POMPE;Quartier Est;750;314;115
+Arme au mur;MITRAILLEUSE RPK;Quartier Est;2500;307;81
+Boîte mystère;BOÎTE MYSTÈRE;Quartier Est;950;316;70

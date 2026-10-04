@@ -2,6 +2,7 @@
 
 Version du jeu : **v0.6.1**. Tous les chiffres viennent de `src/config.js` (et de `src/main.js` pour les manches).
 Carte annotée : [carte.png](carte.png).
+Les mêmes données en tableur : dossier [csv/](csv/) (un fichier par catégorie, séparateur `;`).
 
 Pour demander une modification, citez simplement la ligne (ex. « Mitrailleuse RPK : chargeur 100 », « Mastodonte à 3000 pts », « porte P3 à 500 pts »).
 

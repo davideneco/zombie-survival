@@ -1,0 +1,15 @@
+﻿Achat;Prix (pts);Effet
+Boîte mystère;950;Arme au hasard (tirage 2.6 s)
+Pack-a-Punch;5000;Améliore l'arme en main (voir 02_pack_a_punch.csv)
+Atout MASTODONTE;2500;Santé max 250
+Atout SPEED COLA;3000;Rechargement 2x plus rapide
+Atout DOUBLE TAP;2000;Cadence +33 %, dégâts +25 %
+Atout RÉANIMATION RAPIDE;1500;Solo : se relève seul · Co-op : réanime 2x plus vite
+Atout MULE KICK;4000;Porter 3 armes
+Atout STAMIN-UP;2000;Course plus rapide
+Arme au mur FUSIL À POMPE;750;Munitions : 350 pts
+Arme au mur PISTOLET-MITRAILLEUR;1000;Munitions : 500 pts
+Arme au mur MITRAILLEUSE RPK;2500;Munitions : 1000 pts
+Arme au mur FUSIL DE PRÉCISION;1750;Munitions : 700 pts
+Porte (zone voisine du départ);750;Ouvre une zone
+Porte (par zone plus loin);+500;Supplément

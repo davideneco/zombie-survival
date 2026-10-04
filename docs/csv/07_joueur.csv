@@ -1,0 +1,17 @@
+﻿Réglage;Valeur;Unité
+Points au départ;500;pts
+Santé max;100;PV
+Santé max avec Mastodonte;250;PV
+Délai avant régénération;5;s
+Régénération;25;PV/s
+Vitesse de marche;5;m/s
+Vitesse de sprint;8;m/s
+Multiplicateur vitesse en visée;0,6;
+Vitesse de saut;6,5;m/s
+Gravité;20;m/s²
+Temps à terre avant de mourir (coop);45;s
+Vitesse à terre;1,2;m/s
+Temps de réanimation;2,5;s
+Temps de réanimation avec Réanimation rapide;1,2;s
+Auto-réanimation solo (Réanimation rapide);4;s
+Armes portées;2;(3 avec Mule Kick)

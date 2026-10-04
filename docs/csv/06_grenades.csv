@@ -1,0 +1,9 @@
+﻿Réglage;Valeur;Unité
+Au départ;2;grenades (+2 au début de la manche 1)
+Maximum;4;grenades
+Gagnées par manche;2;grenades
+Retardement;2,2;s
+Rayon;6,5;m
+Dégâts au centre;900;PV
+Dégâts max aux joueurs proches;60;PV
+Chance d'arracher les jambes (zombie survivant);50;%
