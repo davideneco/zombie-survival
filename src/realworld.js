@@ -5,14 +5,14 @@ import { NavGrid } from './nav.js';
 import { computeIsland, stitchRings } from './island.js';
 import { findBreaches } from './breach.js';
 import { preparePassages, cutIntervals, insideRuns, distToPassage } from './passage.js';
+import { createArchitecture, BAY_W } from './architecture.js';
+import { createProps } from './props.js';
 
 // =====================================================================
 //  Monde réel : la Grande Île de Strasbourg (données OpenStreetMap)
 //  Données générées par  tools/fetch-osm.mjs  ->  public/data/area.json
 // =====================================================================
 
-const FLOOR_H = 3.25;  // hauteur d'un étage (m)
-const BAY_W = 4;       // largeur d'une travée de fenêtre (m)
 
 const texLoader = new THREE.TextureLoader();
 const loadTex = (url) => new Promise((res, rej) => texLoader.load(url, res, undefined, rej));
@@ -59,77 +59,6 @@ function tiled(pbr, rx, ry, params = {}) {
   }
   return new THREE.MeshStandardMaterial(out);
 }
-
-// ------------------------------------------------------------------
-//  Façades : crépi (photo) + fenêtres / volets dessinés
-// ------------------------------------------------------------------
-function makeFacade(plasterImg, variant, renderer) {
-  const W = 512, H = Math.round(512 * FLOOR_H / BAY_W);
-  const col = document.createElement('canvas'); col.width = W; col.height = H;
-  const bmp = document.createElement('canvas'); bmp.width = W; bmp.height = H;
-  const c = col.getContext('2d'), b = bmp.getContext('2d');
-
-  // crépi
-  c.drawImage(plasterImg, 0, 0, W / 2, H); c.drawImage(plasterImg, W / 2, 0, W / 2, H);
-  b.fillStyle = '#808080'; b.fillRect(0, 0, W, H);
-  b.filter = 'grayscale(1) contrast(0.6)';
-  b.globalAlpha = 0.9;
-  b.drawImage(plasterImg, 0, 0, W / 2, H); b.drawImage(plasterImg, W / 2, 0, W / 2, H);
-  b.filter = 'none'; b.globalAlpha = 1;
-
-  // corniche / bandeau d'étage (masque la couture verticale)
-  c.fillStyle = 'rgba(40,30,20,0.25)'; c.fillRect(0, H - 6, W, 6);
-  c.fillStyle = 'rgba(255,255,255,0.12)'; c.fillRect(0, 0, W, 4);
-  b.fillStyle = '#b0b0b0'; b.fillRect(0, 0, W, 6);
-
-  const ww = 166, wh = 243, wx = (W - ww) / 2, wy = 62;
-  const SHUTTER = { 0: '#3f5a45', 1: '#7a3b2e', 2: null, 3: '#54616b' }[variant];
-
-  // encadrement en pierre
-  c.fillStyle = '#cfc6b4'; c.fillRect(wx - 12, wy - 12, ww + 24, wh + 24);
-  b.fillStyle = '#d8d8d8'; b.fillRect(wx - 12, wy - 12, ww + 24, wh + 24);
-  // vitre
-  const g = c.createLinearGradient(0, wy, 0, wy + wh);
-  g.addColorStop(0, '#26364a'); g.addColorStop(0.5, '#141c27'); g.addColorStop(1, '#0a0e14');
-  c.fillStyle = g; c.fillRect(wx, wy, ww, wh);
-  // reflet
-  c.fillStyle = 'rgba(160,190,230,0.10)';
-  c.beginPath(); c.moveTo(wx, wy + wh * 0.55); c.lineTo(wx + ww, wy + wh * 0.1); c.lineTo(wx + ww, wy + wh * 0.35); c.lineTo(wx, wy + wh * 0.85); c.fill();
-  b.fillStyle = '#101010'; b.fillRect(wx, wy, ww, wh); // vitre en creux
-  // châssis
-  c.fillStyle = '#d9d3c6';
-  const fr = 7;
-  c.fillRect(wx, wy, ww, fr); c.fillRect(wx, wy + wh - fr, ww, fr);
-  c.fillRect(wx, wy, fr, wh); c.fillRect(wx + ww - fr, wy, fr, wh);
-  c.fillRect(wx + ww / 2 - 3, wy, 6, wh); c.fillRect(wx, wy + wh * 0.38, ww, 6);
-  b.fillStyle = '#c8c8c8';
-  b.fillRect(wx, wy + wh * 0.38, ww, 6); b.fillRect(wx + ww / 2 - 3, wy, 6, wh);
-  // appui de fenêtre
-  c.fillStyle = '#b3aa98'; c.fillRect(wx - 18, wy + wh + 12, ww + 36, 10);
-  c.fillStyle = 'rgba(0,0,0,0.3)'; c.fillRect(wx - 18, wy + wh + 22, ww + 36, 8);
-  b.fillStyle = '#e0e0e0'; b.fillRect(wx - 18, wy + wh + 12, ww + 36, 10);
-
-  if (SHUTTER) {
-    // volets : ouverts (variant 0,1,2) ou fermés (variant 3)
-    const sw = variant === 3 ? ww / 2 : ww / 2 - 6;
-    const lx = variant === 3 ? wx : wx - sw - 14;
-    const rx2 = variant === 3 ? wx + ww / 2 : wx + ww + 14;
-    for (const x of [lx, rx2]) {
-      c.fillStyle = SHUTTER; c.fillRect(x, wy - 8, sw, wh + 16);
-      b.fillStyle = '#d0d0d0'; b.fillRect(x, wy - 8, sw, wh + 16);
-      c.fillStyle = 'rgba(0,0,0,0.28)'; b.fillStyle = '#909090';
-      for (let y = wy; y < wy + wh + 8; y += 9) { c.fillRect(x, y, sw, 2); b.fillRect(x, y, sw, 3); }
-    }
-  }
-
-  const map = new THREE.CanvasTexture(col);
-  const bump = new THREE.CanvasTexture(bmp);
-  for (const t of [map, bump]) { t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = renderer.capabilities.getMaxAnisotropy(); }
-  map.colorSpace = THREE.SRGBColorSpace;
-  return new THREE.MeshStandardMaterial({ map, bumpMap: bump, bumpScale: 2.5, roughness: 0.92, vertexColors: true });
-}
-
-const PALETTE = ['#efe4cb', '#e6cfa6', '#dba99a', '#cdd6d8', '#ebcdcd', '#d9dfc4', '#cfba9d', '#e9dcb0', '#c9876f', '#d8d2c8'].map((h) => new THREE.Color(h));
 
 // ------------------------------------------------------------------
 function polyArea(pts) {
@@ -254,6 +183,7 @@ export async function buildRealWorld(scene, renderer) {
   const blockers = [];
   const polygons = [];
   const lightSources = []; // sources de lumière potentielles ; seules les plus proches du joueur sont allumées
+  const props = createProps(); // mobilier et décors instanciés
 
   // ---------------------------------------------------------------- Sol pavé
   {
@@ -316,10 +246,7 @@ export async function buildRealWorld(scene, renderer) {
   }
 
   // ---------------------------------------------------------------- Bâtiments
-  const facadeMats = [0, 1, 2, 3].map((v) => makeFacade(plasterImg, v, renderer));
-  const buckets = facadeMats.map(() => ({ pos: [], nor: [], uv: [], col: [], idx: [] }));
-  const roofBucket = { pos: [], nor: [], uv: [], idx: [] };
-  const tmpC = new THREE.Color();
+  const arch = createArchitecture({ renderer, plasterImg, roofP, rnd });
 
   const facadeSegs = []; // [ax,az,bx,bz,nx,nz,bays,len] : pour placer les fenêtres d'apparition
   const blds = [];
@@ -329,7 +256,7 @@ export async function buildRealWorld(scene, renderer) {
     const area = polyArea(pts);
     if (Math.abs(area) < 3) continue;
     if (area < 0) pts.reverse();
-    blds.push({ pts, h: bld.h });
+    blds.push({ pts, h: bld.h, tags: bld.tags || {}, name: bld.name });
   }
   // Passages sous immeubles : on repère les portions d'axe qui passent dans un bâtiment
   const passages = preparePassages(data.passages);
@@ -351,6 +278,21 @@ export async function buildRealWorld(scene, renderer) {
   // l'axe d'un passage tracé sur un mur mitoyen n'est "dans" aucun des deux bâtiments : on teste autour
   const axisInside = (x, z) => insideBuilding(x, z) || insideBuilding(x + 0.3, z) || insideBuilding(x - 0.3, z) || insideBuilding(x, z + 0.3) || insideBuilding(x, z - 0.3);
   const passageRuns = insideRuns(passages, axisInside);
+
+  // Bâtiments décrits en 3D par leurs parties : on dessine les parties à la place du contour
+  const hasParts = new Set();
+  {
+    const covered = new Map();
+    for (const prt of data.parts || []) {
+      const pts = cleanRing(prt.pts);
+      if (pts.length < 3) continue;
+      const cx = pts.reduce((s2, q) => s2 + q[0], 0) / pts.length, cz = pts.reduce((s2, q) => s2 + q[1], 0) / pts.length;
+      const arr = bGrid.get(Math.floor(cx / BG) * 4096 + Math.floor(cz / BG)) || [];
+      const k = arr.find((i) => { const [a, b, c, d] = blds[i].box; return cx >= a && cx <= c && cz >= b && cz <= d && pointInPoly(cx, cz, blds[i].pts); });
+      if (k != null) covered.set(k, (covered.get(k) || 0) + Math.abs(polyArea(pts)));
+    }
+    for (const [k, a] of covered) if (a >= 0.4 * Math.abs(polyArea(blds[k].pts))) hasParts.add(k);
+  }
   for (const r of passageRuns) { // prolonge un peu pour rejoindre la façade
     const ext = (a, b) => { const dx = a[0] - b[0], dz = a[1] - b[1], l = Math.hypot(dx, dz) || 1; return [a[0] + (dx / l) * 0.5, a[1] + (dz / l) * 0.5]; };
     r.pts[0] = ext(r.pts[0], r.pts[1]);
@@ -364,80 +306,37 @@ export async function buildRealWorld(scene, renderer) {
     const pts = bld.pts;
     if (breach.removed.has(k)) { rubble.push(pts); continue; }
 
-    const floors = Math.max(2, Math.round(bld.h / FLOOR_H));
-    const H = floors * FLOOR_H;
     polygons.push({ pts });
-
-    const bk = buckets[Math.floor(rnd() * buckets.length)];
-    const tint = PALETTE[Math.floor(rnd() * PALETTE.length)];
-    const dirt = 0.85 + rnd() * 0.15;
-
+    const edgeCuts = [];
     for (let i = 0; i < pts.length; i++) {
       const [ax, az] = pts[i], [bx, bz] = pts[(i + 1) % pts.length];
       const dx = bx - ax, dz = bz - az, len = Math.hypot(dx, dz);
       // ouvertures des passages sous immeubles : pas de mur en bas, seulement le linteau au-dessus
       const cuts = len >= 0.05 ? cutIntervals(passages, ax, az, bx, bz, axisInside) : [];
+      edgeCuts.push(cuts);
       const solid = [];
       let t = 0;
       for (const [t0, t1] of cuts) { if (t0 > t) solid.push([t, t0]); t = t1; }
       if (t < 1) solid.push([t, 1]);
       for (const [t0, t1] of solid) if ((t1 - t0) * len > 0.05) collision.addSegment(ax + dx * t0, az + dz * t0, ax + dx * t1, az + dz * t1);
       if (len < 0.3) continue;
-      const nx = dz / len, nz = -dx / len;
-      const bays = Math.max(1, Math.round(len / BAY_W));
-      facadeSegs.push([ax, az, bx, bz, nx, nz, bays, len]);
-      const quad = (t0, t1, y0, y1) => {
-        const base = bk.pos.length / 3;
-        const x0 = ax + dx * t0, z0 = az + dz * t0, x1 = ax + dx * t1, z1 = az + dz * t1;
-        bk.pos.push(x0, y0, z0, x1, y0, z1, x1, y1, z1, x0, y1, z0);
-        for (let k = 0; k < 4; k++) bk.nor.push(nx, 0, nz);
-        bk.uv.push(bays * t0, (floors * y0) / H, bays * t1, (floors * y0) / H, bays * t1, (floors * y1) / H, bays * t0, (floors * y1) / H);
-        for (const y of [y0, y0, y1, y1]) { tmpC.copy(tint).multiplyScalar(dirt * (0.55 + (0.45 * y) / H)); bk.col.push(tmpC.r, tmpC.g, tmpC.b); }
-        bk.idx.push(base, base + 2, base + 1, base, base + 3, base + 2);
-      };
-      for (const [t0, t1] of solid) quad(t0, t1, 0, H);
-      for (const [t0, t1] of cuts) if (H > PASSAGE_H) quad(t0, t1, PASSAGE_H, H);
+      facadeSegs.push([ax, az, bx, bz, dz / len, -dx / len, Math.max(1, Math.round(len / BAY_W)), len]);
     }
-
-    // toit (plat, triangulé)
-    try {
-      const contour = pts.map(([x, z]) => new THREE.Vector2(x, z));
-      const tris = THREE.ShapeUtils.triangulateShape(contour, []);
-      const base = roofBucket.pos.length / 3;
-      for (const [x, z] of pts) { roofBucket.pos.push(x, H, z); roofBucket.nor.push(0, 1, 0); roofBucket.uv.push(x / 3, z / 3); }
-      for (const [a, b2, c2] of tris) {
-        const ny = (pts[b2][0] - pts[a][0]) * (pts[c2][1] - pts[a][1]) - (pts[b2][1] - pts[a][1]) * (pts[c2][0] - pts[a][0]);
-        if (ny > 0) roofBucket.idx.push(base + a, base + c2, base + b2);
-        else roofBucket.idx.push(base + a, base + b2, base + c2);
-      }
-    } catch (e) { /* polygone dégénéré : ignoré */ }
+    if (hasParts.has(k)) continue; // rendu à partir de ses parties 3D (cathédrale, églises…)
+    const cx = pts.reduce((s2, q) => s2 + q[0], 0) / pts.length, cz = pts.reduce((s2, q) => s2 + q[1], 0) / pts.length;
+    const near = Math.hypot(cx - CONFIG.startHint.x, cz - CONFIG.startHint.z) < 420; // détails (boutiques, lucarnes) près du secteur
+    const commercial = !!bld.tags.amenity || ['retail', 'commercial', 'hotel'].includes(bld.tags.building);
+    arch.building(pts, bld.tags, bld.h, (i) => edgeCuts[i], { inSector: near, shop: commercial || (near && rnd() < 0.38), passageH: PASSAGE_H });
   }
 
-  const toGeo = (bk, withCol) => {
-    const g = new THREE.BufferGeometry();
-    g.setAttribute('position', new THREE.Float32BufferAttribute(bk.pos, 3));
-    g.setAttribute('normal', new THREE.Float32BufferAttribute(bk.nor, 3));
-    g.setAttribute('uv', new THREE.Float32BufferAttribute(bk.uv, 2));
-    if (withCol) g.setAttribute('color', new THREE.Float32BufferAttribute(bk.col, 3));
-    g.setIndex(bk.idx);
-    g.computeBoundingSphere();
-    return g;
-  };
-  buckets.forEach((bk, i) => {
-    if (!bk.pos.length) return;
-    facadeMats[i].side = THREE.DoubleSide;
-    const m = new THREE.Mesh(toGeo(bk, true), facadeMats[i]);
-    m.castShadow = m.receiveShadow = true;
-    scene.add(m);
-  });
-  {
-    const roofMat = new THREE.MeshStandardMaterial({
-      map: roofP.map, normalMap: roofP.normalMap, roughnessMap: roofP.roughnessMap, color: 0x9a8f88, side: THREE.DoubleSide,
-    });
-    const m = new THREE.Mesh(toGeo(roofBucket, false), roofMat);
-    m.castShadow = m.receiveShadow = true;
-    scene.add(m);
+  // Parties 3D (OSM building:part) : cathédrale, églises, tours
+  for (const prt of data.parts || []) {
+    const pts = cleanRing(prt.pts);
+    if (pts.length < 3) continue;
+    if (polyArea(pts) < 0) pts.reverse();
+    arch.part(pts, prt.tags || {});
   }
+  arch.finish(scene);
 
   // ---------------------------------------------------------------- Intérieur des passages sous immeubles
   {
@@ -986,51 +885,92 @@ export async function buildRealWorld(scene, renderer) {
       }
     }
 
-    const longestRun = (runs) => runs.reduce((best, r) => (Math.hypot(r.x1 - r.x0, r.z1 - r.z0) > Math.hypot(best.x1 - best.x0, best.z1 - best.z0) ? r : best), runs[0]);
-    const doorMat = tiled(metalP, 1, 1, { color: 0x8a5a44, metalness: 0.6 });
+    // Les barrières en escalier (cases de 75 cm) qui se touchent forment une ouverture de rue :
+    // on la remplace par un segment droit qui suit la rue (si l'escalier est bien rectiligne).
+    // ajuste une droite sur un groupe de barrières ; si l'escalier n'est pas rectiligne, on le coupe en deux et on recommence
+    const fitInto = (out) => {
+      const fit = (cl, depth) => {
+        const P = cl.flatMap((r) => [[r.x0, r.z0], [r.x1, r.z1]]);
+        let mx = 0, mz = 0;
+        for (const [x, z] of P) { mx += x; mz += z; }
+        mx /= P.length; mz /= P.length;
+        let sxx = 0, sxz = 0, szz = 0;
+        for (const [x, z] of P) { const dx = x - mx, dz = z - mz; sxx += dx * dx; sxz += dx * dz; szz += dz * dz; }
+        const ang = 0.5 * Math.atan2(2 * sxz, sxx - szz), ux = Math.cos(ang), uz = Math.sin(ang);
+        let s0 = Infinity, s1 = -Infinity, dev = 0;
+        for (const [x, z] of P) { const s = (x - mx) * ux + (z - mz) * uz; s0 = Math.min(s0, s); s1 = Math.max(s1, s); dev = Math.max(dev, Math.abs(-(x - mx) * uz + (z - mz) * ux)); }
+        if (cl.length === 1 || dev <= 1.3) { const e = cl.length === 1 ? 0.15 : 0.45; out.push({ x0: mx + ux * (s0 - e), z0: mz + uz * (s0 - e), x1: mx + ux * (s1 + e), z1: mz + uz * (s1 + e) }); return; }
+        if (depth >= 6) { out.push(...cl); return; }
+        const key = (r) => ((r.x0 + r.x1) / 2 - mx) * ux + ((r.z0 + r.z1) / 2 - mz) * uz;
+        const sorted = cl.slice().sort((p, q) => key(p) - key(q));
+        const half = Math.ceil(sorted.length / 2);
+        fit(sorted.slice(0, half), depth + 1);
+        fit(sorted.slice(half), depth + 1);
+      };
+      return fit;
+    };
+    const straightPieces = (runs) => {
+      const left = runs.slice(), out = [];
+      const fit = fitInto(out);
+      const near = (c, r) => Math.min(Math.hypot(c.x0 - r.x0, c.z0 - r.z0), Math.hypot(c.x0 - r.x1, c.z0 - r.z1), Math.hypot(c.x1 - r.x0, c.z1 - r.z0), Math.hypot(c.x1 - r.x1, c.z1 - r.z1)) < 2.2;
+      while (left.length) {
+        const cl = [left.pop()];
+        for (let grown = true; grown;) {
+          grown = false;
+          for (let i = left.length - 1; i >= 0; i--) if (cl.some((c) => near(c, left[i]))) { cl.push(left[i]); left.splice(i, 1); grown = true; }
+        }
+        fit(cl, 0);
+      }
+      return out;
+    };
+    // place un modèle aligné sur un segment (axe x local le long du segment)
+    const alignOn = (obj, r, y = 0) => {
+      const ang = Math.atan2(r.z1 - r.z0, r.x1 - r.x0);
+      obj.position.set((r.x0 + r.x1) / 2, y, (r.z0 + r.z1) / 2);
+      obj.rotation.y = -ang;
+      scene.add(obj);
+      return obj;
+    };
     const FH = 3.4;
     links.forEach((g, di) => {
       const far = depth[g.a] > depth[g.b] ? g.a : g.b;
       const price = Z.basePrice + Z.priceStep * Math.max(0, depth[far] - 1);
       const door = { id: di, price, a: g.a, b: g.b, toZone: far, name: ZONE_NAMES[far], open: false, points: [], segs: [], meshes: [], cells: [] };
-      // les barrières assez proches les unes des autres partagent un panneau ; on en met un par ouverture de rue (>= 2,5 m)
-      for (const r of g.runs) {
+      const pieces = straightPieces(g.runs);
+      const longest = pieces.reduce((b, r) => (Math.hypot(r.x1 - r.x0, r.z1 - r.z0) > Math.hypot(b.x1 - b.x0, b.z1 - b.z0) ? r : b), pieces[0]);
+      // panneau de prix (une texture par porte)
+      const cv = document.createElement('canvas'); cv.width = 512; cv.height = 192;
+      const x = cv.getContext('2d');
+      x.fillStyle = '#1a0d0a'; x.fillRect(0, 0, 512, 192);
+      x.strokeStyle = '#ffd24a'; x.lineWidth = 6; x.strokeRect(8, 8, 496, 176);
+      x.textAlign = 'center';
+      x.fillStyle = '#fff'; x.font = 'bold 34px Arial, sans-serif'; x.fillText('PORTE VERROUILLÉE', 256, 62);
+      x.fillStyle = '#ffd24a'; x.font = 'bold 54px Arial, sans-serif'; x.fillText(`${price} PTS`, 256, 126);
+      x.fillStyle = '#aaa'; x.font = '24px Arial, sans-serif'; x.fillText(`${ZONE_NAMES[g.a]} ↔ ${ZONE_NAMES[g.b]}`, 256, 164);
+      const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace;
+      const signMat = new THREE.MeshBasicMaterial({ map: tex });
+      for (const r of pieces) {
         const len = Math.hypot(r.x1 - r.x0, r.z1 - r.z0);
-        const vertical = r.x0 === r.x1;
+        if (len < 0.2) continue;
         door.segs.push(collision.addSegment(r.x0, r.z0, r.x1, r.z1, FH));
-        const m = new THREE.Mesh(worldBox(vertical ? 0.35 : len, FH, vertical ? len : 0.35, 2), doorMat);
-        m.position.set((r.x0 + r.x1) / 2, FH / 2, (r.z0 + r.z1) / 2);
-        m.castShadow = m.receiveShadow = true;
-        scene.add(m);
-        door.meshes.push(m);
+        const gm = alignOn(props.gate(len), r);
+        door.meshes.push(gm);
         for (let s = 0; s <= len; s += 3) door.points.push({ x: r.x0 + ((r.x1 - r.x0) * s) / len, z: r.z0 + ((r.z1 - r.z0) * s) / len });
-        if (len < 3.5 && !(r === longestRun(g.runs) && !g.runs.some((q) => Math.hypot(q.x1 - q.x0, q.z1 - q.z0) >= 3.5))) continue;
-        // panneau de prix au milieu de l'ouverture (visible des deux côtés) ; au moins un par porte
-        const cv = document.createElement('canvas'); cv.width = 512; cv.height = 192;
-        const x = cv.getContext('2d');
-        x.fillStyle = '#1a0d0a'; x.fillRect(0, 0, 512, 192);
-        x.strokeStyle = '#ffd24a'; x.lineWidth = 6; x.strokeRect(8, 8, 496, 176);
-        x.textAlign = 'center';
-        x.fillStyle = '#fff'; x.font = 'bold 34px Arial, sans-serif'; x.fillText('PORTE VERROUILLÉE', 256, 62);
-        x.fillStyle = '#ffd24a'; x.font = 'bold 54px Arial, sans-serif'; x.fillText(`${price} PTS`, 256, 126);
-        x.fillStyle = '#aaa'; x.font = '24px Arial, sans-serif'; x.fillText(`${ZONE_NAMES[g.a]} ↔ ${ZONE_NAMES[g.b]}`, 256, 164);
-        const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace;
-        const cx0 = (r.x0 + r.x1) / 2, cz0 = (r.z0 + r.z1) / 2;
-        for (const side of [-1, 1]) {
-          const sign = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 0.98), new THREE.MeshBasicMaterial({ map: tex }));
-          sign.position.set(cx0 + (vertical ? side * 0.2 : 0), 2.1, cz0 + (vertical ? 0 : side * 0.2));
-          sign.rotation.y = vertical ? (side > 0 ? Math.PI / 2 : -Math.PI / 2) : (side > 0 ? 0 : Math.PI);
-          scene.add(sign);
-          door.meshes.push(sign);
+        if (r !== longest && len < 3.5) continue;
+        for (const side of [-1, 1]) { // panneau des deux côtés
+          const sign = new THREE.Mesh(new THREE.PlaneGeometry(Math.min(2.6, len), Math.min(2.6, len) * 0.375), signMat);
+          sign.position.set(0, 2.0, side * 0.16);
+          sign.rotation.y = side > 0 ? 0 : Math.PI;
+          gm.add(sign);
         }
-        lightSources.push({ x: cx0, y: 2.6, z: cz0, color: 0xff7733, intensity: 18, dist: 9, door });
+        lightSources.push({ x: (r.x0 + r.x1) / 2, y: 2.6, z: (r.z0 + r.z1) / 2, color: 0xff7733, intensity: 18, dist: 9, door });
       }
       doors.push(door);
     });
     door_depth = depth;
 
     // Barricades définitives aux limites du secteur (le reste de l'île n'est pas encore jouable)
-    const sealMat = tiled(metalP, 1, 1, { color: 0x50555b, metalness: 0.5 });
+    const sealMat = tiled(metalP, 1, 1, { color: 0x5a6066, metalness: 0.5 });
     const cv = document.createElement('canvas'); cv.width = 512; cv.height = 160;
     const x = cv.getContext('2d');
     for (let i = -4; i < 20; i++) { x.fillStyle = i % 2 ? '#111' : '#f2c414'; x.beginPath(); x.moveTo(i * 40, 0); x.lineTo(i * 40 + 40, 0); x.lineTo(i * 40 + 80, 160); x.lineTo(i * 40 + 40, 160); x.fill(); }
@@ -1041,22 +981,18 @@ export async function buildRealWorld(scene, renderer) {
     const sealSignMat = new THREE.MeshBasicMaterial({ map: sealTex });
     const SH = 3.6;
     for (const g of sealedGroups) {
-      for (const r of g.runs) {
+      for (const r of straightPieces(g.runs)) {
         const len = Math.hypot(r.x1 - r.x0, r.z1 - r.z0);
-        const vertical = r.x0 === r.x1;
+        if (len < 0.2) continue;
         collision.addSegment(r.x0, r.z0, r.x1, r.z1, SH);
-        const m = new THREE.Mesh(worldBox(vertical ? 0.4 : len, SH, vertical ? len : 0.4, 2), sealMat);
-        m.position.set((r.x0 + r.x1) / 2, SH / 2, (r.z0 + r.z1) / 2);
-        m.castShadow = m.receiveShadow = true;
-        scene.add(m);
+        const wm = alignOn(props.sealWall(len, sealMat), r);
         for (let t = 0; t <= len; t += 3) sealedPoints.push({ x: r.x0 + ((r.x1 - r.x0) * t) / len, z: r.z0 + ((r.z1 - r.z0) * t) / len });
-        if (len < 3) continue;
-        const cx0 = (r.x0 + r.x1) / 2, cz0 = (r.z0 + r.z1) / 2;
+        if (len < 2.6) continue;
         for (const side of [-1, 1]) {
           const sign = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 0.75), sealSignMat);
-          sign.position.set(cx0 + (vertical ? side * 0.22 : 0), 2.2, cz0 + (vertical ? 0 : side * 0.22));
-          sign.rotation.y = vertical ? (side > 0 ? Math.PI / 2 : -Math.PI / 2) : (side > 0 ? 0 : Math.PI);
-          scene.add(sign);
+          sign.position.set(0, 2.3, -0.05 + side * 0.08);
+          sign.rotation.y = side > 0 ? 0 : Math.PI;
+          wm.add(sign);
         }
       }
     }
@@ -1242,67 +1178,97 @@ export async function buildRealWorld(scene, renderer) {
     }
   }
 
-  // ---------------------------------------------------------------- Props (couverts) : voitures, barrières, caisses
+  // ---------------------------------------------------------------- Décor : mobilier réel (OSM) et objets de l'apocalypse
   {
-    const carColors = [0x6b2a22, 0x2a3a52, 0x4a4d4f, 0x4b5238, 0x7a7266];
-    const glass = new THREE.MeshStandardMaterial({ color: 0x0c1218, roughness: 0.15, metalness: 0.8 });
-    const tyre = new THREE.MeshStandardMaterial({ color: 0x0e0e0e, roughness: 0.9 });
-    const concrete = new THREE.MeshStandardMaterial({ color: 0x8d8b85, roughness: 0.95 });
-    const wood = new THREE.MeshStandardMaterial({ color: 0x6b4a2b, roughness: 0.85 });
-    const spots = [...shuffle(candidatesNear(startPos.x, startPos.z, 4, 6, 55).filter((c) => zoneOf(c[0], c[1]) === startZone)).slice(0, 30), ...randomSpots(110, 4)];
-    const used = [startPos, ...stations, ...machines.map((m) => m.pos), ...wallWeapons.map((w) => w.pos)];
-    const take = (minGap) => {
-      for (let i = 0; i < spots.length; i++) {
-        const [x, z] = spots[i];
-        if (used.every((u) => Math.hypot((u.x ?? u[0]) - x, (u.z ?? u[1]) - z) > minGap)) { used.push([x, z]); return [x, z]; }
+    const inSec = (x, z) => zoneOf(x, z) >= 0;
+    const used = [startPos, ...stations, ...machines.map((m) => m.pos), ...wallWeapons.map((w) => w.pos)].map((v) => [v.x, v.z]);
+    const freeAt = (x, z, gap) => used.every(([ux, uz]) => Math.hypot(ux - x, uz - z) > gap);
+    // mur le plus proche (orientation des bancs, vélos…) et axe de la rue (voitures)
+    const wallDir = (x, z) => { let best = 99, ang = 0; for (let a = 0; a < 16; a++) { const t = (a / 16) * Math.PI * 2; const d = collision.rayHit(x, 1, z, Math.cos(t), 0, Math.sin(t), 6); if (d < best) { best = d; ang = t; } } return { dist: best, ang }; };
+    const streetDir = (x, z) => { let best = -1, ang = 0; for (let a = 0; a < 12; a++) { const t = (a / 12) * Math.PI; const d = collision.rayHit(x, 1, z, Math.cos(t), 0, Math.sin(t), 40) + collision.rayHit(x, 1, z, -Math.cos(t), 0, -Math.sin(t), 40); if (d > best) { best = d; ang = t; } } return ang; };
+    // rotation (rotation.y) pour que le dos de l'objet (axe -z local) soit tourné vers la direction t
+    const backTo = (t) => Math.atan2(-Math.cos(t), -Math.sin(t));
+    let bikes = 0;
+    for (const f of data.furniture || []) {
+      const [x, z] = f.p;
+      if (!inSec(x, z) || insideBuilding(x, z)) continue;
+      const wd = wallDir(x, z);
+      if (f.kind === 'bench' && freeAt(x, z, 2.5)) {
+        const th = wd.dist < 4 ? backTo(wd.ang) : rnd() * Math.PI * 2;
+        props.place('bench', x, z, th);
+        collision.addBox(x, z, 1.9, 0.6, -th, 1);
+        used.push([x, z]);
+      } else if (f.kind === 'waste_basket' && freeAt(x, z, 1.5)) {
+        props.place('bin', x, z, rnd() * 6);
+        collision.addCircle(x, z, 0.26, 1);
+      } else if (f.kind === 'bollard') {
+        props.place('bollard', x, z);
+        collision.addCircle(x, z, 0.1, 0.9);
+      } else if (f.kind === 'bicycle_parking' && bikes < 70 && freeAt(x, z, 2) && rnd() < 0.6) {
+        const th = wd.dist < 5 ? -wd.ang : rnd() * Math.PI; // vélos perpendiculaires au mur
+        const n = 1 + Math.floor(rnd() * 3);
+        for (let k = 0; k < n; k++) {
+          const off = (k - (n - 1) / 2) * 0.65, ox = -Math.sin(wd.ang) * off, oz = Math.cos(wd.ang) * off;
+          props.place('bike', x + ox, z + oz, th, 1, null, 0, (rnd() - 0.5) * 0.12);
+          bikes++;
+        }
+        collision.addBox(x, z, 1.7, n * 0.65, -th, 1);
+        used.push([x, z]);
+      } else if ((f.kind === 'artwork' || f.kind === 'memorial' || f.kind === 'monument') && wd.dist > 3 && freeAt(x, z, 4)) {
+        props.place('statue', x, z, rnd() * 6);
+        collision.addCircle(x, z, 1.2, 4.5);
+        used.push([x, z]);
+      } else if (f.kind === 'fountain' && freeAt(x, z, 4)) {
+        props.place('fountain', x, z);
+        collision.addCircle(x, z, 1.6, 1.6);
+        used.push([x, z]);
       }
-      return null;
-    };
-    const carBody = new THREE.BoxGeometry(4.2, 0.75, 1.8), carCabin = new THREE.BoxGeometry(2.1, 0.65, 1.65), carRoof = new THREE.BoxGeometry(2.0, 0.08, 1.6);
-    const wheelGeo = new THREE.CylinderGeometry(0.33, 0.33, 0.25, 14);
-    for (let i = 0; i < 30; i++) { // voitures abandonnées
-      const p = take(14); if (!p) break;
-      const rot = rnd() * Math.PI;
-      const g = new THREE.Group();
-      const bodyMat = new THREE.MeshStandardMaterial({ color: carColors[i % carColors.length], roughness: 0.55, metalness: 0.5 });
-      const body = new THREE.Mesh(carBody, bodyMat); body.position.y = 0.65; g.add(body);
-      const cabin = new THREE.Mesh(carCabin, glass); cabin.position.set(-0.2, 1.3, 0); g.add(cabin);
-      const roof = new THREE.Mesh(carRoof, bodyMat); roof.position.set(-0.2, 1.65, 0); g.add(roof);
-      for (const [wx, wz] of [[1.3, 0.9], [1.3, -0.9], [-1.3, 0.9], [-1.3, -0.9]]) {
-        const w = new THREE.Mesh(wheelGeo, tyre); w.rotation.x = Math.PI / 2; w.position.set(wx, 0.33, wz); g.add(w);
+    }
+    // chalets du marché de Noël sur les grandes places
+    for (const name of ['Place Kléber', 'Cathédrale', 'Place Gutenberg']) {
+      const zi = ZONE_NAMES.indexOf(name);
+      if (zi < 0 || !seeds[zi]) continue;
+      const [sx, sz] = seeds[zi];
+      let placed = 0;
+      for (const [x, z] of shuffle(candidatesNear(sx, sz, 4, 6, 32).filter((c) => zoneOf(c[0], c[1]) === zi))) {
+        if (placed >= 4 || !freeAt(x, z, 6)) continue;
+        const th = Math.atan2(sx - x, sz - z); // comptoir tourné vers le centre de la place
+        props.place('chalet', x, z, th);
+        collision.addBox(x, z, 3, 2, -th, 2.6);
+        lightSources.push({ x, y: 2, z, color: 0xffb860, intensity: 10, dist: 7 });
+        used.push([x, z]);
+        placed++;
       }
-      g.children.forEach((m) => { m.castShadow = true; m.receiveShadow = true; });
-      g.position.set(p[0], 0, p[1]);
-      g.rotation.y = -rot;
-      scene.add(g);
-      collision.addBox(p[0], p[1], 4.2, 1.8, rot, 1.7);
     }
-    const njGeo = new THREE.BoxGeometry(2.4, 0.9, 0.55);
-    for (let i = 0; i < 40; i++) { // barrières béton (New Jersey)
-      const p = take(8); if (!p) break;
-      const rot = rnd() * Math.PI;
-      const m = new THREE.Mesh(njGeo, concrete);
-      m.position.set(p[0], 0.45, p[1]); m.rotation.y = -rot;
-      m.castShadow = m.receiveShadow = true;
-      scene.add(m);
-      collision.addBox(p[0], p[1], 2.4, 0.55, rot, 0.9);
+    // voitures abandonnées, dans l'axe de la rue
+    const carColors = [0x5a5f66, 0xd8d8d8, 0x1a1c20, 0x22314f, 0x7a1e1e, 0x9aa0a6, 0x3a4a3a, 0x6a5038];
+    const spots = [...shuffle(candidatesNear(startPos.x, startPos.z, 3, 8, 50).filter((c) => zoneOf(c[0], c[1]) === startZone)), ...randomSpots(140, 3)];
+    let cars = 0;
+    for (const [x, z] of spots) {
+      if (cars >= 14) break;
+      if (!freeAt(x, z, 11)) continue;
+      const ang = streetDir(x, z) + (rnd() - 0.5) * 0.5;
+      props.place('car', x, z, -ang, 1, new THREE.Color(carColors[Math.floor(rnd() * carColors.length)]));
+      collision.addBox(x, z, 4.2, 1.75, ang, 1.5);
+      used.push([x, z]);
+      cars++;
     }
-    const crateGeo = new THREE.BoxGeometry(1.1, 1.0, 1.1);
-    for (let i = 0; i < 40; i++) { // caisses en bois
-      const p = take(7); if (!p) break;
-      const rot = rnd() * Math.PI;
-      const g = new THREE.Group();
-      const n = 1 + Math.floor(rnd() * 3);
-      for (let k = 0; k < n; k++) {
-        const c = new THREE.Mesh(crateGeo, wood);
-        c.position.set(k * 0.15, 0.5 + k * 1.0, k * 0.1); c.rotation.y = k * 0.3;
-        c.castShadow = c.receiveShadow = true;
-        g.add(c);
+    // barricades de fortune : sacs de sable, barrières, blocs béton, caisses, palettes, jardinières
+    const junk = [['sandbags', 8, [2, 0.5], 0.9], ['crowd', 8, [2, 0.2], 1.1], ['jersey', 6, [2.4, 0.6], 0.82], ['crate', 9, [1.1, 1.1], 1], ['pallet', 6, [1.2, 1], 0.2], ['planter', 10, [1.6, 0.8], 1]];
+    for (const [type, count, [w, d], h] of junk) {
+      let n = 0;
+      for (const [x, z] of shuffle(randomSpots(80, 2))) {
+        if (n >= count) break;
+        if (!freeAt(x, z, 5)) continue;
+        const ang = streetDir(x, z) + (type === 'crate' ? rnd() * 3 : Math.PI / 2 + (rnd() - 0.5) * 0.6);
+        props.place(type, x, z, -ang);
+        if (type === 'crate' && rnd() < 0.5) props.place('crate', x + 0.1, z + 0.05, -ang + 0.4, 0.9, null, 1.0);
+        collision.addBox(x, z, w, d, ang, h);
+        used.push([x, z]);
+        n++;
       }
-      g.position.set(p[0], 0, p[1]); g.rotation.y = -rot;
-      scene.add(g);
-      collision.addBox(p[0], p[1], 1.2, 1.2, rot, n * 1.0);
     }
+    props.finish(scene);
   }
 
   // ---------------------------------------------------------------- Ciel nocturne (suit le joueur)

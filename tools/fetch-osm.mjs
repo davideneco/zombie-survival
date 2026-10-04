@@ -21,6 +21,8 @@ const bbox = `${LAT - dLat},${LON - dLon},${LAT + dLat},${LON + dLon}`;
 const query = `[out:json][timeout:180][maxsize:536870912];(
   way["building"](${bbox});
   relation["building"](${bbox});
+  way["building:part"](${bbox});
+  relation["building:part"](${bbox});
   way["waterway"](${bbox});
   way["natural"="water"](${bbox});
   relation["natural"="water"](${bbox});
@@ -28,6 +30,10 @@ const query = `[out:json][timeout:180][maxsize:536870912];(
   way["highway"]["covered"="yes"](${bbox});
   node["natural"="tree"](${bbox});
   node["highway"="street_lamp"](${bbox});
+  node["amenity"~"^(bench|waste_basket|fountain|bicycle_parking)$"](${bbox});
+  node["barrier"="bollard"](${bbox});
+  node["tourism"="artwork"](${bbox});
+  node["historic"~"^(memorial|monument)$"](${bbox});
 );out geom;`;
 
 const SERVERS = [
@@ -66,7 +72,13 @@ const ring = (geom) => geom.map(toLocal);
 const raw = await fetchOverpass();
 fs.mkdirSync('data', { recursive: true });
 
-const out = { center: { lat: LAT, lon: LON }, half: HALF, halfZ: HALFZ, buildings: [], passages: [], roads: [], water: [], trees: [], lamps: [], benches: [], parks: [], barriers: [] };
+const out = { center: { lat: LAT, lon: LON }, half: HALF, halfZ: HALFZ, buildings: [], parts: [], passages: [], roads: [], water: [], trees: [], lamps: [], furniture: [], parks: [], barriers: [] };
+
+// étiquettes OSM utiles au rendu (style de façade, toit, couleurs, monuments)
+const KEEP = ['building', 'building:part', 'building:levels', 'building:min_level', 'roof:shape', 'roof:levels', 'roof:height', 'roof:direction',
+  'roof:orientation', 'height', 'min_height', 'building:colour', 'roof:colour', 'building:material', 'roof:material', 'historic', 'amenity',
+  'tourism', 'religion', 'name', 'wikidata'];
+const tagsOf = (t) => { const o = {}; for (const k of KEEP) if (t[k] != null) o[k] = t[k]; return o; };
 
 const heightOf = (t = {}) => {
   if (t.height) { const h = parseFloat(t.height); if (!isNaN(h)) return h; }
@@ -80,13 +92,14 @@ for (const el of raw.elements) {
     const p = toLocal(el);
     if (t.natural === 'tree') out.trees.push(p);
     else if (t.highway === 'street_lamp') out.lamps.push(p);
-    else if (t.amenity) out.benches.push(p);
+    else if (t.amenity || t.barrier || t.tourism || t.historic) out.furniture.push({ p, kind: t.amenity || (t.barrier === 'bollard' ? 'bollard' : t.tourism || t.historic), name: t.name || null });
     continue;
   }
   if (el.type === 'way' && el.geometry) {
     const pts = ring(el.geometry);
     if (t.tunnel === 'building_passage' || (t.highway && t.covered === 'yes')) out.passages.push({ pts, width: parseFloat(t.width) || null, name: t.name || null });
-    else if (t.building) out.buildings.push({ pts, h: heightOf(t), name: t.name || null });
+    else if (t['building:part']) out.parts.push({ pts, tags: tagsOf(t) });
+    else if (t.building) out.buildings.push({ pts, h: heightOf(t), name: t.name || null, tags: tagsOf(t) });
     else if (t.highway) out.roads.push({ pts, type: t.highway, width: parseFloat(t.width) || null, bridge: !!t.bridge, area: t.area === 'yes' });
     else if (t.waterway || t.natural === 'water') out.water.push({ pts, line: !!t.waterway, width: parseFloat(t.width) || null });
     else if (t.barrier) out.barriers.push({ pts, type: t.barrier });
@@ -96,7 +109,8 @@ for (const el of raw.elements) {
     for (const m of el.members) {
       if (m.role !== 'outer' || !m.geometry) continue;
       const pts = ring(m.geometry);
-      if (t.building) out.buildings.push({ pts, h: heightOf(t), name: t.name || null });
+      if (t['building:part']) out.parts.push({ pts, tags: tagsOf(t) });
+      else if (t.building) out.buildings.push({ pts, h: heightOf(t), name: t.name || null, tags: tagsOf(t) });
       else if (t.natural === 'water') out.water.push({ pts, line: false, width: null });
     }
   }
@@ -104,4 +118,4 @@ for (const el of raw.elements) {
 
 fs.mkdirSync('public/data', { recursive: true });
 fs.writeFileSync('public/data/area.json', JSON.stringify(out));
-console.log(`OK : ${out.buildings.length} bâtiments, ${out.passages.length} passages sous immeubles, ${out.roads.length} routes, ${out.water.length} eau, ${out.trees.length} arbres, ${out.lamps.length} lampadaires, ${out.parks.length} zones vertes, ${out.barriers.length} barrières`);
+console.log(`OK : ${out.buildings.length} bâtiments, ${out.parts.length} parties de bâtiments, ${out.furniture.length} mobiliers, ${out.passages.length} passages sous immeubles, ${out.roads.length} routes, ${out.water.length} eau, ${out.trees.length} arbres, ${out.lamps.length} lampadaires, ${out.parks.length} zones vertes, ${out.barriers.length} barrières`);
