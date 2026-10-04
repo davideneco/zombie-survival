@@ -3,14 +3,28 @@ export const CONFIG = {
   map: 'strasbourg', // 'strasbourg' (lieu réel OpenStreetMap) ou 'arena' (arène de test)
   // Strasbourg : toute la Grande Île (données dans public/data/area.json, voir tools/fetch-osm.mjs)
   startHint: { x: 4.3, z: -35.7 }, // point de départ (place du Marché-Neuf, centre de l'ancienne carte), en mètres depuis le centre des données
-  cityHint: { x: -221, z: -156 }, // un point du réseau de rues principal (place Kléber)
+  cityHint: { x: -199, z: -145 }, // un point du réseau de rues principal (place Kléber)
   breaches: 3,                     // secours : bâtiments à effondrer si aucun passage sous immeuble ne relie la place à la ville
-  zones: {
-    cutsX: [-420, 170],   // lignes de coupe est-ouest entre les 3 colonnes de zones
-    cutZ: 0,              // ligne de coupe nord-sud entre les 2 rangées (au sud de la place du Marché-Neuf et de ses passages)
-    basePrice: 750,       // prix de la première porte
-    priceStep: 500,       // supplément par zone plus éloignée
+  // Secteur jouable : autour de la place du Marché-Neuf. Le reste de l'île est visible mais fermé.
+  // Chaque zone part d'un vrai lieu (seed, en mètres : x vers l'est, z vers le sud) ; les cases sont attribuées
+  // à la zone la plus proche en distance de marche, jusqu'à maxDist. Les portes tombent entre deux zones.
+  // items : ce qu'on trouve dans la zone ('station' = borne de munitions, 'wall:<arme>', 'perk:<atout>', 'box', 'pap').
+  sector: {
+    maxDist: 95,        // rayon d'une zone (m, en distance de marche)
+    basePrice: 750,     // prix d'une porte vers une zone voisine de la place de départ
+    priceStep: 250,     // supplément par zone plus éloignée
+    zones: [
+      { name: 'Marché-Neuf', start: true, items: ['station', 'wall:shotgun', 'wall:smg', 'perk:quickrevive', 'box'] },
+      { name: 'Temple-Neuf', seed: { x: -35, z: -95 }, items: ['station', 'perk:staminup'] },
+      { name: 'Rue des Orfèvres', seed: { x: 40, z: -70 }, items: ['wall:smg', 'perk:speedcola'] },
+      { name: 'Rue du Dôme', seed: { x: 110, z: -111 }, items: ['station', 'wall:sniper', 'box'] },
+      { name: 'Grandes Arcades', seed: { x: -110, z: -45 }, items: ['station', 'wall:shotgun', 'perk:mulekick'] },
+      { name: 'Place Kléber', seed: { x: -199, z: -145 }, items: ['station', 'perk:juggernog', 'wall:lmg', 'box'] },
+      { name: 'Place Gutenberg', seed: { x: -20, z: 90 }, items: ['station', 'perk:doubletap', 'box'] },
+      { name: 'Cathédrale', seed: { x: 103, z: 33 }, items: ['station', 'pap', 'box'] },
+    ],
   },
+
   arenaHalf: 30,    // arène de test : 60 x 60 m
 
   player: {

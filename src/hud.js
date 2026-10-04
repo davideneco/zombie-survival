@@ -292,10 +292,13 @@ export class Hud {
     const ctx = cv.getContext('2d');
     ctx.clearRect(0, 0, W, H);
     const img = world.mapImage, mv = world.mapView;
-    const k = Math.min((W - 60) / img.width, (H - 110) / img.height);
-    const ox = (W - img.width * k) / 2, oy = 50 + (H - 110 - img.height * k) / 2;
-    ctx.drawImage(img, ox, oy, img.width * k, img.height * k);
-    const P = (x, z) => [ox + (x + mv.halfX) * mv.scale * k, oy + (z + mv.halfZ) * mv.scale * k];
+    // cadrage sur le secteur jouable (sinon toute l'île)
+    const cr = world.mapCrop || { x0: -mv.halfX, x1: mv.halfX, z0: -mv.halfZ, z1: mv.halfZ };
+    const sw = (cr.x1 - cr.x0) * mv.scale, sh = (cr.z1 - cr.z0) * mv.scale;
+    const k = Math.min((W - 60) / sw, (H - 110) / sh);
+    const ox = (W - sw * k) / 2, oy = 50 + (H - 110 - sh * k) / 2;
+    ctx.drawImage(img, (cr.x0 + mv.halfX) * mv.scale, (cr.z0 + mv.halfZ) * mv.scale, sw, sh, ox, oy, sw * k, sh * k);
+    const P = (x, z) => [ox + (x - cr.x0) * mv.scale * k, oy + (z - cr.z0) * mv.scale * k];
 
     // zones
     ctx.textAlign = 'center';
@@ -309,6 +312,9 @@ export class Hud {
       ctx.fillStyle = i === here ? '#ffd24a' : 'rgba(255,255,255,0.8)';
       ctx.fillText(c.name.toUpperCase(), x, y);
     });
+    // limites du secteur (barricades définitives)
+    ctx.fillStyle = '#9aa0a6';
+    for (const pt of world.sealedPoints || []) { const [x, y] = P(pt.x, pt.z); ctx.fillRect(x - 1.5, y - 1.5, 3, 3); }
     // portes
     for (const d of world.doors) {
       ctx.fillStyle = d.open ? 'rgba(80,220,120,0.6)' : '#ff4433';
@@ -346,9 +352,9 @@ export class Hud {
     // titre + légende
     ctx.textAlign = 'left';
     ctx.font = 'bold 26px Impact, Arial'; ctx.fillStyle = '#ffd24a';
-    ctx.fillText('GRANDE ÎLE DE STRASBOURG', 30, 36);
+    ctx.fillText(world.mapTitle || 'GRANDE ÎLE DE STRASBOURG', 30, 36);
     ctx.font = '13px Arial'; ctx.fillStyle = '#ccc';
-    ctx.fillText('▲ vous   ● vert : munitions   ● orange : arme murale   ● bleu ? : boîte mystère   P : Pack-a-Punch   ● couleurs : atouts   ■ rouge : porte verrouillée   — doré : passage sous immeuble   N ↑', 30, H - 18);
+    ctx.fillText('▲ vous   ● vert : munitions   ● orange : arme murale   ● bleu ? : boîte mystère   P : Pack-a-Punch   ● couleurs : atouts   ■ rouge : porte verrouillée   ■ gris : zone fermée   — doré : passage sous immeuble   N ↑', 30, H - 18);
   }
 
   setRoomBadge(code) {

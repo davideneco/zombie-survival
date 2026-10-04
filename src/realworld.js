@@ -220,18 +220,19 @@ function rippleNormalMap() {
   return t;
 }
 
-// Zones 0-5 : grille 3 x 2 de l'île ; zone 6 : le quartier de départ (ancienne carte du Marché-Neuf)
 const NAV_CELL = 0.75, NAV_MARGIN = 0.5; // marge > rayon des zombies (0,4) : ils ne frôlent plus les murs
 const PASSAGE_H = 3.6; // hauteur sous plafond des passages sous immeubles
 
-const ZONE_NAMES = ['Nord-Ouest', 'Place Kléber', 'Nord-Est', 'Petite France', 'Cathédrale', 'Quartier Est', 'Marché-Neuf'];
+// Zones du secteur jouable (voir CONFIG.sector)
+const ZONE_NAMES = CONFIG.sector.zones.map((z) => z.name);
 const NZONES = ZONE_NAMES.length;
+const NO_EDGE = -2; // (détection des portes) pas de limite entre deux cases
 
 export async function buildRealWorld(scene, renderer) {
   const rnd = seeded(20240611);
   const data = await (await fetch('/data/area.json')).json();
   const halfX = data.half, halfZ = data.halfZ || data.half;
-  const Z = CONFIG.zones;
+  const Z = CONFIG.sector;
 
   const [cobble, plaster, roofP, metalP, barkP, sandP, plasterImg] = await Promise.all([
     loadPBR('cobble', renderer), loadPBR('plaster', renderer), loadPBR('roof', renderer),
@@ -642,23 +643,90 @@ export async function buildRealWorld(scene, renderer) {
   }
   const reachAt = (x, z) => { const ix = nav.cx(x), iz = nav.cz(z); return nav.inside(ix, iz) && reach[nav.idx(ix, iz)] === 1; };
 
-  // ---------------------------------------------------------------- Zones
-  // zone 6 = la place de départ (même grille que la navigation), sinon grille 3 x 2
+  // ---------------------------------------------------------------- Zones du secteur jouable
+  // Chaque zone part d'un vrai lieu ; chaque case accessible va à la zone la plus proche en distance de marche
+  // (les limites tombent au milieu des rues). Au-delà de maxDist : hors secteur, fermé par des barricades.
+  const startZone = Z.zones.findIndex((z) => z.start);
+  const zoneLabel = new Int8Array(nav.nx * nav.nz).fill(-1);
+  const seeds = new Array(NZONES).fill(null); // [x, z] du lieu de chaque zone
+  {
+    const N = nav.nx * nav.nz, INFD = 0x3fffffff;
+    for (let i = 0; i < N; i++) if (breach.startMask[i] && reach[i]) zoneLabel[i] = startZone;
+    seeds[startZone] = [startPos.x, startPos.z];
+    const dist = new Int32Array(N).fill(INFD);
+    const buckets = [[]];
+    Z.zones.forEach((z, zi) => {
+      if (z.start) return;
+      // case accessible la plus proche du lieu (le point donné peut tomber dans un bâtiment)
+      let c = null;
+      const c0x = nav.cx(z.seed.x), c0z = nav.cz(z.seed.z);
+      for (let r = 0; r <= 60 && !c; r++) {
+        for (let dz = -r; dz <= r && !c; dz++) for (let dx = -r; dx <= r; dx++) {
+          if (Math.max(Math.abs(dx), Math.abs(dz)) !== r || !nav.inside(c0x + dx, c0z + dz)) continue;
+          const j = nav.idx(c0x + dx, c0z + dz);
+          if (reach[j] && zoneLabel[j] < 0 && !breach.startMask[j]) { c = [c0x + dx, c0z + dz]; break; }
+        }
+      }
+      if (!c) { console.warn('[zones] lieu introuvable :', z.name); return; }
+      const i = nav.idx(c[0], c[1]);
+      dist[i] = 0; zoneLabel[i] = zi; buckets[0].push(i);
+      seeds[zi] = [nav.worldX(c[0]), nav.worldZ(c[1])];
+    });
+    const maxCost = Math.round((Z.maxDist / nav.cell) * 10);
+    const NB = [[1, 0, 10], [-1, 0, 10], [0, 1, 10], [0, -1, 10], [1, 1, 14], [1, -1, 14], [-1, 1, 14], [-1, -1, 14]];
+    for (let d = 0; d < buckets.length && d <= maxCost; d++) {
+      const bucket = buckets[d];
+      if (!bucket) continue;
+      for (const i of bucket) {
+        if (dist[i] !== d) continue;
+        const ix = i % nav.nx, iz = (i / nav.nx) | 0;
+        for (const [dx, dz, c] of NB) {
+          const jx = ix + dx, jz = iz + dz;
+          if (!nav.inside(jx, jz)) continue;
+          const j = jz * nav.nx + jx;
+          if (!reach[j] || breach.startMask[j]) continue;
+          if (dx && dz && (!reach[iz * nav.nx + jx] || !reach[jz * nav.nx + ix])) continue;
+          const nd = d + c;
+          if (nd <= maxCost && nd < dist[j]) { dist[j] = nd; zoneLabel[j] = zoneLabel[i]; (buckets[nd] || (buckets[nd] = [])).push(j); }
+        }
+      }
+      buckets[d] = null;
+    }
+  }
+  // version étendue aux cases bloquées voisines (joueur collé à un mur, machines contre les façades)
+  const zoneLabelWide = zoneLabel.slice();
+  {
+    let front = [];
+    for (let i = 0; i < zoneLabel.length; i++) if (zoneLabel[i] >= 0) front.push(i);
+    for (let step = 0; step < 6; step++) {
+      const next = [];
+      for (const i of front) {
+        const ix = i % nav.nx, iz = (i / nav.nx) | 0;
+        for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+          const jx = ix + dx, jz = iz + dz;
+          if (!nav.inside(jx, jz)) continue;
+          const j = jz * nav.nx + jx;
+          if (zoneLabelWide[j] >= 0 || reach[j]) continue;
+          zoneLabelWide[j] = zoneLabelWide[i]; next.push(j);
+        }
+      }
+      front = next;
+    }
+  }
   const zoneOf = (x, z) => {
     const ix = nav.cx(x), iz = nav.cz(z);
-    if (nav.inside(ix, iz) && breach.startMask[nav.idx(ix, iz)]) return 6;
-    const col = x < Z.cutsX[0] ? 0 : x < Z.cutsX[1] ? 1 : 2;
-    const row = z < Z.cutZ ? 0 : 1;
-    return col + 3 * row;
+    return nav.inside(ix, iz) ? zoneLabelWide[nav.idx(ix, iz)] : -1;
   };
-  const startZone = zoneOf(startPos.x, startPos.z);
   const zoneOpen = new Array(NZONES).fill(false);
   zoneOpen[startZone] = true;
   const zoneCells = Array.from({ length: NZONES }, () => ({ n: 0, sx: 0, sz: 0 }));
+  let secMinX = Infinity, secMaxX = -Infinity, secMinZ = Infinity, secMaxZ = -Infinity;
   for (let iz = 0; iz < nav.nz; iz += 3) for (let ix = 0; ix < nav.nx; ix += 3) {
-    if (!reach[nav.idx(ix, iz)]) continue;
-    const x = nav.worldX(ix), z = nav.worldZ(iz), zc = zoneCells[zoneOf(x, z)];
+    const zl = zoneLabel[nav.idx(ix, iz)];
+    if (zl < 0) continue;
+    const x = nav.worldX(ix), z = nav.worldZ(iz), zc = zoneCells[zl];
     zc.n++; zc.sx += x; zc.sz += z;
+    secMinX = Math.min(secMinX, x); secMaxX = Math.max(secMaxX, x); secMinZ = Math.min(secMinZ, z); secMaxZ = Math.max(secMaxZ, z);
   }
 
   const candidatesNear = (cx, cz, minClear, minD, maxD) => {
@@ -676,13 +744,13 @@ export async function buildRealWorld(scene, renderer) {
   };
   const shuffle = (a) => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
 
-  // Points aléatoires accessibles sur toute l'île (props)
+  // Points aléatoires accessibles dans le secteur jouable (props)
   const randomSpots = (count, minClear) => {
     const out = [];
     for (let t = 0; t < count * 60 && out.length < count; t++) {
-      const x = (rnd() * 2 - 1) * halfX, z = (rnd() * 2 - 1) * halfZ;
+      const x = secMinX + rnd() * (secMaxX - secMinX), z = secMinZ + rnd() * (secMaxZ - secMinZ);
       const ix = nav.cx(x), iz = nav.cz(z);
-      if (nav.inside(ix, iz) && reach[nav.idx(ix, iz)] && clearance(ix, iz, minClear)) out.push([x, z]);
+      if (nav.inside(ix, iz) && zoneLabel[nav.idx(ix, iz)] >= 0 && clearance(ix, iz, minClear)) out.push([x, z]);
     }
     return out;
   };
@@ -794,15 +862,6 @@ export async function buildRealWorld(scene, renderer) {
   // ---------------------------------------------------------------- Bornes de munitions et armes murales (une série par zone)
   const stations = [];
   const wallWeapons = [];
-  const zoneAnchor = (zi) => {
-    const zc = zoneCells[zi];
-    if (!zc.n) return null;
-    if (zi === startZone) return [startPos.x, startPos.z];
-    const cx = zc.sx / zc.n, cz = zc.sz / zc.n;
-    const c = candidatesNear(cx, cz, 3, 0, 160).filter((p) => zoneOf(p[0], p[1]) === zi).sort((a, b) => Math.hypot(a[0] - cx, a[1] - cz) - Math.hypot(b[0] - cx, b[1] - cz))[0];
-    return c || null;
-  };
-
   const addStation = (x, z, faceX, faceZ) => {
     const g = new THREE.Group();
     const body = new THREE.Mesh(new THREE.BoxGeometry(1.3, 1.7, 0.8), new THREE.MeshStandardMaterial({ color: 0x2c3a2e, roughness: 0.6, metalness: 0.5 }));
@@ -848,6 +907,8 @@ export async function buildRealWorld(scene, renderer) {
   // Partout où deux cases accessibles voisines appartiennent à deux zones différentes, on pose une barrière ;
   // les barrières d'une même paire de zones forment une seule porte (un seul achat).
   const doors = [];
+  const sealedGroups = [];
+  const sealedPoints = []; // pour la carte
   let door_depth;
   {
     const cell = nav.cell, ext = cell + 0.3;
@@ -862,16 +923,16 @@ export async function buildRealWorld(scene, renderer) {
       const ex = nav.worldX(ix) + cell / 2;
       let start = -1, pa = -1, pb = -1;
       for (let iz = 0; iz <= nav.nz; iz++) {
-        let a = -1, b = -1;
+        let a = NO_EDGE, b = NO_EDGE;
         if (iz < nav.nz) {
           const i = nav.idx(ix, iz);
           if (reach[i] && reach[i + 1]) {
-            a = zoneOf(nav.worldX(ix), nav.worldZ(iz)); b = zoneOf(nav.worldX(ix + 1), nav.worldZ(iz));
-            if (a === b) a = b = -1;
+            a = zoneLabel[i]; b = zoneLabel[i + 1];
+            if (a === b) a = b = NO_EDGE;
           }
         }
         if (start >= 0 && (a !== pa || b !== pb)) { addRun(pa, pb, { x0: ex, z0: nav.worldZ(start) - ext, x1: ex, z1: nav.worldZ(iz - 1) + ext }); start = -1; }
-        if (a >= 0 && start < 0) { start = iz; pa = a; pb = b; }
+        if (a !== NO_EDGE && start < 0) { start = iz; pa = a; pb = b; }
       }
     }
     // arêtes horizontales : entre (ix, iz) et (ix, iz + 1)
@@ -879,16 +940,16 @@ export async function buildRealWorld(scene, renderer) {
       const ez = nav.worldZ(iz) + cell / 2;
       let start = -1, pa = -1, pb = -1;
       for (let ix = 0; ix <= nav.nx; ix++) {
-        let a = -1, b = -1;
+        let a = NO_EDGE, b = NO_EDGE;
         if (ix < nav.nx) {
           const i = nav.idx(ix, iz);
           if (reach[i] && reach[i + nav.nx]) {
-            a = zoneOf(nav.worldX(ix), nav.worldZ(iz)); b = zoneOf(nav.worldX(ix), nav.worldZ(iz + 1));
-            if (a === b) a = b = -1;
+            a = zoneLabel[i]; b = zoneLabel[i + nav.nx];
+            if (a === b) a = b = NO_EDGE;
           }
         }
         if (start >= 0 && (a !== pa || b !== pb)) { addRun(pa, pb, { x0: nav.worldX(start) - ext, z0: ez, x1: nav.worldX(ix - 1) + ext, z1: ez }); start = -1; }
-        if (a >= 0 && start < 0) { start = ix; pa = a; pb = b; }
+        if (a !== NO_EDGE && start < 0) { start = ix; pa = a; pb = b; }
       }
     }
 
@@ -897,6 +958,7 @@ export async function buildRealWorld(scene, renderer) {
     // Entre deux autres zones : une seule porte pour toute la limite (un achat ouvre toutes les rues).
     const links = [];
     for (const g of groups.values()) {
+      if (g.a < 0) { sealedGroups.push(g); continue; } // limite du secteur : barricade définitive
       if (g.a !== startZone && g.b !== startZone) { links.push(g); continue; }
       const left = g.runs.slice();
       while (left.length) {
@@ -966,46 +1028,56 @@ export async function buildRealWorld(scene, renderer) {
       doors.push(door);
     });
     door_depth = depth;
+
+    // Barricades définitives aux limites du secteur (le reste de l'île n'est pas encore jouable)
+    const sealMat = tiled(metalP, 1, 1, { color: 0x50555b, metalness: 0.5 });
+    const cv = document.createElement('canvas'); cv.width = 512; cv.height = 160;
+    const x = cv.getContext('2d');
+    for (let i = -4; i < 20; i++) { x.fillStyle = i % 2 ? '#111' : '#f2c414'; x.beginPath(); x.moveTo(i * 40, 0); x.lineTo(i * 40 + 40, 0); x.lineTo(i * 40 + 80, 160); x.lineTo(i * 40 + 40, 160); x.fill(); }
+    x.fillStyle = 'rgba(0,0,0,0.82)'; x.fillRect(30, 30, 452, 100);
+    x.textAlign = 'center'; x.fillStyle = '#f2c414'; x.font = 'bold 46px Impact, Arial, sans-serif'; x.fillText('ZONE FERMÉE', 256, 84);
+    x.fillStyle = '#ddd'; x.font = '22px Arial, sans-serif'; x.fillText('accès interdit — secteur non sécurisé', 256, 116);
+    const sealTex = new THREE.CanvasTexture(cv); sealTex.colorSpace = THREE.SRGBColorSpace;
+    const sealSignMat = new THREE.MeshBasicMaterial({ map: sealTex });
+    const SH = 3.6;
+    for (const g of sealedGroups) {
+      for (const r of g.runs) {
+        const len = Math.hypot(r.x1 - r.x0, r.z1 - r.z0);
+        const vertical = r.x0 === r.x1;
+        collision.addSegment(r.x0, r.z0, r.x1, r.z1, SH);
+        const m = new THREE.Mesh(worldBox(vertical ? 0.4 : len, SH, vertical ? len : 0.4, 2), sealMat);
+        m.position.set((r.x0 + r.x1) / 2, SH / 2, (r.z0 + r.z1) / 2);
+        m.castShadow = m.receiveShadow = true;
+        scene.add(m);
+        for (let t = 0; t <= len; t += 3) sealedPoints.push({ x: r.x0 + ((r.x1 - r.x0) * t) / len, z: r.z0 + ((r.z1 - r.z0) * t) / len });
+        if (len < 3) continue;
+        const cx0 = (r.x0 + r.x1) / 2, cz0 = (r.z0 + r.z1) / 2;
+        for (const side of [-1, 1]) {
+          const sign = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 0.75), sealSignMat);
+          sign.position.set(cx0 + (vertical ? side * 0.22 : 0), 2.2, cz0 + (vertical ? 0 : side * 0.22));
+          sign.rotation.y = vertical ? (side > 0 ? Math.PI / 2 : -Math.PI / 2) : (side > 0 ? 0 : Math.PI);
+          scene.add(sign);
+        }
+      }
+    }
   }
 
-  // Stations et armes : le quartier de départ a sa borne et les deux armes (comme l'ancienne carte),
-  // chaque autre zone a une borne et une arme (fusil à pompe / PM en alternance).
-  const weaponCycle = [
-    ['shotgun', 'FUSIL A POMPE', 750, 350, 0xff8833],
-    ['smg', 'PM MP40', 1000, 500, 0x3399ff],
-  ];
-  const anchors = Array.from({ length: NZONES }, (_, zi) => zoneAnchor(zi));
-  const zoneOrder = [...Array(NZONES).keys()].filter((zi) => anchors[zi] && Number.isFinite(door_depth[zi])).sort((a, b) => door_depth[a] - door_depth[b]);
-  zoneOrder.forEach((zi, k) => {
-    const [ax, az] = anchors[zi];
-    const zc = zoneCells[zi];
-    const fx = zi === startZone ? startPos.x : zc.sx / zc.n, fz = zi === startZone ? startPos.z : zc.sz / zc.n;
-    const inZone = (c) => zoneOf(c[0], c[1]) === zi;
-    const st = shuffle(candidatesNear(ax, az, 3, zi === startZone ? 7 : 3, zi === startZone ? 14 : 20).filter(inZone));
-    const [sx, sz] = st[0] || [ax + 5, az];
-    addStation(sx, sz, fx, fz);
-    const ww = shuffle(candidatesNear(ax, az, 2, 6, 26).filter(inZone)).filter((c) => Math.hypot(c[0] - sx, c[1] - sz) > 4);
-    if (zi === startZone) {
-      addWallBuy(...weaponCycle[0], ww[0], fx, fz);
-      addWallBuy(...weaponCycle[1], ww.find((c) => Math.hypot(c[0] - ww[0][0], c[1] - ww[0][1]) > 6) || ww[1], fx, fz);
-    } else {
-      addWallBuy(...weaponCycle[k % 2], ww[0], fx, fz);
-    }
-  });
-  if (!stations.length) stations.push(new THREE.Vector3(startPos.x + 6, 0, startPos.z));
-
-  // ---------------------------------------------------------------- Machines : atouts, Pack-a-Punch, boîtes mystère
-  // Répartition par zone : on découvre de quoi s'améliorer en ouvrant la ville.
+  // ---------------------------------------------------------------- Bornes, armes au mur et machines (CONFIG.sector.zones[].items)
+  const WALL_COLORS = { shotgun: 0xff8833, smg: 0x3399ff, sniper: 0x88ccff, lmg: 0xff5533 };
   const machines = [];
   {
-    const placed = [...stations.map((v) => [v.x, v.z]), ...wallWeapons.map((w) => [w.pos.x, w.pos.z])];
-    const spotIn = (zi) => {
-      const a = anchors[zi];
+    const placed = [];
+    // emplacement libre dans la zone, près de son lieu, à plus de 5 m des autres objets
+    const spotIn = (zi, minClear, minD, maxD) => {
+      const a = seeds[zi];
       if (!a) return null;
-      const inZone = (c) => zoneOf(c[0], c[1]) === zi && placed.every((p) => Math.hypot(p[0] - c[0], p[1] - c[1]) > 5);
-      const c = shuffle(candidatesNear(a[0], a[1], 3, 4, zi === startZone ? 30 : 45).filter(inZone))[0];
-      if (c) placed.push(c);
-      return c || null;
+      // on élargit la recherche, puis on accepte moins d'espace autour (rues étroites)
+      for (const [r, clear] of [[maxD, minClear], [maxD * 1.6, minClear], [maxD * 2.5, minClear], [maxD * 2.5, Math.max(1, minClear - 1)]]) {
+        const c = shuffle(candidatesNear(a[0], a[1], clear, minD, r)
+          .filter((p) => zoneOf(p[0], p[1]) === zi && placed.every((q) => Math.hypot(q[0] - p[0], q[1] - p[1]) > 5)))[0];
+        if (c) { placed.push(c); return c; }
+      }
+      return null;
     };
     const signTex = (title, sub, color) => {
       const cv = document.createElement('canvas'); cv.width = 512; cv.height = 160;
@@ -1021,8 +1093,7 @@ export async function buildRealWorld(scene, renderer) {
     const addMachine = (type, id, spot, zi) => {
       if (!spot) return;
       const [x, z] = spot;
-      const zc = zoneCells[zi];
-      const fx = zi === startZone ? startPos.x : zc.sx / zc.n, fz = zi === startZone ? startPos.z : zc.sz / zc.n;
+      const [fx, fz] = seeds[zi];
       const g = new THREE.Group();
       let name, price, color, w, h, d;
       if (type === 'perk') {
@@ -1067,29 +1138,25 @@ export async function buildRealWorld(scene, renderer) {
       lightSources.push({ x, y: h + 0.8, z, color: new THREE.Color(color).getHex(), intensity: 22, dist: 9 });
       machines.push({ type, id, name, price, color, letter: type === 'perk' ? CONFIG.perks[id].letter : null, zone: zi, pos: new THREE.Vector3(x, 0, z), group: g });
     };
-    // une boîte et/ou des atouts par zone ; le Pack-a-Punch au bout de la ville (Petite France)
-    const LAYOUT = {
-      6: [['perk', 'quickrevive'], ['box']],
-      1: [['perk', 'juggernog'], ['perk', 'speedcola']],
-      4: [['perk', 'doubletap'], ['box']],
-      0: [['perk', 'mulekick'], ['wall', 'sniper']],
-      2: [['perk', 'staminup'], ['box']],
-      3: [['pap'], ['box']],
-      5: [['wall', 'lmg'], ['box']],
-    };
-    for (const [zs, items] of Object.entries(LAYOUT)) {
-      const zi = Number(zs);
-      if (!anchors[zi] || !Number.isFinite(door_depth[zi])) continue;
-      for (const [type, id] of items) {
-        const spot = spotIn(zi);
-        if (type === 'wall') {
+    Z.zones.forEach((zone, zi) => {
+      if (!seeds[zi] || !Number.isFinite(door_depth[zi])) return;
+      const [fx, fz] = seeds[zi];
+      const start = zi === startZone;
+      for (const item of zone.items || []) {
+        const [type, id] = item.split(':');
+        if (type === 'station') {
+          const sp = spotIn(zi, 3, start ? 7 : 3, start ? 14 : 30);
+          if (sp) addStation(sp[0], sp[1], fx, fz);
+        } else if (type === 'wall') {
           const W = CONFIG.weapons[id];
-          const zc = zoneCells[zi];
-          addWallBuy(id, W.name, W.price, W.ammoPrice, id === 'sniper' ? 0x88ccff : 0xff5533, spot, zc.sx / zc.n, zc.sz / zc.n);
-        } else addMachine(type, id, spot, zi);
+          addWallBuy(id, W.name, W.price, W.ammoPrice, WALL_COLORS[id] || 0xff8833, spotIn(zi, 2, start ? 6 : 4, start ? 26 : 32), fx, fz);
+        } else {
+          addMachine(type, id, spotIn(zi, 3, 4, start ? 30 : 35), zi);
+        }
       }
-    }
+    });
   }
+  if (!stations.length) stations.push(new THREE.Vector3(startPos.x + 6, 0, startPos.z));
 
   // ---------------------------------------------------------------- Plan de la ville (pour la carte plein écran)
   const MAP_SCALE = 0.7; // pixels par mètre
@@ -1121,10 +1188,36 @@ export async function buildRealWorld(scene, renderer) {
       r.pts.forEach(([px, pz], k) => { const X = (px + halfX) * MAP_SCALE, Y = (pz + halfZ) * MAP_SCALE; if (k) x.lineTo(X, Y); else x.moveTo(X, Y); });
       x.stroke();
     }
+    // tout ce qui est hors secteur est assombri (masque grossier de 4 m, élargi pour englober les pâtés de maisons)
+    const G = 4, gw = Math.ceil((halfX * 2) / G), gh = Math.ceil((halfZ * 2) / G);
+    let mask = new Uint8Array(gw * gh);
+    for (let i = 0; i < zoneLabel.length; i++) {
+      if (zoneLabel[i] < 0) continue;
+      const wx = nav.worldX(i % nav.nx), wz = nav.worldZ((i / nav.nx) | 0);
+      mask[Math.floor((wz + halfZ) / G) * gw + Math.floor((wx + halfX) / G)] = 1;
+    }
+    const grow = (m, r, val) => { // dilatation (val = 1) ou érosion (val = 0) carrée
+      const out = m.slice();
+      for (let j = 0; j < gh; j++) for (let i = 0; i < gw; i++) {
+        if (m[j * gw + i] === val) continue;
+        search: for (let dj = -r; dj <= r; dj++) for (let di = -r; di <= r; di++) {
+          const a = i + di, b = j + dj;
+          if (a >= 0 && b >= 0 && a < gw && b < gh && m[b * gw + a] === val) { out[j * gw + i] = val; break search; }
+        }
+      }
+      return out;
+    };
+    mask = grow(grow(mask, 6, 1), 3, 0);
+    const imgAll = x.getImageData(0, 0, W, Hh);
+    for (let py = 0; py < Hh; py++) for (let px = 0; px < W; px++) {
+      const wx = px / MAP_SCALE, wz = py / MAP_SCALE;
+      if (mask[Math.floor(wz / G) * gw + Math.floor(wx / G)]) continue;
+      const o = (py * W + px) * 4;
+      imgAll.data[o] *= 0.42; imgAll.data[o + 1] *= 0.42; imgAll.data[o + 2] *= 0.42;
+    }
+    x.putImageData(imgAll, 0, 0);
   }
-  const zoneCenters = zoneCells.map((zc, i) => (zc.n ? { name: ZONE_NAMES[i], x: zc.sx / zc.n, z: zc.sz / zc.n } : null));
-  // le centre de la place de départ : la position de départ (plus lisible)
-  if (zoneCenters[startZone]) { zoneCenters[startZone].x = startPos.x; zoneCenters[startZone].z = startPos.z; }
+  const zoneCenters = seeds.map((sd, i) => (sd && zoneCells[i].n ? { name: ZONE_NAMES[i], x: sd[0], z: sd[1] } : null));
 
   // ---------------------------------------------------------------- Lampadaires (instanciés, 6 à 8 vraies lumières mobiles)
   {
@@ -1299,7 +1392,8 @@ export async function buildRealWorld(scene, renderer) {
   return {
     half: Math.max(halfX, halfZ), blockers, spawnPoints: [], windowSpawns, pickWindow, pickGround,
     stationPos, stations, wallWeapons, doors, openDoor, zoneOf, startPos, nav, collision, machines,
-    zoneNames: ZONE_NAMES, zoneCenters, startZone, mapImage, mapView: { halfX, halfZ, scale: MAP_SCALE },
+    zoneNames: ZONE_NAMES, zoneCenters, startZone, sealedPoints, mapImage, mapView: { halfX, halfZ, scale: MAP_SCALE },
+    mapCrop: { x0: secMinX - 60, x1: secMaxX + 60, z0: secMinZ - 50, z1: secMaxZ + 50 }, mapTitle: 'SECTEUR DU MARCHÉ-NEUF — STRASBOURG',
     collide: (pos, r) => collision.resolve(pos, r),
     rayHit: (ox, oy, oz, dx, dy, dz, maxT) => collision.rayHit(ox, oy, oz, dx, dy, dz, maxT),
     update(px, pz, dt) {
