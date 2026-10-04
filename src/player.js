@@ -25,7 +25,7 @@ export class Player {
     this.bindInput();
 
     // Lampe torche tactique
-    this.flashlight = new THREE.SpotLight(0xfff2d0, 110, 40, 0.5, 0.6, 1.6);
+    this.flashlight = new THREE.SpotLight(0xfff2d0, 55, 40, 0.5, 0.6, 1.6);
     this.flashlight.position.set(0, 0, 0);
     this.flashlight.target.position.set(0, 0, -1);
     camera.add(this.flashlight, this.flashlight.target);
@@ -235,7 +235,7 @@ export class Player {
   // obligerait three.js à recompiler tous les shaders (gros ralentissement).
   setTorch(on) {
     this.torchOn = on;
-    this.flashlight.intensity = on ? 110 : 0;
+    this.flashlight.intensity = on ? 55 : 0;
   }
 
   releaseInputs() {

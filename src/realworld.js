@@ -7,6 +7,7 @@ import { findBreaches } from './breach.js';
 import { preparePassages, cutIntervals, insideRuns, distToPassage } from './passage.js';
 import { createArchitecture, BAY_W } from './architecture.js';
 import { createProps } from './props.js';
+import { makePerkMachine, makeAmmoStation, makeWallBuy, addPosts, makeMysteryBox, makePackAPunch } from './machines.js';
 
 // =====================================================================
 //  Monde réel : la Grande Île de Strasbourg (données OpenStreetMap)
@@ -762,44 +763,48 @@ export async function buildRealWorld(scene, renderer) {
   const stations = [];
   const wallWeapons = [];
   const addStation = (x, z, faceX, faceZ) => {
-    const g = new THREE.Group();
-    const body = new THREE.Mesh(new THREE.BoxGeometry(1.3, 1.7, 0.8), new THREE.MeshStandardMaterial({ color: 0x2c3a2e, roughness: 0.6, metalness: 0.5 }));
-    body.position.y = 0.85; body.castShadow = body.receiveShadow = true; g.add(body);
-    const panel = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.7, 0.05), new THREE.MeshStandardMaterial({ color: 0x22ff66, emissive: 0x11cc44, emissiveIntensity: 1.6 }));
-    panel.position.set(0, 1.1, 0.42); g.add(panel);
+    const g = makeAmmoStation();
     g.position.set(x, 0, z);
     g.rotation.y = Math.atan2(faceX - x, faceZ - z);
+    g.traverse((o) => { if (o.isMesh) o.castShadow = o.receiveShadow = true; });
     scene.add(g);
-    collision.addBox(x, z, 1.3, 0.8, -g.rotation.y, 1.7);
-    lightSources.push({ x, y: 1.6, z, color: 0x33ff77, intensity: 18, dist: 9 });
+    const [w, d, h] = g.userData.size;
+    collision.addBox(x, z, w, d, -g.rotation.y, h);
+    lightSources.push({ x, y: 2.6, z, color: 0x9fffb0, intensity: 6, dist: 7 });
     stations.push(new THREE.Vector3(x, 0, z));
   };
 
+  // Arme murale : planche avec le dessin à la craie, accrochée sur le mur le plus proche (sinon sur deux poteaux)
   const addWallBuy = (id, name, price, ammoPrice, colorHex, spot, faceX, faceZ) => {
     if (!spot) return;
-    const [x, z] = spot;
-    wallWeapons.push({ id, name, price, ammoPrice, pos: new THREE.Vector3(x, 0, z) });
-    const g = new THREE.Group();
-    const stand = new THREE.Mesh(new THREE.BoxGeometry(1.4, 1.4, 0.2), new THREE.MeshStandardMaterial({ color: 0x1e1e20, roughness: 0.7 }));
-    stand.position.y = 1.2;
-    g.add(stand);
-    const c = document.createElement('canvas'); c.width = 256; c.height = 128;
-    const ctx = c.getContext('2d');
-    ctx.fillStyle = '#16181b'; ctx.fillRect(0, 0, 256, 128);
-    ctx.strokeStyle = '#eee'; ctx.lineWidth = 4;
-    ctx.strokeRect(6, 6, 244, 116);
-    ctx.fillStyle = '#fff'; ctx.font = 'bold 22px Arial, sans-serif'; ctx.textAlign = 'center';
-    ctx.fillText(name, 128, 48);
-    ctx.fillStyle = '#ffd24a'; ctx.font = 'bold 28px Arial, sans-serif';
-    ctx.fillText(`${price} PTS`, 128, 92);
-    const sign = new THREE.Mesh(new THREE.PlaneGeometry(1.3, 0.65), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(c) }));
-    sign.position.set(0, 1.2, 0.11);
-    g.add(sign);
+    let [x, z] = spot;
+    let best = 5, ang = null;
+    for (let a = 0; a < 36; a++) {
+      const t = (a / 36) * Math.PI * 2, cx = Math.cos(t), cz = Math.sin(t);
+      const d = collision.rayHit(x, 1.5, z, cx, 0, cz, 5);
+      if (d >= best) continue;
+      // le panneau (1,6 m) doit tenir sur un pan de mur plat : rayons parallèles à ±0,75 m
+      const ok = [-0.75, 0.75].every((o) => Math.abs(collision.rayHit(x - cz * o, 1.5, z + cx * o, cx, 0, cz, 6) - d) < 0.25);
+      if (ok) { best = d; ang = t; }
+    }
+    const g = makeWallBuy(id, name, price, colorHex);
+    let rot;
+    if (ang != null) {
+      x += Math.cos(ang) * (best - 0.06); z += Math.sin(ang) * (best - 0.06);
+      rot = Math.atan2(-Math.cos(ang), -Math.sin(ang)); // dos contre le mur
+    } else {
+      addPosts(g);
+      rot = Math.atan2(faceX - x, faceZ - z);
+      collision.addBox(x, z, 1.6, 0.2, -rot, 2.2);
+    }
     g.position.set(x, 0, z);
-    g.rotation.y = Math.atan2(faceX - x, faceZ - z);
+    g.rotation.y = rot;
+    g.traverse((o) => { if (o.isMesh) o.castShadow = o.receiveShadow = true; });
     scene.add(g);
-    collision.addBox(x, z, 1.4, 0.4, -g.rotation.y, 2);
-    lightSources.push({ x, y: 2.0, z, color: colorHex, intensity: 20, dist: 8 });
+    // point d'interaction devant la planche
+    const fx = x + Math.sin(rot) * 0.6, fz = z + Math.cos(rot) * 0.6;
+    wallWeapons.push({ id, name, price, ammoPrice, pos: new THREE.Vector3(fx, 0, fz) });
+    lightSources.push({ x: fx, y: 2.5, z: fz, color: 0xffd8a0, intensity: 4, dist: 5 });
   };
 
   // ---------------------------------------------------------------- Portes payantes entre les zones
@@ -963,7 +968,7 @@ export async function buildRealWorld(scene, renderer) {
           sign.rotation.y = side > 0 ? 0 : Math.PI;
           gm.add(sign);
         }
-        lightSources.push({ x: (r.x0 + r.x1) / 2, y: 2.6, z: (r.z0 + r.z1) / 2, color: 0xff7733, intensity: 18, dist: 9, door });
+        lightSources.push({ x: (r.x0 + r.x1) / 2, y: 2.8, z: (r.z0 + r.z1) / 2, color: 0xff8844, intensity: 9, dist: 8, door });
       }
       doors.push(door);
     });
@@ -1030,48 +1035,29 @@ export async function buildRealWorld(scene, renderer) {
       if (!spot) return;
       const [x, z] = spot;
       const [fx, fz] = seeds[zi];
-      const g = new THREE.Group();
-      let name, price, color, w, h, d;
+      let name, price, color, g;
       if (type === 'perk') {
         const P = CONFIG.perks[id];
-        name = P.name; price = P.price; color = P.color; w = 1.1; h = 2.3; d = 0.8;
-        const body = new THREE.Mesh(worldBox(w, h, d, 1), new THREE.MeshStandardMaterial({ color, roughness: 0.4, metalness: 0.3 }));
-        body.position.y = h / 2; g.add(body);
-        const glass = new THREE.Mesh(new THREE.BoxGeometry(0.8, 1.0, 0.05), new THREE.MeshStandardMaterial({ color: 0x111111, emissive: color, emissiveIntensity: 0.7 }));
-        glass.position.set(0, 1.05, d / 2 + 0.02); g.add(glass);
-        for (let i = 0; i < 3; i++) { // bouteilles
-          const b = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.07, 0.3, 8), new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 1.2 }));
-          b.position.set(-0.22 + i * 0.22, 1.0, d / 2 + 0.06); g.add(b);
-        }
+        name = P.name; price = P.price; color = P.color;
+        g = makePerkMachine(id, P, price);
       } else if (type === 'pap') {
-        name = 'PACK-A-PUNCH'; price = CONFIG.papPrice; color = '#b24bff'; w = 1.8; h = 1.6; d = 1.2;
-        const body = new THREE.Mesh(worldBox(w, h, d, 1), new THREE.MeshStandardMaterial({ color: 0x2a2233, roughness: 0.5, metalness: 0.7 }));
-        body.position.y = h / 2; g.add(body);
-        const core = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.4, 0.06), new THREE.MeshStandardMaterial({ color: 0x220033, emissive: 0xb24bff, emissiveIntensity: 2 }));
-        core.position.set(0, 0.9, d / 2 + 0.03); g.add(core);
+        name = 'PACK-A-PUNCH'; price = CONFIG.papPrice; color = '#b24bff';
+        g = makePackAPunch();
       } else {
-        name = 'BOÎTE MYSTÈRE'; price = CONFIG.box.price; color = '#5fb8ff'; w = 1.7; h = 0.75; d = 0.85;
-        const wood = new THREE.MeshStandardMaterial({ color: 0x5a3b22, roughness: 0.8 });
-        const body = new THREE.Mesh(worldBox(w, h, d, 1), wood);
-        body.position.y = h / 2; g.add(body);
-        const lid = new THREE.Group(); lid.position.set(0, h, -d / 2); g.add(lid);
-        const lidMesh = new THREE.Mesh(new THREE.BoxGeometry(w, 0.12, d), wood);
-        lidMesh.position.set(0, 0.06, d / 2); lid.add(lidMesh);
-        const q = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 0.5), new THREE.MeshBasicMaterial({ map: signTex('?', '', '#5fb8ff'), transparent: true }));
-        q.position.set(0, 0.38, d / 2 + 0.01); g.add(q);
-        const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.25, 30, 12, 1, true), new THREE.MeshBasicMaterial({ color: 0x5fb8ff, transparent: true, opacity: 0.12, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
-        beam.position.y = 15; g.add(beam);
-        g.userData.lid = lid;
+        name = 'BOÎTE MYSTÈRE'; price = CONFIG.box.price; color = '#5fb8ff';
+        g = makeMysteryBox();
+        const [, , bh] = g.userData.size;
+        const sign = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 0.47), new THREE.MeshBasicMaterial({ map: signTex(name, `${price} PTS`, color), transparent: true }));
+        sign.position.set(0, bh + 0.55, 0.3);
+        g.add(sign);
       }
-      const sign = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 0.47), new THREE.MeshBasicMaterial({ map: signTex(name, `${price} PTS`, color) }));
-      sign.position.set(0, h + 0.45, d / 2);
-      g.add(sign);
+      const [w, d, h] = g.userData.size;
       g.position.set(x, 0, z);
       g.rotation.y = Math.atan2(fx - x, fz - z);
-      g.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+      g.traverse((o) => { if (o.isMesh && o.material.blending !== THREE.AdditiveBlending) o.castShadow = o.receiveShadow = true; });
       scene.add(g);
       collision.addBox(x, z, w, d, -g.rotation.y, h);
-      lightSources.push({ x, y: h + 0.8, z, color: new THREE.Color(color).getHex(), intensity: 22, dist: 9 });
+      lightSources.push({ x: x + Math.sin(g.rotation.y) * 1.2, y: h + 0.6, z: z + Math.cos(g.rotation.y) * 1.2, color: new THREE.Color(color).getHex(), intensity: 7, dist: 8 });
       machines.push({ type, id, name, price, color, letter: type === 'perk' ? CONFIG.perks[id].letter : null, zone: zi, pos: new THREE.Vector3(x, 0, z), group: g });
     };
     Z.zones.forEach((zone, zi) => {
