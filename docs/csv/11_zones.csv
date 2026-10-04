@@ -1,0 +1,9 @@
+﻿Zone;Départ;"Lieu (x ; z en m)";Portes;Contenu prévu (config);Bornes;Armes au mur;Machines
+Marché-Neuf;oui;"-1 ; -31";P4, P6;station, wall:shotgun, wall:smg, perk:quickrevive, box;1;FUSIL À POMPE, PISTOLET-MITRAILLEUR;RÉANIMATION RAPIDE, BOÎTE MYSTÈRE
+Temple-Neuf;;"-35 ; -95";P2, P4, P5, P7;station, perk:staminup;1;;STAMIN-UP
+Rue des Orfèvres;;"27 ; -58";P5, P6, P9, P10;wall:smg, perk:speedcola;0;PISTOLET-MITRAILLEUR;SPEED COLA
+Rue du Dôme;;"104 ; -118";P7, P10;station, wall:sniper, box;1;FUSIL DE PRÉCISION;BOÎTE MYSTÈRE
+Grandes Arcades;;"-110 ; -45";P1, P2, P3;station, wall:shotgun, perk:mulekick;1;FUSIL À POMPE;MULE KICK
+Place Kléber;;"-199 ; -145";P1;station, perk:juggernog, wall:lmg, box;1;MITRAILLEUSE RPK;MASTODONTE, BOÎTE MYSTÈRE
+Place Gutenberg;;"-20 ; 90";P3, P8;station, perk:doubletap, box;1;;DOUBLE TAP, BOÎTE MYSTÈRE
+Cathédrale;;"103 ; 33";P8, P9;station, pap, box;1;;PACK-A-PUNCH, BOÎTE MYSTÈRE

@@ -1,10 +1,11 @@
 ﻿Porte;Prix (pts);Zone A;Zone B
-P1;1250;Nord-Ouest;Place Kléber
-P2;1750;Petite France;Cathédrale
-P3;750;Place Kléber;Marché-Neuf
-P4;750;Place Kléber;Marché-Neuf
-P5;1250;Place Kléber;Nord-Est
-P6;1750;Cathédrale;Quartier Est
-P7;1750;Nord-Ouest;Petite France
-P8;1250;Place Kléber;Cathédrale
-P9;1750;Nord-Est;Quartier Est
+P1;1250;Grandes Arcades;Place Kléber
+P2;1000;Temple-Neuf;Grandes Arcades
+P3;1250;Grandes Arcades;Place Gutenberg
+P4;750;Marché-Neuf;Temple-Neuf
+P5;750;Temple-Neuf;Rue des Orfèvres
+P6;750;Marché-Neuf;Rue des Orfèvres
+P7;1000;Temple-Neuf;Rue du Dôme
+P8;1250;Place Gutenberg;Cathédrale
+P9;1000;Rue des Orfèvres;Cathédrale
+P10;1000;Rue des Orfèvres;Rue du Dôme

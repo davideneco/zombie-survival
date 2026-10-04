@@ -1,8 +1,8 @@
-﻿id;Arme;Type;Dégâts par balle;Plombs par tir;Multiplicateur tête;Cadence (tirs/s);DPS approx.;Chargeur;Réserve départ;Réserve max;Rechargement (s);Dispersion;Portée (m);Zombies traversés;Explosion rayon (m);Explosion dégâts;Zoom lunette (FOV);Prix au mur (pts);Prix munitions (pts);Où l'obtenir
-rifle;FUSIL D'ASSAUT;automatique;36;1;2,5;9,5;342;30;120;180;1,8;0,012;90;1;;;;départ;300;arme de départ
-shotgun;FUSIL À POMPE;pompe;26;8;1,8;1,3;270,4;6;30;48;2,4;0,046;35;1;;;;750;350;mur Marché-Neuf, mur Nord-Ouest, mur Cathédrale, mur Quartier Est, boîte mystère
-smg;PISTOLET-MITRAILLEUR;automatique;24;1;2,2;13,5;324;32;128;224;1,5;0,022;65;1;;;;1000;500;mur Marché-Neuf, mur Place Kléber, mur Nord-Est, mur Petite France, boîte mystère
-lmg;MITRAILLEUSE RPK;automatique;44;1;2;10,5;462;75;300;450;3,6;0,028;90;1;;;;2500;1000;mur Quartier Est, boîte mystère
-sniper;FUSIL DE PRÉCISION;coup par coup;340;1;3,5;1,1;374;5;30;45;2,8;0,0015;200;4;;;25;1750;700;mur Nord-Ouest, boîte mystère
-magnum;REVOLVER .357;coup par coup;190;1;3;3,2;608;6;48;72;2,2;0,006;80;2;;;;boîte;500;boîte mystère
-raygun;PISTOLET À RAYONS;coup par coup;700;1;1,5;4,2;2940;20;160;200;2,6;0,008;100;1;2,8;500;;boîte;1500;boîte mystère
+﻿id;Arme;Type;Dégâts par balle;Plombs par tir;Multiplicateur tête;Cadence (tirs/s);DPS approx.;Chargeur;Réserve départ;Réserve max;Rechargement (s);Dispersion;Portée (m);Zombies traversés;Explosion rayon (m);Explosion dégâts;Prix au mur (pts);Prix munitions (pts);Où l'obtenir
+rifle;FUSIL D'ASSAUT;automatique;36;1;2,5;9,5;342;30;120;180;1,8;0,012;90;1;;;départ;300;arme de départ
+shotgun;FUSIL À POMPE;pompe;26;8;1,8;1,3;270,4;6;30;48;2,4;0,046;35;1;;;750;350;mur Marché-Neuf, mur Grandes Arcades, boîte mystère
+smg;PISTOLET-MITRAILLEUR;automatique;24;1;2,2;13,5;324;32;128;224;1,5;0,022;65;1;;;1000;500;mur Marché-Neuf, mur Rue des Orfèvres, boîte mystère
+lmg;MITRAILLEUSE RPK;automatique;44;1;2;10,5;462;75;300;450;3,6;0,028;90;1;;;2500;1000;mur Place Kléber, boîte mystère
+sniper;FUSIL DE PRÉCISION;coup par coup;340;1;3,5;1,1;374;5;30;45;2,8;0,0015;200;4;;;1750;700;mur Rue du Dôme, boîte mystère
+magnum;REVOLVER .357;coup par coup;190;1;3;3,2;608;6;48;72;2,2;0,006;80;2;;;boîte;500;boîte mystère
+raygun;PISTOLET À RAYONS;coup par coup;700;1;1,5;4,2;2940;20;160;200;2,6;0,008;100;1;2,8;500;boîte;1500;boîte mystère
