@@ -528,6 +528,9 @@ const game = {
     hud.setBanner?.(null);
     // les zombies restants s'effondrent
     for (const z of this.zombies) if (!z.dead) z.damage(1e9, false);
+    // les joueurs à terre se relèvent ; l'hôte laisse 12 s de répit avant la manche suivante
+    if (this.player.downed || this.player.dead) this.player.revive();
+    if (!this.isClient) { this.toSpawn = 0; this.intermission = 12; }
     sfx.powerup();
     this.addPoints(5000, 'bonus');
     this.player.releaseInputs();
@@ -1231,6 +1234,8 @@ function setupNetworkHandlers(net) {
         buffs: game.buffs,
         doors: (world.doors || []).filter((d) => d.open).map((d) => d.id),
         box: (world.boxes || []).findIndex((b) => b.active),
+        finale: game.finale ? game.finale.t : null,
+        finaleDone: game.finaleDone,
         zombies: game.zombies.map((z) => ({
           id: z.id,
           st: z.spawnType,
@@ -1241,6 +1246,7 @@ function setupNetworkHandlers(net) {
           spd: z.crawler ? z.speed / 0.45 : z.speed,
           spawnT: z.spawnT,
           crawl: z.crawler ? 1 : 0,
+          boss: z.boss ? 1 : 0,
         })),
       }, m.id);
     }
@@ -1425,6 +1431,8 @@ function setupNetworkHandlers(net) {
     game.buffs = m.buffs || game.buffs;
     for (const id of m.doors || []) game.openDoor(id, false);
     if (m.box != null && m.box >= 0) world.setActiveBox?.(m.box);
+    game.finaleDone = !!m.finaleDone;
+    game.finale = m.finale != null ? { t: m.finale, remote: true } : null;
 
     // Supprimer d'éventuels zombies locaux existants
     for (const z of game.zombies) z.dispose();
@@ -1437,7 +1445,7 @@ function setupNetworkHandlers(net) {
       } else {
         spawn = { type: 'ground', pos: new THREE.Vector3(zd.x, 0, zd.z) };
       }
-      const z = new Zombie(scene, spawn, zd.hp, zd.spd, () => {}, zd.id, { crawler: !!zd.crawl });
+      const z = new Zombie(scene, spawn, zd.hp, zd.spd, () => {}, zd.id, { crawler: !!zd.crawl, boss: !!zd.boss, bossDamage: CONFIG.finale.bossDamage });
       z.pos.set(zd.x, 0, zd.z);
       if (zd.spawnT <= 0) z.skipSpawn();
       z.net = { x: zd.x, z: zd.z, yaw: 0, atk: false };
