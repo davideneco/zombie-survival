@@ -182,19 +182,28 @@ export class Player {
 
   // ---------------------------------------------------------------- Input
   bindInput() {
+    // Déplacements : position physique de la touche (e.code), donc ZQSD en AZERTY = WASD en QWERTY.
+    // Actions : lettre réellement tapée (e.key), pour que R, E, F, G, M marchent quel que soit le clavier.
+    const letter = (e) => (e.key && e.key.length === 1 ? e.key.toLowerCase() : '');
     window.addEventListener('keydown', (e) => {
       this.keys[e.code] = true;
-      if (!this.game.playing) return;
-      if (e.code === 'KeyR') this.reload();
-      if (e.code === 'KeyE') this.game.interact();
-      if (e.code === 'KeyF') this.setTorch(!this.torchOn);
-      if (e.code === 'KeyG') this.throwGrenade();
+      const k = letter(e);
+      if (k) this.keys['letter:' + k] = true;
+      if (!this.game.playing || e.repeat) return;
+      if (k === 'r') this.reload();
+      if (k === 'e') this.game.interact();
+      if (k === 'f') this.setTorch(!this.torchOn);
+      if (k === 'g') this.throwGrenade();
       if (e.code === 'Digit1') this.switchWeapon(0);
       if (e.code === 'Digit2') this.switchWeapon(1);
       if (e.code === 'Digit3') this.switchWeapon(2);
       if (e.code === 'Space') e.preventDefault();
     });
-    window.addEventListener('keyup', (e) => { this.keys[e.code] = false; });
+    window.addEventListener('keyup', (e) => {
+      this.keys[e.code] = false;
+      const k = letter(e);
+      if (k) this.keys['letter:' + k] = false;
+    });
     window.addEventListener('wheel', (e) => {
       if (!this.game.playing) return;
       if (e.deltaY > 0) this.nextWeapon();

@@ -875,7 +875,7 @@ const game = {
 
     // Réanimation en continu (touche E maintenue par un joueur vivant)
     const downedTeammate = this.nearDownedTeammate();
-    if (downedTeammate && !p.downed && !p.dead && p.keys['KeyE']) {
+    if (downedTeammate && !p.downed && !p.dead && p.keys['letter:e']) {
       this.reviveTarget = downedTeammate;
       this.reviveTimer += dt;
       if (this.reviveTimer >= this.reviveTime()) {
@@ -1330,7 +1330,8 @@ hud.el.ovBtn.addEventListener('click', (e) => {
 
 // Carte plein écran (M)
 window.addEventListener('keydown', (e) => {
-  if (e.code === 'KeyM' && game.started) hud.toggleMap();
+  // lettre tapée (e.key) et non position physique : en AZERTY la touche M n'est pas au même endroit qu'en QWERTY
+  if (!e.repeat && e.key && e.key.toLowerCase() === 'm' && game.started) hud.toggleMap();
 });
 
 // Nom du joueur
