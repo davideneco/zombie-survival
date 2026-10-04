@@ -1,6 +1,6 @@
 # Zombie Survival — fiche de référence
 
-Version du jeu : **v0.7.0 · 12edddd · 2026-10-04** (package 0.7.0). Générée automatiquement par `node tools/make-docs.mjs` à partir de `src/config.js` et du jeu.
+Version du jeu : **v0.8.0 · dd80eee · 2026-10-04** (package 0.8.0). Générée automatiquement par `node tools/make-docs.mjs` à partir de `src/config.js` et du jeu.
 Carte annotée : [carte.png](carte.png). Les mêmes tableaux en tableur : dossier [csv/](csv/).
 
 Pour demander une modification, citez la ligne (ex. « Mitrailleuse RPK : chargeur 100 », « Mastodonte à 3000 pts », « porte P3 à 500 pts », « mettre la boîte mystère dans la zone Temple-Neuf »).
@@ -188,31 +188,31 @@ Prix des portes : 750 pts pour une zone voisine du départ, +250 par zone plus l
 
 | N° sur la carte | Type | Nom | Zone | Prix (pts) | x (m, vers l'est) | z (m, vers le sud) |
 |---|---|---|---|---|---|---|
-| 1 | Borne de munitions | Borne de munitions | Marché-Neuf |  | -7 | -36 |
-| 2 | Arme au mur | FUSIL À POMPE | Marché-Neuf | 750 | -19 | -35 |
-| 3 | Arme au mur | PISTOLET-MITRAILLEUR | Marché-Neuf | 1000 | -18 | -50 |
-| 4 | Atout | RÉANIMATION RAPIDE | Marché-Neuf | 1500 | -14 | -46 |
-| 5 | BOÎTE MYSTÈRE | BOÎTE MYSTÈRE | Marché-Neuf | 950 | -10 | -55 |
-| 6 | Borne de munitions | Borne de munitions | Temple-Neuf |  | -38 | -111 |
-| 7 | Atout | STAMIN-UP | Temple-Neuf | 2000 | -60 | -116 |
-| 8 | Arme au mur | PISTOLET-MITRAILLEUR | Rue des Orfèvres | 1000 | 17 | -72 |
+| 1 | Borne de munitions | Borne de munitions | Marché-Neuf |  | -6 | -20 |
+| 2 | Arme au mur | FUSIL À POMPE | Marché-Neuf | 750 | -1 | -38 |
+| 3 | Arme au mur | PISTOLET-MITRAILLEUR | Marché-Neuf | 1000 | -4 | -26 |
+| 4 | Atout | RÉANIMATION RAPIDE | Marché-Neuf | 1500 | -29 | -40 |
+| 5 | BOÎTE MYSTÈRE | BOÎTE MYSTÈRE | Marché-Neuf | 950 | -10 | -32 |
+| 6 | Borne de munitions | Borne de munitions | Temple-Neuf |  | -31 | -87 |
+| 7 | Atout | STAMIN-UP | Temple-Neuf | 2000 | -46 | -92 |
+| 8 | Arme au mur | PISTOLET-MITRAILLEUR | Rue des Orfèvres | 1000 | 20 | -65 |
 | 9 | Atout | SPEED COLA | Rue des Orfèvres | 3000 | 17 | -9 |
-| 10 | Borne de munitions | Borne de munitions | Rue du Dôme |  | 110 | -146 |
-| 11 | Arme au mur | FUSIL DE PRÉCISION | Rue du Dôme | 1750 | 88 | -114 |
-| 12 | BOÎTE MYSTÈRE | BOÎTE MYSTÈRE | Rue du Dôme | 950 | 124 | -140 |
-| 13 | Borne de munitions | Borne de munitions | Grandes Arcades |  | -104 | -74 |
-| 14 | Arme au mur | FUSIL À POMPE | Grandes Arcades | 750 | -123 | -16 |
-| 15 | Atout | MULE KICK | Grandes Arcades | 4000 | -111 | -68 |
-| 16 | Borne de munitions | Borne de munitions | Place Kléber |  | -170 | -145 |
-| 17 | Arme au mur | MITRAILLEUSE RPK | Place Kléber | 2500 | -210 | -141 |
-| 18 | Atout | MASTODONTE | Place Kléber | 2500 | -190 | -146 |
-| 19 | BOÎTE MYSTÈRE | BOÎTE MYSTÈRE | Place Kléber | 950 | -217 | -126 |
-| 20 | Borne de munitions | Borne de munitions | Place Gutenberg |  | 1 | 94 |
-| 21 | Atout | DOUBLE TAP | Place Gutenberg | 2000 | -21 | 68 |
-| 22 | BOÎTE MYSTÈRE | BOÎTE MYSTÈRE | Place Gutenberg | 950 | 0 | 107 |
-| 23 | Borne de munitions | Borne de munitions | Cathédrale |  | 89 | 42 |
-| 24 | PACK-A-PUNCH | PACK-A-PUNCH | Cathédrale | 5000 | 107 | 46 |
-| 25 | BOÎTE MYSTÈRE | BOÎTE MYSTÈRE | Cathédrale | 950 | 113 | 40 |
+| 10 | Borne de munitions | Borne de munitions | Rue du Dôme |  | 83 | -118 |
+| 11 | Arme au mur | FUSIL DE PRÉCISION | Rue du Dôme | 1750 | 107 | -137 |
+| 12 | BOÎTE MYSTÈRE | BOÎTE MYSTÈRE | Rue du Dôme | 950 | 106 | -147 |
+| 13 | Borne de munitions | Borne de munitions | Grandes Arcades |  | -104 | -54 |
+| 14 | Arme au mur | FUSIL À POMPE | Grandes Arcades | 750 | -94 | -47 |
+| 15 | Atout | MULE KICK | Grandes Arcades | 4000 | -105 | -61 |
+| 16 | Borne de munitions | Borne de munitions | Place Kléber |  | -202 | -161 |
+| 17 | Arme au mur | MITRAILLEUSE RPK | Place Kléber | 2500 | -178 | -140 |
+| 18 | Atout | MASTODONTE | Place Kléber | 2500 | -222 | -128 |
+| 19 | BOÎTE MYSTÈRE | BOÎTE MYSTÈRE | Place Kléber | 950 | -165 | -144 |
+| 20 | Borne de munitions | Borne de munitions | Place Gutenberg |  | -13 | 108 |
+| 21 | Atout | DOUBLE TAP | Place Gutenberg | 2000 | -1 | 86 |
+| 22 | BOÎTE MYSTÈRE | BOÎTE MYSTÈRE | Place Gutenberg | 950 | -16 | 77 |
+| 23 | Borne de munitions | Borne de munitions | Cathédrale |  | 128 | 22 |
+| 24 | PACK-A-PUNCH | PACK-A-PUNCH | Cathédrale | 5000 | 84 | 29 |
+| 25 | BOÎTE MYSTÈRE | BOÎTE MYSTÈRE | Cathédrale | 950 | 117 | 52 |
 
 ## Commandes
 
