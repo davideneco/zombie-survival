@@ -7,7 +7,8 @@ import { findBreaches } from './breach.js';
 import { preparePassages, cutIntervals, insideRuns, distToPassage } from './passage.js';
 import { createArchitecture, BAY_W } from './architecture.js';
 import { createProps } from './props.js';
-import { makePerkMachine, makeAmmoStation, makeWallBuy, addPosts, makeMysteryBox, makePackAPunch } from './machines.js';
+import { planCathedral, buildInterior, CEIL, PORTAL_H, pointInPoly as inPoly } from './cathedral.js';
+import { makePerkMachine, makeAmmoStation, makeWallBuy, addPosts, makeMysteryBox, makePackAPunch, makeAstronomicalClock } from './machines.js';
 
 // =====================================================================
 //  Monde réel : la Grande Île de Strasbourg (données OpenStreetMap)
@@ -259,6 +260,11 @@ export async function buildRealWorld(scene, renderer) {
     if (area < 0) pts.reverse();
     blds.push({ pts, h: bld.h, tags: bld.tags || {}, name: bld.name });
   }
+  // Cathédrale : intérieur jouable (zone de fin de partie)
+  let kCath = blds.findIndex((b) => b.name === 'Cathédrale Notre-Dame');
+  if (kCath < 0) kCath = blds.reduce((best, b, k) => (b.tags.building === 'cathedral' && (best < 0 || Math.abs(polyArea(b.pts)) > Math.abs(polyArea(blds[best].pts))) ? k : best), -1);
+  const cath = kCath >= 0 ? planCathedral(blds[kCath].pts, (data.parts || []).map((p) => ({ pts: cleanRing(p.pts), tags: p.tags || {} }))) : null;
+
   // Passages sous immeubles : on repère les portions d'axe qui passent dans un bâtiment
   const passages = preparePassages(data.passages);
   const BG = 20, bGrid = new Map();
@@ -307,6 +313,21 @@ export async function buildRealWorld(scene, renderer) {
     const pts = bld.pts;
     if (breach.removed.has(k)) { rubble.push(pts); continue; }
 
+    // bâtiment annexe cartographié à l'intérieur de la cathédrale (chapelle, sacristie…) : on le retire
+    if (cath && k !== kCath) {
+      // un seul coin sous la voûte, ou un coin de l'intérieur dans le bâtiment, suffit à le retirer
+      if (pts.some(([x, z]) => cath.insideInner(x, z)) || cath.inner.some(([x, z]) => inPoly(x, z, pts))) continue;
+    }
+    if (k === kCath && cath) {
+      // creuse : seul le contour extérieur bloque (ouvert au grand portail) ; l'intérieur est construit à part
+      for (let i = 0; i < pts.length; i++) {
+        const [ax, az] = pts[i], [bx, bz] = pts[(i + 1) % pts.length], dx = bx - ax, dz = bz - az;
+        let t = 0;
+        for (const [t0, t1] of cath.cutsOf(ax, az, bx, bz)) { if (t0 > t) collision.addSegment(ax + dx * t, az + dz * t, ax + dx * t0, az + dz * t0); t = t1; }
+        if (t < 1) collision.addSegment(ax + dx * t, az + dz * t, bx, bz);
+      }
+      continue;
+    }
     polygons.push({ pts });
     const edgeCuts = [];
     for (let i = 0; i < pts.length; i++) {
@@ -335,7 +356,24 @@ export async function buildRealWorld(scene, renderer) {
     const pts = cleanRing(prt.pts);
     if (pts.length < 3) continue;
     if (polyArea(pts) < 0) pts.reverse();
-    arch.part(pts, prt.tags || {});
+    let opts = {};
+    if (cath) {
+      const c = pts.reduce((a, q) => [a[0] + q[0] / pts.length, a[1] + q[1] / pts.length], [0, 0]);
+      if (inPoly(c[0], c[1], cath.outline)) {
+        const top = parseFloat(prt.tags.height) || 0;
+        opts = {
+          // un mur dont le milieu est sous la voûte est intérieur : masqué (ou seulement au-dessus de la voûte)
+          keepEdge: (ax, az, bx, bz) => {
+            const n = Math.max(2, Math.ceil(Math.hypot(bx - ax, bz - az)));
+            for (let i = 0; i <= n; i++) if (cath.insideInner(ax + ((bx - ax) * i) / n, az + ((bz - az) * i) / n)) return top > CEIL + 0.5 ? CEIL + 0.2 : false;
+            return true;
+          },
+          cutsOf: cath.cutsOf, portalH: PORTAL_H,
+          skipRoof: cath.insideInner(c[0], c[1]) && top <= CEIL + 0.5,
+        };
+      }
+    }
+    arch.part(pts, prt.tags || {}, opts);
   }
   arch.finish(scene);
 
@@ -481,6 +519,9 @@ export async function buildRealWorld(scene, renderer) {
     scene.add(instanced(new THREE.IcosahedronGeometry(1, 0), new THREE.MeshStandardMaterial({ roughness: 1, flatShading: true }), treeMatrices.leaf, treeMatrices.leafCol));
   }
 
+  // ---------------------------------------------------------------- Intérieur de la cathédrale
+  if (cath) buildInterior(scene, cath, { collision, lightSources, props });
+
   // ---------------------------------------------------------------- Navigation de base (pour placer les props)
   collision.build();
   const nav = new NavGrid(halfX, halfZ, collision, polygons, NAV_CELL, NAV_MARGIN, 1300);
@@ -559,7 +600,9 @@ export async function buildRealWorld(scene, renderer) {
       if (z.start) return;
       // case accessible la plus proche du lieu (le point donné peut tomber dans un bâtiment)
       let c = null;
-      const c0x = nav.cx(z.seed.x), c0z = nav.cz(z.seed.z);
+      const sd = z.seed === 'cathedral' ? (cath ? { x: cath.seed[0], z: cath.seed[1] } : null) : z.seed;
+      if (!sd) return;
+      const c0x = nav.cx(sd.x), c0z = nav.cz(sd.z);
       for (let r = 0; r <= 60 && !c; r++) {
         for (let dz = -r; dz <= r && !c; dz++) for (let dx = -r; dx <= r; dx++) {
           if (Math.max(Math.abs(dx), Math.abs(dz)) !== r || !nav.inside(c0x + dx, c0z + dz)) continue;
@@ -939,7 +982,7 @@ export async function buildRealWorld(scene, renderer) {
     const FH = 3.4;
     links.forEach((g, di) => {
       const far = depth[g.a] > depth[g.b] ? g.a : g.b;
-      const price = Z.basePrice + Z.priceStep * Math.max(0, depth[far] - 1);
+      const price = Z.zones[far].doorPrice || Z.basePrice + Z.priceStep * Math.max(0, depth[far] - 1);
       const door = { id: di, price, a: g.a, b: g.b, toZone: far, name: ZONE_NAMES[far], open: false, points: [], segs: [], meshes: [], cells: [] };
       const pieces = straightPieces(g.runs);
       const longest = pieces.reduce((b, r) => (Math.hypot(r.x1 - r.x0, r.z1 - r.z0) > Math.hypot(b.x1 - b.x0, b.z1 - b.z0) ? r : b), pieces[0]);
@@ -958,7 +1001,9 @@ export async function buildRealWorld(scene, renderer) {
         const len = Math.hypot(r.x1 - r.x0, r.z1 - r.z0);
         if (len < 0.2) continue;
         door.segs.push(collision.addSegment(r.x0, r.z0, r.x1, r.z1, FH));
-        const gm = alignOn(props.gate(len), r);
+        const isPortal = Z.zones[far].portal;
+        const gm = alignOn(isPortal ? props.portalDoors(len) : props.gate(len), r);
+        if (isPortal) door.leaves = (door.leaves || []).concat(gm.userData.leaves);
         door.meshes.push(gm);
         for (let s = 0; s <= len; s += 3) door.points.push({ x: r.x0 + ((r.x1 - r.x0) * s) / len, z: r.z0 + ((r.z1 - r.z0) * s) / len });
         if (r !== longest && len < 3.5) continue;
@@ -1031,7 +1076,7 @@ export async function buildRealWorld(scene, renderer) {
       const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace;
       return t;
     };
-    const addMachine = (type, id, spot, zi) => {
+    const addMachine = (type, id, spot, zi, spotRot = null) => {
       if (!spot) return;
       const [x, z] = spot;
       const [fx, fz] = seeds[zi];
@@ -1043,6 +1088,9 @@ export async function buildRealWorld(scene, renderer) {
       } else if (type === 'pap') {
         name = 'PACK-A-PUNCH'; price = CONFIG.papPrice; color = '#b24bff';
         g = makePackAPunch();
+      } else if (type === 'clock') {
+        name = 'HORLOGE ASTRONOMIQUE'; price = CONFIG.finale.price; color = '#d4a640';
+        g = makeAstronomicalClock();
       } else {
         name = 'BOÎTE MYSTÈRE'; price = CONFIG.box.price; color = '#5fb8ff';
         g = makeMysteryBox();
@@ -1053,7 +1101,7 @@ export async function buildRealWorld(scene, renderer) {
       }
       const [w, d, h] = g.userData.size;
       g.position.set(x, 0, z);
-      g.rotation.y = Math.atan2(fx - x, fz - z);
+      g.rotation.y = spotRot != null ? spotRot : Math.atan2(fx - x, fz - z);
       g.traverse((o) => { if (o.isMesh && o.material.blending !== THREE.AdditiveBlending) o.castShadow = o.receiveShadow = true; });
       scene.add(g);
       collision.addBox(x, z, w, d, -g.rotation.y, h);
@@ -1073,6 +1121,10 @@ export async function buildRealWorld(scene, renderer) {
         } else if (type === 'wall') {
           const W = CONFIG.weapons[id];
           addWallBuy(id, W.name, W.price, W.ammoPrice, WALL_COLORS[id] || 0xff8833, spotIn(zi, 2, start ? 6 : 4, start ? 26 : 32), fx, fz);
+        } else if (zone.seed === 'cathedral' && cath && (type === 'pap' || type === 'clock')) {
+          const fixed = type === 'pap' ? cath.pap : cath.clock;
+          addMachine(type, id, fixed.p, zi, fixed.rot);
+          placed.push(fixed.p);
         } else {
           addMachine(type, id, spotIn(zi, 3, 4, start ? 30 : 35), zi);
         }
@@ -1305,12 +1357,14 @@ export async function buildRealWorld(scene, renderer) {
   }
   nav.invalidate();
 
+  const openingDoors = [];
   function openDoor(id) {
     const d = doors[id];
     if (!d || d.open) return false;
     d.open = true;
     for (const s of d.segs) s.off = true;
-    for (const m of d.meshes) { scene.remove(m); }
+    if (d.leaves) { d.opening = 0; openingDoors.push(d); for (const m of d.meshes) m.traverse((o) => { if (o.isMesh && o.geometry.type === 'PlaneGeometry') o.visible = false; }); }
+    else for (const m of d.meshes) { scene.remove(m); }
     for (const i of d.cells) nav.blocked[i] = 0;
     nav.invalidate();
     zoneOpen[d.a] = zoneOpen[d.b] = true;
@@ -1355,10 +1409,18 @@ export async function buildRealWorld(scene, renderer) {
     stationPos, stations, wallWeapons, doors, openDoor, zoneOf, startPos, nav, collision, machines, boxes, setActiveBox,
     zoneNames: ZONE_NAMES, zoneCenters, startZone, sealedPoints, mapImage, mapView: { halfX, halfZ, scale: MAP_SCALE },
     mapCrop: { x0: secMinX - 60, x1: secMaxX + 60, z0: secMinZ - 50, z1: secMaxZ + 50 }, mapTitle: 'SECTEUR DU MARCHÉ-NEUF — STRASBOURG',
+    cathedral: cath ? { seed: cath.seed, clock: cath.clock, insideInner: cath.insideInner, inner: cath.inner } : null,
     collide: (pos, r) => collision.resolve(pos, r),
     rayHit: (ox, oy, oz, dx, dy, dz, maxT) => collision.rayHit(ox, oy, oz, dx, dy, dz, maxT),
     update(px, pz, dt) {
       sky.position.set(px, 0, pz);
+      for (let i = openingDoors.length - 1; i >= 0; i--) { // battants du grand portail
+        const d = openingDoors[i];
+        d.opening = Math.min(1, d.opening + dt * 0.6);
+        const a = (1 - Math.pow(1 - d.opening, 3)) * 1.75;
+        d.leaves.forEach((lv, k) => { lv.rotation.y = (k % 2 ? 1 : -1) * a; });
+        if (d.opening >= 1) openingDoors.splice(i, 1);
+      }
       if (waterNormal) { waterNormal.offset.x += dt * 0.004; waterNormal.offset.y += dt * 0.0025; }
       lightTimer -= dt;
       if (lightTimer <= 0) { lightTimer = 0.4; assignLights(px, pz); }

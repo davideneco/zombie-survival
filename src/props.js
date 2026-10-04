@@ -169,6 +169,10 @@ export function createProps() {
     [merge([box(3.4, 0.08, 1.4, 0, 2.62, 0.48, 0.55), box(3.4, 0.08, 1.4, 0, 2.62, -0.48, -0.55)]), M.roofRed],
     [box(2.6, 0.9, 0.05, 0, 1.45, 1.01), M.warm], [box(2.8, 0.08, 0.5, 0, 0.98, 1.2), M.woodPlain]];
 
+  // Banc d'église (4,4 m) : assise, dossier, joues
+  P.pew = [[merge([box(4.4, 0.06, 0.45, 0, 0.46, 0), box(4.4, 0.5, 0.05, 0, 0.72, -0.22, -0.1), box(4.4, 0.04, 0.3, 0, 0.92, 0.35),
+    box(0.07, 0.95, 0.55, -2.2, 0.47, 0), box(0.07, 0.95, 0.55, 2.2, 0.47, 0), box(4.4, 0.3, 0.05, 0, 0.75, 0.48)]), M.woodPlain]];
+
   // ---- instances
   const inst = {}; // type -> [{ m: Matrix4, c: Color|null }]
   const tmpM = new THREE.Matrix4(), q = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0);
@@ -230,5 +234,30 @@ export function createProps() {
     return g;
   }
 
-  return { place, finish, gate, sealWall, sizes: { car: P.car.size, bench: P.bench.size }, M };
+  // ---- grand portail gothique : deux battants cloutés qui pivotent sur leurs gonds
+  function portalDoors(len, h = 8.2) {
+    const g = new THREE.Group();
+    const studs = new THREE.MeshStandardMaterial({ color: 0x2a2a2c, roughness: 0.4, metalness: 0.8 });
+    const oak = new THREE.MeshStandardMaterial({ color: 0x4a2a16, map: M.wood.map, roughness: 0.8 });
+    const leaves = [];
+    for (const side of [-1, 1]) {
+      const pivot = new THREE.Group(); pivot.position.set(side * len / 2, 0, 0);
+      const w = len / 2;
+      const leaf = new THREE.Mesh(box(w, h, 0.18, -side * w / 2, h / 2, 0), oak);
+      const bands = [];
+      for (const y of [1, h * 0.35, h * 0.65, h - 1]) bands.push(box(w * 0.92, 0.12, 0.05, -side * w / 2, y, 0.11));
+      for (let i = 0; i < 6; i++) for (let j = 0; j < 10; j++) bands.push(new THREE.SphereGeometry(0.035, 6, 4).translate(-side * (0.2 + (i * (w - 0.4)) / 5), 0.6 + (j * (h - 1.2)) / 9, 0.1));
+      pivot.add(leaf, new THREE.Mesh(merge(bands), studs));
+      g.add(pivot);
+      leaves.push(pivot);
+    }
+    // arc brisé en pierre au-dessus
+    const arch = new THREE.Mesh(box(len + 0.8, 0.6, 0.5, 0, h + 0.3, 0), new THREE.MeshStandardMaterial({ color: 0xa87c6a, roughness: 0.85 }));
+    g.add(arch);
+    g.traverse((o) => { if (o.isMesh) { o.castShadow = o.receiveShadow = true; } });
+    g.userData.leaves = leaves;
+    return g;
+  }
+
+  return { place, finish, gate, sealWall, portalDoors, sizes: { car: P.car.size, bench: P.bench.size }, M };
 }

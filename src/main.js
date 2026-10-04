@@ -92,6 +92,8 @@ const game = {
   grenadesLive: [],
   boxState: null,
   boxMove: null,
+  finale: null,
+  finaleDone: false,
   boxUses: 0,
   boxLimit: 10,
   relocateTimer: 0,
@@ -161,7 +163,7 @@ const game = {
     }
 
     // Traitement sur l'hôte (ou en solo)
-    if (this.buffs.instaKill > 0) damage = 999999;
+    if (this.buffs.instaKill > 0 && !z.boss) damage = 999999;
     const killed = z.damage(damage * (head ? headMult : 1), head);
 
     fx.blood(point.x, point.y, point.z, killed && !head);
@@ -192,8 +194,12 @@ const game = {
       if (this.isMultiplayer) {
         this.net?.send({ t: 'z_dead', id: z.id, head, px: point.x, py: point.y, pz: point.z });
       }
-      // Chance d'apparition d'un bonus COD
-      if (Math.random() < CONFIG.powerups.dropChance) {
+      // Le Bourreau lâche toujours des munitions max ; sinon chance d'apparition d'un bonus COD
+      if (z.boss) {
+        this.spawnPowerup(z.pos, null, 'max_ammo');
+        hud.announce('LE BOURREAU EST TOMBÉ', '', 2500);
+        this.net?.send({ t: 'finale_bossdead' });
+      } else if (Math.random() < CONFIG.powerups.dropChance) {
         this.spawnPowerup(z.pos);
       }
     }
@@ -326,7 +332,7 @@ const game = {
       this.addPoints(400, 'bonus');
       if (!this.isClient) {
         for (const z of this.zombies) {
-          if (z.dead) continue;
+          if (z.dead || z.boss) continue;
           z.damage(999999, false);
           if (this.isMultiplayer) this.net?.send({ t: 'z_dead', id: z.id, head: false });
         }
@@ -416,6 +422,13 @@ const game = {
 
   machinePrompt(m) {
     const p = this.player;
+    if (m.type === 'clock') {
+      const F = CONFIG.finale;
+      if (this.finale) return 'L\'Heure du Jugement a sonné : tenez bon !';
+      if (this.finaleDone) return 'L\'horloge s\'est tue. Strasbourg tient encore…';
+      if (this.round < F.minRound) return `L'horloge astronomique… (manche ${F.minRound} requise pour l'Heure du Jugement)`;
+      return `[E] Faire sonner l'Heure du Jugement : survivre ${F.duration} s dans la cathédrale${F.price ? ` (${F.price} pts)` : ''}`;
+    }
     if (m.type === 'perk') {
       if (p.perks[m.id]) return `${m.name} (déjà acquis)`;
       return `[E] ${m.name} — ${CONFIG.perks[m.id].desc} (${this.perkPrice(m.id)} pts)`;
@@ -432,6 +445,15 @@ const game = {
 
   useMachine(m) {
     const p = this.player;
+    if (m.type === 'clock') {
+      const F = CONFIG.finale;
+      if (this.finale || this.finaleDone || this.round < F.minRound) { sfx.deny(); return; }
+      if (this.points < F.price) { sfx.deny(); return; }
+      this.points -= F.price;
+      if (this.isClient) this.net?.send({ t: 'finale_req' });
+      else this.startFinale();
+      return;
+    }
     if (m.type === 'perk') {
       if (p.perks[m.id]) return;
       const price = this.perkPrice(m.id);
@@ -464,6 +486,54 @@ const game = {
     this.boxState = { machine: m, t: CONFIG.box.spin, result: pick, spin: 0, teddy: false };
     if (this.isClient) this.net?.send({ t: 'box_req' });
     else this.boxState.teddy = this.countBoxUse();
+  },
+
+  // ---------------------------------------------------------- Fin de partie : l'Heure du Jugement
+  startFinale() {
+    const F = CONFIG.finale;
+    this.finale = { t: F.duration, spawnT: 2, bossT: 8, boss: false };
+    this.net?.send({ t: 'finale_start' });
+    this.finaleIntro();
+  },
+  finaleIntro() {
+    if (!this.finale) this.finale = { t: CONFIG.finale.duration, remote: true };
+    for (let k = 0; k < 6; k++) setTimeout(() => sfx.bell?.(), k * 700);
+    hud.announce('L\'HEURE DU JUGEMENT', `Survivez ${CONFIG.finale.duration} secondes dans la cathédrale !`, 5000);
+  },
+  updateFinale(dt) {
+    const f = this.finale;
+    if (!f) { hud.setBanner?.(null); return; }
+    f.t -= dt;
+    const left = Math.max(0, Math.ceil(f.t));
+    hud.setBanner?.(`L'HEURE DU JUGEMENT — ${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`);
+    if (this.isClient || f.remote) return; // l'hôte décide
+    const F = CONFIG.finale;
+    f.spawnT -= dt; f.bossT -= dt;
+    const alive = this.zombies.filter((z) => !z.dead).length;
+    if (f.bossT <= 0 && !f.boss) {
+      f.boss = true;
+      this.spawnZombie(true, true);
+      hud.announce('LE BOURREAU', 'Un monstre approche…', 3000);
+      this.net?.send({ t: 'finale_boss' });
+    }
+    if (f.spawnT <= 0 && alive < F.maxAlive) { f.spawnT = F.spawnInterval; this.spawnZombie(true); }
+    if (f.t <= 0) {
+      this.net?.send({ t: 'finale_win' });
+      this.winFinale();
+    }
+  },
+  winFinale() {
+    this.finale = null;
+    this.finaleDone = true;
+    hud.setBanner?.(null);
+    // les zombies restants s'effondrent
+    for (const z of this.zombies) if (!z.dead) z.damage(1e9, false);
+    sfx.powerup();
+    this.addPoints(5000, 'bonus');
+    this.player.releaseInputs();
+    if (document.pointerLockElement) this._victory = true; // la sortie du pointer lock ne doit pas afficher PAUSE
+    document.exitPointerLock();
+    hud.showOverlay('VICTOIRE !', `L'Heure du Jugement est passée : vous avez tenu la cathédrale.<br>Manche <b style="color:#fff">${this.round}</b> · ${this.kills} zombies tués · +5000 points<br><span style="color:#ffd24a">La nuit continue… jusqu'où irez-vous ?</span>`, 'CONTINUER');
   },
 
   // ---------------------------------------------------------- Boîte mystère : une seule, qui se déplace
@@ -617,13 +687,14 @@ const game = {
       if (z.dead || z.spawnT > 0) continue;
       const d = Math.hypot(z.pos.x - pos.x, z.pos.z - pos.z);
       if (d > radius) continue;
-      const dmg = this.buffs.instaKill > 0 ? 999999 : damage * Math.pow(1 - d / radius, 0.6);
+      const dmg = this.buffs.instaKill > 0 && !z.boss ? 999999 : damage * Math.pow(1 - d / radius, 0.6);
       const killed = z.damage(dmg, false);
       fx.blood(z.pos.x, 1, z.pos.z, killed);
       if (killed) {
         kills++; pts += 60 * mult;
         if (this.isMultiplayer) this.net?.send({ t: 'z_dead', id: z.id, head: false });
-        if (Math.random() < CONFIG.powerups.dropChance) this.spawnPowerup(z.pos);
+        if (z.boss) this.spawnPowerup(z.pos, null, 'max_ammo');
+        else if (Math.random() < CONFIG.powerups.dropChance) this.spawnPowerup(z.pos);
       } else {
         pts += 10 * mult;
         if (!z.crawler && Math.random() < CONFIG.zombie.legBlowChance) {
@@ -752,7 +823,7 @@ const game = {
     return { type: 'ground', pos: best.clone().add(new THREE.Vector3((Math.random() - 0.5) * 2, 0, (Math.random() - 0.5) * 2)) };
   },
 
-  spawnZombie() {
+  spawnZombie(extra = false, boss = false) {
     const spawn = this.pickSpawn();
     let speed = this.zombieSpeed * (0.85 + Math.random() * 0.3);
     if (this.round >= 4 && Math.random() < 0.25) speed *= 1.5; // coureur
@@ -765,10 +836,13 @@ const game = {
       else if (name === 'emerge') { sfx.dirt(v); sfx.groan(Math.min(1, v * 1.4)); }
     };
     const Zc = CONFIG.zombie;
-    const crawl = this.round >= Zc.crawlerRound && Math.random() < Zc.crawlerChance;
-    const z = new Zombie(scene, spawn, this.zombieHealth, speed, onEvent, null, { crawler: crawl });
+    const crawl = !boss && this.round >= Zc.crawlerRound && Math.random() < Zc.crawlerChance;
+    const F = CONFIG.finale;
+    if (boss) speed = 1.6;
+    const hp = boss ? this.zombieHealth * F.bossHealth : this.zombieHealth;
+    const z = new Zombie(scene, spawn, hp, speed, onEvent, null, { crawler: crawl, boss, bossDamage: F.bossDamage });
     this.zombies.push(z);
-    this.toSpawn--;
+    if (!extra) this.toSpawn--;
 
     if (this.isHost) {
       const wi = spawn.type === 'window' ? (spawn.index ?? world.windowSpawns.indexOf(spawn)) : -1;
@@ -784,6 +858,7 @@ const game = {
         hp: z.health,
         spd: speed,
         crawl: crawl ? 1 : 0,
+        boss: boss ? 1 : 0,
       });
     }
   },
@@ -801,6 +876,7 @@ const game = {
     if (this.boxState?.machine.group.userData.lid) this.boxState.machine.group.userData.lid.rotation.x = 0;
     this.boxState = null;
     if (resetStats) this.resetBox();
+    if (resetStats) { this.finale = null; this.finaleDone = false; hud.setBanner?.(null); }
     fx.clear();
 
     this.over = false;
@@ -875,8 +951,10 @@ const game = {
     this.updateBox(dt);
     this.updateBoxMove(dt);
 
-    // Gestion des manches (Hôte ou Solo UNIQUEMENT)
-    if (this.isHost || !this.isMultiplayer) {
+    this.updateFinale(dt);
+
+    // Gestion des manches (Hôte ou Solo UNIQUEMENT) — en pause pendant l'Heure du Jugement
+    if ((this.isHost || !this.isMultiplayer) && !this.finale) {
       const alive = this.zombies.filter((z) => !z.dead).length;
       if (this.toSpawn > 0) {
         this.spawnTimer -= dt;
@@ -1215,7 +1293,7 @@ function setupNetworkHandlers(net) {
       else if (name === 'rumble') sfx.rumble(v);
       else if (name === 'emerge') { sfx.dirt(v); sfx.groan(Math.min(1, v * 1.4)); }
     };
-    const z = new Zombie(scene, spawn, m.hp, m.spd, onEvent, m.id, { crawler: !!m.crawl });
+    const z = new Zombie(scene, spawn, m.hp, m.spd, onEvent, m.id, { crawler: !!m.crawl, boss: !!m.boss, bossDamage: CONFIG.finale.bossDamage });
     z.net = { x: m.x, z: m.z, yaw: 0, atk: false };
     game.zombies.push(z);
   });
@@ -1248,6 +1326,13 @@ function setupNetworkHandlers(net) {
   net.on('nade', (m) => {
     game.throwGrenade(new THREE.Vector3(m.o.x, m.o.y, m.o.z), new THREE.Vector3(m.v.x, m.v.y, m.v.z), false, m.from);
   });
+  // Fin de partie
+  net.on('finale_req', () => { if (game.isHost && !game.finale && !game.finaleDone) game.startFinale(); });
+  net.on('finale_start', () => { game.finale = { t: CONFIG.finale.duration, remote: true }; game.finaleIntro(); });
+  net.on('finale_boss', () => hud.announce('LE BOURREAU', 'Un monstre approche…', 3000));
+  net.on('finale_win', () => game.winFinale());
+  net.on('finale_bossdead', () => hud.announce('LE BOURREAU EST TOMBÉ', '', 2500));
+
   // Boîte mystère : l'hôte compte les tirages et décide des déplacements
   net.on('box_req', (m) => {
     if (!game.isHost) return;
@@ -1550,6 +1635,9 @@ document.addEventListener('pointerlockchange', () => {
   if (document.pointerLockElement === canvas) {
     game.playing = true;
     hud.hideOverlay();
+  } else if (game._victory) {
+    game._victory = false;
+    game.playing = false;
   } else if (game.started && !game.over) {
     game.playing = false;
     game.player.releaseInputs();
@@ -1614,7 +1702,7 @@ function precompileShaders() {
   const temp = [];
   const add = (o) => { scene.add(o); temp.push(o); };
   const sp = { type: 'ground', pos: world.startPos.clone() };
-  const zs = [new Zombie(scene, sp, 100, 1, () => {}), new Zombie(scene, sp, 100, 1, () => {}, null, { crawler: true })];
+  const zs = [new Zombie(scene, sp, 100, 1, () => {}), new Zombie(scene, sp, 100, 1, () => {}, null, { crawler: true }), new Zombie(scene, sp, 100, 1, () => {}, null, { boss: true })];
   add(new THREE.Mesh(NADE_GEO, NADE_MAT));
   add(makeTeddy());
   add(new THREE.Mesh(HALO_GEO, new THREE.MeshBasicMaterial({ transparent: true, blending: THREE.AdditiveBlending, depthWrite: false })));

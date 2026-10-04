@@ -286,7 +286,7 @@ const ROOF_TINTS = { tiles: ['#b8644a', '#a85a40', '#8f4e3a', '#c07050', '#9a5a4
 
 // ------------------------------------------------------------------ Géométrie
 // Rectangle orienté de surface minimale d'un polygone (axe long u, axe court v)
-function obb(pts) {
+export function obb(pts) {
   let best = null;
   for (let i = 0; i < pts.length; i++) {
     const [ax, az] = pts[i], [bx, bz] = pts[(i + 1) % pts.length];
@@ -601,7 +601,9 @@ export function createArchitecture({ renderer, plasterImg, roofP, rnd }) {
     },
 
     // Partie de bâtiment en 3D (OSM building:part) : murs de min_height à height, toit selon roof:shape
-    part(pts, tags) {
+    // opts.keepEdge(ax, az, bx, bz) : garder ce mur ? (murs intérieurs de la cathédrale masqués)
+    // opts.cutsOf(i) : ouvertures dans le mur i (portail) ; opts.skipRoof : pas de toit (sous la voûte intérieure)
+    part(pts, tags, opts = {}) {
       const height = num(tags.height), minH = num(tags.min_height) || 0;
       if (height == null || height - minH < 0.4) return;
       const ob = obb(pts);
@@ -616,8 +618,17 @@ export function createArchitecture({ renderer, plasterImg, roofP, rnd }) {
       const tint = new THREE.Color(PALETTES[style][0]);
       for (let i = 0; i < pts.length; i++) {
         const [ax, az] = pts[i], [bx, bz] = pts[(i + 1) % pts.length];
-        wall(ax, az, bx, bz, 0, 1, minH, wallTop, st, tint, 1, minH);
+        // keepEdge : false = mur masqué, true = mur entier, nombre = mur seulement au-dessus de cette hauteur
+        const keep = opts.keepEdge ? opts.keepEdge(ax, az, bx, bz, wallTop) : true;
+        if (keep === false) continue;
+        const lo = typeof keep === 'number' ? Math.max(minH, keep) : minH;
+        if (lo >= wallTop) continue;
+        const cuts = opts.cutsOf ? opts.cutsOf(ax, az, bx, bz) : [];
+        let t = 0;
+        for (const [t0, t1] of cuts) { if (t0 > t) wall(ax, az, bx, bz, t, t0, lo, wallTop, st, tint, 1, minH); wall(ax, az, bx, bz, t0, t1, Math.max(lo, opts.portalH || 8), wallTop, st, tint, 1, minH); t = t1; }
+        if (t < 1) wall(ax, az, bx, bz, t, 1, lo, wallTop, st, tint, 1, minH);
       }
+      if (opts.skipRoof) return;
       const roofCol = roofColor(tags, roofKind(tags));
       if (rh < 0.2) { flat(pts, wallTop, roofCol); return; }
       // les petits toits à deux pans très étroits deviennent des pyramides (pinacles)
@@ -640,8 +651,8 @@ export function createArchitecture({ renderer, plasterImg, roofP, rnd }) {
         scene.add(m);
         return m;
       };
-      for (const { mat, b } of Object.values(mats)) toMesh(b, mat);
-      toMesh(roofB, roofMat);
+      for (const [key, { mat, b }] of Object.entries(mats)) { const m = toMesh(b, mat); if (m) m.name = 'arch:' + key; }
+      const r = toMesh(roofB, roofMat); if (r) r.name = 'arch:roof';
     },
   };
 }

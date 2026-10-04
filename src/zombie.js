@@ -265,6 +265,19 @@ export class Zombie {
     this.group.rotation.y = this.yaw;
     scene.add(this.group);
     if (opts.crawler) this.makeCrawler();
+    if (opts.boss) this.makeBoss(opts.bossDamage || 45);
+  }
+
+  // Le Bourreau : géant, yeux rouges, frappe fort (fin de partie)
+  makeBoss(damage) {
+    this.boss = true;
+    this.attackDamage = damage;
+    this.group.scale.setScalar(1.75);
+    this.runner = false; this.limp = false;
+    const A = assets();
+    const red = A.bossEye || (A.bossEye = new THREE.MeshBasicMaterial({ color: 0xff2010 }));
+    for (const e of this.eyes) { e.material = red; e.scale.setScalar(1.6); }
+    for (const m of this.mats) m.color.multiplyScalar(0.55);
   }
 
   // Zombie rampant : jambes arrachées, se traîne au sol sur les bras, plus lent
@@ -593,7 +606,7 @@ export class Zombie {
       this.attackWindup -= dt;
       if (this.attackWindup < 0) {
         if (Math.hypot(target.pos.x - this.pos.x, target.pos.z - this.pos.z) < Z.attackRange + 0.5) {
-          target.hurt(Z.damage);
+          target.hurt(this.attackDamage || Z.damage);
         }
         this.attackCd = Z.attackCooldown;
         this.attackWindup = -1;

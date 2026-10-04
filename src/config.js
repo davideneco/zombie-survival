@@ -22,7 +22,9 @@ export const CONFIG = {
       { name: 'Grandes Arcades', seed: { x: -110, z: -45 }, items: ['station', 'wall:ak47', 'wall:p90', 'perk:mulekick', 'box'] },
       { name: 'Place Kléber', seed: { x: -199, z: -145 }, items: ['station', 'perk:juggernog', 'wall:lmg', 'wall:m249', 'box'] },
       { name: 'Place Gutenberg', seed: { x: -20, z: 90 }, items: ['station', 'perk:doubletap', 'wall:scar', 'wall:pkm', 'box'] },
-      { name: 'Cathédrale', seed: { x: 103, z: 33 }, items: ['station', 'pap', 'wall:deagle', 'wall:rifle', 'box'] },
+      { name: 'Cathédrale', seed: { x: 103, z: 33 }, items: ['station', 'wall:deagle', 'wall:rifle', 'box'] },
+      // fin de partie : l'intérieur de la cathédrale, derrière le grand portail (porte la plus chère)
+      { name: 'Intérieur de la Cathédrale', seed: 'cathedral', portal: true, doorPrice: 5000, items: ['pap', 'clock', 'station', 'box'] },
     ],
   },
 
@@ -97,6 +99,17 @@ export const CONFIG = {
     staminup: { name: 'STAMIN-UP', desc: 'Course plus rapide', price: 2000, color: '#e8d24a', letter: 'E' },
   },
   papPrice: 5000,
+
+  // Fin de partie : « L'Heure du Jugement », déclenchée à l'horloge astronomique de la cathédrale
+  finale: {
+    price: 0,             // prix pour lancer l'événement
+    minRound: 8,          // manche minimale
+    duration: 120,        // secondes à tenir
+    spawnInterval: 0.9,   // un zombie toutes les x secondes pendant le siège
+    maxAlive: 30,
+    bossHealth: 40,       // santé du Bourreau = x fois la santé d'un zombie de la manche
+    bossDamage: 45,
+  },
 
   grenade: { start: 2, max: 4, perRound: 2, fuse: 2.2, radius: 6.5, damage: 900, selfDamage: 60 },
 

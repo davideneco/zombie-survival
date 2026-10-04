@@ -354,3 +354,51 @@ export function makeTeddy() {
   }
   return g;
 }
+
+// ------------------------------------------------------------------ Horloge astronomique (fin de partie)
+function clockFace() {
+  const draw = (x, w, h, emis) => {
+    const c = w / 2;
+    if (!emis) { x.fillStyle = '#2a1f3a'; x.fillRect(0, 0, w, h); }
+    x.translate(c, c);
+    // cadran : anneau des heures, zodiaque, soleil et lune
+    x.fillStyle = emis ? '#3a2a10' : '#1a2a5a'; x.beginPath(); x.arc(0, 0, c * 0.95, 0, 7); x.fill();
+    x.strokeStyle = emis ? '#ffcc66' : '#d4a640'; x.lineWidth = 14; x.beginPath(); x.arc(0, 0, c * 0.92, 0, 7); x.stroke();
+    x.lineWidth = 6; x.beginPath(); x.arc(0, 0, c * 0.62, 0, 7); x.stroke();
+    x.fillStyle = emis ? '#ffd27a' : '#e8c060'; x.font = `bold ${Math.round(c * 0.11)}px Georgia, serif`; x.textAlign = 'center'; x.textBaseline = 'middle';
+    const R = ['XII', 'I', 'II', 'III', 'IIII', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI'];
+    R.forEach((t, k) => { const a = (k / 12) * Math.PI * 2 - Math.PI / 2; x.fillText(t, Math.cos(a) * c * 0.78, Math.sin(a) * c * 0.78); });
+    const Z = ['♈', '♉', '♊', '♋', '♌', '♍', '♎', '♏', '♐', '♑', '♒', '♓'];
+    x.font = `${Math.round(c * 0.08)}px serif`;
+    Z.forEach((t, k) => { const a = (k / 12) * Math.PI * 2; x.fillText(t, Math.cos(a) * c * 0.48, Math.sin(a) * c * 0.48); });
+    x.fillStyle = emis ? '#fff2b0' : '#f0d070'; x.beginPath(); x.arc(c * 0.25, -c * 0.12, c * 0.08, 0, 7); x.fill();
+    x.fillStyle = emis ? '#b0c8ff' : '#c8d0e0'; x.beginPath(); x.arc(-c * 0.22, c * 0.15, c * 0.07, 0, 7); x.fill();
+    x.strokeStyle = emis ? '#ffcc66' : '#d4a640'; x.lineWidth = 10; x.beginPath(); x.moveTo(0, 0); x.lineTo(0, -c * 0.7); x.moveTo(0, 0); x.lineTo(c * 0.45, c * 0.2); x.stroke();
+  };
+  return [tex('clock', 512, 512, draw, false), tex('clock', 512, 512, draw, true)];
+}
+export function makeAstronomicalClock() {
+  const g = new THREE.Group();
+  const stone = new THREE.MeshStandardMaterial({ color: 0x9a7466, roughness: 0.85 });
+  const paint = new THREE.MeshStandardMaterial({ color: 0x5a2a2a, roughness: 0.7 });
+  const gold = new THREE.MeshStandardMaterial({ color: 0xd4a640, roughness: 0.3, metalness: 0.9, emissive: 0x2a1a04 });
+  const [map, emap] = clockFace();
+  const face = new THREE.MeshStandardMaterial({ map, emissiveMap: emap, emissive: 0xffffff, emissiveIntensity: 0.9, roughness: 0.5 });
+  const add = (geo, mat, x, y, z) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); g.add(m); return m; };
+  add(new THREE.BoxGeometry(4.2, 3, 1.8), stone, 0, 1.5, 0);              // socle
+  add(new THREE.CylinderGeometry(1.1, 1.1, 0.25, 32), gold, 0, 1.6, 0.92).rotation.x = Math.PI / 2; // globe céleste (cadran bas)
+  add(new THREE.BoxGeometry(3.4, 6, 1.4), paint, 0, 6, 0);                // corps peint
+  const dial = add(new THREE.CircleGeometry(1.45, 48), face, 0, 6.2, 0.72);
+  dial.userData.dial = true;
+  for (const sx of [-1, 1]) {
+    add(new THREE.BoxGeometry(0.5, 9, 0.5), stone, sx * 1.95, 4.5 + 3, 0.2); // tours latérales
+    add(new THREE.ConeGeometry(0.4, 1.8, 8), stone, sx * 1.95, 12.9, 0.2);
+  }
+  add(new THREE.BoxGeometry(2.6, 3.5, 1.2), paint, 0, 10.75, 0);          // étage des automates
+  for (let k = 0; k < 4; k++) add(new THREE.CapsuleGeometry(0.16, 0.6, 3, 6), gold, -0.9 + k * 0.6, 10.6, 0.68); // apôtres
+  add(new THREE.ConeGeometry(1.4, 3.2, 4), stone, 0, 14.1, 0).rotation.y = Math.PI / 4; // flèche
+  add(new THREE.SphereGeometry(0.25, 10, 8), gold, 0, 15.9, 0);           // coq
+  g.traverse((o) => { if (o.isMesh) o.castShadow = o.receiveShadow = true; });
+  g.userData.size = [4.4, 2, 16];
+  return g;
+}

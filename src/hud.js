@@ -243,6 +243,16 @@ export class Hud {
     ctx.fill();
   }
 
+  // Bandeau en haut de l'écran (compte à rebours de la fin de partie)
+  setBanner(text) {
+    if (!this.banner) {
+      this.banner = document.createElement('div');
+      Object.assign(this.banner.style, { position: 'absolute', left: '50%', top: '86px', transform: 'translateX(-50%)', padding: '6px 22px', background: 'rgba(90,0,0,0.75)', border: '1px solid #ff5040', borderRadius: '4px', color: '#ffd8c8', fontSize: '22px', letterSpacing: '3px', textShadow: '0 0 6px #000', display: 'none' });
+      this.el.hud.appendChild(this.banner);
+    }
+    this._set('banner', text || '', () => { this.banner.style.display = text ? 'block' : 'none'; this.banner.textContent = text || ''; });
+  }
+
   setNades(n) {
     this._set('nades', n, () => { this.el.nades.textContent = `GRENADES [G] ${'● '.repeat(n)}${n ? '' : '—'}`; });
   }

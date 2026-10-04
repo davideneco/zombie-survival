@@ -147,6 +147,12 @@ export class Sfx {
     this._noise(1.2, 0.9, 800, 'lowpass');
     this._tone('sine', 150, 25, 1.4, 0.7);
   }
+  bell() { // cloche grave de la cathédrale
+    if (!this.ctx) return;
+    this._tone('sine', 196, 194, 2.5, 0.45);
+    this._tone('sine', 392, 388, 1.8, 0.2);
+    this._tone('triangle', 98, 97, 2.8, 0.25);
+  }
   explosion(v = 1) {
     if (!this.ctx || v < 0.03) return;
     this._noise(1.1, 0.95 * v, 600, 'lowpass');
