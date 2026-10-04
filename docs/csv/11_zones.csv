@@ -6,4 +6,5 @@ Rue du Dôme;;"104 ; -118";P7, P10;station, wall:sniper, wall:svd, box;1;L96A1, 
 Grandes Arcades;;"-110 ; -45";P1, P2, P3;station, wall:ak47, wall:p90, perk:mulekick, box;1;AK-47, FN P90;MULE KICK, BOÎTE MYSTÈRE
 Place Kléber;;"-199 ; -145";P1;station, perk:juggernog, wall:lmg, wall:m249, box;1;RPK, M249 SAW;MASTODONTE, BOÎTE MYSTÈRE
 Place Gutenberg;;"-20 ; 90";P3, P8;station, perk:doubletap, wall:scar, wall:pkm, box;1;SCAR-H, PKM;DOUBLE TAP, BOÎTE MYSTÈRE
-Cathédrale;;"103 ; 33";P8, P9;station, pap, wall:deagle, wall:rifle, box;1;DESERT EAGLE, M4A1;PACK-A-PUNCH, BOÎTE MYSTÈRE
+Cathédrale;;"103 ; 33";P8, P9, P11;station, wall:deagle, wall:rifle, box;1;DESERT EAGLE, M4A1;BOÎTE MYSTÈRE
+Intérieur de la Cathédrale;;"179 ; 40";P11;pap, clock, station, box;1;;PACK-A-PUNCH, HORLOGE ASTRONOMIQUE, BOÎTE MYSTÈRE
