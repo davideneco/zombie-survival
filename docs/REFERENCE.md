@@ -1,7 +1,7 @@
 # Zombie Survival — fiche de référence
 
-Version du jeu : **v0.8.1 · 0eba322 · 2026-10-04** (package 0.8.1). Générée automatiquement par `node tools/make-docs.mjs` à partir de `src/config.js` et du jeu.
-Carte annotée : [carte.png](carte.png). Les mêmes tableaux en tableur : dossier [csv/](csv/).
+Version du jeu : **v0.9.0 · 99600b4 · 2026-10-04** (package 0.9.0). Générée automatiquement par `node tools/make-docs.mjs` à partir de `src/config.js` et du jeu.
+Carte annotée : [carte.png](carte.png). Armes de profil : [armes.png](armes.png). Les mêmes tableaux en tableur : dossier [csv/](csv/).
 
 Pour demander une modification, citez la ligne (ex. « Mitrailleuse RPK : chargeur 100 », « Mastodonte à 3000 pts », « porte P3 à 500 pts », « mettre la boîte mystère dans la zone Temple-Neuf »).
 
@@ -13,38 +13,78 @@ Prix des portes : 750 pts pour une zone voisine du départ, +250 par zone plus l
 
 ## Armes
 
-| id | Arme | Type | Dégâts par balle | Plombs par tir | Multiplicateur tête | Cadence (tirs/s) | DPS approx. | Chargeur | Réserve départ | Réserve max | Rechargement (s) | Dispersion | Portée (m) | Zombies traversés | Explosion rayon (m) | Explosion dégâts | Prix au mur (pts) | Prix munitions (pts) | Où l'obtenir |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| rifle | FUSIL D'ASSAUT | automatique | 36 | 1 | 2,5 | 9,5 | 342 | 30 | 120 | 180 | 1,8 | 0,012 | 90 | 1 |  |  | départ | 300 | arme de départ |
-| shotgun | FUSIL À POMPE | pompe | 26 | 8 | 1,8 | 1,3 | 270,4 | 6 | 30 | 48 | 2,4 | 0,046 | 35 | 1 |  |  | 750 | 350 | mur Marché-Neuf, mur Grandes Arcades, boîte mystère |
-| smg | PISTOLET-MITRAILLEUR | automatique | 24 | 1 | 2,2 | 13,5 | 324 | 32 | 128 | 224 | 1,5 | 0,022 | 65 | 1 |  |  | 1000 | 500 | mur Marché-Neuf, mur Rue des Orfèvres, boîte mystère |
-| lmg | MITRAILLEUSE RPK | automatique | 44 | 1 | 2 | 10,5 | 462 | 75 | 300 | 450 | 3,6 | 0,028 | 90 | 1 |  |  | 2500 | 1000 | mur Place Kléber, boîte mystère |
-| sniper | FUSIL DE PRÉCISION | coup par coup | 340 | 1 | 3,5 | 1,1 | 374 | 5 | 30 | 45 | 2,8 | 0,0015 | 200 | 4 |  |  | 1750 | 700 | mur Rue du Dôme, boîte mystère |
-| magnum | REVOLVER .357 | coup par coup | 190 | 1 | 3 | 3,2 | 608 | 6 | 48 | 72 | 2,2 | 0,006 | 80 | 2 |  |  | boîte | 500 | boîte mystère |
-| raygun | PISTOLET À RAYONS | coup par coup | 700 | 1 | 1,5 | 4,2 | 2940 | 20 | 160 | 200 | 2,6 | 0,008 | 100 | 1 | 2,8 | 500 | boîte | 1500 | boîte mystère |
+| id | Arme | Catégorie | Calibre | Type | Dégâts par balle | Plombs par tir | Multiplicateur tête | Cadence (tirs/s) | DPS approx. | Chargeur | Réserve départ | Réserve max | Rechargement (s) | Dispersion | Portée (m) | Zombies traversés | Explosion rayon (m) | Explosion dégâts | Prix au mur (pts) | Prix munitions (pts) | Où l'obtenir |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| m1911 | COLT M1911 | pistolet | .45 ACP | coup par coup | 48 | 1 | 2,6 | 5,5 | 264 | 7 | 42 | 84 | 1,5 | 0,01 | 50 | 1 |  |  | 400 | 150 | mur Marché-Neuf, boîte mystère, arme de départ |
+| arex | AREX ZERO 1 | pistolet | 9 mm | coup par coup | 34 | 1 | 2,4 | 7,5 | 255 | 17 | 68 | 136 | 1,4 | 0,009 | 55 | 1 |  |  | 700 | 250 | mur Temple-Neuf, boîte mystère |
+| deagle | DESERT EAGLE | pistolet | .50 AE | coup par coup | 165 | 1 | 3 | 2,4 | 396 | 7 | 35 | 56 | 1,9 | 0,011 | 70 | 2 |  |  | 1500 | 600 | mur Cathédrale, boîte mystère |
+| magnum | COLT PYTHON .357 | pistolet | .357 Magnum | coup par coup | 190 | 1 | 3 | 3,2 | 608 | 6 | 48 | 72 | 2,2 | 0,006 | 80 | 2 |  |  | boîte | 500 | boîte mystère |
+| rifle | M4A1 | fusil d'assaut | 5,56 mm | automatique | 36 | 1 | 2,5 | 9,5 | 342 | 30 | 120 | 180 | 1,8 | 0,012 | 90 | 1 |  |  | 1200 | 300 | mur Cathédrale, boîte mystère, arme de départ |
+| ak47 | AK-47 | fusil d'assaut | 7,62×39 mm | automatique | 46 | 1 | 2,3 | 8,5 | 391 | 30 | 120 | 210 | 2,4 | 0,017 | 90 | 1 |  |  | 1600 | 600 | mur Grandes Arcades, boîte mystère |
+| famas | FAMAS F1 | fusil d'assaut | 5,56 mm | automatique | 34 | 1 | 2,4 | 15 | 510 | 25 | 125 | 225 | 2,2 | 0,014 | 85 | 1 |  |  | 1300 | 500 | mur Rue des Orfèvres, boîte mystère |
+| scar | SCAR-H | fusil d'assaut | 7,62×51 mm | automatique | 58 | 1 | 2,4 | 7,5 | 435 | 20 | 100 | 180 | 2,3 | 0,012 | 100 | 2 |  |  | 2200 | 800 | mur Place Gutenberg, boîte mystère |
+| smg | MP40 | pistolet-mitrailleur | 9 mm | automatique | 24 | 1 | 2,2 | 9,5 | 228 | 32 | 128 | 224 | 1,5 | 0,022 | 65 | 1 |  |  | 1000 | 500 | mur Marché-Neuf, boîte mystère |
+| mp5 | MP5 | pistolet-mitrailleur | 9 mm | automatique | 26 | 1 | 2,2 | 13 | 338 | 30 | 150 | 270 | 1,8 | 0,017 | 65 | 1 |  |  | 1200 | 500 | mur Temple-Neuf, boîte mystère |
+| p90 | FN P90 | pistolet-mitrailleur | 5,7×28 mm | automatique | 22 | 1 | 2 | 15 | 330 | 50 | 200 | 350 | 2,6 | 0,02 | 70 | 2 |  |  | 1800 | 700 | mur Grandes Arcades, boîte mystère |
+| lmg | RPK | mitrailleuse | 7,62×39 mm | automatique | 44 | 1 | 2 | 10,5 | 462 | 75 | 300 | 450 | 3,6 | 0,028 | 90 | 1 |  |  | 2500 | 1000 | mur Place Kléber, boîte mystère |
+| m249 | M249 SAW | mitrailleuse | 5,56 mm | automatique | 40 | 1 | 2 | 12,5 | 500 | 100 | 300 | 500 | 4,2 | 0,032 | 90 | 1 |  |  | 3000 | 1200 | mur Place Kléber, boîte mystère |
+| mg42 | MG42 | mitrailleuse | 7,92×57 mm | automatique | 46 | 1 | 2 | 19 | 874 | 50 | 250 | 450 | 4 | 0,04 | 90 | 1 |  |  | boîte | 1200 | boîte mystère |
+| pkm | PKM | mitrailleuse | 7,62×54R | automatique | 55 | 1 | 2 | 10,5 | 577,5 | 100 | 300 | 500 | 4,8 | 0,03 | 100 | 2 |  |  | 3200 | 1300 | mur Place Gutenberg, boîte mystère |
+| sniper | L96A1 | fusil de précision | 7,62×51 mm | coup par coup | 340 | 1 | 3,5 | 1,1 | 374 | 5 | 30 | 45 | 2,8 | 0,0015 | 200 | 4 |  |  | 1750 | 700 | mur Rue du Dôme, boîte mystère |
+| svd | DRAGUNOV SVD | fusil de précision | 7,62×54R | coup par coup | 230 | 1 | 3 | 3 | 690 | 10 | 40 | 70 | 2,6 | 0,004 | 180 | 3 |  |  | 2000 | 800 | mur Rue du Dôme, boîte mystère |
+| barrett | BARRETT M82 | fusil de précision | .50 BMG | coup par coup | 700 | 1 | 3 | 1,6 | 1120 | 10 | 30 | 50 | 3,4 | 0,002 | 220 | 6 |  |  | boîte | 1500 | boîte mystère |
+| shotgun | REMINGTON 870 | fusil à pompe | 12 ga | pompe | 26 | 8 | 1,8 | 1,3 | 270,4 | 6 | 30 | 48 | 2,4 | 0,046 | 35 | 1 |  |  | 750 | 350 | mur Marché-Neuf, boîte mystère |
+| raygun | PISTOLET À RAYONS | spéciale | énergie | coup par coup | 700 | 1 | 1,5 | 4,2 | 2940 | 20 | 160 | 200 | 2,6 | 0,008 | 100 | 1 | 2,8 | 500 | boîte | 1500 | boîte mystère |
 
 ## Pack-a-Punch (5000 pts)
 
 | id | Arme | Nom amélioré | Dégâts | Multiplicateur tête | Chargeur | Réserve max | Zombies traversés | Prix munitions au mur (pts) |
 |---|---|---|---|---|---|---|---|---|
-| rifle | FUSIL D'ASSAUT | M4 ÉCLIPSE | 90 | 3 | 45 | 270 | 2 | 900 |
-| shotgun | FUSIL À POMPE | LE BROYEUR | 65 | 2,16 | 9 | 72 | 2 | 1050 |
-| smg | PISTOLET-MITRAILLEUR | PM INFERNAL | 60 | 2,64 | 48 | 336 | 2 | 1500 |
-| lmg | MITRAILLEUSE RPK | RPK DÉVASTATEUR | 110 | 2,4 | 113 | 675 | 2 | 3000 |
-| sniper | FUSIL DE PRÉCISION | ŒIL DU DÉMON | 850 | 4,2 | 8 | 68 | 6 | 2100 |
-| magnum | REVOLVER .357 | LE VENGEUR | 475 | 3,6 | 9 | 108 | 4 | 1500 |
+| m1911 | COLT M1911 | MUSTANG & SALLY | 120 | 3,12 | 11 | 126 | 2 | 450 |
+| arex | AREX ZERO 1 | ZÉRO ABSOLU | 85 | 2,88 | 26 | 204 | 2 | 750 |
+| deagle | DESERT EAGLE | L'AIGLE NOIR | 412,5 | 3,6 | 11 | 84 | 4 | 1800 |
+| magnum | COLT PYTHON .357 | LE VENGEUR | 475 | 3,6 | 9 | 108 | 4 | 1500 |
+| rifle | M4A1 | M4 ÉCLIPSE | 90 | 3 | 45 | 270 | 2 | 900 |
+| ak47 | AK-47 | AK-ENFER | 115 | 2,76 | 45 | 315 | 2 | 1800 |
+| famas | FAMAS F1 | LE CLAIRON MAUDIT | 85 | 2,88 | 38 | 338 | 2 | 1500 |
+| scar | SCAR-H | LE BALAFRÉ | 145 | 2,88 | 30 | 270 | 4 | 2400 |
+| smg | MP40 | PM INFERNAL | 60 | 2,64 | 48 | 336 | 2 | 1500 |
+| mp5 | MP5 | MP-115 | 65 | 2,64 | 45 | 405 | 2 | 1500 |
+| p90 | FN P90 | LE FRELON | 55 | 2,4 | 75 | 525 | 4 | 2100 |
+| lmg | RPK | RPK DÉVASTATEUR | 110 | 2,4 | 113 | 675 | 2 | 3000 |
+| m249 | M249 SAW | LA FAUCHEUSE | 100 | 2,4 | 150 | 750 | 2 | 3600 |
+| mg42 | MG42 | LA SCIE D'HITLER… BRISÉE | 115 | 2,4 | 75 | 675 | 2 | 3600 |
+| pkm | PKM | LE BULLDOZER | 137,5 | 2,4 | 150 | 750 | 4 | 3900 |
+| sniper | L96A1 | ŒIL DU DÉMON | 850 | 4,2 | 8 | 68 | 6 | 2100 |
+| svd | DRAGUNOV SVD | LA TSARINE | 575 | 3,6 | 15 | 105 | 5 | 2400 |
+| barrett | BARRETT M82 | LE MARTEAU DE THOR | 1750 | 3,6 | 15 | 75 | 8 | 4500 |
+| shotgun | REMINGTON 870 | LE BROYEUR | 65 | 2,16 | 9 | 72 | 2 | 1050 |
 | raygun | PISTOLET À RAYONS | PORTE-TONNERRE | 1120 | 1,8 | 30 | 300 | 2 | 4500 |
 
-## Boîte mystère (950 pts)
+## Boîte mystère (950 pts, une seule boîte : elle change d'emplacement après 1 à 30 tirages, en donnant un nounours remboursé)
 
 | id | Arme | Poids | Chance (%) |
 |---|---|---|---|
-| shotgun | FUSIL À POMPE | 3 | 23,08 |
-| smg | PISTOLET-MITRAILLEUR | 3 | 23,08 |
-| lmg | MITRAILLEUSE RPK | 2 | 15,38 |
-| sniper | FUSIL DE PRÉCISION | 2 | 15,38 |
-| magnum | REVOLVER .357 | 2 | 15,38 |
-| raygun | PISTOLET À RAYONS | 1 | 7,69 |
+| m1911 | COLT M1911 | 2 | 4,65 |
+| arex | AREX ZERO 1 | 3 | 6,98 |
+| deagle | DESERT EAGLE | 2 | 4,65 |
+| magnum | COLT PYTHON .357 | 2 | 4,65 |
+| rifle | M4A1 | 2 | 4,65 |
+| ak47 | AK-47 | 3 | 6,98 |
+| famas | FAMAS F1 | 3 | 6,98 |
+| scar | SCAR-H | 2 | 4,65 |
+| smg | MP40 | 2 | 4,65 |
+| mp5 | MP5 | 3 | 6,98 |
+| p90 | FN P90 | 2 | 4,65 |
+| lmg | RPK | 2 | 4,65 |
+| m249 | M249 SAW | 2 | 4,65 |
+| mg42 | MG42 | 2 | 4,65 |
+| pkm | PKM | 2 | 4,65 |
+| sniper | L96A1 | 2 | 4,65 |
+| svd | DRAGUNOV SVD | 2 | 4,65 |
+| barrett | BARRETT M82 | 1 | 2,33 |
+| shotgun | REMINGTON 870 | 3 | 6,98 |
+| raygun | PISTOLET À RAYONS | 1 | 2,33 |
 
 ## Atouts
 
@@ -160,14 +200,14 @@ Prix des portes : 750 pts pour une zone voisine du départ, +250 par zone plus l
 
 | Zone | Départ | Lieu (x ; z en m) | Portes | Contenu prévu (config) | Bornes | Armes au mur | Machines |
 |---|---|---|---|---|---|---|---|
-| Marché-Neuf | oui | -1 ; -31 | P4, P6 | station, wall:shotgun, wall:smg, perk:quickrevive, box | 1 | FUSIL À POMPE, PISTOLET-MITRAILLEUR | RÉANIMATION RAPIDE, BOÎTE MYSTÈRE |
-| Temple-Neuf |  | -35 ; -95 | P2, P4, P5, P7 | station, perk:staminup | 1 |  | STAMIN-UP |
-| Rue des Orfèvres |  | 27 ; -58 | P5, P6, P9, P10 | wall:smg, perk:speedcola | 0 | PISTOLET-MITRAILLEUR | SPEED COLA |
-| Rue du Dôme |  | 104 ; -118 | P7, P10 | station, wall:sniper, box | 1 | FUSIL DE PRÉCISION | BOÎTE MYSTÈRE |
-| Grandes Arcades |  | -110 ; -45 | P1, P2, P3 | station, wall:shotgun, perk:mulekick | 1 | FUSIL À POMPE | MULE KICK |
-| Place Kléber |  | -199 ; -145 | P1 | station, perk:juggernog, wall:lmg, box | 1 | MITRAILLEUSE RPK | MASTODONTE, BOÎTE MYSTÈRE |
-| Place Gutenberg |  | -20 ; 90 | P3, P8 | station, perk:doubletap, box | 1 |  | DOUBLE TAP, BOÎTE MYSTÈRE |
-| Cathédrale |  | 103 ; 33 | P8, P9 | station, pap, box | 1 |  | PACK-A-PUNCH, BOÎTE MYSTÈRE |
+| Marché-Neuf | oui | -1 ; -31 | P4, P6 | station, wall:m1911, wall:shotgun, wall:smg, perk:quickrevive, box | 1 | COLT M1911, REMINGTON 870, MP40 | RÉANIMATION RAPIDE, BOÎTE MYSTÈRE |
+| Temple-Neuf |  | -35 ; -95 | P2, P4, P5, P7 | station, wall:arex, wall:mp5, perk:staminup, box | 1 | AREX ZERO 1, MP5 | STAMIN-UP, BOÎTE MYSTÈRE |
+| Rue des Orfèvres |  | 27 ; -58 | P5, P6, P9, P10 | wall:famas, perk:speedcola, box | 0 | FAMAS F1 | SPEED COLA, BOÎTE MYSTÈRE |
+| Rue du Dôme |  | 104 ; -118 | P7, P10 | station, wall:sniper, wall:svd, box | 1 | L96A1, DRAGUNOV SVD | BOÎTE MYSTÈRE |
+| Grandes Arcades |  | -110 ; -45 | P1, P2, P3 | station, wall:ak47, wall:p90, perk:mulekick, box | 1 | AK-47, FN P90 | MULE KICK, BOÎTE MYSTÈRE |
+| Place Kléber |  | -199 ; -145 | P1 | station, perk:juggernog, wall:lmg, wall:m249, box | 1 | RPK, M249 SAW | MASTODONTE, BOÎTE MYSTÈRE |
+| Place Gutenberg |  | -20 ; 90 | P3, P8 | station, perk:doubletap, wall:scar, wall:pkm, box | 1 | SCAR-H, PKM | DOUBLE TAP, BOÎTE MYSTÈRE |
+| Cathédrale |  | 103 ; 33 | P8, P9 | station, pap, wall:deagle, wall:rifle, box | 1 | DESERT EAGLE, M4A1 | PACK-A-PUNCH, BOÎTE MYSTÈRE |
 
 ## Portes
 
@@ -189,30 +229,43 @@ Prix des portes : 750 pts pour une zone voisine du départ, +250 par zone plus l
 | N° sur la carte | Type | Nom | Zone | Prix (pts) | x (m, vers l'est) | z (m, vers le sud) |
 |---|---|---|---|---|---|---|
 | 1 | Borne de munitions | Borne de munitions | Marché-Neuf |  | -6 | -20 |
-| 2 | Arme au mur | FUSIL À POMPE | Marché-Neuf | 750 | -1 | -37 |
-| 3 | Arme au mur | PISTOLET-MITRAILLEUR | Marché-Neuf | 1000 | -4 | -26 |
-| 4 | Atout | RÉANIMATION RAPIDE | Marché-Neuf | 1500 | -29 | -40 |
-| 5 | BOÎTE MYSTÈRE | BOÎTE MYSTÈRE | Marché-Neuf | 950 | -10 | -32 |
-| 6 | Borne de munitions | Borne de munitions | Temple-Neuf |  | -31 | -87 |
-| 7 | Atout | STAMIN-UP | Temple-Neuf | 2000 | -46 | -92 |
-| 8 | Arme au mur | PISTOLET-MITRAILLEUR | Rue des Orfèvres | 1000 | 23 | -66 |
-| 9 | Atout | SPEED COLA | Rue des Orfèvres | 3000 | 17 | -9 |
-| 10 | Borne de munitions | Borne de munitions | Rue du Dôme |  | 83 | -118 |
-| 11 | Arme au mur | FUSIL DE PRÉCISION | Rue du Dôme | 1750 | 107 | -136 |
-| 12 | BOÎTE MYSTÈRE | BOÎTE MYSTÈRE | Rue du Dôme | 950 | 106 | -147 |
-| 13 | Borne de munitions | Borne de munitions | Grandes Arcades |  | -104 | -54 |
-| 14 | Arme au mur | FUSIL À POMPE | Grandes Arcades | 750 | -95 | -47 |
-| 15 | Atout | MULE KICK | Grandes Arcades | 4000 | -105 | -61 |
-| 16 | Borne de munitions | Borne de munitions | Place Kléber |  | -202 | -161 |
-| 17 | Arme au mur | MITRAILLEUSE RPK | Place Kléber | 2500 | -179 | -140 |
-| 18 | Atout | MASTODONTE | Place Kléber | 2500 | -222 | -128 |
-| 19 | BOÎTE MYSTÈRE | BOÎTE MYSTÈRE | Place Kléber | 950 | -165 | -144 |
-| 20 | Borne de munitions | Borne de munitions | Place Gutenberg |  | -13 | 108 |
-| 21 | Atout | DOUBLE TAP | Place Gutenberg | 2000 | -1 | 86 |
-| 22 | BOÎTE MYSTÈRE | BOÎTE MYSTÈRE | Place Gutenberg | 950 | -16 | 77 |
-| 23 | Borne de munitions | Borne de munitions | Cathédrale |  | 128 | 22 |
-| 24 | PACK-A-PUNCH | PACK-A-PUNCH | Cathédrale | 5000 | 84 | 29 |
-| 25 | BOÎTE MYSTÈRE | BOÎTE MYSTÈRE | Cathédrale | 950 | 117 | 52 |
+| 2 | Arme au mur | COLT M1911 | Marché-Neuf | 400 | -1 | -37 |
+| 3 | Arme au mur | REMINGTON 870 | Marché-Neuf | 750 | -4 | -26 |
+| 4 | Arme au mur | MP40 | Marché-Neuf | 1000 | -10 | -43 |
+| 5 | Atout | RÉANIMATION RAPIDE | Marché-Neuf | 1500 | 2 | -49 |
+| 6 | BOÎTE MYSTÈRE (emplacement possible) | BOÎTE MYSTÈRE (emplacement possible) | Marché-Neuf | 950 | -11 | -58 |
+| 7 | Borne de munitions | Borne de munitions | Temple-Neuf |  | -26 | -92 |
+| 8 | Arme au mur | AREX ZERO 1 | Temple-Neuf | 700 | -53 | -97 |
+| 9 | Arme au mur | MP5 | Temple-Neuf | 1200 | -58 | -101 |
+| 10 | Atout | STAMIN-UP | Temple-Neuf | 2000 | -37 | -128 |
+| 11 | BOÎTE MYSTÈRE (emplacement possible) | BOÎTE MYSTÈRE (emplacement possible) | Temple-Neuf | 950 | -33 | -101 |
+| 12 | Arme au mur | FAMAS F1 | Rue des Orfèvres | 1300 | 12 | -77 |
+| 13 | Atout | SPEED COLA | Rue des Orfèvres | 3000 | 17 | -72 |
+| 14 | BOÎTE MYSTÈRE (emplacement possible) | BOÎTE MYSTÈRE (emplacement possible) | Rue des Orfèvres | 950 | 11 | -86 |
+| 15 | Borne de munitions | Borne de munitions | Rue du Dôme |  | 83 | -122 |
+| 16 | Arme au mur | L96A1 | Rue du Dôme | 1750 | 95 | -150 |
+| 17 | Arme au mur | DRAGUNOV SVD | Rue du Dôme | 2000 | 103 | -147 |
+| 18 | BOÎTE MYSTÈRE (emplacement possible) | BOÎTE MYSTÈRE (emplacement possible) | Rue du Dôme | 950 | 77 | -132 |
+| 19 | Borne de munitions | Borne de munitions | Grandes Arcades |  | -97 | -62 |
+| 20 | Arme au mur | AK-47 | Grandes Arcades | 1600 | -116 | -72 |
+| 21 | Arme au mur | FN P90 | Grandes Arcades | 1800 | -105 | -24 |
+| 22 | Atout | MULE KICK | Grandes Arcades | 4000 | -88 | -46 |
+| 23 | BOÎTE MYSTÈRE (emplacement possible) | BOÎTE MYSTÈRE (emplacement possible) | Grandes Arcades | 950 | -106 | -35 |
+| 24 | Borne de munitions | Borne de munitions | Place Kléber |  | -190 | -139 |
+| 25 | Arme au mur | RPK | Place Kléber | 2500 | -211 | -118 |
+| 26 | Arme au mur | M249 SAW | Place Kléber | 3000 | -216 | -147 |
+| 27 | Atout | MASTODONTE | Place Kléber | 2500 | -225 | -137 |
+| 28 | BOÎTE MYSTÈRE (emplacement possible) | BOÎTE MYSTÈRE (emplacement possible) | Place Kléber | 950 | -201 | -128 |
+| 29 | Borne de munitions | Borne de munitions | Place Gutenberg |  | 1 | 90 |
+| 30 | Arme au mur | SCAR-H | Place Gutenberg | 2200 | -41 | 75 |
+| 31 | Arme au mur | PKM | Place Gutenberg | 3200 | -5 | 107 |
+| 32 | Atout | DOUBLE TAP | Place Gutenberg | 2000 | -31 | 64 |
+| 33 | BOÎTE MYSTÈRE (emplacement possible) | BOÎTE MYSTÈRE (emplacement possible) | Place Gutenberg | 950 | -6 | 70 |
+| 34 | Borne de munitions | Borne de munitions | Cathédrale |  | 101 | 57 |
+| 35 | Arme au mur | DESERT EAGLE | Cathédrale | 1500 | 95 | 47 |
+| 36 | Arme au mur | M4A1 | Cathédrale | 1200 | 109 | 60 |
+| 37 | PACK-A-PUNCH | PACK-A-PUNCH | Cathédrale | 5000 | 108 | 38 |
+| 38 | BOÎTE MYSTÈRE (emplacement possible) | BOÎTE MYSTÈRE (emplacement possible) | Cathédrale | 950 | 129 | 32 |
 
 ## Commandes
 
