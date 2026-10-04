@@ -1057,8 +1057,9 @@ export async function buildRealWorld(scene, renderer) {
       g.traverse((o) => { if (o.isMesh && o.material.blending !== THREE.AdditiveBlending) o.castShadow = o.receiveShadow = true; });
       scene.add(g);
       collision.addBox(x, z, w, d, -g.rotation.y, h);
-      lightSources.push({ x: x + Math.sin(g.rotation.y) * 1.2, y: h + 0.6, z: z + Math.cos(g.rotation.y) * 1.2, color: new THREE.Color(color).getHex(), intensity: 7, dist: 8 });
-      machines.push({ type, id, name, price, color, letter: type === 'perk' ? CONFIG.perks[id].letter : null, zone: zi, pos: new THREE.Vector3(x, 0, z), group: g });
+      const entry = { type, id, name, price, color, letter: type === 'perk' ? CONFIG.perks[id].letter : null, zone: zi, pos: new THREE.Vector3(x, 0, z), group: g, active: true };
+      machines.push(entry);
+      lightSources.push({ x: x + Math.sin(g.rotation.y) * 1.2, y: h + 0.6, z: z + Math.cos(g.rotation.y) * 1.2, color: new THREE.Color(color).getHex(), intensity: 7, dist: 8, box: type === 'box' ? entry : null });
     };
     Z.zones.forEach((zone, zi) => {
       if (!seeds[zi] || !Number.isFinite(door_depth[zi])) return;
@@ -1328,7 +1329,7 @@ export async function buildRealWorld(scene, renderer) {
   let lightTimer = 0;
   const assignLights = (px, pz) => {
     const sorted = lightSources
-      .filter((s) => !(s.door && s.door.open))
+      .filter((s) => !(s.door && s.door.open) && !(s.box && !s.box.active))
       .map((s) => ({ s, d: (s.x - px) ** 2 + (s.z - pz) ** 2 }))
       .sort((a, b) => a.d - b.d)
       .slice(0, LIGHTS);
@@ -1338,12 +1339,20 @@ export async function buildRealWorld(scene, renderer) {
       l.color.setHex(e.s.color); l.intensity = e.s.intensity; l.distance = e.s.dist; l.position.set(e.s.x, e.s.y, e.s.z);
     });
   };
+  // Boîte mystère : une seule active parmi tous ses emplacements possibles
+  const boxes = machines.filter((m) => m.type === 'box');
+  function setActiveBox(i) {
+    boxes.forEach((b, k) => { b.active = k === i; b.group.visible = b.active; b.group.position.y = 0; b.group.scale.setScalar(1); });
+    lightTimer = 0;
+  }
+  setActiveBox(Math.max(0, boxes.findIndex((b) => b.zone === startZone)));
+
   assignLights(startPos.x, startPos.z);
 
   const stationPos = stations[0];
   return {
     half: Math.max(halfX, halfZ), blockers, spawnPoints: [], windowSpawns, pickWindow, pickGround,
-    stationPos, stations, wallWeapons, doors, openDoor, zoneOf, startPos, nav, collision, machines,
+    stationPos, stations, wallWeapons, doors, openDoor, zoneOf, startPos, nav, collision, machines, boxes, setActiveBox,
     zoneNames: ZONE_NAMES, zoneCenters, startZone, sealedPoints, mapImage, mapView: { halfX, halfZ, scale: MAP_SCALE },
     mapCrop: { x0: secMinX - 60, x1: secMaxX + 60, z0: secMinZ - 50, z1: secMaxZ + 50 }, mapTitle: 'SECTEUR DU MARCHÉ-NEUF — STRASBOURG',
     collide: (pos, r) => collision.resolve(pos, r),

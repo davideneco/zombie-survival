@@ -8,20 +8,21 @@ export const CONFIG = {
   // Secteur jouable : autour de la place du Marché-Neuf. Le reste de l'île est visible mais fermé.
   // Chaque zone part d'un vrai lieu (seed, en mètres : x vers l'est, z vers le sud) ; les cases sont attribuées
   // à la zone la plus proche en distance de marche, jusqu'à maxDist. Les portes tombent entre deux zones.
-  // items : ce qu'on trouve dans la zone ('station' = borne de munitions, 'wall:<arme>', 'perk:<atout>', 'box', 'pap').
+  // items : ce qu'on trouve dans la zone ('station' = borne de munitions, 'wall:<arme>', 'perk:<atout>', 'pap',
+  //         'box' = un emplacement possible de la boîte mystère : il n'y a qu'une boîte, qui se déplace).
   sector: {
     maxDist: 95,        // rayon d'une zone (m, en distance de marche)
     basePrice: 750,     // prix d'une porte vers une zone voisine de la place de départ
     priceStep: 250,     // supplément par zone plus éloignée
     zones: [
-      { name: 'Marché-Neuf', start: true, items: ['station', 'wall:shotgun', 'wall:smg', 'perk:quickrevive', 'box'] },
-      { name: 'Temple-Neuf', seed: { x: -35, z: -95 }, items: ['station', 'perk:staminup'] },
-      { name: 'Rue des Orfèvres', seed: { x: 40, z: -70 }, items: ['wall:smg', 'perk:speedcola'] },
-      { name: 'Rue du Dôme', seed: { x: 110, z: -111 }, items: ['station', 'wall:sniper', 'box'] },
-      { name: 'Grandes Arcades', seed: { x: -110, z: -45 }, items: ['station', 'wall:shotgun', 'perk:mulekick'] },
-      { name: 'Place Kléber', seed: { x: -199, z: -145 }, items: ['station', 'perk:juggernog', 'wall:lmg', 'box'] },
-      { name: 'Place Gutenberg', seed: { x: -20, z: 90 }, items: ['station', 'perk:doubletap', 'box'] },
-      { name: 'Cathédrale', seed: { x: 103, z: 33 }, items: ['station', 'pap', 'box'] },
+      { name: 'Marché-Neuf', start: true, items: ['station', 'wall:m1911', 'wall:shotgun', 'wall:smg', 'perk:quickrevive', 'box'] },
+      { name: 'Temple-Neuf', seed: { x: -35, z: -95 }, items: ['station', 'wall:arex', 'wall:mp5', 'perk:staminup', 'box'] },
+      { name: 'Rue des Orfèvres', seed: { x: 40, z: -70 }, items: ['wall:famas', 'perk:speedcola', 'box'] },
+      { name: 'Rue du Dôme', seed: { x: 110, z: -111 }, items: ['station', 'wall:sniper', 'wall:svd', 'box'] },
+      { name: 'Grandes Arcades', seed: { x: -110, z: -45 }, items: ['station', 'wall:ak47', 'wall:p90', 'perk:mulekick', 'box'] },
+      { name: 'Place Kléber', seed: { x: -199, z: -145 }, items: ['station', 'perk:juggernog', 'wall:lmg', 'wall:m249', 'box'] },
+      { name: 'Place Gutenberg', seed: { x: -20, z: 90 }, items: ['station', 'perk:doubletap', 'wall:scar', 'wall:pkm', 'box'] },
+      { name: 'Cathédrale', seed: { x: 103, z: 33 }, items: ['station', 'pap', 'wall:deagle', 'wall:rifle', 'box'] },
     ],
   },
 
@@ -40,135 +41,51 @@ export const CONFIG = {
     startPoints: 500,
   },
 
+  // Armes. type : 'auto' (rafale tant qu'on tire), 'semi' (une balle par clic), 'shotgun' (plombs).
+  // cat : catégorie (pistol, ar, smg, mg, sniper, shotgun, special). pierce : zombies traversés. adsFov : lunette.
   weapons: {
-    rifle: {
-      id: 'rifle',
-      name: "FUSIL D'ASSAUT",
-      type: 'auto',
-      damage: 36,
-      headMult: 2.5,
-      magSize: 30,
-      startReserve: 120,
-      maxReserve: 180,
-      fireRate: 9.5,
-      reloadTime: 1.8,
-      spread: 0.012,
-      range: 90,
-      price: 0,
-      ammoPrice: 300,
-    },
-    shotgun: {
-      id: 'shotgun',
-      name: "FUSIL À POMPE",
-      type: 'shotgun',
-      pellets: 8,
-      damage: 26,
-      headMult: 1.8,
-      magSize: 6,
-      startReserve: 30,
-      maxReserve: 48,
-      fireRate: 1.3,
-      reloadTime: 2.4,
-      spread: 0.046,
-      range: 35,
-      price: 750,
-      ammoPrice: 350,
-    },
-    smg: {
-      id: 'smg',
-      name: "PISTOLET-MITRAILLEUR",
-      type: 'auto',
-      damage: 24,
-      headMult: 2.2,
-      magSize: 32,
-      startReserve: 128,
-      maxReserve: 224,
-      fireRate: 13.5,
-      reloadTime: 1.5,
-      spread: 0.022,
-      range: 65,
-      price: 1000,
-      ammoPrice: 500,
-    },
-    lmg: {
-      id: 'lmg',
-      name: 'MITRAILLEUSE RPK',
-      type: 'auto',
-      damage: 44,
-      headMult: 2,
-      magSize: 75,
-      startReserve: 300,
-      maxReserve: 450,
-      fireRate: 10.5,
-      reloadTime: 3.6,
-      spread: 0.028,
-      range: 90,
-      price: 2500,
-      ammoPrice: 1000,
-    },
-    sniper: {
-      id: 'sniper',
-      name: 'FUSIL DE PRÉCISION',
-      type: 'semi',
-      damage: 340,
-      headMult: 3.5,
-      magSize: 5,
-      startReserve: 30,
-      maxReserve: 45,
-      fireRate: 1.1,
-      reloadTime: 2.8,
-      spread: 0.0015,
-      range: 200,
-      pierce: 4,          // traverse jusqu'à 4 zombies
-      adsFov: 25,         // lunette
-      price: 1750,
-      ammoPrice: 700,
-    },
-    magnum: {
-      id: 'magnum',
-      name: 'REVOLVER .357',
-      type: 'semi',
-      damage: 190,
-      headMult: 3,
-      magSize: 6,
-      startReserve: 48,
-      maxReserve: 72,
-      fireRate: 3.2,
-      reloadTime: 2.2,
-      spread: 0.006,
-      range: 80,
-      pierce: 2,
-      boxOnly: true,
-      ammoPrice: 500,
-    },
-    raygun: {
-      id: 'raygun',
-      name: 'PISTOLET À RAYONS',
-      type: 'semi',
-      damage: 700,
-      headMult: 1.5,
-      magSize: 20,
-      startReserve: 160,
-      maxReserve: 200,
-      fireRate: 4.2,
-      reloadTime: 2.6,
-      spread: 0.008,
-      range: 100,
-      splash: { radius: 2.8, damage: 500 }, // explosion à l'impact
-      tracer: 0x33ff55,
-      boxOnly: true,
-      ammoPrice: 1500,
-    },
+    // ---- pistolets
+    m1911: { id: 'm1911', cat: 'pistol', name: 'COLT M1911', caliber: '.45 ACP', type: 'semi', damage: 48, headMult: 2.6, magSize: 7, startReserve: 42, maxReserve: 84, fireRate: 5.5, reloadTime: 1.5, spread: 0.01, range: 50, price: 400, ammoPrice: 150 },
+    arex: { id: 'arex', cat: 'pistol', name: 'AREX ZERO 1', caliber: '9 mm', type: 'semi', damage: 34, headMult: 2.4, magSize: 17, startReserve: 68, maxReserve: 136, fireRate: 7.5, reloadTime: 1.4, spread: 0.009, range: 55, price: 700, ammoPrice: 250 },
+    deagle: { id: 'deagle', cat: 'pistol', name: 'DESERT EAGLE', caliber: '.50 AE', type: 'semi', damage: 165, headMult: 3, magSize: 7, startReserve: 35, maxReserve: 56, fireRate: 2.4, reloadTime: 1.9, spread: 0.011, range: 70, pierce: 2, price: 1500, ammoPrice: 600 },
+    magnum: { id: 'magnum', cat: 'pistol', name: 'COLT PYTHON .357', caliber: '.357 Magnum', type: 'semi', damage: 190, headMult: 3, magSize: 6, startReserve: 48, maxReserve: 72, fireRate: 3.2, reloadTime: 2.2, spread: 0.006, range: 80, pierce: 2, boxOnly: true, ammoPrice: 500 },
+    // ---- fusils d'assaut
+    rifle: { id: 'rifle', cat: 'ar', name: 'M4A1', caliber: '5,56 mm', type: 'auto', damage: 36, headMult: 2.5, magSize: 30, startReserve: 120, maxReserve: 180, fireRate: 9.5, reloadTime: 1.8, spread: 0.012, range: 90, price: 1200, ammoPrice: 300 },
+    ak47: { id: 'ak47', cat: 'ar', name: 'AK-47', caliber: '7,62×39 mm', type: 'auto', damage: 46, headMult: 2.3, magSize: 30, startReserve: 120, maxReserve: 210, fireRate: 8.5, reloadTime: 2.4, spread: 0.017, range: 90, price: 1600, ammoPrice: 600 },
+    famas: { id: 'famas', cat: 'ar', name: 'FAMAS F1', caliber: '5,56 mm', type: 'auto', damage: 34, headMult: 2.4, magSize: 25, startReserve: 125, maxReserve: 225, fireRate: 15, reloadTime: 2.2, spread: 0.014, range: 85, price: 1300, ammoPrice: 500 },
+    scar: { id: 'scar', cat: 'ar', name: 'SCAR-H', caliber: '7,62×51 mm', type: 'auto', damage: 58, headMult: 2.4, magSize: 20, startReserve: 100, maxReserve: 180, fireRate: 7.5, reloadTime: 2.3, spread: 0.012, range: 100, pierce: 2, price: 2200, ammoPrice: 800 },
+    // ---- pistolets-mitrailleurs
+    smg: { id: 'smg', cat: 'smg', name: 'MP40', caliber: '9 mm', type: 'auto', damage: 24, headMult: 2.2, magSize: 32, startReserve: 128, maxReserve: 224, fireRate: 9.5, reloadTime: 1.5, spread: 0.022, range: 65, price: 1000, ammoPrice: 500 },
+    mp5: { id: 'mp5', cat: 'smg', name: 'MP5', caliber: '9 mm', type: 'auto', damage: 26, headMult: 2.2, magSize: 30, startReserve: 150, maxReserve: 270, fireRate: 13, reloadTime: 1.8, spread: 0.017, range: 65, price: 1200, ammoPrice: 500 },
+    p90: { id: 'p90', cat: 'smg', name: 'FN P90', caliber: '5,7×28 mm', type: 'auto', damage: 22, headMult: 2, magSize: 50, startReserve: 200, maxReserve: 350, fireRate: 15, reloadTime: 2.6, spread: 0.02, range: 70, pierce: 2, price: 1800, ammoPrice: 700 },
+    // ---- mitrailleuses
+    lmg: { id: 'lmg', cat: 'mg', name: 'RPK', caliber: '7,62×39 mm', type: 'auto', damage: 44, headMult: 2, magSize: 75, startReserve: 300, maxReserve: 450, fireRate: 10.5, reloadTime: 3.6, spread: 0.028, range: 90, price: 2500, ammoPrice: 1000 },
+    m249: { id: 'm249', cat: 'mg', name: 'M249 SAW', caliber: '5,56 mm', type: 'auto', damage: 40, headMult: 2, magSize: 100, startReserve: 300, maxReserve: 500, fireRate: 12.5, reloadTime: 4.2, spread: 0.032, range: 90, price: 3000, ammoPrice: 1200 },
+    mg42: { id: 'mg42', cat: 'mg', name: 'MG42', caliber: '7,92×57 mm', type: 'auto', damage: 46, headMult: 2, magSize: 50, startReserve: 250, maxReserve: 450, fireRate: 19, reloadTime: 4.0, spread: 0.04, range: 90, boxOnly: true, ammoPrice: 1200 },
+    pkm: { id: 'pkm', cat: 'mg', name: 'PKM', caliber: '7,62×54R', type: 'auto', damage: 55, headMult: 2, magSize: 100, startReserve: 300, maxReserve: 500, fireRate: 10.5, reloadTime: 4.8, spread: 0.03, range: 100, pierce: 2, price: 3200, ammoPrice: 1300 },
+    // ---- fusils de précision
+    sniper: { id: 'sniper', cat: 'sniper', name: 'L96A1', caliber: '7,62×51 mm', type: 'semi', damage: 340, headMult: 3.5, magSize: 5, startReserve: 30, maxReserve: 45, fireRate: 1.1, reloadTime: 2.8, spread: 0.0015, range: 200, pierce: 4, adsFov: 25, price: 1750, ammoPrice: 700 },
+    svd: { id: 'svd', cat: 'sniper', name: 'DRAGUNOV SVD', caliber: '7,62×54R', type: 'semi', damage: 230, headMult: 3, magSize: 10, startReserve: 40, maxReserve: 70, fireRate: 3, reloadTime: 2.6, spread: 0.004, range: 180, pierce: 3, adsFov: 28, price: 2000, ammoPrice: 800 },
+    barrett: { id: 'barrett', cat: 'sniper', name: 'BARRETT M82', caliber: '.50 BMG', type: 'semi', damage: 700, headMult: 3, magSize: 10, startReserve: 30, maxReserve: 50, fireRate: 1.6, reloadTime: 3.4, spread: 0.002, range: 220, pierce: 6, adsFov: 20, boxOnly: true, ammoPrice: 1500 },
+    // ---- fusil à pompe et arme spéciale
+    shotgun: { id: 'shotgun', cat: 'shotgun', name: 'REMINGTON 870', caliber: '12 ga', type: 'shotgun', pellets: 8, damage: 26, headMult: 1.8, magSize: 6, startReserve: 30, maxReserve: 48, fireRate: 1.3, reloadTime: 2.4, spread: 0.046, range: 35, price: 750, ammoPrice: 350 },
+    raygun: { id: 'raygun', cat: 'special', name: 'PISTOLET À RAYONS', caliber: 'énergie', type: 'semi', damage: 700, headMult: 1.5, magSize: 20, startReserve: 160, maxReserve: 200, fireRate: 4.2, reloadTime: 2.6, spread: 0.008, range: 100, splash: { radius: 2.8, damage: 500 }, tracer: 0x33ff55, boxOnly: true, ammoPrice: 1500 },
   },
+  // Armes au départ (la première est en main)
+  startWeapons: ['rifle', 'm1911'],
 
   // Noms des armes améliorées au Pack-a-Punch
   papNames: {
-    rifle: 'M4 ÉCLIPSE', shotgun: 'LE BROYEUR', smg: 'PM INFERNAL', lmg: 'RPK DÉVASTATEUR',
-    sniper: 'ŒIL DU DÉMON', magnum: 'LE VENGEUR', raygun: 'PORTE-TONNERRE',
+    m1911: 'MUSTANG & SALLY', arex: 'ZÉRO ABSOLU', deagle: 'L\'AIGLE NOIR', magnum: 'LE VENGEUR', rifle: 'M4 ÉCLIPSE', ak47: 'AK-ENFER', famas: 'LE CLAIRON MAUDIT',
+    scar: 'LE BALAFRÉ', smg: 'PM INFERNAL', mp5: 'MP-115', p90: 'LE FRELON', lmg: 'RPK DÉVASTATEUR', m249: 'LA FAUCHEUSE', mg42: 'LA SCIE D\'HITLER… BRISÉE',
+    pkm: 'LE BULLDOZER', sniper: 'ŒIL DU DÉMON', svd: 'LA TSARINE', barrett: 'LE MARTEAU DE THOR', shotgun: 'LE BROYEUR', raygun: 'PORTE-TONNERRE',
   },
 
-  // Boîte mystère : arme au hasard (poids = chance relative)
-  box: { price: 950, spin: 2.6, pool: { shotgun: 3, smg: 3, lmg: 2, sniper: 2, magnum: 2, raygun: 1 } },
+  // Boîte mystère : une seule boîte, qui change d'emplacement après un nombre aléatoire de tirages (1 à maxUses)
+  box: {
+    price: 950, spin: 2.6, maxUses: 30,
+    pool: { m1911: 2, arex: 3, deagle: 2, magnum: 2, rifle: 2, ak47: 3, famas: 3, scar: 2, smg: 2, mp5: 3, p90: 2, lmg: 2, m249: 2, mg42: 2, pkm: 2, sniper: 2, svd: 2, barrett: 1, shotgun: 3, raygun: 1 },
+  },
 
   // Atouts (machines) : prix et effet décrit dans le jeu
   perks: {

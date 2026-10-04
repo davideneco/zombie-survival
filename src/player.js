@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { CONFIG } from './config.js';
+import { buildWeaponModels } from './viewmodels.js';
 
 const ADS_DELTA = 20; // réduction du FOV en visée
 const PAP_TINT = 0x6a1fa8; // reflet violet des armes améliorées
@@ -80,7 +81,7 @@ export class Player {
     this.grenades = CONFIG.grenade.start;
 
     // Inventaire d'armes
-    this.inventory = [this.newWeapon('rifle')];
+    this.inventory = CONFIG.startWeapons.map((id) => this.newWeapon(id));
     this.weaponIdx = 0;
     this.switchWeapon(0);
 
@@ -162,6 +163,11 @@ export class Player {
     if (this.curW) this.curW.reloading = false;
     this.weaponIdx = idx;
     const w = this.curW;
+    // bouche du canon (éclair de tir, départ des traçantes) selon la longueur de l'arme
+    const mi = this.vmInfo && this.vmInfo[w.id];
+    this.muzzle.position.set(0, mi ? mi.muzzleY : 0.015, mi ? mi.muzzle : -0.6);
+    this.flash.position.set(0, mi ? mi.muzzleY : 0.015, (mi ? mi.muzzle : -0.6) - 0.04);
+    this.flashLight.position.set(0, 0.05, (mi ? mi.muzzle : -0.6) - 0.1);
     for (const [id, grp] of Object.entries(this.vms)) {
       grp.visible = id === w.id;
       if (grp.visible) {
@@ -274,62 +280,10 @@ export class Player {
       this.vms[id] = grp;
     };
 
-    // FUSIL D'ASSAUT
-    weapon('rifle', (grp, M) => {
-      addBox(grp, 0.06, 0.09, 0.5, 0, 0, 0, M.dark);
-      addBox(grp, 0.025, 0.025, 0.35, 0, 0.015, -0.4, M.dark);
-      addBox(grp, 0.05, 0.12, 0.07, 0, -0.1, 0.02, M.dark).rotation.x = 0.2;
-      addBox(grp, 0.05, 0.1, 0.22, 0, -0.02, 0.35, M.wood);
-      addBox(grp, 0.04, 0.12, 0.05, 0, -0.09, 0.15, M.dark).rotation.x = -0.2;
-      addBox(grp, 0.015, 0.03, 0.015, 0, 0.07, -0.5, M.dark);
-      hands(grp, M, [0.02, -0.06, -0.12], [0, -0.12, 0.16]);
-    });
-    // FUSIL À POMPE
-    weapon('shotgun', (grp, M) => {
-      addBox(grp, 0.07, 0.08, 0.45, 0, 0, 0, M.dark);
-      addBox(grp, 0.032, 0.032, 0.45, 0, 0.02, -0.42, M.grey);
-      addBox(grp, 0.028, 0.028, 0.38, 0, -0.018, -0.38, M.grey);
-      addBox(grp, 0.07, 0.07, 0.18, 0, -0.018, -0.26, M.wood);
-      addBox(grp, 0.055, 0.11, 0.26, 0, -0.03, 0.35, M.wood);
-      hands(grp, M, [0.02, -0.03, -0.26], [0, -0.12, 0.16]);
-    });
-    // PISTOLET-MITRAILLEUR
-    weapon('smg', (grp, M) => {
-      addBox(grp, 0.05, 0.07, 0.38, 0, 0, 0, M.dark);
-      addBox(grp, 0.022, 0.022, 0.28, 0, 0.01, -0.32, M.grey);
-      addBox(grp, 0.03, 0.18, 0.045, 0, -0.12, -0.05, M.dark);
-      addBox(grp, 0.035, 0.09, 0.045, 0, -0.07, -0.14, M.wood);
-      addBox(grp, 0.04, 0.1, 0.045, 0, -0.08, 0.12, M.dark).rotation.x = -0.2;
-      addBox(grp, 0.04, 0.07, 0.18, 0, -0.02, 0.28, M.wood);
-      hands(grp, M, [0.01, -0.06, -0.14], [0, -0.11, 0.13]);
-    });
-    // MITRAILLEUSE RPK : long canon, bipied, chargeur tambour
-    weapon('lmg', (grp, M) => {
-      addBox(grp, 0.08, 0.1, 0.55, 0, 0, 0, M.dark);
-      addBox(grp, 0.03, 0.03, 0.5, 0, 0.02, -0.5, M.grey);
-      addBox(grp, 0.1, 0.12, 0.12, 0, -0.1, -0.02, M.grey);
-      addBox(grp, 0.06, 0.12, 0.3, 0, -0.03, 0.38, M.wood);
-      addBox(grp, 0.01, 0.12, 0.01, 0.03, -0.07, -0.6, M.grey).rotation.z = 0.3;
-      addBox(grp, 0.01, 0.12, 0.01, -0.03, -0.07, -0.6, M.grey).rotation.z = -0.3;
-      hands(grp, M, [0.02, -0.06, -0.22], [0, -0.13, 0.17]);
-    });
-    // FUSIL DE PRÉCISION : lunette
-    weapon('sniper', (grp, M) => {
-      addBox(grp, 0.055, 0.08, 0.6, 0, 0, 0, M.dark);
-      addBox(grp, 0.022, 0.022, 0.45, 0, 0.012, -0.5, M.grey);
-      addBox(grp, 0.045, 0.045, 0.26, 0, 0.08, -0.02, M.grey);
-      addBox(grp, 0.055, 0.055, 0.03, 0, 0.08, -0.16, M.dark);
-      addBox(grp, 0.055, 0.12, 0.26, 0, -0.03, 0.38, M.wood);
-      hands(grp, M, [0.02, -0.06, -0.18], [0, -0.12, 0.17]);
-    });
-    // REVOLVER
-    weapon('magnum', (grp, M) => {
-      addBox(grp, 0.04, 0.06, 0.12, 0, 0, -0.05, M.grey);
-      addBox(grp, 0.05, 0.05, 0.06, 0, -0.005, -0.03, M.dark);
-      addBox(grp, 0.022, 0.022, 0.2, 0, 0.012, -0.2, M.grey);
-      addBox(grp, 0.035, 0.11, 0.05, 0, -0.08, 0.04, M.wood).rotation.x = -0.25;
-      hands(grp, M, [0.0, -0.09, 0.04], [0, -0.11, 0.08]);
-    });
+    // Toutes les armes classiques : modèles détaillés (viewmodels.js)
+    const built = buildWeaponModels(this.vm);
+    Object.assign(this.vms, built.vms);
+    this.vmInfo = built.info;
     // PISTOLET À RAYONS : corps rouge, ailettes, bulbe vert lumineux
     weapon('raygun', (grp, M) => {
       const red = new THREE.MeshStandardMaterial({ color: 0x9a2a1e, roughness: 0.4, metalness: 0.6 });
@@ -491,10 +445,7 @@ export class Player {
     this.yaw += (Math.random() - 0.5) * 0.002;
 
     // Sons
-    if (cfg.type === 'shotgun' || cfg.id === 'sniper' || cfg.id === 'magnum') this.game.sfx.shotgun();
-    else if (cfg.id === 'smg') this.game.sfx.smg();
-    else if (cfg.id === 'raygun') this.game.sfx.ray?.() ?? this.game.sfx.shot();
-    else this.game.sfx.shot();
+    this.game.weaponSound(cfg.id);
 
     // Muzzle flash
     this.flash.visible = true;

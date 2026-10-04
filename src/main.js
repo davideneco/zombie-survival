@@ -9,6 +9,7 @@ import { Sfx } from './audio.js';
 import { fx } from './fx.js';
 import { Net } from './net.js';
 import { RemotePlayer, slotColor } from './remote.js';
+import { makeTeddy } from './machines.js';
 
 document.getElementById('version').textContent = __GAME_VERSION__;
 
@@ -90,6 +91,9 @@ const game = {
   powerups: [],
   grenadesLive: [],
   boxState: null,
+  boxMove: null,
+  boxUses: 0,
+  boxLimit: 10,
   relocateTimer: 0,
   buffs: { instaKill: 0, doublePoints: 0 },
   sfx, hud, world, settings,
@@ -112,6 +116,19 @@ const game = {
     const list = world.blockers.slice();
     for (const z of this.zombies) if (z.targetable) list.push(...z.meshes);
     return list;
+  },
+
+  // Bruit de tir selon la famille de l'arme
+  weaponSound(id) {
+    const w = CONFIG.weapons[id];
+    if (!w) return sfx.shot();
+    if (id === 'raygun') return sfx.ray();
+    if (w.cat === 'shotgun') return sfx.shotgun();
+    if (w.cat === 'sniper' || id === 'deagle' || id === 'magnum') return sfx.heavy();
+    if (w.cat === 'pistol') return sfx.pistol();
+    if (w.cat === 'smg') return sfx.smg();
+    if (w.cat === 'mg') return sfx.mg();
+    return sfx.shot();
   },
 
   // Zombies seuls (les murs sont gérés par world.rayHit sur la grande carte)
@@ -385,7 +402,10 @@ const game = {
   nearMachine() {
     if (!world.machines) return null;
     const p = this.player.pos;
-    for (const m of world.machines) if (Math.hypot(p.x - m.pos.x, p.z - m.pos.z) < 2.6) return m;
+    for (const m of world.machines) {
+      if (m.type === 'box' && (!m.active || this.boxMove)) continue; // une seule boîte, et pas pendant son déplacement
+      if (Math.hypot(p.x - m.pos.x, p.z - m.pos.z) < 2.6) return m;
+    }
     return null;
   },
 
@@ -440,7 +460,63 @@ const game = {
     const total = pool.reduce((s2, [, w]) => s2 + w, 0);
     let r = Math.random() * total, pick = pool[0]?.[0] || 'smg';
     for (const [id, w] of pool) { if ((r -= w) <= 0) { pick = id; break; } }
-    this.boxState = { machine: m, t: CONFIG.box.spin, result: pick, spin: 0 };
+    // nounours ? c'est l'hôte (ou le solo) qui compte les tirages
+    this.boxState = { machine: m, t: CONFIG.box.spin, result: pick, spin: 0, teddy: false };
+    if (this.isClient) this.net?.send({ t: 'box_req' });
+    else this.boxState.teddy = this.countBoxUse();
+  },
+
+  // ---------------------------------------------------------- Boîte mystère : une seule, qui se déplace
+  // Compte un tirage (hôte / solo). Retourne true si ce tirage donne le nounours (la boîte va partir).
+  countBoxUse() {
+    this.boxUses++;
+    const teddy = this.boxUses >= this.boxLimit;
+    if (this.isHost) this.net?.send({ t: 'box_state', uses: this.boxUses });
+    return teddy;
+  },
+  // L'hôte choisit le prochain emplacement et prévient tout le monde
+  hostMoveBox() {
+    const boxes = world.boxes || [];
+    if (boxes.length < 2) return;
+    const cur = boxes.findIndex((b) => b.active);
+    let next = cur;
+    while (next === cur) next = Math.floor(Math.random() * boxes.length);
+    this.boxUses = 0;
+    this.boxLimit = 1 + Math.floor(Math.random() * CONFIG.box.maxUses);
+    this.net?.send({ t: 'box_move', idx: next });
+    this.startBoxMove(next);
+  },
+  // Animation : le nounours apparaît, la boîte s'envole puis réapparaît ailleurs
+  startBoxMove(next) {
+    const from = (world.boxes || []).find((b) => b.active);
+    if (!from) { world.setActiveBox?.(next); return; }
+    const teddy = makeTeddy();
+    teddy.position.set(0, 0.9, 0);
+    from.group.add(teddy);
+    this.boxMove = { t: 0, from, next, teddy };
+    sfx.nuke?.();
+  },
+  updateBoxMove(dt) {
+    const mv = this.boxMove;
+    if (!mv) return;
+    mv.t += dt;
+    mv.teddy.rotation.y += dt * 3;
+    mv.teddy.position.y = 0.9 + Math.min(1, mv.t) * 0.6;
+    if (mv.t > 1.2) { mv.from.group.position.y = (mv.t - 1.2) ** 2 * 6; mv.from.group.rotation.y += dt * 2 * (mv.t - 1.2); }
+    if (mv.t < 3.4) return;
+    mv.from.group.remove(mv.teddy);
+    mv.from.group.rotation.y = Math.atan2(world.zoneCenters[mv.from.zone].x - mv.from.pos.x, world.zoneCenters[mv.from.zone].z - mv.from.pos.z);
+    world.setActiveBox(mv.next);
+    const nb = world.boxes[mv.next];
+    hud.announce('BOÎTE MYSTÈRE', `Elle est réapparue : ${world.zoneNames[nb.zone]}`, 3500);
+    this.boxMove = null;
+  },
+  resetBox() {
+    if (!world.boxes) return;
+    world.setActiveBox(Math.max(0, world.boxes.findIndex((b) => b.zone === world.startZone)));
+    this.boxUses = 0;
+    this.boxLimit = 1 + Math.floor(Math.random() * CONFIG.box.maxUses);
+    if (this.boxMove) { this.boxMove.from.group.remove(this.boxMove.teddy); this.boxMove = null; }
   },
 
   updateBox(dt) {
@@ -460,7 +536,12 @@ const game = {
     }
     if (b.t > 0) return;
     const p = this.player;
-    if (b.result) {
+    if (b.result && b.teddy) {
+      // nounours : on est remboursé, et la boîte part ailleurs
+      this.addPoints(CONFIG.box.price, 'bonus');
+      hud.announce('NOUNOURS !', 'La boîte mystère s\'en va… (remboursé)', 3000);
+      if (!this.isClient) this.hostMoveBox();
+    } else if (b.result) {
       p.giveWeapon(b.result);
       sfx.powerup();
       hud.announce(CONFIG.weapons[b.result].name, 'Boîte mystère', 2500);
@@ -719,6 +800,7 @@ const game = {
     this.grenadesLive = [];
     if (this.boxState?.machine.group.userData.lid) this.boxState.machine.group.userData.lid.rotation.x = 0;
     this.boxState = null;
+    if (resetStats) this.resetBox();
     fx.clear();
 
     this.over = false;
@@ -791,6 +873,7 @@ const game = {
     }
     this.updateGrenades(dt);
     this.updateBox(dt);
+    this.updateBoxMove(dt);
 
     // Gestion des manches (Hôte ou Solo UNIQUEMENT)
     if (this.isHost || !this.isMultiplayer) {
@@ -1069,6 +1152,7 @@ function setupNetworkHandlers(net) {
         intermission: game.intermission,
         buffs: game.buffs,
         doors: (world.doors || []).filter((d) => d.open).map((d) => d.id),
+        box: (world.boxes || []).findIndex((b) => b.active),
         zombies: game.zombies.map((z) => ({
           id: z.id,
           st: z.spawnType,
@@ -1100,9 +1184,7 @@ function setupNetworkHandlers(net) {
     game.tracer(o, e);
     const d = Math.hypot(m.origin.x - game.player.pos.x, m.origin.z - game.player.pos.z);
     if (d < 50) {
-      if (m.w === 'shotgun') sfx.shotgun();
-      else if (m.w === 'smg') sfx.smg();
-      else sfx.shot();
+      game.weaponSound(m.w);
     }
   });
 
@@ -1166,6 +1248,17 @@ function setupNetworkHandlers(net) {
   net.on('nade', (m) => {
     game.throwGrenade(new THREE.Vector3(m.o.x, m.o.y, m.o.z), new THREE.Vector3(m.v.x, m.v.y, m.v.z), false, m.from);
   });
+  // Boîte mystère : l'hôte compte les tirages et décide des déplacements
+  net.on('box_req', (m) => {
+    if (!game.isHost) return;
+    const teddy = game.countBoxUse();
+    net.send({ t: 'box_res', teddy }, m.from);
+    if (teddy) setTimeout(() => game.hostMoveBox(), CONFIG.box.spin * 1000 + 200);
+  });
+  net.on('box_res', (m) => { if (game.boxState && game.boxState.result) game.boxState.teddy = !!m.teddy; });
+  net.on('box_state', (m) => { game.boxUses = m.uses; });
+  net.on('box_move', (m) => { game.startBoxMove(m.idx); });
+
   // Impact explosif d'un coéquipier (pistolet à rayons) : dégâts appliqués par l'hôte
   net.on('splash', (m) => {
     if (!game.isHost) return;
@@ -1246,6 +1339,7 @@ function setupNetworkHandlers(net) {
     hud.setRound(m.round);
     game.buffs = m.buffs || game.buffs;
     for (const id of m.doors || []) game.openDoor(id, false);
+    if (m.box != null && m.box >= 0) world.setActiveBox?.(m.box);
 
     // Supprimer d'éventuels zombies locaux existants
     for (const z of game.zombies) z.dispose();
@@ -1522,6 +1616,7 @@ function precompileShaders() {
   const sp = { type: 'ground', pos: world.startPos.clone() };
   const zs = [new Zombie(scene, sp, 100, 1, () => {}), new Zombie(scene, sp, 100, 1, () => {}, null, { crawler: true })];
   add(new THREE.Mesh(NADE_GEO, NADE_MAT));
+  add(makeTeddy());
   add(new THREE.Mesh(HALO_GEO, new THREE.MeshBasicMaterial({ transparent: true, blending: THREE.AdditiveBlending, depthWrite: false })));
   add(new THREE.Mesh(new THREE.DodecahedronGeometry(0.35), new THREE.MeshStandardMaterial({ color: 0x22ff66, emissive: 0x22ff66, emissiveIntensity: 1.2, roughness: 0.3 })));
   add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3(0, 1, 0)]), new THREE.LineBasicMaterial({ transparent: true })));
@@ -1609,6 +1704,7 @@ function frame() {
 frame();
 
 window.game = game;
-game.scene = scene; // accès console / outils de test
+game.scene = scene; // accès console / outils de test (tools/make-docs.mjs)
+game.THREE = THREE;
 game.renderer = renderer;
 game.camera = camera;

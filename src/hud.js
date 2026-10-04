@@ -1,5 +1,5 @@
 const $ = (id) => document.getElementById(id);
-const SHORT = { rifle: 'FUSIL', shotgun: 'POMPE', smg: 'PM', lmg: 'RPK', sniper: 'SNIPER', magnum: '.357', raygun: 'RAYONS' };
+const SHORT = { m1911: '1911', arex: 'AREX', deagle: 'DEAGLE', magnum: 'PYTHON', rifle: 'M4A1', ak47: 'AK-47', famas: 'FAMAS', scar: 'SCAR', smg: 'MP40', mp5: 'MP5', p90: 'P90', lmg: 'RPK', m249: 'M249', mg42: 'MG42', pkm: 'PKM', sniper: 'L96', svd: 'SVD', barrett: 'M82', shotgun: '870', raygun: 'RAYONS' };
 const CARDINALS = [['N', 0], ['NE', 45], ['E', 90], ['SE', 135], ['S', 180], ['SO', 225], ['O', 270], ['NO', 315]];
 
 export class Hud {
@@ -334,7 +334,7 @@ export class Hud {
     };
     for (const s of world.stations || []) icon(s.x, s.z, '#2a9d4a', '⁍');
     for (const w of world.wallWeapons || []) icon(w.pos.x, w.pos.z, '#d98a2b', '⌐');
-    for (const m of world.machines || []) icon(m.pos.x, m.pos.z, m.type === 'box' ? '#3f8fd8' : m.color, m.type === 'box' ? '?' : m.type === 'pap' ? 'P' : (m.letter || m.name[0]));
+    for (const m of world.machines || []) if (m.type !== 'box' || m.active) icon(m.pos.x, m.pos.z, m.type === 'box' ? '#3f8fd8' : m.color, m.type === 'box' ? '?' : m.type === 'pap' ? 'P' : (m.letter || m.name[0]));
     // coéquipiers
     for (const tm of teammates) {
       const [x, y] = P(tm.pos.x, tm.pos.z);

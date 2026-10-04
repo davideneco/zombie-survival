@@ -1,5 +1,6 @@
 // Régénère la documentation du jeu à partir du jeu lui-même :
 //   docs/carte.png      carte annotée du secteur jouable (zones, portes, objets numérotés)
+//   docs/armes.png      planche des armes vues de profil
 //   docs/REFERENCE.md   fiche de référence (armes, atouts, zones, portes, manches…)
 //   docs/csv/*.csv      les mêmes données en tableur, un fichier par catégorie (séparateur ;)
 //
@@ -81,7 +82,7 @@ const pageScript = `(() => {
   const items = [];
   for (const s of data.stations) items.push({ zone: s.zone, x: s.x, z: s.z, color: '#2a9d4a', label: 'Borne de munitions' });
   for (const v of data.walls) items.push({ zone: v.zone, x: v.x, z: v.z, color: '#d98a2b', label: 'Arme au mur : ' + v.idName + ' — ' + v.price + ' pts' , id: v.id, price: v.price });
-  for (const m of data.machines) items.push({ zone: m.zone, x: m.x, z: m.z, color: m.type === 'box' ? '#3f8fd8' : m.type === 'pap' ? '#9b3fe0' : (w.machines.find((q) => q.name === m.name)?.color || '#888'), label: (m.type === 'perk' ? 'Atout : ' : '') + m.name + ' — ' + m.price + ' pts' });
+  for (const m of data.machines) items.push({ zone: m.zone, x: m.x, z: m.z, color: m.type === 'box' ? '#3f8fd8' : m.type === 'pap' ? '#9b3fe0' : (w.machines.find((q) => q.name === m.name)?.color || '#888'), label: (m.type === 'perk' ? 'Atout : ' : '') + m.name + (m.type === 'box' ? ' (emplacement possible)' : '') + ' — ' + m.price + ' pts' });
   items.sort((a, b) => a.zone - b.zone);
   items.forEach((it, i) => { it.n = i + 1; });
   data.items = items;
@@ -131,6 +132,9 @@ const names = {};
 for (const it of D.items) if (it.id) names[it.n] = `Arme au mur : ${W[it.id].name} — ${it.price} pts`;
 const png = await evaluate(`window.__drawRest(${JSON.stringify(names)})`);
 fs.writeFileSync(path.join(DOCS, 'carte.png'), Buffer.from(png.split(',')[1], 'base64'));
+// planche des armes vues de profil
+const armsPng = await evaluate("(async()=>{try{const g=window.game,T=g.THREE,R=g.renderer,p=g.player; const C=(await import('/src/config.js')).CONFIG;\nconst ids=Object.keys(p.vms);\nconst sc=new T.Scene(); sc.background=new T.Color(0x4a505a);\nsc.add(new T.HemisphereLight(0xffffff,0x404040,2.2)); const dl=new T.DirectionalLight(0xffffff,2.5); dl.position.set(2,3,4); sc.add(dl);\nconst cam=new T.OrthographicCamera(-0.55,0.55,0.22,-0.22,0.1,10); cam.position.set(0,0,3); cam.lookAt(0,0,0);\nconst cols=4, cw=600, ch=240; const out=document.createElement('canvas'); out.width=cols*cw; out.height=Math.ceil(ids.length/cols)*ch+60; const x=out.getContext('2d');\nx.fillStyle='#0b0d10'; x.fillRect(0,0,out.width,out.height); x.font='bold 30px Impact, Arial'; x.fillStyle='#ffd24a'; x.fillText('ARMES — vue de profil',20,42);\nconst oldSize=new T.Vector2(); R.getSize(oldSize); R.setSize(cw,ch,false); R.toneMappingExposure=1.4;\nconst order=['m1911','arex','deagle','magnum','rifle','ak47','famas','scar','smg','mp5','p90','shotgun','lmg','m249','mg42','pkm','sniper','svd','barrett','raygun'].filter(i=>ids.includes(i));\norder.forEach((id,k)=>{ const src=p.vms[id]; const grp=src.clone(true); grp.visible=true; grp.position.set(0,0,0); grp.traverse(o=>{ if(o.userData.skin) o.visible=false; });\n grp.rotation.set(0,-Math.PI/2,0); const box=new T.Box3().setFromObject(grp); const c=box.getCenter(new T.Vector3()); grp.position.sub(c);\n const size=box.getSize(new T.Vector3()); const s=Math.min(0.95/Math.max(size.x,0.3), 0.38/Math.max(size.y,0.1)); grp.scale.setScalar(s); grp.position.multiplyScalar(s);\n sc.add(grp); R.render(sc,cam); sc.remove(grp);\n const ox=(k%cols)*cw, oy=60+Math.floor(k/cols)*ch; x.drawImage(R.domElement,0,0,cw,ch,ox,oy,cw,ch);\n const W=C.weapons[id]; x.font='bold 22px Arial'; x.fillStyle='#fff'; x.fillText(W.name,ox+12,oy+28); x.font='15px Arial'; x.fillStyle='#aaa'; x.fillText(`${W.caliber||''} · ${W.damage}${W.pellets?'×'+W.pellets:''} dégâts · ${W.fireRate} tirs/s · ${W.magSize} coups`,ox+12,oy+50);\n x.fillStyle='rgba(0,0,0,0.45)'; x.fillRect(ox,oy,cw,56); x.font='bold 22px Arial'; x.fillStyle='#fff'; x.fillText(W.name,ox+12,oy+28); x.font='15px Arial'; x.fillStyle='#ddd'; x.fillText(`${W.caliber||''} · ${W.damage}${W.pellets?'×'+W.pellets:''} dégâts · ${W.fireRate} tirs/s · ${W.magSize} coups`,ox+12,oy+50); x.strokeStyle='#2a2e34'; x.strokeRect(ox+0.5,oy+0.5,cw-1,ch-1); });\nR.setSize(oldSize.x,oldSize.y,false);\nreturn out.toDataURL('image/png')}catch(e){return 'ERR '+e.stack}})()\n");
+fs.writeFileSync(path.join(DOCS, 'armes.png'), Buffer.from(armsPng.split(',')[1], 'base64'));
 chrome.kill();
 
 // ------------------------------------------------------------------ Tableaux
@@ -138,7 +142,7 @@ const fr = (n, d = 2) => (typeof n === 'number' ? String(+n.toFixed(d)).replace(
 const where = {};
 for (const v of D.walls) (where[v.id] ||= new Set()).add(`mur ${zname(v.zone)}`);
 for (const id of Object.keys(C.box.pool)) (where[id] ||= new Set()).add('boîte mystère');
-where.rifle = new Set(['arme de départ']);
+for (const id of C.startWeapons) (where[id] ||= new Set()).add('arme de départ');
 const typeName = { auto: 'automatique', shotgun: 'pompe', semi: 'coup par coup' };
 const totalW = Object.values(C.box.pool).reduce((a, b) => a + b, 0);
 const P = C.player, Zc = C.zombie, S = C.sector;
@@ -146,11 +150,11 @@ const zoneOfMachine = (id) => D.machines.filter((m) => m.id === id).map((m) => z
 
 const T = {}; // nom -> { title, header, rows }
 const table = (key, title, header, rows) => { T[key] = { title, header, rows }; };
-table('01_armes', 'Armes', ['id', 'Arme', 'Type', 'Dégâts par balle', 'Plombs par tir', 'Multiplicateur tête', 'Cadence (tirs/s)', 'DPS approx.', 'Chargeur', 'Réserve départ', 'Réserve max', 'Rechargement (s)', 'Dispersion', 'Portée (m)', 'Zombies traversés', 'Explosion rayon (m)', 'Explosion dégâts', 'Prix au mur (pts)', 'Prix munitions (pts)', 'Où l\'obtenir'],
-  Object.values(W).map((w) => [w.id, w.name, typeName[w.type] || w.type, w.damage, w.pellets || 1, w.headMult, w.fireRate, w.damage * (w.pellets || 1) * w.fireRate, w.magSize, w.startReserve, w.maxReserve, w.reloadTime, fr(w.spread, 4), w.range, w.pierce || 1, w.splash?.radius ?? '', w.splash?.damage ?? '', w.price || (w.boxOnly ? 'boîte' : 'départ'), w.ammoPrice, [...(where[w.id] || [])].join(', ')]));
+table('01_armes', 'Armes', ['id', 'Arme', 'Catégorie', 'Calibre', 'Type', 'Dégâts par balle', 'Plombs par tir', 'Multiplicateur tête', 'Cadence (tirs/s)', 'DPS approx.', 'Chargeur', 'Réserve départ', 'Réserve max', 'Rechargement (s)', 'Dispersion', 'Portée (m)', 'Zombies traversés', 'Explosion rayon (m)', 'Explosion dégâts', 'Prix au mur (pts)', 'Prix munitions (pts)', 'Où l\'obtenir'],
+  Object.values(W).map((w) => [w.id, w.name, ({ pistol: 'pistolet', ar: 'fusil d\'assaut', smg: 'pistolet-mitrailleur', mg: 'mitrailleuse', sniper: 'fusil de précision', shotgun: 'fusil à pompe', special: 'spéciale' })[w.cat] || '', w.caliber || '', typeName[w.type] || w.type, w.damage, w.pellets || 1, w.headMult, w.fireRate, w.damage * (w.pellets || 1) * w.fireRate, w.magSize, w.startReserve, w.maxReserve, w.reloadTime, fr(w.spread, 4), w.range, w.pierce || 1, w.splash?.radius ?? '', w.splash?.damage ?? '', w.price || (w.boxOnly ? 'boîte' : ''), w.ammoPrice, [...(where[w.id] || [])].join(', ')]));
 table('02_pack_a_punch', 'Pack-a-Punch (' + C.papPrice + ' pts)', ['id', 'Arme', 'Nom amélioré', 'Dégâts', 'Multiplicateur tête', 'Chargeur', 'Réserve max', 'Zombies traversés', 'Prix munitions au mur (pts)'],
   Object.values(W).map((w) => [w.id, w.name, C.papNames[w.id], w.damage * (w.id === 'raygun' ? 1.6 : 2.5), w.headMult * 1.2, Math.round(w.magSize * 1.5), Math.round(w.maxReserve * 1.5), (w.pierce || 0) + 2, w.ammoPrice * 3]));
-table('03_boite_mystere', 'Boîte mystère (' + C.box.price + ' pts)', ['id', 'Arme', 'Poids', 'Chance (%)'], Object.entries(C.box.pool).map(([id, p]) => [id, W[id].name, p, (p / totalW) * 100]));
+table('03_boite_mystere', 'Boîte mystère (' + C.box.price + ' pts, une seule boîte : elle change d\'emplacement après 1 à ' + C.box.maxUses + ' tirages, en donnant un nounours remboursé)', ['id', 'Arme', 'Poids', 'Chance (%)'], Object.entries(C.box.pool).map(([id, p]) => [id, W[id].name, p, (p / totalW) * 100]));
 table('04_atouts', 'Atouts', ['id', 'Atout', 'Lettre', 'Effet', 'Prix (pts)', 'Prix solo (pts)', 'Zone'], Object.entries(C.perks).map(([id, p]) => [id, p.name, p.letter, p.desc, p.price, p.soloPrice ?? p.price, zoneOfMachine(id)]));
 table('05_grenades', 'Grenades', ['Réglage', 'Valeur', 'Unité'], [
   ['Au départ', C.grenade.start, `(+${C.grenade.perRound} au début de la manche 1)`], ['Maximum', C.grenade.max, ''], ['Gagnées par manche', C.grenade.perRound, ''],
@@ -192,7 +196,7 @@ const mdTable = (t) => `| ${t.header.join(' | ')} |\n|${t.header.map(() => '---'
 let md = `# Zombie Survival — fiche de référence
 
 Version du jeu : **${D.version}** (package ${pkg.version}). Générée automatiquement par \`node tools/make-docs.mjs\` à partir de \`src/config.js\` et du jeu.
-Carte annotée : [carte.png](carte.png). Les mêmes tableaux en tableur : dossier [csv/](csv/).
+Carte annotée : [carte.png](carte.png). Armes de profil : [armes.png](armes.png). Les mêmes tableaux en tableur : dossier [csv/](csv/).
 
 Pour demander une modification, citez la ligne (ex. « Mitrailleuse RPK : chargeur 100 », « Mastodonte à 3000 pts », « porte P3 à 500 pts », « mettre la boîte mystère dans la zone Temple-Neuf »).
 
@@ -215,4 +219,4 @@ md += `### Notes
 fs.writeFileSync(path.join(DOCS, 'REFERENCE.md'), md);
 await sleep(800);
 try { fs.rmSync(profile, { recursive: true, force: true }); } catch { /* Chrome écrit encore : sans importance */ }
-console.log(`OK : docs/carte.png, docs/REFERENCE.md, ${Object.keys(T).length} fichiers dans docs/csv/`);
+console.log(`OK : docs/carte.png, docs/armes.png, docs/REFERENCE.md, ${Object.keys(T).length} fichiers dans docs/csv/`);

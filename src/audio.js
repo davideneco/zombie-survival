@@ -69,6 +69,21 @@ export class Sfx {
       setTimeout(() => this.ctx && this._noise(0.05, 0.35, 3200, 'highpass'), 280);
     }, 380);
   }
+  pistol(v = 1) {
+    if (!this.ctx) return;
+    this._noise(0.1, 0.55 * v, 3200);
+    this._tone('square', 260, 60, 0.07, 0.3 * v);
+  }
+  heavy(v = 1) { // gros calibre : fusil de précision, Desert Eagle
+    if (!this.ctx) return;
+    this._noise(0.45, 1.0 * v, 1200);
+    this._tone('sawtooth', 90, 25, 0.35, 0.7 * v);
+  }
+  mg(v = 1) {
+    if (!this.ctx) return;
+    this._noise(0.14, 0.65 * v, 2400);
+    this._tone('square', 140, 45, 0.1, 0.4 * v);
+  }
   smg() {
     if (!this.ctx) return;
     this._noise(0.12, 0.45, 4200);
