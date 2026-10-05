@@ -105,4 +105,9 @@ export const PILLARS = [...Array(NAVE.bays + 1).keys()].map((k) => NAVE.s0 + (k 
 export const CRYPT = { s0: 43, s1: 56, t: 8.5, y: -4.2, H: 3.8 };
 // trous dans le sol de la croisée : deux escaliers (nord / sud) descendent vers l'est jusqu'à la crypte
 export const CRYPT_STAIRS = [-1, 1].map((side) => ({ side, s0: 35.5, s1: 44.2, t0: side < 0 ? -7.9 : 5.5, t1: side < 0 ? -5.5 : 7.9 }));
+// escaliers en colimaçon des deux tours de façade (centres, rayons du noyau et des marches) : la voûte des bases des tours
+// (18 m) est percée à leur passage
+export const TOWER_STAIRS = { NW: [-41.5, -16.5], SW: [-41.5, 16.5], RO: 3.8, RI: 1.3 };
+const disc = (c, r, n = 28) => [...Array(n).keys()].map((k) => [c[0] + Math.cos((k / n) * Math.PI * 2) * r, c[1] + Math.sin((k / n) * Math.PI * 2) * r]);
+export const CEIL_HOLES = { towerN: [disc(TOWER_STAIRS.NW, TOWER_STAIRS.RO + 0.35)], towerS: [disc(TOWER_STAIRS.SW, TOWER_STAIRS.RO + 0.35)] };
 export const FLOOR_HOLES = { crossing: CRYPT_STAIRS.map((c) => [[c.s0, c.t0], [c.s1, c.t0], [c.s1, c.t1], [c.s0, c.t1]]) };

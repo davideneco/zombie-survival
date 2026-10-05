@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { BLOCKS, PILLARS, NAVE, FLOOR_HOLES, computeEdges, interfaceDef, blockOf } from './plan2.js';
+import { BLOCKS, PILLARS, NAVE, FLOOR_HOLES, CEIL_HOLES, computeEdges, interfaceDef, blockOf } from './plan2.js';
 
 // Rez-de-chaussée de la cathédrale : dallage, voûtes, murs à vitraux, arcades de la nef, murs de refend percés d'arcs,
 // rosace, bancs, maître-autel, lustres. Tout est construit dans le repère (s, t) puis converti en coordonnées monde.
@@ -85,7 +85,8 @@ export function buildGround(ctx) {
     const quad = [[s0, t0], [s1, t0], [s1, t1], [s0, t1]].map(([s, t]) => W(s, t));
     const holes = (FLOOR_HOLES[B.id] || []).map((h) => h.map(([s, t]) => W(s, t)));
     mesher.flat(mats.floor, quad, 0.03, { uvScale: 4.8, holes });
-    mesher.flat(mats.vault, quad, B.H, { up: false, uvFn: (x, z) => [S(x, z) / 8, T(x, z) / 8] });
+    const ceilHoles = (CEIL_HOLES[B.id] || []).map((h) => h.map(([s, t]) => W(s, t)));
+    mesher.flat(mats.vault, quad, B.H, { holes: ceilHoles, up: false, uvFn: (x, z) => [S(x, z) / 8, T(x, z) / 8] });
   }
 
   // ------------------------------------------------------------------ murs

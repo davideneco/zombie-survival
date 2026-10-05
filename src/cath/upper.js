@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { NAVE, PILLARS } from './plan2.js';
+import { NAVE, PILLARS, TOWER_STAIRS } from './plan2.js';
 import { archPoints, TEXV, PORTAL_H } from './ground.js';
 import { buildSpire } from './spire.js';
 
@@ -137,16 +137,32 @@ export function buildUpper(ctx) {
       const a = stopsAll[i], b = stopsAll[i + 1];
       links.push(levels.addLink(`${name} ${a.y}->${b.y}`, a.region, b.region, helix(a.y, b.y), stairRegion.get(i)));
     }
-    // palier : pastille plate de 2,2 x 2,4 m, du seuil de la porte vers l'extérieur
-    const padAt = (y, region, extra = []) => {
-      const ph = phiAt(y);
-      const a = polar(c, rOut - 0.4, ph - 22), b = polar(c, rOut - 0.4, ph + 22), cc = polar(c, rOut + 1.9, ph + 22), d = polar(c, rOut + 1.9, ph - 22);
-      const poly = [a, b, cc, d].map(([x, z]) => [x, z]);
+    // palier : du seuil de la porte vers l'extérieur, aussi large que l'ouverture de la cage (pans de mur ouverts jusqu'à ±31,5°) :
+    // sinon on tombe entre la marche et la dalle en longeant le mur près de la porte
+    const padAt = (y, region) => {
+      const ph = phiAt(y), A = 33, r0 = y >= top - 1e-6 ? rOut - 0.4 : rOut - 0.1, r1 = rOut + 1.9; // (palier du haut : il rejoint le palier intérieur)
+      const poly = [];
+      for (let k = 0; k <= 6; k++) poly.push(polar(c, r0, ph - A + (2 * A * k) / 6));
+      for (let k = 6; k >= 0; k--) poly.push(polar(c, r1, ph - A + (2 * A * k) / 6));
       const tris = levels.addPoly(region, poly, y);
       mesher.flat(mats.deck, poly, y, { uvScale: 4 });
       collision.addFloor(y, tris);
     };
     for (const e of exits) padAt(e.y, e.region);
+    // palier intérieur au sommet : au-delà de la dernière marche la cage était vide jusqu'au tour du dessous (on y tombait en longeant le mur)
+    {
+      const ph = phiAt(top), last = exits.find((e) => Math.abs(e.y - top) < 1e-6);
+      if (last) {
+        const poly = [];
+        for (let k = 0; k <= 8; k++) poly.push(polar(c, rIn + 0.1, ph - dir * 4 + (dir * 70 * k) / 8));
+        for (let k = 8; k >= 0; k--) poly.push(polar(c, rOut + 0.05, ph - dir * 4 + (dir * 70 * k) / 8));
+        const tris = levels.addPoly(last.region, poly, top);
+        mesher.flat(mats.deck, poly, top, { uvScale: 4 });
+        collision.addFloor(top, tris);
+        // dessous du palier (vu depuis le tour inférieur)
+        mesher.flat(mats.stone, poly, top - 0.3, { uvScale: 4, up: false });
+      }
+    }
     return { phiAt, links, c, rOut, top, lp };
   };
 
@@ -170,7 +186,7 @@ export function buildUpper(ctx) {
 
   // ---------------------------------------------------------------- tribune de la rose (W1, région R3) et salle des cloches (W2)
   const HALL = [-46, -23.5, -37, 23.5];
-  const NW = { c: [-41.5, -16.5] }, SW = { c: [-41.5, 16.5] }, RO = 3.8, RI = 1.3;
+  const NW = { c: TOWER_STAIRS.NW }, SW = { c: TOWER_STAIRS.SW }, RO = TOWER_STAIRS.RO, RI = TOWER_STAIRS.RI;
   const hole = (c, r = RO + 0.45) => circleST(c, r);
   slab(R3, stripST(HALL[0], HALL[1], HALL[2], HALL[3]), Y.R3, [hole(NW.c), hole(SW.c)]);
   slab(W2, stripST(HALL[0], HALL[1], HALL[2], HALL[3]), Y.W2, [hole(SW.c)]);

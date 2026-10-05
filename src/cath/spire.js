@@ -39,7 +39,7 @@ export function buildSpire(h) {
     }
   }
   // dessus du fût : terrasse annulaire à 104 m (trou : cage de l'escalier et pagode)
-  const RING_IN = 6.5, RING_OUT = 9.3;
+  const RING_IN = 6.3, RING_OUT = 9.3; // (bord intérieur sous la paroi de la pagode : pas de fente entre la terrasse et la cage)
   slab(TOP, circleST(c, RING_OUT, 32), TOP_Y, [circleST(c, RING_IN, 32)], mats.stone);
   // garde-corps de la terrasse : parapet de pierre
   {
@@ -81,13 +81,42 @@ export function buildSpire(h) {
   const RB0 = 6.35, RB1 = 1.9; // rayon du fût à 104 m et à 128 m
   const rb = (y) => RB0 + (RB1 - RB0) * ((y - TOP_Y) / (TIP_Y - TOP_Y));
   const rho = (y) => rb(y) + 0.6; // rayon de l'axe de la rampe
-  const tiers = [];
+  // étages de la pagode, octogonaux, alignés sur le fût ; porte de 2,6 x 2,1 m dans l'étage du bas, face à la sortie de l'escalier (0°)
+  const DOOR_HW = 1.3, DOOR_H = 2.1;
+  const at = (r, deg, y) => { const [x, z] = polar(c, r, deg); return [x, y, z]; };
   for (let i = 0; i < 6; i++) {
-    const y0 = TOP_Y + 4 * i, y1 = y0 + 4;
-    tiers.push(new THREE.CylinderGeometry(rb(y1), rb(y0), 4, 8, 1, false).rotateY(22.5 * DEG).translate(...(() => { const [x, z] = W(c[0], c[1]); return [x, (y0 + y1) / 2, z]; })()));
-    tiers.push(new THREE.CylinderGeometry(rb(y1) + 0.18, rb(y1) + 0.18, 0.3, 8).rotateY(22.5 * DEG).translate(...(() => { const [x, z] = W(c[0], c[1]); return [x, y1, z]; })()));
+    const y0 = TOP_Y + 4 * i, y1 = y0 + 4, r0 = rb(y0), r1 = rb(y1);
+    for (let k = 0; k < 8; k++) {
+      const a0 = -22.5 + 45 * k, a1 = a0 + 45;
+      if (i === 0 && k === 0) {
+        // face de la porte : deux trumeaux et un linteau (fractions u le long de la face)
+        const L = 2 * r0 * Math.sin(22.5 * DEG), u0 = 0.5 - DOOR_HW / L, u1 = 0.5 + DOOR_HW / L, fy = DOOR_H / 4;
+        const P = (u, f) => { const A = at(r0 + (r1 - r0) * f, a0, y0 + 4 * f), B = at(r0 + (r1 - r0) * f, a1, y0 + 4 * f); return [A[0] + (B[0] - A[0]) * u, A[1], A[2] + (B[2] - A[2]) * u]; };
+        mesher.quad(mats.stone, P(0, 0), P(u0, 0), P(u0, 1), P(0, 1));
+        mesher.quad(mats.stone, P(u1, 0), P(1, 0), P(1, 1), P(u1, 1));
+        mesher.quad(mats.stone, P(u0, fy), P(u1, fy), P(u1, 1), P(u0, 1));
+        continue;
+      }
+      mesher.quad(mats.stone, at(r0, a0, y0), at(r0, a1, y0), at(r1, a1, y1), at(r1, a0, y1));
+    }
+    // corniche de l'étage
+    const ring = [...Array(9).keys()].map((k) => polar(c, r1 + 0.18, -22.5 + 45 * k));
+    mesher.strip(mats.stoneDark, ring, y1 - 0.15, y1 + 0.15, { uScale: 3, vScale: 3 });
+    mesher.flat(mats.stoneDark, ring.slice(0, 8), y1 + 0.15, { uvScale: 3 });
   }
-  mesher.geo(mats.stoneDark2 || mats.stone, mergeSimple(tiers));
+  // collision de la pagode (sinon on traverse sa paroi depuis la rampe ou la terrasse et on tombe dans la cage de l'escalier) :
+  // 32 pans par tranche de 0,5 m, juste dans la paroi ; chaque tranche ne gêne que les corps dont les pieds y sont
+  {
+    for (let y = TOP_Y - 0.05; y < TIP_Y; y += 0.5) {
+      const r = rb(Math.max(TOP_Y, y));
+      for (let k = 0; k < 32; k++) {
+        const a0 = k * 11.25, a1 = a0 + 11.25;
+        if (y < TOP_Y + DOOR_H - 0.1 && (a0 > 360 - 15 || a1 < 15)) continue; // porte
+        const A = polar(c, r, a0), B = polar(c, r, a1);
+        collision.addSegment(A[0], A[1], B[0], B[1], y + 0.8, y + 1.7);
+      }
+    }
+  }
   {
     // aiguille et croix dorée
     const [x, z] = W(c[0], c[1]);
@@ -127,8 +156,11 @@ export function buildSpire(h) {
   slab(TIP, circleST(c, 2.8, 20), TIP_Y, [circleST(c, 1.75, 20)], mats.stone);
   {
     for (let k = 0; k < 20; k++) {
+      // pas de garde-corps là où la rampe passe juste dessous (dernier demi-tour, jusqu'à 2 m sous le balcon) ni à son arrivée
+      const back = ((((phiR(TIP_Y) - (k * 18 + 9)) % 360) + 360) % 360);
+      if (back < 190 || back > 320) continue;
       const A = polar(c, 2.85, k * 18), B = polar(c, 2.85, (k + 1) * 18);
-      collision.addSegment(A[0], A[1], B[0], B[1], TIP_Y + 1.4, TIP_Y - 0.3);
+      collision.addSegment(A[0], A[1], B[0], B[1], TIP_Y + 1.4, TIP_Y);
     }
     collision.addCircle(...(() => { const [x, z] = W(c[0], c[1]); return [x, z]; })(), 1.8, TIP_Y + 20, TIP_Y - 0.5);
   }
