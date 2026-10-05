@@ -3,6 +3,7 @@
 import { WebSocketServer } from 'ws';
 
 const MAX_PLAYERS = 4;
+const CHAR_COUNT = 8; // personnages jouables (src/characters.js)
 const rooms = new Map();
 let nextId = 1;
 
@@ -20,8 +21,8 @@ const peersOf = (room) => [...room.members.values()].map((m) => ({ id: m.id, nam
 // Plus petit emplacement (0-3) libre : détermine la couleur / le skin du joueur, identique pour tout le monde.
 const freeSlot = (room, want = -1) => {
   const used = new Set([...room.members.values()].map((m) => m.slot));
-  if (Number.isInteger(want) && want >= 0 && want < MAX_PLAYERS && !used.has(want)) return want; // personnage demandé s'il est libre
-  for (let i = 0; i < MAX_PLAYERS; i++) if (!used.has(i)) return i;
+  if (Number.isInteger(want) && want >= 0 && want < CHAR_COUNT && !used.has(want)) return want; // personnage demandé s'il est libre
+  for (let i = 0; i < CHAR_COUNT; i++) if (!used.has(i)) return i;
   return 0;
 };
 

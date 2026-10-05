@@ -14,6 +14,10 @@ export const CHARACTERS = [
   { id: 'lea', name: 'LÉA', role: 'Infirmière', accent: '#4fc3f7', skin: 0xf1d0b0, hair: 0x8a3a18, hairStyle: 'ponytail', beard: false, scale: [0.94, 0.97], fp: { sleeve: 0xdfe6ee, hand: 0x4aa8e0 } },
   { id: 'karim', name: 'KARIM', role: 'Pompier', accent: '#ff8a3d', skin: 0x8d5a3b, hair: 0x111111, hairStyle: 'buzz', beard: true, scale: [1.1, 1.04], fp: { sleeve: 0xd8541a, hand: 0x2a2a2e } },
   { id: 'chloe', name: 'CHLOÉ', role: 'Étudiante', accent: '#ff5c7a', skin: 0xc9a07a, hair: 0x1c1a24, hairStyle: 'long', beard: false, scale: [0.96, 0.99], fp: { sleeve: 0xb8283c, hand: 0xe0d0b8 } },
+  { id: 'lucian', name: 'LUCIAN', role: 'Le Purificateur', accent: '#dfe6ff', skin: 0x6b4630, hair: 0x15110e, hairStyle: 'buzz', beard: true, scale: [1.03, 1.05], fp: { sleeve: 0x16161c, hand: 0x24242a } },
+  { id: 'picsou', name: 'PICSOU', role: 'Milliardaire', accent: '#ffd24a', skin: 0xf6f4ee, hair: 0xf6f4ee, hairStyle: 'none', duck: true, scale: [1.02, 0.8], fp: { sleeve: 0xb02020, hand: 0xf6f4ee } },
+  { id: 'klukai', name: 'KLUKAI', role: 'Poupée tactique', accent: '#8fd3ff', skin: 0xf3dccb, hair: 0x9fd0ee, hairStyle: 'longtail', beard: false, eye: 0x3aa060, scale: [0.93, 0.98], fp: { sleeve: 0x6a3a9a, hand: 0x141418 } },
+  { id: 'harry', name: 'HARRY', role: 'Sorcier', accent: '#e0b040', skin: 0xf0cfb4, hair: 0x16110d, hairStyle: 'messy', beard: false, eye: 0x2f8a3a, scale: [0.95, 0.97], fp: { sleeve: 0x141416, hand: 0xf0cfb4 } },
 ];
 export const charOf = (slot) => CHARACTERS[((slot % CHARACTERS.length) + CHARACTERS.length) % CHARACTERS.length];
 export const slotColor = (slot) => charOf(slot).accent;
@@ -145,17 +149,20 @@ export class Avatar {
 
     // ---- tête
     this.headG = new THREE.Group(); this.headG.position.set(0, 0.66, 0); this.headG.scale.setScalar(1.1); t.add(this.headG);
+    const white = mat(0xf2f2f2, 0.4), dark = mat(0x16100c, 0.5);
+    if (ch.duck) this.duckHead(skin);
+    else {
     put(this.headG, sphere(0.1), skin, 0, 0.07, 0, 0, 0, 0, 0.92, 1.1, 1.0);
     put(this.headG, sphere(0.085), skin, 0, 0.0, -0.02, 0, 0, 0, 0.95, 0.9, 1.0); // mâchoire
-    const white = mat(0xf2f2f2, 0.4), dark = mat(0x16100c, 0.5);
     for (const sx of [-1, 1]) {
       put(this.headG, sphere(0.017), white, sx * 0.04, 0.085, -0.088, 0, 0, 0, 1.15, 0.8, 0.6);
-      put(this.headG, sphere(0.01), mat(0x2a4a68, 0.3), sx * 0.04, 0.085, -0.096);
+      put(this.headG, sphere(0.01), mat(ch.eye || 0x2a4a68, 0.3), sx * 0.04, 0.085, -0.096);
       put(this.headG, box(0.045, 0.008, 0.012), hair, sx * 0.04, 0.115, -0.092, 0, 0, sx * -0.12);
       put(this.headG, sphere(0.022), skin, sx * 0.093, 0.06, 0.0, 0, 0, 0, 0.5, 1.1, 0.8); // oreilles
     }
     put(this.headG, box(0.022, 0.04, 0.03), mat(ch.skin, 0.8), 0, 0.055, -0.096, 0.25);
     put(this.headG, box(0.05, 0.009, 0.012), mat(0x7a3a34, 0.6), 0, 0.012, -0.088);
+    }
     this.hairStyle(hair);
     this.gear();
     this.weapon = null; this.weaponId = null; this.hands = null;
@@ -177,6 +184,22 @@ export class Avatar {
     if (id === 'lea') {
       return { top: mat(0xdfe6ee, 0.8), sleeve: mat(0xdfe6ee, 0.8), foreSleeve: mat(0x3a8ab8, 0.8), pants: mat(0x3a8ab8, 0.8), boots: mat(0xf0f0f0, 0.6), sole: mat(0x9a9aa4, 0.7), belt: mat(0x1c3a52, 0.7), gloves: mat(0x4aa8e0, 0.6) };
     }
+    if (id === 'lucian') {
+      const blk = mat(0x16161c, 0.65);
+      return { top: blk, sleeve: blk, pants: mat(0x1e1e24, 0.8), boots: mat(0x0e0e10, 0.6), sole: mat(0x060606, 0.9), belt: mat(0xc8a040, 0.35, 0.8), gloves: mat(0x24242a, 0.6) };
+    }
+    if (id === 'picsou') {
+      const red = mat(0xb02020, 0.75), white = mat(0xf6f4ee, 0.9);
+      return { top: red, sleeve: red, foreSleeve: red, pants: white, pantsLow: white, boots: mat(0xf0f0f0, 0.7), sole: mat(0xf0a020, 0.5), belt: red, gloves: white };
+    }
+    if (id === 'klukai') {
+      const blk = mat(0x141418, 0.6);
+      return { top: blk, sleeve: mat(0x6a3a9a, 0.7), foreSleeve: blk, pants: mat(0x22222a, 0.7), pantsLow: mat(0x0c0c10, 0.5), boots: mat(0x101014, 0.5), sole: mat(0x050505, 0.9), belt: mat(0x3ac8ff, 0.3, 0.3), gloves: blk };
+    }
+    if (id === 'harry') {
+      const robe = mat(0x141416, 0.85);
+      return { top: robe, sleeve: robe, pants: mat(0x4a4a50, 0.85), boots: mat(0x1a120c, 0.6), sole: mat(0x0a0a0a, 0.9), belt: mat(0x141416, 0.85), gloves: mat(0xf0cfb4, 0.75) };
+    }
     if (id === 'karim') {
       return { top: mat(0xd8541a, 0.75), sleeve: mat(0xd8541a, 0.75), pants: mat(0x1d2536, 0.85), boots: mat(0x141414, 0.7), sole: mat(0x0a0a0a, 0.9), belt: mat(0x111111, 0.6), gloves: mat(0x2a2a2e, 0.7) };
     }
@@ -191,6 +214,17 @@ export class Avatar {
       put(h, dome(0.11, 0.6), hair, 0, 0.07, 0.01, 0, 0, 0, 0.95, 1.1, 1.05);
       put(h, capsule(0.03, 0.16), hair, 0, 0.0, 0.14, 0.7, 0, 0);
       put(h, torus(0.032, 0.008), mat(0xc22a3a, 0.6), 0, 0.06, 0.112, 0.7, 0, 0);
+    } else if (st === 'none') {
+      // (Picsou : plumes)
+    } else if (st === 'messy') { // cheveux en bataille
+      put(h, dome(0.11, 0.6), hair, 0, 0.075, 0.008, 0, 0, 0, 0.96, 1.12, 1.05);
+      for (let k = 0; k < 9; k++) { const a = (k / 9) * Math.PI * 2; put(h, sphere(0.035), hair, Math.cos(a) * 0.07, 0.16 + (k % 3) * 0.012, Math.sin(a) * 0.07 - 0.01); }
+      put(h, sphere(0.04), hair, 0.03, 0.13, -0.085, 0, 0, 0, 1.4, 0.7, 0.6); // mèche sur le front
+    } else if (st === 'longtail') { // longue queue de cheval
+      put(h, dome(0.112, 0.62), hair, 0, 0.07, 0.01, 0, 0, 0, 0.96, 1.1, 1.06);
+      put(h, capsule(0.04, 0.42), hair, 0, -0.12, 0.13, 0.25, 0, 0);
+      put(h, torus(0.036, 0.01), mat(0x3ac8ff, 0.3, 0.4), 0, 0.08, 0.12, 0.7, 0, 0);
+      for (const sx of [-1, 1]) put(h, capsule(0.026, 0.14), hair, sx * 0.09, -0.02, -0.03);
     } else {
       put(h, dome(0.113, 0.62), hair, 0, 0.07, 0.01, 0, 0, 0, 0.96, 1.1, 1.06);
       put(h, capsule(0.085, 0.16), hair, 0, -0.04, 0.05, 0, 0, 0, 1.0, 1, 0.7);
@@ -202,10 +236,57 @@ export class Avatar {
     }
   }
 
+  duckHead(white) {
+    const h = this.headG;
+    put(h, sphere(0.12), white, 0, 0.07, 0, 0, 0, 0, 1.0, 1.1, 1.05);
+    const orange = mat(0xf0a020, 0.5);
+    put(h, box(0.11, 0.035, 0.13), orange, 0, 0.03, -0.14);       // bec
+    put(h, box(0.1, 0.025, 0.11), orange, 0, -0.005, -0.13);
+    for (const sx of [-1, 1]) {
+      put(h, sphere(0.032), mat(0xffffff, 0.3), sx * 0.045, 0.11, -0.1, 0, 0, 0, 0.9, 1.3, 0.6);
+      put(h, sphere(0.014), mat(0x101010, 0.3), sx * 0.045, 0.11, -0.122);
+      put(h, torus(0.03, 0.004), mat(0xd4a640, 0.3, 0.8), sx * 0.045, 0.11, -0.125); // pince-nez
+      put(h, capsule(0.03, 0.06), white, sx * 0.105, 0.02, 0.0); // favoris
+    }
+  }
+
   // -------------------------------------------------------------- équipement propre à chaque personnage
   gear() {
     const id = this.ch.id, t = this.torsoG, h = this.headG, o = this.mats.out;
-    if (id === 'marc') {
+    if (id === 'lucian') {
+      const blk = mat(0x101014, 0.6), white = mat(0xe8e8ee, 0.5), gold = mat(0xc8a040, 0.35, 0.8), glow = mat(0xdfe8ff, 0.3);
+      glow.emissive = new THREE.Color(0x8fa8ff); glow.emissiveIntensity = 0.8;
+      put(t, box(0.36, 0.55, 0.06), blk, 0, -0.18, 0.15); // pans du long manteau
+      put(t, box(0.13, 0.55, 0.05), blk, -0.13, -0.18, -0.14); put(t, box(0.13, 0.55, 0.05), blk, 0.13, -0.18, -0.14);
+      put(t, box(0.03, 0.62, 0.065), white, -0.07, 0.3, -0.145); put(t, box(0.03, 0.62, 0.065), white, 0.07, 0.3, -0.145); // liserés blancs
+      put(t, cyl(0.1, 0.12, 0.12, 12), white, 0, 0.6, 0); // col montant
+      for (const sx of [-1, 1]) { put(t, box(0.12, 0.05, 0.16), gold, sx * SHOULDER_X, 0.56, 0); put(t, box(0.06, 0.16, 0.1), white, sx * 0.17, -0.22, -0.02); }
+      put(t, box(0.04, 0.04, 0.04), glow, 0, 0.45, -0.17); // relique lumineuse
+    } else if (id === 'picsou') {
+      const blk = mat(0x15151a, 0.6), spats = mat(0xf0f0f0, 0.7), orange = mat(0xf0a020, 0.5);
+      put(h, cyl(0.1, 0.1, 0.2, 14), blk, 0, 0.27, 0.0); put(h, cyl(0.15, 0.15, 0.015, 16), blk, 0, 0.17, 0); // haut-de-forme
+      put(h, cyl(0.101, 0.101, 0.03, 14), mat(0xb02020, 0.6), 0, 0.2, 0);
+      put(t, box(0.3, 0.12, 0.2), blk, 0, 0.55, 0.0); // col de la redingote
+      put(t, box(0.36, 0.4, 0.05), mat(0xb02020, 0.75), 0, -0.12, 0.13); // basques
+      for (const l of this.legs) { put(l.knee, box(0.12, 0.08, 0.3), orange, 0, -0.43, -0.08); put(l.knee, cyl(0.065, 0.065, 0.12, 10), spats, 0, -0.36, 0); }
+    } else if (id === 'klukai') {
+      const blk = mat(0x141418, 0.6), purple = mat(0x6a3a9a, 0.7), cyan = mat(0x3ac8ff, 0.3, 0.3);
+      put(h, dome(0.125, 0.5), blk, 0, 0.09, 0.0, 0, 0, 0, 1, 1, 1.05); put(h, box(0.18, 0.012, 0.12), blk, 0, 0.11, -0.13); // casquette
+      put(t, torus(0.07, 0.025), blk, 0, 0.56, 0, Math.PI / 2, 0, 0); // masque autour du cou
+      put(t, capsule(0.17, 0.08), purple, 0, 0.22, 0, 0, 0, 0, 1.18, 1, 0.84); // veste violette
+      for (const sx of [-1, 1]) put(t, box(0.02, 0.36, 0.012), cyan, sx * 0.06, 0.35, -0.145);
+      put(t, box(0.24, 0.26, 0.11), blk, 0, 0.36, 0.17); // sac tactique
+      for (const l of this.legs) put(l.hip, box(0.1, 0.06, 0.13), cyan, 0, -0.3, -0.03); // sangles
+    } else if (id === 'harry') {
+      const blk = mat(0x121214, 0.85), red = mat(0x8a1a1a, 0.8), gold = mat(0xd0a030, 0.6), wood = mat(0x5a3a1e, 0.8);
+      for (const sx of [-1, 1]) put(h, torus(0.03, 0.005), mat(0x202024, 0.3, 0.7), sx * 0.04, 0.085, -0.1); // lunettes rondes
+      put(h, box(0.025, 0.004, 0.005), mat(0x202024, 0.3, 0.7), 0, 0.087, -0.104);
+      put(h, box(0.006, 0.03, 0.004), mat(0xa02020, 0.6), 0.02, 0.14, -0.1, 0, 0, 0.6); // cicatrice
+      put(t, cyl(0.17, 0.27, 0.62, 14), blk, 0, -0.2, 0.0, 0, 0, 0, 1, 1, 0.8); // robe de sorcier
+      put(t, torus(0.09, 0.03), red, 0, 0.55, 0, Math.PI / 2, 0, 0); // écharpe Gryffondor
+      for (let k = 0; k < 3; k++) put(t, box(0.07, 0.025, 0.04), k % 2 ? gold : red, 0.06, 0.42 - k * 0.07, -0.14);
+      put(t, cyl(0.008, 0.008, 0.32, 6), wood, -0.16, 0.0, -0.1, 0.4, 0, 0); // baguette à la ceinture
+    } else if (id === 'marc') {
       const od = mat(0x3a4228, 0.85), steel = mat(0x4a5238, 0.6, 0.2), blk = mat(0x1d1f1c, 0.7), strap = mat(0x25271f, 0.8);
       // casque avec couvre-casque, lunettes de vision nocturne relevées
       put(h, dome(0.128, 0.6), steel, 0, 0.075, 0.004, 0, 0, 0, 1, 1.08, 1.04);
