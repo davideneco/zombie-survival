@@ -1409,6 +1409,7 @@ export async function buildRealWorld(scene, renderer) {
     }
     const sg = new THREE.BufferGeometry(); sg.setAttribute('position', new THREE.Float32BufferAttribute(sp, 3));
     sky.add(new THREE.Points(sg, new THREE.PointsMaterial({ color: 0xdde6ff, size: 1.4, sizeAttenuation: false, fog: false })));
+    sky.scale.setScalar(0.5); // ciel à 150 m : dans le champ de la caméra (170 m)
     scene.add(sky);
   }
 

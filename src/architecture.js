@@ -651,8 +651,32 @@ export function createArchitecture({ renderer, plasterImg, roofP, rnd }) {
         scene.add(m);
         return m;
       };
-      for (const [key, { mat, b }] of Object.entries(mats)) { const m = toMesh(b, mat); if (m) m.name = 'arch:' + key; }
-      const r = toMesh(roofB, roofMat); if (r) r.name = 'arch:roof';
+      // Découpe en tuiles de 96 m : la caméra ne dessine que les morceaux de ville devant elle et à portée du brouillard
+      // (sinon toute la ville, ~600 000 triangles, était dessinée à chaque image).
+      const T = 160;
+      const split = (b) => {
+        const tiles = new Map();
+        const P = b.pos, N = b.nor, U = b.uv, C = b.col, I = b.idx;
+        for (let i = 0; i < I.length; i += 3) {
+          const a = I[i], bb = I[i + 1], c = I[i + 2];
+          const cx = (P[a * 3] + P[bb * 3] + P[c * 3]) / 3, cz = (P[a * 3 + 2] + P[bb * 3 + 2] + P[c * 3 + 2]) / 3;
+          const k = Math.floor(cx / T) * 4096 + Math.floor(cz / T);
+          let t = tiles.get(k);
+          if (!t) { t = { pos: [], nor: [], uv: [], col: [], idx: [], map: new Map() }; tiles.set(k, t); }
+          for (const v of [a, bb, c]) {
+            let j = t.map.get(v);
+            if (j === undefined) {
+              j = t.pos.length / 3; t.map.set(v, j);
+              t.pos.push(P[v * 3], P[v * 3 + 1], P[v * 3 + 2]); t.nor.push(N[v * 3], N[v * 3 + 1], N[v * 3 + 2]);
+              t.uv.push(U[v * 2], U[v * 2 + 1]); t.col.push(C[v * 3], C[v * 3 + 1], C[v * 3 + 2]);
+            }
+            t.idx.push(j);
+          }
+        }
+        return [...tiles.values()];
+      };
+      for (const [key, { mat, b }] of Object.entries(mats)) for (const t of split(b)) { const m = toMesh(t, mat); if (m) m.name = 'arch:' + key; }
+      for (const t of split(roofB)) { const r = toMesh(t, roofMat); if (r) r.name = 'arch:roof'; }
     },
   };
 }

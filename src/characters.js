@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { cloneWeapon, weaponKit } from './weaponDisplay.js';
 
 // =====================================================================
@@ -66,6 +67,25 @@ const L1 = 0.3, L2 = 0.3; // bras : épaule -> coude, coude -> poignet (+ main)
 const T1 = 0.45, T2 = 0.45; // jambes
 const SHOULDER_X = 0.2;
 const DOWN = new THREE.Vector3(0, -1, 0);
+
+// Fusionne, dans chaque articulation, les pièces fixes qui partagent le même matériau
+function mergeStatic(root) {
+  const groups = [];
+  root.traverse((o) => { if (!o.isMesh && o.children.length) groups.push(o); });
+  for (const g of groups) {
+    const byMat = new Map();
+    for (const c of g.children) if (c.isMesh && !c.children.length) { if (!byMat.has(c.material)) byMat.set(c.material, []); byMat.get(c.material).push(c); }
+    for (const [mat, list] of byMat) {
+      if (list.length < 2) continue;
+      const geos = list.map((m) => { m.updateMatrix(); const gg = (m.geometry.index ? m.geometry.toNonIndexed() : m.geometry.clone()); for (const k of Object.keys(gg.attributes)) if (!['position', 'normal', 'uv'].includes(k)) gg.deleteAttribute(k); return gg.applyMatrix4(m.matrix); });
+      const merged = mergeGeometries(geos);
+      if (!merged) continue;
+      for (const m of list) g.remove(m);
+      const mm = new THREE.Mesh(merged, mat); mm.castShadow = true;
+      g.add(mm);
+    }
+  }
+}
 
 export class Avatar {
   constructor(ch) {
@@ -142,6 +162,7 @@ export class Avatar {
     this.flash = null;
     this.walk = 0; this.kick = 0; this.sway = 0;
     this.pole = [new THREE.Vector3(-0.5, -1, 0.15), new THREE.Vector3(0.5, -1, 0.15)];
+    mergeStatic(this.root); // ~80 maillages -> ~30 : beaucoup moins d'appels de dessin par coéquipier
     this.setWeapon('rifle');
   }
 

@@ -32,7 +32,8 @@ const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x070b12);
 scene.fog = new THREE.FogExp2(0x0b121c, CONFIG.map === 'arena' ? 0.022 : 0.019);
 
-const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.05, 700);
+// au-delà de ~150 m le brouillard cache tout : inutile de dessiner plus loin
+const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.05, 170);
 
 // Ambiance nocturne réaliste
 const hemi = new THREE.HemisphereLight(0x6677aa, 0x222018, 1.1);
@@ -48,13 +49,26 @@ scene.add(moon, moon.target);
 const MOON_OFFSET = new THREE.Vector3(25, 55, 15);
 
 // ------------------------------------------------------- Options (client)
-const DEFAULT_SETTINGS = { brightness: 1.4, fov: 80, sens: 1, volume: 1 };
+const DEFAULT_SETTINGS = { brightness: 1.4, fov: 80, sens: 1, volume: 1, quality: 1 };
 const settings = { ...DEFAULT_SETTINGS };
 try { Object.assign(settings, JSON.parse(localStorage.getItem('zombie_settings') || '{}')); } catch {}
 
+// Qualité : 0 = performances (résolution réduite, pas d'ombres), 1 = équilibrée, 2 = haute (pleine résolution des écrans HD)
+let appliedQuality = null;
 function applyVisualSettings() {
   renderer.toneMappingExposure = 1.3 * settings.brightness;
   hemi.intensity = 1.1 * settings.brightness;
+  const q = settings.quality ?? 1;
+  if (q === appliedQuality) return;
+  appliedQuality = q;
+  renderer.setPixelRatio(q === 0 ? 0.75 : q === 1 ? 1 : Math.min(window.devicePixelRatio, 2));
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  const size = q === 2 ? 2048 : 1024;
+  if (moon.shadow.mapSize.x !== size) { moon.shadow.mapSize.set(size, size); moon.shadow.map?.dispose(); moon.shadow.map = null; }
+  renderer.shadowMap.enabled = q > 0;
+  renderer.shadowMap.type = q === 2 ? THREE.PCFSoftShadowMap : THREE.PCFShadowMap; // ombres douces seulement en qualité haute
+  renderer.shadowMap.autoUpdate = false; // mise à jour pilotée par la boucle (une image sur deux hors qualité haute)
+  scene.traverse((o) => { if (o.material) for (const m of [].concat(o.material)) m.needsUpdate = true; }); // les shaders changent avec les ombres
 }
 applyVisualSettings();
 
@@ -1646,12 +1660,14 @@ const optInputs = {
   fov: document.getElementById('optFov'),
   sens: document.getElementById('optSens'),
   volume: document.getElementById('optVolume'),
+  quality: document.getElementById('optQuality'),
 };
 const optFormat = {
   brightness: (v) => `${Math.round(v * 100)}%`,
   fov: (v) => `${Math.round(v)}°`,
   sens: (v) => `${(+v).toFixed(2)}x`,
   volume: (v) => `${Math.round(v * 100)}%`,
+  quality: (v) => ['Rapide', 'Normale', 'Haute'][Math.round(v)] || 'Normale',
 };
 for (const [key, input] of Object.entries(optInputs)) {
   input.value = settings[key];
@@ -1720,6 +1736,7 @@ function precompileShaders() {
   // vrai rendu (avec les ombres), à l'écran derrière le menu : envoie textures et géométries à la carte
   // graphique et force le pilote à finir la compilation, sinon c'est le premier affichage en jeu qui saccade.
   // (pas dans une cible hors écran : three.js y utilise d'autres variantes de shaders, sans tone mapping)
+  renderer.shadowMap.needsUpdate = true;
   renderer.render(scene, camera);
   for (const o of hidden) o.visible = false;
   for (const o of culled) o.frustumCulled = true;
@@ -1784,8 +1801,12 @@ function frame() {
   const frozen = !game.isMultiplayer && !game.playing && game.started && !game.over && !q.has('debug');
   if (game.started && !game.over && !frozen) game.update(dt);
   hud.update(dt);
+  // ombres de la lune : recalculées une image sur deux (à chaque image en qualité haute) : ~20 % de rendu en moins
+  shadowFrame++;
+  if (shadowFrame % ((settings.quality ?? 1) >= 2 ? 1 : 2) === 0) renderer.shadowMap.needsUpdate = true;
   renderer.render(scene, camera);
 }
+let shadowFrame = 0;
 frame();
 
 window.game = game;
