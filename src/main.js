@@ -4,6 +4,8 @@ import { buildWorld } from './world.js';
 import { buildRealWorld } from './realworld.js';
 import { Player } from './player.js';
 import { Zombie, zombieTextures } from './zombie.js';
+import { Boss } from './boss.js';
+import { installFinale } from './finale.js';
 import { Hud } from './hud.js';
 import { Sfx } from './audio.js';
 import { fx } from './fx.js';
@@ -197,14 +199,10 @@ const game = {
       if (this.isMultiplayer) {
         this.net?.send({ t: 'z_dead', id: z.id, head, px: point.x, py: point.y, pz: point.z });
       }
-      // Le Bourreau lâche toujours des munitions max ; sinon chance d'apparition d'un bonus COD
-      if (z.boss) {
-        this.spawnPowerup(z.pos, null, 'max_ammo');
-        hud.announce('LE BOURREAU EST TOMBÉ', '', 2500);
-        this.net?.send({ t: 'finale_bossdead' });
-      } else if (Math.random() < CONFIG.powerups.dropChance) {
-        this.spawnPowerup(z.pos);
-      }
+      // Chance d'apparition d'un bonus COD ; le Bourreau, lui, lâche toujours des munitions max
+      this.onFinaleKill(z);
+      if (z.isBoss) this.spawnPowerup(z.pos, null, 'max_ammo');
+      else if (Math.random() < CONFIG.powerups.dropChance) this.spawnPowerup(z.pos);
     }
   },
 
@@ -301,7 +299,7 @@ const game = {
     if (!groundTargets.length) return;
     targets = groundTargets;
     for (const z of this.zombies) {
-      if (z.dead || z.spawnT > 0 || z.region || z.link) continue;
+      if (z.dead || z.spawnT > 0 || z.region || z.link || z.isBoss) continue;
       let near = Infinity;
       for (const t of targets) near = Math.min(near, Math.hypot(t.pos.x - z.pos.x, t.pos.z - z.pos.z));
       z.farT = near > 90 ? (z.farT || 0) + 1 : 0;
@@ -472,13 +470,7 @@ const game = {
 
   machinePrompt(m) {
     const p = this.player;
-    if (m.type === 'clock') {
-      const F = CONFIG.finale;
-      if (this.finale) return 'L\'Heure du Jugement a sonné : tenez bon !';
-      if (this.finaleDone) return 'L\'horloge s\'est tue. Strasbourg tient encore…';
-      if (this.round < F.minRound) return `L'horloge astronomique… (manche ${F.minRound} requise pour l'Heure du Jugement)`;
-      return `[E] Faire sonner l'Heure du Jugement : survivre ${F.duration} s dans la cathédrale${F.price ? ` (${F.price} pts)` : ''}`;
-    }
+    if (m.type === 'clock') return this.finalePrompt(m);
     if (m.type === 'perk') {
       if (p.perks[m.id]) return `${m.name} (déjà acquis)`;
       return `[E] ${m.name} — ${CONFIG.perks[m.id].desc} (${this.perkPrice(m.id)} pts)`;
@@ -515,57 +507,6 @@ const game = {
     }
     if (this.boxRoll?.machine === m) { this.takeBoxWeapon(); return; }
     this.buyBox();
-  },
-
-  // ---------------------------------------------------------- Fin de partie : l'Heure du Jugement
-  startFinale() {
-    const F = CONFIG.finale;
-    this.finale = { t: F.duration, spawnT: 2, bossT: 8, boss: false };
-    this.net?.send({ t: 'finale_start' });
-    this.finaleIntro();
-  },
-  finaleIntro() {
-    if (!this.finale) this.finale = { t: CONFIG.finale.duration, remote: true };
-    for (let k = 0; k < 6; k++) setTimeout(() => sfx.bell?.(), k * 700);
-    hud.announce('L\'HEURE DU JUGEMENT', `Survivez ${CONFIG.finale.duration} secondes dans la cathédrale !`, 5000);
-  },
-  updateFinale(dt) {
-    const f = this.finale;
-    if (!f) { hud.setBanner?.(null); return; }
-    f.t -= dt;
-    const left = Math.max(0, Math.ceil(f.t));
-    hud.setBanner?.(`L'HEURE DU JUGEMENT — ${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`);
-    if (this.isClient || f.remote) return; // l'hôte décide
-    const F = CONFIG.finale;
-    f.spawnT -= dt; f.bossT -= dt;
-    const alive = this.zombies.filter((z) => !z.dead).length;
-    if (f.bossT <= 0 && !f.boss) {
-      f.boss = true;
-      this.spawnZombie(true, true);
-      hud.announce('LE BOURREAU', 'Un monstre approche…', 3000);
-      this.net?.send({ t: 'finale_boss' });
-    }
-    if (f.spawnT <= 0 && alive < F.maxAlive) { f.spawnT = F.spawnInterval; this.spawnZombie(true); }
-    if (f.t <= 0) {
-      this.net?.send({ t: 'finale_win' });
-      this.winFinale();
-    }
-  },
-  winFinale() {
-    this.finale = null;
-    this.finaleDone = true;
-    hud.setBanner?.(null);
-    // les zombies restants s'effondrent
-    for (const z of this.zombies) if (!z.dead) z.damage(1e9, false);
-    // les joueurs à terre se relèvent ; l'hôte laisse 12 s de répit avant la manche suivante
-    if (this.player.downed || this.player.dead) this.player.revive();
-    if (!this.isClient) { this.toSpawn = 0; this.intermission = 12; }
-    sfx.powerup();
-    this.addPoints(5000, 'bonus');
-    this.player.releaseInputs();
-    if (document.pointerLockElement) this._victory = true; // la sortie du pointer lock ne doit pas afficher PAUSE
-    document.exitPointerLock();
-    hud.showOverlay('VICTOIRE !', `L'Heure du Jugement est passée : vous avez tenu la cathédrale.<br>Manche <b style="color:#fff">${this.round}</b> · ${this.kills} zombies tués · +5000 points<br><span style="color:#ffd24a">La nuit continue… jusqu'où irez-vous ?</span>`, 'CONTINUER');
   },
 
   // ---------------------------------------------------------- Boîte mystère : une seule, qui se déplace
@@ -690,7 +631,8 @@ const game = {
       if (killed) {
         kills++; pts += 60 * mult;
         if (this.isMultiplayer) this.net?.send({ t: 'z_dead', id: z.id, head: false });
-        if (z.boss) this.spawnPowerup(z.pos, null, 'max_ammo');
+        this.onFinaleKill(z);
+        if (z.isBoss) this.spawnPowerup(z.pos, null, 'max_ammo');
         else if (Math.random() < CONFIG.powerups.dropChance) this.spawnPowerup(z.pos);
       } else {
         pts += 10 * mult;
@@ -820,7 +762,7 @@ const game = {
     return { type: 'ground', pos: best.clone().add(new THREE.Vector3((Math.random() - 0.5) * 2, 0, (Math.random() - 0.5) * 2)) };
   },
 
-  spawnZombie(extra = false, boss = false) {
+  spawnZombie(extra = false) {
     const spawn = this.pickSpawn();
     let speed = this.zombieSpeed * (0.85 + Math.random() * 0.3);
     if (this.round >= 4 && Math.random() < 0.25) speed *= 1.5; // coureur
@@ -833,11 +775,9 @@ const game = {
       else if (name === 'emerge') { sfx.dirt(v); sfx.groan(Math.min(1, v * 1.4)); }
     };
     const Zc = CONFIG.zombie;
-    const crawl = !boss && this.round >= Zc.crawlerRound && Math.random() < Zc.crawlerChance;
-    const F = CONFIG.finale;
-    if (boss) speed = 1.6;
-    const hp = boss ? this.zombieHealth * F.bossHealth : this.zombieHealth;
-    const z = new Zombie(scene, spawn, hp, speed, onEvent, null, { crawler: crawl, boss, bossDamage: F.bossDamage });
+    const crawl = this.round >= Zc.crawlerRound && Math.random() < Zc.crawlerChance;
+    const hp = this.zombieHealth;
+    const z = new Zombie(scene, spawn, hp, speed, onEvent, null, { crawler: crawl });
     this.zombies.push(z);
     if (!extra) this.toSpawn--;
 
@@ -855,7 +795,6 @@ const game = {
         hp: z.health,
         spd: speed,
         crawl: crawl ? 1 : 0,
-        boss: boss ? 1 : 0,
       });
     }
   },
@@ -873,7 +812,7 @@ const game = {
     this.resetBoxRoll();
     this.resetPap();
     if (resetStats) this.resetBox();
-    if (resetStats) { this.finale = null; this.finaleDone = false; hud.setBanner?.(null); }
+    if (resetStats) { this.finale = null; this.finaleDone = false; hud.setBanner?.(null); hud.setBossBar?.(null); }
     fx.clear();
 
     this.over = false;
@@ -1096,6 +1035,8 @@ const game = {
               Math.round(z.yaw * 100) / 100,
               z.attacking ? 1 : 0,
               Math.round(z.pos.y * 100) / 100,
+              z.isBoss ? z.bs : 0,
+              z.isBoss && z.state === 'hidden' ? 1 : 0,
             ]);
           }
           this.net?.send({ t: 'z_tick', z: zdata });
@@ -1171,6 +1112,7 @@ sfx.setVolume(settings.volume);
 game.player = new Player(camera, scene, world, game);
 hud.setWeapon(game.player.curCfg.name);
 installMachineFx(game, { world, hud, sfx, fx });
+installFinale(game, { world, scene, hud, sfx, fx });
 game.player.setCharacter(charOf(game.charPref));
 
 // Choix du personnage (menu) : cartes avec portrait, rendu une seule fois
@@ -1262,7 +1204,7 @@ function setupNetworkHandlers(net) {
         buffs: game.buffs,
         doors: (world.doors || []).filter((d) => d.open).map((d) => d.id),
         box: (world.boxes || []).findIndex((b) => b.active),
-        finale: game.finale ? game.finale.t : null,
+        finale: game.finale ? 1 : null,
         finaleDone: game.finaleDone,
         zombies: game.zombies.map((z) => ({
           id: z.id,
@@ -1274,7 +1216,9 @@ function setupNetworkHandlers(net) {
           spd: z.crawler ? z.speed / 0.45 : z.speed,
           spawnT: z.spawnT,
           crawl: z.crawler ? 1 : 0,
-          boss: z.boss ? 1 : 0,
+          boss: z.isBoss ? 1 : 0,
+          kind: z.kind || null,
+          y: z.pos.y,
         })),
       }, m.id);
     }
@@ -1304,6 +1248,7 @@ function setupNetworkHandlers(net) {
   // Dégâts reçus
   net.on('hurt', (m) => {
     game.player.hurt(m.amount);
+    if (m.kx || m.kz) { game.player.vel.x += m.kx || 0; game.player.vel.z += m.kz || 0; game.player.vy = Math.max(game.player.vy, 3.2); }
   });
 
   // Points reçus (client)
@@ -1320,6 +1265,7 @@ function setupNetworkHandlers(net) {
     } else {
       spawn = { type: 'ground', pos: new THREE.Vector3(m.x, 0, m.z) };
     }
+    if (game.zombies.some((q) => q.id === m.id)) return;
     const onEvent = (name, z) => {
       const d = Math.hypot(z.pos.x - game.player.pos.x, z.pos.z - game.player.pos.z);
       const v = Math.max(0, 1 - d / 45);
@@ -1328,18 +1274,21 @@ function setupNetworkHandlers(net) {
       else if (name === 'rumble') sfx.rumble(v);
       else if (name === 'emerge') { sfx.dirt(v); sfx.groan(Math.min(1, v * 1.4)); }
     };
-    const z = new Zombie(scene, spawn, m.hp, m.spd, onEvent, m.id, { crawler: !!m.crawl, boss: !!m.boss, bossDamage: CONFIG.finale.bossDamage });
-    z.net = { x: m.x, z: m.z, yaw: 0, atk: false };
+    const z = m.boss ? new Boss(scene, spawn, m.hp, onEvent, m.id, {}) : new Zombie(scene, spawn, m.hp, m.spd, onEvent, m.id, { crawler: !!m.crawl, kind: m.kind || null });
+    if (m.run) z.runner = true;
+    if (m.fin) { z.skipSpawn(); z.pos.set(m.x, m.y || 0, m.z); if (m.boss) z.group.visible = false; }
+    z.net = { x: m.x, z: m.z, y: m.y || 0, yaw: 0, atk: false, bs: m.boss ? 9 : 0 };
     game.zombies.push(z);
   });
 
   net.on('z_tick', (m) => {
     const map = new Map();
     for (const z of game.zombies) map.set(z.id, z);
-    for (const [id, x, z, yaw, atk, y] of m.z) {
+    for (const [id, x, z, yaw, atk, y, bs, hid] of m.z) {
       const zombie = map.get(id);
       if (zombie) {
-        zombie.net = { x, z, yaw, atk: !!atk, y: y || 0 };
+        zombie.net = { x, z, yaw, atk: !!atk, y: y || 0, bs: bs || 0 };
+        if (zombie.isBoss) zombie.group.visible = !hid;
       }
     }
   });
@@ -1363,10 +1312,11 @@ function setupNetworkHandlers(net) {
   });
   // Fin de partie
   net.on('finale_req', () => { if (game.isHost && !game.finale && !game.finaleDone) game.startFinale(); });
-  net.on('finale_start', () => { game.finale = { t: CONFIG.finale.duration, remote: true }; game.finaleIntro(); });
-  net.on('finale_boss', () => hud.announce('LE BOURREAU', 'Un monstre approche…', 3000));
+  net.on('finale_start', () => { game.finale = { remote: true }; game.finaleIntro(); });
   net.on('finale_win', () => game.winFinale());
-  net.on('finale_bossdead', () => hud.announce('LE BOURREAU EST TOMBÉ', '', 2500));
+  net.on('finale_info', (m) => game.finaleInfo(m));
+  net.on('finale_say', (m) => hud.announce(m.title, m.sub, m.ms));
+  net.on('boss_fx', (m) => game.bossEvent(m.name, m));
 
   // Boîte mystère : l'hôte compte les tirages et décide des déplacements
   net.on('box_req', (m) => { if (game.isHost && !game.hostBoxRoll(m.from, m.owned || [])) net.send({ t: 'box_deny' }, m.from); });
@@ -1464,7 +1414,7 @@ function setupNetworkHandlers(net) {
     for (const id of m.doors || []) game.openDoor(id, false);
     if (m.box != null && m.box >= 0) world.setActiveBox?.(m.box);
     game.finaleDone = !!m.finaleDone;
-    game.finale = m.finale != null ? { t: m.finale, remote: true } : null;
+    game.finale = m.finale != null ? { remote: true } : null;
 
     // Supprimer d'éventuels zombies locaux existants
     for (const z of game.zombies) z.dispose();
@@ -1477,7 +1427,7 @@ function setupNetworkHandlers(net) {
       } else {
         spawn = { type: 'ground', pos: new THREE.Vector3(zd.x, 0, zd.z) };
       }
-      const z = new Zombie(scene, spawn, zd.hp, zd.spd, () => {}, zd.id, { crawler: !!zd.crawl, boss: !!zd.boss, bossDamage: CONFIG.finale.bossDamage });
+      const z = zd.boss ? new Boss(scene, spawn, zd.hp, () => {}, zd.id, {}) : new Zombie(scene, spawn, zd.hp, zd.spd, () => {}, zd.id, { crawler: !!zd.crawl, kind: zd.kind || null });
       z.pos.set(zd.x, 0, zd.z);
       if (zd.spawnT <= 0) z.skipSpawn();
       z.net = { x: zd.x, z: zd.z, yaw: 0, atk: false };
@@ -1748,6 +1698,8 @@ function precompileShaders() {
   add(new THREE.Mesh(NADE_GEO, NADE_MAT));
   add(makeTeddy());
   const disp = makeDisplay(); add(disp.root); disp.showPap('rifle');
+  for (const k of ['armored', 'bloat']) zs.push(new Zombie(scene, sp, 100, 1, () => {}, null, { kind: k }));
+  zs.push(new Boss(scene, sp, 100, () => {}, null, {}));
   for (const ch of [CHARACTERS[0], CHARACTERS[1]]) { const av = new Avatar(ch); av.flash.visible = true; add(av.root); }
   add(new THREE.Mesh(HALO_GEO, new THREE.MeshBasicMaterial({ transparent: true, blending: THREE.AdditiveBlending, depthWrite: false })));
   add(new THREE.Mesh(new THREE.DodecahedronGeometry(0.35), new THREE.MeshStandardMaterial({ color: 0x22ff66, emissive: 0x22ff66, emissiveIntensity: 1.2, roughness: 0.3 })));

@@ -433,7 +433,8 @@ export class Player {
     this.bobT += dt * (sprinting ? 12 : 8) * (moving && onGround ? 1 : 0);
     const bob = moving && onGround ? Math.sin(this.bobT) * (sprinting ? 0.06 : 0.035) : 0;
     const eyeH = this.downed ? 0.55 : P.eye;
-    this.camera.position.set(this.pos.x, this.pos.y + eyeH + bob, this.pos.z);
+    const sh = this.game.shake || 0;
+    this.camera.position.set(this.pos.x + (sh ? (Math.random() - 0.5) * sh * 0.25 : 0), this.pos.y + eyeH + bob + (sh ? (Math.random() - 0.5) * sh * 0.25 : 0), this.pos.z + (sh ? (Math.random() - 0.5) * sh * 0.25 : 0));
     this.camera.rotation.set(this.pitch + this.recoil, this.yaw, 0);
 
     // ---- animation de l'arme ----

@@ -268,6 +268,7 @@ export class Zombie {
     scene.add(this.group);
     if (opts.crawler) this.makeCrawler();
     if (opts.boss) this.makeBoss(opts.bossDamage || 45);
+    if (opts.kind) this.makeKind(opts.kind);
   }
 
   // Le Bourreau : géant, yeux rouges, frappe fort (fin de partie)
@@ -280,6 +281,30 @@ export class Zombie {
     const red = A.bossEye || (A.bossEye = new THREE.MeshBasicMaterial({ color: 0xff2010 }));
     for (const e of this.eyes) { e.material = red; e.scale.setScalar(1.6); }
     for (const m of this.mats) m.color.multiplyScalar(0.55);
+  }
+
+  // Variantes de la fin de partie : 'armored' (croisé en armure : encaisse, plus lent) et 'bloat' (pestiféré gonflé de gaz : explose à sa mort)
+  makeKind(kind) {
+    this.kind = kind;
+    const A = assets();
+    const metal = A.metalMat || (A.metalMat = new THREE.MeshStandardMaterial({ color: 0x5a6068, roughness: 0.45, metalness: 0.85 }));
+    if (kind === 'armored') {
+      this.armor = 0.5; this.speed *= 0.8; this.runner = false;
+      this.group.scale.multiplyScalar(1.12);
+      for (const m of this.mats) m.color.multiplyScalar(0.7);
+      const dome = new THREE.Mesh(new THREE.SphereGeometry(0.15, 12, 8, 0, Math.PI * 2, 0, Math.PI * 0.55), metal);
+      dome.position.set(0, 0.07, 0.02); this.headGroup.add(dome);
+      const bar = new THREE.Mesh(new THREE.BoxGeometry(0.025, 0.12, 0.03), metal); bar.position.set(0, 0.05, 0.14); this.headGroup.add(bar);
+      const plate = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.45, 0.22), metal); plate.position.set(0, 0.3, 0.02); this.spine.add(plate);
+      for (const a of this.arms) { const pad = new THREE.Mesh(new THREE.SphereGeometry(0.09, 8, 6), metal); pad.position.y = 0; a.shoulder.add(pad); }
+    } else if (kind === 'bloat') {
+      this.explodes = true; this.speed *= 0.7; this.runner = false;
+      const sc = this.group.scale.x;
+      this.group.scale.set(sc * 1.35, sc, sc * 1.35);
+      this.skinMat.color.setRGB(0.55, 0.72, 0.28);
+      this.shirtMat.color.setRGB(0.55, 0.6, 0.35);
+      this.glow = 0x1a2800;
+    }
   }
 
   // Zombie rampant : jambes arrachées, se traîne au sol sur les bras, plus lent
@@ -340,7 +365,7 @@ export class Zombie {
   // Retourne true si le zombie meurt.
   damage(amount, isHead = false) {
     if (this.dead) return false;
-    this.health -= amount;
+    this.health -= amount * (this.armor || 1);
     this.hitFlash = 0.1;
     if (this.health <= 0) {
       this.dead = true;
@@ -482,7 +507,7 @@ export class Zombie {
 
     // ----- Flash rouge quand touché -----
     this.hitFlash = Math.max(0, this.hitFlash - dt);
-    const flash = this.hitFlash > 0 ? 0x660000 : 0x000000;
+    const flash = this.hitFlash > 0 ? 0x660000 : this.glow || 0x000000;
     for (const m of this.mats) m.emissive.setHex(flash);
 
     // ----- Apparition en cours -----

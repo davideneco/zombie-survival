@@ -103,15 +103,25 @@ export const CONFIG = {
   },
   papPrice: 5000,
 
-  // Fin de partie : « L'Heure du Jugement », déclenchée à l'horloge astronomique de la cathédrale
+  // Fin de partie : « L'Heure du Jugement », déclenchée à l'horloge astronomique de la cathédrale.
+  // Quatre actes : trois vagues (crypte, galeries, portes) -> le Bourreau dans la nef -> ascension de la tour sud
+  // (330 marches) -> combat final sur la plateforme à 67 m. Les zombies n'apparaissent pas comme dans une manche
+  // classique : ils sortent de la crypte, des galeries du triforium, des portes du parvis.
   finale: {
     price: 0,             // prix pour lancer l'événement
     minRound: 8,          // manche minimale
-    duration: 120,        // secondes à tenir
-    spawnInterval: 0.9,   // un zombie toutes les x secondes pendant le siège
-    maxAlive: 30,
-    bossHealth: 40,       // santé du Bourreau = x fois la santé d'un zombie de la manche
-    bossDamage: 45,
+    maxAlive: 28,         // zombies simultanés pendant une vague
+    bossHealth: 60000,    // santé du Bourreau (joueur seul) ; +70 % par joueur supplémentaire
+    bossDamage: 45,       // coup de hache
+    chargeDamage: 55,     // ruée
+    slamDamage: 40,       // onde de choc (on l'évite en sautant)
+    breather: 8,          // secondes de répit entre deux vagues
+    waves: [
+      { name: 'La crypte s\'ouvre', where: 'crypt', count: 16, perPlayer: 4, kinds: { normal: 0.75, bloat: 0.15, crawler: 0.1 } },
+      { name: 'Les galeries', where: 'galleries', count: 20, perPlayer: 5, kinds: { normal: 0.4, runner: 0.3, crawler: 0.1, armored: 0.2 } },
+      { name: 'Les portes de la ville', where: 'portal', count: 24, perPlayer: 6, kinds: { normal: 0.3, runner: 0.25, armored: 0.25, bloat: 0.2 } },
+    ],
+    kindHealth: { normal: 1, runner: 0.8, crawler: 0.8, armored: 3, bloat: 1.6 },
   },
 
   grenade: { start: 2, max: 4, perRound: 2, fuse: 2.2, radius: 6.5, damage: 900, selfDamage: 60 },

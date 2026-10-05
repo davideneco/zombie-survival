@@ -253,6 +253,22 @@ export class Hud {
     this._set('banner', text || '', () => { this.banner.style.display = text ? 'block' : 'none'; this.banner.textContent = text || ''; });
   }
 
+  // Barre de vie du boss (haut de l'écran) : { hp, max, phase, name } ou null
+  setBossBar(b) {
+    if (!this.bossBar) {
+      const w = document.createElement('div');
+      Object.assign(w.style, { position: 'absolute', left: '50%', top: '128px', transform: 'translateX(-50%)', width: '520px', display: 'none', textAlign: 'center', textShadow: '0 0 6px #000' });
+      w.innerHTML = '<div class="bn" style="font-size:20px;letter-spacing:5px;color:#ffb0a0"></div><div style="height:14px;border:1px solid #a33;background:rgba(0,0,0,.65)"><div class="bf" style="height:100%;width:100%;background:linear-gradient(#e33,#900)"></div></div>';
+      this.el.hud.appendChild(w);
+      this.bossBar = { w, n: w.querySelector('.bn'), f: w.querySelector('.bf') };
+    }
+    const k = b ? `${Math.round((b.hp / b.max) * 200)}|${b.phase}` : '';
+    this._set('bossbar', k, () => {
+      this.bossBar.w.style.display = b ? 'block' : 'none';
+      if (b) { this.bossBar.f.style.width = `${Math.max(0, (b.hp / b.max) * 100)}%`; this.bossBar.n.textContent = `${b.name}${b.phase >= 3 ? ' — FURIEUX' : ''}`; }
+    });
+  }
+
   setNades(n) {
     this._set('nades', n, () => { this.el.nades.textContent = `GRENADES [G] ${'● '.repeat(n)}${n ? '' : '—'}`; });
   }
