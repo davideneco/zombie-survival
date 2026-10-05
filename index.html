@@ -122,6 +122,14 @@
     #overlay .btn-sub:hover { background: #3b6cb5; }
     #overlay .btn-go { padding: 12px 36px; font-size: 22px; margin-top: 10px; background: #228833; }
     #overlay .btn-go:hover { background: #2eb845; }
+    /* Choix du personnage */
+    .char-row { display: flex; gap: 10px; justify-content: center; }
+    .char-card { width: 104px; padding: 4px 4px 6px; background: rgba(0,0,0,0.55); border: 2px solid #444; border-radius: 6px; cursor: pointer; font-family: Arial, sans-serif; text-align: center; transition: border-color .12s, transform .12s; }
+    .char-card:hover { transform: translateY(-2px); border-color: #888; }
+    .char-card.sel { border-color: var(--c, #ffd24a); box-shadow: 0 0 10px var(--c, #ffd24a); }
+    .char-card img { width: 96px; height: 120px; object-fit: contain; display: block; margin: 0 auto; }
+    .char-card b { display: block; font-size: 15px; color: var(--c, #fff); letter-spacing: 1px; }
+    .char-card small { font-size: 11px; color: #aaa; }
     #lobbyBox { background: rgba(0,0,0,0.5); border: 1px solid #444; border-radius: 6px; padding: 12px 20px; width: 100%; }
     #lobbyStatus { font-size: 20px; color: #ffd24a; letter-spacing: 1px; }
     #lobbyPlayers { margin-top: 8px; font-family: Arial, sans-serif; font-size: 14px; line-height: 1.6; color: #ddd; }
@@ -199,6 +207,8 @@
         <label for="playerName">PSEUDO :</label>
         <input type="text" id="playerName" maxlength="12" value="Joueur" autocomplete="off" />
       </div>
+
+      <div id="charRow" class="char-row"></div>
 
       <div class="btn-row">
         <button class="btn btn-main" id="btnSolo">SOLO</button>

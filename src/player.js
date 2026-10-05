@@ -79,6 +79,7 @@ export class Player {
     this.bleedout = 0;
     this.selfRevive = 0;
     this.grenades = CONFIG.grenade.start;
+    this.locked = false; // arme confisquée par le Pack-a-Punch
 
     // Inventaire d'armes
     this.inventory = CONFIG.startWeapons.map((id) => this.newWeapon(id));
@@ -99,6 +100,12 @@ export class Player {
   newWeapon(id) {
     const cfg = CONFIG.weapons[id];
     return { id, ammo: cfg.magSize, reserve: cfg.startReserve, reloading: false, reloadT: 0, pap: false };
+  }
+
+  // Apparence des bras en vue à la première personne
+  setCharacter(ch) {
+    this.sleeveMat.color.setHex(ch.fp.sleeve);
+    for (const m of new Set(this.handMats)) m.color.setHex(ch.fp.hand);
   }
 
   // ---------------------------------------------------------------- Atouts
@@ -196,14 +203,15 @@ export class Player {
       const k = letter(e);
       if (k) this.keys['letter:' + k] = true;
       if (!this.game.playing || e.repeat) return;
-      if (k === 'r') this.reload();
+      if (k === 'r' && !this.locked) this.reload();
       if (k === 'e') this.game.interact();
       if (k === 'f') this.setTorch(!this.torchOn);
       if (k === 'g') this.throwGrenade();
+      if (e.code === 'Space') e.preventDefault();
+      if (this.locked) return; // arme dans le Pack-a-Punch
       if (e.code === 'Digit1') this.switchWeapon(0);
       if (e.code === 'Digit2') this.switchWeapon(1);
       if (e.code === 'Digit3') this.switchWeapon(2);
-      if (e.code === 'Space') e.preventDefault();
     });
     window.addEventListener('keyup', (e) => {
       this.keys[e.code] = false;
@@ -211,7 +219,7 @@ export class Player {
       if (k) this.keys['letter:' + k] = false;
     });
     window.addEventListener('wheel', (e) => {
-      if (!this.game.playing) return;
+      if (!this.game.playing || this.locked) return;
       if (e.deltaY > 0) this.nextWeapon();
       else if (e.deltaY < 0) this.prevWeapon();
     });
@@ -297,6 +305,18 @@ export class Player {
       hands(grp, M, [0.0, -0.09, 0.05], [0, -0.11, 0.09]);
     });
 
+    // Mains et manches : couleurs du personnage choisi (setCharacter)
+    this.sleeveMat = new THREE.MeshStandardMaterial({ color: 0x4a5530, roughness: 0.9 });
+    this.handMats = [];
+    for (const grp of Object.values(this.vms)) {
+      grp.traverse((o) => {
+        if (!o.isMesh || !o.userData.skin) return;
+        this.handMats.push(o.material);
+        const sl = new THREE.Mesh(new THREE.BoxGeometry(0.095, 0.095, 0.34), this.sleeveMat); // avant-bras
+        sl.position.set(0, 0.012, 0.22); sl.rotation.x = -0.18;
+        o.add(sl);
+      });
+    }
     this.muzzle = new THREE.Object3D();
     this.muzzle.position.set(0, 0.015, -0.6);
     this.vm.add(this.muzzle);
@@ -380,7 +400,8 @@ export class Player {
     }
     // lunette : on cache l'arme quand on vise au fusil de précision
     // (on cache le modèle de l'arme, pas le groupe entier qui contient la lumière de tir)
-    this.vms[w.id].visible = !(cfg.adsFov && this.aim > 0.8);
+    // (jamais le groupe entier : il porte la lumière de tir, et masquer une lumière recompile tous les shaders)
+    this.vms[w.id].visible = !this.locked && !(cfg.adsFov && this.aim > 0.8);
 
     // ---- tir & rechargement ----
     if (this.downed || this.dead) {
@@ -393,7 +414,7 @@ export class Player {
         w.reserve -= take;
         w.reloading = false;
       }
-    } else if (this.mouseDown && now >= this.nextShot) {
+    } else if (this.mouseDown && now >= this.nextShot && !this.locked) {
       if (w.ammo > 0) this.shoot(now, moving);
       else if (w.reserve > 0) this.reload();
       else { this.nextShot = now + 0.3; this.game.sfx.empty(); }

@@ -238,20 +238,35 @@ export class NavGrid {
     return true;
   }
 
+  // Ligne droite libre pour un zombie ? (aucune case bloquée entre les deux : sinon on viserait à travers un mur mince)
+  clear(x0, z0, x1, z1) {
+    const dx = x1 - x0, dz = z1 - z0, len = Math.hypot(dx, dz);
+    const steps = Math.ceil(len / (this.cell * 0.5));
+    for (let i = 1; i <= steps; i++) {
+      const t = i / steps;
+      if (this.isBlockedAt(x0 + dx * t, z0 + dz * t)) return false;
+    }
+    return true;
+  }
+
   // Direction (x,z normalisée) à suivre pour rejoindre le joueur ; null = chemin inconnu.
   steer(x, z, out) {
     const ix = this.cx(x), iz = this.cz(z);
     if (!this.inside(ix, iz)) return null;
-    const { nx, nz, dist } = this;
+    const { nx, nz, dist, blocked } = this;
     let best = dist[this.idx(ix, iz)], bx = ix, bz = iz;
-    const R = Math.max(2, Math.round(2 / this.cell)); // regarde ~2 m devant pour un mouvement fluide
+    // dans la marge d'un mur (case bloquée) : seuls les voisins immédiats sont sûrs, sinon on viserait à travers le mur
+    const R = blocked[this.idx(ix, iz)] ? 1 : Math.max(2, Math.round(2 / this.cell)); // sinon regarde ~2 m devant pour un mouvement fluide
     for (let dz = -R; dz <= R; dz++) {
       for (let dx = -R; dx <= R; dx++) {
         const jx = ix + dx, jz = iz + dz;
         if (jx < 0 || jz < 0 || jx >= nx || jz >= nz) continue;
         const d = dist[jz * nx + jx];
-        // favorise les cases les plus avancées vers la cible
-        if (d < best) { best = d; bx = jx; bz = jz; }
+        if (d >= best) continue;
+        // voisins immédiats : atteignables (sauf coin coupé) ; plus loin : ligne droite libre exigée
+        const adj = Math.abs(dx) <= 1 && Math.abs(dz) <= 1;
+        if (adj ? (dx !== 0 && dz !== 0 && (blocked[iz * nx + jx] || blocked[jz * nx + ix])) : !this.clear(x, z, this.worldX(jx), this.worldZ(jz))) continue;
+        best = d; bx = jx; bz = jz;
       }
     }
     if (best >= INF || (bx === ix && bz === iz)) return null;

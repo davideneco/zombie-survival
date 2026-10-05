@@ -83,9 +83,12 @@ export const CONFIG = {
     pkm: 'LE BULLDOZER', sniper: 'ŒIL DU DÉMON', svd: 'LA TSARINE', barrett: 'LE MARTEAU DE THOR', shotgun: 'LE BROYEUR', raygun: 'PORTE-TONNERRE',
   },
 
+  // Pack-a-Punch : durées de l'animation (s) ; l'arme améliorée attend offerTime secondes avant d'être rendue d'office
+  pap: { inTime: 0.9, workTime: 4.4, outTime: 0.9, offerTime: 15 },
+
   // Boîte mystère : une seule boîte, qui change d'emplacement après un nombre aléatoire de tirages (1 à maxUses)
   box: {
-    price: 950, spin: 2.6, maxUses: 30,
+    price: 950, spin: 4.4, offerTime: 10, maxUses: 30, // spin : durée du défilement des armes ; offerTime : temps pour prendre l'arme proposée
     pool: { m1911: 2, arex: 3, deagle: 2, magnum: 2, rifle: 2, ak47: 3, famas: 3, scar: 2, smg: 2, mp5: 3, p90: 2, lmg: 2, m249: 2, mg42: 2, pkm: 2, sniper: 2, svd: 2, barrett: 1, shotgun: 3, raygun: 1 },
   },
 

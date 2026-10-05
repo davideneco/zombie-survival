@@ -18,8 +18,9 @@ function makeCode() {
 const send = (ws, msg) => { if (ws.readyState === 1) ws.send(JSON.stringify(msg)); };
 const peersOf = (room) => [...room.members.values()].map((m) => ({ id: m.id, name: m.name, slot: m.slot }));
 // Plus petit emplacement (0-3) libre : détermine la couleur / le skin du joueur, identique pour tout le monde.
-const freeSlot = (room) => {
+const freeSlot = (room, want = -1) => {
   const used = new Set([...room.members.values()].map((m) => m.slot));
+  if (Number.isInteger(want) && want >= 0 && want < MAX_PLAYERS && !used.has(want)) return want; // personnage demandé s'il est libre
   for (let i = 0; i < MAX_PLAYERS; i++) if (!used.has(i)) return i;
   return 0;
 };
@@ -46,10 +47,11 @@ function onMessage(ws, raw) {
     if (ws.room) leave(ws);
     const code = makeCode();
     const room = { code, host: ws.pid, started: false, members: new Map() };
-    room.members.set(ws.pid, { id: ws.pid, name, ws, slot: 0 });
+    const slot0 = freeSlot(room, msg.slot);
+    room.members.set(ws.pid, { id: ws.pid, name, ws, slot: slot0 });
     rooms.set(code, room);
     ws.room = code;
-    send(ws, { t: 'joined', id: ws.pid, slot: 0, code, host: ws.pid, started: false, peers: peersOf(room) });
+    send(ws, { t: 'joined', id: ws.pid, slot: slot0, code, host: ws.pid, started: false, peers: peersOf(room) });
     return;
   }
 
@@ -59,7 +61,7 @@ function onMessage(ws, raw) {
     const room = rooms.get(code);
     if (!room) return send(ws, { t: 'error', msg: 'Salon introuvable.' });
     if (room.members.size >= MAX_PLAYERS) return send(ws, { t: 'error', msg: 'Salon complet (4 joueurs max).' });
-    const slot = freeSlot(room);
+    const slot = freeSlot(room, msg.slot);
     room.members.set(ws.pid, { id: ws.pid, name, ws, slot });
     ws.room = code;
     send(ws, { t: 'joined', id: ws.pid, slot, code, host: room.host, started: room.started, peers: peersOf(room) });

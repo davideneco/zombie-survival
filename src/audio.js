@@ -147,6 +147,15 @@ export class Sfx {
     this._noise(1.2, 0.9, 800, 'lowpass');
     this._tone('sine', 150, 25, 1.4, 0.7);
   }
+  tick(p = 0) { // défilement des armes de la boîte mystère
+    if (!this.ctx) return;
+    this._tone('triangle', 700 + 500 * p, 500 + 300 * p, 0.05, 0.12);
+  }
+  papWork() { // grondement mécanique du Pack-a-Punch
+    if (!this.ctx) return;
+    this._noise(4.2, 0.35, 500, 'lowpass');
+    this._tone('sawtooth', 70, 190, 4.2, 0.18);
+  }
   bell() { // cloche grave de la cathédrale
     if (!this.ctx) return;
     this._tone('sine', 196, 194, 2.5, 0.45);

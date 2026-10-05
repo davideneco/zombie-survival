@@ -9,7 +9,10 @@ import { Sfx } from './audio.js';
 import { fx } from './fx.js';
 import { Net } from './net.js';
 import { RemotePlayer, slotColor } from './remote.js';
+import { CHARACTERS, Avatar, charOf, renderPortraits } from './characters.js';
 import { makeTeddy } from './machines.js';
+import { installMachineFx } from './machineFx.js';
+import { makeDisplay } from './weaponDisplay.js';
 
 document.getElementById('version').textContent = __GAME_VERSION__;
 
@@ -90,7 +93,6 @@ const game = {
   effects: [],
   powerups: [],
   grenadesLive: [],
-  boxState: null,
   boxMove: null,
   finale: null,
   finaleDone: false,
@@ -109,6 +111,7 @@ const game = {
   roomCode: null,
   mySlot: 0,
   playerName: localStorage.getItem('zombie_name') || 'Joueur',
+  charPref: Math.max(0, Math.min(CHARACTERS.length - 1, parseInt(localStorage.getItem('zombie_char') || '0', 10) || 0)), // personnage choisi dans le menu
   remotes: new Map(), // pid -> RemotePlayer
   netTimer: 0,
   reviveTimer: 0,
@@ -433,14 +436,8 @@ const game = {
       if (p.perks[m.id]) return `${m.name} (déjà acquis)`;
       return `[E] ${m.name} — ${CONFIG.perks[m.id].desc} (${this.perkPrice(m.id)} pts)`;
     }
-    if (m.type === 'pap') {
-      if (this.boxState?.machine === m) return 'Amélioration en cours…';
-      if (p.curW.pap) return `${p.curCfg.name} est déjà amélioré`;
-      return `[E] Pack-a-Punch : améliorer ${p.curCfg.name} (${CONFIG.papPrice} pts)`;
-    }
-    if (this.boxState) return this.boxState.machine === m ? 'La boîte tourne…' : 'Une boîte mystère est déjà en cours';
-    const full = p.inventory.length >= p.maxWeapons;
-    return `[E] Boîte mystère : arme au hasard (${CONFIG.box.price} pts)${full ? ' — remplace l’arme en main' : ''}`;
+    if (m.type === 'pap') return this.papPrompt(m);
+    return this.boxPrompt(m);
   },
 
   useMachine(m) {
@@ -464,28 +461,13 @@ const game = {
       hud.announce(m.name, CONFIG.perks[m.id].desc, 2500);
       return;
     }
-    if (this.boxState) return;
     if (m.type === 'pap') {
-      if (p.curW.pap) return;
-      if (this.points < CONFIG.papPrice) { sfx.deny(); return; }
-      this.points -= CONFIG.papPrice;
-      sfx.pap();
-      // l'arme est "dans la machine" quelques secondes
-      this.boxState = { machine: m, t: 2.5, weaponIdx: p.weaponIdx };
+      if (this.papAnim?.machine === m) { this.takePap(); return; }
+      this.buyPap();
       return;
     }
-    if (this.points < CONFIG.box.price) { sfx.deny(); return; }
-    this.points -= CONFIG.box.price;
-    sfx.jingle();
-    // tirage pondéré, sans les armes déjà possédées
-    const pool = Object.entries(CONFIG.box.pool).filter(([id]) => !p.hasWeapon(id));
-    const total = pool.reduce((s2, [, w]) => s2 + w, 0);
-    let r = Math.random() * total, pick = pool[0]?.[0] || 'smg';
-    for (const [id, w] of pool) { if ((r -= w) <= 0) { pick = id; break; } }
-    // nounours ? c'est l'hôte (ou le solo) qui compte les tirages
-    this.boxState = { machine: m, t: CONFIG.box.spin, result: pick, spin: 0, teddy: false };
-    if (this.isClient) this.net?.send({ t: 'box_req' });
-    else this.boxState.teddy = this.countBoxUse();
+    if (this.boxRoll?.machine === m) { this.takeBoxWeapon(); return; }
+    this.buyBox();
   },
 
   // ---------------------------------------------------------- Fin de partie : l'Heure du Jugement
@@ -590,42 +572,6 @@ const game = {
     this.boxUses = 0;
     this.boxLimit = 1 + Math.floor(Math.random() * CONFIG.box.maxUses);
     if (this.boxMove) { this.boxMove.from.group.remove(this.boxMove.teddy); this.boxMove = null; }
-  },
-
-  updateBox(dt) {
-    const b = this.boxState;
-    if (!b) return;
-    b.t -= dt;
-    const lid = b.machine.group.userData.lid;
-    if (lid) lid.rotation.x = -Math.min(1.2, (CONFIG.box.spin - b.t) * 3);
-    if (b.result) {
-      // noms qui défilent pendant le tirage
-      b.spin -= dt;
-      if (b.spin <= 0 && b.t > 0.3) {
-        b.spin = 0.12;
-        const ids = Object.keys(CONFIG.box.pool);
-        hud.prompt(`? ${CONFIG.weapons[ids[Math.floor(Math.random() * ids.length)]].name} ?`);
-      }
-    }
-    if (b.t > 0) return;
-    const p = this.player;
-    if (b.result && b.teddy) {
-      // nounours : on est remboursé, et la boîte part ailleurs
-      this.addPoints(CONFIG.box.price, 'bonus');
-      hud.announce('NOUNOURS !', 'La boîte mystère s\'en va… (remboursé)', 3000);
-      if (!this.isClient) this.hostMoveBox();
-    } else if (b.result) {
-      p.giveWeapon(b.result);
-      sfx.powerup();
-      hud.announce(CONFIG.weapons[b.result].name, 'Boîte mystère', 2500);
-    } else {
-      // Pack-a-Punch terminé : on récupère l'arme améliorée
-      if (p.inventory[b.weaponIdx]) p.switchWeapon(b.weaponIdx);
-      p.upgradeCurrent();
-      hud.announce(p.curCfg.name, 'Arme améliorée au Pack-a-Punch !', 2800);
-    }
-    if (lid) lid.rotation.x = 0;
-    this.boxState = null;
   },
 
   // ---------------------------------------------------------- Grenades / explosions
@@ -876,8 +822,8 @@ const game = {
     this.powerups = [];
     for (const g of this.grenadesLive) scene.remove(g.mesh);
     this.grenadesLive = [];
-    if (this.boxState?.machine.group.userData.lid) this.boxState.machine.group.userData.lid.rotation.x = 0;
-    this.boxState = null;
+    this.resetBoxRoll();
+    this.resetPap();
     if (resetStats) this.resetBox();
     if (resetStats) { this.finale = null; this.finaleDone = false; hud.setBanner?.(null); }
     fx.clear();
@@ -951,7 +897,8 @@ const game = {
       this.relocateZombies(dt, targets);
     }
     this.updateGrenades(dt);
-    this.updateBox(dt);
+    this.updateBoxRoll(dt);
+    this.updatePap(dt);
     this.updateBoxMove(dt);
 
     this.updateFinale(dt);
@@ -1080,6 +1027,9 @@ const game = {
           dead: p.dead,
           pts: this.points,
           w: p.curW.id,
+          pap: p.curW.pap ? 1 : 0,
+          rl: p.curW.reloading ? 1 : 0,
+          ads: p.aiming ? 1 : 0,
         });
 
         // L'hôte envoie la position et l'état de tous les zombies
@@ -1159,14 +1109,38 @@ const game = {
       const d = this.nearDoor();
       promptText = `[E] Ouvrir la porte vers ${d.name} (${d.price} pts)`;
     }
-    // pendant le tirage de la boîte, le prompt affiche les armes qui défilent
-    if (!(this.boxState && this.boxState.result && this.nearMachine() === this.boxState.machine)) hud.prompt(promptText);
+    hud.prompt(promptText);
   },
 };
 
 sfx.setVolume(settings.volume);
 game.player = new Player(camera, scene, world, game);
 hud.setWeapon(game.player.curCfg.name);
+installMachineFx(game, { world, hud, sfx, fx });
+game.player.setCharacter(charOf(game.charPref));
+
+// Choix du personnage (menu) : cartes avec portrait, rendu une seule fois
+{
+  const row = document.getElementById('charRow');
+  if (row) {
+    const cards = CHARACTERS.map((ch, i) => {
+      const c = document.createElement('div');
+      c.className = 'char-card'; c.style.setProperty('--c', ch.accent);
+      c.innerHTML = `<img alt="${ch.name}" /><b>${ch.name}</b><small>${ch.role}</small>`;
+      c.addEventListener('click', (e) => {
+        e.stopPropagation();
+        game.charPref = i; localStorage.setItem('zombie_char', String(i));
+        game.player.setCharacter(ch);
+        cards.forEach((x, k) => x.classList.toggle('sel', k === i));
+      });
+      row.appendChild(c);
+      return c;
+    });
+    cards[game.charPref].classList.add('sel');
+    // les portraits sont dessinés juste après le premier affichage (un petit contexte WebGL à part)
+    setTimeout(() => { try { renderPortraits(200).forEach((u, i) => { cards[i].querySelector('img').src = u; }); } catch (err) { console.warn('portraits', err); } }, 400);
+  }
+}
 
 // --------------------------------------------- Multijoueur / Réseau
 function addRemote(id, name, slot) {
@@ -1266,6 +1240,7 @@ function setupNetworkHandlers(net) {
     const o = new THREE.Vector3(m.origin.x, m.origin.y, m.origin.z);
     const e = new THREE.Vector3(m.end.x, m.end.y, m.end.z);
     game.tracer(o, e);
+    game.remotes.get(m.from)?.fire();
     const d = Math.hypot(m.origin.x - game.player.pos.x, m.origin.z - game.player.pos.z);
     if (d < 50) {
       game.weaponSound(m.w);
@@ -1340,13 +1315,16 @@ function setupNetworkHandlers(net) {
   net.on('finale_bossdead', () => hud.announce('LE BOURREAU EST TOMBÉ', '', 2500));
 
   // Boîte mystère : l'hôte compte les tirages et décide des déplacements
-  net.on('box_req', (m) => {
-    if (!game.isHost) return;
-    const teddy = game.countBoxUse();
-    net.send({ t: 'box_res', teddy }, m.from);
-    if (teddy) setTimeout(() => game.hostMoveBox(), CONFIG.box.spin * 1000 + 200);
-  });
-  net.on('box_res', (m) => { if (game.boxState && game.boxState.result) game.boxState.teddy = !!m.teddy; });
+  net.on('box_req', (m) => { if (game.isHost && !game.hostBoxRoll(m.from, m.owned || [])) net.send({ t: 'box_deny' }, m.from); });
+  net.on('box_roll', (m) => game.startBoxRoll(m));
+  net.on('box_deny', () => { game.points += CONFIG.box.price; sfx.deny(); });
+  net.on('box_take', (m) => { if (game.isHost) game.hostBoxTake(m.from); });
+  net.on('box_taken', (m) => game.onBoxTaken(m.pid));
+  net.on('box_expire', () => { if (game.boxRoll?.phase === 'offer') { game.boxRoll.offerT = 0; } });
+  net.on('pap_req', (m) => { if (game.isHost && !game.hostPapStart(m.from, m.w)) net.send({ t: 'pap_deny' }, m.from); });
+  net.on('pap_start', (m) => game.startPapAnim(m));
+  net.on('pap_deny', () => { game.points += CONFIG.papPrice; game.player.locked = false; sfx.deny(); });
+  net.on('pap_taken', () => game.endPap());
   net.on('box_state', (m) => { game.boxUses = m.uses; });
   net.on('box_move', (m) => { game.startBoxMove(m.idx); });
 
@@ -1553,6 +1531,7 @@ hud.el.btnHost.addEventListener('click', async (e) => {
     net.on('joined', (m) => {
       net.id = m.id;
       game.mySlot = m.slot || 0;
+      game.player.setCharacter(charOf(game.mySlot));
       net.hostId = m.host;
       game.isHost = true;
       game.isClient = false;
@@ -1566,7 +1545,7 @@ hud.el.btnHost.addEventListener('click', async (e) => {
       updateLobbyUI(m.peers);
     });
 
-    net.send({ t: 'create', name: game.playerName });
+    net.send({ t: 'create', name: game.playerName, slot: game.charPref });
   } catch (err) {
     alert("Impossible d'héberger le salon : " + err.message);
   }
@@ -1589,6 +1568,7 @@ hud.el.btnJoin.addEventListener('click', async (e) => {
     net.on('joined', (m) => {
       net.id = m.id;
       game.mySlot = m.slot || 0;
+      game.player.setCharacter(charOf(game.mySlot));
       net.hostId = m.host;
       game.isHost = false;
       game.isClient = true;
@@ -1622,7 +1602,7 @@ hud.el.btnJoin.addEventListener('click', async (e) => {
       }
     });
 
-    net.send({ t: 'join', code, name: game.playerName });
+    net.send({ t: 'join', code, name: game.playerName, slot: game.charPref });
   } catch (err) {
     alert('Impossible de rejoindre : ' + err.message);
   }
@@ -1713,11 +1693,14 @@ function precompileShaders() {
   const zs = [new Zombie(scene, sp, 100, 1, () => {}), new Zombie(scene, sp, 100, 1, () => {}, null, { crawler: true }), new Zombie(scene, sp, 100, 1, () => {}, null, { boss: true })];
   add(new THREE.Mesh(NADE_GEO, NADE_MAT));
   add(makeTeddy());
+  const disp = makeDisplay(); add(disp.root); disp.showPap('rifle');
+  for (const ch of [CHARACTERS[0], CHARACTERS[1]]) { const av = new Avatar(ch); av.flash.visible = true; add(av.root); }
   add(new THREE.Mesh(HALO_GEO, new THREE.MeshBasicMaterial({ transparent: true, blending: THREE.AdditiveBlending, depthWrite: false })));
   add(new THREE.Mesh(new THREE.DodecahedronGeometry(0.35), new THREE.MeshStandardMaterial({ color: 0x22ff66, emissive: 0x22ff66, emissiveIntensity: 1.2, roughness: 0.3 })));
   add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3(0, 1, 0)]), new THREE.LineBasicMaterial({ transparent: true })));
   const tagTex = new THREE.CanvasTexture(document.createElement('canvas'));
   add(new THREE.Sprite(new THREE.SpriteMaterial({ map: tagTex, depthTest: false, transparent: true })));
+  add(new THREE.Sprite(new THREE.SpriteMaterial({ map: tagTex, depthTest: false, transparent: true, fog: false }))); // étiquette de nom des coéquipiers
   if (world.windowSpawns?.length) world.windowSpawns[0].getQuad();
   // les objets cachés (autres armes, zombies en attente…) sont rendus visibles le temps de la compilation ;
   // pas les lumières, pour compiler avec le vrai nombre de lumières

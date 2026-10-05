@@ -288,6 +288,7 @@ export async function buildRealWorld(scene, renderer) {
 
   // Bâtiments décrits en 3D par leurs parties : on dessine les parties à la place du contour
   const hasParts = new Set();
+  const partsOf = new Map(); // bâtiment -> parties qui touchent le sol (ce qu'on voit réellement : seul cela doit bloquer)
   {
     const covered = new Map();
     for (const prt of data.parts || []) {
@@ -296,7 +297,16 @@ export async function buildRealWorld(scene, renderer) {
       const cx = pts.reduce((s2, q) => s2 + q[0], 0) / pts.length, cz = pts.reduce((s2, q) => s2 + q[1], 0) / pts.length;
       const arr = bGrid.get(Math.floor(cx / BG) * 4096 + Math.floor(cz / BG)) || [];
       const k = arr.find((i) => { const [a, b, c, d] = blds[i].box; return cx >= a && cx <= c && cz >= b && cz <= d && pointInPoly(cx, cz, blds[i].pts); });
-      if (k != null) covered.set(k, (covered.get(k) || 0) + Math.abs(polyArea(pts)));
+      if (k != null) {
+        prt._k = k;
+        covered.set(k, (covered.get(k) || 0) + Math.abs(polyArea(pts)));
+        if ((parseFloat(prt.tags?.min_height) || 0) < 2.5) {
+          let minX = Infinity, minZ = Infinity, maxX = -Infinity, maxZ = -Infinity;
+          for (const [x, z] of pts) { minX = Math.min(minX, x); maxX = Math.max(maxX, x); minZ = Math.min(minZ, z); maxZ = Math.max(maxZ, z); }
+          if (!partsOf.has(k)) partsOf.set(k, []);
+          partsOf.get(k).push({ pts, minX, minZ, maxX, maxZ });
+        }
+      }
     }
     for (const [k, a] of covered) if (a >= 0.4 * Math.abs(polyArea(blds[k].pts))) hasParts.add(k);
   }
@@ -305,6 +315,45 @@ export async function buildRealWorld(scene, renderer) {
     r.pts[0] = ext(r.pts[0], r.pts[1]);
     r.pts[r.pts.length - 1] = ext(r.pts[r.pts.length - 1], r.pts[r.pts.length - 2]);
   }
+
+  // Un mur de contour n'existe que là où une partie 3D est dessinée : sinon il resterait un mur invisible (Palais Rohan, cathédrale…)
+  const distToRing = (x, z, pts) => {
+    let best = Infinity;
+    for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+      const ax = pts[j][0], az = pts[j][1], abx = pts[i][0] - ax, abz = pts[i][1] - az, l2 = abx * abx + abz * abz;
+      let t = l2 > 0 ? ((x - ax) * abx + (z - az) * abz) / l2 : 0; t = t < 0 ? 0 : t > 1 ? 1 : t;
+      best = Math.min(best, Math.hypot(x - ax - abx * t, z - az - abz * t));
+    }
+    return best;
+  };
+  const supportedRuns = (k, ax, az, bx, bz) => {
+    const parts = partsOf.get(k) || [];
+    const len = Math.hypot(bx - ax, bz - az), n = Math.max(1, Math.ceil(len / 0.5));
+    const runs = [];
+    let start = -1;
+    for (let i = 0; i <= n; i++) {
+      const t = i / n, x = ax + (bx - ax) * t, z = az + (bz - az) * t;
+      const ok = i < n + 1 && parts.some((q) => x >= q.minX - 1 && x <= q.maxX + 1 && z >= q.minZ - 1 && z <= q.maxZ + 1 && (pointInPoly(x, z, q.pts) || distToRing(x, z, q.pts) < 1));
+      if (ok && start < 0) start = Math.max(0, (i - 1) / n);
+      if (!ok && start >= 0) { runs.push([start, Math.min(1, i / n)]); start = -1; }
+    }
+    if (start >= 0) runs.push([start, 1]);
+    return runs;
+  };
+  // intersection de deux listes d'intervalles triés
+  const clipRuns = (runs, cuts) => {
+    let out = runs;
+    for (const [c0, c1] of cuts) {
+      const next = [];
+      for (const [a, b] of out) {
+        if (c1 <= a || c0 >= b) { next.push([a, b]); continue; }
+        if (c0 > a) next.push([a, c0]);
+        if (c1 < b) next.push([c1, b]);
+      }
+      out = next;
+    }
+    return out;
+  };
 
   // Place de départ ; brèches (bâtiments effondrés) seulement si aucun passage ne la relie à la ville
   const breach = findBreaches(blds.map((b) => b.pts), halfX, halfZ, CONFIG.startHint, CONFIG.cityHint, CONFIG.breaches, NAV_CELL, NAV_MARGIN, passages);
@@ -322,13 +371,15 @@ export async function buildRealWorld(scene, renderer) {
       // creuse : seul le contour extérieur bloque (ouvert au grand portail) ; l'intérieur est construit à part
       for (let i = 0; i < pts.length; i++) {
         const [ax, az] = pts[i], [bx, bz] = pts[(i + 1) % pts.length], dx = bx - ax, dz = bz - az;
-        let t = 0;
-        for (const [t0, t1] of cath.cutsOf(ax, az, bx, bz)) { if (t0 > t) collision.addSegment(ax + dx * t, az + dz * t, ax + dx * t0, az + dz * t0); t = t1; }
-        if (t < 1) collision.addSegment(ax + dx * t, az + dz * t, bx, bz);
+        for (const [t0, t1] of clipRuns(supportedRuns(k, ax, az, bx, bz), cath.cutsOf(ax, az, bx, bz))) {
+          if ((t1 - t0) * Math.hypot(dx, dz) > 0.05) collision.addSegment(ax + dx * t0, az + dz * t0, ax + dx * t1, az + dz * t1);
+        }
       }
       continue;
     }
-    polygons.push({ pts });
+    const partial = hasParts.has(k);
+    if (partial) { for (const q of partsOf.get(k) || []) if (Math.abs(polyArea(q.pts)) > 1) polygons.push({ pts: q.pts }); }
+    else polygons.push({ pts });
     const edgeCuts = [];
     for (let i = 0; i < pts.length; i++) {
       const [ax, az] = pts[i], [bx, bz] = pts[(i + 1) % pts.length];
@@ -336,12 +387,13 @@ export async function buildRealWorld(scene, renderer) {
       // ouvertures des passages sous immeubles : pas de mur en bas, seulement le linteau au-dessus
       const cuts = len >= 0.05 ? cutIntervals(passages, ax, az, bx, bz, axisInside) : [];
       edgeCuts.push(cuts);
-      const solid = [];
+      let solid = [];
       let t = 0;
       for (const [t0, t1] of cuts) { if (t0 > t) solid.push([t, t0]); t = t1; }
       if (t < 1) solid.push([t, 1]);
+      if (partial) solid = clipRuns(supportedRuns(k, ax, az, bx, bz), cuts);
       for (const [t0, t1] of solid) if ((t1 - t0) * len > 0.05) collision.addSegment(ax + dx * t0, az + dz * t0, ax + dx * t1, az + dz * t1);
-      if (len < 0.3) continue;
+      if (len < 0.3 || partial) continue;
       facadeSegs.push([ax, az, bx, bz, dz / len, -dx / len, Math.max(1, Math.round(len / BAY_W)), len]);
     }
     if (hasParts.has(k)) continue; // rendu à partir de ses parties 3D (cathédrale, églises…)
@@ -373,7 +425,13 @@ export async function buildRealWorld(scene, renderer) {
         };
       }
     }
-    arch.part(pts, prt.tags || {}, opts);
+    let tags = prt.tags || {};
+    if (tags.height == null && prt._k != null && !tags['min_height']) { // partie sans hauteur : elle prend celle du bâtiment (Palais Rohan…)
+      const bh = blds[prt._k].h || 12;
+      tags = { ...tags, height: String(bh) };
+      if ((tags['roof:shape'] || 'flat') !== 'flat' && tags['roof:height'] == null) tags['roof:height'] = String(Math.min(5, bh * 0.4));
+    }
+    arch.part(pts, tags, opts);
   }
   arch.finish(scene);
 
@@ -1098,6 +1156,7 @@ export async function buildRealWorld(scene, renderer) {
         const sign = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 0.47), new THREE.MeshBasicMaterial({ map: signTex(name, `${price} PTS`, color), transparent: true }));
         sign.position.set(0, bh + 0.55, 0.3);
         g.add(sign);
+        g.userData.sign = sign;
       }
       const [w, d, h] = g.userData.size;
       g.position.set(x, 0, z);

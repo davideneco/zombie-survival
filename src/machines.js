@@ -329,6 +329,26 @@ export function makePackAPunch() {
   for (const z of [-0.3, 0.1]) { const r = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, W - 0.2, 16), roller); r.rotation.z = Math.PI / 2; r.position.set(0, H + 0.12, z); g.add(r); }
   const pipe = new THREE.MeshStandardMaterial({ color: 0x6a3a8a, roughness: 0.4, metalness: 0.7, emissive: 0x3a0a5a, emissiveIntensity: 0.6 });
   for (const sx of [-1, 1]) { const p = new THREE.Mesh(new THREE.TorusGeometry(0.35, 0.06, 8, 16, Math.PI), pipe); p.position.set(sx * (W / 2 - 0.2), H, -0.2); p.rotation.y = Math.PI / 2; g.add(p); }
+  // fente d'introduction de l'arme, fermée par une porte coulissante
+  const rim = new THREE.MeshStandardMaterial({ color: 0xb8742a, roughness: 0.4, metalness: 0.9 });
+  const hole = new THREE.MeshStandardMaterial({ color: 0x07030c, roughness: 0.6, metalness: 0.3, emissive: 0x2a0850, emissiveIntensity: 0.5 });
+  const SY = 0.58;
+  const put = (geo, mat, x, y, z) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); g.add(m); return m; };
+  put(new THREE.BoxGeometry(1.3, 0.3, 0.05), rim, 0, SY, D / 2 + 0.03);
+  put(new THREE.BoxGeometry(1.14, 0.2, 0.06), hole, 0, SY, D / 2 + 0.035);
+  const slotDoor = new THREE.Mesh(new THREE.BoxGeometry(1.16, 0.22, 0.05), metal); slotDoor.position.set(0, SY, D / 2 + 0.07); g.add(slotDoor);
+  // engrenages sur les flancs (tournent pendant l'amélioration)
+  const gears = [];
+  for (const sx of [-1, 1]) {
+    const gear = new THREE.Group();
+    gear.add(new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 0.07, 16), rim));
+    for (let k = 0; k < 10; k++) { const t = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.07, 0.12), rim); const a = (k / 10) * Math.PI * 2; t.position.set(Math.cos(a) * 0.33, 0, Math.sin(a) * 0.33); t.rotation.y = -a; gear.add(t); }
+    gear.rotation.z = Math.PI / 2; gear.position.set(sx * (W / 2 + 0.04), H * 0.62, 0.1);
+    g.add(gear); gears.push(gear);
+  }
+  g.userData.rollers = g.children.filter((o) => o.geometry && o.geometry.type === 'CylinderGeometry' && o.position.y > H);
+  g.userData.slotDoor = slotDoor; g.userData.slotY = SY; g.userData.gears = gears; g.userData.front = front;
+  g.userData.anchor = [0, 1.0, D / 2 + 0.7];
   g.userData.size = [W, D, H + 0.4];
   return g;
 }
