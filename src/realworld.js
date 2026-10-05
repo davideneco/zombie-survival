@@ -5,9 +5,11 @@ import { NavGrid } from './nav.js';
 import { computeIsland, stitchRings } from './island.js';
 import { findBreaches } from './breach.js';
 import { preparePassages, cutIntervals, insideRuns, distToPassage } from './passage.js';
+import { Levels } from './levels.js';
 import { createArchitecture, BAY_W } from './architecture.js';
 import { createProps } from './props.js';
-import { planCathedral, buildInterior, CEIL, PORTAL_H, pointInPoly as inPoly } from './cathedral.js';
+import { planCathedral, CEIL, pointInPoly as inPoly } from './cathedral.js';
+import { buildCathedral, augmentPlan, PORTAL_H } from './cath/index.js';
 import { makePerkMachine, makeAmmoStation, makeWallBuy, addPosts, makeMysteryBox, makePackAPunch, makeAstronomicalClock } from './machines.js';
 
 // =====================================================================
@@ -260,10 +262,12 @@ export async function buildRealWorld(scene, renderer) {
     if (area < 0) pts.reverse();
     blds.push({ pts, h: bld.h, tags: bld.tags || {}, name: bld.name });
   }
+  let cathInfo = null;
+  const levels = new Levels(); // étages (cathédrale : balcons, escaliers, plateforme, flèche)
   // Cathédrale : intérieur jouable (zone de fin de partie)
   let kCath = blds.findIndex((b) => b.name === 'Cathédrale Notre-Dame');
   if (kCath < 0) kCath = blds.reduce((best, b, k) => (b.tags.building === 'cathedral' && (best < 0 || Math.abs(polyArea(b.pts)) > Math.abs(polyArea(blds[best].pts))) ? k : best), -1);
-  const cath = kCath >= 0 ? planCathedral(blds[kCath].pts, (data.parts || []).map((p) => ({ pts: cleanRing(p.pts), tags: p.tags || {} }))) : null;
+  const cath = kCath >= 0 ? augmentPlan(planCathedral(blds[kCath].pts, (data.parts || []).map((p) => ({ pts: cleanRing(p.pts), tags: p.tags || {} })))) : null;
 
   // Passages sous immeubles : on repère les portions d'axe qui passent dans un bâtiment
   const passages = preparePassages(data.passages);
@@ -412,16 +416,32 @@ export async function buildRealWorld(scene, renderer) {
     if (cath) {
       const c = pts.reduce((a, q) => [a[0] + q[0] / pts.length, a[1] + q[1] / pts.length], [0, 0]);
       if (inPoly(c[0], c[1], cath.outline)) {
-        const top = parseFloat(prt.tags.height) || 0;
+        const top = parseFloat(prt.tags.height) || 0, minH = parseFloat(prt.tags.min_height) || 0;
+        const sc = cath.S(c[0], c[1]), tc = cath.T(c[0], c[1]);
+        const inMassif = sc > -53 && sc < -26 && Math.abs(tc) < 27;
+        const tw = cath.P(-39.5, -14);
+        // remplacés par les étages modélisés (cath/) : planchers du massif, maisonnette de l'escalier, tour nord et flèche
+        if (inMassif && top - minH <= 1.6 && polyArea(pts) > 300) continue;
+        if (minH >= 65 && sc > -48 && sc < -29 && tc > 6 && tc < 22) continue;
+        if (minH >= 60 && Math.hypot(c[0] - tw[0], c[1] - tw[1]) < 13) continue;
         opts = {
-          // un mur dont le milieu est sous la voûte est intérieur : masqué (ou seulement au-dessus de la voûte)
-          keepEdge: (ax, az, bx, bz) => {
-            const n = Math.max(2, Math.ceil(Math.hypot(bx - ax, bz - az)));
-            for (let i = 0; i <= n; i++) if (cath.insideInner(ax + ((bx - ax) * i) / n, az + ((bz - az) * i) / n)) return top > CEIL + 0.5 ? CEIL + 0.2 : false;
-            return true;
+          // un mur dont l'extérieur donne sur l'intérieur de l'édifice est une cloison : masqué jusqu'à la hauteur des voûtes
+          keepEdge: (ax, az, bx, bz, wallTop) => {
+            const len = Math.hypot(bx - ax, bz - az) || 1, n = Math.max(1, Math.ceil(len / 1.5));
+            const nx = (bz - az) / len, nz = -(bx - ax) / len;
+            const sgn = inPoly((ax + bx) / 2 + nx * 0.3, (az + bz) / 2 + nz * 0.3, pts) ? -1 : 1; // sens vers l'extérieur de la partie
+            let ext = 0, hideTo = 0;
+            for (let i = 0; i <= n; i++) {
+              const x = ax + ((bx - ax) * i) / n, z = az + ((bz - az) * i) / n;
+              const o = cath.ceilAt(x + nx * sgn * 0.7, z + nz * sgn * 0.7), here = cath.ceilAt(x, z);
+              if (o == null && here == null) { ext++; continue; }
+              hideTo = Math.max(hideTo, o || 0, here || 0, cath.ceilAt(x - nx * sgn * 0.7, z - nz * sgn * 0.7) || 0);
+            }
+            if (ext > n / 2) return true; // mur extérieur
+            return wallTop > hideTo + 0.5 ? hideTo + 0.2 : false;
           },
           cutsOf: cath.cutsOf, portalH: PORTAL_H,
-          skipRoof: cath.insideInner(c[0], c[1]) && top <= CEIL + 0.5,
+          skipRoof: (cath.ceilAt(c[0], c[1]) != null && top <= cath.ceilAt(c[0], c[1]) + 0.5) || (inMassif && polyArea(pts) > 500),
         };
       }
     }
@@ -578,11 +598,12 @@ export async function buildRealWorld(scene, renderer) {
   }
 
   // ---------------------------------------------------------------- Intérieur de la cathédrale
-  if (cath) buildInterior(scene, cath, { collision, lightSources, props });
+  if (cath) cathInfo = buildCathedral({ scene, plan: cath, collision, lightSources, props, levels });
 
   // ---------------------------------------------------------------- Navigation de base (pour placer les props)
   collision.build();
   const nav = new NavGrid(halfX, halfZ, collision, polygons, NAV_CELL, NAV_MARGIN, 1300);
+  nav.segFilter = (it) => collision._blocks(it, 0); // la grille du sol ignore les obstacles d'étage (garde-corps, murs des tours…)
   nav.outside = (x, z) => !onIsland(x, z);
   nav.carve = (b) => {
     for (const r of passageRuns) {
@@ -1393,6 +1414,8 @@ export async function buildRealWorld(scene, renderer) {
 
   // ---------------------------------------------------------------- Finalisation navigation
   collision.build();
+  levels.build();
+  levels.buildNavs(NavGrid, collision);
   // Les portes sont ouvertes pour construire la grille, puis leurs cases sont bloquées une par une.
   for (const d of doors) for (const s of d.segs) s.off = true;
   nav.build();
@@ -1468,7 +1491,9 @@ export async function buildRealWorld(scene, renderer) {
     stationPos, stations, wallWeapons, doors, openDoor, zoneOf, startPos, nav, collision, machines, boxes, setActiveBox,
     zoneNames: ZONE_NAMES, zoneCenters, startZone, sealedPoints, mapImage, mapView: { halfX, halfZ, scale: MAP_SCALE },
     mapCrop: { x0: secMinX - 60, x1: secMaxX + 60, z0: secMinZ - 50, z1: secMaxZ + 50 }, mapTitle: 'SECTEUR DU MARCHÉ-NEUF — STRASBOURG',
-    cathedral: cath ? { seed: cath.seed, clock: cath.clock, insideInner: cath.insideInner, inner: cath.inner } : null,
+    cathedral: cath ? { seed: cath.seed, clock: cath.clock, insideInner: cath.insideInner, inner: cath.inner, P: cath.P, S: cath.S, T: cath.T, ceilAt: cath.ceilAt, info: cathInfo } : null,
+    levels,
+    floorAt: (x, z, y, out) => levels.floorAt(x, z, y, out),
     collide: (pos, r) => collision.resolve(pos, r),
     rayHit: (ox, oy, oz, dx, dy, dz, maxT) => collision.rayHit(ox, oy, oz, dx, dy, dz, maxT),
     update(px, pz, dt) {

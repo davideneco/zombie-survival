@@ -7,27 +7,44 @@ export class Collision {
     this.cell = cell;
     this.segs = [];
     this.circles = [];
+    this.floors = [];
     this.grid = new Map();
     this.stamp = 0;
   }
 
-  // h : hauteur de l'obstacle (les balles passent au-dessus). off : obstacle désactivé (porte ouverte).
-  addSegment(ax, az, bx, bz, h = Infinity) {
-    const s = { ax, az, bx, bz, h, off: false, stamp: 0 };
+  // h : hauteur du dessus de l'obstacle (les balles passent au-dessus) ; y0 : hauteur du dessous (obstacles d'étage :
+  // garde-corps d'un balcon, mur d'une tour…). off : obstacle désactivé (porte ouverte).
+  addSegment(ax, az, bx, bz, h = Infinity, y0 = -Infinity) {
+    const s = { ax, az, bx, bz, h, y0, off: false, stamp: 0 };
     this.segs.push(s);
     return s;
   }
 
-  addCircle(x, z, r, h = 4) { this.circles.push({ x, z, r, h, off: false, stamp: 0 }); }
+  addCircle(x, z, r, h = 4, y0 = -Infinity) { const c = { x, z, r, h, y0, off: false, stamp: 0 }; this.circles.push(c); return c; }
+
+  // Dalles horizontales (planchers des étages) qui arrêtent les balles : triangles [ax,az,bx,bz,cx,cz] à la hauteur y
+  addFloor(y, tris) {
+    let minX = Infinity, minZ = Infinity, maxX = -Infinity, maxZ = -Infinity;
+    for (const t of tris) for (let i = 0; i < 6; i += 2) { minX = Math.min(minX, t[i]); maxX = Math.max(maxX, t[i]); minZ = Math.min(minZ, t[i + 1]); maxZ = Math.max(maxZ, t[i + 1]); }
+    this.floors.push({ y, tris, minX, maxX, minZ, maxZ });
+  }
+
+  // Cet obstacle gêne-t-il un corps dont les pieds sont à la hauteur y ?
+  //  - obstacle posé au sol : il bloque tant qu'on est en dessous de son sommet (au moins 1,35 m : on ne saute pas par-dessus un banc)
+  //  - obstacle d'étage (y0 fini) : il bloque entre son dessous et son dessus
+  _blocks(it, y) {
+    if (it.y0 > -Infinity) return y + 1.7 > it.y0 && y < it.h - 0.3;
+    return it.h === Infinity || y < Math.max(it.h - 0.35, 1.35);
+  }
 
   // Boîte orientée (caisses, voitures, barrières) = 4 segments
-  addBox(x, z, w, d, rot = 0, h = Infinity) {
+  addBox(x, z, w, d, rot = 0, h = Infinity, y0 = -Infinity) {
     const c = Math.cos(rot), s = Math.sin(rot);
     const pts = [[-w / 2, -d / 2], [w / 2, -d / 2], [w / 2, d / 2], [-w / 2, d / 2]]
       .map(([px, pz]) => [x + px * c - pz * s, z + px * s + pz * c]);
     for (let i = 0; i < 4; i++) {
       const a = pts[i], b = pts[(i + 1) % 4];
-      this.addSegment(a[0], a[1], b[0], b[1], h);
+      this.addSegment(a[0], a[1], b[0], b[1], h, y0);
     }
   }
 
@@ -58,7 +75,7 @@ export class Collision {
 
   // Pousse `pos` (x,z) hors des obstacles et le garde dans la zone de jeu.
   resolve(pos, radius) {
-    const c = this.cell;
+    const c = this.cell, py = pos.y || 0;
     for (let pass = 0; pass < 2; pass++) {
       this.stamp++;
       const x0 = Math.floor((pos.x - radius) / c), x1 = Math.floor((pos.x + radius) / c);
@@ -70,6 +87,7 @@ export class Collision {
           for (const it of arr) {
             if (it.stamp === this.stamp || it.off) continue;
             it.stamp = this.stamp;
+            if (!this._blocks(it, py)) continue;
             let cx, cz, rr = radius;
             if (it.r !== undefined) {
               cx = it.x; cz = it.z; rr += it.r;
@@ -106,7 +124,20 @@ export class Collision {
   // de bâtiments, beaucoup trop lent avec plusieurs milliers de bâtiments.
   rayHit(ox, oy, oz, dx, dy, dz, maxT) {
     let best = maxT;
-    if (dy < -1e-6) best = Math.min(best, oy / -dy); // sol
+    if (dy < -1e-6 && oy > 0) best = Math.min(best, oy / -dy); // sol
+    for (const f of this.floors) { // planchers : la balle les traverse seulement par les trous (escaliers)
+      if (Math.abs(dy) < 1e-6) break;
+      const t = (f.y - oy) / dy;
+      if (t <= 0.02 || t >= best) continue;
+      const px = ox + dx * t, pz = oz + dz * t;
+      if (px < f.minX || px > f.maxX || pz < f.minZ || pz > f.maxZ) continue;
+      for (const tr of f.tris) {
+        const d1 = (px - tr[2]) * (tr[1] - tr[3]) - (tr[0] - tr[2]) * (pz - tr[3]);
+        const d2 = (px - tr[4]) * (tr[3] - tr[5]) - (tr[2] - tr[4]) * (pz - tr[5]);
+        const d3 = (px - tr[0]) * (tr[5] - tr[1]) - (tr[4] - tr[0]) * (pz - tr[1]);
+        if (!((d1 < 0 || d2 < 0 || d3 < 0) && (d1 > 0 || d2 > 0 || d3 > 0))) { best = t; break; }
+      }
+    }
     const h2 = Math.hypot(dx, dz);
     if (h2 < 1e-9) return best;
     const ux = dx / h2, uz = dz / h2; // direction horizontale unitaire ; la distance 3D = t2d / h2
@@ -143,7 +174,7 @@ export class Collision {
           }
           if (t > 0 && t < best2d) {
             const y = oy + dy * (t / h2);
-            if (y >= 0 && y <= it.h) best2d = t;
+            if (y >= it.y0 && y <= it.h) best2d = t;
           }
         }
       }

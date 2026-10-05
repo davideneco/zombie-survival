@@ -80,6 +80,7 @@ export class Player {
     this.selfRevive = 0;
     this.grenades = CONFIG.grenade.start;
     this.locked = false; // arme confisquée par le Pack-a-Punch
+    this.region = 0; this.wasGrounded = true;
 
     // Inventaire d'armes
     this.inventory = CONFIG.startWeapons.map((id) => this.newWeapon(id));
@@ -376,12 +377,18 @@ export class Player {
     this.pos.x += this.vel.x * dt;
     this.pos.z += this.vel.z * dt;
 
-    // ---- saut / gravité ----
-    const onGround = this.pos.y <= 0.001;
+    // ---- saut / gravité (sol = niveau 0, ou balcon / escalier / plateforme sous les pieds) ----
+    const fl = this._fl || (this._fl = { y: 0, region: 0 });
+    if (this.world.floorAt) this.world.floorAt(this.pos.x, this.pos.z, this.pos.y, fl); else { fl.y = 0; fl.region = 0; }
+    const ground = fl.y;
+    const onGround = this.pos.y <= ground + 0.02 && this.vy <= 0.5;
     if (K.Space && onGround && !this.downed) this.vy = P.jumpSpeed;
     this.vy -= P.gravity * dt;
     this.pos.y += this.vy * dt;
-    if (this.pos.y < 0) { this.pos.y = 0; this.vy = 0; }
+    if (this.pos.y <= ground) { this.pos.y = ground; this.vy = 0; }
+    else if (this.wasGrounded && this.vy <= 0 && this.pos.y - ground < 0.45) { this.pos.y = ground; this.vy = 0; } // on colle à la pente en descendant
+    this.wasGrounded = this.pos.y <= ground + 0.02;
+    this.region = fl.region;
 
     this.world.collide(this.pos, P.radius);
 

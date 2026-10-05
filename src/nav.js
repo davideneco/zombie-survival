@@ -10,6 +10,7 @@ export class NavGrid {
   constructor(halfX, halfZ, collision, polygons, cell = 0.5, margin = 0.5, maxCost = Infinity) {
     this.halfX = halfX;
     this.halfZ = halfZ;
+    this.ox = -halfX; this.oz = -halfZ; // coin (x, z) minimal de la grille : une grille locale (étage) peut être décalée
     this.cell = cell;
     this.nx = Math.round((halfX * 2) / cell);
     this.nz = Math.round((halfZ * 2) / cell);
@@ -21,17 +22,19 @@ export class NavGrid {
     this.dist = new Int32Array(this.nx * this.nz).fill(INF);
     this.touched = [];
     this.lastTargetKey = null;
+    this.walkable = null; // (x, z) => true si praticable (grille locale d'un étage : tout le reste est bloqué)
+    this.segFilter = null; // (segment | cercle) => true si l'obstacle compte pour cette grille (obstacles de l'étage)
     this.outside = null; // (x, z) => true si hors de la zone jouable
     this.carve = null;   // (blocked) => libère les cases des passages sous immeubles
   }
 
   // ---- conversions ----
-  cx(x) { return Math.floor((x + this.halfX) / this.cell); }
-  cz(z) { return Math.floor((z + this.halfZ) / this.cell); }
+  cx(x) { return Math.floor((x - this.ox) / this.cell); }
+  cz(z) { return Math.floor((z - this.oz) / this.cell); }
   idx(ix, iz) { return iz * this.nx + ix; }
   inside(ix, iz) { return ix >= 0 && iz >= 0 && ix < this.nx && iz < this.nz; }
-  worldX(ix) { return (ix + 0.5) * this.cell - this.halfX; }
-  worldZ(iz) { return (iz + 0.5) * this.cell - this.halfZ; }
+  worldX(ix) { return this.ox + (ix + 0.5) * this.cell; }
+  worldZ(iz) { return this.oz + (iz + 0.5) * this.cell; }
 
   // À appeler quand l'état des obstacles change (porte ouverte) : force le recalcul du champ.
   invalidate() { this.lastTargetKey = null; }
@@ -46,9 +49,12 @@ export class NavGrid {
     const { nx, nz, cell, margin } = this;
     const b = this.blocked;
     b.fill(0);
+    if (this.walkable) { // grille locale : seul ce qui est praticable est libre
+      for (let iz = 0; iz < nz; iz++) for (let ix = 0; ix < nx; ix++) b[iz * nx + ix] = this.walkable(this.worldX(ix), this.worldZ(iz)) ? 0 : 1;
+    }
 
     // 1) intérieur des bâtiments
-    for (const poly of this.polys) {
+    for (const poly of (this.walkable ? [] : this.polys)) {
       const pts = poly.pts;
       let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
       for (const [x, z] of pts) { minX = Math.min(minX, x); maxX = Math.max(maxX, x); minZ = Math.min(minZ, z); maxZ = Math.max(maxZ, z); }
@@ -79,8 +85,9 @@ export class NavGrid {
         }
       }
     };
-    for (const s of this.col.segs) if (!s.off) mark(s.ax, s.az, s.bx, s.bz, margin);
-    for (const c of this.col.circles) mark(c.x, c.z, c.x, c.z, c.r + margin);
+    const keep = this.segFilter;
+    for (const s of this.col.segs) if (!s.off && (!keep || keep(s))) mark(s.ax, s.az, s.bx, s.bz, margin);
+    for (const c of this.col.circles) if (!c.off && (!keep || keep(c))) mark(c.x, c.z, c.x, c.z, c.r + margin);
 
     // 3) bord de la zone de jeu
     const m = Math.ceil(margin / cell);

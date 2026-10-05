@@ -113,7 +113,7 @@ export function planCathedral(outline, parts) {
 }
 
 // ------------------------------------------------------------------ Textures
-function canvasTex(w, h, draw, emissive = false) {
+export function canvasTex(w, h, draw, emissive = false) {
   const c = document.createElement('canvas'); c.width = w; c.height = h;
   const x = c.getContext('2d');
   if (emissive) { x.fillStyle = '#000'; x.fillRect(0, 0, w, h); }
@@ -122,8 +122,8 @@ function canvasTex(w, h, draw, emissive = false) {
   t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 8;
   return t;
 }
-const GLASS = ['#1a3a9a', '#a01a1a', '#1a7a3a', '#c09a1a', '#6a1a8a', '#1a6aa0', '#c0501a'];
-function stainedGlass(x, px, py, w, h, emis) {
+export const GLASS = ['#1a3a9a', '#a01a1a', '#1a7a3a', '#c09a1a', '#6a1a8a', '#1a6aa0', '#c0501a'];
+export function stainedGlass(x, px, py, w, h, emis) {
   // vitrail en lancette : petites pièces colorées sertie de plomb
   x.save(); x.beginPath(); x.moveTo(px, py + h); x.lineTo(px, py + w * 0.6);
   for (let a = 0; a <= 16; a++) { const t = a / 16; x.lineTo(px + w * t, py + w * 0.6 - Math.sin(t * Math.PI) * w * 0.6); }
@@ -159,7 +159,7 @@ function wallTextures() {
   };
   return [canvasTex(W, H, draw, false), canvasTex(W, H, draw, true)];
 }
-function floorTex() {
+export function floorTex() {
   return canvasTex(512, 512, (x, w, h) => {
     const n = 4, c = w / n;
     for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) {
@@ -170,7 +170,7 @@ function floorTex() {
     for (let i = 0; i <= n; i++) { x.beginPath(); x.moveTo(i * c, 0); x.lineTo(i * c, h); x.stroke(); x.beginPath(); x.moveTo(0, i * c); x.lineTo(w, i * c); x.stroke(); }
   });
 }
-function vaultTex() {
+export function vaultTex() {
   // une travée : voûte peinte bleu nuit étoilée, ogives en croix et arcs doubleaux
   return canvasTex(512, 512, (x, w, h) => {
     const g = x.createRadialGradient(w / 2, h / 2, 10, w / 2, h / 2, w * 0.7); g.addColorStop(0, '#2a3458'); g.addColorStop(1, '#141a30');
@@ -182,7 +182,7 @@ function vaultTex() {
     x.fillStyle = '#c8a050'; x.beginPath(); x.arc(w / 2, h / 2, 22, 0, 7); x.fill(); // clé de voûte dorée
   });
 }
-function roseTex(emissive) {
+export function roseTex(emissive) {
   return canvasTex(1024, 1024, (x, w, h, emis) => {
     const c = w / 2;
     x.translate(c, c);
@@ -367,7 +367,7 @@ export function buildInterior(scene, plan, { collision, lightSources, props }) {
   lightSources.push({ x: plan.pIn[0] + axis.ux * 6, y: 14, z: plan.pIn[1] + axis.uz * 6, color: 0x9a7aff, intensity: 10, dist: 20 });
 }
 
-function mergeAll(list) {
+export function mergeAll(list) {
   const geos = list.map((g) => (g.index ? g.toNonIndexed() : g));
   const pos = [], nor = [];
   for (const g of geos) { pos.push(...g.attributes.position.array); nor.push(...g.attributes.normal.array); }

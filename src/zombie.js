@@ -153,6 +153,8 @@ export class Zombie {
     this.runner = speed > 3.2;
     this.crawler = false;
     this.noProgress = 0; // secondes passées sans réussir à avancer (coincé)
+    this.region = 0;     // étage (0 = sol de la ville) ; link : escalier en cours d'emprunt
+    this.link = null;
 
     // Matériaux (clonés : le flash de dégâts est propre à chaque zombie)
     const mk = (tex) => new THREE.MeshStandardMaterial({ map: tex, bumpMap: tex, bumpScale: 0.6, roughness: 0.85 });
@@ -485,7 +487,6 @@ export class Zombie {
 
     // ----- Apparition en cours -----
     if (this.spawnT > 0) { this._spawnUpdate(dt); return; }
-    this.pos.y = 0;
 
     // ----- Pantin réseau (client) : on suit l'état de l'hôte, sans IA -----
     if (this.net) {
@@ -493,11 +494,12 @@ export class Zombie {
       const bx = this.pos.x, bz = this.pos.z;
       this.pos.x += (n.x - this.pos.x) * k;
       this.pos.z += (n.z - this.pos.z) * k;
+      this.pos.y += ((n.y || 0) - this.pos.y) * k;
       let d = n.yaw - this.yaw;
       d = Math.atan2(Math.sin(d), Math.cos(d));
       this.yaw += d * k;
       this.group.rotation.set(0, this.yaw, 0);
-      if (Math.hypot(n.x - this.pos.x, n.z - this.pos.z) > 8) { this.pos.x = n.x; this.pos.z = n.z; } // téléporté par l'hôte
+      if (Math.hypot(n.x - this.pos.x, n.z - this.pos.z) > 8) { this.pos.x = n.x; this.pos.z = n.z; this.pos.y = n.y || 0; } // téléporté par l'hôte
       const moving = Math.hypot(this.pos.x - bx, this.pos.z - bz) > this.speed * dt * 0.3;
       this.walkT += dt * (moving ? this.speed * (this.runner ? 2.6 : 3.2) : 1.2);
       const lean = this.runner ? 0.5 : 0.28;
@@ -508,19 +510,23 @@ export class Zombie {
     }
 
     const Z = CONFIG.zombie;
+    const lv = world.levels, hasLv = !!lv && lv.links.length > 0;
+    if (!this.link) this.pos.y = this.region && lv ? lv.regions[this.region].y : 0; // le zombie reste à la hauteur de son étage
+    const zr = this.link ? (this.link.dir > 0 ? this.link.link.b : this.link.link.a) : this.region;
 
     let target = player;
     if (Array.isArray(player)) {
-      let bestDist = Infinity;
+      let bestCost = Infinity;
       target = null;
-      // seulement les joueurs debout : on ignore les joueurs à terre ou morts
-      const candidates = player.filter((pl) => pl && !pl.dead && !pl.downed);
-      for (const pl of candidates) {
-        const d = Math.hypot(pl.pos.x - this.pos.x, pl.pos.z - this.pos.z);
-        if (d < bestDist) {
-          bestDist = d;
-          target = pl;
+      // seulement les joueurs debout, et atteignables (par les escaliers) : on ignore les joueurs à terre ou morts
+      for (const pl of player) {
+        if (!pl || pl.dead || pl.downed) continue;
+        let cost = Math.hypot(pl.pos.x - this.pos.x, pl.pos.z - this.pos.z);
+        if (hasLv) {
+          const pr = pl.tregion || 0;
+          if (pr !== zr) { const hd = lv.hopDistance(zr, pr); if (hd === Infinity) continue; cost += hd + 12; }
         }
+        if (cost < bestCost) { bestCost = cost; target = pl; }
       }
     }
     if (!target) { // personne à poursuivre : il titube sur place
@@ -530,17 +536,28 @@ export class Zombie {
       else this._pose(this.walkT, 0.15, 0.85, this.runner ? 0.5 : 0.28, 0.18);
       return;
     }
+    if (this.link) { this._onLink(dt, target, world); return; }
 
-    const dx = target.pos.x - this.pos.x;
-    const dz = target.pos.z - this.pos.z;
+    // ----- Objectif : le joueur (même étage), ou le pied de l'escalier qui mène vers lui -----
+    let gx = target.pos.x, gz = target.pos.z, chase = true;
+    const tr = hasLv ? target.tregion || 0 : 0;
+    if (hasLv && this.region !== tr) {
+      const hop = lv.nextHop(this.region, tr);
+      if (!hop) { this.walkT += dt * 1.2; this._pose(this.walkT, 0.15, 0.85, 0.28, 0.18); return; }
+      const L = hop.link, e = hop.dir > 0 ? L.path[0] : L.path[L.path.length - 1];
+      gx = e[0]; gz = e[2]; chase = false;
+      if (Math.hypot(gx - this.pos.x, gz - this.pos.z) < 1.3) { this.link = { link: L, dir: hop.dir, s: hop.dir > 0 ? 0 : L.length }; return; }
+    }
+    const dx = gx - this.pos.x;
+    const dz = gz - this.pos.z;
     const dist = Math.hypot(dx, dz);
 
-    // ----- Direction : tout droit si le joueur est visible, sinon via le flow field -----
-    const nav = world.nav;
-    let dirx = dx / dist, dirz = dz / dist;
+    // ----- Direction : tout droit si l'objectif est visible, sinon via le flow field de l'étage -----
+    const nav = this.region && lv ? lv.regions[this.region].nav : world.nav;
+    let dirx = dx / (dist || 1), dirz = dz / (dist || 1);
     let visible = true;
     if (nav) {
-      visible = dist < 1.5 || nav.los(this.pos.x, this.pos.z, target.pos.x, target.pos.z);
+      visible = dist < 1.5 || nav.los(this.pos.x, this.pos.z, gx, gz);
       if (!visible) {
         const s = nav.steer(this.pos.x, this.pos.z, this._steer);
         if (s) { dirx = s.x; dirz = s.z; }
@@ -556,7 +573,7 @@ export class Zombie {
 
     // ----- Déplacement -----
     this.attackCd -= dt;
-    const inRange = dist < Z.attackRange && visible;
+    const inRange = chase && dist < Z.attackRange && visible && Math.abs(target.pos.y - this.pos.y) < 2.4;
     let moving = false;
     if (!inRange && this.attackWindup < 0) {
       moving = true;
@@ -575,7 +592,7 @@ export class Zombie {
         if (o === this || o.dead || o.spawnT > 0) continue;
         const ox = this.pos.x - o.pos.x, oz = this.pos.z - o.pos.z;
         const d = Math.hypot(ox, oz);
-        if (d > 0 && d < 0.8) {
+        if (d > 0 && d < 0.8 && o.region === this.region && !o.link) {
           const push = (0.8 - d) * 0.5;
           this.pos.x += (ox / d) * push;
           this.pos.z += (oz / d) * push;
@@ -605,7 +622,7 @@ export class Zombie {
     if (this.attackWindup >= 0) {
       this.attackWindup -= dt;
       if (this.attackWindup < 0) {
-        if (Math.hypot(target.pos.x - this.pos.x, target.pos.z - this.pos.z) < Z.attackRange + 0.5) {
+        if (Math.hypot(target.pos.x - this.pos.x, target.pos.z - this.pos.z) < Z.attackRange + 0.5 && Math.abs(target.pos.y - this.pos.y) < 2.6) {
           target.hurt(this.attackDamage || Z.damage);
         }
         this.attackCd = Z.attackCooldown;
@@ -621,6 +638,47 @@ export class Zombie {
     if (this.crawler) { this._poseCrawl(this.walkT, attacking); return; }
     const lean = this.runner ? 0.5 : 0.28;
     this._pose(this.walkT, moving ? (this.runner ? 1.25 : 1) : 0.15, attacking ? 1.5 : 0.85, attacking ? lean + 0.3 : lean, attacking ? 0.4 : 0.18);
+  }
+
+  // Sur un escalier : le zombie suit le chemin 3D du lien (ou va à la rencontre du joueur qui s'y trouve) et frappe sur place
+  _onLink(dt, target, world) {
+    const lv = world.levels, k = this.link, L = k.link, Z = CONFIG.zombie;
+    this.attackCd -= dt;
+    const dx = target.pos.x - this.pos.x, dz = target.pos.z - this.pos.z, dy = target.pos.y - this.pos.y;
+    const d3 = Math.hypot(dx, dz, dy);
+    let moving = this.attackWindup < 0;
+    if (target.region === L.region) { // le joueur est sur la même volée de marches : on va vers lui
+      const ps = lv.project(L, target.pos.x, target.pos.z, target.pos.y);
+      k.dir = ps >= k.s ? 1 : -1;
+      if (Math.abs(ps - k.s) < 1.3) moving = false;
+    }
+    const inRange = d3 < Z.attackRange + 0.2 && Math.abs(dy) < 2.2;
+    if (inRange) moving = false;
+    const sp = this.limp ? this.speed * 0.8 : this.speed;
+    const tmp = this._lk || (this._lk = { x: 0, y: 0, z: 0, yaw: 0 });
+    if (moving) k.s += k.dir * sp * 0.9 * dt;
+    lv.pointOn(L, k.s, tmp);
+    this.pos.set(tmp.x, tmp.y, tmp.z);
+    let diff = (inRange ? Math.atan2(dx, dz) : tmp.yaw + (k.dir < 0 ? Math.PI : 0)) - this.yaw;
+    diff = Math.atan2(Math.sin(diff), Math.cos(diff));
+    this.yaw += diff * Math.min(1, dt * 8);
+    this.group.rotation.set(0, this.yaw, 0);
+    if (moving) this.walkT += dt * sp * (this.runner ? 2.6 : 3.2); else this.walkT += dt * 1.2;
+    if (this.attackWindup >= 0) {
+      this.attackWindup -= dt;
+      if (this.attackWindup < 0) {
+        if (d3 < Z.attackRange + 0.7) target.hurt(this.attackDamage || Z.damage);
+        this.attackCd = Z.attackCooldown; this.attackWindup = -1;
+      }
+    } else if (inRange && this.attackCd <= 0) this.attackWindup = 0.35;
+    this.attacking = this.attackWindup >= 0;
+    if (k.s <= 0 || k.s >= L.length) { // arrivé : on reprend l'IA normale sur l'étage d'arrivée
+      this.region = k.dir > 0 ? L.b : L.a;
+      this.link = null;
+    }
+    if (this.crawler) { this._poseCrawl(this.walkT, this.attacking); return; }
+    const lean = this.runner ? 0.5 : 0.28;
+    this._pose(this.walkT, moving ? (this.runner ? 1.25 : 1) : 0.15, this.attacking ? 1.5 : 0.85, this.attacking ? lean + 0.3 : lean, this.attacking ? 0.4 : 0.18);
   }
 
   dispose() {

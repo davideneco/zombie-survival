@@ -248,13 +248,60 @@ const game = {
     this.gameOver();
   },
 
+  // ------------------------------------------------------------- Étages (cathédrale)
+  // Région (étage) de chaque joueur : tregion = étage « utile » (un joueur sur un escalier compte pour l'extrémité la plus proche)
+  updateLevels() {
+    const lv = world.levels;
+    if (!lv || !lv.links.length) return;
+    const p = this.player;
+    p.tregion = lv.endRegion(p.region || 0, p.pos.x, p.pos.z, p.pos.y);
+    for (const r of this.remotes.values()) {
+      r.region = lv.regionAt(r.pos.x, r.pos.z, r.pos.y);
+      r.tregion = lv.endRegion(r.region, r.pos.x, r.pos.z, r.pos.y);
+    }
+  },
+  // Sources du champ de flux d'un étage : les joueurs qui y sont, et le pied de l'escalier qui mène aux autres
+  fieldTargets(region, players) {
+    const lv = world.levels;
+    if (!lv || !lv.links.length) return players;
+    const out = [];
+    for (const pl of players) {
+      const pr = pl.tregion || 0;
+      if (pr === region) { out.push(pl); continue; }
+      const hop = lv.nextHop(region, pr);
+      if (!hop) continue;
+      const L = hop.link, e = hop.dir > 0 ? L.path[0] : L.path[L.path.length - 1];
+      out.push({ x: e[0], z: e[2] });
+    }
+    return out;
+  },
+  // Champs de flux des étages où se trouvent des zombies (grilles petites : calcul complet toutes les 0,3 s)
+  updateRegionFields(dt, players) {
+    const lv = world.levels;
+    if (!lv || !lv.links.length) return;
+    this.regionFieldT = (this.regionFieldT || 0) - dt;
+    if (this.regionFieldT > 0) return;
+    this.regionFieldT = 0.3;
+    const used = new Set();
+    for (const z of this.zombies) if (!z.dead && z.region) used.add(z.region);
+    for (const r of used) {
+      const reg = lv.regions[r];
+      if (!reg.nav) continue;
+      const t = this.fieldTargets(r, players);
+      if (t.length) reg.nav.computeField(t);
+    }
+  },
+
   // Zombies coincés dans le décor ou partis trop loin : on les fait réapparaître près des joueurs (hôte)
   relocateZombies(dt, targets) {
     this.relocateTimer -= dt;
     if (this.relocateTimer > 0 || !targets.length || !world.pickGround) return;
     this.relocateTimer = 1;
+    const groundTargets = targets.filter((t) => !t.tregion);
+    if (!groundTargets.length) return;
+    targets = groundTargets;
     for (const z of this.zombies) {
-      if (z.dead || z.spawnT > 0) continue;
+      if (z.dead || z.spawnT > 0 || z.region || z.link) continue;
       let near = Infinity;
       for (const t of targets) near = Math.min(near, Math.hypot(t.pos.x - z.pos.x, t.pos.z - z.pos.z));
       z.farT = near > 90 ? (z.farT || 0) + 1 : 0;
@@ -295,7 +342,7 @@ const game = {
     halo.scale.setScalar(0.9);
     grp.add(halo);
 
-    grp.position.set(pos.x, 0.9, pos.z);
+    grp.position.set(pos.x, (pos.y || 0) + 0.9, pos.z);
     scene.add(grp);
 
     const pu = {
@@ -603,7 +650,8 @@ const game = {
         if (dot < 0) { g.vel.x -= 1.6 * dot * ux; g.vel.z -= 1.6 * dot * uz; }
         g.pos.x = pushed.x; g.pos.z = pushed.z;
       }
-      if (g.pos.y < 0.09) { g.pos.y = 0.09; g.vel.y = Math.abs(g.vel.y) * 0.35; g.vel.x *= 0.6; g.vel.z *= 0.6; if (g.vel.y < 0.6) g.vel.y = 0; }
+      const gy = world.floorAt ? world.floorAt(g.pos.x, g.pos.z, g.pos.y + 0.3, this._gfl || (this._gfl = { y: 0, region: 0 })).y + 0.09 : 0.09;
+      if (g.pos.y < gy) { g.pos.y = gy; g.vel.y = Math.abs(g.vel.y) * 0.35; g.vel.x *= 0.6; g.vel.z *= 0.6; if (g.vel.y < 0.6) g.vel.y = 0; }
       g.mesh.position.copy(g.pos);
       g.mesh.rotation.x += dt * 8;
       if (Number.isNaN(before.x)) g.t = 0;
@@ -885,14 +933,19 @@ const game = {
 
     // Pathfinding / champ de flux multi-joueurs (Hôte ou Solo uniquement)
     // (calculé par tranches à chaque image sur toute la carte, uniquement vers les joueurs debout)
+    this.updateLevels(dt);
     if (world.nav && (this.isHost || !this.isMultiplayer)) {
       const targets = [p, ...this.remotes.values()].filter((pl) => !pl.dead && !pl.downed);
       if (targets.length) {
-        if (world.nav.updateField) world.nav.updateField(targets, 25000);
-        else {
-          this.navTimer = (this.navTimer ?? 0) - dt;
-          if (this.navTimer <= 0) { world.nav.computeField(targets); this.navTimer = 0.15; }
+        const gt = this.fieldTargets(0, targets);
+        if (gt.length) {
+          if (world.nav.updateField) world.nav.updateField(gt, 25000);
+          else {
+            this.navTimer = (this.navTimer ?? 0) - dt;
+            if (this.navTimer <= 0) { world.nav.computeField(gt); this.navTimer = 0.15; }
+          }
         }
+        this.updateRegionFields(dt, targets);
       }
       this.relocateZombies(dt, targets);
     }
@@ -1042,6 +1095,7 @@ const game = {
               Math.round(z.pos.z * 100) / 100,
               Math.round(z.yaw * 100) / 100,
               z.attacking ? 1 : 0,
+              Math.round(z.pos.y * 100) / 100,
             ]);
           }
           this.net?.send({ t: 'z_tick', z: zdata });
@@ -1282,10 +1336,10 @@ function setupNetworkHandlers(net) {
   net.on('z_tick', (m) => {
     const map = new Map();
     for (const z of game.zombies) map.set(z.id, z);
-    for (const [id, x, z, yaw, atk] of m.z) {
+    for (const [id, x, z, yaw, atk, y] of m.z) {
       const zombie = map.get(id);
       if (zombie) {
-        zombie.net = { x, z, yaw, atk: !!atk };
+        zombie.net = { x, z, yaw, atk: !!atk, y: y || 0 };
       }
     }
   });
