@@ -1132,15 +1132,27 @@ export async function buildRealWorld(scene, renderer) {
   const machines = [];
   {
     const placed = [];
+    // distance d'un point à la porte payante la plus proche
+    const doorDist = (x, z) => {
+      let m = Infinity;
+      for (const d of doors) for (const p of d.points) m = Math.min(m, Math.hypot(p.x - x, p.z - z));
+      return m;
+    };
+    // Un atout trop près d'une porte gêne : son invite [E] (rayon 2,6 m) prend le pas sur celle de la porte (rayon 3,4 m),
+    // et le joueur ne trouve plus l'endroit où acheter l'ouverture. Sans recouvrement des deux rayons : > 6 m.
+    const PERK_DOOR_GAPS = [8, 6.5];
     // emplacement libre dans la zone, près de son lieu, à plus de 5 m des autres objets
-    const spotIn = (zi, minClear, minD, maxD) => {
+    // doorGaps : distances minimales aux portes à essayer, de la plus grande à la plus petite (à chaque élargissement)
+    const spotIn = (zi, minClear, minD, maxD, doorGaps = [0]) => {
       const a = seeds[zi];
       if (!a) return null;
       // on élargit la recherche, puis on accepte moins d'espace autour (rues étroites)
       for (const [r, clear] of [[maxD, minClear], [maxD * 1.6, minClear], [maxD * 2.5, minClear], [maxD * 2.5, Math.max(1, minClear - 1)]]) {
-        const c = shuffle(candidatesNear(a[0], a[1], clear, minD, r)
-          .filter((p) => zoneOf(p[0], p[1]) === zi && placed.every((q) => Math.hypot(q[0] - p[0], q[1] - p[1]) > 5)))[0];
-        if (c) { placed.push(c); return c; }
+        for (const gap of doorGaps) {
+          const c = shuffle(candidatesNear(a[0], a[1], clear, minD, r)
+            .filter((p) => zoneOf(p[0], p[1]) === zi && placed.every((q) => Math.hypot(q[0] - p[0], q[1] - p[1]) > 5) && (!gap || doorDist(p[0], p[1]) >= gap)))[0];
+          if (c) { placed.push(c); return c; }
+        }
       }
       return null;
     };
@@ -1206,7 +1218,9 @@ export async function buildRealWorld(scene, renderer) {
           addMachine(type, id, fixed.p, zi, fixed.rot);
           placed.push(fixed.p);
         } else {
-          addMachine(type, id, spotIn(zi, 3, 4, start ? 30 : 35), zi);
+          const R = start ? 30 : 35;
+          // un atout n'est jamais abandonné : si aucun emplacement n'est loin des portes, on retombe sur l'ancien tirage
+          addMachine(type, id, type === 'perk' ? spotIn(zi, 3, 4, R, PERK_DOOR_GAPS) || spotIn(zi, 3, 4, R) : spotIn(zi, 3, 4, R), zi);
         }
       }
     });
