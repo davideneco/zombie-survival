@@ -2,6 +2,3 @@ node_modules
 dist
 .DS_Store
 *.log
-
-# musique personnalisée : protégée par le droit d'auteur et le dépôt est public (voir public/music/LISEZMOI.txt)
-public/music/theme.*
