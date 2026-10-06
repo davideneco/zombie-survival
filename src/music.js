@@ -167,6 +167,24 @@ export class Music {
     this.duck.gain.setTargetAtTime(on ? 0.55 : 1, t, 0.2);
   }
 
+  // Joue un morceau fourni (AudioBuffer) en boucle à la place du rock synthétisé. Le niveau est ramené à celui de
+  // la musique intégrée pour que le curseur « Musique » ait le même effet quel que soit le fichier.
+  playTrack(buf) {
+    this.stop();
+    const d = buf.getChannelData(0);
+    let sum = 0, n = 0;
+    for (let i = 0; i < d.length; i += 4) { sum += d[i] * d[i]; n++; }
+    const rms = Math.sqrt(sum / Math.max(1, n));
+    const g = this.ctx.createGain();
+    g.gain.value = rms > 1e-4 ? Math.min(6, Math.max(0.3, 0.56 / rms)) : 1; // vise un RMS de -5 dB avant le bus
+    const src = this.ctx.createBufferSource();
+    src.buffer = buf;
+    src.loop = true;
+    src.connect(g).connect(this.out);
+    src.start();
+    this.track = src;
+  }
+
   start() {
     if (this.timer) return;
     this.nextTime = this.ctx.currentTime + 0.1;

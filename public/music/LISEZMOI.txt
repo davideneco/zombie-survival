@@ -1,0 +1,9 @@
+Musique de fond personnalisée
+=============================
+
+Dépose ici un fichier nommé  theme.mp3  (ou theme.ogg, theme.m4a, theme.wav) :
+le jeu le joue en boucle à la place du rock synthétisé. Sans fichier, c'est le rock intégré qui joue.
+
+- Le curseur « Musique » des options règle son volume ; la musique est étouffée dans les menus et en pause.
+- Le niveau est ajusté automatiquement : inutile de normaliser le fichier.
+- N'utilise que de la musique dont tu as les droits (ou libre de droits) : ce dossier est publié avec le jeu.

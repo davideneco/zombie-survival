@@ -33,6 +33,8 @@ const GUNS = {
   svd:     { cf: 3200, cd: 0.07,  cv: 0.95, bf: 1300, bd: 0.34, bv: 0.85, tf: 95,  td: 0.28, tv: 0.85, gf: 180, gd: 0.15, gv: 0.42, rv: 0.8,  ec: 0.4,  ed: 0.24 },
   barrett: { cf: 2400, cd: 0.09,  cv: 1,    bf: 900,  bd: 0.55, bv: 1,    tf: 62,  td: 0.5,  tv: 1,    gf: 120, gd: 0.25, gv: 0.5,  rv: 1,    ec: 0.55, ed: 0.3 },
 };
+// Morceau personnalisé : déposer un de ces fichiers dans public/music/ (voir le LISEZMOI de ce dossier)
+const CUSTOM_TRACKS = ['/music/theme.mp3', '/music/theme.ogg', '/music/theme.m4a', '/music/theme.wav'];
 // Armes sans profil propre
 const GUN_FALLBACK = { pistol: 'm1911', ar: 'rifle', smg: 'mp5', mg: 'm249', sniper: 'sniper' };
 
@@ -69,11 +71,25 @@ export class Sfx {
     if (this.ctx) { this.ctx.resume(); return; }
     const c = this.ctx = new (window.AudioContext || window.webkitAudioContext)();
     this._build(c);
-    this.music.start();
+    // un morceau déposé dans public/music/ remplace le rock synthétisé (s'il n'y en a pas, on lance le rock)
+    this._loadTrack().then((ok) => { if (!ok) this.music.start(); });
     // onglet en arrière-plan : plus de son (et le séquenceur de la musique s'arrête avec l'horloge audio)
     document.addEventListener('visibilitychange', () => {
       if (document.hidden) c.suspend(); else c.resume();
     });
+  }
+
+  async _loadTrack() {
+    for (const url of CUSTOM_TRACKS) {
+      try {
+        const res = await fetch(url);
+        // un fichier absent renvoie souvent la page d'accueil (SPA) : decodeAudioData la refusera
+        if (!res.ok || /text\/html/.test(res.headers.get('content-type') || '')) continue;
+        this.music.playTrack(await this.ctx.decodeAudioData(await res.arrayBuffer()));
+        return true;
+      } catch { /* pas de morceau, ou format illisible : on passe au suivant */ }
+    }
+    return false;
   }
 
   // Chaîne audio : sons -> bus -> compresseur -> volume général ; réverbération partagée ; musique sur le même bus
