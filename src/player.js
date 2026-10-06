@@ -530,7 +530,7 @@ export class Player {
     if (w.reloading || w.ammo >= cfg.magSize || w.reserve <= 0) return;
     w.reloading = true;
     w.reloadT = 0;
-    this.game.sfx.reload();
+    this.game.sfx.reload(cfg.cat, cfg.reloadTime);
   }
 
   throwGrenade() {

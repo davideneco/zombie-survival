@@ -49,7 +49,7 @@ scene.add(moon, moon.target);
 const MOON_OFFSET = new THREE.Vector3(25, 55, 15);
 
 // ------------------------------------------------------- Options (client)
-const DEFAULT_SETTINGS = { brightness: 1.4, fov: 80, sens: 1, volume: 1, quality: 1 };
+const DEFAULT_SETTINGS = { brightness: 1.4, fov: 80, sens: 1, volume: 1, music: 0.5, quality: 1 };
 const settings = { ...DEFAULT_SETTINGS };
 try { Object.assign(settings, JSON.parse(localStorage.getItem('zombie_settings') || '{}')); } catch {}
 
@@ -139,17 +139,9 @@ const game = {
     return list;
   },
 
-  // Bruit de tir selon la famille de l'arme
-  weaponSound(id) {
-    const w = CONFIG.weapons[id];
-    if (!w) return sfx.shot();
-    if (id === 'raygun') return sfx.ray();
-    if (w.cat === 'shotgun') return sfx.shotgun();
-    if (w.cat === 'sniper' || id === 'deagle' || id === 'magnum') return sfx.heavy();
-    if (w.cat === 'pistol') return sfx.pistol();
-    if (w.cat === 'smg') return sfx.smg();
-    if (w.cat === 'mg') return sfx.mg();
-    return sfx.shot();
+  // Bruit de tir (chaque arme a le sien) ; v : volume, dist : distance de la source en mètres
+  weaponSound(id, v = 1, dist = 0) {
+    sfx.gun(id, v, dist);
   },
 
   // Zombies seuls (les murs sont gérés par world.rayHit sur la grande carte)
@@ -1123,6 +1115,7 @@ const game = {
 };
 
 sfx.setVolume(settings.volume);
+sfx.setMusicVolume(settings.music);
 game.player = new Player(camera, scene, world, game);
 hud.setWeapon(game.player.curCfg.name);
 installMachineFx(game, { world, hud, sfx, fx });
@@ -1254,9 +1247,7 @@ function setupNetworkHandlers(net) {
     game.tracer(o, e);
     game.remotes.get(m.from)?.fire();
     const d = Math.hypot(m.origin.x - game.player.pos.x, m.origin.z - game.player.pos.z);
-    if (d < 50) {
-      game.weaponSound(m.w);
-    }
+    if (d < 80) game.weaponSound(m.w, Math.max(0.25, 1 - d / 100), d);
   });
 
   // Dégâts reçus
@@ -1486,6 +1477,9 @@ function setupNetworkHandlers(net) {
 // --------------------------------------------- Menu / Pointer lock
 const canvas = renderer.domElement;
 
+// Le navigateur n'autorise le son qu'après une interaction : on démarre l'audio (et la musique du menu) au premier clic
+for (const ev of ['pointerdown', 'keydown']) window.addEventListener(ev, () => sfx.init(), { once: true });
+
 function lockAndPlay() {
   sfx.init();
   if (game.over) {
@@ -1660,6 +1654,7 @@ const optInputs = {
   fov: document.getElementById('optFov'),
   sens: document.getElementById('optSens'),
   volume: document.getElementById('optVolume'),
+  music: document.getElementById('optMusic'),
   quality: document.getElementById('optQuality'),
 };
 const optFormat = {
@@ -1667,6 +1662,7 @@ const optFormat = {
   fov: (v) => `${Math.round(v)}°`,
   sens: (v) => `${(+v).toFixed(2)}x`,
   volume: (v) => `${Math.round(v * 100)}%`,
+  music: (v) => `${Math.round(v * 100)}%`,
   quality: (v) => ['Rapide', 'Normale', 'Haute'][Math.round(v)] || 'Normale',
 };
 for (const [key, input] of Object.entries(optInputs)) {
@@ -1677,6 +1673,7 @@ for (const [key, input] of Object.entries(optInputs)) {
     input.nextElementSibling.textContent = optFormat[key](settings[key]);
     applyVisualSettings();
     sfx.setVolume(settings.volume);
+    sfx.setMusicVolume(settings.music);
     try { localStorage.setItem('zombie_settings', JSON.stringify(settings)); } catch {}
   });
 }
@@ -1793,6 +1790,15 @@ if (q.has('debug')) {
 }
 
 // ------------------------------------------------------------- Boucle
+// Musique : de plus en plus dure avec les manches, à fond pendant le finale, étouffée dans les menus et en pause
+// (en multijoueur la partie continue pendant la pause, donc la musique aussi)
+function updateMusicMood() {
+  const inGame = game.started && !game.over;
+  const intensity = !inGame ? 0.3 : game.finale ? 1 : Math.min(0.85, 0.3 + game.round * 0.05);
+  const paused = !game.isMultiplayer && !game.playing;
+  sfx.setMood(intensity, !inGame || paused);
+}
+
 const clock = new THREE.Clock();
 function frame() {
   requestAnimationFrame(frame);
@@ -1801,6 +1807,7 @@ function frame() {
   const frozen = !game.isMultiplayer && !game.playing && game.started && !game.over && !q.has('debug');
   if (game.started && !game.over && !frozen) game.update(dt);
   hud.update(dt);
+  updateMusicMood();
   // ombres de la lune : recalculées une image sur deux (à chaque image en qualité haute) : ~20 % de rendu en moins
   shadowFrame++;
   if (shadowFrame % ((settings.quality ?? 1) >= 2 ? 1 : 2) === 0) renderer.shadowMap.needsUpdate = true;
