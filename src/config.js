@@ -126,6 +126,34 @@ export const CONFIG = {
 
   grenade: { start: 2, max: 4, perRound: 2, fuse: 2.2, radius: 6.5, damage: 900, selfDamage: 60 },
 
+  // Véhicules (motos). Touches : ZQSD / flèches pour conduire, Espace = frein à main, E = monter / descendre.
+  // Le conducteur ne tire pas (les deux mains sur le guidon) ; le passager de la grosse moto, lui, tire normalement.
+  // Vitesses en m/s (le joueur marche à 5 et sprinte à 8 ; les zombies vont de 1,7 à 3,8). grip : accélération latérale maximale
+  // (m/s²) : plus elle est faible, plus il faut ralentir pour tourner (rayon minimal = vitesse² / grip).
+  vehicles: {
+    mountRange: 2.6,   // distance maximale pour monter (m)
+    // Chaque ligne pose un véhicule dans la zone nommée (près de son lieu, sur un emplacement dégagé)
+    spawns: [
+      { type: 'moto', zone: 'Marché-Neuf' },
+      { type: 'grosseMoto', zone: 'Marché-Neuf' },
+    ],
+    // Écraser un zombie : dégâts = vitesse × roadkill (propre à chaque moto) au-dessus de minSpeed ; la moto perd un peu de vitesse
+    roadkill: { minSpeed: 5, slowdown: 0.93, cooldown: 0.5 },
+    // Choc contre un mur : au-dessus de minSpeed (vitesse perdue dans le choc), les occupants perdent damagePerMs PV par m/s en trop
+    // (jamais mortel : il leur reste au moins 1 PV)
+    crash: { minSpeed: 10, damagePerMs: 3.5, maxDamage: 45 },
+    types: {
+      moto: {
+        name: 'MOTO', seats: 1, maxSpeed: 21, accel: 11, brake: 28, reverseSpeed: 3.5, drag: 0.12,
+        wheelbase: 1.35, maxSteer: 0.62, grip: 15, radius: 0.55, roadkill: 16,
+      },
+      grosseMoto: {
+        name: 'GROSSE MOTO', seats: 2, maxSpeed: 17, accel: 8, brake: 24, reverseSpeed: 3, drag: 0.12,
+        wheelbase: 1.75, maxSteer: 0.5, grip: 11, radius: 0.7, roadkill: 24,
+      },
+    },
+  },
+
   powerups: {
     dropChance: 0.05,
     duration: 25,     // durée d'activité sur le sol avant disparition

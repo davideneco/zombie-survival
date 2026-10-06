@@ -285,7 +285,9 @@ Prix des portes : 750 pts pour une zone voisine du départ, +250 par zone plus l
 | R | Recharger |
 | 1 / 2 / 3 / molette | Changer d'arme |
 | G | Grenade |
-| E | Acheter, ouvrir une porte, utiliser une machine, réanimer (maintenir) |
+| E | Acheter, ouvrir une porte, utiliser une machine, réanimer (maintenir), monter / descendre d'une moto |
+| ZQSD / WASD (en moto) | Accélérer, freiner / reculer, tourner |
+| Espace (en moto) | Frein à main |
 | F | Lampe torche |
 | M | Carte |
 | Échap | Menu pause |

@@ -11,6 +11,7 @@ export class Hud {
       points: $('points'),
       round: $('roundNum'),
       prompt: $('prompt'),
+      speedo: $('speedo'),
       announce: $('announce'),
       vignette: $('vignette'),
       nukeflash: $('nukeflash'),
@@ -114,6 +115,14 @@ export class Hud {
         html += `<div class="buff double">⚡ POINTS DOUBLES (${Math.ceil(buffs.doublePoints)}s)</div>`;
       }
       this.el.powerupBar.innerHTML = html;
+    });
+  }
+
+  // Compteur de vitesse (sur une moto) : m/s -> km/h, null pour le masquer
+  setSpeed(ms) {
+    this._set('speedo', ms == null ? '' : Math.round(Math.abs(ms) * 3.6), () => {
+      this.el.speedo.style.display = ms == null ? 'none' : 'block';
+      this.el.speedo.innerHTML = ms == null ? '' : `${Math.round(Math.abs(ms) * 3.6)}<small>km/h</small>`;
     });
   }
 
@@ -360,6 +369,7 @@ export class Hud {
     };
     for (const s of world.stations || []) icon(s.x, s.z, '#2a9d4a', '⁍');
     for (const w of world.wallWeapons || []) icon(w.pos.x, w.pos.z, '#d98a2b', '⌐');
+    for (const v of world.vehicles || []) icon(v.pos.x, v.pos.z, '#e0c22e', v.type === 'moto' ? 'M' : 'G'); // motos : M (solo), G (grosse, 2 places)
     for (const m of world.machines || []) if (m.type !== 'box' || m.active) icon(m.pos.x, m.pos.z, m.type === 'box' ? '#3f8fd8' : m.color, m.type === 'box' ? '?' : m.type === 'pap' ? 'P' : (m.letter || m.name[0]));
     // coéquipiers
     for (const tm of teammates) {

@@ -411,23 +411,39 @@ export class Avatar {
   // s : { dt, speed, fwd (vitesse avant/arrière locale), pitch, reloading, aiming, downed, fire }
   update(s) {
     const dt = s.dt;
-    // marche : balancement des jambes selon la vitesse réelle
-    const sp = Math.min(8, s.speed);
-    this.walk += dt * (sp > 0.2 ? 3 + sp * 1.25 : 0);
-    const amp = Math.min(1, sp / 4) * 0.65;
-    const sw = Math.sin(this.walk) * amp * (s.fwd < -0.5 ? -1 : 1);
-    this.legs[0].hip.rotation.x = sw; this.legs[1].hip.rotation.x = -sw;
-    this.legs[0].knee.rotation.x = -Math.max(0, -Math.sin(this.walk + 0.9)) * amp * 1.1;
-    this.legs[1].knee.rotation.x = -Math.max(0, Math.sin(this.walk + 0.9)) * amp * 1.1;
-    // buste : léger rebond, penché en sprint
-    const bob = Math.abs(Math.sin(this.walk)) * 0.025 * (amp > 0.05 ? 1 : 0);
-    this.torsoG.position.y = 0.93 + bob;
-    this.hips.position.y = 0.92 + bob;
-    this.torsoG.rotation.x = -Math.min(0.2, sp * 0.02);
+    if (s.seat) {
+      // assis sur une moto : cuisses vers l'avant, genoux pliés, buste penché (plus pour le conducteur)
+      for (const L of this.legs) { L.hip.rotation.set(1.2, 0, L.side * 0.12); L.knee.rotation.set(-1.4, 0, 0); }
+      this.hips.position.y = 0.92; this.torsoG.position.y = 0.93;
+      this.torsoG.rotation.x = s.seat === 1 ? -0.36 : -0.18;
+    } else {
+      // marche : balancement des jambes selon la vitesse réelle
+      const sp = Math.min(8, s.speed);
+      this.walk += dt * (sp > 0.2 ? 3 + sp * 1.25 : 0);
+      const amp = Math.min(1, sp / 4) * 0.65;
+      const sw = Math.sin(this.walk) * amp * (s.fwd < -0.5 ? -1 : 1);
+      this.legs[0].hip.rotation.x = sw; this.legs[1].hip.rotation.x = -sw;
+      this.legs[0].knee.rotation.x = -Math.max(0, -Math.sin(this.walk + 0.9)) * amp * 1.1;
+      this.legs[1].knee.rotation.x = -Math.max(0, Math.sin(this.walk + 0.9)) * amp * 1.1;
+      // buste : léger rebond, penché en sprint
+      const bob = Math.abs(Math.sin(this.walk)) * 0.025 * (amp > 0.05 ? 1 : 0);
+      this.torsoG.position.y = 0.93 + bob;
+      this.hips.position.y = 0.92 + bob;
+      this.torsoG.rotation.x = -Math.min(0.2, sp * 0.02);
+    }
     // visée : épaules, tête
     const pitch = s.pitch || 0;
     this.pitchG.rotation.x = pitch * 0.8 - this.torsoG.rotation.x;
     this.headG.rotation.x = pitch * 0.5 - this.torsoG.rotation.x;
+    // conducteur : les deux mains sur le guidon (pas d'arme), le buste ne suit pas la visée
+    if (s.seat === 1) {
+      this.weapon.visible = false;
+      this.flash.visible = false;
+      this.pitchG.rotation.x = -this.torsoG.rotation.x;
+      for (const a of this.arms) this.solveArm(a, new THREE.Vector3(a.side * 0.3, -0.32, -0.52));
+      return;
+    }
+    this.weapon.visible = true;
     // arme : recul, rechargement (elle se baisse et s'incline), visée
     this.kick = Math.max(0, this.kick - dt * 7);
     this.sway += dt;

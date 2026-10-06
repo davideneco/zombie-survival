@@ -81,6 +81,7 @@ export class Player {
     this.grenades = CONFIG.grenade.start;
     this.locked = false; // arme confisquée par le Pack-a-Punch
     this.region = 0; this.wasGrounded = true;
+    this.vehicle = null; // { v, seat } quand on est sur une moto
 
     // Inventaire d'armes
     this.inventory = CONFIG.startWeapons.map((id) => this.newWeapon(id));
@@ -204,7 +205,7 @@ export class Player {
       const k = letter(e);
       if (k) this.keys['letter:' + k] = true;
       if (!this.game.playing || e.repeat) return;
-      if (k === 'r' && !this.locked) this.reload();
+      if (k === 'r' && !this.locked && !(this.vehicle && this.vehicle.seat === 0)) this.reload();
       if (k === 'e') this.game.interact();
       if (k === 'f') this.setTorch(!this.torchOn);
       if (k === 'g') this.throwGrenade();
@@ -360,37 +361,48 @@ export class Player {
     }
 
     // ---- déplacement ----
-    let mx = (K.KeyD || K.ArrowRight ? 1 : 0) - (K.KeyA || K.ArrowLeft ? 1 : 0);
-    let mz = (K.KeyW || K.ArrowUp ? 1 : 0) - (K.KeyS || K.ArrowDown ? 1 : 0);
-    const moving = (mx !== 0 || mz !== 0) && !this.dead;
-    const sprinting = !this.downed && !!K.ShiftLeft && mz > 0 && !this.aiming;
-    const stamin = this.perks.staminup ? 1.3 : 1;
-    let speed = this.downed ? 1.2 : (sprinting ? P.sprintSpeed * stamin : P.walkSpeed * (this.perks.staminup ? 1.1 : 1));
-    if (this.aiming && !this.downed) speed *= 0.6;
-    if (moving) { const l = Math.hypot(mx, mz); mx /= l; mz /= l; }
-    const sin = Math.sin(this.yaw), cos = Math.cos(this.yaw);
-    const wx = (cos * mx - sin * mz) * speed;
-    const wz = (-sin * mx - cos * mz) * speed;
-    const k = Math.min(1, dt * 12);
-    this.vel.x += (wx - this.vel.x) * k;
-    this.vel.z += (wz - this.vel.z) * k;
-    this.pos.x += this.vel.x * dt;
-    this.pos.z += this.vel.z * dt;
+    const veh = this.vehicle; // { v, seat } quand on est sur une moto
+    let moving = false, sprinting = false, onGround = true;
+    if (veh) {
+      // sur une moto : le joueur suit la selle (la moto est simulée par Vehicle) et sa vue tourne avec elle
+      veh.v.hipWorld(veh.seat, this._v);
+      this.pos.set(this._v.x, veh.v.pos.y, this._v.z);
+      this.vel.set(0, 0, 0);
+      this.vy = 0; this.wasGrounded = true; this.region = 0;
+      this.yaw += veh.v.dyaw;
+    } else {
+      let mx = (K.KeyD || K.ArrowRight ? 1 : 0) - (K.KeyA || K.ArrowLeft ? 1 : 0);
+      let mz = (K.KeyW || K.ArrowUp ? 1 : 0) - (K.KeyS || K.ArrowDown ? 1 : 0);
+      moving = (mx !== 0 || mz !== 0) && !this.dead;
+      sprinting = !this.downed && !!K.ShiftLeft && mz > 0 && !this.aiming;
+      const stamin = this.perks.staminup ? 1.3 : 1;
+      let speed = this.downed ? 1.2 : (sprinting ? P.sprintSpeed * stamin : P.walkSpeed * (this.perks.staminup ? 1.1 : 1));
+      if (this.aiming && !this.downed) speed *= 0.6;
+      if (moving) { const l = Math.hypot(mx, mz); mx /= l; mz /= l; }
+      const sin = Math.sin(this.yaw), cos = Math.cos(this.yaw);
+      const wx = (cos * mx - sin * mz) * speed;
+      const wz = (-sin * mx - cos * mz) * speed;
+      const k = Math.min(1, dt * 12);
+      this.vel.x += (wx - this.vel.x) * k;
+      this.vel.z += (wz - this.vel.z) * k;
+      this.pos.x += this.vel.x * dt;
+      this.pos.z += this.vel.z * dt;
 
-    // ---- saut / gravité (sol = niveau 0, ou balcon / escalier / plateforme sous les pieds) ----
-    const fl = this._fl || (this._fl = { y: 0, region: 0 });
-    if (this.world.floorAt) this.world.floorAt(this.pos.x, this.pos.z, this.pos.y, fl); else { fl.y = 0; fl.region = 0; }
-    const ground = fl.y;
-    const onGround = this.pos.y <= ground + 0.02 && this.vy <= 0.5;
-    if (K.Space && onGround && !this.downed) this.vy = P.jumpSpeed;
-    this.vy -= P.gravity * dt;
-    this.pos.y += this.vy * dt;
-    if (this.pos.y <= ground) { this.pos.y = ground; this.vy = 0; }
-    else if (this.wasGrounded && this.vy <= 0 && this.pos.y - ground < 0.45) { this.pos.y = ground; this.vy = 0; } // on colle à la pente en descendant
-    this.wasGrounded = this.pos.y <= ground + 0.02;
-    this.region = fl.region;
+      // ---- saut / gravité (sol = niveau 0, ou balcon / escalier / plateforme sous les pieds) ----
+      const fl = this._fl || (this._fl = { y: 0, region: 0 });
+      if (this.world.floorAt) this.world.floorAt(this.pos.x, this.pos.z, this.pos.y, fl); else { fl.y = 0; fl.region = 0; }
+      const ground = fl.y;
+      onGround = this.pos.y <= ground + 0.02 && this.vy <= 0.5;
+      if (K.Space && onGround && !this.downed) this.vy = P.jumpSpeed;
+      this.vy -= P.gravity * dt;
+      this.pos.y += this.vy * dt;
+      if (this.pos.y <= ground) { this.pos.y = ground; this.vy = 0; }
+      else if (this.wasGrounded && this.vy <= 0 && this.pos.y - ground < 0.45) { this.pos.y = ground; this.vy = 0; } // on colle à la pente en descendant
+      this.wasGrounded = this.pos.y <= ground + 0.02;
+      this.region = fl.region;
 
-    this.world.collide(this.pos, P.radius);
+      this.world.collide(this.pos, P.radius);
+    }
 
     // ---- régénération ----
     if (!this.downed && this.health < this.maxHealth && now - this.lastHurt > P.regenDelay) {
@@ -400,7 +412,7 @@ export class Player {
     // ---- visée (ADS) ----
     this.aim += ((this.aiming && !this.downed ? 1 : 0) - this.aim) * Math.min(1, dt * 12);
     const base = this.game.settings.fov;
-    const fov = base - (cfg.adsFov ? base - cfg.adsFov : ADS_DELTA) * this.aim;
+    const fov = base - (cfg.adsFov ? base - cfg.adsFov : ADS_DELTA) * this.aim + (veh ? Math.min(12, Math.abs(veh.v.speed) * 0.55) : 0);
     if (Math.abs(fov - this.camera.fov) > 0.01) {
       this.camera.fov = fov;
       this.camera.updateProjectionMatrix();
@@ -408,7 +420,7 @@ export class Player {
     // lunette : on cache l'arme quand on vise au fusil de précision
     // (on cache le modèle de l'arme, pas le groupe entier qui contient la lumière de tir)
     // (jamais le groupe entier : il porte la lumière de tir, et masquer une lumière recompile tous les shaders)
-    this.vms[w.id].visible = !this.locked && !(cfg.adsFov && this.aim > 0.8);
+    this.vms[w.id].visible = !this.locked && !(cfg.adsFov && this.aim > 0.8) && !(veh && veh.seat === 0);
 
     // ---- tir & rechargement ----
     if (this.downed || this.dead) {
@@ -421,7 +433,7 @@ export class Player {
         w.reserve -= take;
         w.reloading = false;
       }
-    } else if (this.mouseDown && now >= this.nextShot && !this.locked) {
+    } else if (this.mouseDown && now >= this.nextShot && !this.locked && !(veh && veh.seat === 0)) {
       if (w.ammo > 0) this.shoot(now, moving);
       else if (w.reserve > 0) this.reload();
       else { this.nextShot = now + 0.3; this.game.sfx.empty(); }
@@ -433,9 +445,15 @@ export class Player {
     this.bobT += dt * (sprinting ? 12 : 8) * (moving && onGround ? 1 : 0);
     const bob = moving && onGround ? Math.sin(this.bobT) * (sprinting ? 0.06 : 0.035) : 0;
     const eyeH = this.downed ? 0.55 : P.eye;
-    const sh = this.game.shake || 0;
-    this.camera.position.set(this.pos.x + (sh ? (Math.random() - 0.5) * sh * 0.25 : 0), this.pos.y + eyeH + bob + (sh ? (Math.random() - 0.5) * sh * 0.25 : 0), this.pos.z + (sh ? (Math.random() - 0.5) * sh * 0.25 : 0));
-    this.camera.rotation.set(this.pitch + this.recoil, this.yaw, 0);
+    let sh = this.game.shake || 0;
+    let ex = this.pos.x, ey = this.pos.y + eyeH + bob, ez = this.pos.z;
+    if (veh) {
+      veh.v.eyeWorld(veh.seat, this._v);
+      ex = this._v.x; ey = this._v.y; ez = this._v.z;
+      sh += Math.min(1, Math.abs(veh.v.speed) / veh.v.def.maxSpeed) * 0.05; // vibration du moteur
+    }
+    this.camera.position.set(ex + (sh ? (Math.random() - 0.5) * sh * 0.25 : 0), ey + (sh ? (Math.random() - 0.5) * sh * 0.25 : 0), ez + (sh ? (Math.random() - 0.5) * sh * 0.25 : 0));
+    this.camera.rotation.set(this.pitch + this.recoil, this.yaw, veh ? veh.v.lean * 0.5 : 0);
 
     // ---- animation de l'arme ----
     this.kick *= Math.max(0, 1 - dt * 14);
@@ -534,7 +552,7 @@ export class Player {
   }
 
   throwGrenade() {
-    if (this.downed || this.dead || this.grenades <= 0) return;
+    if (this.downed || this.dead || this.grenades <= 0 || (this.vehicle && this.vehicle.seat === 0)) return;
     this.grenades--;
     this.camera.updateMatrixWorld(true);
     const dir = new THREE.Vector3(0, 0, -1).applyQuaternion(this.camera.quaternion);

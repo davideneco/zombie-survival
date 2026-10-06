@@ -327,6 +327,57 @@ export class Sfx {
     this._noise(0.25, 0.35, 700, 'lowpass', { f1: 200 });
   }
 
+  // ------------------------------------------------------------ Motos
+  // Moteur : dents de scie + carré + sous-grave filtrés, à-coups des cylindres (modulation d'amplitude) et bruit du vent.
+  // set(rpm 0..1, accélérateur -1..1, vitesse 0..1, volume 0..1) ; stop() l'éteint.
+  createEngine(kind) {
+    if (!this.ctx) return null;
+    const c = this.ctx, big = kind === 'grosseMoto';
+    const out = c.createGain(); out.gain.value = 0;
+    const am = c.createGain(); am.gain.value = big ? 0.62 : 0.8;
+    const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 900; lp.Q.value = 2;
+    const osc = (type, gain) => { const o = c.createOscillator(), g = c.createGain(); o.type = type; g.gain.value = gain; o.connect(g).connect(lp); o.start(); return o; };
+    const o1 = osc('sawtooth', 0.5), o2 = osc('square', 0.22), sub = osc('sine', big ? 0.7 : 0.4);
+    lp.connect(am).connect(out);
+    const lfo = c.createOscillator(), lg = c.createGain();
+    lfo.frequency.value = 10; lg.gain.value = big ? 0.38 : 0.18; lfo.connect(lg).connect(am.gain); lfo.start();
+    const wind = c.createBufferSource(), wf = c.createBiquadFilter(), wg = c.createGain();
+    wind.buffer = this.noiseBuf; wind.loop = true; wf.type = 'bandpass'; wf.frequency.value = 700; wf.Q.value = 0.6; wg.gain.value = 0;
+    wind.connect(wf).connect(wg).connect(out); wind.start();
+    out.connect(this.bus);
+    const base = big ? 34 : 52, span = big ? 95 : 175;
+    return {
+      set: (rpm, throttle, ratio, vol) => {
+        const t = c.currentTime, f = base + rpm * span;
+        o1.frequency.setTargetAtTime(f, t, 0.04); o2.frequency.setTargetAtTime(f * 1.006, t, 0.04); sub.frequency.setTargetAtTime(f * 0.5, t, 0.04);
+        lp.frequency.setTargetAtTime(500 + rpm * 1800 + Math.max(0, throttle) * 600, t, 0.05);
+        lfo.frequency.setTargetAtTime(big ? 5 + rpm * 17 : 12 + rpm * 44, t, 0.05);
+        wf.frequency.setTargetAtTime(500 + ratio * 1500, t, 0.1); wg.gain.setTargetAtTime(ratio * 0.3, t, 0.1);
+        out.gain.setTargetAtTime(vol * (0.16 + 0.1 * rpm + Math.max(0, throttle) * 0.06), t, 0.05);
+      },
+      stop: () => {
+        const t = c.currentTime;
+        out.gain.setTargetAtTime(0, t, 0.06);
+        for (const n of [o1, o2, sub, lfo, wind]) n.stop(t + 0.35);
+      },
+    };
+  }
+  mount(kind) { // démarreur puis un coup d'accélérateur
+    if (!this.ctx) return;
+    const big = kind === 'grosseMoto';
+    this._tone('sawtooth', big ? 45 : 70, big ? 80 : 120, 0.45, 0.25, { dist: true });
+    this._noise(0.25, 0.2, 900, 'lowpass', { f1: 300 });
+    this._tone('sawtooth', big ? 50 : 80, big ? 140 : 260, 0.4, 0.3, { at: 0.45, dist: true });
+    this._tone('sawtooth', big ? 140 : 260, big ? 60 : 100, 0.5, 0.25, { at: 0.85, dist: true });
+  }
+  crash(v = 1) { // choc contre un mur : tôle froissée et coup sourd
+    if (!this.ctx || v < 0.05) return;
+    this._noise(0.35, 0.7 * v, 700, 'lowpass', { f1: 150, send: 0.3 });
+    this._tone('sine', 120, 38, 0.3, 0.7 * v);
+    this._clack(0.02, 0.8 * v, 900);
+    this._noise(0.2, 0.4 * v, 3000, 'bandpass', { at: 0.04, q: 1.2 });
+  }
+
   // ------------------------------------------------------------ Interface et ambiance
   buy() {
     if (!this.ctx) return;

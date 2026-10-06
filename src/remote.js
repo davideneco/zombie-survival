@@ -42,6 +42,7 @@ export class RemotePlayer {
     this.seen = false;
     this.fireNext = false;
     this.vel = new THREE.Vector3();
+    this.ride = null; // { v, seat } quand il est assis sur une moto
 
     this.avatar = new Avatar(charOf(slot));
     this.group = new THREE.Group();
@@ -74,7 +75,37 @@ export class RemotePlayer {
   // Un tir de ce joueur vient d'être signalé : éclair de bouche et recul
   fire() { this.fireNext = true; }
 
+  // Assis sur une moto : le personnage devient un enfant de la moto (il en suit cap, inclinaison et position)
+  setRide(v, seat) {
+    if (this.ride && this.ride.v === v && this.ride.seat === seat) return;
+    this.ride = { v, seat };
+    v.group.add(this.group);
+    const h = v.model.seats[seat].hip;
+    this.group.position.set(h[0], h[1] - 0.92 * this.avatar.ch.scale[1], h[2]);
+    this.group.rotation.set(0, 0, 0);
+  }
+
+  clearRide() {
+    if (!this.ride) return;
+    this.ride = null;
+    this.scene.add(this.group);
+    this.pos.copy(this.tpos);
+    this.group.position.copy(this.pos);
+    this.group.rotation.set(0, this.yaw, 0);
+  }
+
   update(dt) {
+    if (this.ride) { // sur une moto : position et cap suivent la moto, jambes pliées ; le passager peut tourner le buste pour tirer
+      const { v, seat } = this.ride;
+      v.hipWorld(seat, this.pos);
+      const d = Math.atan2(Math.sin(this.tyaw - v.yaw), Math.cos(this.tyaw - v.yaw));
+      this.group.rotation.y = seat === 1 ? Math.max(-1.3, Math.min(1.3, d)) : 0;
+      this.avatar.setWeapon(this.weapon, this.pap);
+      this.avatar.update({ dt, speed: 0, fwd: 0, pitch: this.pitch, reloading: this.reloading, aiming: this.aiming, fire: this.fireNext, seat: seat === 0 ? 1 : 2 });
+      this.fireNext = false;
+      this.tag.visible = true;
+      return;
+    }
     const k = Math.min(1, dt * 12);
     const px = this.pos.x, pz = this.pos.z;
     this.pos.lerp(this.tpos, k);

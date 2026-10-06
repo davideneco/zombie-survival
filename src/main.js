@@ -14,6 +14,7 @@ import { RemotePlayer, slotColor } from './remote.js';
 import { CHARACTERS, Avatar, charOf, renderPortraits } from './characters.js';
 import { makeTeddy } from './machines.js';
 import { installMachineFx } from './machineFx.js';
+import { installVehicles } from './vehicles.js';
 import { makeDisplay } from './weaponDisplay.js';
 
 document.getElementById('version').textContent = __GAME_VERSION__;
@@ -407,6 +408,9 @@ const game = {
     const p = this.player;
     if (p.downed || p.dead) return;
 
+    // 0) Sur une moto : E descend
+    if (p.vehicle) { this.leaveVehicle(); return; }
+
     // 1) Réanimation d'un coéquipier (déclenchée en maintenant E dans update)
     if (this.nearDownedTeammate()) return;
 
@@ -447,7 +451,11 @@ const game = {
       return;
     }
 
-    // 5) Porte payante
+    // 5) Moto : monter (avant la porte : les motos sont posées loin des portes)
+    const nv = this.nearVehicle();
+    if (nv) { this.tryMount(nv.v, nv.seat); return; }
+
+    // 6) Porte payante
     const door = this.nearDoor();
     if (door) {
       if (this.points < door.price) { sfx.deny(); return; }
@@ -833,6 +841,7 @@ const game = {
     this.buffs.instaKill = 0;
     this.buffs.doublePoints = 0;
     this.player.reset();
+    this.resetVehicles?.();
   },
 
   gameOver() {
@@ -861,6 +870,7 @@ const game = {
 
     // Le joueur local n'est contrôlable que si le pointer lock est actif
     this.player.active = this.playing;
+    this.updateVehicles(dt);
     p.update(dt, this.time);
 
     // Mise à jour des coéquipiers
@@ -1085,7 +1095,10 @@ const game = {
 
     // Prompt contextuel
     let promptText = null;
-    if (downedTeammate) {
+    hud.setSpeed(p.vehicle ? p.vehicle.v.speed : null);
+    if (p.vehicle) {
+      promptText = p.vehicle.seat === 0 ? '[E] Descendre' : '[E] Descendre · clic gauche : tirer';
+    } else if (downedTeammate) {
       const left = Math.max(0, this.reviveTime() - this.reviveTimer).toFixed(1);
       promptText = `[E] Maintenir pour réanimer ${downedTeammate.name} (${left}s)`;
     } else if (this.nearStation()) {
@@ -1106,6 +1119,8 @@ const game = {
         const full = p.inventory.length >= p.maxWeapons;
         promptText = `[E] Acheter ${ww.name} (${ww.price} pts)${full ? ' — remplace l’arme en main' : ''}`;
       }
+    } else if (this.nearVehicle()) {
+      promptText = this.vehiclePrompt(this.nearVehicle());
     } else if (this.nearDoor()) {
       const d = this.nearDoor();
       promptText = `[E] Ouvrir la porte vers ${d.name} (${d.price} pts)`;
@@ -1120,6 +1135,8 @@ game.player = new Player(camera, scene, world, game);
 hud.setWeapon(game.player.curCfg.name);
 installMachineFx(game, { world, hud, sfx, fx });
 installFinale(game, { world, scene, hud, sfx, fx });
+installVehicles(game, { world, scene, hud, sfx });
+game.initVehicles();
 game.player.setCharacter(charOf(game.charPref));
 
 // Choix du personnage (menu) : cartes avec portrait, rendu une seule fois
@@ -1178,6 +1195,7 @@ function refreshLobby() {
 }
 
 function setupNetworkHandlers(net) {
+  game.bindVehicleNet(net);
   // Déconnexion
   net.on('disconnect', () => {
     hud.announce('DÉCONNECTÉ', 'Perte de connexion au serveur', 4000);
@@ -1188,6 +1206,7 @@ function setupNetworkHandlers(net) {
     location.reload();
   });
   net.on('left', (m) => {
+    game.onPeerLeft(m.id); // libère ses places de moto (hôte)
     removeRemote(m.id);
     refreshLobby();
     game.checkTeamWipe();
@@ -1213,6 +1232,7 @@ function setupNetworkHandlers(net) {
         box: (world.boxes || []).findIndex((b) => b.active),
         finale: game.finale ? 1 : null,
         finaleDone: game.finaleDone,
+        vehicles: game.vehicleSnapshot(),
         zombies: game.zombies.map((z) => ({
           id: z.id,
           st: z.spawnType,
@@ -1420,6 +1440,7 @@ function setupNetworkHandlers(net) {
     if (m.box != null && m.box >= 0) world.setActiveBox?.(m.box);
     game.finaleDone = !!m.finaleDone;
     game.finale = m.finale != null ? { remote: true } : null;
+    game.applyVehicleSnapshot(m.vehicles);
 
     // Supprimer d'éventuels zombies locaux existants
     for (const z of game.zombies) z.dispose();

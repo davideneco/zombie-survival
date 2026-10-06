@@ -1144,6 +1144,7 @@ export async function buildRealWorld(scene, renderer) {
   // ---------------------------------------------------------------- Bornes, armes au mur et machines (CONFIG.sector.zones[].items)
   const WALL_COLORS = { shotgun: 0xff8833, smg: 0x3399ff, sniper: 0x88ccff, lmg: 0xff5533 };
   const machines = [];
+  const vehicleSpawns = []; // motos : { type, x, z, yaw } (voir CONFIG.vehicles)
   {
     const placed = [];
     // distance d'un point à la porte payante la plus proche
@@ -1238,6 +1239,25 @@ export async function buildRealWorld(scene, renderer) {
         }
       }
     });
+    // Motos : une par ligne de CONFIG.vehicles.spawns, sur un emplacement dégagé de la zone, loin des portes (même raison que
+    // les atouts : leur invite [E] masquerait celle de la porte), posée dans l'axe de la rue
+    const alongStreet = (x, z) => {
+      let best = -1, ang = 0;
+      for (let a = 0; a < 12; a++) {
+        const t = (a / 12) * Math.PI;
+        const d = collision.rayHit(x, 1, z, Math.cos(t), 0, Math.sin(t), 40) + collision.rayHit(x, 1, z, -Math.cos(t), 0, -Math.sin(t), 40);
+        if (d > best) { best = d; ang = t; }
+      }
+      return ang;
+    };
+    for (const sp of CONFIG.vehicles?.spawns || []) {
+      const zi = ZONE_NAMES.indexOf(sp.zone);
+      if (zi < 0 || !seeds[zi] || !Number.isFinite(door_depth[zi])) continue;
+      const spot = spotIn(zi, 2, 6, 28, PERK_DOOR_GAPS) || spotIn(zi, 2, 6, 28); // 2 : dégagement en cases (entier)
+      if (!spot) continue;
+      const t = alongStreet(spot[0], spot[1]);
+      vehicleSpawns.push({ type: sp.type, x: spot[0], z: spot[1], yaw: Math.atan2(-Math.cos(t), -Math.sin(t)) });
+    }
   }
   if (!stations.length) stations.push(new THREE.Vector3(startPos.x + 6, 0, startPos.z));
 
@@ -1328,7 +1348,7 @@ export async function buildRealWorld(scene, renderer) {
   // ---------------------------------------------------------------- Décor : mobilier réel (OSM) et objets de l'apocalypse
   {
     const inSec = (x, z) => zoneOf(x, z) >= 0;
-    const used = [startPos, ...stations, ...machines.map((m) => m.pos), ...wallWeapons.map((w) => w.pos)].map((v) => [v.x, v.z]);
+    const used = [startPos, ...stations, ...machines.map((m) => m.pos), ...wallWeapons.map((w) => w.pos), ...vehicleSpawns].map((v) => [v.x, v.z]);
     const freeAt = (x, z, gap) => used.every(([ux, uz]) => Math.hypot(ux - x, uz - z) > gap);
     // mur le plus proche (orientation des bancs, vélos…) et axe de la rue (voitures)
     const wallDir = (x, z) => { let best = 99, ang = 0; for (let a = 0; a < 16; a++) { const t = (a / 16) * Math.PI * 2; const d = collision.rayHit(x, 1, z, Math.cos(t), 0, Math.sin(t), 6); if (d < best) { best = d; ang = t; } } return { dist: best, ang }; };
@@ -1517,7 +1537,7 @@ export async function buildRealWorld(scene, renderer) {
   const stationPos = stations[0];
   return {
     half: Math.max(halfX, halfZ), blockers, spawnPoints: [], windowSpawns, pickWindow, pickGround,
-    stationPos, stations, wallWeapons, doors, openDoor, zoneOf, startPos, nav, collision, machines, boxes, setActiveBox,
+    stationPos, stations, wallWeapons, vehicleSpawns, doors, openDoor, zoneOf, startPos, nav, collision, machines, boxes, setActiveBox,
     zoneNames: ZONE_NAMES, zoneCenters, startZone, sealedPoints, mapImage, mapView: { halfX, halfZ, scale: MAP_SCALE },
     mapCrop: { x0: secMinX - 60, x1: secMaxX + 60, z0: secMinZ - 50, z1: secMaxZ + 50 }, mapTitle: 'SECTEUR DU MARCHÉ-NEUF — STRASBOURG',
     cathedral: cath ? { seed: cath.seed, clock: cath.clock, insideInner: cath.insideInner, inner: cath.inner, P: cath.P, S: cath.S, T: cath.T, ceilAt: cath.ceilAt, info: cathInfo } : null,
