@@ -190,21 +190,34 @@ export async function buildRealWorld(scene, renderer) {
   const props = createProps(); // mobilier et décors instanciés
 
   // ---------------------------------------------------------------- Sol pavé
+  const GROUND_W = halfX * 2 + 60, GROUND_H = halfZ * 2 + 60, GROUND_TILE = 2.2; // GROUND_TILE : taille réelle approx. d'une tuile de pavés (m)
+  let groundMesh = null;
   {
-    const w = halfX * 2 + 60, h = halfZ * 2 + 60;
-    const geo = new THREE.PlaneGeometry(w, h);
+    const geo = new THREE.PlaneGeometry(GROUND_W, GROUND_H);
     const uv = geo.attributes.uv;
-    const tile = 2.2; // taille réelle approx. d'une tuile de pavés (m)
-    for (let i = 0; i < uv.count; i++) uv.setXY(i, (uv.getX(i) * w) / tile, (uv.getY(i) * h) / tile);
+    for (let i = 0; i < uv.count; i++) uv.setXY(i, (uv.getX(i) * GROUND_W) / GROUND_TILE, (uv.getY(i) * GROUND_H) / GROUND_TILE);
     const mat = new THREE.MeshStandardMaterial({
       map: cobble.map, normalMap: cobble.normalMap, roughnessMap: cobble.roughnessMap,
       color: 0xb8b2aa, normalScale: new THREE.Vector2(1.2, 1.2),
     });
-    const ground = new THREE.Mesh(geo, mat);
-    ground.rotation.x = -Math.PI / 2;
-    ground.receiveShadow = true;
-    scene.add(ground);
+    groundMesh = new THREE.Mesh(geo, mat);
+    groundMesh.rotation.x = -Math.PI / 2;
+    groundMesh.receiveShadow = true;
+    scene.add(groundMesh);
   }
+  // Perce le sol pavé là où un escalier descend (cages d'escalier de la crypte) : sinon les pavés recouvrent le trou, qui
+  // ressemble à du sol plein alors qu'on y tombe. Même repère et mêmes UV que le plan d'origine, seuls les trous changent.
+  const cutGroundHoles = (polys) => {
+    if (!polys.length) return;
+    const hw = GROUND_W / 2, hh = GROUND_H / 2;
+    const shape = new THREE.Shape([[-hw, -hh], [hw, -hh], [hw, hh], [-hw, hh]].map(([x, y]) => new THREE.Vector2(x, y)));
+    for (const poly of polys) shape.holes.push(new THREE.Path(poly.map(([x, z]) => new THREE.Vector2(x, -z)))); // le plan est tourné de -90° : y local = -z monde
+    const geo = new THREE.ShapeGeometry(shape);
+    const pos = geo.attributes.position, uv = geo.attributes.uv;
+    for (let i = 0; i < uv.count; i++) uv.setXY(i, (pos.getX(i) + hw) / GROUND_TILE, (pos.getY(i) + hh) / GROUND_TILE);
+    groundMesh.geometry.dispose();
+    groundMesh.geometry = geo;
+  };
 
   // ---------------------------------------------------------------- Eau (rivière Ill et canaux)
   let waterNormal = null;
@@ -599,6 +612,7 @@ export async function buildRealWorld(scene, renderer) {
 
   // ---------------------------------------------------------------- Intérieur de la cathédrale
   if (cath) cathInfo = buildCathedral({ scene, plan: cath, collision, lightSources, props, levels });
+  cutGroundHoles(levels.holePolys);
 
   // ---------------------------------------------------------------- Navigation de base (pour placer les props)
   collision.build();

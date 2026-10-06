@@ -18,6 +18,7 @@ export class Levels {
     this.tris = [];
     this.grid = new Map();
     this.holes = []; // trous dans le sol de la ville (cages d'escalier descendantes) : le sol implicite y est supprimé
+    this.holePolys = []; // les mêmes trous en polygones [[x, z], …] : le sol dessiné (pavés) y est percé aussi
     this.regions = [{ id: 0, name: 'Niveau du sol', y: 0, kind: 'ground', bbox: null }];
     this.links = [];
     this.built = false;
@@ -69,6 +70,7 @@ export class Levels {
 
   // Trou dans le sol de la ville (polygone [[x, z], …]) : on y descend par un escalier
   addGroundHole(pts) {
+    this.holePolys.push(pts);
     const contour = pts.map(([x, z]) => new THREE.Vector2(x, z));
     for (const [i, j, k] of THREE.ShapeUtils.triangulateShape(contour, [])) {
       const a = contour[i], b = contour[j], c = contour[k];

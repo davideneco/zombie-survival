@@ -12,8 +12,12 @@ export function buildCrypt(h) {
   const tris = levels.addPoly(R, poly, Y0);
   mesher.flat(mats.floor, poly, Y0 + 0.02, { uvScale: 3 });
   collision.addFloor(Y0, tris);
-  // voûte (sous le sol du chœur) et murs
-  mesher.flat(mats.vault, poly, Y0 + H, { up: false, uvFn: (x, z) => [x / 6, z / 6] });
+  // voûte (sous le sol du chœur) et murs. La voûte est échancrée au bout des deux escaliers (qui débouchent dans la crypte
+  // sous le trou du sol) : sinon son dessus, à 0,4 m sous le sol, ressemble à un fond plein et cache la fin de la descente.
+  const vault = [[s0, -t], [s1, -t], [s1, t], [s0, t]];
+  for (const st of [...CRYPT_STAIRS].sort((a, b) => b.t0 - a.t0)) vault.push([s0, st.t1], [Math.min(st.s1, s1), st.t1], [Math.min(st.s1, s1), st.t0], [s0, st.t0]);
+  mesher.flat(mats.vault, vault.map(([s, tt]) => W(s, tt)), Y0 + H, { up: false, uvFn: (x, z) => [x / 6, z / 6] });
+  for (const st of CRYPT_STAIRS) mesher.strip(mats.stoneDark, [W(st.s1, st.t0), W(st.s1, st.t1)], Y0 + H, 0.03, { uScale: 3, vScale: 3 }); // tranche de la voûte, au bout du trou
   const walls = [[[s0, -t], [s1, -t]], [[s1, -t], [s1, t]], [[s1, t], [s0, t]]];
   for (const [a, b] of walls) {
     const A = W(...a), B = W(...b);
