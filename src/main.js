@@ -718,7 +718,7 @@ const game = {
     const countMult = this.isMultiplayer ? 1 + this.remotes.size * 0.75 : 1;
     this.toSpawn = Math.round((4 + r * 3) * countMult);
     this.zombieHealth = r < 10 ? 70 + r * 30 : Math.round(340 * Math.pow(1.1, r - 9));
-    this.zombieSpeed = Math.min(1.6 + r * 0.2, 4.2);
+    this.zombieSpeed = Math.min(CONFIG.zombie.speedStart + r * CONFIG.zombie.speedPerRound, CONFIG.zombie.speedMax);
     this.spawnTimer = 1;
     hud.setRound(r);
     sfx.roundStart();
@@ -770,8 +770,9 @@ const game = {
 
   spawnZombie(extra = false) {
     const spawn = this.pickSpawn();
+    const Zc = CONFIG.zombie;
     let speed = this.zombieSpeed * (0.85 + Math.random() * 0.3);
-    if (this.round >= 4 && Math.random() < 0.25) speed *= 1.5; // coureur
+    if (this.round >= Zc.runnerRound && Math.random() < Zc.runnerChance) speed *= Zc.runnerMult; // coureur
     const onEvent = (name, z) => {
       const d = Math.hypot(z.pos.x - this.player.pos.x, z.pos.z - this.player.pos.z);
       const v = Math.max(0, 1 - d / 45);
@@ -780,7 +781,6 @@ const game = {
       else if (name === 'rumble') sfx.rumble(v);
       else if (name === 'emerge') { sfx.dirt(v); sfx.groan(Math.min(1, v * 1.4)); }
     };
-    const Zc = CONFIG.zombie;
     const crawl = this.round >= Zc.crawlerRound && Math.random() < Zc.crawlerChance;
     const hp = this.zombieHealth;
     const z = new Zombie(scene, spawn, hp, speed, onEvent, null, { crawler: crawl });

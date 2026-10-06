@@ -44,7 +44,7 @@ export function buildCrypt(h) {
   for (const [s, tt, rot] of [[54.5, -7, 0], [54.5, 7, 0], [49, 0, 1.57]]) {
     const [x, z] = W(s, tt);
     sg.push(new THREE.BoxGeometry(2.2, 0.8, 0.9).rotateY(rot).translate(x, Y0 + 0.4, z));
-    collision.addBox(x, z, rot ? 0.9 : 2.2, rot ? 2.2 : 0.9, 0, 0.8, Y0 - 0.5);
+    collision.addBox(x, z, rot ? 0.9 : 2.2, rot ? 2.2 : 0.9, 0, Y0 + 0.8, Y0 - 0.5); // hauteurs absolues : le sommet est à 0,8 m AU-DESSUS DU SOL DE LA CRYPTE
   }
   mesher.geo(mats.stone, mergeSimple(sg));
   levels.regions[R].spawns.push(...[[46, -6], [46, 6], [52, 0], [55, -6], [55, 6]].map(([s, tt]) => W(s, tt)));

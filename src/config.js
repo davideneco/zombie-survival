@@ -138,6 +138,14 @@ export const CONFIG = {
     damage: 20,
     attackCooldown: 1.0,
     maxAlive: 22,
+    // vitesse de marche : speedStart + manche × speedPerRound, plafonnée à speedMax (m/s ; le joueur marche à 5 et sprinte à 8).
+    // À partir de runnerRound, une part (runnerChance) des zombies sont des coureurs : vitesse × runnerMult.
+    speedStart: 1.6,
+    speedPerRound: 0.12,
+    speedMax: 3.8,
+    runnerRound: 4,
+    runnerChance: 0.25,
+    runnerMult: 1.35,
     crawlerChance: 0.12,   // à partir de la manche 4 : part de zombies rampants (sans jambes)
     crawlerRound: 4,
     legBlowChance: 0.5,    // un zombie qui survit à une explosion perd ses jambes
