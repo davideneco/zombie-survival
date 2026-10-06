@@ -176,7 +176,9 @@ export class Music {
     for (let i = 0; i < d.length; i += 4) { sum += d[i] * d[i]; n++; }
     const rms = Math.sqrt(sum / Math.max(1, n));
     const g = this.ctx.createGain();
-    g.gain.value = rms > 1e-4 ? Math.min(6, Math.max(0.3, 0.56 / rms)) : 1; // vise un RMS de -5 dB avant le bus
+    const t = this.ctx.currentTime;
+    g.gain.setValueAtTime(0, t); // entrée en fondu : le décodage d'un long morceau finit à un moment imprévisible
+    g.gain.linearRampToValueAtTime(rms > 1e-4 ? Math.min(6, Math.max(0.3, 0.56 / rms)) : 1, t + 2); // vise un RMS de -5 dB avant le bus
     const src = this.ctx.createBufferSource();
     src.buffer = buf;
     src.loop = true;
