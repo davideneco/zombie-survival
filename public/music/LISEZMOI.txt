@@ -9,6 +9,6 @@ le jeu le joue en boucle à la place du rock synthétisé. Sans fichier, c'est l
 - Le morceau entre en fondu (2 s) une fois chargé.
 
 Droits d'auteur
-- theme.mp3 est commité dans ce dépôt, qui est PRIVÉ. Ne rends jamais le dépôt public (ni un fork, ni un dépôt
-  public contenant ce fichier) sans retirer le morceau, ou sans en avoir les droits.
-- Pour ne plus le publier : supprime theme.mp3, puis ajoute « public/music/theme.* » au .gitignore.
+- theme.* est dans le .gitignore : le fichier reste sur ton ordinateur et n'est PAS envoyé sur GitHub.
+- Si tu héberges le jeu en ligne, le fichier doit être présent sur le serveur. Ne le fais que si tu en as les droits
+  (ou prends une musique libre de droits), puis retire la ligne « public/music/theme.* » du .gitignore.
