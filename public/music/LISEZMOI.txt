@@ -6,4 +6,10 @@ le jeu le joue en boucle à la place du rock synthétisé. Sans fichier, c'est l
 
 - Le curseur « Musique » des options règle son volume ; la musique est étouffée dans les menus et en pause.
 - Le niveau est ajusté automatiquement : inutile de normaliser le fichier.
-- N'utilise que de la musique dont tu as les droits (ou libre de droits) : ce dossier est publié avec le jeu.
+- Le morceau entre en fondu (2 s) une fois chargé.
+
+Droits d'auteur
+- theme.* est dans le .gitignore : le fichier reste sur ton ordinateur et n'est PAS envoyé sur GitHub
+  (le dépôt est public : ce serait diffuser le morceau à tout le monde).
+- Si tu héberges le jeu en ligne, le fichier doit être présent sur le serveur. Ne le fais que si tu en as les droits
+  (ou prends une musique libre de droits), puis retire la ligne « public/music/theme.* » du .gitignore.
