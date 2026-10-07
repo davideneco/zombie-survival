@@ -374,6 +374,16 @@ export class Sfx {
     this._tone('sawtooth', big ? 50 : 80, big ? 140 : 260, 0.4, 0.3, { at: 0.45, dist: true });
     this._tone('sawtooth', big ? 140 : 260, big ? 60 : 100, 0.5, 0.25, { at: 0.85, dist: true });
   }
+  beep() { // réserve d'essence : deux petits bips d'alerte
+    if (!this.ctx) return;
+    this._tone('sine', 1500, 1500, 0.07, 0.12);
+    this._tone('sine', 1500, 1500, 0.07, 0.12, { at: 0.13 });
+  }
+  cough(v = 1) { // moteur qui tousse : raté de gaz
+    if (!this.ctx || v < 0.03) return;
+    this._noise(0.18, 0.5 * v, 400, 'lowpass', { f1: 120 });
+    this._tone('sawtooth', 90, 38, 0.2, 0.22 * v, { dist: true });
+  }
   alarm(v = 1) { // moto en feu : deux bips stridents
     if (!this.ctx || v < 0.03) return;
     this._tone('square', 1040, 1040, 0.13, 0.14 * v);

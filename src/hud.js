@@ -17,6 +17,9 @@ export class Hud {
       speedTick: $('vSpeedTick'),
       hpFill: $('vHpFill'),
       hpTxt: $('vHpTxt'),
+      fuelRow: $('vFuelRow'),
+      fuelFill: $('vFuelFill'),
+      fuelTxt: $('vFuelTxt'),
       announce: $('announce'),
       vignette: $('vignette'),
       nukeflash: $('nukeflash'),
@@ -147,6 +150,14 @@ export class Hud {
       this.el.hpFill.style.width = `${pct}%`;
       this.el.hpFill.style.background = f < 0.25 ? '#e03030' : f < 0.5 ? '#f0a030' : '#3fbf5f';
       this.el.hpTxt.textContent = `${pct} %`;
+    });
+    // essence : ambre, rouge clignotant sous 15 %
+    const ff = Math.max(0, info.fuel ?? 0), fp = Math.round(ff * 100);
+    this._set('vfuel', fp, () => {
+      this.el.fuelFill.style.width = `${fp}%`;
+      this.el.fuelFill.style.background = ff < 0.15 ? '#e03030' : '#e8b030';
+      this.el.fuelTxt.textContent = `${fp} %`;
+      this.el.fuelRow.classList.toggle('low', ff < 0.15);
     });
   }
 

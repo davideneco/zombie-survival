@@ -217,13 +217,19 @@ export const CONFIG = {
       smoke: { grey: { below: 0.5, rate: 4 }, black: { below: 0.25, rate: 10 }, flames: { below: 0.1, rate: 10 } },
       repairPrice: 2,     // points par PV réparé à la borne du parking
     },
+    // Essence (litres, affichée en %). Le conducteur consomme : ralenti (moteur tournant) + gaz x (base + perSpeed x v / vmax), marche arrière x 0,6 ;
+    // moteur arrêté (pas de conducteur) : rien. Sous lowBelow : bip toutes les lowBeep s et jauge rouge clignotante ; sous missBelow : ratés
+    // (gaz coupés missLen s toutes les ~missEvery s) ; à sec : « PANNE SÈCHE », la moto n'avance plus qu'en poussée (pushSpeed m/s max,
+    // pushAccel m/s², freins et direction normaux). Borne du parking : « plein + réparation » (pricePerL pts par litre, plus les PV).
+    // Jerrican : dropChance par zombie tué, seulement si une moto en état a moins de dropBelow de réservoir, un seul au sol ; +jerrican L.
+    fuel: { lowBelow: 0.15, lowBeep: 4, missBelow: 0.05, missEvery: 1.5, missLen: 0.15, pushSpeed: 3, pushAccel: 3, pricePerL: 50, jerrican: 2.5, dropChance: 0.03, dropBelow: 0.5, respawn: 0.4 },
     types: {
       moto: {
-        name: 'MOTO', seats: 1, hp: 300, maxSpeed: 21, accel: 11, brake: 28, reverseSpeed: 3.5, drag: 0.12,
+        name: 'MOTO', seats: 1, hp: 300, tank: 6, idle: 0.004, gas: 0.012, perSpeed: 0.017, maxSpeed: 21, accel: 11, brake: 28, reverseSpeed: 3.5, drag: 0.12,
         wheelbase: 1.35, maxSteer: 0.62, grip: 15, radius: 0.55, roadkill: { K: 16, vmin: 9, slowdown: 0.85 },
       },
       grosseMoto: {
-        name: 'GROSSE MOTO', seats: 2, hp: 500, maxSpeed: 17, accel: 8, brake: 24, reverseSpeed: 3, drag: 0.12,
+        name: 'GROSSE MOTO', seats: 2, hp: 500, tank: 10, idle: 0.005, gas: 0.016, perSpeed: 0.021, maxSpeed: 17, accel: 8, brake: 24, reverseSpeed: 3, drag: 0.12,
         wheelbase: 1.75, maxSteer: 0.5, grip: 11, radius: 0.7, roadkill: { K: 24, vmin: 7, slowdown: 0.90 },
       },
     },

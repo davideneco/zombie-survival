@@ -75,7 +75,7 @@
     #mapOverlay.show { display: block; }
     #mapCanvas { width: 100%; height: 100%; }
 
-    #prompt { position: absolute; left: 50%; top: 62%; transform: translateX(-50%); font-size: 22px; text-shadow: 0 0 4px #000; background: rgba(0,0,0,0.5); padding: 4px 16px; border-radius: 4px; display: none; }
+    #prompt { position: absolute; left: 50%; top: 62%; transform: translateX(-50%); white-space: nowrap; font-size: 22px; text-shadow: 0 0 4px #000; background: rgba(0,0,0,0.5); padding: 4px 16px; border-radius: 4px; display: none; }
     /* Tableau de bord de la moto : compteur (gris sous le seuil d'écrasement, rouge au-dessus) et jauge de vitesse avec son trait de seuil */
     #vehHud { position: absolute; left: 50%; bottom: 3%; transform: translateX(-50%); width: 280px; text-align: center; display: none; text-shadow: 0 0 6px #000; }
     #speedo { font-size: 44px; font-weight: bold; letter-spacing: 2px; color: #9aa0a6; line-height: 1.05; }
@@ -164,6 +164,7 @@
       <div id="speedo"></div>
       <div class="vbar" id="vSpeedBar"><i id="vSpeedFill"></i><b id="vSpeedTick"></b></div>
       <div class="vrow" id="vHpRow"><span>PV MOTO</span><div class="vbar"><i id="vHpFill"></i></div><em id="vHpTxt"></em></div>
+      <div class="vrow" id="vFuelRow"><span>ESSENCE</span><div class="vbar"><i id="vFuelFill"></i></div><em id="vFuelTxt"></em></div>
     </div>
     <div id="roomBadge"></div>
     <div id="teammates"></div>

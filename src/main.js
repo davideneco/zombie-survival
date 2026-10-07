@@ -91,6 +91,9 @@ let nextPuId = 1;
 
 // Géométries / matériaux partagés (créer un matériau en pleine partie coûte une initialisation de shader)
 const HALO_GEO = new THREE.SphereGeometry(0.6, 12, 10);
+const JERRY_GEO = new THREE.BoxGeometry(0.34, 0.46, 0.16);
+const JERRY_NECK = new THREE.CylinderGeometry(0.035, 0.035, 0.1, 8);
+const JERRY_HANDLE = new THREE.BoxGeometry(0.1, 0.06, 0.05);
 const NADE_GEO = new THREE.SphereGeometry(0.09, 10, 8);
 const NADE_MAT = new THREE.MeshStandardMaterial({ color: 0x2f3b1f, roughness: 0.6, metalness: 0.4 });
 const TRACER_MATS = new Map();
@@ -210,6 +213,7 @@ const game = {
       }
       // Chance d'apparition d'un bonus COD ; le Bourreau, lui, lâche toujours des munitions max
       this.onFinaleKill(z);
+      this.maybeDropFuel(z.pos); // bidon d'essence (rare, seulement si une moto est à moitié vide)
       if (z.isBoss) this.spawnPowerup(z.pos, null, 'max_ammo');
       else if (Math.random() < CONFIG.powerups.dropChance) this.spawnPowerup(z.pos);
     }
@@ -336,19 +340,24 @@ const game = {
     if (type === 'insta_kill') col = 0xff2222;
     if (type === 'nuke') col = 0xffdd22;
     if (type === 'double_points') col = 0xffaa00;
+    if (type === 'fuel') col = 0xb81208; // jerrican rouge (bonus d'essence des motos)
 
-    const baseGeo = new THREE.DodecahedronGeometry(0.35);
+    const baseGeo = type === 'fuel' ? JERRY_GEO : new THREE.DodecahedronGeometry(0.35);
     const baseMat = new THREE.MeshStandardMaterial({
       color: col,
       emissive: col,
-      emissiveIntensity: 1.2,
+      emissiveIntensity: type === 'fuel' ? 0.25 : 1.2, // le bidon reste bien rouge (une forte émission le délave en rose)
       roughness: 0.3,
     });
     const m = new THREE.Mesh(baseGeo, baseMat);
     grp.add(m);
+    if (type === 'fuel') { // bidon d'essence : corps, goulot et poignée
+      const nz = new THREE.Mesh(JERRY_NECK, baseMat); nz.position.set(0.1, 0.27, 0); grp.add(nz);
+      const hd = new THREE.Mesh(JERRY_HANDLE, baseMat); hd.position.set(-0.07, 0.27, 0); grp.add(hd);
+    }
 
     // halo lumineux (pas de PointLight : ajouter/cacher une lumière fait recompiler tous les shaders)
-    const halo = new THREE.Mesh(HALO_GEO, new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.35, blending: THREE.AdditiveBlending, depthWrite: false }));
+    const halo = new THREE.Mesh(HALO_GEO, new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: type === 'fuel' ? 0.16 : 0.35, blending: THREE.AdditiveBlending, depthWrite: false }));
     halo.scale.setScalar(0.9);
     grp.add(halo);
 
@@ -371,9 +380,14 @@ const game = {
     return pu;
   },
 
-  collectPowerup(p, byRemote = false) {
+  collectPowerup(p, byRemote = false, pid = null) {
     sfx.powerup();
-    if (p.type === 'max_ammo') {
+    if (p.type === 'fuel') {
+      // l'hôte répartit l'essence (moto du ramasseur, sinon la plus vide) ; les autres reçoivent v_fuel
+      if (!byRemote && !this.isClient) this.hostFuelPickup(pid ?? (this.net?.id ?? 0));
+      hud.announce('ESSENCE !', `Bidon : +${CONFIG.vehicles.fuel.jerrican} L`.replace('.', ','), 2200);
+      hud.popup('+2,5 L ESSENCE', 'bonus');
+    } else if (p.type === 'max_ammo') {
       for (const w of this.player.inventory) {
         w.reserve = this.player.statsOf(w).maxReserve;
       }
@@ -659,6 +673,7 @@ const game = {
         kills++; pts += 60 * mult;
         if (this.isMultiplayer) this.net?.send({ t: 'z_dead', id: z.id, head: false });
         this.onFinaleKill(z);
+        this.maybeDropFuel(z.pos);
         if (z.isBoss) this.spawnPowerup(z.pos, null, 'max_ammo');
         else if (Math.random() < CONFIG.powerups.dropChance) this.spawnPowerup(z.pos);
       } else {
@@ -1136,7 +1151,7 @@ const game = {
 
     // Prompt contextuel
     let promptText = null;
-    hud.setVehicle(p.vehicle ? { speed: p.vehicle.v.speed, vmax: p.vehicle.v.def.maxSpeed, vmin: p.vehicle.v.def.roadkill.vmin, hp: p.vehicle.v.hp, hpMax: p.vehicle.v.maxHp } : null);
+    hud.setVehicle(p.vehicle ? { speed: p.vehicle.v.speed, vmax: p.vehicle.v.def.maxSpeed, vmin: p.vehicle.v.def.roadkill.vmin, hp: p.vehicle.v.hp, hpMax: p.vehicle.v.maxHp, fuel: p.vehicle.v.fuelFrac } : null);
     if (p.vehicle) {
       promptText = p.vehicle.v.state === 'burning' ? 'SAUTEZ ! [E]' : p.vehicle.seat === 0 ? '[E] Descendre' : '[E] Descendre · clic gauche : tirer';
     } else if (downedTeammate) {
@@ -1432,7 +1447,7 @@ function setupNetworkHandlers(net) {
     const idx = game.powerups.findIndex((p) => p.id === m.id);
     if (idx >= 0) {
       const pu = game.powerups[idx];
-      game.collectPowerup(pu);
+      game.collectPowerup(pu, false, m.from);
       scene.remove(pu.grp);
       game.powerups.splice(idx, 1);
     }

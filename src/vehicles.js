@@ -14,6 +14,7 @@ import { fx } from './fx.js';
 const angDiff = (a, b) => Math.atan2(Math.sin(a - b), Math.cos(a - b));
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const r2 = (v) => Math.round(v * 100) / 100;
+const r1 = (v) => Math.round(v * 10) / 10;
 const fl = { y: 0, region: 0 };
 const tmpV = new THREE.Vector3();
 
@@ -42,6 +43,7 @@ export class Vehicle {
     this.crashT = 0; this.sendT = 0; this.hitT = 0;
     this.hp = this.def.hp; this.state = 'ok'; this.burnT = 0; this.wreckT = 0; this.hpDirty = false; this.hpSendT = 0;
     this.respawnRound = 0; this.respawnPending = false; this.respawnRetry = 0; this.fxAcc = 0; this.alarmT = 0;
+    this.fuel = this.def.tank; this.fuelLock = 0; this.missCd = 1; this.missT = 0; this.beepT = 0; this.dryNoted = false;
     this.seats.fill(null);
     this.setWreckLook(false);
     this.group.visible = true;
@@ -63,6 +65,7 @@ export class Vehicle {
   }
 
   get maxHp() { return this.def.hp; }
+  get fuelFrac() { return this.fuel / this.def.tank; }
   get hpFrac() { return this.hp / this.def.hp; }
   get usable() { return this.state === 'ok'; }
 
@@ -101,7 +104,7 @@ export class Vehicle {
       this.sendT -= dt;
       if (this.sendT <= 0) {
         this.sendT = 0.05;
-        g.net.send({ t: 'v_state', id: this.id, x: r2(this.pos.x), z: r2(this.pos.z), yaw: r2(this.yaw), spd: r2(this.speed), st: r2(this.steer), ln: r2(this.lean) });
+        g.net.send({ t: 'v_state', id: this.id, x: r2(this.pos.x), z: r2(this.pos.z), yaw: r2(this.yaw), spd: r2(this.speed), st: r2(this.steer), ln: r2(this.lean), fu: r1(this.fuel) });
       }
     }
   }
@@ -172,23 +175,42 @@ export class Vehicle {
     const steerIn = on ? (K.KeyD || K.ArrowRight ? 1 : 0) - (K.KeyA || K.ArrowLeft ? 1 : 0) : 0;
     let sp = this.speed;
 
+    // essence : réserve (bips), ratés sous missBelow, panne sèche (poussée au pas)
+    const FU = CONFIG.vehicles.fuel, frac = this.fuelFrac, dry = on && this.fuel <= 0;
+    let miss = false;
+    if (on && !dry && frac < FU.missBelow) {
+      this.missCd -= dt;
+      if (this.missT > 0) this.missT -= dt;
+      else if (this.missCd <= 0) { this.missT = FU.missLen; this.missCd = FU.missEvery * (0.7 + 0.6 * Math.random()); g.sfx.cough?.(0.8); }
+      miss = this.missT > 0;
+    } else this.missT = 0;
+    if (on && !dry && frac < FU.lowBelow) { this.beepT -= dt; if (this.beepT <= 0) { this.beepT = FU.lowBeep; g.sfx.beep?.(); } } else this.beepT = 0;
+    if (dry && !this.dryNoted) { this.dryNoted = true; g.sfx.cough?.(1); g.hud.announce('PANNE SÈCHE', 'Plus d\'essence : la moto n\'avance plus qu\'au pas', 3500); }
+    if (!dry && this.fuel > 0) this.dryNoted = false;
+
     // vitesse : accélération qui faiblit près du maximum, freinage, marche arrière, résistance
+    const coast = () => { const drag = (D.drag * Math.abs(sp) + 0.8) * dt; sp = Math.abs(sp) <= drag ? 0 : sp - Math.sign(sp) * drag; };
     this.throttle = 0;
     if (fwdKey && !backKey) {
       this.throttle = 1;
-      sp += (sp < 0 ? D.brake : D.accel * Math.max(0.1, 1 - sp / D.maxSpeed)) * dt;
+      if (sp < 0) sp += D.brake * dt;
+      else if (dry) { if (sp < FU.pushSpeed) sp = Math.min(FU.pushSpeed, sp + FU.pushAccel * dt); else coast(); }
+      else if (miss) { this.throttle = 0; coast(); }
+      else sp += D.accel * Math.max(0.1, 1 - sp / D.maxSpeed) * dt;
     } else if (backKey && !fwdKey) {
       this.throttle = -1;
-      sp = sp > 0.3 ? sp - D.brake * dt : Math.max(-D.reverseSpeed, sp - D.accel * 0.5 * dt);
-    } else {
-      const drag = (D.drag * Math.abs(sp) + 0.8) * dt;
-      sp = Math.abs(sp) <= drag ? 0 : sp - Math.sign(sp) * drag;
-    }
+      sp = sp > 0.3 ? sp - D.brake * dt : Math.max(-(dry ? Math.min(D.reverseSpeed, FU.pushSpeed) : D.reverseSpeed), sp - (dry ? FU.pushAccel : D.accel * 0.5) * dt);
+    } else coast();
     if (hb) {
       const b = D.brake * 1.1 * dt;
       sp = Math.abs(sp) <= b ? 0 : sp - Math.sign(sp) * b;
     }
     sp = clamp(sp, -D.reverseSpeed, D.maxSpeed);
+    // consommation : ralenti + gaz (marche arrière x 0,6) ; moteur coupé (en feu) ou réservoir vide : rien
+    if (on && this.fuel > 0) {
+      const gas = this.throttle === 0 ? 0 : (D.gas + D.perSpeed * Math.abs(sp) / D.maxSpeed) * (this.throttle < 0 ? 0.6 : 1);
+      this.fuel = Math.max(0, this.fuel - (D.idle + gas) * dt);
+    }
 
     // direction : angle de braquage qui diminue avec la vitesse, modèle « bicyclette » ; le frein à main donne du dérapage
     this.steer += (steerIn - this.steer) * Math.min(1, dt * 7);
@@ -281,8 +303,9 @@ export class Vehicle {
   // ------------------------------------------------------------------ son du moteur
   updateEngine(dt, local) {
     const g = this.game;
-    if (this.seats[0] != null && !this.engine) this.engine = g.sfx.createEngine?.(this.type) || null;
-    if (this.seats[0] == null && this.engine) this.stopEngine();
+    const running = this.seats[0] != null && this.state === 'ok' && this.fuel > 0; // pas de conducteur, en feu ou à sec : moteur arrêté
+    if (running && !this.engine) this.engine = g.sfx.createEngine?.(this.type) || null;
+    if (!running && this.engine) this.stopEngine();
     if (!this.engine) return;
     // 4 rapports : le régime retombe à chaque passage de vitesse
     const ratio = clamp(Math.abs(this.speed) / this.def.maxSpeed, 0, 1), gears = 4, gear = Math.min(gears - 1, Math.floor(ratio * gears));
@@ -339,7 +362,7 @@ export function installVehicles(game, { world, hud, sfx, scene }) {
 
     vehiclePrompt(nv) {
       const v = nv.v, role = v.def.seats > 1 ? (nv.seat === 0 ? ' — conducteur' : ' — passager') : '';
-      return `[E] Monter sur la ${v.def.name.toLowerCase()}${role} (PV ${Math.round(v.hpFrac * 100)} %)`;
+      return `[E] Monter sur la ${v.def.name.toLowerCase()}${role} (PV ${Math.round(v.hpFrac * 100)} % · essence ${Math.round(v.fuelFrac * 100)} %)`;
     },
 
     // ----------------------------------------------------------- points de vie (écrits par l'hôte seul)
@@ -448,6 +471,7 @@ export function installVehicles(game, { world, hud, sfx, scene }) {
     },
     respawnVehicle(v) {
       v.reset();
+      v.fuel = v.def.tank * R().fuel.respawn; // revient avec 40 % d'essence
       if (this.player.vehicle?.v === v) this.player.vehicle = null;
       this.refreshRiders();
     },
@@ -493,7 +517,7 @@ export function installVehicles(game, { world, hud, sfx, scene }) {
       p.vy = 0; p.vehicle = null;
       if (seat === 0) { // le conducteur descend : la moto s'arrête là
         v.speed = 0; v.steer = 0; v.lean = 0; v.throttle = 0; v.syncNet();
-        if (this.isMultiplayer) this.net?.send({ t: 'v_state', id: v.id, x: r2(v.pos.x), z: r2(v.pos.z), yaw: r2(v.yaw), spd: 0, st: 0, ln: 0 });
+        if (this.isMultiplayer) this.net?.send({ t: 'v_state', id: v.id, x: r2(v.pos.x), z: r2(v.pos.z), yaw: r2(v.yaw), spd: 0, st: 0, ln: 0, fu: r1(v.fuel) }); // l'essence passe au prochain conducteur
       }
       sfx.knock?.(0.5);
       if (!this.isMultiplayer) v.seats[seat] = null;
@@ -544,6 +568,7 @@ export function installVehicles(game, { world, hud, sfx, scene }) {
         const v = this.vehicles[m.id];
         if (!v || v.seats[0] === myId()) return;
         v.net = { x: m.x, z: m.z, yaw: m.yaw, speed: m.spd, steer: m.st, lean: m.ln };
+        if (m.fu != null && performance.now() > v.fuelLock) v.fuel = clamp(+m.fu, 0, v.def.tank); // anciens messages : pas de `fu`
       });
       net.on('v_req', (m) => { if (this.isHost) this.hostSeat(m.id, m.seat, m.from); });
       net.on('v_leave', (m) => {
@@ -562,6 +587,7 @@ export function installVehicles(game, { world, hud, sfx, scene }) {
       net.on('v_boom', (m) => { const v = this.vehicles[m.id]; if (v && !this.isHost) this.onVehicleBoom(v, m.x, m.z, false); });
       net.on('v_respawn', (m) => { const v = this.vehicles[m.id]; if (v && !this.isHost) this.respawnVehicle(v); });
       // borne du parking : le client a déjà payé ; l'hôte vérifie et rend la différence (v_refund)
+      net.on('v_fuel', (m) => { const v = this.vehicles[m.id]; if (v && !this.isHost) this.setFuel(v, m.fu); });
       net.on('v_service', (m) => { if (this.isHost) this.hostService(m.id, m.from, +m.paid || 0); });
       net.on('v_refund', (m) => { if (+m.pts > 0) { this.points += Math.round(m.pts); hud.announce('BORNE', `Remboursé : ${Math.round(m.pts)} pts`, 1800); } });
       net.on('v_seats', (m) => {
@@ -576,7 +602,7 @@ export function installVehicles(game, { world, hud, sfx, scene }) {
 
     // Nouvel arrivant : positions, occupants, PV et état de toutes les motos (wreck : secondes d'épave restantes ; back : manche de retour)
     vehicleSnapshot() {
-      return this.vehicles.map((v) => ({ id: v.id, x: v.pos.x, z: v.pos.z, yaw: v.yaw, seats: v.seats, hp: r2(v.hp), st: v.state, wreck: r2(v.wreckT), back: v.respawnRound }));
+      return this.vehicles.map((v) => ({ id: v.id, x: v.pos.x, z: v.pos.z, yaw: v.yaw, seats: v.seats, hp: r2(v.hp), fu: r2(v.fuel), st: v.state, wreck: r2(v.wreckT), back: v.respawnRound }));
     },
     applyVehicleSnapshot(list) {
       for (const s of list || []) {
@@ -584,6 +610,7 @@ export function installVehicles(game, { world, hud, sfx, scene }) {
         if (!v) continue;
         v.pos.set(s.x, 0, s.z); v.yaw = s.yaw; v.speed = 0; v.seats = s.seats.slice(); v.syncNet(); v.apply();
         if (s.hp != null) v.hp = clamp(+s.hp, 0, v.maxHp);
+        if (s.fu != null) v.fuel = clamp(+s.fu, 0, v.def.tank);
         v.respawnRound = s.back || 0;
         if (s.st === 'burning') this.startBurn(v);
         else if (s.st === 'wreck' || s.st === 'gone') {
@@ -608,16 +635,16 @@ export function installVehicles(game, { world, hud, sfx, scene }) {
       }
       return { v: best };
     },
-    // Ce que la borne ferait pour la moto : { cost, missing }
+    // Ce que la borne ferait pour la moto : { cost (pts), missing (PV), liters }
     serviceOf(v) {
-      const missing = Math.max(0, v.maxHp - v.hp);
-      return { missing, cost: Math.ceil(missing * R().damage.repairPrice) };
+      const missing = Math.max(0, v.maxHp - v.hp), liters = Math.max(0, v.def.tank - v.fuel);
+      return { missing, liters, cost: Math.ceil(missing * R().damage.repairPrice + liters * R().fuel.pricePerL - 1e-6) };
     },
     pumpPrompt(np) {
       if (!np.v) return 'Borne du parking : aucune moto à portée (8 m)';
       const sv = this.serviceOf(np.v), name = np.v.def.name;
-      if (sv.cost <= 0) return `${name} : en parfait état`;
-      return `[E] Réparer la ${name.toLowerCase()} : ${sv.cost} pts (PV ${Math.round(np.v.hpFrac * 100)} %)`;
+      if (sv.cost <= 0) return `${name} : plein fait, en parfait état`;
+      return `[E] Plein + réparation ${name} : ${sv.cost} pts (essence ${Math.round(np.v.fuelFrac * 100)} % · PV ${Math.round(np.v.hpFrac * 100)} %)`;
     },
     usePump(np) {
       const v = np.v;
@@ -627,10 +654,33 @@ export function installVehicles(game, { world, hud, sfx, scene }) {
       if (this.points < sv.cost) { sfx.deny(); return; }
       this.points -= sv.cost; // le client paie d'abord (comme les portes) : l'hôte rembourse s'il refuse
       sfx.buy();
-      hud.announce(v.def.name, `Réparation : −${sv.cost} pts`, 2200);
+      hud.announce(v.def.name, `Plein + réparation : −${sv.cost} pts`, 2200);
       if (this.isClient) this.net?.send({ t: 'v_service', id: v.id, paid: sv.cost });
       else this.hostService(v.id, null, sv.cost);
     },
+    // Essence absolue d'une moto (hôte : à la borne ou au bidon ; v_fuel : les autres l'adoptent, conducteur compris)
+    setFuel(v, fu, broadcast = false) {
+      v.fuel = clamp(+fu, 0, v.def.tank);
+      v.fuelLock = performance.now() + 300; // un v_state déjà en route avec l'ancienne valeur ne doit pas l'écraser
+      if (broadcast && this.isMultiplayer) this.net?.send({ t: 'v_fuel', id: v.id, fu: r2(v.fuel) });
+    },
+
+    // Bidon d'essence (hôte) : 3 % par zombie tué, seulement si une moto en état est sous 50 % de réservoir, un seul à la fois au sol
+    maybeDropFuel(pos) {
+      const F = R().fuel;
+      if (this.isClient || Math.random() >= F.dropChance) return;
+      if (this.powerups.some((q) => q.type === 'fuel') || !this.vehicles.some((v) => v.usable && v.fuelFrac < F.dropBelow)) return;
+      this.spawnPowerup(pos, null, 'fuel');
+    },
+    // Bidon ramassé par `pid` (hôte) : +jerrican L à la moto du ramasseur, sinon à la moto la plus vide
+    hostFuelPickup(pid) {
+      const F = R().fuel;
+      let v = this.vehicles.find((q) => q.usable && q.seats.includes(pid));
+      if (!v) v = this.vehicles.filter((q) => q.usable).sort((a, b) => a.fuelFrac - b.fuelFrac)[0];
+      if (v) this.setFuel(v, v.fuel + F.jerrican, true);
+      return v;
+    },
+
     // hôte : applique le service payé `paid` par le joueur `pid` (null : l'hôte lui-même) ; rembourse l'excédent ou tout si impossible
     hostService(vid, pid, paid) {
       const v = this.vehicles[vid];
@@ -640,6 +690,7 @@ export function installVehicles(game, { world, hud, sfx, scene }) {
       if (sv.cost <= 0 || sv.cost > paid) { refund(paid); return; } // déjà en parfait état, ou plus abîmée depuis : on rend tout
       v.hp = v.maxHp;
       this.flushVehicleHp(v);
+      this.setFuel(v, v.def.tank, true);
       refund(paid - sv.cost);
     },
   });
