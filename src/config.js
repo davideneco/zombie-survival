@@ -5,30 +5,61 @@ export const CONFIG = {
   startHint: { x: 4.3, z: -35.7 }, // point de départ (place du Marché-Neuf, centre de l'ancienne carte), en mètres depuis le centre des données
   cityHint: { x: -199, z: -145 }, // un point du réseau de rues principal (place Kléber)
   breaches: 3,                     // secours : bâtiments à effondrer si aucun passage sous immeuble ne relie la place à la ville
-  // Secteur jouable : autour de la place du Marché-Neuf. Le reste de l'île est visible mais fermé.
+  // Toute la Grande Île est jouable, découpée en zones qu'on ouvre l'une après l'autre en payant les portes.
   // Chaque zone part d'un vrai lieu (seed, en mètres : x vers l'est, z vers le sud) ; les cases sont attribuées
-  // à la zone la plus proche en distance de marche, jusqu'à maxDist. Les portes tombent entre deux zones.
+  // à la zone la plus proche en distance de marche. Trois phases (realworld.js) : 1) les zones d'origine (sans `outer`),
+  // limitées à maxDist ; 2) les zones `outer: true`, sans limite de distance, sur les cases restantes ; 3) les poches enclavées
+  // sont rattachées en entier à la zone voisine qui les touche le plus. Les portes tombent entre deux zones voisines.
+  // Prix d'une porte = le plus cher des `doorPrice` des deux zones qu'elle sépare (Marché-Neuf : 0). Paliers des zones `outer` :
+  // A 1500, B 2000, C 2500 (voir les commentaires de chaque zone).
   // items : ce qu'on trouve dans la zone ('station' = borne de munitions, 'wall:<arme>', 'perk:<atout>', 'pap',
   //         'box' = un emplacement possible de la boîte mystère : il n'y a qu'une boîte, qui se déplace).
   sector: {
-    maxDist: 95,        // rayon d'une zone (m, en distance de marche)
-    basePrice: 750,     // prix d'une porte vers une zone voisine de la place de départ
-    priceStep: 250,     // supplément par zone plus éloignée
+    maxDist: 95,        // rayon d'une zone d'origine (m, en distance de marche) ; les zones `outer` n'ont pas de limite
+    basePrice: 750,     // (repli) prix d'une porte vers une zone sans doorPrice : de la place de départ
+    priceStep: 250,     // (repli) supplément par zone plus éloignée
+    // Décor des zones `outer`, proportionnel à leur surface (une voiture / un objet de barricade par tant de m²) ; le décor des zones
+    // d'origine garde son tirage et ses plafonds propres (14 voitures, 47 objets de barricade)
+    outerDecor: { carArea: 6000, junkArea: 2500, bikeMax: 30 },
     zones: [
       { name: 'Marché-Neuf', start: true, items: ['station', 'wall:m1911', 'wall:shotgun', 'wall:smg', 'perk:quickrevive', 'box'] },
-      { name: 'Temple-Neuf', seed: { x: -35, z: -95 }, items: ['station', 'wall:arex', 'wall:mp5', 'perk:staminup', 'box'] },
-      { name: 'Rue des Orfèvres', seed: { x: 40, z: -70 }, items: ['wall:famas', 'perk:speedcola', 'box'] },
-      { name: 'Rue du Dôme', seed: { x: 110, z: -111 }, items: ['station', 'wall:sniper', 'wall:svd', 'box'] },
-      { name: 'Grandes Arcades', seed: { x: -110, z: -45 }, items: ['station', 'wall:ak47', 'wall:p90', 'perk:mulekick', 'box'] },
-      { name: 'Place Kléber', seed: { x: -199, z: -145 }, items: ['station', 'perk:juggernog', 'wall:lmg', 'wall:m249', 'box'] },
-      { name: 'Place Gutenberg', seed: { x: -20, z: 90 }, items: ['station', 'perk:doubletap', 'wall:scar', 'wall:pkm', 'box'] },
-      { name: 'Cathédrale', seed: { x: 103, z: 33 }, items: ['station', 'wall:deagle', 'wall:rifle', 'box'] },
+      { name: 'Temple-Neuf', seed: { x: -35, z: -95 }, doorPrice: 750, items: ['station', 'wall:arex', 'wall:mp5', 'perk:staminup', 'box'] },
+      { name: 'Rue des Orfèvres', seed: { x: 40, z: -70 }, doorPrice: 750, items: ['wall:famas', 'perk:speedcola', 'box'] },
+      { name: 'Rue du Dôme', seed: { x: 110, z: -111 }, doorPrice: 1000, items: ['station', 'wall:sniper', 'wall:svd', 'box'] },
+      { name: 'Grandes Arcades', seed: { x: -110, z: -45 }, doorPrice: 1000, items: ['station', 'wall:ak47', 'wall:p90', 'perk:mulekick', 'box'] },
+      { name: 'Place Kléber', seed: { x: -199, z: -145 }, doorPrice: 1250, items: ['station', 'perk:juggernog', 'wall:lmg', 'wall:m249', 'box'] },
+      { name: 'Place Gutenberg', seed: { x: -20, z: 90 }, doorPrice: 1250, items: ['station', 'perk:doubletap', 'wall:scar', 'wall:pkm', 'box'] },
+      { name: 'Cathédrale', seed: { x: 103, z: 33 }, doorPrice: 1000, items: ['station', 'wall:deagle', 'wall:rifle', 'box'] },
       // fin de partie : l'intérieur de la cathédrale, derrière le grand portail (porte la plus chère)
       { name: 'Intérieur de la Cathédrale', seed: 'cathedral', portal: true, doorPrice: 5000, items: ['pap', 'clock', 'station', 'box'] },
       // place de l'Homme de Fer (rotonde du tram), derrière la place Kléber : profondeur 4, donc 1500 pts calculés. Ajoutée en dernier :
       // le tirage des emplacements des autres zones ne change pas.
       // isolatedRnd : ses emplacements (et son décor) ne consomment pas le tirage commun aux autres zones
-      { name: 'Homme de Fer', seed: { x: -290, z: -203 }, isolatedRnd: true, items: ['station', 'wall:crossbow', 'wall:m79', 'perk:phdflopper', 'box'] },
+      { name: 'Homme de Fer', seed: { x: -290, z: -203 }, isolatedRnd: true, doorPrice: 1500, items: ['station', 'wall:crossbow', 'wall:m79', 'perk:phdflopper', 'box'] },
+      // ---- le reste de la Grande Île (v0.27.0) : zones `outer`, dans cet ordre (le tirage des zones d'origine ne bouge pas :
+      // les zones `outer` ont leur propre générateur). Noms tirés des monuments OpenStreetMap ; « Grand'Rue » et « Quai Schoepflin »
+      // sont des noms déduits du plan (à confirmer). Armes premium (magnum, saiga, mg42, barrett) : v0.28.0 ; en attendant, une arme
+      // déjà vendable (ou aucune) à leur place.
+      // palier A : 1500
+      { name: 'Saint-Pierre-le-Jeune', outer: true, seed: { x: -140, z: -340 }, doorPrice: 1500, items: ['station', 'wall:rifle', 'box'] },
+      { name: "Grand'Rue", outer: true, seed: { x: -400, z: 10 }, doorPrice: 1500, items: ['station', 'wall:mp5', 'box'] },
+      { name: 'Grand Séminaire', outer: true, seed: { x: 300, z: -60 }, doorPrice: 1500, items: ['station', 'wall:shotgun', 'box'] },
+      { name: 'Palais Rohan', outer: true, seed: { x: 260, z: 140 }, doorPrice: 1500, items: ['wall:ak47'] },
+      { name: 'Musée historique', outer: true, seed: { x: 200, z: 215 }, doorPrice: 1500, items: ['station', 'wall:arex', 'box'] },
+      // palier B : 2000
+      { name: 'Place Broglie', outer: true, seed: { x: 150, z: -345 }, doorPrice: 2000, items: ['station', 'wall:lmg', 'box'] },
+      { name: 'Quai Schoepflin', outer: true, seed: { x: -20, z: -470 }, doorPrice: 2000, items: ['wall:svd'] },
+      { name: 'Hôtel de Neuwiller', outer: true, seed: { x: -450, z: -250 }, doorPrice: 2000, items: ['wall:famas'] },
+      { name: 'Monument Stoeber', outer: true, seed: { x: -490, z: -150 }, doorPrice: 2000, items: ['station', 'wall:scar', 'box'] },
+      { name: 'Ancienne Douane', outer: true, seed: { x: 30, z: 330 }, doorPrice: 2000, items: ['station', 'wall:sniper'] },
+      { name: 'Saint-Thomas', outer: true, seed: { x: -230, z: 250 }, doorPrice: 2000, items: ['station', 'wall:p90', 'box'] },
+      { name: 'Église Réformée', outer: true, seed: { x: -330, z: 170 }, doorPrice: 2000, items: ['wall:smg'] },
+      // palier C : 2500
+      { name: 'Opéra', outer: true, seed: { x: 250, z: -450 }, doorPrice: 2500, items: ['station'] },
+      { name: 'Préfecture', outer: true, seed: { x: 400, z: -340 }, doorPrice: 2500, items: ['station', 'wall:pkm', 'box'] },
+      { name: 'Saint-Étienne', outer: true, seed: { x: 540, z: -90 }, doorPrice: 2500, items: ['station', 'wall:m249', 'box'] },
+      { name: 'Saint-Pierre-le-Vieux', outer: true, seed: { x: -620, z: -60 }, doorPrice: 2500, items: ['wall:deagle'] },
+      { name: 'Petite France', outer: true, seed: { x: -660, z: 150 }, doorPrice: 2500, items: ['wall:crossbow'] },
     ],
   },
 
@@ -272,6 +303,10 @@ export const CONFIG = {
     // chevalier de fer : variante 'armored' (armure x0,5, vitesse x0,8) qui apparaît dans la zone donnée, à partir de la manche fromRound,
     // avec la probabilité `chance` par zombie ; maxAlive en vie au plus ; santé x healthMult (avec l'armure : x3 de résistance)
     ironKnight: { zone: 'Homme de Fer', fromRound: 8, chance: 0.15, maxAlive: 3, healthMult: 1.5 },
+    // champ de flux (chemin vers les joueurs) : calculé seulement jusqu'à `range` m de marche autour de chaque joueur (une grande
+    // île coûterait 25 000 cases par image en permanence), par tranches de `budget` cases par image, relancé au plus toutes les
+    // `interval` s. Un zombie plus loin va tout droit ; relocateZombies le ramène près des joueurs s'il reste coincé ou trop loin.
+    flow: { range: 160, interval: 0.2, budget: 25000 },
   },
 };
 

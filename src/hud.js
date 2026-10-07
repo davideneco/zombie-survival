@@ -373,16 +373,19 @@ export class Hud {
     // zones
     ctx.textAlign = 'center';
     const here = world.zoneOf(player.pos.x, player.pos.z);
+    // 27 zones : la police suit la surface de la zone (les petites zones du centre restent lisibles), les zones encore fermées sont
+    // plus pâles
     world.zoneCenters.forEach((c, i) => {
       if (!c) return;
       const [x, y] = P(c.x, c.z);
-      ctx.font = `bold ${i === here ? 22 : 18}px Impact, Arial`;
-      ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(0,0,0,0.85)';
+      const size = Math.round(11 + Math.sqrt(world.zoneArea?.[i] || 8000) / 20) + (i === here ? 3 : 0);
+      ctx.font = `bold ${size}px Impact, Arial`;
+      ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(0,0,0,0.85)'; ctx.lineJoin = 'round';
       ctx.strokeText(c.name.toUpperCase(), x, y);
-      ctx.fillStyle = i === here ? '#ffd24a' : 'rgba(255,255,255,0.8)';
+      ctx.fillStyle = i === here ? '#ffd24a' : world.isZoneOpen?.(i) ? 'rgba(255,255,255,0.92)' : 'rgba(255,255,255,0.62)';
       ctx.fillText(c.name.toUpperCase(), x, y);
     });
-    // limites du secteur (barricades définitives)
+    // limites fermées (aucune tant que toute l'île est ouverte)
     ctx.fillStyle = '#9aa0a6';
     for (const pt of world.sealedPoints || []) { const [x, y] = P(pt.x, pt.z); ctx.fillRect(x - 1.5, y - 1.5, 3, 3); }
     // portes
@@ -447,7 +450,7 @@ export class Hud {
     ctx.font = 'bold 26px Impact, Arial'; ctx.fillStyle = '#ffd24a';
     ctx.fillText(world.mapTitle || 'GRANDE ÎLE DE STRASBOURG', 30, 36);
     ctx.font = '13px Arial'; ctx.fillStyle = '#ccc';
-    ctx.fillText('▲ vous   ● vert : munitions   ● orange : arme murale   ● bleu ? : boîte mystère   P : Pack-a-Punch   ● couleurs : atouts   ■ rouge : porte verrouillée   P bleu : motos   ■ gris : zone fermée   — doré : passage sous immeuble   N ↑', 30, H - 18);
+    ctx.fillText('▲ vous   ● vert : munitions   ● orange : arme murale   ● bleu ? : boîte mystère   P : Pack-a-Punch   ● couleurs : atouts   ■ rouge : porte verrouillée (prix)   P bleu : motos   — doré : passage sous immeuble   N ↑', 30, H - 18);
   }
 
   setRoomBadge(code) {

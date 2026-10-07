@@ -715,12 +715,28 @@ export async function buildRealWorld(scene, renderer) {
   }
   const reachAt = (x, z) => { const ix = nav.cx(x), iz = nav.cz(z); return nav.inside(ix, iz) && reach[nav.idx(ix, iz)] === 1; };
 
-  // ---------------------------------------------------------------- Zones du secteur jouable
+  // ---------------------------------------------------------------- Zones de la Grande Île
   // Chaque zone part d'un vrai lieu ; chaque case accessible va à la zone la plus proche en distance de marche
-  // (les limites tombent au milieu des rues). Au-delà de maxDist : hors secteur, fermé par des barricades.
+  // (les limites tombent au milieu des rues). Trois phases, toutes déterministes (aucun Math.random) :
+  //  1) les zones d'origine (sans `outer`), limitées à maxDist : exactement le découpage de la v0.26.0 ;
+  //  2) les zones `outer`, sur les cases restantes, sans limite de distance (les zones de la phase 1 sont gelées) ;
+  //  3) les poches enclavées (cases que la phase 2 n'atteint pas) sont rattachées en entier à la zone voisine qui les touche le plus.
   const startZone = Z.zones.findIndex((z) => z.start);
   const zoneLabel = new Int8Array(nav.nx * nav.nz).fill(-1);
   const seeds = new Array(NZONES).fill(null); // [x, z] du lieu de chaque zone
+  const NB8 = [[1, 0, 10], [-1, 0, 10], [0, 1, 10], [0, -1, 10], [1, 1, 14], [1, -1, 14], [-1, 1, 14], [-1, -1, 14]];
+  // case accessible la plus proche d'un lieu (le point donné peut tomber dans un bâtiment) et pas encore attribuée
+  const seedCell = (sd, maxR) => {
+    const c0x = nav.cx(sd.x), c0z = nav.cz(sd.z);
+    for (let r = 0; r <= maxR; r++) {
+      for (let dz = -r; dz <= r; dz++) for (let dx = -r; dx <= r; dx++) {
+        if (Math.max(Math.abs(dx), Math.abs(dz)) !== r || !nav.inside(c0x + dx, c0z + dz)) continue;
+        const j = nav.idx(c0x + dx, c0z + dz);
+        if (reach[j] && zoneLabel[j] < 0 && !breach.startMask[j]) return [c0x + dx, c0z + dz];
+      }
+    }
+    return null;
+  };
   {
     const N = nav.nx * nav.nz, INFD = 0x3fffffff;
     for (let i = 0; i < N; i++) if (breach.startMask[i] && reach[i]) zoneLabel[i] = startZone;
@@ -728,33 +744,23 @@ export async function buildRealWorld(scene, renderer) {
     const dist = new Int32Array(N).fill(INFD);
     const buckets = [[]];
     Z.zones.forEach((z, zi) => {
-      if (z.start) return;
-      // case accessible la plus proche du lieu (le point donné peut tomber dans un bâtiment)
-      let c = null;
+      if (z.start || z.outer) return;
       const sd = z.seed === 'cathedral' ? (cath ? { x: cath.seed[0], z: cath.seed[1] } : null) : z.seed;
       if (!sd) return;
-      const c0x = nav.cx(sd.x), c0z = nav.cz(sd.z);
-      for (let r = 0; r <= 60 && !c; r++) {
-        for (let dz = -r; dz <= r && !c; dz++) for (let dx = -r; dx <= r; dx++) {
-          if (Math.max(Math.abs(dx), Math.abs(dz)) !== r || !nav.inside(c0x + dx, c0z + dz)) continue;
-          const j = nav.idx(c0x + dx, c0z + dz);
-          if (reach[j] && zoneLabel[j] < 0 && !breach.startMask[j]) { c = [c0x + dx, c0z + dz]; break; }
-        }
-      }
+      const c = seedCell(sd, 60);
       if (!c) { console.warn('[zones] lieu introuvable :', z.name); return; }
       const i = nav.idx(c[0], c[1]);
       dist[i] = 0; zoneLabel[i] = zi; buckets[0].push(i);
       seeds[zi] = [nav.worldX(c[0]), nav.worldZ(c[1])];
     });
     const maxCost = Math.round((Z.maxDist / nav.cell) * 10);
-    const NB = [[1, 0, 10], [-1, 0, 10], [0, 1, 10], [0, -1, 10], [1, 1, 14], [1, -1, 14], [-1, 1, 14], [-1, -1, 14]];
     for (let d = 0; d < buckets.length && d <= maxCost; d++) {
       const bucket = buckets[d];
       if (!bucket) continue;
       for (const i of bucket) {
         if (dist[i] !== d) continue;
         const ix = i % nav.nx, iz = (i / nav.nx) | 0;
-        for (const [dx, dz, c] of NB) {
+        for (const [dx, dz, c] of NB8) {
           const jx = ix + dx, jz = iz + dz;
           if (!nav.inside(jx, jz)) continue;
           const j = jz * nav.nx + jx;
@@ -767,11 +773,71 @@ export async function buildRealWorld(scene, renderer) {
       buckets[d] = null;
     }
   }
-  // version étendue aux cases bloquées voisines (joueur collé à un mur, machines contre les façades)
-  const zoneLabelWide = zoneLabel.slice();
+  const zoneLabel1 = zoneLabel.slice(); // découpage de la phase 1 (zones d'origine) : le décor et les objets d'origine s'y réfèrent
+  // phase 2 : les zones `outer`, sans limite de distance
   {
+    const N = nav.nx * nav.nz, INFD = 0x3fffffff;
+    const dist = new Int32Array(N).fill(INFD);
+    const buckets = [[]];
+    Z.zones.forEach((z, zi) => {
+      if (!z.outer) return;
+      const c = seedCell(z.seed, 80);
+      if (!c) { console.warn('[zones] lieu introuvable :', z.name); return; }
+      const i = nav.idx(c[0], c[1]);
+      dist[i] = 0; zoneLabel[i] = zi; buckets[0].push(i);
+      seeds[zi] = [nav.worldX(c[0]), nav.worldZ(c[1])];
+    });
+    for (let d = 0; d < buckets.length; d++) {
+      const bucket = buckets[d];
+      if (!bucket) continue;
+      for (const i of bucket) {
+        if (dist[i] !== d) continue;
+        const ix = i % nav.nx, iz = (i / nav.nx) | 0;
+        for (const [dx, dz, c] of NB8) {
+          const jx = ix + dx, jz = iz + dz;
+          if (!nav.inside(jx, jz)) continue;
+          const j = jz * nav.nx + jx;
+          if (!reach[j] || zoneLabel1[j] >= 0) continue; // zones d'origine gelées
+          if (dx && dz && (!reach[iz * nav.nx + jx] || !reach[jz * nav.nx + ix])) continue;
+          const nd = d + c;
+          if (nd < dist[j]) { dist[j] = nd; zoneLabel[j] = zoneLabel[i]; (buckets[nd] || (buckets[nd] = [])).push(j); }
+        }
+      }
+      buckets[d] = null;
+    }
+  }
+  // phase 3 : poches enclavées -> zone voisine qui les touche le plus (égalité : indice le plus bas)
+  {
+    const N = nav.nx * nav.nz, stack = [];
+    const seen = new Uint8Array(N);
+    let rest = 0;
+    for (let s = 0; s < N; s++) {
+      if (!reach[s] || zoneLabel[s] >= 0 || seen[s]) continue;
+      const comp = [s], touch = new Map();
+      seen[s] = 1; stack.push(s);
+      while (stack.length) {
+        const c = stack.pop(), x = c % nav.nx, z = (c / nav.nx) | 0;
+        for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+          const jx = x + dx, jz = z + dz;
+          if (!nav.inside(jx, jz)) continue;
+          const j = jz * nav.nx + jx;
+          if (!reach[j]) continue;
+          if (zoneLabel[j] >= 0) touch.set(zoneLabel[j], (touch.get(zoneLabel[j]) || 0) + 1);
+          else if (!seen[j]) { seen[j] = 1; comp.push(j); stack.push(j); }
+        }
+      }
+      let best = -1, bestN = 0;
+      for (const [zi, n] of touch) if (n > bestN || (n === bestN && zi < best)) { best = zi; bestN = n; }
+      if (best < 0) { rest += comp.length; continue; }
+      for (const j of comp) zoneLabel[j] = best;
+    }
+    if (rest && typeof location !== 'undefined' && new URLSearchParams(location.search).has('debug')) console.warn(`[zones] ${rest} cases accessibles sans zone`);
+  }
+  // version étendue aux cases bloquées voisines (joueur collé à un mur, machines contre les façades)
+  const widen = (label) => {
+    const wide = label.slice();
     let front = [];
-    for (let i = 0; i < zoneLabel.length; i++) if (zoneLabel[i] >= 0) front.push(i);
+    for (let i = 0; i < label.length; i++) if (label[i] >= 0) front.push(i);
     for (let step = 0; step < 6; step++) {
       const next = [];
       for (const i of front) {
@@ -780,20 +846,29 @@ export async function buildRealWorld(scene, renderer) {
           const jx = ix + dx, jz = iz + dz;
           if (!nav.inside(jx, jz)) continue;
           const j = jz * nav.nx + jx;
-          if (zoneLabelWide[j] >= 0 || reach[j]) continue;
-          zoneLabelWide[j] = zoneLabelWide[i]; next.push(j);
+          if (wide[j] >= 0 || reach[j]) continue;
+          wide[j] = wide[i]; next.push(j);
         }
       }
       front = next;
     }
-  }
+    return wide;
+  };
+  const zoneLabelWide = widen(zoneLabel), zoneLabelWide1 = widen(zoneLabel1);
   const zoneOf = (x, z) => {
     const ix = nav.cx(x), iz = nav.cz(z);
     return nav.inside(ix, iz) ? zoneLabelWide[nav.idx(ix, iz)] : -1;
   };
+  // zone d'après le découpage d'origine (phase 1) : -1 hors des zones d'origine. Les objets et le décor d'origine l'utilisent :
+  // ils restent exactement ceux de la v0.26.0, quelles que soient les zones ajoutées autour.
+  const zoneOf1 = (x, z) => {
+    const ix = nav.cx(x), iz = nav.cz(z);
+    return nav.inside(ix, iz) ? zoneLabelWide1[nav.idx(ix, iz)] : -1;
+  };
   const zoneOpen = new Array(NZONES).fill(false);
   zoneOpen[startZone] = true;
   const zoneCells = Array.from({ length: NZONES }, () => ({ n: 0, sx: 0, sz: 0 }));
+  const zoneList = Array.from({ length: NZONES }, () => []); // cases accessibles (tous les 3 m) de chaque zone : décor des zones `outer`
   let secMinX = Infinity, secMaxX = -Infinity, secMinZ = Infinity, secMaxZ = -Infinity;
   for (let iz = 0; iz < nav.nz; iz += 3) for (let ix = 0; ix < nav.nx; ix += 3) {
     const zl = zoneLabel[nav.idx(ix, iz)];
@@ -802,6 +877,12 @@ export async function buildRealWorld(scene, renderer) {
     zc.n++; zc.sx += x; zc.sz += z;
     secMinX = Math.min(secMinX, x); secMaxX = Math.max(secMaxX, x); secMinZ = Math.min(secMinZ, z); secMaxZ = Math.max(secMaxZ, z);
   }
+  for (let iz = 0; iz < nav.nz; iz += 4) for (let ix = 0; ix < nav.nx; ix += 4) {
+    const i = nav.idx(ix, iz);
+    if (reach[i] && zoneLabel[i] >= 0) zoneList[zoneLabel[i]].push([ix, iz]);
+  }
+  const zoneArea = new Array(NZONES).fill(0); // m² accessibles par zone (outils de test)
+  for (let i = 0; i < zoneLabel.length; i++) if (reach[i] && zoneLabel[i] >= 0) zoneArea[zoneLabel[i]] += nav.cell * nav.cell;
 
   const candidatesNear = (cx, cz, minClear, minD, maxD) => {
     const out = [];
@@ -816,14 +897,17 @@ export async function buildRealWorld(scene, renderer) {
     }
     return out;
   };
-  const shuffle = (a) => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+  // Tirages : `rnd` (commun, zones d'origine), `rndOuter` (zones `outer` : emplacements, mobilier, voitures, barricades). Les zones
+  // `outer` n'y touchent jamais : le décor et les objets des zones d'origine restent ceux de la v0.26.0.
+  const rndOuter = seeded(77002);
+  const shuffle = (a, rng = rnd) => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rng() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
 
-  // Points aléatoires accessibles dans le secteur jouable (props). Les zones à tirage isolé (zone.isolatedRnd) n'y comptent pas :
+  // Points aléatoires accessibles dans les zones d'origine (props). Les zones à tirage isolé (zone.isolatedRnd) n'y comptent pas :
   // le décor aléatoire des zones d'origine reste exactement le même quand on ajoute une zone.
   const isolatedZone = Z.zones.map((z) => !!z.isolatedRnd);
   let lgMinX = Infinity, lgMaxX = -Infinity, lgMinZ = Infinity, lgMaxZ = -Infinity;
   for (let iz = 0; iz < nav.nz; iz += 3) for (let ix = 0; ix < nav.nx; ix += 3) {
-    const zl = zoneLabel[nav.idx(ix, iz)];
+    const zl = zoneLabel1[nav.idx(ix, iz)];
     if (zl < 0 || isolatedZone[zl]) continue;
     const x = nav.worldX(ix), z = nav.worldZ(iz);
     lgMinX = Math.min(lgMinX, x); lgMaxX = Math.max(lgMaxX, x); lgMinZ = Math.min(lgMinZ, z); lgMaxZ = Math.max(lgMaxZ, z);
@@ -833,7 +917,7 @@ export async function buildRealWorld(scene, renderer) {
     for (let t = 0; t < count * 60 && out.length < count; t++) {
       const x = lgMinX + rnd() * (lgMaxX - lgMinX), z = lgMinZ + rnd() * (lgMaxZ - lgMinZ);
       const ix = nav.cx(x), iz = nav.cz(z);
-      if (nav.inside(ix, iz) && zoneLabel[nav.idx(ix, iz)] >= 0 && !isolatedZone[zoneLabel[nav.idx(ix, iz)]] && clearance(ix, iz, minClear)) out.push([x, z]);
+      if (nav.inside(ix, iz) && zoneLabel1[nav.idx(ix, iz)] >= 0 && !isolatedZone[zoneLabel1[nav.idx(ix, iz)]] && clearance(ix, iz, minClear)) out.push([x, z]);
     }
     return out;
   };
@@ -865,7 +949,13 @@ export async function buildRealWorld(scene, renderer) {
     const WW = 1.3, WH = 2.06, WY = 1.7;
     const quadGeo = new THREE.PlaneGeometry(WW, WH);
 
-    const makeQuad = (nx, nz, cx, cz) => {
+    // Vitres brisées : un modèle par fenêtre utilisée, mais en nombre borné (pool LRU de QUAD_POOL). Sans cela, chaque fenêtre servie
+    // gardait pour toujours deux maillages et deux matériaux : sur toute l'île, plusieurs milliers. Quand le pool est plein, la vitre
+    // la moins récemment servie est reprise (elle redevient une fenêtre intacte) et replacée sur la nouvelle.
+    const QUAD_POOL = 64;
+    const quadPool = [];
+    let quadClock = 0;
+    const makeQuad = () => {
       const g = new THREE.Group();
       const glow = new THREE.Mesh(quadGeo, new THREE.MeshBasicMaterial({
         color: 0xff2a10, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false,
@@ -874,14 +964,28 @@ export async function buildRealWorld(scene, renderer) {
       const broken = new THREE.Mesh(quadGeo, new THREE.MeshBasicMaterial({
         map: brokenTex, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -3,
       }));
-      broken.visible = false;
       broken.position.z = 0.012;
       g.add(glow, broken);
-      g.position.set(cx + nx * 0.03, WY, cz + nz * 0.03);
-      g.rotation.y = Math.atan2(nx, nz);
       g.userData.warn = (t) => { glow.material.opacity = 0.18 + 0.4 * Math.abs(Math.sin(t * 13)); };
       g.userData.broke = () => { glow.material.opacity = 0; broken.visible = true; };
+      g.userData.reset = () => { glow.material.opacity = 0; broken.visible = false; };
+      g.userData.reset();
       scene.add(g);
+      return g;
+    };
+    const quadFor = (sp, nx, nz, cx, cz) => {
+      if (sp._q) { sp._q.userData.used = ++quadClock; return sp._q; }
+      let g;
+      if (quadPool.length < QUAD_POOL) { g = makeQuad(); quadPool.push(g); }
+      else {
+        g = quadPool.reduce((old, q) => (q.userData.used < old.userData.used ? q : old));
+        g.userData.owner._q = null;
+        g.userData.reset();
+      }
+      g.userData.owner = sp; g.userData.used = ++quadClock;
+      g.position.set(cx + nx * 0.03, WY, cz + nz * 0.03);
+      g.rotation.y = Math.atan2(nx, nz);
+      sp._q = g;
       return g;
     };
 
@@ -901,7 +1005,7 @@ export async function buildRealWorld(scene, renderer) {
           center: new THREE.Vector3(px + nx * 0.1, WY, pz + nz * 0.1),
           nx, nz, yaw: Math.atan2(nx, nz), busyUntil: 0, _q: null,
           index: windowSpawns.length, zone: zoneOf(ox, oz),
-          getQuad() { return this._q || (this._q = makeQuad(nx, nz, px, pz)); },
+          getQuad() { return quadFor(this, nx, nz, px, pz); },
         };
         windowSpawns.push(sp);
         const key = winKey(Math.floor(ox / WIN_CELL), Math.floor(oz / WIN_CELL));
@@ -993,85 +1097,81 @@ export async function buildRealWorld(scene, renderer) {
   // ---------------------------------------------------------------- Portes payantes entre les zones
   // Partout où deux cases accessibles voisines appartiennent à deux zones différentes, on pose une barrière ;
   // les barrières d'une même paire de zones forment une seule porte (un seul achat).
+  // Prix d'une porte = le plus cher des `doorPrice` des deux zones qu'elle sépare (Marché-Neuf : 0).
   const doors = [];
   const sealedGroups = [];
-  const sealedPoints = []; // pour la carte
+  const sealedPoints = []; // pour la carte (aucun tant que toute l'île est ouverte)
   let door_depth;
+  const doorPts = []; // points de toutes les portes (doorDist)
+  const doorPtsLegacy = []; // points des portes du découpage d'origine : les objets d'origine s'y réfèrent (voir zoneOf1)
   {
     const cell = nav.cell, ext = cell + 0.3;
-    const groups = new Map(); // "a-b" -> { a, b, runs: [{x0,z0,x1,z1}] }
-    const addRun = (a, b, r) => {
-      const k = a < b ? `${a}-${b}` : `${b}-${a}`;
-      if (!groups.has(k)) groups.set(k, { a: Math.min(a, b), b: Math.max(a, b), runs: [] });
-      groups.get(k).runs.push(r);
+    // limites entre zones d'après un découpage : { links: [{a, b, runs}], sealed: [...] }
+    const findLinks = (label) => {
+      const groups = new Map(); // "a-b" -> { a, b, runs: [{x0,z0,x1,z1}] }
+      const addRun = (a, b, r) => {
+        const k = a < b ? `${a}-${b}` : `${b}-${a}`;
+        if (!groups.has(k)) groups.set(k, { a: Math.min(a, b), b: Math.max(a, b), runs: [] });
+        groups.get(k).runs.push(r);
+      };
+      // arêtes verticales : entre (ix, iz) et (ix + 1, iz)
+      for (let ix = 0; ix < nav.nx - 1; ix++) {
+        const ex = nav.worldX(ix) + cell / 2;
+        let start = -1, pa = -1, pb = -1;
+        for (let iz = 0; iz <= nav.nz; iz++) {
+          let a = NO_EDGE, b = NO_EDGE;
+          if (iz < nav.nz) {
+            const i = nav.idx(ix, iz);
+            if (reach[i] && reach[i + 1]) {
+              a = label[i]; b = label[i + 1];
+              if (a === b) a = b = NO_EDGE;
+            }
+          }
+          if (start >= 0 && (a !== pa || b !== pb)) { addRun(pa, pb, { x0: ex, z0: nav.worldZ(start) - ext, x1: ex, z1: nav.worldZ(iz - 1) + ext }); start = -1; }
+          if (a !== NO_EDGE && start < 0) { start = iz; pa = a; pb = b; }
+        }
+      }
+      // arêtes horizontales : entre (ix, iz) et (ix, iz + 1)
+      for (let iz = 0; iz < nav.nz - 1; iz++) {
+        const ez = nav.worldZ(iz) + cell / 2;
+        let start = -1, pa = -1, pb = -1;
+        for (let ix = 0; ix <= nav.nx; ix++) {
+          let a = NO_EDGE, b = NO_EDGE;
+          if (ix < nav.nx) {
+            const i = nav.idx(ix, iz);
+            if (reach[i] && reach[i + nav.nx]) {
+              a = label[i]; b = label[i + nav.nx];
+              if (a === b) a = b = NO_EDGE;
+            }
+          }
+          if (start >= 0 && (a !== pa || b !== pb)) { addRun(pa, pb, { x0: nav.worldX(start) - ext, z0: ez, x1: nav.worldX(ix - 1) + ext, z1: ez }); start = -1; }
+          if (a !== NO_EDGE && start < 0) { start = ix; pa = a; pb = b; }
+        }
+      }
+      // Depuis la place de départ : une porte par brèche (barrières proches < 12 m).
+      // Entre deux autres zones : une seule porte pour toute la limite (un achat ouvre toutes les rues).
+      const links = [], sealed = [];
+      for (const g of groups.values()) {
+        if (g.a < 0) { sealed.push(g); continue; } // limite d'une zone fermée : barricade définitive
+        if (g.a !== startZone && g.b !== startZone) { links.push(g); continue; }
+        const left = g.runs.slice();
+        while (left.length) {
+          const cluster = [left.pop()];
+          for (let grown = true; grown;) {
+            grown = false;
+            for (let i = left.length - 1; i >= 0; i--) {
+              const r = left[i];
+              const close = cluster.some((c) => Math.min(
+                Math.hypot(c.x0 - r.x0, c.z0 - r.z0), Math.hypot(c.x0 - r.x1, c.z0 - r.z1),
+                Math.hypot(c.x1 - r.x0, c.z1 - r.z0), Math.hypot(c.x1 - r.x1, c.z1 - r.z1)) < 12);
+              if (close) { cluster.push(r); left.splice(i, 1); grown = true; }
+            }
+          }
+          links.push({ a: g.a, b: g.b, runs: cluster });
+        }
+      }
+      return { links, sealed };
     };
-    // arêtes verticales : entre (ix, iz) et (ix + 1, iz)
-    for (let ix = 0; ix < nav.nx - 1; ix++) {
-      const ex = nav.worldX(ix) + cell / 2;
-      let start = -1, pa = -1, pb = -1;
-      for (let iz = 0; iz <= nav.nz; iz++) {
-        let a = NO_EDGE, b = NO_EDGE;
-        if (iz < nav.nz) {
-          const i = nav.idx(ix, iz);
-          if (reach[i] && reach[i + 1]) {
-            a = zoneLabel[i]; b = zoneLabel[i + 1];
-            if (a === b) a = b = NO_EDGE;
-          }
-        }
-        if (start >= 0 && (a !== pa || b !== pb)) { addRun(pa, pb, { x0: ex, z0: nav.worldZ(start) - ext, x1: ex, z1: nav.worldZ(iz - 1) + ext }); start = -1; }
-        if (a !== NO_EDGE && start < 0) { start = iz; pa = a; pb = b; }
-      }
-    }
-    // arêtes horizontales : entre (ix, iz) et (ix, iz + 1)
-    for (let iz = 0; iz < nav.nz - 1; iz++) {
-      const ez = nav.worldZ(iz) + cell / 2;
-      let start = -1, pa = -1, pb = -1;
-      for (let ix = 0; ix <= nav.nx; ix++) {
-        let a = NO_EDGE, b = NO_EDGE;
-        if (ix < nav.nx) {
-          const i = nav.idx(ix, iz);
-          if (reach[i] && reach[i + nav.nx]) {
-            a = zoneLabel[i]; b = zoneLabel[i + nav.nx];
-            if (a === b) a = b = NO_EDGE;
-          }
-        }
-        if (start >= 0 && (a !== pa || b !== pb)) { addRun(pa, pb, { x0: nav.worldX(start) - ext, z0: ez, x1: nav.worldX(ix - 1) + ext, z1: ez }); start = -1; }
-        if (a !== NO_EDGE && start < 0) { start = ix; pa = a; pb = b; }
-      }
-    }
-
-    // profondeur de chaque zone (nombre de portes depuis le départ) -> prix
-    // Depuis la place de départ : une porte par brèche (barrières proches < 12 m).
-    // Entre deux autres zones : une seule porte pour toute la limite (un achat ouvre toutes les rues).
-    const links = [];
-    for (const g of groups.values()) {
-      if (g.a < 0) { sealedGroups.push(g); continue; } // limite du secteur : barricade définitive
-      if (g.a !== startZone && g.b !== startZone) { links.push(g); continue; }
-      const left = g.runs.slice();
-      while (left.length) {
-        const cluster = [left.pop()];
-        for (let grown = true; grown;) {
-          grown = false;
-          for (let i = left.length - 1; i >= 0; i--) {
-            const r = left[i];
-            const close = cluster.some((c) => Math.min(
-              Math.hypot(c.x0 - r.x0, c.z0 - r.z0), Math.hypot(c.x0 - r.x1, c.z0 - r.z1),
-              Math.hypot(c.x1 - r.x0, c.z1 - r.z0), Math.hypot(c.x1 - r.x1, c.z1 - r.z1)) < 12);
-            if (close) { cluster.push(r); left.splice(i, 1); grown = true; }
-          }
-        }
-        links.push({ a: g.a, b: g.b, runs: cluster });
-      }
-    }
-    const depth = new Array(NZONES).fill(Infinity);
-    depth[startZone] = 0;
-    for (let changed = true; changed;) {
-      changed = false;
-      for (const g of links) {
-        if (depth[g.a] + 1 < depth[g.b]) { depth[g.b] = depth[g.a] + 1; changed = true; }
-        if (depth[g.b] + 1 < depth[g.a]) { depth[g.a] = depth[g.b] + 1; changed = true; }
-      }
-    }
 
     // Les barrières en escalier (cases de 75 cm) qui se touchent forment une ouverture de rue :
     // on la remplace par un segment droit qui suit la rue (si l'escalier est bien rectiligne).
@@ -1111,6 +1211,8 @@ export async function buildRealWorld(scene, renderer) {
       }
       return out;
     };
+    // points d'une barrière, tous les 3 m (invites [E], carte, distance aux portes)
+    const pointsOf = (r, len, out) => { for (let s = 0; s <= len; s += 3) out.push({ x: r.x0 + ((r.x1 - r.x0) * s) / len, z: r.z0 + ((r.z1 - r.z0) * s) / len }); };
     // place un modèle aligné sur un segment (axe x local le long du segment)
     const alignOn = (obj, r, y = 0) => {
       const ang = Math.atan2(r.z1 - r.z0, r.x1 - r.x0);
@@ -1119,14 +1221,37 @@ export async function buildRealWorld(scene, renderer) {
       scene.add(obj);
       return obj;
     };
+
+    // portes du découpage d'origine (phase 1) : seulement leurs points
+    for (const g of findLinks(zoneLabel1).links) {
+      for (const r of straightPieces(g.runs)) {
+        const len = Math.hypot(r.x1 - r.x0, r.z1 - r.z0);
+        if (len >= 0.2) pointsOf(r, len, doorPtsLegacy);
+      }
+    }
+
+    const { links, sealed } = findLinks(zoneLabel);
+    sealedGroups.push(...sealed);
+    // profondeur de chaque zone (nombre de portes depuis le départ) : affichage et repli de prix
+    const depth = new Array(NZONES).fill(Infinity);
+    depth[startZone] = 0;
+    for (let changed = true; changed;) {
+      changed = false;
+      for (const g of links) {
+        if (depth[g.a] + 1 < depth[g.b]) { depth[g.b] = depth[g.a] + 1; changed = true; }
+        if (depth[g.b] + 1 < depth[g.a]) { depth[g.a] = depth[g.b] + 1; changed = true; }
+      }
+    }
+    const zonePrice = (zi) => (zi === startZone ? 0 : Z.zones[zi].doorPrice ?? Z.basePrice + Z.priceStep * Math.max(0, depth[zi] - 1));
+
     const FH = 3.4;
+    // panneau de prix : une texture par porte (nom des deux zones) ; chaque porte garde la sienne
     links.forEach((g, di) => {
       const far = depth[g.a] > depth[g.b] ? g.a : g.b;
-      const price = Z.zones[far].doorPrice || Z.basePrice + Z.priceStep * Math.max(0, depth[far] - 1);
+      const price = Math.max(zonePrice(g.a), zonePrice(g.b));
       const door = { id: di, price, a: g.a, b: g.b, toZone: far, name: ZONE_NAMES[far], open: false, points: [], segs: [], meshes: [], cells: [] };
       const pieces = straightPieces(g.runs);
       const longest = pieces.reduce((b, r) => (Math.hypot(r.x1 - r.x0, r.z1 - r.z0) > Math.hypot(b.x1 - b.x0, b.z1 - b.z0) ? r : b), pieces[0]);
-      // panneau de prix (une texture par porte)
       const cv = document.createElement('canvas'); cv.width = 512; cv.height = 192;
       const x = cv.getContext('2d');
       x.fillStyle = '#1a0d0a'; x.fillRect(0, 0, 512, 192);
@@ -1134,7 +1259,9 @@ export async function buildRealWorld(scene, renderer) {
       x.textAlign = 'center';
       x.fillStyle = '#fff'; x.font = 'bold 34px Arial, sans-serif'; x.fillText('PORTE VERROUILLÉE', 256, 62);
       x.fillStyle = '#ffd24a'; x.font = 'bold 54px Arial, sans-serif'; x.fillText(`${price} PTS`, 256, 126);
-      x.fillStyle = '#aaa'; x.font = '24px Arial, sans-serif'; x.fillText(`${ZONE_NAMES[g.a]} ↔ ${ZONE_NAMES[g.b]}`, 256, 164);
+      x.fillStyle = '#aaa'; x.font = '24px Arial, sans-serif';
+      const names = `${ZONE_NAMES[g.a]} ↔ ${ZONE_NAMES[g.b]}`;
+      x.fillText(names, 256, 164, 480); // maxWidth : les noms longs (Saint-Pierre-le-Vieux ↔ Monument Stoeber) se resserrent
       const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace;
       const signMat = new THREE.MeshBasicMaterial({ map: tex });
       for (const r of pieces) {
@@ -1145,56 +1272,68 @@ export async function buildRealWorld(scene, renderer) {
         const gm = alignOn(isPortal ? props.portalDoors(len) : props.gate(len), r);
         if (isPortal) door.leaves = (door.leaves || []).concat(gm.userData.leaves);
         door.meshes.push(gm);
-        for (let s = 0; s <= len; s += 3) door.points.push({ x: r.x0 + ((r.x1 - r.x0) * s) / len, z: r.z0 + ((r.z1 - r.z0) * s) / len });
+        pointsOf(r, len, door.points);
         if (r !== longest && len < 3.5) continue;
-        for (const side of [-1, 1]) { // panneau des deux côtés
-          const sign = new THREE.Mesh(new THREE.PlaneGeometry(Math.min(2.6, len), Math.min(2.6, len) * 0.375), signMat);
-          sign.position.set(0, 2.0, side * 0.16);
-          sign.rotation.y = side > 0 ? 0 : Math.PI;
-          gm.add(sign);
+        // panneau des deux côtés ; une longue porte en reçoit un tous les 14 m environ (on en voit toujours un en s'approchant)
+        const nSigns = Math.max(1, Math.round(len / 14)), sw = Math.min(2.6, len / nSigns);
+        for (let k = 0; k < nSigns; k++) {
+          const u = nSigns === 1 ? 0 : -len / 2 + (len * (k + 0.5)) / nSigns;
+          for (const side of [-1, 1]) {
+            const sign = new THREE.Mesh(new THREE.PlaneGeometry(sw, sw * 0.375), signMat);
+            sign.position.set(u, 2.0, side * 0.16);
+            sign.rotation.y = side > 0 ? 0 : Math.PI;
+            gm.add(sign);
+          }
+          const lx = (r.x0 + r.x1) / 2 + ((r.x1 - r.x0) / len) * u, lz = (r.z0 + r.z1) / 2 + ((r.z1 - r.z0) / len) * u;
+          lightSources.push({ x: lx, y: 2.8, z: lz, color: 0xff8844, intensity: 9, dist: 8, door });
         }
-        lightSources.push({ x: (r.x0 + r.x1) / 2, y: 2.8, z: (r.z0 + r.z1) / 2, color: 0xff8844, intensity: 9, dist: 8, door });
       }
+      doorPts.push(...door.points);
       doors.push(door);
     });
     door_depth = depth;
 
-    // Barricades définitives aux limites du secteur (le reste de l'île n'est pas encore jouable)
-    const sealMat = tiled(metalP, 1, 1, { color: 0x5a6066, metalness: 0.5 });
-    const cv = document.createElement('canvas'); cv.width = 512; cv.height = 160;
-    const x = cv.getContext('2d');
-    for (let i = -4; i < 20; i++) { x.fillStyle = i % 2 ? '#111' : '#f2c414'; x.beginPath(); x.moveTo(i * 40, 0); x.lineTo(i * 40 + 40, 0); x.lineTo(i * 40 + 80, 160); x.lineTo(i * 40 + 40, 160); x.fill(); }
-    x.fillStyle = 'rgba(0,0,0,0.82)'; x.fillRect(30, 30, 452, 100);
-    x.textAlign = 'center'; x.fillStyle = '#f2c414'; x.font = 'bold 46px Impact, Arial, sans-serif'; x.fillText('ZONE FERMÉE', 256, 84);
-    x.fillStyle = '#ddd'; x.font = '22px Arial, sans-serif'; x.fillText('accès interdit — secteur non sécurisé', 256, 116);
-    const sealTex = new THREE.CanvasTexture(cv); sealTex.colorSpace = THREE.SRGBColorSpace;
-    const sealSignMat = new THREE.MeshBasicMaterial({ map: sealTex });
-    const SH = 3.6;
-    for (const g of sealedGroups) {
-      for (const r of straightPieces(g.runs)) {
-        const len = Math.hypot(r.x1 - r.x0, r.z1 - r.z0);
-        if (len < 0.2) continue;
-        collision.addSegment(r.x0, r.z0, r.x1, r.z1, SH);
-        const wm = alignOn(props.sealWall(len, sealMat), r);
-        for (let t = 0; t <= len; t += 3) sealedPoints.push({ x: r.x0 + ((r.x1 - r.x0) * t) / len, z: r.z0 + ((r.z1 - r.z0) * t) / len });
-        if (len < 2.6) continue;
-        for (const side of [-1, 1]) {
-          const sign = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 0.75), sealSignMat);
-          sign.position.set(0, 2.3, -0.05 + side * 0.08);
-          sign.rotation.y = side > 0 ? 0 : Math.PI;
-          wm.add(sign);
+    // Barricades définitives : plus aucune depuis que toute l'île est ouverte (v0.27.0), mais le code reste pour une zone fermée
+    // éventuelle ; son apparition est signalée en ?debug (zone sans lieu, case orpheline : un groupe scellé n'a pas de porte).
+    if (sealedGroups.length) {
+      if (typeof location !== 'undefined' && new URLSearchParams(location.search).has('debug')) {
+        console.warn(`[zones] ${sealedGroups.length} limite(s) scellée(s), p. ex. (${Math.round(sealedGroups[0].runs[0].x0)} ; ${Math.round(sealedGroups[0].runs[0].z0)})`);
+      }
+      const sealMat = tiled(metalP, 1, 1, { color: 0x5a6066, metalness: 0.5 });
+      const cv = document.createElement('canvas'); cv.width = 512; cv.height = 160;
+      const x = cv.getContext('2d');
+      for (let i = -4; i < 20; i++) { x.fillStyle = i % 2 ? '#111' : '#f2c414'; x.beginPath(); x.moveTo(i * 40, 0); x.lineTo(i * 40 + 40, 0); x.lineTo(i * 40 + 80, 160); x.lineTo(i * 40 + 40, 160); x.fill(); }
+      x.fillStyle = 'rgba(0,0,0,0.82)'; x.fillRect(30, 30, 452, 100);
+      x.textAlign = 'center'; x.fillStyle = '#f2c414'; x.font = 'bold 46px Impact, Arial, sans-serif'; x.fillText('ZONE FERMÉE', 256, 84);
+      x.fillStyle = '#ddd'; x.font = '22px Arial, sans-serif'; x.fillText('accès interdit — secteur non sécurisé', 256, 116);
+      const sealTex = new THREE.CanvasTexture(cv); sealTex.colorSpace = THREE.SRGBColorSpace;
+      const sealSignMat = new THREE.MeshBasicMaterial({ map: sealTex });
+      const SH = 3.6;
+      for (const g of sealedGroups) {
+        for (const r of straightPieces(g.runs)) {
+          const len = Math.hypot(r.x1 - r.x0, r.z1 - r.z0);
+          if (len < 0.2) continue;
+          collision.addSegment(r.x0, r.z0, r.x1, r.z1, SH);
+          const wm = alignOn(props.sealWall(len, sealMat), r);
+          pointsOf(r, len, sealedPoints);
+          if (len < 2.6) continue;
+          for (const side of [-1, 1]) {
+            const sign = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 0.75), sealSignMat);
+            sign.position.set(0, 2.3, -0.05 + side * 0.08);
+            sign.rotation.y = side > 0 ? 0 : Math.PI;
+            wm.add(sign);
+          }
         }
       }
     }
   }
 
   // ---------------------------------------------------------------- Bornes, armes au mur et machines (CONFIG.sector.zones[].items)
-  // distance d'un point à la porte payante la plus proche
-  const doorDist = (x, z) => {
-    let m = Infinity;
-    for (const d of doors) for (const p of d.points) m = Math.min(m, Math.hypot(p.x - x, p.z - z));
-    return m;
-  };
+  // distance d'un point à la porte payante la plus proche ; doorDistLegacy : parmi les portes du découpage d'origine seulement
+  // (les objets des zones d'origine sont placés comme avant l'ajout des autres zones)
+  const nearestPt = (pts, x, z) => { let m = Infinity; for (const p of pts) m = Math.min(m, Math.hypot(p.x - x, p.z - z)); return m; };
+  const doorDist = (x, z) => nearestPt(doorPts, x, z);
+  const doorDistLegacy = (x, z) => nearestPt(doorPtsLegacy, x, z);
   const WALL_COLORS = { shotgun: 0xff8833, smg: 0x3399ff, sniper: 0x88ccff, lmg: 0xff5533, crossbow: 0xc89a50, m79: 0xff6a2a };
   const machines = [];
   const vehicleSpawns = []; // motos : { type, x, z, yaw } (voir CONFIG.vehicles)
@@ -1209,12 +1348,14 @@ export async function buildRealWorld(scene, renderer) {
     const spotIn = (zi, minClear, minD, maxD, doorGaps = [0]) => {
       const a = seeds[zi];
       if (!a) return null;
+      // zones d'origine : découpage, portes et tirage d'origine (identiques à la v0.26.0) ; zones `outer` : les leurs
+      const outer = !!Z.zones[zi].outer, zOf = outer ? zoneOf : zoneOf1, dDist = outer ? doorDist : doorDistLegacy, rng = outer ? rndOuter : rnd;
       // on élargit la recherche, puis on accepte moins d'espace autour (rues étroites)
       for (const [r, clear] of [[maxD, minClear], [maxD * 1.6, minClear], [maxD * 2.5, minClear], [maxD * 2.5, Math.max(1, minClear - 1)]]) {
         for (const gap of doorGaps) {
           const c = shuffle(candidatesNear(a[0], a[1], clear, minD, r)
-            .filter((p) => zoneOf(p[0], p[1]) === zi && placed.every((q) => Math.hypot(q[0] - p[0], q[1] - p[1]) > 5) && (!gap || doorDist(p[0], p[1]) >= gap)
-              && !(isolatedZone[zi] && hdfPlan && railDist(hdfPlan, p[0], p[1]) < 4)))[0];
+            .filter((p) => zOf(p[0], p[1]) === zi && placed.every((q) => Math.hypot(q[0] - p[0], q[1] - p[1]) > 5) && (!gap || dDist(p[0], p[1]) >= gap)
+              && !((isolatedZone[zi] || outer) && hdfPlan && railDist(hdfPlan, p[0], p[1]) < 4)), rng)[0];
           if (c) { placed.push(c); return c; }
         }
       }
@@ -1265,19 +1406,24 @@ export async function buildRealWorld(scene, renderer) {
       machines.push(entry);
       lightSources.push({ x: x + Math.sin(g.rotation.y) * 1.2, y: h + 0.6, z: z + Math.cos(g.rotation.y) * 1.2, color: new THREE.Color(color).getHex(), intensity: 7, dist: 8, box: type === 'box' ? entry : null });
     };
+    // zones `outer` : tout objet à plus de 4 m d'une porte si possible (6,5 m pour un atout, comme avant : voir PERK_DOOR_GAPS)
+    const OUTER_DOOR_GAPS = [8, 6.5, 4, 0];
     Z.zones.forEach((zone, zi) => {
       if (!seeds[zi] || !Number.isFinite(door_depth[zi])) return;
       const [fx, fz] = seeds[zi];
       const start = zi === startZone;
+      const gaps = zone.outer ? OUTER_DOOR_GAPS : [0];
       const rndState = zone.isolatedRnd ? rnd.save() : null; // la zone tire ses emplacements puis rend le tirage intact
       for (const item of zone.items || []) {
         const [type, id] = item.split(':');
         if (type === 'station') {
-          const sp = spotIn(zi, 3, start ? 7 : 3, start ? 14 : 30);
-          if (sp) addStation(sp[0], sp[1], fx, fz);
+          const sp = spotIn(zi, 3, start ? 7 : 3, start ? 14 : 30, gaps);
+          if (sp) { addStation(sp[0], sp[1], fx, fz); stations[stations.length - 1].zone = zi; }
         } else if (type === 'wall') {
           const W = CONFIG.weapons[id];
-          addWallBuy(id, W.name, W.price, W.ammoPrice, WALL_COLORS[id] || 0xff8833, spotIn(zi, 2, start ? 6 : 4, start ? 26 : 32), fx, fz);
+          const n0 = wallWeapons.length;
+          addWallBuy(id, W.name, W.price, W.ammoPrice, WALL_COLORS[id] || 0xff8833, spotIn(zi, 2, start ? 6 : 4, start ? 26 : 32, gaps), fx, fz);
+          if (wallWeapons.length > n0) wallWeapons[n0].zone = zi;
         } else if (zone.seed === 'cathedral' && cath && (type === 'pap' || type === 'clock')) {
           const fixed = type === 'pap' ? cath.pap : cath.clock;
           addMachine(type, id, fixed.p, zi, fixed.rot);
@@ -1285,7 +1431,7 @@ export async function buildRealWorld(scene, renderer) {
         } else {
           const R = start ? 30 : 35;
           // un atout n'est jamais abandonné : si aucun emplacement n'est loin des portes, on retombe sur l'ancien tirage
-          addMachine(type, id, type === 'perk' ? spotIn(zi, 3, 4, R, PERK_DOOR_GAPS) || spotIn(zi, 3, 4, R) : spotIn(zi, 3, 4, R), zi);
+          addMachine(type, id, type === 'perk' ? spotIn(zi, 3, 4, R, PERK_DOOR_GAPS) || spotIn(zi, 3, 4, R) : spotIn(zi, 3, 4, R, gaps), zi);
         }
       }
       if (rndState != null) rnd.load(rndState);
@@ -1423,9 +1569,19 @@ export async function buildRealWorld(scene, renderer) {
   }
 
   // ---------------------------------------------------------------- Décor : mobilier réel (OSM) et objets de l'apocalypse
+  // Deux passes. 1) Zones d'origine (découpage de la phase 1 : zoneOf1) : le code, le tirage `rnd` et les plafonds de la v0.26.0, donc
+  // exactement le même décor qu'avant. 2) Zones `outer` (et poches rattachées) : tirage `rndOuter` à part, plafond de vélos à part,
+  // voitures et objets en proportion de la surface (CONFIG.sector.outerDecor). La passe 2 vient après la passe 1 : elle ne peut rien
+  // changer à ce que la passe 1 a posé.
   {
-    const inSec = (x, z) => zoneOf(x, z) >= 0;
-    const used = [startPos, ...stations, ...machines.map((m) => m.pos), ...wallWeapons.map((w) => w.pos), ...vehicleSpawns, ...(parkingInfo ? parkingInfo.points : [])].map((v) => [v.x, v.z]);
+    const inSec = (x, z) => zoneOf1(x, z) >= 0;
+    const OD = Z.outerDecor || { carArea: 6000, junkArea: 2500, bikeMax: 30 };
+    // objets des zones d'origine seulement (la passe 1 ignore ceux des zones `outer`)
+    const legacyItems = [
+      ...stations.filter((s) => !Z.zones[s.zone]?.outer), ...machines.filter((m) => !Z.zones[m.zone].outer).map((m) => m.pos),
+      ...wallWeapons.filter((w) => !Z.zones[w.zone]?.outer).map((w) => w.pos),
+    ];
+    const used = [startPos, ...legacyItems, ...vehicleSpawns, ...(parkingInfo ? parkingInfo.points : [])].map((v) => [v.x, v.z]);
     // le parking des motos réserve son emprise (marge 1,5 m) : ni mobilier, ni voiture, ni barricade dessus
     const inParking = (x, z, margin = 0) => !!parkingInfo && parkingInfo.inRect(x, z, margin);
     const freeAt = (x, z, gap) => !inParking(x, z, 1.5) && used.every(([ux, uz]) => Math.hypot(ux - x, uz - z) > gap);
@@ -1434,21 +1590,19 @@ export async function buildRealWorld(scene, renderer) {
     const streetDir = (x, z) => { let best = -1, ang = 0; for (let a = 0; a < 12; a++) { const t = (a / 12) * Math.PI; const d = collision.rayHit(x, 1, z, Math.cos(t), 0, Math.sin(t), 40) + collision.rayHit(x, 1, z, -Math.cos(t), 0, -Math.sin(t), 40); if (d > best) { best = d; ang = t; } } return ang; };
     // rotation (rotation.y) pour que le dos de l'objet (axe -z local) soit tourné vers la direction t
     const backTo = (t) => Math.atan2(-Math.cos(t), -Math.sin(t));
-    let bikes = 0;
     const rndIso = seeded(77001);
     // Place de l'Homme de Fer : rails, quais, rames, totems, statue (avant le mobilier : il évite l'emprise)
     const hdfZone = ZONE_NAMES.indexOf(HDF.zone);
     let hdf = null;
     if (hdfPlan && hdfZone >= 0 && seeds[hdfZone]) {
       const near = (data.furniture || []).map((f) => f.p).filter((p) => Math.hypot(p[0] - hdfPlan.cx, p[1] - hdfPlan.cz) < 70);
-      hdf = buildHdfDecor({ scene, collision, lightSources, plan: hdfPlan, zi: hdfZone, zoneOf, doorDist, used, columns: hdfStruct.columns, obstacles: near });
+      hdf = buildHdfDecor({ scene, collision, lightSources, plan: hdfPlan, zi: hdfZone, zoneOf: zoneOf1, doorDist: doorDistLegacy, used, columns: hdfStruct.columns, obstacles: near });
       hdfInfo = { ...hdf, structures: hdfStruct, plan: hdfPlan };
     }
-    for (const f of data.furniture || []) {
+    // un meuble OSM ; st = { bikes, cap } : vélos posés / plafond de la passe
+    const placeFurniture = (f, rnd2, st) => {
       const [x, z] = f.p;
-      if (!inSec(x, z) || insideBuilding(x, z) || (hdf && hdf.covers(x, z)) || inParking(x, z, 0.8)) continue;
       const wd = wallDir(x, z);
-      const rnd2 = isolatedZone[zoneOf(x, z)] ? rndIso : rnd; // mobilier d'une zone isolée : tirage à part
       if (f.kind === 'bench' && freeAt(x, z, 2.5)) {
         const th = wd.dist < 4 ? backTo(wd.ang) : rnd2() * Math.PI * 2;
         props.place('bench', x, z, th);
@@ -1460,13 +1614,13 @@ export async function buildRealWorld(scene, renderer) {
       } else if (f.kind === 'bollard') {
         props.place('bollard', x, z);
         collision.addCircle(x, z, 0.1, 0.9);
-      } else if (f.kind === 'bicycle_parking' && bikes < 70 && freeAt(x, z, 2) && rnd2() < 0.6) {
+      } else if (f.kind === 'bicycle_parking' && st.bikes < st.cap && freeAt(x, z, 2) && rnd2() < 0.6) {
         const th = wd.dist < 5 ? -wd.ang : rnd2() * Math.PI; // vélos perpendiculaires au mur
         const n = 1 + Math.floor(rnd2() * 3);
         for (let k = 0; k < n; k++) {
           const off = (k - (n - 1) / 2) * 0.65, ox = -Math.sin(wd.ang) * off, oz = Math.cos(wd.ang) * off;
           props.place('bike', x + ox, z + oz, th, 1, null, 0, (rnd2() - 0.5) * 0.12);
-          bikes++;
+          st.bikes++;
         }
         collision.addBox(x, z, 1.7, n * 0.65, -th, 1);
         used.push([x, z]);
@@ -1479,6 +1633,12 @@ export async function buildRealWorld(scene, renderer) {
         collision.addCircle(x, z, 1.6, 1.6);
         used.push([x, z]);
       }
+    };
+    const legacyBikes = { bikes: 0, cap: 70 };
+    for (const f of data.furniture || []) {
+      const [x, z] = f.p;
+      if (!inSec(x, z) || insideBuilding(x, z) || (hdf && hdf.covers(x, z)) || inParking(x, z, 0.8)) continue;
+      placeFurniture(f, isolatedZone[zoneOf1(x, z)] ? rndIso : rnd, legacyBikes); // mobilier d'une zone isolée : tirage à part
     }
     // chalets du marché de Noël sur les grandes places
     for (const name of ['Place Kléber', 'Cathédrale', 'Place Gutenberg']) {
@@ -1486,7 +1646,7 @@ export async function buildRealWorld(scene, renderer) {
       if (zi < 0 || !seeds[zi]) continue;
       const [sx, sz] = seeds[zi];
       let placed = 0;
-      for (const [x, z] of shuffle(candidatesNear(sx, sz, 4, 6, 32).filter((c) => zoneOf(c[0], c[1]) === zi))) {
+      for (const [x, z] of shuffle(candidatesNear(sx, sz, 4, 6, 32).filter((c) => zoneOf1(c[0], c[1]) === zi))) {
         if (placed >= 4 || !freeAt(x, z, 6)) continue;
         const th = Math.atan2(sx - x, sz - z); // comptoir tourné vers le centre de la place
         props.place('chalet', x, z, th);
@@ -1498,7 +1658,7 @@ export async function buildRealWorld(scene, renderer) {
     }
     // voitures abandonnées, dans l'axe de la rue
     const carColors = [0x5a5f66, 0xd8d8d8, 0x1a1c20, 0x22314f, 0x7a1e1e, 0x9aa0a6, 0x3a4a3a, 0x6a5038];
-    const spots = [...shuffle(candidatesNear(startPos.x, startPos.z, 3, 8, 50).filter((c) => zoneOf(c[0], c[1]) === startZone)), ...randomSpots(140, 3)];
+    const spots = [...shuffle(candidatesNear(startPos.x, startPos.z, 3, 8, 50).filter((c) => zoneOf1(c[0], c[1]) === startZone)), ...randomSpots(140, 3)];
     let cars = 0;
     for (const [x, z] of spots) {
       if (cars >= 14) break;
@@ -1524,6 +1684,49 @@ export async function buildRealWorld(scene, renderer) {
         n++;
       }
     }
+
+    // ---- passe 2 : zones `outer` et poches rattachées aux zones d'origine (tirage rndOuter)
+    for (const it of [...stations.filter((s) => Z.zones[s.zone]?.outer), ...machines.filter((m) => Z.zones[m.zone].outer).map((m) => m.pos), ...wallWeapons.filter((w) => Z.zones[w.zone]?.outer).map((w) => w.pos)]) used.push([it.x, it.z]);
+    const outerBikes = { bikes: 0, cap: OD.bikeMax };
+    for (const f of data.furniture || []) {
+      const [x, z] = f.p;
+      if (zoneOf(x, z) < 0 || inSec(x, z) || insideBuilding(x, z) || inParking(x, z, 0.8)) continue;
+      // à 2,5 m au moins d'une porte : le mobilier ne cache ni la barrière ni son panneau
+      if (doorDist(x, z) < 2.5) continue;
+      placeFurniture(f, rndOuter, outerBikes);
+    }
+    // cases de la zone (tous les 3 m, accessibles et dégagées), mélangées par rndOuter
+    const outerSpots = (zi, minClear) => shuffle(zoneList[zi].filter(([ix, iz]) => clearance(ix, iz, minClear)).map(([ix, iz]) => [nav.worldX(ix), nav.worldZ(iz)]), rndOuter);
+    const junkTotal = junk.reduce((n, j) => n + j[1], 0);
+    Z.zones.forEach((zone, zi) => {
+      if (!zone.outer || !seeds[zi] || !Number.isFinite(door_depth[zi])) return;
+      const nCars = Math.floor(zoneArea[zi] / OD.carArea), nJunk = Math.floor(zoneArea[zi] / OD.junkArea);
+      let c = 0;
+      for (const [x, z] of outerSpots(zi, 3)) {
+        if (c >= nCars) break;
+        if (!freeAt(x, z, 11) || doorDist(x, z) < 6) continue;
+        const ang = streetDir(x, z) + (rndOuter() - 0.5) * 0.5;
+        props.place('car', x, z, -ang, 1, new THREE.Color(carColors[Math.floor(rndOuter() * carColors.length)]));
+        collision.addBox(x, z, 4.2, 1.75, ang, 1.5);
+        used.push([x, z]);
+        c++;
+      }
+      const spotsJ = outerSpots(zi, 2);
+      for (const [type, count, [w, d], h] of junk) {
+        const want = Math.round((nJunk * count) / junkTotal);
+        let n = 0;
+        for (const [x, z] of spotsJ) {
+          if (n >= want) break;
+          if (!freeAt(x, z, 5) || doorDist(x, z) < 4) continue;
+          const ang = streetDir(x, z) + (type === 'crate' ? rndOuter() * 3 : Math.PI / 2 + (rndOuter() - 0.5) * 0.6);
+          props.place(type, x, z, -ang);
+          if (type === 'crate' && rndOuter() < 0.5) props.place('crate', x + 0.1, z + 0.05, -ang + 0.4, 0.9, null, 1.0);
+          collision.addBox(x, z, w, d, ang, h);
+          used.push([x, z]);
+          n++;
+        }
+      }
+    });
     props.finish(scene);
   }
 
@@ -1582,6 +1785,9 @@ export async function buildRealWorld(scene, renderer) {
     const d = doors[id];
     if (!d || d.open) return false;
     d.open = true;
+    // zone que cette porte ouvre : celle qui était encore fermée (une porte lointaine achetée de loin peut n'en ouvrir aucune de neuve)
+    d.opens = !zoneOpen[d.a] ? d.a : !zoneOpen[d.b] ? d.b : d.toZone;
+    d.name = ZONE_NAMES[d.opens];
     for (const s of d.segs) s.off = true;
     if (d.leaves) { d.opening = 0; openingDoors.push(d); for (const m of d.meshes) m.traverse((o) => { if (o.isMesh && o.geometry.type === 'PlaneGeometry') o.visible = false; }); }
     else for (const m of d.meshes) { scene.remove(m); }
@@ -1628,7 +1834,8 @@ export async function buildRealWorld(scene, renderer) {
     half: Math.max(halfX, halfZ), blockers, spawnPoints: [], windowSpawns, pickWindow, pickGround,
     stationPos, stations, wallWeapons, vehicleSpawns, parking: parkingInfo, doors, openDoor, zoneOf, startPos, nav, collision, machines, boxes, setActiveBox,
     zoneNames: ZONE_NAMES, zoneCenters, startZone, sealedPoints, mapImage, mapView: { halfX, halfZ, scale: MAP_SCALE },
-    mapCrop: { x0: secMinX - 60, x1: secMaxX + 60, z0: secMinZ - 50, z1: secMaxZ + 50 }, mapTitle: 'SECTEUR DU MARCHÉ-NEUF — STRASBOURG',
+    isZoneOpen: (i) => !!zoneOpen[i], zoneArea, zoneOf1, // zoneOf1 : zone d'après le découpage d'origine (outils de test)
+    mapCrop: { x0: Math.max(-halfX, secMinX - 40), x1: Math.min(halfX, secMaxX + 40), z0: Math.max(-halfZ, secMinZ - 40), z1: Math.min(halfZ, secMaxZ + 40) }, mapTitle: 'GRANDE ÎLE — STRASBOURG',
     cathedral: cath ? { seed: cath.seed, clock: cath.clock, insideInner: cath.insideInner, inner: cath.inner, P: cath.P, S: cath.S, T: cath.T, ceilAt: cath.ceilAt, info: cathInfo } : null,
     levels, hdf: hdfInfo,
     floorAt: (x, z, y, out) => levels.floorAt(x, z, y, out),

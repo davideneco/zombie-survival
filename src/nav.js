@@ -170,9 +170,11 @@ export class NavGrid {
   }
 
   // ---- champ global incrémental (double tampon) ----
-  // Calcule le champ de flux sur toute la carte accessible, par tranches de `budget` cases par appel,
-  // puis l'échange avec le champ courant : les zombies trouvent leur chemin même très loin des joueurs.
-  updateField(targets, budget = 50000) {
+  // Calcule le champ de flux autour des cibles, par tranches de `budget` cases par appel, puis l'échange avec le champ courant.
+  // maxCost : coût maximal exploré (10 par case, 14 en diagonale ; 160 m de marche = 160 / cell x 10) ; au-delà les cases restent
+  // sans chemin (steer() rend null) : sur une grande carte, c'est le voisinage des joueurs seul qui est calculé.
+  // Retourne true tant qu'un calcul est en cours (l'appelant peut espacer les relances une fois qu'il est fini : `this.job` est null).
+  updateField(targets, budget = 50000, maxCost = Infinity) {
     if (!this.job) {
       const starts = [];
       for (const t of targets) {
@@ -180,7 +182,7 @@ export class NavGrid {
         const src = this.nearestFree(t.pos ? t.pos.x : t.x, t.pos ? t.pos.z : t.z);
         if (src) { const id = this.idx(src[0], src[1]); if (!starts.includes(id)) starts.push(id); }
       }
-      if (!starts.length) return;
+      if (!starts.length) return false;
       if (!this.distB) { this.distB = new Int32Array(this.nx * this.nz).fill(INF); this.touchedB = []; }
       const { distB, touchedB } = this;
       for (let k = 0; k < touchedB.length; k++) distB[touchedB[k]] = INF;
@@ -191,7 +193,7 @@ export class NavGrid {
     const job = this.job, { nx, nz, blocked } = this, dist = this.distB, touched = this.touchedB;
     const NB = NEIGHBORS;
     let ops = 0;
-    while (job.d < job.buckets.length) {
+    while (job.d < job.buckets.length && job.d <= maxCost) {
       const bucket = job.buckets[job.d];
       if (!bucket) { job.d++; job.bi = 0; continue; }
       while (job.bi < bucket.length) {
@@ -213,7 +215,7 @@ export class NavGrid {
             (job.buckets[nd] || (job.buckets[nd] = [])).push(j);
           }
         }
-        if (++ops >= budget) return;
+        if (++ops >= budget) return true;
       }
       job.buckets[job.d] = null;
       job.d++; job.bi = 0;
@@ -223,6 +225,7 @@ export class NavGrid {
     [this.touched, this.touchedB] = [this.touchedB, this.touched];
     this.lastTargetKey = null;
     this.job = null;
+    return false;
   }
 
   // Distance de marche (en mètres) depuis la case de (x,z) jusqu'à la cible, ou Infinity

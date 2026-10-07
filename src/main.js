@@ -20,6 +20,10 @@ import { installLauncher } from './launcher.js';
 import { makeDisplay } from './weaponDisplay.js';
 
 document.getElementById('version').textContent = __GAME_VERSION__;
+// Version du jeu (« v0.27.0 », sans le commit ni la date) : jointe au message `join`, et comparée à celle de l'hôte dans `sync`.
+// Les identifiants de porte (et les emplacements des objets des zones ajoutées) dépendent de la version : un client d'une autre
+// version verrait d'autres portes et d'autres prix.
+const GAME_V = String(__GAME_VERSION__).split(' ')[0];
 
 // ---------------------------------------------------------------- Rendu
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -571,8 +575,10 @@ const game = {
     const boxes = world.boxes || [];
     if (boxes.length < 2) return;
     const cur = boxes.findIndex((b) => b.active);
-    let next = cur;
-    while (next === cur) next = Math.floor(Math.random() * boxes.length);
+    // la boîte ne réapparaît que dans une zone déjà ouverte (sinon elle serait hors de portée), jamais au même endroit
+    const open = boxes.map((b, i) => i).filter((i) => i !== cur && (!world.isZoneOpen || world.isZoneOpen(boxes[i].zone)));
+    if (!open.length) return;
+    const next = open[Math.floor(Math.random() * open.length)];
     this.boxUses = 0;
     this.boxLimit = 1 + Math.floor(Math.random() * CONFIG.box.maxUses);
     this.net?.send({ t: 'box_move', idx: next });
@@ -751,7 +757,7 @@ const game = {
     const d = world.doors[id];
     sfx.buy();
     // première ouverture de la zone du parking des motos : on l'annonce (le « P » bleu de la carte indique l'endroit)
-    const pk = world.parking, firstPark = !!pk && !this.parkingSeen && (d.a === pk.zone || d.b === pk.zone);
+    const pk = world.parking, firstPark = !!pk && !this.parkingSeen && d.opens === pk.zone;
     if (firstPark) this.parkingSeen = true;
     if (announce) {
       if (firstPark) hud.announce(`PARKING ${pk.name.replace(/^Place /, '').toUpperCase()} — ${pk.size} motos`, 'Repérez le « P » bleu sur la carte [M]', 4500);
@@ -961,8 +967,15 @@ const game = {
       if (targets.length) {
         const gt = this.fieldTargets(0, targets);
         if (gt.length) {
-          if (world.nav.updateField) world.nav.updateField(gt, 25000);
-          else {
+          if (world.nav.updateField) {
+            // champ borné autour des joueurs (CONFIG.zombie.flow), relancé au plus toutes les `interval` s une fois fini
+            const F = CONFIG.zombie.flow, nv = world.nav;
+            this.flowCool = (this.flowCool ?? 0) - dt;
+            if (nv.job || this.flowCool <= 0) {
+              nv.updateField(gt, F.budget, Math.round((F.range / nv.cell) * 10));
+              if (!nv.job) this.flowCool = F.interval;
+            }
+          } else {
             this.navTimer = (this.navTimer ?? 0) - dt;
             if (this.navTimer <= 0) { world.nav.computeField(gt); this.navTimer = 0.15; }
           }
@@ -1192,8 +1205,9 @@ const game = {
     } else if (this.nearVehicle()) {
       promptText = this.vehiclePrompt(this.nearVehicle());
     } else if (this.nearDoor()) {
-      const d = this.nearDoor();
-      promptText = `[E] Ouvrir la porte vers ${d.name} (${d.price} pts)`;
+      const d = this.nearDoor(), here = world.zoneOf(this.player.pos.x, this.player.pos.z);
+      const to = here === d.a ? d.b : here === d.b ? d.a : d.toZone; // la zone de l'autre côté de la barrière
+      promptText = `[E] Ouvrir la porte vers ${world.zoneNames[to]} (${d.price} pts)`;
     }
     hud.prompt(promptText);
   },
@@ -1234,6 +1248,13 @@ game.player.setCharacter(charOf(game.charPref));
 }
 
 // --------------------------------------------- Multijoueur / Réseau
+// Empreinte des portes (zones reliées et prix, dans l'ordre des identifiants) : identique chez tous les joueurs d'une même version
+function doorsHash() {
+  let h = 2166136261;
+  for (const ch of (world.doors || []).map((d) => `${d.a}-${d.b}-${d.price}`).join(',')) h = Math.imul(h ^ ch.charCodeAt(0), 16777619);
+  return (h >>> 0).toString(36);
+}
+
 function addRemote(id, name, slot) {
   if (game.remotes.has(id)) return game.remotes.get(id);
   const rp = new RemotePlayer(scene, id, name, slot, game.net);
@@ -1294,6 +1315,8 @@ function setupNetworkHandlers(net) {
     if (game.isHost) {
       net.send({
         t: 'sync',
+        v: GAME_V,
+        dh: doorsHash(),
         started: game.started,
         round: game.round,
         toSpawn: game.toSpawn,
@@ -1512,6 +1535,12 @@ function setupNetworkHandlers(net) {
 
   // Synchronisation globale (pour le nouveau client qui rejoint)
   net.on('sync', (m) => {
+    // même version, mêmes portes (identifiants et prix) que l'hôte : sinon la partie est incohérente, on quitte
+    if ((m.v && m.v !== GAME_V) || (m.dh && m.dh !== doorsHash())) {
+      alert(`Version du jeu différente de celle de l'hôte (${m.v || '?'} contre ${GAME_V}) : les portes ne correspondent pas. Rechargez la page pour récupérer la dernière version.`);
+      location.reload();
+      return;
+    }
     game.round = m.round;
     game.toSpawn = m.toSpawn;
     hud.setRound(m.round);
@@ -1658,7 +1687,7 @@ hud.el.btnHost.addEventListener('click', async (e) => {
       updateLobbyUI(m.peers);
     });
 
-    net.send({ t: 'create', name: game.playerName, slot: game.charPref });
+    net.send({ t: 'create', name: game.playerName, slot: game.charPref, v: GAME_V });
   } catch (err) {
     alert("Impossible d'héberger le salon : " + err.message);
   }
@@ -1715,7 +1744,7 @@ hud.el.btnJoin.addEventListener('click', async (e) => {
       }
     });
 
-    net.send({ t: 'join', code, name: game.playerName, slot: game.charPref });
+    net.send({ t: 'join', code, name: game.playerName, slot: game.charPref, v: GAME_V });
   } catch (err) {
     alert('Impossible de rejoindre : ' + err.message);
   }
