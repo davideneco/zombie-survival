@@ -7,6 +7,7 @@ Jeu coop de survie contre des zombies à Strasbourg (Three.js, serveur de dev Vi
 - Tout nouveau système (vagues, armes, véhicules, power-ups) passe d'abord par `game-designer`.
 - L'implémentation passe par `gameplay-coder`.
 - Un comportement bizarre ou un bug passe par `playtest-bug-hunter`.
+- Un bug visuel ou d'interface (à constater à l'écran, avec captures) passe par `gui-test-debugger`.
 
 ## Conventions
 - Modules ES, config d'équilibrage dans `src/config.js`.
