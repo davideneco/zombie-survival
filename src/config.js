@@ -25,6 +25,10 @@ export const CONFIG = {
       { name: 'Cathédrale', seed: { x: 103, z: 33 }, items: ['station', 'wall:deagle', 'wall:rifle', 'box'] },
       // fin de partie : l'intérieur de la cathédrale, derrière le grand portail (porte la plus chère)
       { name: 'Intérieur de la Cathédrale', seed: 'cathedral', portal: true, doorPrice: 5000, items: ['pap', 'clock', 'station', 'box'] },
+      // place de l'Homme de Fer (rotonde du tram), derrière la place Kléber : profondeur 4, donc 1500 pts calculés. Ajoutée en dernier :
+      // le tirage des emplacements des autres zones ne change pas.
+      // isolatedRnd : ses emplacements (et son décor) ne consomment pas le tirage commun aux autres zones
+      { name: 'Homme de Fer', seed: { x: -290, z: -203 }, isolatedRnd: true, items: ['station', 'box'] },
     ],
   },
 

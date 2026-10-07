@@ -10,6 +10,7 @@ import { createArchitecture, BAY_W } from './architecture.js';
 import { createProps } from './props.js';
 import { planCathedral, CEIL, pointInPoly as inPoly } from './cathedral.js';
 import { buildCathedral, augmentPlan, PORTAL_H } from './cath/index.js';
+import { HDF, isRotunda, isOpenShelter, rotundaInfo, shelterInfo, planHdf, railDist, buildHdfStructures, buildHdfDecor } from './hommedefer.js';
 import { makePerkMachine, makeAmmoStation, makeWallBuy, addPosts, makeMysteryBox, makePackAPunch, makeAstronomicalClock } from './machines.js';
 
 // =====================================================================
@@ -26,12 +27,15 @@ const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
 
 // Mulberry32 : aléatoire reproductible pour que la map soit la même à chaque partie
 function seeded(seed) {
-  return () => {
+  const f = () => {
     seed |= 0; seed = (seed + 0x6d2b79f5) | 0;
     let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
     t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
+  f.save = () => seed;       // état du générateur : permet de placer des objets « hors tirage » (voir zone.isolatedRnd)
+  f.load = (s) => { seed = s; };
+  return f;
 }
 
 async function loadPBR(name, renderer) {
@@ -267,14 +271,26 @@ export async function buildRealWorld(scene, renderer) {
 
   const facadeSegs = []; // [ax,az,bx,bz,nx,nz,bays,len] : pour placer les fenêtres d'apparition
   const blds = [];
+  const rotundas = [], shelters = []; // contours (voir hommedefer.js)
+  let ghosts = []; // bâtiments retirés avant le prochain bâtiment gardé (pour garder le tirage `rnd` identique)
   for (const bld of data.buildings) {
     const pts = cleanRing(bld.pts);
     if (pts.length < 3) continue;
     const area = polyArea(pts);
     if (Math.abs(area) < 3) continue;
     if (area < 0) pts.reverse();
-    blds.push({ pts, h: bld.h, tags: bld.tags || {}, name: bld.name });
+    // Place de l'Homme de Fer : la rotonde de verre du tram (toit en l'air) et les abris de quai sans hauteur ne sont pas des
+    // immeubles pleins. Ils sont rendus à part (hommedefer.js) ; retirés d'ici, ils ne bloquent plus la place.
+    // Leur construction « à blanc » (ghost) est rejouée à leur place dans l'ordre : le tirage `rnd` de la suite reste identique.
+    if (isRotunda(bld.tags || {}) || isOpenShelter(bld.tags || {})) {
+      (isRotunda(bld.tags || {}) ? rotundas : shelters).push(pts);
+      ghosts.push({ pts, h: bld.h, tags: bld.tags || {} });
+      continue;
+    }
+    blds.push({ pts, h: bld.h, tags: bld.tags || {}, name: bld.name, ghosts });
+    ghosts = [];
   }
+  const tailGhosts = ghosts;
   let cathInfo = null;
   const levels = new Levels(); // étages (cathédrale : balcons, escaliers, plateforme, flèche)
   // Cathédrale : intérieur jouable (zone de fin de partie)
@@ -375,7 +391,14 @@ export async function buildRealWorld(scene, renderer) {
   // Place de départ ; brèches (bâtiments effondrés) seulement si aucun passage ne la relie à la ville
   const breach = findBreaches(blds.map((b) => b.pts), halfX, halfZ, CONFIG.startHint, CONFIG.cityHint, CONFIG.breaches, NAV_CELL, NAV_MARGIN, passages);
   const rubble = [];
+  const ghostBuild = (g) => {
+    const cx = g.pts.reduce((s2, q) => s2 + q[0], 0) / g.pts.length, cz = g.pts.reduce((s2, q) => s2 + q[1], 0) / g.pts.length;
+    const near = Math.hypot(cx - CONFIG.startHint.x, cz - CONFIG.startHint.z) < 420;
+    const commercial = !!g.tags.amenity || ['retail', 'commercial', 'hotel'].includes(g.tags.building);
+    arch.building(g.pts, g.tags, g.h, () => [], { inSector: near, shop: commercial || (near && rnd() < 0.38), passageH: PASSAGE_H, ghost: true });
+  };
   for (const [k, bld] of blds.entries()) {
+    for (const g of bld.ghosts) ghostBuild(g);
     const pts = bld.pts;
     if (breach.removed.has(k)) { rubble.push(pts); continue; }
 
@@ -419,6 +442,8 @@ export async function buildRealWorld(scene, renderer) {
     const commercial = !!bld.tags.amenity || ['retail', 'commercial', 'hotel'].includes(bld.tags.building);
     arch.building(pts, bld.tags, bld.h, (i) => edgeCuts[i], { inSector: near, shop: commercial || (near && rnd() < 0.38), passageH: PASSAGE_H });
   }
+
+  for (const g of tailGhosts) ghostBuild(g);
 
   // Parties 3D (OSM building:part) : cathédrale, églises, tours
   for (const prt of data.parts || []) {
@@ -614,6 +639,18 @@ export async function buildRealWorld(scene, renderer) {
   if (cath) cathInfo = buildCathedral({ scene, plan: cath, collision, lightSources, props, levels });
   cutGroundHoles(levels.holePolys);
 
+  // ---------------------------------------------------------------- Place de l'Homme de Fer : rotonde et abris (avant la grille de collision)
+  // Les colonnes de la rotonde et les abris de quai bloquent ; le reste de la place reste praticable sous le verre.
+  let hdfPlan = null, hdfStruct = null, hdfInfo = null; // hdfInfo : ce qui a été posé (tests, outils)
+  if (rotundas.length) {
+    const rotundaInfos = rotundas.map(rotundaInfo);
+    const r0 = rotundaInfos[0];
+    collision.build(); // grille provisoire : le plan des rails lance des rayons
+    hdfPlan = planHdf(collision, r0.cx, r0.cz);
+    const nearShelters = shelters.map((pts) => shelterInfo(pts, [r0.cx, r0.cz])).filter((s) => Math.hypot(s.x - r0.cx, s.z - r0.cz) < 150); // les autres sont hors de vue
+    hdfStruct = buildHdfStructures({ scene, collision, lightSources, rotundas: rotundaInfos, shelters: nearShelters, plan: hdfPlan });
+  }
+
   // ---------------------------------------------------------------- Navigation de base (pour placer les props)
   collision.build();
   const nav = new NavGrid(halfX, halfZ, collision, polygons, NAV_CELL, NAV_MARGIN, 1300);
@@ -780,13 +817,22 @@ export async function buildRealWorld(scene, renderer) {
   };
   const shuffle = (a) => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
 
-  // Points aléatoires accessibles dans le secteur jouable (props)
+  // Points aléatoires accessibles dans le secteur jouable (props). Les zones à tirage isolé (zone.isolatedRnd) n'y comptent pas :
+  // le décor aléatoire des zones d'origine reste exactement le même quand on ajoute une zone.
+  const isolatedZone = Z.zones.map((z) => !!z.isolatedRnd);
+  let lgMinX = Infinity, lgMaxX = -Infinity, lgMinZ = Infinity, lgMaxZ = -Infinity;
+  for (let iz = 0; iz < nav.nz; iz += 3) for (let ix = 0; ix < nav.nx; ix += 3) {
+    const zl = zoneLabel[nav.idx(ix, iz)];
+    if (zl < 0 || isolatedZone[zl]) continue;
+    const x = nav.worldX(ix), z = nav.worldZ(iz);
+    lgMinX = Math.min(lgMinX, x); lgMaxX = Math.max(lgMaxX, x); lgMinZ = Math.min(lgMinZ, z); lgMaxZ = Math.max(lgMaxZ, z);
+  }
   const randomSpots = (count, minClear) => {
     const out = [];
     for (let t = 0; t < count * 60 && out.length < count; t++) {
-      const x = secMinX + rnd() * (secMaxX - secMinX), z = secMinZ + rnd() * (secMaxZ - secMinZ);
+      const x = lgMinX + rnd() * (lgMaxX - lgMinX), z = lgMinZ + rnd() * (lgMaxZ - lgMinZ);
       const ix = nav.cx(x), iz = nav.cz(z);
-      if (nav.inside(ix, iz) && zoneLabel[nav.idx(ix, iz)] >= 0 && clearance(ix, iz, minClear)) out.push([x, z]);
+      if (nav.inside(ix, iz) && zoneLabel[nav.idx(ix, iz)] >= 0 && !isolatedZone[zoneLabel[nav.idx(ix, iz)]] && clearance(ix, iz, minClear)) out.push([x, z]);
     }
     return out;
   };
@@ -1142,17 +1188,17 @@ export async function buildRealWorld(scene, renderer) {
   }
 
   // ---------------------------------------------------------------- Bornes, armes au mur et machines (CONFIG.sector.zones[].items)
+  // distance d'un point à la porte payante la plus proche
+  const doorDist = (x, z) => {
+    let m = Infinity;
+    for (const d of doors) for (const p of d.points) m = Math.min(m, Math.hypot(p.x - x, p.z - z));
+    return m;
+  };
   const WALL_COLORS = { shotgun: 0xff8833, smg: 0x3399ff, sniper: 0x88ccff, lmg: 0xff5533 };
   const machines = [];
   const vehicleSpawns = []; // motos : { type, x, z, yaw } (voir CONFIG.vehicles)
   {
     const placed = [];
-    // distance d'un point à la porte payante la plus proche
-    const doorDist = (x, z) => {
-      let m = Infinity;
-      for (const d of doors) for (const p of d.points) m = Math.min(m, Math.hypot(p.x - x, p.z - z));
-      return m;
-    };
     // Un atout trop près d'une porte gêne : son invite [E] (rayon 2,6 m) prend le pas sur celle de la porte (rayon 3,4 m),
     // et le joueur ne trouve plus l'endroit où acheter l'ouverture. Sans recouvrement des deux rayons : > 6 m.
     const PERK_DOOR_GAPS = [8, 6.5];
@@ -1165,7 +1211,8 @@ export async function buildRealWorld(scene, renderer) {
       for (const [r, clear] of [[maxD, minClear], [maxD * 1.6, minClear], [maxD * 2.5, minClear], [maxD * 2.5, Math.max(1, minClear - 1)]]) {
         for (const gap of doorGaps) {
           const c = shuffle(candidatesNear(a[0], a[1], clear, minD, r)
-            .filter((p) => zoneOf(p[0], p[1]) === zi && placed.every((q) => Math.hypot(q[0] - p[0], q[1] - p[1]) > 5) && (!gap || doorDist(p[0], p[1]) >= gap)))[0];
+            .filter((p) => zoneOf(p[0], p[1]) === zi && placed.every((q) => Math.hypot(q[0] - p[0], q[1] - p[1]) > 5) && (!gap || doorDist(p[0], p[1]) >= gap)
+              && !(isolatedZone[zi] && hdfPlan && railDist(hdfPlan, p[0], p[1]) < 4)))[0];
           if (c) { placed.push(c); return c; }
         }
       }
@@ -1220,6 +1267,7 @@ export async function buildRealWorld(scene, renderer) {
       if (!seeds[zi] || !Number.isFinite(door_depth[zi])) return;
       const [fx, fz] = seeds[zi];
       const start = zi === startZone;
+      const rndState = zone.isolatedRnd ? rnd.save() : null; // la zone tire ses emplacements puis rend le tirage intact
       for (const item of zone.items || []) {
         const [type, id] = item.split(':');
         if (type === 'station') {
@@ -1238,6 +1286,7 @@ export async function buildRealWorld(scene, renderer) {
           addMachine(type, id, type === 'perk' ? spotIn(zi, 3, 4, R, PERK_DOOR_GAPS) || spotIn(zi, 3, 4, R) : spotIn(zi, 3, 4, R), zi);
         }
       }
+      if (rndState != null) rnd.load(rndState);
     });
     // Motos : une par ligne de CONFIG.vehicles.spawns, sur un emplacement dégagé de la zone, loin des portes (même raison que
     // les atouts : leur invite [E] masquerait celle de la porte), posée dans l'axe de la rue
@@ -1356,33 +1405,43 @@ export async function buildRealWorld(scene, renderer) {
     // rotation (rotation.y) pour que le dos de l'objet (axe -z local) soit tourné vers la direction t
     const backTo = (t) => Math.atan2(-Math.cos(t), -Math.sin(t));
     let bikes = 0;
+    const rndIso = seeded(77001);
+    // Place de l'Homme de Fer : rails, quais, rames, totems, statue (avant le mobilier : il évite l'emprise)
+    const hdfZone = ZONE_NAMES.indexOf(HDF.zone);
+    let hdf = null;
+    if (hdfPlan && hdfZone >= 0 && seeds[hdfZone]) {
+      const near = (data.furniture || []).map((f) => f.p).filter((p) => Math.hypot(p[0] - hdfPlan.cx, p[1] - hdfPlan.cz) < 70);
+      hdf = buildHdfDecor({ scene, collision, lightSources, plan: hdfPlan, zi: hdfZone, zoneOf, doorDist, used, columns: hdfStruct.columns, obstacles: near });
+      hdfInfo = { ...hdf, structures: hdfStruct, plan: hdfPlan };
+    }
     for (const f of data.furniture || []) {
       const [x, z] = f.p;
-      if (!inSec(x, z) || insideBuilding(x, z)) continue;
+      if (!inSec(x, z) || insideBuilding(x, z) || (hdf && hdf.covers(x, z))) continue;
       const wd = wallDir(x, z);
+      const rnd2 = isolatedZone[zoneOf(x, z)] ? rndIso : rnd; // mobilier d'une zone isolée : tirage à part
       if (f.kind === 'bench' && freeAt(x, z, 2.5)) {
-        const th = wd.dist < 4 ? backTo(wd.ang) : rnd() * Math.PI * 2;
+        const th = wd.dist < 4 ? backTo(wd.ang) : rnd2() * Math.PI * 2;
         props.place('bench', x, z, th);
         collision.addBox(x, z, 1.9, 0.6, -th, 1);
         used.push([x, z]);
       } else if (f.kind === 'waste_basket' && freeAt(x, z, 1.5)) {
-        props.place('bin', x, z, rnd() * 6);
+        props.place('bin', x, z, rnd2() * 6);
         collision.addCircle(x, z, 0.26, 1);
       } else if (f.kind === 'bollard') {
         props.place('bollard', x, z);
         collision.addCircle(x, z, 0.1, 0.9);
-      } else if (f.kind === 'bicycle_parking' && bikes < 70 && freeAt(x, z, 2) && rnd() < 0.6) {
-        const th = wd.dist < 5 ? -wd.ang : rnd() * Math.PI; // vélos perpendiculaires au mur
-        const n = 1 + Math.floor(rnd() * 3);
+      } else if (f.kind === 'bicycle_parking' && bikes < 70 && freeAt(x, z, 2) && rnd2() < 0.6) {
+        const th = wd.dist < 5 ? -wd.ang : rnd2() * Math.PI; // vélos perpendiculaires au mur
+        const n = 1 + Math.floor(rnd2() * 3);
         for (let k = 0; k < n; k++) {
           const off = (k - (n - 1) / 2) * 0.65, ox = -Math.sin(wd.ang) * off, oz = Math.cos(wd.ang) * off;
-          props.place('bike', x + ox, z + oz, th, 1, null, 0, (rnd() - 0.5) * 0.12);
+          props.place('bike', x + ox, z + oz, th, 1, null, 0, (rnd2() - 0.5) * 0.12);
           bikes++;
         }
         collision.addBox(x, z, 1.7, n * 0.65, -th, 1);
         used.push([x, z]);
       } else if ((f.kind === 'artwork' || f.kind === 'memorial' || f.kind === 'monument') && wd.dist > 3 && freeAt(x, z, 4)) {
-        props.place('statue', x, z, rnd() * 6);
+        props.place('statue', x, z, rnd2() * 6);
         collision.addCircle(x, z, 1.2, 4.5);
         used.push([x, z]);
       } else if (f.kind === 'fountain' && freeAt(x, z, 4)) {
@@ -1541,7 +1600,7 @@ export async function buildRealWorld(scene, renderer) {
     zoneNames: ZONE_NAMES, zoneCenters, startZone, sealedPoints, mapImage, mapView: { halfX, halfZ, scale: MAP_SCALE },
     mapCrop: { x0: secMinX - 60, x1: secMaxX + 60, z0: secMinZ - 50, z1: secMaxZ + 50 }, mapTitle: 'SECTEUR DU MARCHÉ-NEUF — STRASBOURG',
     cathedral: cath ? { seed: cath.seed, clock: cath.clock, insideInner: cath.insideInner, inner: cath.inner, P: cath.P, S: cath.S, T: cath.T, ceilAt: cath.ceilAt, info: cathInfo } : null,
-    levels,
+    levels, hdf: hdfInfo,
     floorAt: (x, z, y, out) => levels.floorAt(x, z, y, out),
     collide: (pos, r) => collision.resolve(pos, r),
     rayHit: (ox, oy, oz, dx, dy, dz, maxT) => collision.rayHit(ox, oy, oz, dx, dy, dz, maxT),

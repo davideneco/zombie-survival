@@ -556,9 +556,25 @@ export function createArchitecture({ renderer, plasterImg, roofP, rnd }) {
     return r < 0.62 ? 'plaster' : r < 0.94 ? 'sandstone' : 'modern';
   }
 
+  // Construit un bâtiment sans rien en garder : tire exactement les mêmes nombres aléatoires (textures, styles, teintes) mais
+  // efface la géométrie produite. Sert à retirer un bâtiment du rendu sans décaler la suite du tirage `rnd`, donc sans changer
+  // l'aspect des autres façades ni l'emplacement des objets placés ensuite (machines, armes murales…).
+  function ghost(fn) {
+    const all = () => [roofB, ...Object.values(mats).map((m) => m.b)];
+    const before = new Map(all().map((b) => [b, [b.pos.length, b.nor.length, b.uv.length, b.col.length, b.idx.length]]));
+    const r = fn();
+    for (const b of all()) {
+      const [p, n, u, c, i] = before.get(b) || [0, 0, 0, 0, 0];
+      b.pos.length = p; b.nor.length = n; b.uv.length = u; b.col.length = c; b.idx.length = i;
+    }
+    return r;
+  }
+
   return {
     // Bâtiment complet. cutsOf(i) : ouvertures (passages) du mur i. Retourne { wallTop, roofTop }.
+    // opts.ghost : le construire « pour rien » (voir ghost)
     building(pts, tags, hGuess, cutsOf, opts = {}) {
+      if (opts.ghost) return ghost(() => this.building(pts, tags, hGuess, cutsOf, { ...opts, ghost: false }));
       const area = Math.abs(polyArea(pts));
       const levelsTag = num(tags['building:levels']);
       const levels = levelsTag != null ? Math.max(1, levelsTag) : Math.max(2, Math.round((hGuess - GF_H) / FLOOR_H) + 1);
