@@ -12,6 +12,10 @@ export class Net {
 
   on(type, fn) { this.handlers[type] = fn; }
 
+  // Message réservé à l'hôte (manches, zombies, motos, finale, téléportation de debug…) : ignoré s'il ne vient pas de lui.
+  // Le relais écrase `from` par l'identifiant réel de l'expéditeur, donc un client ne peut pas se faire passer pour l'hôte.
+  onHost(type, fn) { this.handlers[type] = (m) => { if (m.from === this.hostId && this.hostId != null) fn(m); else this.rejected = (this.rejected || 0) + 1; }; }
+
   connect() {
     return new Promise((resolve, reject) => {
       const proto = location.protocol === 'https:' ? 'wss' : 'ws';

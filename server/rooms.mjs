@@ -73,6 +73,8 @@ function onMessage(ws, raw) {
   // Tout le reste est relayé : msg.to = id précis, sinon tous les autres membres.
   const room = rooms.get(ws.room);
   if (!room) return;
+  // menu debug : seul l'hôte peut envoyer dbg_tp / dbg_note (dbg_ack est la réponse d'un client à l'hôte)
+  if (typeof msg.t === 'string' && msg.t.startsWith('dbg_') && msg.t !== 'dbg_ack' && room.host !== ws.pid) return;
   if (msg.t === 'start' && room.host === ws.pid) room.started = true;
   msg.from = ws.pid;
   if (msg.to != null && msg.to !== '*') {

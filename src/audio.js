@@ -389,6 +389,10 @@ export class Sfx {
     this._tone('square', 1040, 1040, 0.13, 0.14 * v);
     this._tone('square', 780, 780, 0.13, 0.14 * v, { at: 0.17 });
   }
+  down(v = 1) { // un coéquipier est à terre : trois bips d'alarme
+    if (!this.ctx || v < 0.03) return;
+    for (let i = 0; i < 3; i++) this._tone('square', 960, 760, 0.16, 0.16 * v, { at: i * 0.28 });
+  }
   crash(v = 1) { // choc contre un mur : tôle froissée et coup sourd
     if (!this.ctx || v < 0.05) return;
     this._noise(0.35, 0.7 * v, 700, 'lowpass', { f1: 150, send: 0.3 });

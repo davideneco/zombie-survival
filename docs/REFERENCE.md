@@ -1,6 +1,6 @@
 # Zombie Survival — fiche de référence
 
-Version du jeu : **v0.29.0 · 0036f40 · 2026-10-07** (package 0.29.0). Générée automatiquement par `node tools/make-docs.mjs` à partir de `src/config.js` et du jeu.
+Version du jeu : **v0.30.0 · 99b9385 · 2026-10-07** (package 0.30.0). Générée automatiquement par `node tools/make-docs.mjs` à partir de `src/config.js` et du jeu.
 Carte annotée : [carte.png](carte.png). Armes de profil : [armes.png](armes.png). Les mêmes tableaux en tableur : dossier [csv/](csv/).
 
 Pour demander une modification, citez la ligne (ex. « Mitrailleuse RPK : chargeur 100 », « Mastodonte à 3000 pts », « porte P3 à 500 pts », « mettre la boîte mystère dans la zone Temple-Neuf »).
@@ -446,7 +446,8 @@ Prix d'une porte : le plus cher des deux prix de zone (colonne « Prix de la por
 | V (en moto) | Vue à la 3e personne / à la 1re personne |
 | F | Lampe torche |
 | M | Carte |
-| Échap | Menu pause |
+| Échap | Ferme la carte ou le menu debug ; sinon menu pause (reprise : Échap, ou clic si le navigateur refuse) |
+| F9 (hôte) | Menu debug de l'hôte : 1-4 joueur, T deux fois amener, Y rejoindre, N réanimer, U débloquer les zombies, P perfs |
 
 ### Notes
 

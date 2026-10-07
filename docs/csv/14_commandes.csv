@@ -14,4 +14,5 @@ Espace (en moto);Frein à main
 V (en moto);Vue à la 3e personne / à la 1re personne
 F;Lampe torche
 M;Carte
-Échap;Menu pause
+Échap;"Ferme la carte ou le menu debug ; sinon menu pause (reprise : Échap, ou clic si le navigateur refuse)"
+F9 (hôte);Menu debug de l'hôte : 1-4 joueur, T deux fois amener, Y rejoindre, N réanimer, U débloquer les zombies, P perfs

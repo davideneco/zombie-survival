@@ -18,6 +18,8 @@ import { installVehicles } from './vehicles.js';
 import { wreckMaterial } from './vehicleModels.js';
 import { installLauncher } from './launcher.js';
 import { makeDisplay } from './weaponDisplay.js';
+import { installUi } from './ui.js';
+import { installDebugMenu } from './debugMenu.js';
 
 document.getElementById('version').textContent = __GAME_VERSION__;
 // Version du jeu (« v0.27.0 », sans le commit ni la date) : jointe au message `join`, et comparée à celle de l'hôte dans `sync`.
@@ -322,27 +324,33 @@ const game = {
     }
   },
 
-  // Zombies coincés dans le décor ou partis trop loin : on les fait réapparaître près des joueurs (hôte)
-  relocateZombies(dt, targets) {
-    this.relocateTimer -= dt;
-    if (this.relocateTimer > 0 || !targets.length || !world.pickGround) return;
-    this.relocateTimer = 1;
+  // Zombies coincés dans le décor ou partis trop loin : on les fait réapparaître près des joueurs (hôte).
+  // force : appel du menu debug (U), sans attendre la seconde de recharge et avec des seuils plus bas ; renvoie le nombre de zombies déplacés.
+  relocateZombies(dt, targets, force = false) {
+    if (!force) {
+      this.relocateTimer -= dt;
+      if (this.relocateTimer > 0 || !targets.length || !world.pickGround) return 0;
+      this.relocateTimer = 1;
+    } else if (!targets.length || !world.pickGround) return 0;
     const groundTargets = targets.filter((t) => !t.tregion);
-    if (!groundTargets.length) return;
+    if (!groundTargets.length) return 0;
     targets = groundTargets;
+    let moved = 0;
     for (const z of this.zombies) {
       if (z.dead || z.spawnT > 0 || z.region || z.link || z.isBoss) continue;
       let near = Infinity;
       for (const t of targets) near = Math.min(near, Math.hypot(t.pos.x - z.pos.x, t.pos.z - z.pos.z));
-      z.farT = near > 90 ? (z.farT || 0) + 1 : 0;
-      const stuck = z.noProgress > 5 && near > 12;
-      if (!stuck && z.farT < 4) continue;
+      if (!force) z.farT = near > 90 ? (z.farT || 0) + 1 : 0;
+      const stuck = z.noProgress > (force ? 1.5 : 5) && near > (force ? 5 : 12);
+      if (!stuck && !(force && near > 70) && (force || z.farT < 4)) continue;
       const t = targets[Math.floor(Math.random() * targets.length)];
       const g = world.pickGround(t.pos.x, t.pos.z, 22, 45);
       if (!g) continue;
       z.pos.set(g.x, 0, g.z);
       z.noProgress = 0; z.farT = 0;
+      moved++;
     }
+    return moved;
   },
 
   // ------------------------------------------------------------- Bonus (Power-ups COD)
@@ -930,6 +938,28 @@ const game = {
     }
   },
 
+  // Position et état du joueur local, envoyés aux autres (20 Hz, et tout de suite après une téléportation)
+  sendPlayerState() {
+    const p = this.player;
+    if (!this.isMultiplayer || !this.net?.connected) return;
+    this.net.send({
+      t: 'p_state',
+      x: Math.round(p.pos.x * 100) / 100,
+      y: Math.round(p.pos.y * 100) / 100,
+      z: Math.round(p.pos.z * 100) / 100,
+      yaw: Math.round(p.yaw * 100) / 100,
+      pitch: Math.round(p.pitch * 100) / 100,
+      hp: Math.round(p.health),
+      downed: p.downed,
+      dead: p.dead,
+      pts: this.points,
+      w: p.curW.id,
+      pap: p.curW.pap ? 1 : 0,
+      rl: p.curW.reloading ? 1 : 0,
+      ads: p.aiming ? 1 : 0,
+    });
+  },
+
   // ------------------------------------------------------------ États
   reset(resetStats = true) {
     for (const z of this.zombies) z.dispose();
@@ -966,6 +996,7 @@ const game = {
     if (this.over) return;
     this.over = true;
     this.player.releaseInputs();
+    this.ui?.closeOverlays();
     document.exitPointerLock();
     hud.prompt(null);
 
@@ -1148,23 +1179,7 @@ const game = {
       if (this.netTimer <= 0) {
         this.netTimer = 0.05; // 20 fois par seconde
 
-        // Envoi de la position et de l'état du joueur local
-        this.net?.send({
-          t: 'p_state',
-          x: Math.round(p.pos.x * 100) / 100,
-          y: Math.round(p.pos.y * 100) / 100,
-          z: Math.round(p.pos.z * 100) / 100,
-          yaw: Math.round(p.yaw * 100) / 100,
-          pitch: Math.round(p.pitch * 100) / 100,
-          hp: Math.round(p.health),
-          downed: p.downed,
-          dead: p.dead,
-          pts: this.points,
-          w: p.curW.id,
-          pap: p.curW.pap ? 1 : 0,
-          rl: p.curW.reloading ? 1 : 0,
-          ads: p.aiming ? 1 : 0,
-        });
+        this.sendPlayerState(); // position et état du joueur local
 
         // L'hôte envoie la position et l'état de tous les zombies
         if (this.isHost && this.zombies.length > 0) {
@@ -1266,6 +1281,7 @@ installMachineFx(game, { world, hud, sfx, fx });
 installFinale(game, { world, scene, hud, sfx, fx });
 installVehicles(game, { world, scene, hud, sfx });
 installLauncher(game, { world, scene, fx });
+installDebugMenu(game, { world, hud, sfx });
 game.initVehicles();
 game.player.setCharacter(charOf(game.charPref));
 
@@ -1399,6 +1415,23 @@ function setupNetworkHandlers(net) {
     if (game.isHost && !wasOut && (rp.dead || rp.downed)) game.checkTeamWipe();
   });
 
+  // Un coéquipier tombe à terre : message avec la distance et la direction, trois bips d'alarme
+  net.on('p_down', (m) => {
+    const rp = game.remotes.get(m.from);
+    if (!rp) return;
+    rp.downed = true;
+    const p = game.player, dx = rp.pos.x - p.pos.x, dz = rp.pos.z - p.pos.z;
+    const dir = ['N', 'NE', 'E', 'SE', 'S', 'SO', 'O', 'NO'][Math.round(((Math.atan2(dx, -dz) * 180 / Math.PI + 360) % 360) / 45) % 8]; // cap 0 = nord (-z), 90 = est (+x)
+    hud.announce(`${String(rp.name).toUpperCase()} EST À TERRE`, `${Math.round(Math.hypot(dx, dz))} m ${dir} · maintenez [E] pour le réanimer`, 3500);
+    sfx.down?.(Math.max(0.4, 1 - Math.hypot(dx, dz) / 120));
+    game.checkTeamWipe();
+  });
+
+  // Menu debug de l'hôte : téléportation (dbg_tp : de l'hôte seulement), réponse du client, annonce à tous
+  net.onHost('dbg_tp', (m) => game.debugMenu.receive(m));
+  net.on('dbg_ack', (m) => { if (game.isHost) game.debugMenu.onAck(m); });
+  net.onHost('dbg_note', (m) => { const t = String(m.text || '').slice(0, 120); hud.toast(t); console.info('[DBG]', t); });
+
   // Tirs des coéquipiers (traçantes + sons)
   net.on('p_shot', (m) => {
     const o = new THREE.Vector3(m.origin.x, m.origin.y, m.origin.z);
@@ -1416,13 +1449,13 @@ function setupNetworkHandlers(net) {
   });
 
   // Points reçus (client)
-  net.on('pts', (m) => {
+  net.onHost('pts', (m) => {
     game.addPoints(m.pts, m.head ? 'head' : '');
     if (m.kill) { game.kills += m.kills || 1; sfx.kill(); }
   });
 
   // Zombies (spécifique client)
-  net.on('z_spawn', (m) => {
+  net.onHost('z_spawn', (m) => {
     let spawn;
     if (m.st === 'window' && world.windowSpawns && m.wi >= 0) {
       spawn = world.windowSpawns[m.wi];
@@ -1445,7 +1478,7 @@ function setupNetworkHandlers(net) {
     game.zombies.push(z);
   });
 
-  net.on('z_tick', (m) => {
+  net.onHost('z_tick', (m) => {
     const map = new Map();
     for (const z of game.zombies) map.set(z.id, z);
     for (const [id, x, z, yaw, atk, y, bs, hid] of m.z) {
@@ -1457,7 +1490,7 @@ function setupNetworkHandlers(net) {
     }
   });
 
-  net.on('z_dead', (m) => {
+  net.onHost('z_dead', (m) => {
     const z = game.zombies.find((zb) => zb.id === m.id);
     if (z) z.damage(999999, m.head);
   });
@@ -1478,25 +1511,25 @@ function setupNetworkHandlers(net) {
   });
   // Fin de partie
   net.on('finale_req', () => { if (game.isHost && !game.finale && !game.finaleDone && game.finaleReady()) game.startFinale(); }); // l'hôte revalide : manche et quartiers ouverts
-  net.on('finale_start', () => { game.finale = { remote: true }; game.finaleIntro(); });
-  net.on('finale_win', () => game.winFinale());
-  net.on('finale_info', (m) => game.finaleInfo(m));
-  net.on('finale_say', (m) => hud.announce(m.title, m.sub, m.ms));
-  net.on('boss_fx', (m) => game.bossEvent(m.name, m));
+  net.onHost('finale_start', () => { game.finale = { remote: true }; game.finaleIntro(); });
+  net.onHost('finale_win', () => game.winFinale());
+  net.onHost('finale_info', (m) => game.finaleInfo(m));
+  net.onHost('finale_say', (m) => hud.announce(m.title, m.sub, m.ms));
+  net.onHost('boss_fx', (m) => game.bossEvent(m.name, m));
 
   // Boîte mystère : l'hôte compte les tirages et décide des déplacements
   net.on('box_req', (m) => { if (game.isHost && !game.hostBoxRoll(m.from, m.owned || [])) net.send({ t: 'box_deny' }, m.from); });
-  net.on('box_roll', (m) => game.startBoxRoll(m));
-  net.on('box_deny', () => { game.points += CONFIG.box.price; sfx.deny(); });
+  net.onHost('box_roll', (m) => game.startBoxRoll(m));
+  net.onHost('box_deny', () => { game.points += CONFIG.box.price; sfx.deny(); });
   net.on('box_take', (m) => { if (game.isHost) game.hostBoxTake(m.from); });
-  net.on('box_taken', (m) => game.onBoxTaken(m.pid));
-  net.on('box_expire', () => { if (game.boxRoll?.phase === 'offer') { game.boxRoll.offerT = 0; } });
+  net.onHost('box_taken', (m) => game.onBoxTaken(m.pid));
+  net.onHost('box_expire', () => { if (game.boxRoll?.phase === 'offer') { game.boxRoll.offerT = 0; } });
   net.on('pap_req', (m) => { if (game.isHost && !game.hostPapStart(m.from, m.w)) net.send({ t: 'pap_deny' }, m.from); });
-  net.on('pap_start', (m) => game.startPapAnim(m));
-  net.on('pap_deny', () => { game.points += CONFIG.papPrice; game.player.locked = false; sfx.deny(); });
+  net.onHost('pap_start', (m) => game.startPapAnim(m));
+  net.onHost('pap_deny', () => { game.points += CONFIG.papPrice; game.player.locked = false; sfx.deny(); });
   net.on('pap_taken', () => game.endPap());
-  net.on('box_state', (m) => { game.boxUses = m.uses; });
-  net.on('box_move', (m) => { game.startBoxMove(m.idx); });
+  net.onHost('box_state', (m) => { game.boxUses = m.uses; });
+  net.onHost('box_move', (m) => { game.startBoxMove(m.idx); });
 
   // Impact explosif d'un coéquipier (pistolet à rayons) : dégâts appliqués par l'hôte
   net.on('splash', (m) => {
@@ -1506,11 +1539,11 @@ function setupNetworkHandlers(net) {
     fx.explosion(m.pt.x, m.pt.y, m.pt.z, m.r, c); // l'hôte voit l'effet, puis le relaie aux autres clients (pas à l'émetteur : o)
     game.net.send({ t: 'boom', pt: m.pt, r: m.r, c, o: m.from });
   });
-  net.on('boom', (m) => {
+  net.onHost('boom', (m) => {
     if (m.o != null && m.o === net.id) return; // c'est notre propre impact : déjà affiché
     fx.explosion(m.pt.x, m.pt.y, m.pt.z, m.r, m.c ?? 0x44ff66);
   });
-  net.on('z_crawl', (m) => {
+  net.onHost('z_crawl', (m) => {
     const z = game.zombies.find((zb) => zb.id === m.id);
     if (z && !z.dead) z.makeCrawler();
   });
@@ -1519,7 +1552,7 @@ function setupNetworkHandlers(net) {
   net.on('door_open', (m) => { game.openDoor(m.id); });
 
   // Bonus
-  net.on('pu_spawn', (m) => {
+  net.onHost('pu_spawn', (m) => {
     game.spawnPowerup(new THREE.Vector3(m.x, 0, m.z), m.id, m.type);
   });
   net.on('pu_pickup', (m) => {
@@ -1532,7 +1565,7 @@ function setupNetworkHandlers(net) {
       game.powerups.splice(idx, 1);
     }
   });
-  net.on('pu_collect', (m) => {
+  net.onHost('pu_collect', (m) => {
     const idx = game.powerups.findIndex((p) => p.id === m.id);
     if (idx >= 0) {
       const pu = game.powerups[idx];
@@ -1543,7 +1576,7 @@ function setupNetworkHandlers(net) {
   });
 
   // Manches
-  net.on('round_start', (m) => {
+  net.onHost('round_start', (m) => {
     game.round = m.r;
     game.toSpawn = m.toSpawn;
     hud.setRound(m.r);
@@ -1552,7 +1585,7 @@ function setupNetworkHandlers(net) {
     if (game.player.downed || game.player.dead) game.player.revive();
     game.player.grenades = Math.min(CONFIG.grenade.max, game.player.grenades + CONFIG.grenade.perRound);
   });
-  net.on('round_end', () => {
+  net.onHost('round_end', () => {
     sfx.roundEnd();
     hud.announce('MANCHE TERMINÉE', 'La prochaine arrive…', 4000);
   });
@@ -1569,7 +1602,7 @@ function setupNetworkHandlers(net) {
     net.send({ t: 'revive', id: m.id });
   });
 
-  net.on('revive', (m) => {
+  net.onHost('revive', (m) => {
     if (m.id === net.id) {
       game.player.revive();
     } else {
@@ -1579,7 +1612,7 @@ function setupNetworkHandlers(net) {
   });
 
   // Synchronisation globale (pour le nouveau client qui rejoint)
-  net.on('sync', (m) => {
+  net.onHost('sync', (m) => {
     // même version, mêmes portes (identifiants et prix) que l'hôte : sinon la partie est incohérente, on quitte
     if ((m.v && m.v !== GAME_V) || (m.dh && m.dh !== doorsHash())) {
       alert(`Version du jeu différente de celle de l'hôte (${m.v || '?'} contre ${GAME_V}) : les portes ne correspondent pas. Rechargez la page pour récupérer la dernière version.`);
@@ -1616,7 +1649,7 @@ function setupNetworkHandlers(net) {
   });
 
   // Démarrage par l'hôte
-  net.on('start', () => {
+  net.onHost('start', () => {
     game.started = true;
     game.reset(false);
     hud.showOverlay(
@@ -1626,7 +1659,7 @@ function setupNetworkHandlers(net) {
     );
   });
 
-  net.on('restart', () => {
+  net.onHost('restart', () => {
     game.started = true;
     game.reset(true);
     hud.showOverlay(
@@ -1636,9 +1669,10 @@ function setupNetworkHandlers(net) {
     );
   });
 
-  net.on('game_over', (m) => {
+  net.onHost('game_over', (m) => {
     game.over = true;
     game.player.releaseInputs();
+    game.ui.closeOverlays();
     document.exitPointerLock();
     hud.prompt(null);
     hud.showOverlay(
@@ -1667,6 +1701,8 @@ function lockAndPlay() {
   if (req && req.catch) req.catch(() => {});
 }
 
+installUi(game, { hud, canvas, lockAndPlay }); // pile de couches, Échap, carte (M), plein écran
+
 // Clic direct sur le canvas en cours de partie pour reprendre le contrôle
 canvas.addEventListener('click', () => {
   if (game.started && !game.over && document.pointerLockElement !== canvas) {
@@ -1678,12 +1714,6 @@ canvas.addEventListener('click', () => {
 hud.el.ovBtn.addEventListener('click', (e) => {
   e.stopPropagation();
   lockAndPlay();
-});
-
-// Carte plein écran (M)
-window.addEventListener('keydown', (e) => {
-  // lettre tapée (e.key) et non position physique : en AZERTY la touche M n'est pas au même endroit qu'en QWERTY
-  if (!e.repeat && e.key && e.key.toLowerCase() === 'm' && game.started) hud.toggleMap();
 });
 
 // Nom du joueur
@@ -1808,22 +1838,16 @@ hud.el.btnStartGame.addEventListener('click', (e) => {
 
 document.addEventListener('pointerlockchange', () => {
   if (document.pointerLockElement === canvas) {
-    game.playing = true;
-    hud.hideOverlay();
+    game.ui.onPointerLocked();
   } else if (game._victory) {
     game._victory = false;
     game.playing = false;
-  } else if (game.started && !game.over) {
-    game.playing = false;
-    game.player.releaseInputs();
-    hud.showOverlay('PAUSE', game.isMultiplayer ? 'La partie continue pour vos coéquipiers.' : 'Jeu en pause.', null);
-    hud.showPanel('pausePanel');
+  } else {
+    game.ui.onPointerUnlocked(); // souris libérée en jeu = Échap : ferme la carte / le menu debug, sinon pause
   }
 });
 
 // --------------------------------------------- Menus : titre / options / pause
-let optionsBack = 'titlePanel';
-
 const optInputs = {
   brightness: document.getElementById('optBrightness'),
   fov: document.getElementById('optFov'),
@@ -1853,10 +1877,7 @@ for (const [key, input] of Object.entries(optInputs)) {
   });
 }
 
-function openOptions(back) {
-  optionsBack = back;
-  hud.showPanel('optionsPanel');
-}
+const openOptions = (back) => game.ui.openOptions(back);
 
 hud.el.titlePanel.addEventListener('click', (e) => e.stopPropagation());
 hud.el.pausePanel.addEventListener('click', (e) => e.stopPropagation());
@@ -1864,7 +1885,7 @@ hud.el.optionsPanel.addEventListener('click', (e) => e.stopPropagation());
 document.getElementById('btnPlay').addEventListener('click', () => hud.showPanel('menuPanel'));
 document.getElementById('btnOptions').addEventListener('click', () => openOptions('titlePanel'));
 document.getElementById('btnPauseOptions').addEventListener('click', () => openOptions('pausePanel'));
-document.getElementById('btnOptBack').addEventListener('click', () => hud.showPanel(optionsBack));
+document.getElementById('btnOptBack').addEventListener('click', () => hud.showPanel(game.ui.optionsBack));
 document.getElementById('btnResume').addEventListener('click', () => lockAndPlay());
 document.getElementById('btnModeBack').addEventListener('click', (e) => {
   e.stopPropagation();

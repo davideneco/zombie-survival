@@ -254,7 +254,7 @@ export class Hud {
       if (d > maxRange) continue;
       const px = cx + (rx / maxRange) * r;
       const py = cy + (rz / maxRange) * r;
-      ctx.fillStyle = tm.dead ? '#ff3333' : (tm.color || '#3a7bd5');
+      ctx.fillStyle = tm.dead || tm.downed ? '#ff3333' : (tm.color || '#3a7bd5');
       ctx.beginPath();
       ctx.arc(px, py, 3.8, 0, Math.PI * 2);
       ctx.fill();
@@ -501,6 +501,7 @@ export class Hud {
   }
 
   showMenu(title, text) {
+    this.screenTitle = '';
     this.el.ovTitle.textContent = title;
     this.el.ovText.innerHTML = text;
     this.el.ovBtn.classList.add('hidden');
@@ -509,6 +510,7 @@ export class Hud {
   }
 
   showOverlay(title, text, btn) {
+    this.screenTitle = title; // écran à bouton en cours (lu par ui.js pour la pile de couches)
     this.el.ovTitle.textContent = title;
     this.el.ovText.innerHTML = text;
     this.showPanel(null);
@@ -522,6 +524,20 @@ export class Hud {
   }
 
   hideOverlay() {
+    this.screenTitle = '';
     this.el.overlay.classList.add('hidden');
+  }
+
+  // Petit message temporaire sous la boussole (journal du menu debug, annonces discrètes)
+  toast(text, ms = 4000) {
+    if (!this.toastEl) {
+      this.toastEl = document.createElement('div');
+      Object.assign(this.toastEl.style, { position: 'absolute', left: '50%', top: '96px', transform: 'translateX(-50%)', padding: '4px 14px', background: 'rgba(5,12,18,0.78)', border: '1px solid rgba(255,255,255,0.25)', borderRadius: '4px', color: '#cfe3ff', font: '14px Arial, sans-serif', letterSpacing: '1px', display: 'none', whiteSpace: 'nowrap' });
+      this.el.hud.appendChild(this.toastEl);
+    }
+    this.toastEl.textContent = text;
+    this.toastEl.style.display = 'block';
+    clearTimeout(this.toastT);
+    this.toastT = setTimeout(() => { this.toastEl.style.display = 'none'; }, ms);
   }
 }

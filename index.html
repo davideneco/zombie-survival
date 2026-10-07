@@ -113,6 +113,15 @@
     .opt-row input[type=range] { width: 100%; accent-color: #b01818; cursor: pointer; }
     .opt-row output { text-align: right; color: #ffd24a; }
 
+    /* Bandeau « Cliquez pour reprendre » (carte / menu debug fermés par Échap : souris libérée, pas la pause complète) */
+    #resumeBanner { white-space: nowrap; position: fixed; left: 50%; top: 40%; transform: translateX(-50%); z-index: 40; padding: 14px 34px; font-size: 30px; letter-spacing: 4px; color: #fff; background: rgba(0,0,0,0.72); border: 2px solid #ffd24a; border-radius: 6px; cursor: pointer; text-shadow: 0 0 8px #000; }
+    #resumeBanner small { display: block; font: 13px Arial, sans-serif; letter-spacing: 1px; color: #bbb; margin-top: 4px; text-align: center; }
+    /* Menu debug de l'hôte (F9) */
+    #dbgMenu { position: fixed; right: 12px; top: 12px; z-index: 45; width: 470px; max-height: calc(100% - 24px); overflow: hidden; padding: 8px 12px; background: rgba(4,10,16,0.88); border: 1px solid #3a7bd5; border-radius: 6px; font: 12px/1.45 "Consolas", "Courier New", monospace; color: #cfe3ff; pointer-events: none; white-space: pre; }
+    #dbgMenu b { color: #ffd24a; }
+    #dbgMenu .sel { background: rgba(58,123,213,0.35); color: #fff; }
+    #dbgMenu .bad { color: #ff7a6a; }
+
     /* Multijoueur / HUD */
     #roomBadge { position: absolute; left: 160px; top: 32px; background: rgba(10,20,30,0.85); border: 1px solid #3a7bd5; padding: 6px 14px; border-radius: 4px; font-size: 18px; letter-spacing: 2px; color: #7cb9ff; display: none; text-shadow: 0 0 6px #000; }
     #teammates { position: absolute; left: 24px; top: 156px; display: flex; flex-direction: column; gap: 8px; font-family: Arial, sans-serif; pointer-events: none; }
@@ -195,6 +204,8 @@
   </div>
 
   <div id="mapOverlay"><canvas id="mapCanvas"></canvas></div>
+  <div id="resumeBanner" class="hidden">CLIQUEZ POUR REPRENDRE<small>Échap : pause</small></div>
+  <div id="dbgMenu" class="hidden"></div>
 
   <div id="overlay">
     <h1 id="ovTitle">ZOMBIE SURVIVAL</h1>
@@ -221,6 +232,8 @@
       <div class="opt-row"><label for="optQuality">Qualité</label><input type="range" id="optQuality" min="0" max="2" step="1" /><output></output></div>
       <div class="opt-row"><label for="optVolume">Volume</label><input type="range" id="optVolume" min="0" max="1" step="0.05" /><output></output></div>
       <div class="opt-row"><label for="optMusic">Musique</label><input type="range" id="optMusic" min="0" max="1" step="0.05" /><output></output></div>
+      <button class="btn btn-sub btn-wide" id="btnFullscreen" style="font-size:18px">PLEIN ÉCRAN : NON</button>
+      <div style="font-size:12px;color:#999">Plein écran (Chrome / Edge) : Échap ouvre la pause sans libérer la souris.</div>
       <button class="btn btn-sub btn-wide" id="btnOptBack">RETOUR</button>
     </div>
 
@@ -256,7 +269,7 @@
 
     <div id="controls">
       <b>ZQSD / WASD</b> se déplacer &nbsp;·&nbsp; <b>Souris</b> viser &nbsp;·&nbsp; <b>Clic gauche</b> tirer &nbsp;·&nbsp; <b>Clic droit</b> viser (ADS)<br />
-      <b>1 / 2 / 3 / Molette</b> changer d'arme &nbsp;·&nbsp; <b>G</b> grenade &nbsp;·&nbsp; <b>M</b> carte &nbsp;·&nbsp; <b>R</b> recharger &nbsp;·&nbsp; <b>E</b> acheter / ouvrir une porte / réanimer / monter-descendre de moto &nbsp;·&nbsp; <b>Shift</b> sprint &nbsp;·&nbsp; <b>F</b> lampe<br />
+      <b>1 / 2 / 3 / Molette</b> changer d'arme &nbsp;·&nbsp; <b>G</b> grenade &nbsp;·&nbsp; <b>M</b> carte &nbsp;·&nbsp; <b>Échap</b> pause / fermer &nbsp;·&nbsp; <b>F9</b> menu debug (hôte) &nbsp;·&nbsp; <b>R</b> recharger &nbsp;·&nbsp; <b>E</b> acheter / ouvrir une porte / réanimer / monter-descendre de moto &nbsp;·&nbsp; <b>Shift</b> sprint &nbsp;·&nbsp; <b>F</b> lampe<br />
       <b>En moto</b> : <b>ZQSD</b> accélérer, freiner, tourner &nbsp;·&nbsp; <b>Espace</b> frein à main &nbsp;·&nbsp; <b>V</b> vue 3e / 1re personne &nbsp;·&nbsp; le passager tire normalement, le conducteur non
     </div>
   </div>

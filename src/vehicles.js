@@ -583,18 +583,18 @@ export function installVehicles(game, { world, hud, sfx, scene }) {
         this.broadcastSeats(v);
         this.refreshRiders();
       });
-      net.on('v_deny', () => hud.announce('PLACE INDISPONIBLE', 'Place prise ou moto hors d\'usage.', 1800));
+      net.onHost('v_deny', () => hud.announce('PLACE INDISPONIBLE', 'Place prise ou moto hors d\'usage.', 1800));
       // points de vie : l'hôte les écrit (v_dmg des clients), les autres les reçoivent
       net.on('v_dmg', (m) => { const v = this.vehicles[m.id]; if (this.isHost && v) this.damageVehicle(v, clamp(+m.amt || 0, 0, 200), m.src || ''); });
-      net.on('v_hp', (m) => { const v = this.vehicles[m.id]; if (v && !this.isHost && v.state === 'ok') v.hp = clamp(+m.hp, 0, v.maxHp); });
-      net.on('v_burn', (m) => { const v = this.vehicles[m.id]; if (v && !this.isHost) this.startBurn(v); });
-      net.on('v_boom', (m) => { const v = this.vehicles[m.id]; if (v && !this.isHost) this.onVehicleBoom(v, m.x, m.z, false); });
-      net.on('v_respawn', (m) => { const v = this.vehicles[m.id]; if (v && !this.isHost) this.respawnVehicle(v); });
+      net.onHost('v_hp', (m) => { const v = this.vehicles[m.id]; if (v && !this.isHost && v.state === 'ok') v.hp = clamp(+m.hp, 0, v.maxHp); });
+      net.onHost('v_burn', (m) => { const v = this.vehicles[m.id]; if (v && !this.isHost) this.startBurn(v); });
+      net.onHost('v_boom', (m) => { const v = this.vehicles[m.id]; if (v && !this.isHost) this.onVehicleBoom(v, m.x, m.z, false); });
+      net.onHost('v_respawn', (m) => { const v = this.vehicles[m.id]; if (v && !this.isHost) this.respawnVehicle(v); });
       // borne du parking : le client a déjà payé ; l'hôte vérifie et rend la différence (v_refund)
-      net.on('v_fuel', (m) => { const v = this.vehicles[m.id]; if (v && !this.isHost) this.setFuel(v, m.fu); });
+      net.onHost('v_fuel', (m) => { const v = this.vehicles[m.id]; if (v && !this.isHost) this.setFuel(v, m.fu); });
       net.on('v_service', (m) => { if (this.isHost) this.hostService(m.id, m.from, +m.paid || 0); });
-      net.on('v_refund', (m) => { if (+m.pts > 0) { this.points += Math.round(m.pts); hud.announce('BORNE', `Remboursé : ${Math.round(m.pts)} pts`, 1800); } });
-      net.on('v_seats', (m) => {
+      net.onHost('v_refund', (m) => { if (+m.pts > 0) { this.points += Math.round(m.pts); hud.announce('BORNE', `Remboursé : ${Math.round(m.pts)} pts`, 1800); } });
+      net.onHost('v_seats', (m) => {
         const v = this.vehicles[m.id];
         if (!v) return;
         v.seats = m.seats.slice();

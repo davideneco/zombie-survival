@@ -215,6 +215,7 @@ export class Player {
       const k = letter(e);
       if (k) this.keys['letter:' + k] = true;
       if (!this.game.playing || e.repeat) return;
+      if (this.game.debugMenu?.open) return; // menu debug (F9) : les lettres et chiffres lui sont réservés
       if (k === 'r' && !this.locked && !(this.vehicle && this.vehicle.seat === 0)) this.reload();
       if (k === 'e') this.game.interact();
       if (k === 'f') this.setTorch(!this.torchOn);
@@ -238,7 +239,7 @@ export class Player {
     });
 
     document.addEventListener('mousedown', (e) => {
-      if (!this.game.playing) return;
+      if (!this.game.playing || this.game.debugMenu?.open) return;
       if (e.button === 0) this.mouseDown = true;
       if (e.button === 2) this.aiming = true;
     });
