@@ -183,8 +183,8 @@ export class Vehicle {
     const dmg = Math.min(C.maxDamage, (impact - C.minSpeed) * C.damagePerMs);
     this.seats.forEach((pid) => {
       if (pid == null) return;
-      if (pid === g.localId()) { const p = g.player, d = Math.min(dmg, p.health - 1); if (d > 0) p.hurt(d); }
-      else { const rp = g.remotes.get(pid), d = rp ? Math.min(dmg, rp.health - 1) : 0; if (d > 0) rp.hurt(d); }
+      if (pid === g.localId()) { const p = g.player, d = Math.min(dmg, p.health - 1); if (d > 0) p.hurt(d, 'crash'); }
+      else { const rp = g.remotes.get(pid), d = rp ? Math.min(dmg, rp.health - 1) : 0; if (d > 0) rp.hurt(d, 0, 0, 'crash'); }
     });
   }
 

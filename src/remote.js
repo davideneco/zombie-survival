@@ -70,7 +70,7 @@ export class RemotePlayer {
     this.dead = !!s.dead;
   }
 
-  hurt(amount, kx = 0, kz = 0) { this.net.send({ t: 'hurt', amount, kx, kz }, this.id); }
+  hurt(amount, kx = 0, kz = 0, src = null) { this.net.send({ t: 'hurt', amount, kx, kz, src }, this.id); } // src : 'blast' | 'crash' | absent (coup)
 
   // Un tir de ce joueur vient d'être signalé : éclair de bouche et recul
   fire() { this.fireNext = true; }

@@ -28,7 +28,7 @@ export const CONFIG = {
       // place de l'Homme de Fer (rotonde du tram), derrière la place Kléber : profondeur 4, donc 1500 pts calculés. Ajoutée en dernier :
       // le tirage des emplacements des autres zones ne change pas.
       // isolatedRnd : ses emplacements (et son décor) ne consomment pas le tirage commun aux autres zones
-      { name: 'Homme de Fer', seed: { x: -290, z: -203 }, isolatedRnd: true, items: ['station', 'wall:crossbow', 'wall:m79', 'box'] },
+      { name: 'Homme de Fer', seed: { x: -290, z: -203 }, isolatedRnd: true, items: ['station', 'wall:crossbow', 'wall:m79', 'perk:phdflopper', 'box'] },
     ],
   },
 
@@ -140,7 +140,12 @@ export const CONFIG = {
     quickrevive: { name: 'RÉANIMATION RAPIDE', desc: 'Solo : se relève seul · Co-op : réanime 2x plus vite', price: 1500, soloPrice: 500, color: '#3aa6ff', letter: 'R' },
     mulekick: { name: 'MULE KICK', desc: 'Porter 3 armes', price: 4000, color: '#3f7d3a', letter: 'K' },
     staminup: { name: 'STAMIN-UP', desc: 'Course plus rapide', price: 2000, color: '#e8d24a', letter: 'E' },
+    phdflopper: { name: 'PHD FLOPPER', desc: 'Immunisé aux explosions et aux chocs · saut en sprint : onde explosive', price: 2000, color: '#8d3fd1', letter: 'P' },
   },
+  // PHD Flopper : immunité totale aux dégâts 'blast' (grenades, M79, pestiférés) et 'crash' (choc de moto), pas aux coups de zombie ni
+  // du Bourreau. Plongeon : sauter pendant un sprint, ou tomber de fallHeight m ou plus, au moins minAir s en l'air -> à l'atterrissage,
+  // onde explosive de rayon `radius` aux pieds (dégâts = base + perRound x manche, aux zombies seulement), puis `cooldown` s de recharge.
+  phd: { radius: 4.5, base: 1500, perRound: 100, cooldown: 5, minAir: 0.35, fallHeight: 2.5, color: 0xb06cff },
   papPrice: 5000,
 
   // Fin de partie : « L'Heure du Jugement », déclenchée à l'horloge astronomique de la cathédrale.
@@ -217,6 +222,9 @@ export const CONFIG = {
     crawlerChance: 0.12,   // à partir de la manche 4 : part de zombies rampants (sans jambes)
     crawlerRound: 4,
     legBlowChance: 0.5,    // un zombie qui survit à une explosion perd ses jambes
+    // chevalier de fer : variante 'armored' (armure x0,5, vitesse x0,8) qui apparaît dans la zone donnée, à partir de la manche fromRound,
+    // avec la probabilité `chance` par zombie ; maxAlive en vie au plus ; santé x healthMult (avec l'armure : x3 de résistance)
+    ironKnight: { zone: 'Homme de Fer', fromRound: 8, chance: 0.15, maxAlive: 3, healthMult: 1.5 },
   },
 };
 

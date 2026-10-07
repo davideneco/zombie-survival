@@ -680,6 +680,15 @@ const game = {
     if (this.isMultiplayer) this.net?.send({ t: 'boom', pt, r: radius, c: color });
   },
 
+  // PHD Flopper : onde explosive aux pieds du joueur à l'atterrissage (Player.onLand). Dégâts aux zombies seulement (aucun aux joueurs) :
+  // le joueur calcule les dégâts de la manche, l'hôte les applique et attribue les points (splash), les autres machines montrent l'effet.
+  flop(pos) {
+    const F = CONFIG.phd;
+    this.splash(new THREE.Vector3(pos.x, pos.y, pos.z), F.radius, F.base + F.perRound * Math.max(1, this.round), F.color);
+    sfx.explosion?.(0.7);
+    this.shake = Math.max(this.shake || 0, 0.45);
+  },
+
   nearStation() {
     const p = this.player.pos;
     for (const s of world.stations || [world.stationPos]) {
@@ -788,8 +797,13 @@ const game = {
   spawnZombie(extra = false) {
     const spawn = this.pickSpawn();
     const Zc = CONFIG.zombie;
+    // chevalier de fer : dans la zone de l'Homme de Fer, à partir de la manche fromRound, `chance` de chance, maxAlive en vie
+    // au plus. L'hôte tire au sort (z_spawn porte kind) ; le zombie n'est ni coureur ni rampant.
+    const IK = Zc.ironKnight, sx0 = spawn.type === 'window' ? spawn.outside.x : spawn.pos.x, sz0 = spawn.type === 'window' ? spawn.outside.z : spawn.pos.z;
+    const knight = !!IK && this.round >= IK.fromRound && !!world.zoneOf && world.zoneNames[world.zoneOf(sx0, sz0)] === IK.zone
+      && this.zombies.filter((q) => q.ironKnight && !q.dead).length < IK.maxAlive && Math.random() < IK.chance;
     let speed = this.zombieSpeed * (0.85 + Math.random() * 0.3);
-    if (this.round >= Zc.runnerRound && Math.random() < Zc.runnerChance) speed *= Zc.runnerMult; // coureur
+    if (!knight && this.round >= Zc.runnerRound && Math.random() < Zc.runnerChance) speed *= Zc.runnerMult; // coureur
     const onEvent = (name, z) => {
       const d = Math.hypot(z.pos.x - this.player.pos.x, z.pos.z - this.player.pos.z);
       const v = Math.max(0, 1 - d / 45);
@@ -798,9 +812,10 @@ const game = {
       else if (name === 'rumble') sfx.rumble(v);
       else if (name === 'emerge') { sfx.dirt(v); sfx.groan(Math.min(1, v * 1.4)); }
     };
-    const crawl = this.round >= Zc.crawlerRound && Math.random() < Zc.crawlerChance;
-    const hp = this.zombieHealth;
-    const z = new Zombie(scene, spawn, hp, speed, onEvent, null, { crawler: crawl });
+    const crawl = !knight && this.round >= Zc.crawlerRound && Math.random() < Zc.crawlerChance;
+    const hp = knight ? Math.round(this.zombieHealth * IK.healthMult) : this.zombieHealth;
+    const z = new Zombie(scene, spawn, hp, speed, onEvent, null, { crawler: crawl, kind: knight ? 'armored' : null });
+    if (knight) z.ironKnight = true;
     this.zombies.push(z);
     if (!extra) this.toSpawn--;
 
@@ -816,8 +831,9 @@ const game = {
         x: sx,
         z: sz,
         hp: z.health,
-        spd: speed,
+        spd: speed, // avant les réductions de vitesse de la variante et du rampant : le client les réapplique dans makeKind / makeCrawler
         crawl: crawl ? 1 : 0,
+        kind: knight ? 'armored' : null,
       });
     }
   },
@@ -1252,7 +1268,7 @@ function setupNetworkHandlers(net) {
           x: z.pos.x,
           z: z.pos.z,
           hp: z.health,
-          spd: z.crawler ? z.speed / 0.45 : z.speed,
+          spd: z.speed / (z.crawler ? 0.45 : 1) / (z.kind === 'armored' ? 0.8 : z.kind === 'bloat' ? 0.7 : 1), // vitesse d'avant les réductions (le client les réapplique)
           spawnT: z.spawnT,
           crawl: z.crawler ? 1 : 0,
           boss: z.isBoss ? 1 : 0,

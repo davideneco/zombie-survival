@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { CONFIG } from './config.js';
 import { fx } from './fx.js';
+import { morionGeometry, cuirassGeometry, pauldronGeometry } from './ironArmor.js';
 
 // =====================================================================
 //  Zombie : modèle articulé (hanches, genoux, épaules, coudes, mâchoire),
@@ -287,16 +288,18 @@ export class Zombie {
   makeKind(kind) {
     this.kind = kind;
     const A = assets();
-    const metal = A.metalMat || (A.metalMat = new THREE.MeshStandardMaterial({ color: 0x5a6068, roughness: 0.45, metalness: 0.85 }));
+    const metal = A.metalMat || (A.metalMat = new THREE.MeshStandardMaterial({ color: 0x5a6068, roughness: 0.45, metalness: 0.85, emissive: 0x15181c })); // un peu d'émission : sans envmap un métal sombre serait noir pur
     if (kind === 'armored') {
       this.armor = 0.5; this.speed *= 0.8; this.runner = false;
       this.group.scale.multiplyScalar(1.12);
       for (const m of this.mats) m.color.multiplyScalar(0.7);
-      const dome = new THREE.Mesh(new THREE.SphereGeometry(0.15, 12, 8, 0, Math.PI * 2, 0, Math.PI * 0.55), metal);
-      dome.position.set(0, 0.07, 0.02); this.headGroup.add(dome);
-      const bar = new THREE.Mesh(new THREE.BoxGeometry(0.025, 0.12, 0.03), metal); bar.position.set(0, 0.05, 0.14); this.headGroup.add(bar);
-      const plate = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.45, 0.22), metal); plate.position.set(0, 0.3, 0.02); this.spine.add(plate);
-      for (const a of this.arms) { const pad = new THREE.Mesh(new THREE.SphereGeometry(0.09, 8, 6), metal); pad.position.y = 0; a.shoulder.add(pad); }
+      // chevalier de fer : morion à crête, cuirasse à tassettes et épaulières (ironArmor.js, celles de la statue de l'Homme de Fer)
+      const k = A.knight || (A.knight = { morion: morionGeometry(), cuirass: cuirassGeometry(), pauldrons: [pauldronGeometry(-1), pauldronGeometry(1)] });
+      const morion = new THREE.Mesh(k.morion, metal);
+      morion.position.set(0, 0.03, 0.0); morion.scale.setScalar(0.88); this.headGroup.add(morion);
+      const cuirass = new THREE.Mesh(k.cuirass, metal);
+      cuirass.position.set(0, 0.1, 0.0); cuirass.scale.set(0.64, 0.92, 0.5); this.spine.add(cuirass);
+      this.arms.forEach((a, i) => { const pad = new THREE.Mesh(k.pauldrons[i], metal); pad.scale.setScalar(0.72); a.shoulder.add(pad); });
     } else if (kind === 'bloat') {
       this.explodes = true; this.speed *= 0.7; this.runner = false;
       const sc = this.group.scale.x;

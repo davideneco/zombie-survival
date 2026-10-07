@@ -59,9 +59,12 @@ export function installFinale(game, { world, scene, hud, sfx, fx }) {
     else if (name === 'burst') { fx.emit(d.x, (d.y || 0) + 1, d.z, { count: 26, color: [0x7aff3a, 0x4a9a1a, 0xb8ff6a], speed: 3.4, up: 2.5, size: 0.13, life: 1.1, grav: 2, spread: 0.5 }); sfx.explosion?.(v * 0.6); }
   };
 
-  const hurtPlayer = (p, dmg, kx = 0, kz = 0) => {
-    if (p === game.player) { p.hurt(dmg); p.vel.x += kx; p.vel.z += kz; p.vy = Math.max(p.vy, 3.2); }
-    else p.hurt(dmg, kx, kz); // coéquipier : message réseau
+  // src : 'blast' pour l'explosion d'un pestiféré (le PHD Flopper l'ignore), absent pour les coups du Bourreau
+  const hurtPlayer = (p, dmg, kx = 0, kz = 0, src = null) => {
+    if (p === game.player) {
+      p.hurt(dmg, src);
+      if (!(src === 'blast' && p.perks.phdflopper)) { p.vel.x += kx; p.vel.z += kz; p.vy = Math.max(p.vy, 3.2); } // immunisé : pas de projection non plus
+    } else p.hurt(dmg, kx, kz, src); // coéquipier : message réseau
   };
 
   const bossCtx = {
@@ -280,7 +283,7 @@ export function installFinale(game, { world, scene, hud, sfx, fx }) {
         bossEvent('burst', { x: z.pos.x, y: z.pos.y, z: z.pos.z });
         for (const p of standing()) {
           const d = Math.hypot(p.pos.x - z.pos.x, p.pos.z - z.pos.z);
-          if (d < 4.2 && Math.abs(p.pos.y - z.pos.y) < 2.5) hurtPlayer(p, 38 * (1 - d / 5), 0, 0);
+          if (d < 4.2 && Math.abs(p.pos.y - z.pos.y) < 2.5) hurtPlayer(p, 38 * (1 - d / 5), 0, 0, 'blast');
         }
       }
       if (z.isBoss) {

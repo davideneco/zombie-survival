@@ -85,6 +85,7 @@ export class Player {
     this.grenades = CONFIG.grenade.start;
     this.locked = false; // arme confisquée par le Pack-a-Punch
     this.region = 0; this.wasGrounded = true;
+    this.airT = 0; this.peakY = 0; this.jumpSprint = false; this.flopCd = 0; // PHD Flopper (plongeon)
     this.vehicle = null; // { v, seat } quand on est sur une moto
 
     // Inventaire d'armes
@@ -379,7 +380,7 @@ export class Player {
       veh.v.hipWorld(veh.seat, this._v);
       this.pos.set(this._v.x, veh.v.pos.y, this._v.z);
       this.vel.set(0, 0, 0);
-      this.vy = 0; this.wasGrounded = true; this.region = 0;
+      this.vy = 0; this.wasGrounded = true; this.region = 0; this.airT = 0; this.jumpSprint = false; // en moto : pas de plongeon
       this.yaw += veh.v.dyaw;
     } else {
       let mx = (K.KeyD || K.ArrowRight ? 1 : 0) - (K.KeyA || K.ArrowLeft ? 1 : 0);
@@ -404,7 +405,7 @@ export class Player {
       if (this.world.floorAt) this.world.floorAt(this.pos.x, this.pos.z, this.pos.y, fl); else { fl.y = 0; fl.region = 0; }
       const ground = fl.y;
       onGround = this.pos.y <= ground + 0.02 && this.vy <= 0.5;
-      if (K.Space && onGround && !this.downed) this.vy = P.jumpSpeed;
+      if (K.Space && onGround && !this.downed) { this.vy = P.jumpSpeed; this.jumpSprint = sprinting; } // saut lancé en sprint : plongeon possible (PHD Flopper)
       this.vy -= P.gravity * dt;
       this.pos.y += this.vy * dt;
       if (this.pos.y <= ground) { this.pos.y = ground; this.vy = 0; }
@@ -412,8 +413,17 @@ export class Player {
       this.wasGrounded = this.pos.y <= ground + 0.02;
       this.region = fl.region;
 
+      // ---- PHD Flopper : temps en l'air, hauteur de chute ; à l'atterrissage, onde explosive (voir onLand)
+      if (!this.wasGrounded) { this.airT += dt; this.peakY = Math.max(this.peakY, this.pos.y); }
+      else {
+        if (this.airT > 0) this.onLand(this.airT, this.peakY - ground);
+        this.airT = 0; this.peakY = ground; this.jumpSprint = false;
+      }
+
       this.world.collide(this.pos, P.radius);
     }
+
+    this.flopCd = Math.max(0, this.flopCd - dt);
 
     // ---- régénération ----
     if (!this.downed && this.health < this.maxHealth && now - this.lastHurt > P.regenDelay) {
@@ -607,10 +617,21 @@ export class Player {
     this.game.throwGrenade(o, v, true);
   }
 
+  // Atterrissage après `air` s en l'air et une chute de `drop` m : le PHD Flopper déclenche son onde explosive si le saut est parti
+  // d'un sprint ou si la chute dépasse fallHeight. Ni en moto, ni à terre, avec une recharge de cooldown s.
+  onLand(air, drop) {
+    const F = CONFIG.phd;
+    if (!this.perks.phdflopper || this.vehicle || this.downed || this.dead || this.flopCd > 0 || air < F.minAir) return;
+    if (!this.jumpSprint && drop < F.fallHeight) return;
+    this.flopCd = F.cooldown;
+    this.game.flop(this.pos);
+  }
+
   // -------------------------------------------------------------- Dégâts
   // src : origine des dégâts ('blast' explosion, 'crash' choc de moto ; absent = coup de zombie, Bourreau…)
   hurt(amount, src = null) {
     if (this.downed || this.dead) return;
+    if (this.perks.phdflopper && (src === 'blast' || src === 'crash')) return; // PHD Flopper : immunité aux explosions et aux chocs
     this.health -= amount;
     this.lastHurt = this.game.time;
     this.game.hud.damage();

@@ -66,6 +66,12 @@ function emblem(x, id, cx, cy, r, col) {
   } else if (id === 'staminup') { // aile + chaussure
     P([[-0.9, 0.5], [0.7, 0.5], [0.9, 0.25], [0.3, 0.1], [0.1, -0.5], [-0.5, -0.5], [-0.6, 0.1]]); x.fill();
     x.fillStyle = '#ffffff'; for (let k = 0; k < 3; k++) { P([[-0.95, -0.2 + k * 0.22], [-0.55, -0.32 + k * 0.22], [-0.55, -0.22 + k * 0.22], [-0.95, -0.1 + k * 0.22]]); x.fill(); }
+  } else if (id === 'phdflopper') { // morion devant une étoile d'explosion à 8 branches
+    x.beginPath();
+    for (let k = 0; k < 16; k++) { const a = (k / 16) * Math.PI * 2 - Math.PI / 2, rr = k % 2 ? 0.52 : 1.05; (k ? x.lineTo : x.moveTo).call(x, Math.cos(a) * rr * r, Math.sin(a) * rr * r); }
+    x.closePath(); x.fill();
+    x.fillStyle = '#140822'; // silhouette sombre : elle se détache de l'étoile claire (diffus comme émissif)
+    P([[-0.62, -0.05], [-0.5, 0.12], [-0.3, 0.18], [0.3, 0.18], [0.5, 0.12], [0.62, -0.05], [0.4, 0.04], [0.38, 0.0], [0.34, -0.2], [0.2, -0.36], [0.05, -0.44], [0.0, -0.54], [-0.06, -0.44], [-0.2, -0.36], [-0.34, -0.2], [-0.38, 0.0], [-0.4, 0.04]]); x.fill();
   }
   x.restore();
 }
