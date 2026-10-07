@@ -555,7 +555,7 @@ export async function buildRealWorld(scene, renderer) {
     const PH = 1.1, PT = 0.5, FH = 3.2, FT = 0.25;
     const parapets = [], fences = [];
     const wall = (ax, az, bx, bz, water) => {
-      collision.addSegment(ax, az, bx, bz);
+      collision.addSegment(ax, az, bx, bz, water ? PH : FH); // hauteur réelle : les balles passent par-dessus un parapet de 1,1 m (avant : mur invisible à hauteur d'œil)
       if (water) quaySegs.push([ax, az, bx, bz]);
       const len = Math.hypot(bx - ax, bz - az);
       const h = water ? PH : FH, t = water ? PT : FT;
@@ -650,13 +650,14 @@ export async function buildRealWorld(scene, renderer) {
     const r0 = rotundaInfos[0];
     collision.build(); // grille provisoire : le plan des rails lance des rayons
     hdfPlan = planHdf(collision, r0.cx, r0.cz);
-    const nearShelters = shelters.map((pts) => shelterInfo(pts, [r0.cx, r0.cz])).filter((s) => Math.hypot(s.x - r0.cx, s.z - r0.cz) < 150); // les autres sont hors de vue
+    const nearShelters = shelters.map((pts) => shelterInfo(pts, [r0.cx, r0.cz])); // tous les abris de l'île (les abris vitrés des arrêts de bus et de tram ne sont plus des immeubles pleins)
     hdfStruct = buildHdfStructures({ scene, collision, lightSources, rotundas: rotundaInfos, shelters: nearShelters, plan: hdfPlan });
   }
 
   // ---------------------------------------------------------------- Navigation de base (pour placer les props)
   collision.build();
   const nav = new NavGrid(halfX, halfZ, collision, polygons, NAV_CELL, NAV_MARGIN, 1300);
+  nav.vaultCost = CONFIG.zombie.vault.cost;
   nav.segFilter = (it) => collision._blocks(it, 0); // la grille du sol ignore les obstacles d'étage (garde-corps, murs des tours…)
   nav.outside = (x, z) => !onIsland(x, z);
   nav.carve = (b) => {
@@ -1609,14 +1610,14 @@ export async function buildRealWorld(scene, renderer) {
       if (f.kind === 'bench' && freeAt(x, z, 2.5)) {
         const th = wd.dist < 4 ? backTo(wd.ang) : rnd2() * Math.PI * 2;
         props.place('bench', x, z, th);
-        collision.addBox(x, z, 1.9, 0.6, -th, 1);
+        collision.addBox(x, z, 1.9, 0.6, -th, 1, undefined, 'prop', true); // banc : enjambable (Espace)
         used.push([x, z]);
       } else if (f.kind === 'waste_basket' && freeAt(x, z, 1.5)) {
         props.place('bin', x, z, rnd2() * 6);
-        collision.addCircle(x, z, 0.26, 1);
+        collision.addCircle(x, z, 0.26, 1, undefined, 'prop', true); // poubelle : enjambable
       } else if (f.kind === 'bollard') {
         props.place('bollard', x, z);
-        collision.addCircle(x, z, 0.1, 0.9);
+        collision.addCircle(x, z, 0.1, 0.9, undefined, 'prop', true); // borne : enjambable
       } else if (f.kind === 'bicycle_parking' && st.bikes < st.cap && freeAt(x, z, 2) && rnd2() < 0.6) {
         const th = wd.dist < 5 ? -wd.ang : rnd2() * Math.PI; // vélos perpendiculaires au mur
         const n = 1 + Math.floor(rnd2() * 3);
@@ -1625,7 +1626,7 @@ export async function buildRealWorld(scene, renderer) {
           props.place('bike', x + ox, z + oz, th, 1, null, 0, (rnd2() - 0.5) * 0.12);
           st.bikes++;
         }
-        collision.addBox(x, z, 1.7, n * 0.65, -th, 1);
+        collision.addBox(x, z, 1.7, n * 0.65, -th, 1, undefined, 'prop', true); // vélos : enjambables si la profondeur traversée est <= 1,3 m
         used.push([x, z]);
       } else if ((f.kind === 'artwork' || f.kind === 'memorial' || f.kind === 'monument') && wd.dist > 3 && freeAt(x, z, 4)) {
         props.place('statue', x, z, rnd2() * 6);
@@ -1681,8 +1682,9 @@ export async function buildRealWorld(scene, renderer) {
         if (!freeAt(x, z, 5)) continue;
         const ang = streetDir(x, z) + (type === 'crate' ? rnd() * 3 : Math.PI / 2 + (rnd() - 0.5) * 0.6);
         props.place(type, x, z, -ang);
-        if (type === 'crate' && rnd() < 0.5) props.place('crate', x + 0.1, z + 0.05, -ang + 0.4, 0.9, null, 1.0);
-        collision.addBox(x, z, w, d, ang, h);
+        const stacked = type === 'crate' && rnd() < 0.5; // caisse surmontée d'une seconde : 2 m, pas enjambable
+        if (stacked) props.place('crate', x + 0.1, z + 0.05, -ang + 0.4, 0.9, null, 1.0);
+        collision.addBox(x, z, w, d, ang, stacked ? 2 : h, undefined, 'prop', type !== 'pallet' && !stacked); // palette : on marche dessus (h <= 0,3) ; caisses empilées : 2 m (les balles ne passent plus à travers la caisse du dessus)
         used.push([x, z]);
         n++;
       }
@@ -1738,8 +1740,9 @@ export async function buildRealWorld(scene, renderer) {
           if (!freeAt(x, z, 5) || doorDist(x, z) < 4) continue;
           const ang = streetDir(x, z) + (type === 'crate' ? rndOuter() * 3 : Math.PI / 2 + (rndOuter() - 0.5) * 0.6);
           props.place(type, x, z, -ang);
-          if (type === 'crate' && rndOuter() < 0.5) props.place('crate', x + 0.1, z + 0.05, -ang + 0.4, 0.9, null, 1.0);
-          collision.addBox(x, z, w, d, ang, h);
+          const stacked = type === 'crate' && rndOuter() < 0.5;
+          if (stacked) props.place('crate', x + 0.1, z + 0.05, -ang + 0.4, 0.9, null, 1.0);
+          collision.addBox(x, z, w, d, ang, stacked ? 2 : h, undefined, 'prop', type !== 'pallet' && !stacked);
           used.push([x, z]);
           n++;
         }

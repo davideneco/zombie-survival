@@ -28,7 +28,10 @@ export const HDF = {
 export const isRotunda = (tags) => tags.building === 'roof' && (parseFloat(tags.min_height) || 0) >= 2.5;
 
 // Abri de quai sans hauteur ni niveaux dans OSM : l'extraction lui a tiré une hauteur d'immeuble au hasard (12 à 18 m).
-export const isOpenShelter = (tags) => tags.amenity === 'shelter' && tags.height == null && tags['building:levels'] == null && !isRotunda(tags);
+// v0.33.0 : aussi les abris vitrés de plain-pied (building:levels = 1, building:material = glass : arrêts de bus et de tram de 4,7 m, 51 dans l'île),
+// qui étaient rendus et bloqués comme des immeubles pleins.
+export const isOpenShelter = (tags) => tags.amenity === 'shelter' && tags.height == null && !isRotunda(tags)
+  && (tags['building:levels'] == null || (tags['building:material'] === 'glass' && (parseFloat(tags['building:levels']) || 1) <= 1));
 
 // Aléatoire reproductible (textures et salissures)
 function mulberry(seed) {

@@ -328,6 +328,11 @@ export function createArchitecture({ renderer, plasterImg, roofP, rnd }) {
   const STYLES = { plaster: [4, drawPlaster], timber: [3, drawTimber], sandstone: [3, drawSandstone], gothic: [1, (c, i, r, v) => drawSandstone(c, i, r, v, true)], modern: [1, drawModern] };
   const mats = {}; // "style:variante" -> { mat, bucket }
   const bucket = () => ({ pos: [], nor: [], uv: [], col: [], idx: [] });
+  // Rang fixe de chaque matériau (style + variante) : deux faces coplanaires de deux matériaux (bâtiments aux emprises qui se chevauchent dans
+  // OSM, bandeaux de devanture contre un mur…) se disputaient le même pixel (z-fighting). Chaque matériau reçoit un décalage de profondeur
+  // propre (polygonOffset, 1 unité par rang) : le plus grand rang gagne toujours, sans scintillement (tools/stuck-scan.mjs, étape zfight).
+  const RANK = { plaster: 0, timber: 4, sandstone: 7, modern: 10, gothic: 11, shop: 12, dormer: 18, flood: 22 };
+  const rankMat = (mat, style, variant) => { const r = (RANK[style] ?? 0) + variant + 1; mat.polygonOffset = true; mat.polygonOffsetFactor = -0.5 * r; mat.polygonOffsetUnits = -r; return mat; };
   const matFor = (style, variant) => {
     const key = `${style}:${variant}`;
     if (!mats[key]) {
@@ -335,7 +340,7 @@ export function createArchitecture({ renderer, plasterImg, roofP, rnd }) {
       if (style === 'shop') set = texSet(CW * 2, GH, (ctx) => drawShop(ctx, plasterImg, rnd, variant));
       else if (style === 'dormer') set = texSet(256, 256, (ctx) => drawDormer(ctx, plasterImg, rnd));
       else set = texSet(CW * 2, CH * 2, (ctx) => STYLES[style][1](ctx, plasterImg, rnd, variant));
-      mats[key] = { mat: material(renderer, set), b: bucket() };
+      mats[key] = { mat: rankMat(material(renderer, set), style, variant), b: bucket() };
     }
     return mats[key];
   };
@@ -348,6 +353,7 @@ export function createArchitecture({ renderer, plasterImg, roofP, rnd }) {
       mat.emissiveMap = base.mat.map;
       mat.emissive = new THREE.Color(0xe8b48c);
       mat.emissiveIntensity = 0.24;
+      rankMat(mat, 'flood', 0);
       floodMat = { mat, b: bucket() };
       mats['gothic:flood'] = floodMat;
     }

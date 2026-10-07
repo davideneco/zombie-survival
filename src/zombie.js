@@ -150,6 +150,7 @@ export class Zombie {
     this.groanT = 2 + Math.random() * 6;
     this.yaw = 0;
     this._steer = { x: 0, z: 0 };
+    this.vault = null; this.vaultCd = 0; // enjambement d'un obstacle bas (voir _tryVault)
     this.limp = Math.random() < 0.3;
     this.runner = speed > 3.2;
     this.crawler = false;
@@ -571,6 +572,8 @@ export class Zombie {
       return;
     }
     if (this.link) { this._onLink(dt, target, world); return; }
+    if (this.vault) { this._vaultStep(dt); return; }
+    this.vaultCd -= dt;
 
     // ----- Objectif : le joueur (même étage), ou le pied de l'escalier qui mène vers lui -----
     let gx = target.pos.x, gz = target.pos.z, chase = true;
@@ -619,6 +622,7 @@ export class Zombie {
       }
       const bx = this.pos.x, bz = this.pos.z;
       const sp = this.limp ? this.speed * 0.8 : this.speed;
+      if (!visible && this.vaultCd <= 0 && !this.crawler && !this.region && this._tryVault(dirx, dirz, world, nav)) return; // le champ de flux traverse un obstacle bas : on l'enjambe
       this.pos.x += dirx * sp * dt;
       this.pos.z += dirz * sp * dt;
 
@@ -673,6 +677,38 @@ export class Zombie {
     if (this.crawler) { this._poseCrawl(this.walkT, attacking); return; }
     const lean = this.runner ? 0.5 : 0.28;
     this._pose(this.walkT, moving ? (this.runner ? 1.25 : 1) : 0.15, attacking ? 1.5 : 0.85, attacking ? lean + 0.3 : lean, attacking ? 0.4 : 0.18);
+  }
+
+  // Enjambement (zombie) : devant un obstacle enjambable (banc, caisse, barrière…) que le champ de flux traverse, si l'arrivée est libre et
+  // plus proche du joueur (walkDistance) : CONFIG.zombie.vault.time s de saut, sans collision, arme tendue comme à une fenêtre.
+  _tryVault(dirx, dirz, world, nav) {
+    const V = CONFIG.zombie.vault, col = world.collision;
+    if (!col?.findVault || !nav?.walkDistance) return false;
+    const h = col.findVault(this.pos.x, this.pos.z, dirx, dirz, V.reach, this._vh || (this._vh = {}));
+    if (!h || h.tOut - h.tIn > 1.3 || -(dirx * h.nx + dirz * h.nz) < Math.cos((V.maxAngle * Math.PI) / 180)) return false;
+    const lx = this.pos.x + dirx * (h.tOut + 0.5), lz = this.pos.z + dirz * (h.tOut + 0.5);
+    const q = this._vq || (this._vq = { x: 0, y: 0, z: 0 });
+    q.x = lx; q.y = 0; q.z = lz; world.collide(q, CONFIG.zombie.radius);
+    if (Math.hypot(q.x - lx, q.z - lz) > 0.05 || nav.isBlockedAt(lx, lz)) return false;
+    if (!(nav.walkDistance(lx, lz) < nav.walkDistance(this.pos.x, this.pos.z) - 0.3)) return false; // pas de progrès : inutile
+    this.vault = { t: 0, x0: this.pos.x, z0: this.pos.z, x1: lx, z1: lz };
+    this.attacking = false;
+    return true;
+  }
+
+  _vaultStep(dt) {
+    const v = this.vault, V = CONFIG.zombie.vault;
+    v.t += dt;
+    const u = Math.min(1, v.t / V.time), e = u * u * (3 - 2 * u);
+    this.pos.x = v.x0 + (v.x1 - v.x0) * e; this.pos.z = v.z0 + (v.z1 - v.z0) * e;
+    this.pos.y = V.arc * Math.sin(Math.PI * u);
+    this.yaw = Math.atan2(v.x1 - v.x0, v.z1 - v.z0);
+    this.group.rotation.set(0, this.yaw, 0);
+    this.walkT += dt * 6;
+    this.attacking = false;
+    if (this.crawler) this._poseCrawl(this.walkT, false);
+    else this._pose(this.walkT, 0.8, 1.6, 0.4, 0.2);
+    if (u >= 1) { this.vault = null; this.vaultCd = V.cooldown; this.pos.y = 0; this.noProgress = 0; this.stuckT = 0; }
   }
 
   // Sur un escalier : le zombie suit le chemin 3D du lien (ou va à la rencontre du joueur qui s'y trouve) et frappe sur place

@@ -1,5 +1,7 @@
 // Collisions cercle (joueur / zombie) contre des segments (murs de bâtiments,
 // côtés de caisses) et des cercles (arbres, lampadaires). Accélérées par une grille.
+const WALK_OVER = 0.3;      // un obstacle au sol de cette hauteur ou moins (palette) ne bloque pas : on marche dessus
+const VAULT_MAX_H = 1.15;   // hauteur maximale d'un obstacle enjambable (m)
 export class Collision {
   constructor(halfX, halfZ = halfX, cell = 4) {
     this.halfX = halfX;
@@ -8,6 +10,7 @@ export class Collision {
     this.segs = [];
     this.circles = [];
     this.floors = [];
+    this.vaults = [];   // obstacles enjambables : { id, h, segs | circle }
     this.grid = new Map();
     this.stamp = 0;
   }
@@ -17,13 +20,19 @@ export class Collision {
   // kind : nature de l'obstacle pour les dégâts des motos : 'wall' (architecture : façade, quai, parapet, porte payante ou
   // scellée, marche : la moto ne s'abîme pas) ou 'prop' (objet physique : voiture, mobilier, arbre, machine… : elle s'abîme).
   // addSegment = 'wall' par défaut ; addCircle et addBox = 'prop' par défaut.
-  addSegment(ax, az, bx, bz, h = Infinity, y0 = -Infinity, kind = 'wall') {
-    const s = { ax, az, bx, bz, h, y0, kind, off: false, stamp: 0 };
+  addSegment(ax, az, bx, bz, h = Infinity, y0 = -Infinity, kind = 'wall', vid = 0) {
+    const s = { ax, az, bx, bz, h, y0, kind, vid, off: false, stamp: 0 };
     this.segs.push(s);
     return s;
   }
 
-  addCircle(x, z, r, h = 4, y0 = -Infinity, kind = 'prop') { const c = { x, z, r, h, y0, kind, off: false, stamp: 0 }; this.circles.push(c); return c; }
+  // vault (v0.33.0) : obstacle que le joueur peut enjamber (Espace, voir findVault) : hauteur <= 1,15 m
+  addCircle(x, z, r, h = 4, y0 = -Infinity, kind = 'prop', vault = false) {
+    const c = { x, z, r, h, y0, kind, vid: 0, off: false, stamp: 0 };
+    if (vault) { c.vid = this.vaults.length + 1; this.vaults.push({ id: c.vid, h, circle: c }); }
+    this.circles.push(c);
+    return c;
+  }
 
   // Dalles horizontales (planchers des étages) qui arrêtent les balles : triangles [ax,az,bx,bz,cx,cz] à la hauteur y
   addFloor(y, tris) {
@@ -37,18 +46,64 @@ export class Collision {
   //  - obstacle d'étage (y0 fini) : il bloque entre son dessous et son dessus
   _blocks(it, y) {
     if (it.y0 > -Infinity) return y + 1.7 > it.y0 && y < it.h - 0.3;
+    if (it.h <= WALK_OVER) return false; // palette, câble au sol… : on marche dessus
     return it.h === Infinity || y < Math.max(it.h - 0.35, 1.35);
   }
 
   // Boîte orientée (caisses, voitures, barrières) = 4 segments
-  addBox(x, z, w, d, rot = 0, h = Infinity, y0 = -Infinity, kind = 'prop') {
+  addBox(x, z, w, d, rot = 0, h = Infinity, y0 = -Infinity, kind = 'prop', vault = false) {
     const c = Math.cos(rot), s = Math.sin(rot);
     const pts = [[-w / 2, -d / 2], [w / 2, -d / 2], [w / 2, d / 2], [-w / 2, d / 2]]
       .map(([px, pz]) => [x + px * c - pz * s, z + px * s + pz * c]);
+    const vid = vault ? this.vaults.length + 1 : 0, segs = [];
     for (let i = 0; i < 4; i++) {
       const a = pts[i], b = pts[(i + 1) % 4];
-      this.addSegment(a[0], a[1], b[0], b[1], h, y0, kind);
+      segs.push(this.addSegment(a[0], a[1], b[0], b[1], h, y0, kind, vid));
     }
+    if (vault) this.vaults.push({ id: vid, h, segs });
+  }
+
+  // Enjambement : depuis (ox, oz) en regardant dans la direction (ux, uz) unitaire, y a-t-il un obstacle enjambable à moins de reach m ?
+  // Renvoie { v, tIn, tOut, nx, nz } (distances le long du rayon ; n : normale de la face d'entrée) ou null. Les obstacles non enjambables
+  // (voiture, mur…) placés avant lui l'emportent : le rayon doit atteindre l'obstacle sans rien rencontrer d'autre.
+  findVault(ox, oz, ux, uz, reach, out = {}) {
+    if (!this.vaults.length) return null;
+    const c = this.cell, x0 = Math.floor((ox - reach) / c), x1 = Math.floor((ox + reach) / c), z0 = Math.floor((oz - reach) / c), z1 = Math.floor((oz + reach) / c);
+    let best = null;
+    this.stamp++;
+    for (let ix = x0; ix <= x1; ix++) for (let iz = z0; iz <= z1; iz++) {
+      const arr = this.grid.get(this._key(ix, iz));
+      if (!arr) continue;
+      for (const it of arr) {
+        if (!it.vid || it.stamp === this.stamp || it.off) continue;
+        it.stamp = this.stamp;
+        const v = this.vaults[it.vid - 1];
+        if (!v || v.h > VAULT_MAX_H) continue;
+        let tIn = Infinity, tOut = -Infinity, nx = 0, nz = 0;
+        if (v.circle) {
+          const cc = v.circle, fx = cc.x - ox, fz = cc.z - oz, proj = fx * ux + fz * uz, d2 = fx * fx + fz * fz - proj * proj;
+          if (d2 >= cc.r * cc.r || proj <= 0) continue;
+          const hw = Math.sqrt(cc.r * cc.r - d2);
+          tIn = proj - hw; tOut = proj + hw;
+          const px = ox + ux * tIn - cc.x, pz = oz + uz * tIn - cc.z, l = Math.hypot(px, pz) || 1; nx = px / l; nz = pz / l;
+        } else {
+          for (const sg of v.segs) {
+            const ex = sg.bx - sg.ax, ez = sg.bz - sg.az, den = ux * ez - uz * ex;
+            if (Math.abs(den) < 1e-9) continue;
+            const ax = sg.ax - ox, az = sg.az - oz, tt = (ax * ez - az * ex) / den, uu = (ax * uz - az * ux) / den;
+            if (uu < 0 || uu > 1 || tt < 0) continue;
+            if (tt < tIn) { tIn = tt; const l = Math.hypot(ex, ez) || 1; nx = ez / l; nz = -ex / l; if (nx * ux + nz * uz > 0) { nx = -nx; nz = -nz; } } // normale tournée vers l'expéditeur
+            if (tt > tOut) tOut = tt;
+          }
+          if (tIn === Infinity) continue;
+          if (tOut - tIn < 0.05) tOut = tIn + 0.05;
+        }
+        if (tIn > reach || tIn >= (best ? best.tIn : Infinity)) continue;
+        best = { v, tIn, tOut, nx, nz };
+      }
+    }
+    if (!best) return null;
+    return Object.assign(out, best);
   }
 
   _key(ix, iz) { return ix * 4096 + iz; }

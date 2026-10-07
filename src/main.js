@@ -20,6 +20,7 @@ import { installLauncher } from './launcher.js';
 import { makeDisplay } from './weaponDisplay.js';
 import { installUi } from './ui.js';
 import { installDebugMenu } from './debugMenu.js';
+import { installUnstick } from './unstick.js';
 
 document.getElementById('version').textContent = __GAME_VERSION__;
 // Version du jeu (« v0.27.0 », sans le commit ni la date) : jointe au message `join`, et comparée à celle de l'hôte dans `sync`.
@@ -1010,6 +1011,7 @@ const game = {
       pap: p.curW.pap ? 1 : 0,
       rl: p.curW.reloading ? 1 : 0,
       ads: p.aiming ? 1 : 0,
+      vt: p.vault ? Math.round(Math.min(1, p.vault.t / p.vault.dur) * 100) / 100 : 0, // progression de l'enjambement (animation des coéquipiers)
       mc: p.mc,                                                     // coups de couteau donnés (les coéquipiers animent leur avatar)
       bo: p.downed && !p.dead ? Math.ceil(p.bleedout) : 0,         // secondes avant la mort (à terre)
       rv: this.reviveTarget ? this.reviveTarget.id : null,          // coéquipier que je suis en train de réanimer
@@ -1078,6 +1080,7 @@ const game = {
     this.player.active = this.playing;
     this.updateVehicles(dt);
     p.update(dt, this.time);
+    this.unstick?.update(dt);
 
     // Mise à jour des coéquipiers
     RemotePlayer.tick(dt);
@@ -1327,6 +1330,9 @@ const game = {
       const to = here === d.a ? d.b : here === d.b ? d.a : d.toZone; // la zone de l'autre côté de la barrière
       promptText = `[E] Ouvrir la porte vers ${world.zoneNames[to]} (${d.price} pts)`;
     }
+    if (!promptText && p.vaultReady && !p.vault) promptText = '[Espace] Enjamber';
+    const unstickPrompt = this.unstick?.prompt();
+    if (unstickPrompt && !p.vehicle) promptText = unstickPrompt; // coincé : l'invite de déblocage passe avant les autres
     hud.prompt(promptText);
   },
 };
@@ -1340,6 +1346,7 @@ installFinale(game, { world, scene, hud, sfx, fx });
 installVehicles(game, { world, scene, hud, sfx });
 installLauncher(game, { world, scene, fx });
 installDebugMenu(game, { world, hud, sfx });
+installUnstick(game, { world, hud, sfx });
 game.initVehicles();
 game.player.setCharacter(charOf(game.charPref));
 

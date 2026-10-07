@@ -9,6 +9,7 @@ import { buildSpire } from './spire.js';
 
 export const Y = { R2: 14.5, R3: 22.5, W2: 44, PLAT: 67.5 };
 const DEG = Math.PI / 180;
+const DECK_LIFT = 0.02; // les dalles sont dessinées 2 cm au-dessus de leur surface praticable : plus de z-fighting avec la voûte du dessous et les sommets de murs
 
 export function buildUpper(ctx) {
   const { scene, plan, collision, lightSources, mats, mesher, levels, ground } = ctx;
@@ -29,7 +30,7 @@ export function buildUpper(ctx) {
   const slab = (region, polyST, y, holesST = [], mat = mats.deck) => {
     const poly = polyST.map(([s, t]) => W(s, t)), holes = holesST.map((h) => h.map(([s, t]) => W(s, t)));
     const tris = levels.addPoly(region, poly, y, holes);
-    mesher.flat(mat, poly, y, { holes, uvScale: 4 });
+    mesher.flat(mat, poly, y + DECK_LIFT, { holes, uvScale: 4 });
     collision.addFloor(y, tris);
     return tris;
   };
@@ -37,7 +38,7 @@ export function buildUpper(ctx) {
   const pad = (region, polyST, y) => {
     const poly = polyST.map(([s, t]) => W(s, t));
     const tris = levels.addPoly(region, poly, y);
-    mesher.flat(mats.deck, poly, y, { uvScale: 4 });
+    mesher.flat(mats.deck, poly, y + DECK_LIFT, { uvScale: 4 });
     collision.addFloor(y, tris);
   };
   const ironBoxes = [];
@@ -145,7 +146,7 @@ export function buildUpper(ctx) {
       for (let k = 0; k <= 6; k++) poly.push(polar(c, r0, ph - A + (2 * A * k) / 6));
       for (let k = 6; k >= 0; k--) poly.push(polar(c, r1, ph - A + (2 * A * k) / 6));
       const tris = levels.addPoly(region, poly, y);
-      mesher.flat(mats.deck, poly, y, { uvScale: 4 });
+      mesher.flat(mats.deck, poly, y + DECK_LIFT, { uvScale: 4 });
       collision.addFloor(y, tris);
     };
     for (const e of exits) padAt(e.y, e.region);
@@ -157,7 +158,7 @@ export function buildUpper(ctx) {
         for (let k = 0; k <= 8; k++) poly.push(polar(c, rIn + 0.1, ph - dir * 4 + (dir * 70 * k) / 8));
         for (let k = 8; k >= 0; k--) poly.push(polar(c, rOut + 0.05, ph - dir * 4 + (dir * 70 * k) / 8));
         const tris = levels.addPoly(last.region, poly, top);
-        mesher.flat(mats.deck, poly, top, { uvScale: 4 });
+        mesher.flat(mats.deck, poly, top + DECK_LIFT, { uvScale: 4 });
         collision.addFloor(top, tris);
         // dessous du palier (vu depuis le tour inférieur)
         mesher.flat(mats.stone, poly, top - 0.3, { uvScale: 4, up: false });

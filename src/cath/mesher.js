@@ -133,8 +133,10 @@ function wallMaterial(kind, H, y0 = 0) {
 // Tous les matériaux de l'intérieur (créés une fois)
 export function makeMaterials() {
   const m = {
-    stone: new THREE.MeshStandardMaterial({ color: 0xa87c6a, roughness: 0.85, side: THREE.DoubleSide }),
-    stoneDark: new THREE.MeshStandardMaterial({ color: 0x6a5048, roughness: 0.9, side: THREE.DoubleSide }),
+    // pierre : poussée vers l'arrière (polygonOffset positif) : les faces de dessous des socles, coplanaires avec le sol de la ville, et les
+    // sommets de murs sous un plancher ne se disputent plus le pixel ; stoneDark l'emporte sur stone, la dalle (deck) sur les deux
+    stone: new THREE.MeshStandardMaterial({ color: 0xa87c6a, roughness: 0.85, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: 2, polygonOffsetUnits: 2 }),
+    stoneDark: new THREE.MeshStandardMaterial({ color: 0x6a5048, roughness: 0.9, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 }),
     gold: new THREE.MeshStandardMaterial({ color: 0xd4a640, roughness: 0.3, metalness: 0.9, emissive: 0x3a2808 }),
     wood: new THREE.MeshStandardMaterial({ color: 0x4a2e1c, roughness: 0.75 }),
     iron: new THREE.MeshStandardMaterial({ color: 0x2c2c30, roughness: 0.5, metalness: 0.7 }),

@@ -123,6 +123,7 @@ export class RemotePlayer {
     this.downed = !!s.downed;
     this.dead = !!s.dead;
     if (s.mc != null) { if (this.mc != null && s.mc !== this.mc && !this.downed) this.avatar.stab(); this.mc = s.mc; } // coup de couteau
+    this.vt = +s.vt || 0;                // progression de l'enjambement (0 : à plat)
     this.bo = s.bo | 0;                  // secondes avant la mort (à terre)
     this.rv = s.rv ?? null;              // identifiant du joueur qu'il est en train de réanimer
     this.rvl = +s.rvl || 0;              // secondes restantes de cette réanimation
@@ -180,6 +181,7 @@ export class RemotePlayer {
     // à terre : allongé sur le dos
     this.group.rotation.x += ((isDown ? -Math.PI / 2 : 0) - this.group.rotation.x) * k;
     this.group.position.y += isDown ? 0.25 : 0;
+    if (this.vt > 0) this.group.position.y += 0.55 * Math.sin(Math.PI * Math.min(1, this.vt)); // enjambement : l'avatar passe par-dessus
     this.tag.position.y = isDown ? 0.9 : 2.2;
     this.tag.visible = true;
     this.updateMarks(dt, view);

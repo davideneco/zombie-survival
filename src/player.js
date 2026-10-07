@@ -93,6 +93,7 @@ export class Player {
     this.airT = 0; this.peakY = 0; this.jumpSprint = false; this.flopCd = 0; // PHD Flopper (plongeon)
     this.vehicle = null; // { v, seat } quand on est sur une moto
     this.meleeT = -1; this.meleeHit = true; this.nextMelee = 0; this.lunge = null; // couteau (voir melee)
+    this.vault = null; this.vaultCd = 0; this.vaultReady = false; // enjambement (voir tryVault)
     this.ride?.reset();
 
     // Inventaire d'armes
@@ -397,6 +398,7 @@ export class Player {
     } else {
       let mx = (K.KeyD || K.ArrowRight ? 1 : 0) - (K.KeyA || K.ArrowLeft ? 1 : 0);
       let mz = (K.KeyW || K.ArrowUp ? 1 : 0) - (K.KeyS || K.ArrowDown ? 1 : 0);
+      if (this.vault) { mx = 0; mz = 0; } // enjambement en cours : le chemin est imposé
       moving = (mx !== 0 || mz !== 0) && !this.dead;
       sprinting = !this.downed && !!K.ShiftLeft && mz > 0 && !this.aiming;
       const stamin = this.perks.staminup ? 1.3 : 1;
@@ -417,7 +419,12 @@ export class Player {
       if (this.world.floorAt) this.world.floorAt(this.pos.x, this.pos.z, this.pos.y, fl); else { fl.y = 0; fl.region = 0; }
       const ground = fl.y;
       onGround = this.pos.y <= ground + 0.02 && this.vy <= 0.5;
-      if (K.Space && onGround && !this.downed) { this.vy = P.jumpSpeed; this.jumpSprint = sprinting; } // saut lancé en sprint : plongeon possible (PHD Flopper)
+      this.vaultCd = Math.max(0, this.vaultCd - dt);
+      this.vaultReady = onGround && !this.vault && !this.downed && !this.dead && !this.locked && this.vaultCd <= 0 && !!this.checkVault();
+      if (K.Space && onGround && !this.downed && !this.vault) {
+        if (this.vaultReady && this.startVault()) { /* enjambement : pas de saut */ }
+        else { this.vy = P.jumpSpeed; this.jumpSprint = sprinting; } // saut lancé en sprint : plongeon possible (PHD Flopper)
+      }
       this.vy -= P.gravity * dt;
       this.pos.y += this.vy * dt;
       if (this.pos.y <= ground) { this.pos.y = ground; this.vy = 0; }
@@ -432,7 +439,8 @@ export class Player {
         this.airT = 0; this.peakY = ground; this.jumpSprint = false;
       }
 
-      this.world.collide(this.pos, P.radius);
+      if (this.vault) this.stepVault(dt); // chemin imposé : pas de collision (on passe par-dessus l'obstacle)
+      else this.world.collide(this.pos, P.radius);
     }
 
     this.flopCd = Math.max(0, this.flopCd - dt);
@@ -468,7 +476,7 @@ export class Player {
         w.reserve -= take;
         w.reloading = false;
       }
-    } else if (!this.locked && !(veh && veh.seat === 0)) {
+    } else if (!this.locked && !this.vault && !(veh && veh.seat === 0)) {
       // Jusqu'à MAX_SHOTS_PER_FRAME tirs par image : le temps restant d'un tir est reporté au suivant (voir shoot),
       // donc la cadence réelle égale fireRate même quand une image dure plus qu'une période de tir.
       for (let n = 0; n < MAX_SHOTS_PER_FRAME && this.mouseDown && now >= this.nextShot; n++) {
@@ -490,7 +498,7 @@ export class Player {
     this.recoil *= Math.max(0, 1 - dt * 8);
     this.bobT += dt * (sprinting ? 12 : 8) * (moving && onGround ? 1 : 0);
     const bob = moving && onGround ? Math.sin(this.bobT) * (sprinting ? 0.06 : 0.035) : 0;
-    const eyeH = this.downed ? 0.55 : P.eye;
+    const eyeH = (this.downed ? 0.55 : P.eye) + (this.vault ? CONFIG.vault.camLift * Math.sin(Math.PI * Math.min(1, this.vault.t / this.vault.dur)) : 0);
     let sh = this.game.shake || 0;
     let ex = this.pos.x, ey = this.pos.y + eyeH + bob, ez = this.pos.z;
     if (veh) {
@@ -519,6 +527,7 @@ export class Player {
     if (sprinting) { rx += 0.25; x -= 0.05; y -= 0.05; }
     this.vm.position.set(x + (moving ? Math.sin(this.bobT * 0.5) * 0.008 : 0), y, z + this.kick * 0.07);
     this.vm.rotation.set(rx, sprinting ? 0.35 : 0, 0);
+    if (this.vault) { const lo = Math.sin(Math.PI * Math.min(1, this.vault.t / this.vault.dur)); this.vm.position.y -= 0.16 * lo; this.vm.rotation.x += 0.5 * lo; } // arme baissée
     this.animateKnife(dt);
 
     // muzzle flash
@@ -526,6 +535,50 @@ export class Player {
       this.flashT -= dt;
       if (this.flashT <= 0) { this.flash.visible = false; this.flashLight.intensity = 0; }
     }
+  }
+
+  // ------------------------------------------------------------- Enjambement (Espace devant un obstacle de moins de 1,15 m)
+  // Obstacle enjambable (Collision.findVault) à moins de reach m, de face (moins de maxAngle degrés), profondeur <= maxDepth ; case d'arrivée
+  // libre, à la même hauteur (+- heightTol), dans une zone OUVERTE (jamais de contournement d'une porte payante). Renvoie { lx, lz } ou null.
+  checkVault() {
+    const V = CONFIG.vault, w = this.world, col = w.collision;
+    if (!col || !col.findVault) return null;
+    const ux = -Math.sin(this.yaw), uz = -Math.cos(this.yaw);
+    const h = col.findVault(this.pos.x, this.pos.z, ux, uz, V.reach, this._vh || (this._vh = {}));
+    if (!h) return null;
+    if (-(ux * h.nx + uz * h.nz) < Math.cos((V.maxAngle * Math.PI) / 180)) return null;
+    if (h.tOut - h.tIn > V.maxDepth) return null;
+    const oy = this.pos.y + 0.5;
+    if (w.rayHit && w.rayHit(this.pos.x, oy, this.pos.z, ux, 0, uz, h.tIn - 0.03) < h.tIn - 0.12) return null; // autre chose avant l'obstacle
+    const lx = this.pos.x + ux * (h.tOut + V.clearance), lz = this.pos.z + uz * (h.tOut + V.clearance);
+    if (w.rayHit && w.rayHit(this.pos.x + ux * (h.tOut + 0.03), oy, this.pos.z + uz * (h.tOut + 0.03), ux, 0, uz, V.clearance + 0.02) < V.clearance - 0.02) return null; // mur juste derrière
+    const q = this._vq || (this._vq = { x: 0, y: 0, z: 0 });
+    q.x = lx; q.y = this.pos.y; q.z = lz;
+    w.collide(q, CONFIG.player.radius);
+    if (Math.hypot(q.x - lx, q.z - lz) > 0.05) return null;               // la case d'arrivée est encombrée
+    if (w.nav?.outside?.(lx, lz)) return null;                              // eau, hors île
+    const fl = this._vfl || (this._vfl = { y: 0, region: 0 });
+    if (w.floorAt) { w.floorAt(lx, lz, this.pos.y + 0.1, fl); if (fl.region !== (this.region || 0) || Math.abs(fl.y - this.pos.y) > V.heightTol) return null; }
+    if (w.zoneOf && w.isZoneOpen) { const zi = w.zoneOf(lx, lz); if (zi < 0 || !w.isZoneOpen(zi)) return null; } // zone fermée : refusé
+    return { lx, lz, h };
+  }
+
+  startVault() {
+    const V = CONFIG.vault, t = this.checkVault();
+    if (!t) return false;
+    this.vault = { t: 0, dur: V.time, x0: this.pos.x, z0: this.pos.z, x1: t.lx, z1: t.lz, y: this.pos.y };
+    this.vel.set(0, 0, 0); this.vy = 0; this.jumpSprint = false; this.aiming = false; this.mouseDown = false;
+    this.game.sfx.vault?.();
+    return true;
+  }
+
+  stepVault(dt) {
+    const v = this.vault;
+    v.t += dt;
+    const u = Math.min(1, v.t / v.dur), e = u * u * (3 - 2 * u);
+    this.pos.x = v.x0 + (v.x1 - v.x0) * e; this.pos.z = v.z0 + (v.z1 - v.z0) * e; this.pos.y = v.y;
+    this.vel.set(0, 0, 0); this.vy = 0; this.airT = 0; this.wasGrounded = true;
+    if (u >= 1) { this.vault = null; this.vaultCd = CONFIG.vault.cooldown; this.world.collide(this.pos, CONFIG.player.radius); }
   }
 
   // ------------------------------------------------------------- Couteau
@@ -555,7 +608,7 @@ export class Player {
   // Lance un coup de couteau (touche V, ou clic gauche chargeur ET réserve vides). Renvoie false si impossible (recharge du coup, à terre…).
   melee(now) {
     const K = CONFIG.knife;
-    if (this.downed || this.dead || this.vehicle || this.locked || this.meleeT >= 0 || now < this.nextMelee || !this.game.started) return false;
+    if (this.downed || this.dead || this.vehicle || this.locked || this.vault || this.meleeT >= 0 || now < this.nextMelee || !this.game.started) return false;
     this.nextMelee = now + K.cooldown;
     this.meleeT = 0; this.meleeHit = false;
     this.mc = (this.mc + 1) & 255;

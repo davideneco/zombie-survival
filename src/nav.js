@@ -26,6 +26,7 @@ export class NavGrid {
     this.segFilter = null; // (segment | cercle) => true si l'obstacle compte pour cette grille (obstacles de l'étage)
     this.outside = null; // (x, z) => true si hors de la zone jouable
     this.carve = null;   // (blocked) => libère les cases des passages sous immeubles
+    this.vaultCost = 40; // coût de traversée d'une case enjambable dans le champ de flux (10 = case libre) : CONFIG.zombie.vault.cost
   }
 
   // ---- conversions ----
@@ -37,11 +38,38 @@ export class NavGrid {
   worldZ(iz) { return this.oz + (iz + 0.5) * this.cell; }
 
   // À appeler quand l'état des obstacles change (porte ouverte) : force le recalcul du champ.
-  invalidate() { this.lastTargetKey = null; }
+  invalidate() { this.lastTargetKey = null; this.version = (this.version || 0) + 1; }
+
+  // Composantes connexes des cases libres (8 voisins, sans coin coupé) : { labels: Int32Array (0 = case bloquée), sizes: [0, n1, n2…], version }.
+  // Mémorisées jusqu'au prochain invalidate() (porte ouverte). Sert à repérer les poches fermées (outil stuck-scan, bouton « se débloquer »).
+  components() {
+    if (this._comp && this._comp.version === (this.version || 0)) return this._comp;
+    const { nx, nz, blocked } = this, labels = new Int32Array(nx * nz), sizes = [0], stack = new Int32Array(nx * nz);
+    for (let start = 0; start < labels.length; start++) {
+      if (blocked[start] || labels[start]) continue;
+      const id = sizes.length; let n = 0, sp = 0;
+      labels[start] = id; stack[sp++] = start;
+      while (sp) {
+        const i = stack[--sp]; n++;
+        const ix = i % nx, iz = (i / nx) | 0;
+        for (let k = 0; k < 8; k++) {
+          const dx = NEIGHBORS[k][0], dz = NEIGHBORS[k][1], jx = ix + dx, jz = iz + dz;
+          if (jx < 0 || jz < 0 || jx >= nx || jz >= nz) continue;
+          const j = jz * nx + jx;
+          if (blocked[j] || labels[j]) continue;
+          if (dx !== 0 && dz !== 0 && (blocked[iz * nx + jx] || blocked[jz * nx + ix])) continue;
+          labels[j] = id; stack[sp++] = j;
+        }
+      }
+      sizes.push(n);
+    }
+    this._comp = { labels, sizes, version: this.version || 0 };
+    return this._comp;
+  }
 
   isBlockedAt(x, z) {
     const ix = this.cx(x), iz = this.cz(z);
-    return !this.inside(ix, iz) || this.blocked[this.idx(ix, iz)] === 1;
+    return !this.inside(ix, iz) || this.blocked[this.idx(ix, iz)] !== 0; // 1 = bloquée, 2 = obstacle enjambable (bloquée pour tout sauf le champ de flux)
   }
 
   // ---- construction de la grille d'obstacles ----
@@ -86,8 +114,14 @@ export class NavGrid {
       }
     };
     const keep = this.segFilter;
-    for (const s of this.col.segs) if (!s.off && (!keep || keep(s))) mark(s.ax, s.az, s.bx, s.bz, margin);
-    for (const c of this.col.circles) if (!c.off && (!keep || keep(c))) mark(c.x, c.z, c.x, c.z, c.r + margin);
+    for (const s of this.col.segs) if (!s.off && !s.vid && (!keep || keep(s))) mark(s.ax, s.az, s.bx, s.bz, margin);
+    for (const c of this.col.circles) if (!c.off && !c.vid && (!keep || keep(c))) mark(c.x, c.z, c.x, c.z, c.r + margin);
+    // obstacles enjambables (banc, caisse, barrière…) : cases de valeur 2 (« franchissables ») là où aucun autre obstacle ne bloque ; le champ de
+    // flux les traverse à un coût de vaultCost (au lieu de 10), les zombies les enjambent (zombie.js) ; ailleurs elles comptent comme bloquées
+    const b1 = b.slice();
+    for (const s of this.col.segs) if (!s.off && s.vid && (!keep || keep(s))) mark(s.ax, s.az, s.bx, s.bz, margin);
+    for (const c of this.col.circles) if (!c.off && c.vid && (!keep || keep(c))) mark(c.x, c.z, c.x, c.z, c.r + margin);
+    for (let i = 0; i < b.length; i++) if (b[i] === 1 && b1[i] === 0) b[i] = 2;
 
     // 3) bord de la zone de jeu
     const m = Math.ceil(margin / cell);
@@ -154,9 +188,9 @@ export class NavGrid {
           const jx = ix + dx, jz = iz + dz;
           if (jx < 0 || jz < 0 || jx >= nx || jz >= nz) continue;
           const j = jz * nx + jx;
-          if (blocked[j]) continue;
+          if (blocked[j] === 1) continue;
           if (dx !== 0 && dz !== 0 && (blocked[iz * nx + jx] || blocked[jz * nx + ix])) continue; // pas de coin coupé
-          const nd = d + c;
+          const nd = d + (blocked[j] === 2 ? this.vaultCost * (c > 10 ? 1.4 : 1) : c);
           if (nd < dist[j]) {
             if (dist[j] >= INF) touched.push(j);
             dist[j] = nd;
@@ -206,9 +240,9 @@ export class NavGrid {
           const jx = ix + dx, jz = iz + dz;
           if (jx < 0 || jz < 0 || jx >= nx || jz >= nz) continue;
           const j = jz * nx + jx;
-          if (blocked[j]) continue;
+          if (blocked[j] === 1) continue;
           if (dx !== 0 && dz !== 0 && (blocked[iz * nx + jx] || blocked[jz * nx + ix])) continue;
-          const nd = d + NB[k][2];
+          const nd = d + (blocked[j] === 2 ? this.vaultCost * (NB[k][2] > 10 ? 1.4 : 1) : NB[k][2]);
           if (nd < dist[j]) {
             if (dist[j] >= INF) touched.push(j);
             dist[j] = nd;

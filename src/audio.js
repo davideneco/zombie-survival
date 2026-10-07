@@ -299,6 +299,13 @@ export class Sfx {
     }
   }
 
+  vault() { // enjambement : froissement de tissu, appui de la main, réception
+    if (!this.ctx) return;
+    this._noise(0.14, 0.22, 1400, 'bandpass', { f1: 500, q: 0.8, atk: 0.03 });
+    this._tone('sine', 120, 60, 0.08, 0.3, { at: 0.04 });
+    this._tone('sine', 150, 55, 0.1, 0.35, { at: 0.42 });
+  }
+
   // Couteau : 'swing' (souffle de la lame), 'flesh' (chair : choc mou et humide), 'metal' (armure : deux notes métalliques)
   knife(kind = 'swing', v = 1) {
     if (!this.ctx || v < 0.03) return;
