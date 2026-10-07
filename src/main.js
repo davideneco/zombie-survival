@@ -639,6 +639,7 @@ const game = {
       if (z.dead || z.spawnT > 0) continue;
       const d = Math.hypot(z.pos.x - pos.x, z.pos.z - pos.z);
       if (d > radius) continue;
+      if (Math.abs(z.pos.y + 1 - pos.y) > 2.5) continue; // pas à travers le plafond ou le plancher (z.pos.y = pieds, +1 = torse)
       const dmg = this.buffs.instaKill > 0 && !z.boss ? 999999 : damage * Math.pow(1 - d / radius, 0.6);
       const killed = z.damage(dmg, false);
       fx.blood(z.pos.x, 1, z.pos.z, killed);
@@ -1132,7 +1133,7 @@ const game = {
 sfx.setVolume(settings.volume);
 sfx.setMusicVolume(settings.music);
 game.player = new Player(camera, scene, world, game);
-hud.setWeapon(game.player.curCfg.name);
+hud.setWeapon(game.player.curCfg.name, game.player.curCfg.caliber);
 installMachineFx(game, { world, hud, sfx, fx });
 installFinale(game, { world, scene, hud, sfx, fx });
 installVehicles(game, { world, scene, hud, sfx });

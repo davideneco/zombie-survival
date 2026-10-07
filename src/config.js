@@ -43,35 +43,60 @@ export const CONFIG = {
     startPoints: 500,
   },
 
-  // Armes. type : 'auto' (rafale tant qu'on tire), 'semi' (une balle par clic), 'shotgun' (plombs).
+  // Armes. type : 'auto' (rafale tant qu'on tire), 'semi' (une balle par clic ; fireRate = plafond), 'shotgun' (plombs).
   // cat : catégorie (pistol, ar, smg, mg, sniper, shotgun, special). pierce : zombies traversés. adsFov : lunette.
+  // cal : clé du calibre (voir `calibers` plus bas) ; mod : coefficient sur les dégâts de base du calibre (arme plus ou moins
+  // puissante que la moyenne de son calibre). damage / headMult / pierce / falloff* : surcharges facultatives, qui l'emportent
+  // sur le calibre. Les dégâts sont ceux d'un tir de près (voir falloffMult) ; pour le fusil à pompe, par plomb.
   weapons: {
     // ---- pistolets
-    m1911: { id: 'm1911', cat: 'pistol', name: 'COLT M1911', caliber: '.45 ACP', type: 'semi', damage: 48, headMult: 2.6, magSize: 7, startReserve: 42, maxReserve: 84, fireRate: 5.5, reloadTime: 1.5, spread: 0.01, range: 50, price: 400, ammoPrice: 150 },
-    arex: { id: 'arex', cat: 'pistol', name: 'AREX ZERO 1', caliber: '9 mm', type: 'semi', damage: 34, headMult: 2.4, magSize: 17, startReserve: 68, maxReserve: 136, fireRate: 7.5, reloadTime: 1.4, spread: 0.009, range: 55, price: 700, ammoPrice: 250 },
-    deagle: { id: 'deagle', cat: 'pistol', name: 'DESERT EAGLE', caliber: '.50 AE', type: 'semi', damage: 165, headMult: 3, magSize: 7, startReserve: 35, maxReserve: 56, fireRate: 2.4, reloadTime: 1.9, spread: 0.011, range: 70, pierce: 2, price: 1500, ammoPrice: 600 },
-    magnum: { id: 'magnum', cat: 'pistol', name: 'COLT PYTHON .357', caliber: '.357 Magnum', type: 'semi', damage: 190, headMult: 3, magSize: 6, startReserve: 48, maxReserve: 72, fireRate: 3.2, reloadTime: 2.2, spread: 0.006, range: 80, pierce: 2, boxOnly: true, ammoPrice: 500 },
+    m1911: { id: 'm1911', cat: 'pistol', name: 'COLT M1911', cal: '45acp', type: 'semi', magSize: 7, startReserve: 42, maxReserve: 84, fireRate: 5.5, reloadTime: 1.5, spread: 0.01, range: 50, price: 400, ammoPrice: 150 },
+    arex: { id: 'arex', cat: 'pistol', name: 'AREX ZERO 1', cal: '9mm', mod: 1.1, type: 'semi', magSize: 17, startReserve: 68, maxReserve: 136, fireRate: 7.5, reloadTime: 1.4, spread: 0.009, range: 55, price: 700, ammoPrice: 250 },
+    deagle: { id: 'deagle', cat: 'pistol', name: 'DESERT EAGLE', cal: '50ae', type: 'semi', magSize: 7, startReserve: 35, maxReserve: 56, fireRate: 2.4, reloadTime: 1.9, spread: 0.011, range: 70, price: 1500, ammoPrice: 600 },
+    magnum: { id: 'magnum', cat: 'pistol', name: 'COLT PYTHON .357', cal: '357', mod: 1.1, type: 'semi', magSize: 6, startReserve: 48, maxReserve: 72, fireRate: 3.2, reloadTime: 2.2, spread: 0.006, range: 80, boxOnly: true, ammoPrice: 500 },
     // ---- fusils d'assaut
-    rifle: { id: 'rifle', cat: 'ar', name: 'M4A1', caliber: '5,56 mm', type: 'auto', damage: 36, headMult: 2.5, magSize: 30, startReserve: 120, maxReserve: 180, fireRate: 9.5, reloadTime: 1.8, spread: 0.012, range: 90, price: 1200, ammoPrice: 300 },
-    ak47: { id: 'ak47', cat: 'ar', name: 'AK-47', caliber: '7,62×39 mm', type: 'auto', damage: 46, headMult: 2.3, magSize: 30, startReserve: 120, maxReserve: 210, fireRate: 8.5, reloadTime: 2.4, spread: 0.017, range: 90, price: 1600, ammoPrice: 600 },
-    famas: { id: 'famas', cat: 'ar', name: 'FAMAS F1', caliber: '5,56 mm', type: 'auto', damage: 34, headMult: 2.4, magSize: 25, startReserve: 125, maxReserve: 225, fireRate: 15, reloadTime: 2.2, spread: 0.014, range: 85, price: 1300, ammoPrice: 500 },
-    scar: { id: 'scar', cat: 'ar', name: 'SCAR-H', caliber: '7,62×51 mm', type: 'auto', damage: 58, headMult: 2.4, magSize: 20, startReserve: 100, maxReserve: 180, fireRate: 7.5, reloadTime: 2.3, spread: 0.012, range: 100, pierce: 2, price: 2200, ammoPrice: 800 },
+    rifle: { id: 'rifle', cat: 'ar', name: 'M4A1', cal: '556', mod: 0.9, type: 'auto', magSize: 30, startReserve: 120, maxReserve: 180, fireRate: 12.5, reloadTime: 1.8, spread: 0.012, range: 90, price: 1200, ammoPrice: 300 },
+    ak47: { id: 'ak47', cat: 'ar', name: 'AK-47', cal: '762x39', type: 'auto', magSize: 30, startReserve: 120, maxReserve: 210, fireRate: 10, reloadTime: 2.4, spread: 0.017, range: 90, price: 1600, ammoPrice: 600 },
+    famas: { id: 'famas', cat: 'ar', name: 'FAMAS F1', cal: '556', type: 'auto', magSize: 25, startReserve: 125, maxReserve: 225, fireRate: 15, reloadTime: 2.2, spread: 0.014, range: 85, price: 1300, ammoPrice: 500 },
+    scar: { id: 'scar', cat: 'ar', name: 'SCAR-H', cal: '762x51', type: 'auto', magSize: 20, startReserve: 100, maxReserve: 180, fireRate: 10, reloadTime: 2.3, spread: 0.018, range: 100, price: 2500, ammoPrice: 800 },
     // ---- pistolets-mitrailleurs
-    smg: { id: 'smg', cat: 'smg', name: 'MP40', caliber: '9 mm', type: 'auto', damage: 24, headMult: 2.2, magSize: 32, startReserve: 128, maxReserve: 224, fireRate: 9.5, reloadTime: 1.5, spread: 0.022, range: 65, price: 1000, ammoPrice: 500 },
-    mp5: { id: 'mp5', cat: 'smg', name: 'MP5', caliber: '9 mm', type: 'auto', damage: 26, headMult: 2.2, magSize: 30, startReserve: 150, maxReserve: 270, fireRate: 13, reloadTime: 1.8, spread: 0.017, range: 65, price: 1200, ammoPrice: 500 },
-    p90: { id: 'p90', cat: 'smg', name: 'FN P90', caliber: '5,7×28 mm', type: 'auto', damage: 22, headMult: 2, magSize: 50, startReserve: 200, maxReserve: 350, fireRate: 15, reloadTime: 2.6, spread: 0.02, range: 70, pierce: 2, price: 1800, ammoPrice: 700 },
+    smg: { id: 'smg', cat: 'smg', name: 'MP40', cal: '9mm', mod: 1.15, type: 'auto', magSize: 32, startReserve: 128, maxReserve: 224, fireRate: 8.3, reloadTime: 1.5, spread: 0.022, range: 65, price: 800, ammoPrice: 500 },
+    mp5: { id: 'mp5', cat: 'smg', name: 'MP5', cal: '9mm', type: 'auto', magSize: 30, startReserve: 150, maxReserve: 270, fireRate: 13, reloadTime: 1.8, spread: 0.017, range: 65, price: 1200, ammoPrice: 500 },
+    p90: { id: 'p90', cat: 'smg', name: 'FN P90', cal: '57x28', type: 'auto', magSize: 50, startReserve: 200, maxReserve: 350, fireRate: 15, reloadTime: 2.6, spread: 0.02, range: 70, price: 1800, ammoPrice: 700 },
     // ---- mitrailleuses
-    lmg: { id: 'lmg', cat: 'mg', name: 'RPK', caliber: '7,62×39 mm', type: 'auto', damage: 44, headMult: 2, magSize: 75, startReserve: 300, maxReserve: 450, fireRate: 10.5, reloadTime: 3.6, spread: 0.028, range: 90, price: 2500, ammoPrice: 1000 },
-    m249: { id: 'm249', cat: 'mg', name: 'M249 SAW', caliber: '5,56 mm', type: 'auto', damage: 40, headMult: 2, magSize: 100, startReserve: 300, maxReserve: 500, fireRate: 12.5, reloadTime: 4.2, spread: 0.032, range: 90, price: 3000, ammoPrice: 1200 },
-    mg42: { id: 'mg42', cat: 'mg', name: 'MG42', caliber: '7,92×57 mm', type: 'auto', damage: 46, headMult: 2, magSize: 50, startReserve: 250, maxReserve: 450, fireRate: 19, reloadTime: 4.0, spread: 0.04, range: 90, boxOnly: true, ammoPrice: 1200 },
-    pkm: { id: 'pkm', cat: 'mg', name: 'PKM', caliber: '7,62×54R', type: 'auto', damage: 55, headMult: 2, magSize: 100, startReserve: 300, maxReserve: 500, fireRate: 10.5, reloadTime: 4.8, spread: 0.03, range: 100, pierce: 2, price: 3200, ammoPrice: 1300 },
+    lmg: { id: 'lmg', cat: 'mg', name: 'RPK', cal: '762x39', mod: 0.95, headMult: 2, type: 'auto', magSize: 75, startReserve: 300, maxReserve: 450, fireRate: 10, reloadTime: 3.6, spread: 0.028, range: 90, price: 2500, ammoPrice: 1000 },
+    m249: { id: 'm249', cat: 'mg', name: 'M249 SAW', cal: '556', headMult: 2, type: 'auto', magSize: 100, startReserve: 300, maxReserve: 500, fireRate: 12.5, reloadTime: 4.2, spread: 0.032, range: 90, price: 3000, ammoPrice: 1200 },
+    mg42: { id: 'mg42', cat: 'mg', name: 'MG42', cal: '792x57', mod: 0.8, headMult: 2, type: 'auto', magSize: 50, startReserve: 250, maxReserve: 450, fireRate: 20, reloadTime: 5, spread: 0.04, range: 90, boxOnly: true, ammoPrice: 1200 },
+    pkm: { id: 'pkm', cat: 'mg', name: 'PKM', cal: '762x54r', mod: 0.8, headMult: 2, type: 'auto', magSize: 100, startReserve: 300, maxReserve: 500, fireRate: 10.5, reloadTime: 4.8, spread: 0.03, range: 100, price: 3200, ammoPrice: 1300 },
     // ---- fusils de précision
-    sniper: { id: 'sniper', cat: 'sniper', name: 'L96A1', caliber: '7,62×51 mm', type: 'semi', damage: 340, headMult: 3.5, magSize: 5, startReserve: 30, maxReserve: 45, fireRate: 1.1, reloadTime: 2.8, spread: 0.0015, range: 200, pierce: 4, adsFov: 25, price: 1750, ammoPrice: 700 },
-    svd: { id: 'svd', cat: 'sniper', name: 'DRAGUNOV SVD', caliber: '7,62×54R', type: 'semi', damage: 230, headMult: 3, magSize: 10, startReserve: 40, maxReserve: 70, fireRate: 3, reloadTime: 2.6, spread: 0.004, range: 180, pierce: 3, adsFov: 28, price: 2000, ammoPrice: 800 },
-    barrett: { id: 'barrett', cat: 'sniper', name: 'BARRETT M82', caliber: '.50 BMG', type: 'semi', damage: 700, headMult: 3, magSize: 10, startReserve: 30, maxReserve: 50, fireRate: 1.6, reloadTime: 3.4, spread: 0.002, range: 220, pierce: 6, adsFov: 20, boxOnly: true, ammoPrice: 1500 },
+    sniper: { id: 'sniper', cat: 'sniper', name: 'L96A1', cal: '762match', type: 'semi', magSize: 5, startReserve: 30, maxReserve: 45, fireRate: 1.1, reloadTime: 2.8, spread: 0.0015, range: 200, adsFov: 25, price: 1750, ammoPrice: 700 },
+    svd: { id: 'svd', cat: 'sniper', name: 'DRAGUNOV SVD', cal: '762x54r7n1', type: 'semi', magSize: 10, startReserve: 40, maxReserve: 70, fireRate: 3, reloadTime: 2.6, spread: 0.004, range: 180, adsFov: 28, price: 2000, ammoPrice: 800 },
+    barrett: { id: 'barrett', cat: 'sniper', name: 'BARRETT M82', cal: '50bmg', type: 'semi', magSize: 10, startReserve: 30, maxReserve: 50, fireRate: 1.2, reloadTime: 3.4, spread: 0.002, range: 220, adsFov: 20, boxOnly: true, ammoPrice: 1500 },
     // ---- fusil à pompe et arme spéciale
-    shotgun: { id: 'shotgun', cat: 'shotgun', name: 'REMINGTON 870', caliber: '12 ga', type: 'shotgun', pellets: 8, damage: 26, headMult: 1.8, magSize: 6, startReserve: 30, maxReserve: 48, fireRate: 1.3, reloadTime: 2.4, spread: 0.046, range: 35, price: 750, ammoPrice: 350 },
-    raygun: { id: 'raygun', cat: 'special', name: 'PISTOLET À RAYONS', caliber: 'énergie', type: 'semi', damage: 700, headMult: 1.5, magSize: 20, startReserve: 160, maxReserve: 200, fireRate: 4.2, reloadTime: 2.6, spread: 0.008, range: 100, splash: { radius: 2.8, damage: 500 }, tracer: 0x33ff55, boxOnly: true, ammoPrice: 1500 },
+    shotgun: { id: 'shotgun', cat: 'shotgun', name: 'REMINGTON 870', cal: '12ga', type: 'shotgun', pellets: 8, magSize: 6, startReserve: 30, maxReserve: 48, fireRate: 1.3, reloadTime: 2.4, spread: 0.046, range: 35, price: 750, ammoPrice: 350 },
+    // énergie : pas de chute des dégâts ; le tir direct et la zone (splash) sont propres à l'arme
+    raygun: { id: 'raygun', cat: 'special', name: 'PISTOLET À RAYONS', cal: 'energy', type: 'semi', damage: 1000, headMult: 1.5, magSize: 24, startReserve: 168, maxReserve: 240, fireRate: 4.2, reloadTime: 2.6, spread: 0.008, range: 100, splash: { radius: 3.5, damage: 900 }, tracer: 0x33ff55, boxOnly: true, ammoPrice: 1500 },
+  },
+  // Calibres : dégâts de base d'un tir de près, multiplicateur de tête, zombies traversés et chute des dégâts avec la distance.
+  // Le multiplicateur vaut 1 jusqu'à falloffStart (m), baisse linéairement jusqu'à minMult à falloffEnd (m), puis reste à minMult.
+  // base = dégâts d'un projectile (par plomb pour le calibre 12 ga). pierce : seulement s'il dépasse 1.
+  // Les clés sont résolues dans chaque arme une seule fois, en bas de ce fichier.
+  calibers: {
+    '57x28': { name: '5,7×28 mm', base: 22, head: 2.0, pierce: 2, falloffStart: 12, falloffEnd: 40, minMult: 0.55 },
+    '9mm': { name: '9 mm', base: 26, head: 2.2, pierce: 1, falloffStart: 12, falloffEnd: 35, minMult: 0.5 },
+    '556': { name: '5,56 mm', base: 40, head: 2.4, pierce: 1, falloffStart: 25, falloffEnd: 70, minMult: 0.7 },
+    '45acp': { name: '.45 ACP', base: 50, head: 2.6, pierce: 1, falloffStart: 10, falloffEnd: 35, minMult: 0.5 },
+    '762x39': { name: '7,62×39 mm', base: 54, head: 2.3, pierce: 1, falloffStart: 22, falloffEnd: 65, minMult: 0.65 },
+    '762x51': { name: '7,62×51 mm', base: 78, head: 2.5, pierce: 2, falloffStart: 35, falloffEnd: 90, minMult: 0.8 },
+    '762x54r': { name: '7,62×54R', base: 80, head: 2.5, pierce: 2, falloffStart: 35, falloffEnd: 90, minMult: 0.8 },
+    '792x57': { name: '7,92×57 mm', base: 80, head: 2.2, pierce: 2, falloffStart: 30, falloffEnd: 90, minMult: 0.75 },
+    '357': { name: '.357 Magnum', base: 130, head: 3.0, pierce: 2, falloffStart: 15, falloffEnd: 50, minMult: 0.6 },
+    '50ae': { name: '.50 AE', base: 160, head: 3.0, pierce: 2, falloffStart: 18, falloffEnd: 55, minMult: 0.6 },
+    '12ga': { name: '12 ga', base: 30, head: 1.8, pierce: 1, falloffStart: 6, falloffEnd: 25, minMult: 0.25 },
+    '762match': { name: '7,62×51 mm Match', base: 340, head: 3.5, pierce: 4, falloffStart: 80, falloffEnd: 200, minMult: 0.9 },
+    '762x54r7n1': { name: '7,62×54R 7N1', base: 230, head: 3.0, pierce: 3, falloffStart: 80, falloffEnd: 200, minMult: 0.9 },
+    '50bmg': { name: '.50 BMG', base: 700, head: 3.0, pierce: 6, falloffStart: 100, falloffEnd: 220, minMult: 0.95 },
+    energy: { name: 'énergie' }, // pas de base ni de chute : le pistolet à rayons règle ses propres dégâts
   },
   // Armes au départ (la première est en main)
   startWeapons: ['rifle', 'm1911'],
@@ -179,3 +204,35 @@ export const CONFIG = {
     legBlowChance: 0.5,    // un zombie qui survit à une explosion perd ses jambes
   },
 };
+
+// Résolution des calibres : chaque arme reçoit le nom du calibre, ses dégâts (base × mod), son multiplicateur de tête, sa
+// pénétration et sa chute des dégâts, sauf si elle les définit elle-même. Fait une seule fois, au chargement du module.
+for (const w of Object.values(CONFIG.weapons)) {
+  const c = CONFIG.calibers[w.cal];
+  if (!c) throw new Error(`Arme ${w.id} : calibre inconnu « ${w.cal} »`);
+  w.caliber = c.name;
+  if (c.base != null) w.damage ??= Math.round(c.base * (w.mod ?? 1));
+  if (c.head != null) w.headMult ??= c.head;
+  if (c.pierce > 1) w.pierce ??= c.pierce; // jamais 1 : le Pack-a-Punch ajoute 2 si `pierce` existe, sinon donne 2
+  if (c.falloffStart != null) {
+    w.falloffStart ??= c.falloffStart;
+    w.falloffEnd ??= c.falloffEnd;
+    w.minMult ??= c.minMult;
+  }
+}
+
+// Multiplicateur des dégâts selon la distance du tir (m) : 1 jusqu'à falloffStart, puis décroissance linéaire jusqu'à
+// minMult à falloffEnd, puis minMult au-delà. Sans falloffStart (énergie), pas de chute.
+export function falloffMult(cfg, dist) {
+  if (cfg.falloffStart == null || dist <= cfg.falloffStart) return 1;
+  if (dist >= cfg.falloffEnd) return cfg.minMult;
+  return 1 - (1 - cfg.minMult) * (dist - cfg.falloffStart) / (cfg.falloffEnd - cfg.falloffStart);
+}
+
+// Contrôle de cohérence, en mode ?debug uniquement
+if (typeof location !== 'undefined' && new URLSearchParams(location.search).has('debug')) {
+  for (const w of Object.values(CONFIG.weapons)) {
+    if (w.falloffStart != null && w.falloffStart > w.range) console.warn(`[config] ${w.id} : falloffStart (${w.falloffStart}) > range (${w.range})`);
+    if (w.minMult != null && !(w.minMult >= 0 && w.minMult <= 1)) console.warn(`[config] ${w.id} : minMult (${w.minMult}) hors de [0, 1]`);
+  }
+}

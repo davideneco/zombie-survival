@@ -85,9 +85,15 @@ export class Hud {
     });
   }
 
-  setWeapon(name) {
-    this._set('weapon', name, () => {
+  // Nom de l'arme, avec le calibre en petit dessous
+  setWeapon(name, caliber = '') {
+    this._set('weapon', `${name}|${caliber}`, () => {
       this.el.weapon.textContent = name;
+      if (caliber) {
+        const small = document.createElement('small');
+        small.textContent = caliber;
+        this.el.weapon.appendChild(small);
+      }
     });
   }
 

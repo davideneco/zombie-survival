@@ -1,9 +1,11 @@
 import * as THREE from 'three';
-import { CONFIG } from './config.js';
+import { CONFIG, falloffMult } from './config.js';
 import { buildWeaponModels } from './viewmodels.js';
 
 const ADS_DELTA = 20; // réduction du FOV en visée
 const PAP_TINT = 0x6a1fa8; // reflet violet des armes améliorées
+const MAX_SHOTS_PER_FRAME = 3; // plafond de tirs par image (armes automatiques très rapides ou image longue)
+const FIRE_RESUME_GAP = 0.1; // au-delà de ce retard sur nextShot, le tir ne se « rattrape » pas : on repart de l'instant présent
 
 export class Player {
   constructor(camera, scene, world, game) {
@@ -185,7 +187,7 @@ export class Player {
         });
       }
     }
-    this.game.hud.setWeapon(this.curCfg.name);
+    this.game.hud.setWeapon(this.curCfg.name, this.curCfg.caliber);
   }
 
   nextWeapon() {
@@ -433,11 +435,15 @@ export class Player {
         w.reserve -= take;
         w.reloading = false;
       }
-    } else if (this.mouseDown && now >= this.nextShot && !this.locked && !(veh && veh.seat === 0)) {
-      if (w.ammo > 0) this.shoot(now, moving);
-      else if (w.reserve > 0) this.reload();
-      else { this.nextShot = now + 0.3; this.game.sfx.empty(); }
-      if (cfg.type === 'semi') this.mouseDown = false; // une balle par clic
+    } else if (!this.locked && !(veh && veh.seat === 0)) {
+      // Jusqu'à MAX_SHOTS_PER_FRAME tirs par image : le temps restant d'un tir est reporté au suivant (voir shoot),
+      // donc la cadence réelle égale fireRate même quand une image dure plus qu'une période de tir.
+      for (let n = 0; n < MAX_SHOTS_PER_FRAME && this.mouseDown && now >= this.nextShot; n++) {
+        if (w.ammo > 0) this.shoot(now, moving);
+        else if (w.reserve > 0) { this.reload(); break; }
+        else { this.nextShot = now + 0.3; this.game.sfx.empty(); break; }
+        if (cfg.type === 'semi') { this.mouseDown = false; break; } // une balle par clic
+      }
     }
 
     // ---- caméra ----
@@ -483,7 +489,10 @@ export class Player {
     const cfg = this.curCfg;
     const w = this.curW;
     w.ammo--;
-    this.nextShot = now + 1 / cfg.fireRate;
+    // Semi-auto : fireRate est un plafond (une balle par clic). Sinon on cumule à partir du tir prévu et non de `now`, pour
+    // ne pas arrondir la période à l'image supérieure ; après une pause, on repart de `now` (pas de rafale de rattrapage).
+    const period = 1 / cfg.fireRate;
+    this.nextShot = cfg.type === 'semi' || now - this.nextShot > FIRE_RESUME_GAP ? now + period : this.nextShot + period;
     this.kick = 1;
 
     // Recul
@@ -528,7 +537,8 @@ export class Player {
         if (!z) { end = h.point; this.game.impact(h.point); stopped = true; break; }
         if (seen.has(z)) continue;
         seen.add(z);
-        this.game.hitZombie(z, h.object.userData.head, h.point, cfg.damage, cfg.headMult);
+        // chute des dégâts selon la distance, propre à chaque zombie touché (calcul côté tireur : z_hit inchangé)
+        this.game.hitZombie(z, h.object.userData.head, h.point, cfg.damage * falloffMult(cfg, h.distance), cfg.headMult);
         end = h.point;
         if (--budget <= 0) { stopped = true; break; }
       }
