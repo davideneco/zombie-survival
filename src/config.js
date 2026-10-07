@@ -20,7 +20,7 @@ export const CONFIG = {
     priceStep: 250,     // (repli) supplément par zone plus éloignée
     // Décor des zones `outer`, proportionnel à leur surface (une voiture / un objet de barricade par tant de m²) ; le décor des zones
     // d'origine garde son tirage et ses plafonds propres (14 voitures, 47 objets de barricade)
-    outerDecor: { carArea: 6000, junkArea: 2500, bikeMax: 30 },
+    outerDecor: { carArea: 6000, junkArea: 2500, bikeMax: 30, chaletRadius: 40 },
     zones: [
       { name: 'Marché-Neuf', start: true, items: ['station', 'wall:m1911', 'wall:shotgun', 'wall:smg', 'perk:quickrevive', 'box'] },
       { name: 'Temple-Neuf', seed: { x: -35, z: -95 }, doorPrice: 750, items: ['station', 'wall:arex', 'wall:mp5', 'perk:staminup', 'box'] },
@@ -46,7 +46,7 @@ export const CONFIG = {
       { name: 'Palais Rohan', outer: true, seed: { x: 260, z: 140 }, doorPrice: 1500, items: ['wall:ak47'] },
       { name: 'Musée historique', outer: true, seed: { x: 200, z: 215 }, doorPrice: 1500, items: ['station', 'wall:arex', 'box'] },
       // palier B : 2000
-      { name: 'Place Broglie', outer: true, seed: { x: 150, z: -345 }, doorPrice: 2000, items: ['station', 'wall:lmg', 'box'] },
+      { name: 'Place Broglie', outer: true, seed: { x: 150, z: -345 }, doorPrice: 2000, chalets: 4, items: ['station', 'wall:lmg', 'box'] },
       { name: 'Quai Schoepflin', outer: true, seed: { x: -20, z: -470 }, doorPrice: 2000, items: ['wall:svd'] },
       { name: 'Hôtel de Neuwiller', outer: true, seed: { x: -450, z: -250 }, doorPrice: 2000, items: ['wall:famas'] },
       { name: 'Monument Stoeber', outer: true, seed: { x: -490, z: -150 }, doorPrice: 2000, items: ['station', 'wall:scar', 'box'] },
@@ -210,18 +210,31 @@ export const CONFIG = {
     mountRange: 2.6,   // distance maximale pour monter (m)
     pumpRange: 2.4,    // distance maximale à la borne du parking pour l'utiliser (m) ; pumpReach : distance borne-moto maximale (m)
     pumpReach: 8,
-    // Parking : un seul endroit, sur la place Gutenberg (à côté de l'entrée du parking souterrain). Les emplacements sont fixes
-    // (aucun tirage : identiques chez tous les joueurs). x, z : centre (m) ; yaw : cap des motos (0 = vers le nord, -z) ; dx / dz :
-    // décalage dans le repère du parking (dx vers la droite des motos, dz vers l'arrière). rect : emprise réservée au décor (m).
-    // Si le centre n'est pas dans la zone `zone`, les motos retombent sur `spawns` (ancien tirage, avec un avertissement en ?debug).
-    parking: {
-      zone: 'Place Gutenberg', x: -22, z: 70, yaw: 0,
-      bays: [{ type: 'moto', dx: -1.2 }, { type: 'grosseMoto', dx: 1.2 }],
-      slots: [-3.6, -1.2, 1.2, 3.6], // emplacements peints au sol (dx) ; 1,6 x 2,6 m ; les motos occupent les deux du milieu
-      pump: { dx: -6.5, dz: 0 }, sign: { dx: 0, dz: 5.5 },
-      rect: { w: 10, d: 12 },
-    },
-    // Repli (voir parking) : une ligne par moto, posée dans la zone nommée sur un emplacement dégagé
+    // Parkings (v0.29.0 : un tableau). Chacun a ses emplacements fixes (aucun tirage : identiques chez tous les joueurs), un panneau
+    // « P » et une borne plein + réparation. Les motos sont créées dans l'ordre des parkings puis des `bays` (leur identifiant en dépend).
+    // x, z : centre (m) ; yaw : cap des motos (0 = vers le nord, -z) ; dx / dz : décalage dans le repère du parking (dx vers la droite
+    // des motos, dz vers l'arrière). rect : emprise réservée au décor (m), entièrement dans la zone `zone`, dégagée et accessible
+    // (au moins 8 m des portes : leur invite [E] ne doit pas être masquée). Un parking dont le rectangle est invalide est ignoré
+    // (avertissement en ?debug) ; si aucun ne l'est, les motos retombent sur `spawns` (ancien tirage).
+    parkings: [
+      // place Gutenberg, à côté de l'entrée du parking souterrain : 2 motos
+      {
+        zone: 'Place Gutenberg', x: -22, z: 70, yaw: 0,
+        bays: [{ type: 'moto', dx: -1.2 }, { type: 'grosseMoto', dx: 1.2 }],
+        slots: [-3.6, -1.2, 1.2, 3.6], // emplacements peints au sol (dx) ; 1,6 x 2,6 m ; les motos occupent les deux du milieu
+        pump: { dx: -6.5, dz: 0 }, sign: { dx: 0, dz: 5.5 },
+        rect: { w: 10, d: 12 },
+      },
+      // place Broglie (v0.29.0) : 1 moto et sa borne, pour la partie nord-est de l'île
+      {
+        zone: 'Place Broglie', x: 169.5, z: -340.5, yaw: 0,
+        bays: [{ type: 'moto', dx: 0 }],
+        slots: [0],
+        pump: { dx: -3.6, dz: 0.5 }, sign: { dx: 3.6, dz: 3.5 },
+        rect: { w: 10, d: 12 },
+      },
+    ],
+    // Repli (voir parkings) : une ligne par moto, posée dans la zone nommée sur un emplacement dégagé
     spawns: [
       { type: 'moto', zone: 'Marché-Neuf' },
       { type: 'grosseMoto', zone: 'Marché-Neuf' },

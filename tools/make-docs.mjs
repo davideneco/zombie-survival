@@ -200,7 +200,7 @@ const VT = C.vehicles.types, VD = C.vehicles.damage, VF = C.vehicles.fuel, VR = 
 const rk = (t, v) => t.roadkill.K * v * Math.min(1, 0.4 + 0.6 * (v - t.roadkill.vmin) / VR.rampSpeed);
 const vcol = (f) => Object.values(VT).map(f);
 const same = (x) => Object.values(VT).map((_, i) => (i ? 'idem' : x)); // règle commune aux deux motos
-table('15_motos', 'Motos (parking de la place Gutenberg : un panneau bleu « P », 2 motos, une borne plein + réparation)', ['Réglage', ...Object.values(VT).map((t) => t.name), 'Unité'], [
+table('15_motos', 'Motos (deux parkings au panneau bleu « P », avec chacun une borne plein + réparation : place Gutenberg, 2 motos ; place Broglie, 1 moto)', ['Réglage', ...Object.values(VT).map((t) => t.name), 'Unité'], [
   ['Places', ...vcol((t) => t.seats), ''], ['Points de vie', ...vcol((t) => t.hp), 'PV'], ['Vitesse max', ...vcol((t) => Math.round(t.maxSpeed * 3.6)), 'km/h'],
   ['Réservoir', ...vcol((t) => t.tank), 'L'], ['Autonomie à fond', ...vcol((t) => +(t.tank / (t.idle + t.gas + t.perSpeed) / 60).toFixed(1)), 'min'],
   ['Seuil d\'écrasement', ...vcol((t) => Math.round(t.roadkill.vmin * 3.6)), 'km/h (en dessous : aucun dégât, un zombie arrête la moto)'],

@@ -409,8 +409,8 @@ export class Hud {
     for (const w of world.wallWeapons || []) icon(w.pos.x, w.pos.z, '#d98a2b', '⌐');
     // parking des motos : carré arrondi bleu « P » (forme différente des pastilles rondes) ; les motos garées s'affichent à côté (leurs
     // positions sont à 2 m l'une de l'autre) ; une moto qui roule s'affiche à sa vraie place. M : moto (solo), G : grosse moto (2 places)
-    const pk = world.parking;
-    if (pk) {
+    const pks = world.parkings || [];
+    for (const pk of pks) {
       const [qx, qy] = P(pk.x, pk.z);
       ctx.fillStyle = '#2a6fd8'; ctx.strokeStyle = '#fff'; ctx.lineWidth = 2;
       ctx.beginPath(); ctx.roundRect(qx - 12, qy - 12, 24, 24, 6); ctx.fill(); ctx.stroke();
@@ -419,11 +419,12 @@ export class Hud {
     for (const v of world.vehicles || []) {
       const lab = v.type === 'moto' ? 'M' : 'G', f = v.hp / v.maxHp;
       const col = f < 0.25 ? '#d83a2e' : f < 0.5 ? '#e8892b' : '#e0c22e'; // jaune, orange sous 50 % des PV, rouge sous 25 %
-      const parked = pk && Math.hypot(v.pos.x - pk.x, v.pos.z - pk.z) < 9;
+      const pk = pks.find((q) => Math.hypot(v.pos.x - q.x, v.pos.z - q.z) < 9) || pks.find((q) => Math.hypot(v.spawn.x - q.x, v.spawn.z - q.z) < 9); // parking de la moto (garée ou d'attache)
+      const parked = !!pk && Math.hypot(v.pos.x - pk.x, v.pos.z - pk.z) < 9;
       let qx, qy;
       if (v.state === 'gone' || (pk && v.state === 'wreck' && parked)) [qx, qy] = P(v.spawn.x, v.spawn.z);
       else [qx, qy] = P(v.pos.x, v.pos.z);
-      if (pk && (parked || v.state === 'gone')) { const [cx, cy] = P(pk.x, pk.z); qx = cx + (v.type === 'moto' ? -17 : 17); qy = cy + 19; }
+      if (pk && (parked || v.state === 'gone')) { const [cx, cy] = P(pk.x, pk.z); qx = cx + (pk.size > 1 ? (v.type === 'moto' ? -17 : 17) : 0); qy = cy + 19; }
       if (v.state === 'wreck' || v.state === 'gone') { // épave : croix grise « M+2 » (revient 2 manches après sa destruction)
         ctx.strokeStyle = '#000'; ctx.lineWidth = 5; ctx.beginPath(); ctx.moveTo(qx - 7, qy - 7); ctx.lineTo(qx + 7, qy + 7); ctx.moveTo(qx + 7, qy - 7); ctx.lineTo(qx - 7, qy + 7); ctx.stroke();
         ctx.strokeStyle = '#9aa0a6'; ctx.lineWidth = 3; ctx.stroke();

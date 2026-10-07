@@ -1341,7 +1341,7 @@ export async function buildRealWorld(scene, renderer) {
   const WALL_COLORS = { shotgun: 0xff8833, smg: 0x3399ff, sniper: 0x88ccff, lmg: 0xff5533, crossbow: 0xc89a50, m79: 0xff6a2a, magnum: 0xffc84a, saiga: 0xffc84a, mg42: 0xffc84a, barrett: 0xffc84a }; // dorées : armes premium des zones extérieures
   const machines = [];
   const vehicleSpawns = []; // motos : { type, x, z, yaw } (voir CONFIG.vehicles)
-  let parkingInfo = null;   // parking des motos (voir parking.js), null si repli
+  const parkings = [];      // parkings des motos (voir parking.js) ; vide si repli
   {
     const placed = [];
     // Un atout trop près d'une porte gêne : son invite [E] (rayon 2,6 m) prend le pas sur celle de la porte (rayon 3,4 m),
@@ -1450,11 +1450,11 @@ export async function buildRealWorld(scene, renderer) {
       }
       return ang;
     };
-    // Parking : un seul endroit (CONFIG.vehicles.parking), emplacements fixes (aucun tirage, identiques chez tous les joueurs).
-    // Contrôle : tout le rectangle doit être dans la zone voulue, accessible à pied et dégagé ; sinon repli sur l'ancien tirage.
+    // Parkings (CONFIG.vehicles.parkings), emplacements fixes (aucun tirage, identiques chez tous les joueurs). Contrôle : tout le
+    // rectangle doit être dans la zone voulue, accessible à pied et dégagé, à 8 m au moins des portes (leur invite [E] ne doit pas
+    // être masquée) ; sinon ce parking est ignoré. Si aucun ne reste, repli sur l'ancien tirage.
     const debugMode = typeof location !== 'undefined' && new URLSearchParams(location.search).has('debug');
-    const PK = CONFIG.vehicles?.parking;
-    if (PK) {
+    for (const PK of CONFIG.vehicles?.parkings || []) {
       const zi = ZONE_NAMES.indexOf(PK.zone), L = parkingLayout(PK);
       let why = null;
       if (zi < 0 || !seeds[zi] || !Number.isFinite(door_depth[zi])) why = `zone « ${PK.zone} » absente`;
@@ -1465,15 +1465,14 @@ export async function buildRealWorld(scene, renderer) {
           if (zoneOf(q.x, q.z) !== zi) { why = `(${q.x.toFixed(1)} ; ${q.z.toFixed(1)}) hors de la zone`; break; }
           if (!reachAt(q.x, q.z) || !clearance(ix, iz, 1)) { why = `(${q.x.toFixed(1)} ; ${q.z.toFixed(1)}) bloqué ou inaccessible`; break; }
         }
+        if (!why) for (const pt of [L.center, ...L.bays, L.pump, L.sign]) if (doorDist(pt.x, pt.z) < 8) { why = `(${pt.x.toFixed(1)} ; ${pt.z.toFixed(1)}) à moins de 8 m d'une porte`; break; }
       }
-      if (why) { if (debugMode) console.warn('[parking] repli sur le tirage aléatoire des motos :', why); }
-      else {
-        for (const b of L.bays) vehicleSpawns.push({ type: b.type, x: b.x, z: b.z, yaw: b.yaw });
-        buildParkingDecor(scene, collision, lightSources, PK, L);
-        parkingInfo = { zone: zi, name: PK.zone, x: PK.x, z: PK.z, yaw: PK.yaw, pump: { x: L.pump.x, z: L.pump.z }, sign: { x: L.sign.x, z: L.sign.z }, inRect: L.inRect, points: L.points, size: L.bays.length };
-      }
+      if (why) { if (debugMode) console.warn(`[parking] « ${PK.zone} » ignoré :`, why); continue; }
+      for (const b of L.bays) vehicleSpawns.push({ type: b.type, x: b.x, z: b.z, yaw: b.yaw });
+      buildParkingDecor(scene, collision, lightSources, PK, L);
+      parkings.push({ zone: zi, name: PK.zone, x: PK.x, z: PK.z, yaw: PK.yaw, pump: { x: L.pump.x, z: L.pump.z }, sign: { x: L.sign.x, z: L.sign.z }, inRect: L.inRect, points: L.points, size: L.bays.length });
     }
-    if (!parkingInfo) {
+    if (!parkings.length) {
       // Repli : une moto par ligne de CONFIG.vehicles.spawns, sur un emplacement dégagé de la zone, loin des portes (même raison que
       // les atouts : leur invite [E] masquerait celle de la porte), posée dans l'axe de la rue
       for (const sp of CONFIG.vehicles?.spawns || []) {
@@ -1579,15 +1578,15 @@ export async function buildRealWorld(scene, renderer) {
   // changer à ce que la passe 1 a posé.
   {
     const inSec = (x, z) => zoneOf1(x, z) >= 0;
-    const OD = Z.outerDecor || { carArea: 6000, junkArea: 2500, bikeMax: 30 };
+    const OD = Z.outerDecor || { carArea: 6000, junkArea: 2500, bikeMax: 30, chaletRadius: 40 };
     // objets des zones d'origine seulement (la passe 1 ignore ceux des zones `outer`)
     const legacyItems = [
       ...stations.filter((s) => !Z.zones[s.zone]?.outer), ...machines.filter((m) => !Z.zones[m.zone].outer).map((m) => m.pos),
       ...wallWeapons.filter((w) => !Z.zones[w.zone]?.outer).map((w) => w.pos),
     ];
-    const used = [startPos, ...legacyItems, ...vehicleSpawns, ...(parkingInfo ? parkingInfo.points : [])].map((v) => [v.x, v.z]);
+    const used = [startPos, ...legacyItems, ...vehicleSpawns, ...parkings.flatMap((pk) => pk.points)].map((v) => [v.x, v.z]);
     // le parking des motos réserve son emprise (marge 1,5 m) : ni mobilier, ni voiture, ni barricade dessus
-    const inParking = (x, z, margin = 0) => !!parkingInfo && parkingInfo.inRect(x, z, margin);
+    const inParking = (x, z, margin = 0) => parkings.some((pk) => pk.inRect(x, z, margin));
     const freeAt = (x, z, gap) => !inParking(x, z, 1.5) && used.every(([ux, uz]) => Math.hypot(ux - x, uz - z) > gap);
     // mur le plus proche (orientation des bancs, vélos…) et axe de la rue (voitures)
     const wallDir = (x, z) => { let best = 99, ang = 0; for (let a = 0; a < 16; a++) { const t = (a / 16) * Math.PI * 2; const d = collision.rayHit(x, 1, z, Math.cos(t), 0, Math.sin(t), 6); if (d < best) { best = d; ang = t; } } return { dist: best, ang }; };
@@ -1705,6 +1704,21 @@ export async function buildRealWorld(scene, renderer) {
     Z.zones.forEach((zone, zi) => {
       if (!zone.outer || !seeds[zi] || !Number.isFinite(door_depth[zi])) return;
       const nCars = Math.floor(zoneArea[zi] / OD.carArea), nJunk = Math.floor(zoneArea[zi] / OD.junkArea);
+      // chalets du marché de Noël (zone.chalets) : sur la place, à moins de OD.chaletRadius m du lieu de la zone, comptoir tourné vers lui
+      if (zone.chalets) {
+        const [sx, sz] = seeds[zi];
+        let placed = 0;
+        for (const [x, z] of outerSpots(zi, 4)) {
+          if (placed >= zone.chalets) break;
+          if (Math.hypot(x - sx, z - sz) > OD.chaletRadius || !freeAt(x, z, 6) || doorDist(x, z) < 6) continue;
+          const th = Math.atan2(sx - x, sz - z);
+          props.place('chalet', x, z, th);
+          collision.addBox(x, z, 3, 2, -th, 2.6);
+          lightSources.push({ x, y: 2, z, color: 0xffb860, intensity: 10, dist: 7 });
+          used.push([x, z]);
+          placed++;
+        }
+      }
       let c = 0;
       for (const [x, z] of outerSpots(zi, 3)) {
         if (c >= nCars) break;
@@ -1837,7 +1851,7 @@ export async function buildRealWorld(scene, renderer) {
   const stationPos = stations[0];
   return {
     half: Math.max(halfX, halfZ), blockers, spawnPoints: [], windowSpawns, pickWindow, pickGround,
-    stationPos, stations, wallWeapons, vehicleSpawns, parking: parkingInfo, doors, openDoor, zoneOf, startPos, nav, collision, machines, boxes, setActiveBox,
+    stationPos, stations, wallWeapons, vehicleSpawns, parkings, doors, openDoor, zoneOf, startPos, nav, collision, machines, boxes, setActiveBox,
     zoneNames: ZONE_NAMES, zoneCenters, startZone, sealedPoints, mapImage, mapView: { halfX, halfZ, scale: MAP_SCALE },
     isZoneOpen: (i) => !!zoneOpen[i], zoneArea, zoneOf1, // zoneOf1 : zone d'après le découpage d'origine (outils de test)
     mapCrop: { x0: Math.max(-halfX, secMinX - 40), x1: Math.min(halfX, secMaxX + 40), z0: Math.max(-halfZ, secMinZ - 40), z1: Math.min(halfZ, secMaxZ + 40) }, mapTitle: 'GRANDE ÎLE — STRASBOURG',

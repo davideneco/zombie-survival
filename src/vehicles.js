@@ -629,9 +629,10 @@ export function installVehicles(game, { world, hud, sfx, scene }) {
     // ----------------------------------------------------------- borne du parking : réparation (2 pts / PV)
     // La borne agit sur la moto la plus proche du joueur, à moins de pumpReach m de la borne ; il faut être descendu
     nearPump() {
-      const pk = world.parking, p = this.player;
-      if (!pk || p.vehicle || p.downed || p.dead) return null;
-      if (Math.hypot(p.pos.x - pk.pump.x, p.pos.z - pk.pump.z) > R().pumpRange) return null;
+      const p = this.player;
+      if (p.vehicle || p.downed || p.dead) return null;
+      const pk = (world.parkings || []).find((q) => Math.hypot(p.pos.x - q.pump.x, p.pos.z - q.pump.z) <= R().pumpRange);
+      if (!pk) return null;
       let best = null, bd = R().pumpReach;
       for (const v of this.vehicles) {
         if (!v.usable) continue;

@@ -757,10 +757,10 @@ const game = {
     const d = world.doors[id];
     sfx.buy();
     // première ouverture de la zone du parking des motos : on l'annonce (le « P » bleu de la carte indique l'endroit)
-    const pk = world.parking, firstPark = !!pk && !this.parkingSeen && d.opened.includes(pk.zone);
-    if (firstPark) this.parkingSeen = true;
+    const pk = (world.parkings || []).find((q) => !this.parkingSeen?.has(q.zone) && d.opened.includes(q.zone)), firstPark = !!pk;
+    if (firstPark) (this.parkingSeen ||= new Set()).add(pk.zone);
     if (announce) {
-      if (firstPark) hud.announce(`PARKING ${pk.name.replace(/^Place /, '').toUpperCase()} — ${pk.size} motos`, 'Repérez le « P » bleu sur la carte [M]', 4500);
+      if (firstPark) hud.announce(`PARKING ${pk.name.replace(/^Place /, '').toUpperCase()} — ${pk.size} moto${pk.size > 1 ? 's' : ''}`, 'Repérez le « P » bleu sur la carte [M]', 4500);
       else hud.announce('PORTE OUVERTE', `Accès à ${d.name}`, 2500);
     }
     if (!this.isClient) this.openingBonus(d); // hôte ou solo : le bonus est ensuite annoncé aux clients par pu_spawn

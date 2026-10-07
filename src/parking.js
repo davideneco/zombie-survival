@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 
-// Parking des motos (CONFIG.vehicles.parking) : un seul endroit, sur la place Gutenberg. Emplacements fixes, sans tirage.
+// Parkings des motos (CONFIG.vehicles.parkings : place Gutenberg, place Broglie). Emplacements fixes, sans tirage.
 //  - parkingLayout : positions (pures, identiques chez tous les joueurs) des motos, de la borne, du panneau et de l'emprise réservée
 //  - buildParkingDecor : panneau « P / MOTOS », marquage des emplacements au sol, borne de service (plein + réparation)
 // Repère du parking : dx vers la droite des motos, dz vers l'arrière (comme Vehicle.toWorld) ; yaw 0 = les motos regardent le nord (-z).
