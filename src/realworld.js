@@ -1858,7 +1858,7 @@ export async function buildRealWorld(scene, renderer) {
     cathedral: cath ? { seed: cath.seed, clock: cath.clock, insideInner: cath.insideInner, inner: cath.inner, P: cath.P, S: cath.S, T: cath.T, ceilAt: cath.ceilAt, info: cathInfo } : null,
     levels, hdf: hdfInfo,
     floorAt: (x, z, y, out) => levels.floorAt(x, z, y, out),
-    collide: (pos, r) => collision.resolve(pos, r),
+    collide: (pos, r, out) => collision.resolve(pos, r, out),
     rayHit: (ox, oy, oz, dx, dy, dz, maxT) => collision.rayHit(ox, oy, oz, dx, dy, dz, maxT),
     // Hauteur du plafond à l'aplomb de (x, z) : voûtes de la cathédrale, passage sous immeuble (PASSAGE_H), sinon rien (ciel ouvert)
     ceilingAt: (x, z) => {

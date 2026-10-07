@@ -17,6 +17,7 @@ const r2 = (v) => Math.round(v * 100) / 100;
 const r1 = (v) => Math.round(v * 10) / 10;
 const fl = { y: 0, region: 0 };
 const tmpV = new THREE.Vector3();
+const colOut = { kind: null, push: 0, nx: 0, nz: 0 }; // nature et normale de la poussée la plus forte (Collision.resolve)
 
 export class Vehicle {
   constructor(game, scene, id, type, spawn) {
@@ -229,25 +230,76 @@ export class Vehicle {
     const fx = -Math.sin(this.yaw), fz = -Math.cos(this.yaw);
     const ox = this.pos.x, oz = this.pos.z;
     const p = { x: ox + fx * sp * dt, y: 0.1, z: oz + fz * sp * dt };
-    g.world.collide(p, D.radius);
+    colOut.kind = null; colOut.push = 0;
+    g.world.collide(p, D.radius, colOut);
     const cx = p.x - (ox + fx * sp * dt), cz = p.z - (oz + fz * sp * dt), cl = Math.hypot(cx, cz);
     g.world.floorAt?.(p.x, p.z, 0.1, fl);
     if (g.world.floorAt && (fl.region !== 0 || Math.abs(fl.y) > 0.25)) { // marche, trou : on ne passe pas
-      this.crash(Math.abs(sp));
+      this.crash(Math.abs(sp), 'wall'); // marche, trou : de l'architecture
       sp = -sp * 0.15;
     } else {
       this.pos.x = p.x; this.pos.z = p.z;
       if (cl > 1e-4) { // poussée du mur : plus on fonce dedans de face, plus on perd de vitesse
         const into = clamp(-(fx * cx + fz * cz) / cl * Math.sign(sp), 0, 1);
         if (into > 0.05) {
-          this.crash(Math.abs(sp) * into);
+          this.crash(Math.abs(sp) * into, colOut.kind || 'wall');
           sp *= 1 - 0.92 * into * into;
         }
       }
     }
+    sp = this.collideBikes(sp, dt);
     this.speed = sp;
     if (this.roadkill()) { this.pos.x = ox; this.pos.z = oz; } // arrêtée net par un zombie au contact : on ne le traverse pas
     this.syncNet();
+  }
+
+  // Deux cercles par moto (à +- empattement / 2 le long du cap) : l'avant et l'arrière. Renvoie [x0, z0, x1, z1, rayon].
+  bikeCircles(out = []) {
+    const h = this.def.wheelbase / 2, fx = -Math.sin(this.yaw), fz = -Math.cos(this.yaw);
+    out[0] = this.pos.x + fx * h; out[1] = this.pos.z + fz * h; out[2] = this.pos.x - fx * h; out[3] = this.pos.z - fz * h; out[4] = this.def.bikeRadius;
+    return out;
+  }
+
+  // Moto contre moto (conducteur local seulement) : chaque conducteur résout SA moto contre la position interpolée des autres. Une moto
+  // garée (sans conducteur) est un obstacle fixe : on la heurte pleinement, et c'est nous qui lui infligeons ses dégâts (v_dmg). Entre deux
+  // motos conduites, chacune ne s'abîme que par elle-même (poussée partielle, `driven`). Dégâts : max(0, vitesse d'approche - free) x perMs
+  // pour chacune ; le pilote suit la règle habituelle des chocs (crash) ; rebond : sp -= bounce x vitesse vers l'autre. Renvoie la vitesse.
+  collideBikes(sp, dt) {
+    const g = this.game, M = CONFIG.vehicles.damage.motoHit;
+    if (this.state !== 'ok' || !g.vehicles) return sp;
+    this._bikeHit ??= {};
+    for (const k in this._bikeHit) this._bikeHit[k] -= dt;
+    const fx = -Math.sin(this.yaw), fz = -Math.cos(this.yaw), a = this.bikeCircles(this._ca ??= []);
+    const reach = this.def.wheelbase / 2 + this.def.bikeRadius;
+    for (const o of g.vehicles) {
+      if (o === this || (o.state !== 'ok' && o.state !== 'burning')) continue;
+      if (Math.hypot(o.pos.x - this.pos.x, o.pos.z - this.pos.z) > reach + o.def.wheelbase / 2 + o.def.bikeRadius) continue;
+      const b = o.bikeCircles(o._cb ??= []);
+      let pen = 0, nx = 0, nz = 0;
+      for (let i = 0; i < 4; i += 2) for (let j = 0; j < 4; j += 2) {
+        const dx = a[i] - b[j], dz = a[i + 1] - b[j + 1], d = Math.hypot(dx, dz), p = a[4] + b[4] - d;
+        if (p > pen) { pen = p; if (d > 1e-6) { nx = dx / d; nz = dz / d; } else { nx = -fx; nz = -fz; } }
+      }
+      if (pen <= 0) continue;
+      const driven = o.seats[0] != null;
+      const k = driven ? M.driven : 1;
+      this.pos.x += nx * pen * k; this.pos.z += nz * pen * k;   // normale de l'autre moto vers la nôtre
+      const ofx = -Math.sin(o.yaw) * o.speed, ofz = -Math.cos(o.yaw) * o.speed;
+      const vx = fx * sp, vz = fz * sp;
+      const closing = (ofx - vx) * nx + (ofz - vz) * nz;      // vitesse d'approche (m/s), > 0 si on se rapproche
+      if (closing < 0.3) continue;
+      const into = Math.max(0, -(vx * nx + vz * nz));          // notre vitesse vers l'autre moto
+      if (into > 0 && sp !== 0) sp = clamp(sp - Math.sign(sp) * M.bounce * into, -this.def.reverseSpeed, this.def.maxSpeed);
+      if ((this._bikeHit[o.id] ?? 0) > 0) continue;            // un choc compte une fois
+      this._bikeHit[o.id] = M.hitCooldown;
+      const dmg = Math.max(0, closing - M.free) * M.perMs;
+      if (dmg > 0) {
+        g.damageVehicle(this, dmg, 'crash');
+        if (!driven) g.damageVehicle(o, dmg, 'crash');         // moto garée : son conducteur n'existe pas, c'est nous qui la blessons
+      }
+      this.crash(closing, 'moto');
+    }
+    return sp;
   }
 
   // Dégâts d'un écrasement à la vitesse `speed` (m/s) : 0 sous le seuil vmin de la moto, puis K x v x r, r montant de 0,4 à 1 sur rampSpeed m/s
@@ -286,13 +338,15 @@ export class Vehicle {
     return blocked;
   }
 
-  // Choc : secousse, bruit ; au-dessus du seuil les occupants se blessent (jamais mortel)
-  crash(impact) {
+  // Choc : secousse, bruit ; au-dessus du seuil les occupants se blessent (jamais mortel). kind : 'prop' (objet physique : la moto
+  // s'abîme de max(0, impact - crashFree) x crashPerMs), 'wall' (architecture : D.wall x ce montant, 0 par défaut) ou 'moto' (autre moto :
+  // les dégâts de la moto sont calculés par collideBikes, seuls la secousse, le bruit et le pilote sont traités ici)
+  crash(impact, kind = 'prop') {
     const C = CONFIG.vehicles.crash, g = this.game;
     if (impact < 3) return;
     g.shake = Math.max(g.shake || 0, Math.min(1, impact / 22));
     g.sfx.crash?.(Math.min(1, impact / 20));
-    const D = CONFIG.vehicles.damage, wear = Math.max(0, impact - D.crashFree) * D.crashPerMs;
+    const D = CONFIG.vehicles.damage, wear = kind === 'moto' ? 0 : Math.max(0, impact - D.crashFree) * D.crashPerMs * (kind === 'wall' ? D.wall : 1);
     if (wear > 0 && this.hitT <= 0) { this.hitT = 0.5; g.damageVehicle(this, wear, 'crash'); } // un choc compte une fois (même mur, images suivantes)
     if (impact < C.minSpeed || this.crashT > 0) return;
     this.crashT = 0.8;

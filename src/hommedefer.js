@@ -180,7 +180,7 @@ export function buildHdfStructures({ scene, collision, lightSources, rotundas, s
       const a = ((plan.colPhase + (k * 360) / C.columns) * Math.PI) / 180;
       cols.push([r.cx + Math.cos(a) * C.colCircle, r.cz + Math.sin(a) * C.colCircle, a]);
     }
-    for (const [x, z] of cols) collision.addCircle(x, z, C.colRadius, C.height);
+    for (const [x, z] of cols) collision.addCircle(x, z, C.colRadius, C.height, -Infinity, 'wall'); // colonne : architecture
     out.columns.push(...cols.map(([x, z]) => [x, z]));
     out.rotundas.push({ cx: r.cx, cz: r.cz, R: r.R });
 
@@ -251,8 +251,8 @@ export function buildHdfStructures({ scene, collision, lightSources, rotundas, s
   for (const s of shelters) { // collision : panneau arrière et deux poteaux
     const nx = -s.uz * s.back, nz = s.ux * s.back;
     const bx = s.x + (nx * s.dep) / 2, bz = s.z + (nz * s.dep) / 2;
-    collision.addSegment(bx - (s.ux * s.len) / 2, bz - (s.uz * s.len) / 2, bx + (s.ux * s.len) / 2, bz + (s.uz * s.len) / 2, HDF.shelterHeight);
-    for (const k of [-1, 1]) collision.addCircle(s.x - (nx * s.dep) / 2 + s.ux * k * (s.len / 2 - 0.15), s.z - (nz * s.dep) / 2 + s.uz * k * (s.len / 2 - 0.15), 0.1, HDF.shelterHeight);
+    collision.addSegment(bx - (s.ux * s.len) / 2, bz - (s.uz * s.len) / 2, bx + (s.ux * s.len) / 2, bz + (s.uz * s.len) / 2, HDF.shelterHeight, -Infinity, 'prop'); // abri vitré : objet
+    for (const k of [-1, 1]) collision.addCircle(s.x - (nx * s.dep) / 2 + s.ux * k * (s.len / 2 - 0.15), s.z - (nz * s.dep) / 2 + s.uz * k * (s.len / 2 - 0.15), 0.1, HDF.shelterHeight, -Infinity, 'prop');
   }
   return out;
 }

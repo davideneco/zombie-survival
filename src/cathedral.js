@@ -287,7 +287,7 @@ export function buildInterior(scene, plan, { collision, lightSources, props }) {
         pillarG.push(new THREE.CylinderGeometry(0.85, 1.0, CEIL, 12).translate(x, CEIL / 2, z));
         for (const [dx, dz] of [[0.9, 0], [-0.9, 0], [0, 0.9], [0, -0.9]]) pillarG.push(new THREE.CylinderGeometry(0.22, 0.22, CEIL, 8).translate(x + dx, CEIL / 2, z + dz));
         pillarG.push(new THREE.BoxGeometry(2.6, 0.5, 2.6).translate(x, 0.25, z));
-        collision.addCircle(x, z, 1.25, CEIL);
+        collision.addCircle(x, z, 1.25, CEIL, -Infinity, 'wall');
         if (k < bays) {
           const ge = new THREE.ExtrudeGeometry(archShape(bw), { depth: 0.8, bevelEnabled: false });
           ge.translate(0, 0, -0.4);

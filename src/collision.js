@@ -14,13 +14,16 @@ export class Collision {
 
   // h : hauteur du dessus de l'obstacle (les balles passent au-dessus) ; y0 : hauteur du dessous (obstacles d'étage :
   // garde-corps d'un balcon, mur d'une tour…). off : obstacle désactivé (porte ouverte).
-  addSegment(ax, az, bx, bz, h = Infinity, y0 = -Infinity) {
-    const s = { ax, az, bx, bz, h, y0, off: false, stamp: 0 };
+  // kind : nature de l'obstacle pour les dégâts des motos : 'wall' (architecture : façade, quai, parapet, porte payante ou
+  // scellée, marche : la moto ne s'abîme pas) ou 'prop' (objet physique : voiture, mobilier, arbre, machine… : elle s'abîme).
+  // addSegment = 'wall' par défaut ; addCircle et addBox = 'prop' par défaut.
+  addSegment(ax, az, bx, bz, h = Infinity, y0 = -Infinity, kind = 'wall') {
+    const s = { ax, az, bx, bz, h, y0, kind, off: false, stamp: 0 };
     this.segs.push(s);
     return s;
   }
 
-  addCircle(x, z, r, h = 4, y0 = -Infinity) { const c = { x, z, r, h, y0, off: false, stamp: 0 }; this.circles.push(c); return c; }
+  addCircle(x, z, r, h = 4, y0 = -Infinity, kind = 'prop') { const c = { x, z, r, h, y0, kind, off: false, stamp: 0 }; this.circles.push(c); return c; }
 
   // Dalles horizontales (planchers des étages) qui arrêtent les balles : triangles [ax,az,bx,bz,cx,cz] à la hauteur y
   addFloor(y, tris) {
@@ -38,13 +41,13 @@ export class Collision {
   }
 
   // Boîte orientée (caisses, voitures, barrières) = 4 segments
-  addBox(x, z, w, d, rot = 0, h = Infinity, y0 = -Infinity) {
+  addBox(x, z, w, d, rot = 0, h = Infinity, y0 = -Infinity, kind = 'prop') {
     const c = Math.cos(rot), s = Math.sin(rot);
     const pts = [[-w / 2, -d / 2], [w / 2, -d / 2], [w / 2, d / 2], [-w / 2, d / 2]]
       .map(([px, pz]) => [x + px * c - pz * s, z + px * s + pz * c]);
     for (let i = 0; i < 4; i++) {
       const a = pts[i], b = pts[(i + 1) % 4];
-      this.addSegment(a[0], a[1], b[0], b[1], h, y0);
+      this.addSegment(a[0], a[1], b[0], b[1], h, y0, kind);
     }
   }
 
@@ -74,8 +77,11 @@ export class Collision {
   }
 
   // Pousse `pos` (x,z) hors des obstacles et le garde dans la zone de jeu.
-  resolve(pos, radius) {
+  // out (facultatif) : reçoit la poussée la plus forte { kind: 'wall' | 'prop' | null, push, nx, nz } (normale unitaire vers l'extérieur) ;
+  // le bord de la zone de jeu compte comme un mur.
+  resolve(pos, radius, out = null) {
     const c = this.cell, py = pos.y || 0;
+    let bestPush = 0, bestKind = null, bnx = 0, bnz = 0;
     for (let pass = 0; pass < 2; pass++) {
       this.stamp++;
       const x0 = Math.floor((pos.x - radius) / c), x1 = Math.floor((pos.x + radius) / c);
@@ -96,6 +102,7 @@ export class Collision {
               if (d2 < rr * rr && d2 > 1e-8) {
                 const d = Math.sqrt(d2), push = rr - d;
                 pos.x += (dx / d) * push; pos.z += (dz / d) * push;
+                if (push > bestPush) { bestPush = push; bestKind = it.kind; bnx = dx / d; bnz = dz / d; }
               }
             } else {
               const abx = it.bx - it.ax, abz = it.bz - it.az;
@@ -108,6 +115,7 @@ export class Collision {
               if (d2 < rr * rr && d2 > 1e-8) {
                 const d = Math.sqrt(d2), push = rr - d;
                 pos.x += (dx / d) * push; pos.z += (dz / d) * push;
+                if (push > bestPush) { bestPush = push; bestKind = it.kind; bnx = dx / d; bnz = dz / d; }
               }
             }
           }
@@ -115,8 +123,13 @@ export class Collision {
       }
     }
     const limX = this.halfX - radius, limZ = this.halfZ - radius;
-    pos.x = Math.max(-limX, Math.min(limX, pos.x));
-    pos.z = Math.max(-limZ, Math.min(limZ, pos.z));
+    const qx = Math.max(-limX, Math.min(limX, pos.x)), qz = Math.max(-limZ, Math.min(limZ, pos.z));
+    if (out) {
+      const edge = Math.hypot(qx - pos.x, qz - pos.z);
+      if (edge > bestPush) { bestPush = edge; bestKind = 'wall'; bnx = (qx - pos.x) / edge; bnz = (qz - pos.z) / edge; }
+      out.kind = bestKind; out.push = bestPush; out.nx = bnx; out.nz = bnz;
+    }
+    pos.x = qx; pos.z = qz;
   }
 
   // Lancer de rayon 3D contre les obstacles (murs, arbres, voitures) + le sol.

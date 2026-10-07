@@ -247,7 +247,12 @@ export const CONFIG = {
     // (jamais mortel : il leur reste au moins 1 PV)
     crash: { minSpeed: 10, damagePerMs: 3.5, maxDamage: 45 },
     // Points de vie des motos (type.hp) et dégâts qu'elles subissent. Seul l'hôte écrit les PV (v_dmg -> v_hp).
-    //  - choc contre un mur : max(0, impact - crashFree) x crashPerMs (impact = vitesse perdue, m/s) ; un coup de zombie sur un occupant : zombieHit
+    //  - choc contre un objet physique (voiture, mobilier, arbre, machine… : obstacle de nature 'prop') : max(0, impact - crashFree) x crashPerMs
+    //    (impact = vitesse perdue, m/s) ; contre un MUR (architecture : façade, quai, parapet, porte, marche, bord de l'île : nature 'wall')
+    //    la moto est abîmée de `wall` x ce montant (0 = jamais) ; le pilote, lui, se blesse pareil (crash.minSpeed)
+    //  - choc moto contre moto : chacune perd max(0, vitesse relative d'approche - motoHit.free) x motoHit.perMs PV ; rebond : la moto perd
+    //    motoHit.bounce x sa vitesse vers l'autre (l'autre moto, si elle est conduite par un autre joueur, calcule ses propres dégâts)
+    //  - un coup de zombie sur un occupant : zombieHit
     //  - explosion (grenade, M79, pestiféré, autre moto) : `explosion` x les dégâts infligés aux zombies, même atténuation ; balles et
     //    splash (pistolet à rayons, carreau explosif, onde du PHD) n'abîment pas les motos
     //  - écrasement : roadkillKill par zombie tué, roadkillHurt par zombie qui survit
@@ -255,7 +260,7 @@ export const CONFIG = {
     //    atténuation, dégâts maximaux aux joueurs, jamais mortels), épave wreckTime s, puis retour au parking à la manche suivante + respawnRounds
     //  - fumée selon les PV (grey / black : fraction des PV en dessous de laquelle, particules par seconde ; flames : flammèches)
     damage: {
-      crashFree: 6, crashPerMs: 5, zombieHit: 10, explosion: 0.1, roadkillKill: 5, roadkillHurt: 12,
+      crashFree: 6, crashPerMs: 5, wall: 0, motoHit: { free: 4, perMs: 4, bounce: 1.3, hitCooldown: 0.5, driven: 0.55 }, zombieHit: 10, explosion: 0.1, roadkillKill: 5, roadkillHurt: 12,
       burnTime: 2, wreckTime: 20, respawnRounds: 2, respawnClear: 1.5, respawnRetry: 1,
       blast: { radius: 5, zombies: 1000, players: 50, color: 0xff8a2a },
       smoke: { grey: { below: 0.5, rate: 4 }, black: { below: 0.25, rate: 10 }, flames: { below: 0.1, rate: 10 } },
@@ -281,11 +286,11 @@ export const CONFIG = {
     types: {
       moto: {
         name: 'MOTO', seats: 1, camArm: 3.4, hp: 300, tank: 6, idle: 0.004, gas: 0.012, perSpeed: 0.017, maxSpeed: 21, accel: 11, brake: 28, reverseSpeed: 3.5, drag: 0.12,
-        wheelbase: 1.35, maxSteer: 0.62, grip: 15, radius: 0.55, roadkill: { K: 16, vmin: 9, slowdown: 0.85 },
+        wheelbase: 1.35, maxSteer: 0.62, grip: 15, radius: 0.55, bikeRadius: 0.45, roadkill: { K: 16, vmin: 9, slowdown: 0.85 },
       },
       grosseMoto: {
         name: 'GROSSE MOTO', seats: 2, camArm: 4.0, hp: 500, tank: 10, idle: 0.005, gas: 0.016, perSpeed: 0.021, maxSpeed: 17, accel: 8, brake: 24, reverseSpeed: 3, drag: 0.12,
-        wheelbase: 1.75, maxSteer: 0.5, grip: 11, radius: 0.7, roadkill: { K: 24, vmin: 7, slowdown: 0.90 },
+        wheelbase: 1.75, maxSteer: 0.5, grip: 11, radius: 0.7, bikeRadius: 0.55, roadkill: { K: 24, vmin: 7, slowdown: 0.90 },
       },
     },
   },

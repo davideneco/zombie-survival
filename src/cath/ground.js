@@ -113,9 +113,9 @@ export function buildGround(ctx) {
     if (h > 14.5) {
       pillarGeo.push(new THREE.CylinderGeometry(r + 0.32, r, 0.7, 14).translate(x, 14.85, z)); // chapiteau
       pillarGeo.push(new THREE.CylinderGeometry(0.5, 0.5, h - 14.5, 10).translate(x, (h + 14.5) / 2, z));
-      collision.addCircle(x, z, r + 0.3, 15.3, -0.5);   // pilier : les galeries le contournent
-      collision.addCircle(x, z, 0.62, h, 15.3);         // fût mince au-dessus des galeries
-    } else collision.addCircle(x, z, r + 0.3, h, -0.5);
+      collision.addCircle(x, z, r + 0.3, 15.3, -0.5, 'wall');   // pilier : les galeries le contournent
+      collision.addCircle(x, z, 0.62, h, 15.3, 'wall');         // fût mince au-dessus des galeries
+    } else collision.addCircle(x, z, r + 0.3, h, -0.5, 'wall');
   };
 
   for (const f of interfaces) {
