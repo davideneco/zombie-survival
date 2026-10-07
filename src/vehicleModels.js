@@ -18,6 +18,10 @@ const mats = () => MAT || (MAT = {
   screen: std(0x9fb4c4, 0.1, 0.1, { transparent: true, opacity: 0.35 }),
 });
 
+// Matériau noir partagé de toutes les épaves (compilé au préchauffage : voir precompileShaders dans main.js)
+let WRECK = null;
+export const wreckMaterial = () => WRECK || (WRECK = std(0x0d0d0f, 0.95, 0.1));
+
 const SHARED_UP = new THREE.Vector3(0, 1, 0);
 function box(parent, w, h, d, mat, x = 0, y = 0, z = 0, rx = 0, ry = 0, rz = 0) {
   const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);

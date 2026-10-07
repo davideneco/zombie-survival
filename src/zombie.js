@@ -652,6 +652,7 @@ export class Zombie {
       if (this.attackWindup < 0) {
         if (Math.hypot(target.pos.x - this.pos.x, target.pos.z - this.pos.z) < Z.attackRange + 0.5 && Math.abs(target.pos.y - this.pos.y) < 2.6) {
           target.hurt(this.attackDamage || Z.damage);
+          world.onStrike?.(target); // crochet des motos : la moto de la victime perd des PV (hôte)
         }
         this.attackCd = Z.attackCooldown;
         this.attackWindup = -1;

@@ -3,6 +3,7 @@ import * as THREE from 'three';
 // Effets visuels légers : particules instanciées (sang, verre, terre, poussière)
 // et taches de sang persistantes au sol. Un seul draw call pour toutes les particules.
 const N = 280;
+const NG = 220; // particules sans éclairage
 const DECALS = 36;
 
 const _m = new THREE.Matrix4();
@@ -37,22 +38,23 @@ function splatTexture() {
 }
 
 class Fx {
+  makePool(material, n) {
+    const mesh = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), material, n);
+    mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    mesh.frustumCulled = false;
+    for (let i = 0; i < n; i++) { mesh.setColorAt(i, _c.set(0xffffff)); mesh.setMatrixAt(i, ZERO); }
+    this.scene.add(mesh);
+    const parts = Array.from({ length: n }, () => ({ life: 0, max: 1, x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, size: 0.05, rx: 0, ry: 0, rz: 0, sx: 0, sy: 0, sz: 0, grav: 12 }));
+    return { mesh, parts, n, cursor: 0, active: 0 };
+  }
+
   init(scene) {
     if (this.scene) return;
     this.scene = scene;
 
-    this.mesh = new THREE.InstancedMesh(
-      new THREE.BoxGeometry(1, 1, 1),
-      new THREE.MeshStandardMaterial({ roughness: 0.7 }),
-      N
-    );
-    this.mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-    this.mesh.frustumCulled = false;
-    for (let i = 0; i < N; i++) { this.mesh.setColorAt(i, _c.set(0xffffff)); this.mesh.setMatrixAt(i, ZERO); }
-    scene.add(this.mesh);
-    this.parts = Array.from({ length: N }, () => ({ life: 0, max: 1, x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, size: 0.05, rx: 0, ry: 0, rz: 0, sx: 0, sy: 0, sz: 0, grav: 12 }));
-    this.cursor = 0;
-    this.active = 0;
+    // Deux réserves de particules (un seul dessin chacune) : la principale (éclairée : sang, poussière, débris) et une « sans éclairage »
+    // (option glow : flammes et fumée des motos, qui doivent rester visibles de nuit). Aucune lumière dans les deux cas.
+    this.pools = [this.makePool(new THREE.MeshStandardMaterial({ roughness: 0.7 }), N), this.makePool(new THREE.MeshBasicMaterial({ fog: true }), NG)];
 
     // Taches de sang
     const tex = splatTexture();
@@ -98,13 +100,14 @@ class Fx {
   // Émet `count` particules autour de (x,y,z).
   emit(x, y, z, o = {}) {
     if (!this.scene) return;
-    const { count = 8, color = 0xffffff, speed = 3, up = 2, size = 0.06, life = 0.8, nx = 0, nz = 0, push = 0, grav = 12, spread = 0.1 } = o;
+    const { count = 8, color = 0xffffff, speed = 3, up = 2, size = 0.06, life = 0.8, nx = 0, nz = 0, push = 0, grav = 12, spread = 0.1, glow = false } = o;
     const colors = Array.isArray(color) ? color : [color];
+    const pool = this.pools[glow ? 1 : 0];
     for (let i = 0; i < count; i++) {
-      const p = this.parts[this.cursor];
-      const idx = this.cursor;
-      this.cursor = (this.cursor + 1) % N;
-      if (p.life <= 0) this.active++;
+      const p = pool.parts[pool.cursor];
+      const idx = pool.cursor;
+      pool.cursor = (pool.cursor + 1) % pool.n;
+      if (p.life <= 0) pool.active++;
       p.life = p.max = life * (0.6 + Math.random() * 0.6);
       p.x = x + (Math.random() - 0.5) * spread; p.y = y + (Math.random() - 0.5) * spread; p.z = z + (Math.random() - 0.5) * spread;
       const a = Math.random() * Math.PI * 2, s = speed * (0.3 + Math.random() * 0.7);
@@ -114,9 +117,9 @@ class Fx {
       p.rx = Math.random() * 6; p.ry = Math.random() * 6; p.rz = Math.random() * 6;
       p.sx = (Math.random() - 0.5) * 12; p.sy = (Math.random() - 0.5) * 12; p.sz = (Math.random() - 0.5) * 12;
       p.grav = grav;
-      this.mesh.setColorAt(idx, _c.set(colors[Math.floor(Math.random() * colors.length)]));
+      pool.mesh.setColorAt(idx, _c.set(colors[Math.floor(Math.random() * colors.length)]));
     }
-    if (this.mesh.instanceColor) this.mesh.instanceColor.needsUpdate = true;
+    if (pool.mesh.instanceColor) pool.mesh.instanceColor.needsUpdate = true;
   }
 
   blood(x, y, z, big = false) {
@@ -147,12 +150,13 @@ class Fx {
 
   update(dt) {
     if (!this.scene) return;
-    if (this.active > 0) {
-      for (let i = 0; i < N; i++) {
-        const p = this.parts[i];
+    for (const pool of this.pools) {
+      if (pool.active <= 0) continue;
+      for (let i = 0; i < pool.n; i++) {
+        const p = pool.parts[i];
         if (p.life <= 0) continue;
         p.life -= dt;
-        if (p.life <= 0) { this.active--; this.mesh.setMatrixAt(i, ZERO); continue; }
+        if (p.life <= 0) { pool.active--; pool.mesh.setMatrixAt(i, ZERO); continue; }
         p.vy -= p.grav * dt;
         p.x += p.vx * dt; p.y += p.vy * dt; p.z += p.vz * dt;
         if (p.y < 0.03) { p.y = 0.03; p.vy = Math.abs(p.vy) * 0.2; p.vx *= 0.5; p.vz *= 0.5; p.sx = p.sy = p.sz = 0; }
@@ -161,9 +165,9 @@ class Fx {
         _e.set(p.rx, p.ry, p.rz);
         _q.setFromEuler(_e);
         _m.compose(_p.set(p.x, p.y, p.z), _q, _s.set(k, k * 0.6, k));
-        this.mesh.setMatrixAt(i, _m);
+        pool.mesh.setMatrixAt(i, _m);
       }
-      this.mesh.instanceMatrix.needsUpdate = true;
+      pool.mesh.instanceMatrix.needsUpdate = true;
     }
     for (let i = this.booms.length - 1; i >= 0; i--) {
       const b = this.booms[i];
@@ -187,9 +191,11 @@ class Fx {
 
   clear() {
     if (!this.scene) return;
-    for (let i = 0; i < N; i++) { this.parts[i].life = 0; this.mesh.setMatrixAt(i, ZERO); }
-    this.mesh.instanceMatrix.needsUpdate = true;
-    this.active = 0;
+    for (const pool of this.pools) {
+      for (let i = 0; i < pool.n; i++) { pool.parts[i].life = 0; pool.mesh.setMatrixAt(i, ZERO); }
+      pool.mesh.instanceMatrix.needsUpdate = true;
+      pool.active = 0;
+    }
     for (const d of this.decals) { d.life = 0; d.mesh.visible = false; }
   }
 }

@@ -15,6 +15,8 @@ export class Hud {
       speedo: $('speedo'),
       speedFill: $('vSpeedFill'),
       speedTick: $('vSpeedTick'),
+      hpFill: $('vHpFill'),
+      hpTxt: $('vHpTxt'),
       announce: $('announce'),
       vignette: $('vignette'),
       nukeflash: $('nukeflash'),
@@ -139,6 +141,13 @@ export class Hud {
     });
     this._set('speedbar', `${Math.round(Math.abs(info.speed) / info.vmax * 200)}`, () => { this.el.speedFill.style.width = `${Math.min(100, Math.abs(info.speed) / info.vmax * 100)}%`; });
     this._set('speedtick', `${info.vmin}|${info.vmax}`, () => { this.el.speedTick.style.left = `${Math.min(100, info.vmin / info.vmax * 100)}%`; });
+    // points de vie de la moto : verte, orange sous 50 %, rouge sous 25 %
+    const f = info.hpMax > 0 ? Math.max(0, info.hp / info.hpMax) : 0, pct = Math.round(f * 100);
+    this._set('vhp', pct, () => {
+      this.el.hpFill.style.width = `${pct}%`;
+      this.el.hpFill.style.background = f < 0.25 ? '#e03030' : f < 0.5 ? '#f0a030' : '#3fbf5f';
+      this.el.hpTxt.textContent = `${pct} %`;
+    });
   }
 
   prompt(text) {
@@ -394,8 +403,18 @@ export class Hud {
       ctx.fillStyle = '#fff'; ctx.font = 'bold 17px Arial'; ctx.fillText('P', qx, qy + 6);
     }
     for (const v of world.vehicles || []) {
-      if (pk && Math.hypot(v.pos.x - pk.x, v.pos.z - pk.z) < 9) { const [qx, qy] = P(pk.x, pk.z); icon(0, 0, '#e0c22e', v.type === 'moto' ? 'M' : 'G', qx + (v.type === 'moto' ? -17 : 17), qy + 19); }
-      else icon(v.pos.x, v.pos.z, '#e0c22e', v.type === 'moto' ? 'M' : 'G');
+      const lab = v.type === 'moto' ? 'M' : 'G', f = v.hp / v.maxHp;
+      const col = f < 0.25 ? '#d83a2e' : f < 0.5 ? '#e8892b' : '#e0c22e'; // jaune, orange sous 50 % des PV, rouge sous 25 %
+      const parked = pk && Math.hypot(v.pos.x - pk.x, v.pos.z - pk.z) < 9;
+      let qx, qy;
+      if (v.state === 'gone' || (pk && v.state === 'wreck' && parked)) [qx, qy] = P(v.spawn.x, v.spawn.z);
+      else [qx, qy] = P(v.pos.x, v.pos.z);
+      if (pk && (parked || v.state === 'gone')) { const [cx, cy] = P(pk.x, pk.z); qx = cx + (v.type === 'moto' ? -17 : 17); qy = cy + 19; }
+      if (v.state === 'wreck' || v.state === 'gone') { // épave : croix grise « M+2 » (revient 2 manches après sa destruction)
+        ctx.strokeStyle = '#000'; ctx.lineWidth = 5; ctx.beginPath(); ctx.moveTo(qx - 7, qy - 7); ctx.lineTo(qx + 7, qy + 7); ctx.moveTo(qx + 7, qy - 7); ctx.lineTo(qx - 7, qy + 7); ctx.stroke();
+        ctx.strokeStyle = '#9aa0a6'; ctx.lineWidth = 3; ctx.stroke();
+        ctx.font = 'bold 10px Arial'; ctx.lineWidth = 3; ctx.strokeStyle = '#000'; ctx.strokeText(`${lab}+2`, qx, qy + 20); ctx.fillStyle = '#ccc'; ctx.fillText(`${lab}+2`, qx, qy + 20);
+      } else icon(0, 0, col, lab, qx, qy);
     }
     for (const m of world.machines || []) if (m.type !== 'box' || m.active) icon(m.pos.x, m.pos.z, m.type === 'box' ? '#3f8fd8' : m.color, m.type === 'box' ? '?' : m.type === 'pap' ? 'P' : (m.letter || m.name[0]));
     // coéquipiers

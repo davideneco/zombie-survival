@@ -15,6 +15,7 @@ import { CHARACTERS, Avatar, charOf, renderPortraits } from './characters.js';
 import { makeTeddy } from './machines.js';
 import { installMachineFx } from './machineFx.js';
 import { installVehicles } from './vehicles.js';
+import { wreckMaterial } from './vehicleModels.js';
 import { installLauncher } from './launcher.js';
 import { makeDisplay } from './weaponDisplay.js';
 
@@ -212,6 +213,7 @@ const game = {
       if (z.isBoss) this.spawnPowerup(z.pos, null, 'max_ammo');
       else if (Math.random() < CONFIG.powerups.dropChance) this.spawnPowerup(z.pos);
     }
+    return killed; // (client : undefined, l'hôte tranche)
   },
 
   impact(point, color = 0xcccccc) {
@@ -454,6 +456,10 @@ const game = {
       return;
     }
 
+    // 4b) Borne du parking (à plus de 2,4 m de toute place de moto : jamais en concurrence avec « monter »)
+    const np = this.nearPump();
+    if (np) { this.usePump(np); return; }
+
     // 5) Moto : monter (avant la porte : les motos sont posées loin des portes)
     const nv = this.nearVehicle();
     if (nv) { this.tryMount(nv.v, nv.seat); return; }
@@ -634,6 +640,7 @@ const game = {
     if (self && d < radius && !p.downed && !p.dead) p.hurt((self === true ? CONFIG.grenade.selfDamage : self) * (1 - d / radius), src);
     if (this.isClient) return;
     this.areaDamage(pos, radius, damage, owner);
+    this.damageVehiclesInRadius?.(pos, radius, damage); // les motos : 10 % des dégâts infligés aux zombies (hôte)
   },
 
   // Dégâts de zone sur les zombies (hôte / solo) ; les survivants peuvent perdre leurs jambes
@@ -662,7 +669,7 @@ const game = {
         }
       }
     }
-    if (!pts) return;
+    if (!pts || owner === false) return; // owner === false : personne à récompenser (moto sans conducteur qui explose)
     if (owner != null) this.net?.send({ t: 'pts', pts, kill: kills > 0, kills }, owner);
     else { this.kills += kills; if (kills) sfx.kill(); this.addPoints(pts); }
   },
@@ -763,6 +770,7 @@ const game = {
     if (this.isHost) {
       this.net?.send({ t: 'round_start', r, toSpawn: this.toSpawn });
     }
+    if (!this.isClient) this.hostRespawnCheck?.(); // motos détruites : retour au parking (hôte)
   },
 
   pickSpawn() {
@@ -1128,9 +1136,9 @@ const game = {
 
     // Prompt contextuel
     let promptText = null;
-    hud.setVehicle(p.vehicle ? { speed: p.vehicle.v.speed, vmax: p.vehicle.v.def.maxSpeed, vmin: p.vehicle.v.def.roadkill.vmin } : null);
+    hud.setVehicle(p.vehicle ? { speed: p.vehicle.v.speed, vmax: p.vehicle.v.def.maxSpeed, vmin: p.vehicle.v.def.roadkill.vmin, hp: p.vehicle.v.hp, hpMax: p.vehicle.v.maxHp } : null);
     if (p.vehicle) {
-      promptText = p.vehicle.seat === 0 ? '[E] Descendre' : '[E] Descendre · clic gauche : tirer';
+      promptText = p.vehicle.v.state === 'burning' ? 'SAUTEZ ! [E]' : p.vehicle.seat === 0 ? '[E] Descendre' : '[E] Descendre · clic gauche : tirer';
     } else if (downedTeammate) {
       const left = Math.max(0, this.reviveTime() - this.reviveTimer).toFixed(1);
       promptText = `[E] Maintenir pour réanimer ${downedTeammate.name} (${left}s)`;
@@ -1152,6 +1160,8 @@ const game = {
         const full = p.inventory.length >= p.maxWeapons;
         promptText = `[E] Acheter ${ww.name} (${ww.price} pts)${full ? ' — remplace l’arme en main' : ''}`;
       }
+    } else if (this.nearPump()) {
+      promptText = this.pumpPrompt(this.nearPump());
     } else if (this.nearVehicle()) {
       promptText = this.vehiclePrompt(this.nearVehicle());
     } else if (this.nearDoor()) {
@@ -1777,6 +1787,7 @@ function precompileShaders() {
   const disp = makeDisplay(); add(disp.root); disp.showPap('rifle');
   for (const k of ['armored', 'bloat']) zs.push(new Zombie(scene, sp, 100, 1, () => {}, null, { kind: k }));
   zs.push(new Boss(scene, sp, 100, () => {}, null, {}));
+  add(new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.1), wreckMaterial())); // épave de moto (matériau noir partagé)
   for (const ch of [CHARACTERS[0], CHARACTERS[1]]) { const av = new Avatar(ch); av.flash.visible = true; add(av.root); }
   add(new THREE.Mesh(HALO_GEO, new THREE.MeshBasicMaterial({ transparent: true, blending: THREE.AdditiveBlending, depthWrite: false })));
   add(new THREE.Mesh(new THREE.DodecahedronGeometry(0.35), new THREE.MeshStandardMaterial({ color: 0x22ff66, emissive: 0x22ff66, emissiveIntensity: 1.2, roughness: 0.3 })));

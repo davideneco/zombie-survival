@@ -374,6 +374,11 @@ export class Sfx {
     this._tone('sawtooth', big ? 50 : 80, big ? 140 : 260, 0.4, 0.3, { at: 0.45, dist: true });
     this._tone('sawtooth', big ? 140 : 260, big ? 60 : 100, 0.5, 0.25, { at: 0.85, dist: true });
   }
+  alarm(v = 1) { // moto en feu : deux bips stridents
+    if (!this.ctx || v < 0.03) return;
+    this._tone('square', 1040, 1040, 0.13, 0.14 * v);
+    this._tone('square', 780, 780, 0.13, 0.14 * v, { at: 0.17 });
+  }
   crash(v = 1) { // choc contre un mur : tôle froissée et coup sourd
     if (!this.ctx || v < 0.05) return;
     this._noise(0.35, 0.7 * v, 700, 'lowpass', { f1: 150, send: 0.3 });

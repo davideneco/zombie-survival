@@ -177,6 +177,8 @@ export const CONFIG = {
   // (m/s²) : plus elle est faible, plus il faut ralentir pour tourner (rayon minimal = vitesse² / grip).
   vehicles: {
     mountRange: 2.6,   // distance maximale pour monter (m)
+    pumpRange: 2.4,    // distance maximale à la borne du parking pour l'utiliser (m) ; pumpReach : distance borne-moto maximale (m)
+    pumpReach: 8,
     // Parking : un seul endroit, sur la place Gutenberg (à côté de l'entrée du parking souterrain). Les emplacements sont fixes
     // (aucun tirage : identiques chez tous les joueurs). x, z : centre (m) ; yaw : cap des motos (0 = vers le nord, -z) ; dx / dz :
     // décalage dans le repère du parking (dx vers la droite des motos, dz vers l'arrière). rect : emprise réservée au décor (m).
@@ -200,13 +202,28 @@ export const CONFIG = {
     // Choc contre un mur : au-dessus de minSpeed (vitesse perdue dans le choc), les occupants perdent damagePerMs PV par m/s en trop
     // (jamais mortel : il leur reste au moins 1 PV)
     crash: { minSpeed: 10, damagePerMs: 3.5, maxDamage: 45 },
+    // Points de vie des motos (type.hp) et dégâts qu'elles subissent. Seul l'hôte écrit les PV (v_dmg -> v_hp).
+    //  - choc contre un mur : max(0, impact - crashFree) x crashPerMs (impact = vitesse perdue, m/s) ; un coup de zombie sur un occupant : zombieHit
+    //  - explosion (grenade, M79, pestiféré, autre moto) : `explosion` x les dégâts infligés aux zombies, même atténuation ; balles et
+    //    splash (pistolet à rayons, carreau explosif, onde du PHD) n'abîment pas les motos
+    //  - écrasement : roadkillKill par zombie tué, roadkillHurt par zombie qui survit
+    //  - à 0 PV : en feu pendant burnTime s (moteur coupé, personne ne peut monter), puis explosion (blast : rayon, dégâts aux zombies avec
+    //    atténuation, dégâts maximaux aux joueurs, jamais mortels), épave wreckTime s, puis retour au parking à la manche suivante + respawnRounds
+    //  - fumée selon les PV (grey / black : fraction des PV en dessous de laquelle, particules par seconde ; flames : flammèches)
+    damage: {
+      crashFree: 6, crashPerMs: 5, zombieHit: 10, explosion: 0.1, roadkillKill: 5, roadkillHurt: 12,
+      burnTime: 2, wreckTime: 20, respawnRounds: 2, respawnClear: 1.5, respawnRetry: 1,
+      blast: { radius: 5, zombies: 1000, players: 50, color: 0xff8a2a },
+      smoke: { grey: { below: 0.5, rate: 4 }, black: { below: 0.25, rate: 10 }, flames: { below: 0.1, rate: 10 } },
+      repairPrice: 2,     // points par PV réparé à la borne du parking
+    },
     types: {
       moto: {
-        name: 'MOTO', seats: 1, maxSpeed: 21, accel: 11, brake: 28, reverseSpeed: 3.5, drag: 0.12,
+        name: 'MOTO', seats: 1, hp: 300, maxSpeed: 21, accel: 11, brake: 28, reverseSpeed: 3.5, drag: 0.12,
         wheelbase: 1.35, maxSteer: 0.62, grip: 15, radius: 0.55, roadkill: { K: 16, vmin: 9, slowdown: 0.85 },
       },
       grosseMoto: {
-        name: 'GROSSE MOTO', seats: 2, maxSpeed: 17, accel: 8, brake: 24, reverseSpeed: 3, drag: 0.12,
+        name: 'GROSSE MOTO', seats: 2, hp: 500, maxSpeed: 17, accel: 8, brake: 24, reverseSpeed: 3, drag: 0.12,
         wheelbase: 1.75, maxSteer: 0.5, grip: 11, radius: 0.7, roadkill: { K: 24, vmin: 7, slowdown: 0.90 },
       },
     },

@@ -85,6 +85,11 @@
     .vbar i { position: absolute; left: 0; top: 0; bottom: 0; width: 0; background: #9aa0a6; }
     .vbar b { position: absolute; top: -3px; bottom: -3px; width: 2px; background: #fff; box-shadow: 0 0 2px #000; }
     #speedo.hot + .vbar i { background: #ff4a3a; }
+    .vrow { display: flex; align-items: center; gap: 6px; margin-top: 3px; font: 11px/1 Arial, sans-serif; letter-spacing: 1px; color: #ccc; }
+    .vrow span { width: 62px; text-align: right; }
+    .vrow .vbar { flex: 1; margin-top: 0; height: 9px; }
+    .vrow em { width: 38px; text-align: left; font-style: normal; font-weight: bold; }
+    .vrow.low .vbar { animation: pulse .5s infinite alternate; }
     #announce { position: absolute; left: 50%; top: 22%; transform: translateX(-50%); text-align: center; font-size: 64px; color: #b01818; text-shadow: 0 0 10px #000; opacity: 0; transition: opacity .6s; }
     #announce small { display: block; font-size: 22px; color: #ddd; letter-spacing: 3px; }
     #announce.show { opacity: 1; }
@@ -158,6 +163,7 @@
     <div id="vehHud">
       <div id="speedo"></div>
       <div class="vbar" id="vSpeedBar"><i id="vSpeedFill"></i><b id="vSpeedTick"></b></div>
+      <div class="vrow" id="vHpRow"><span>PV MOTO</span><div class="vbar"><i id="vHpFill"></i></div><em id="vHpTxt"></em></div>
     </div>
     <div id="roomBadge"></div>
     <div id="teammates"></div>
