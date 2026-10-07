@@ -545,6 +545,7 @@ export async function buildRealWorld(scene, renderer) {
   }
 
   // ---------------------------------------------------------------- Limites de l'île
+  const quaySegs = []; // parapets de quai (1,1 m de haut) : une arme murale ne s'y accroche pas (la planche flotterait au-dessus)
   // Contour lissé (marching squares) : parapet de quai en grès côté eau, grille côté terre (ponts).
   // Chaque mur qui bloque le joueur est donc visible.
   {
@@ -555,6 +556,7 @@ export async function buildRealWorld(scene, renderer) {
     const parapets = [], fences = [];
     const wall = (ax, az, bx, bz, water) => {
       collision.addSegment(ax, az, bx, bz);
+      if (water) quaySegs.push([ax, az, bx, bz]);
       const len = Math.hypot(bx - ax, bz - az);
       const h = water ? PH : FH, t = water ? PT : FT;
       const g = worldBox(len + t * 0.6, h, t, water ? 1.5 : 2.2);
@@ -1062,7 +1064,8 @@ export async function buildRealWorld(scene, renderer) {
   };
 
   // Arme murale : planche avec le dessin à la craie, accrochée sur le mur le plus proche (sinon sur deux poteaux)
-  const addWallBuy = (id, name, price, ammoPrice, colorHex, spot, faceX, faceZ) => {
+  const nearQuay = (x, z) => quaySegs.some(([ax, az, bx, bz]) => { const dx = bx - ax, dz = bz - az, l2 = dx * dx + dz * dz; let t = l2 ? ((x - ax) * dx + (z - az) * dz) / l2 : 0; t = t < 0 ? 0 : t > 1 ? 1 : t; return Math.hypot(x - ax - dx * t, z - az - dz * t) < 0.5; });
+  const addWallBuy = (id, name, price, ammoPrice, colorHex, spot, faceX, faceZ, avoidQuay = false) => {
     if (!spot) return;
     let [x, z] = spot;
     let best = 5, ang = null;
@@ -1070,6 +1073,7 @@ export async function buildRealWorld(scene, renderer) {
       const t = (a / 36) * Math.PI * 2, cx = Math.cos(t), cz = Math.sin(t);
       const d = collision.rayHit(x, 1.5, z, cx, 0, cz, 5);
       if (d >= best) continue;
+      if (avoidQuay && nearQuay(x + cx * d, z + cz * d)) continue;
       // le panneau (1,6 m) doit tenir sur un pan de mur plat : rayons parallèles à ±0,75 m
       const ok = [-0.75, 0.75].every((o) => Math.abs(collision.rayHit(x - cz * o, 1.5, z + cx * o, cx, 0, cz, 6) - d) < 0.25);
       if (ok) { best = d; ang = t; }
@@ -1334,7 +1338,7 @@ export async function buildRealWorld(scene, renderer) {
   const nearestPt = (pts, x, z) => { let m = Infinity; for (const p of pts) m = Math.min(m, Math.hypot(p.x - x, p.z - z)); return m; };
   const doorDist = (x, z) => nearestPt(doorPts, x, z);
   const doorDistLegacy = (x, z) => nearestPt(doorPtsLegacy, x, z);
-  const WALL_COLORS = { shotgun: 0xff8833, smg: 0x3399ff, sniper: 0x88ccff, lmg: 0xff5533, crossbow: 0xc89a50, m79: 0xff6a2a };
+  const WALL_COLORS = { shotgun: 0xff8833, smg: 0x3399ff, sniper: 0x88ccff, lmg: 0xff5533, crossbow: 0xc89a50, m79: 0xff6a2a, magnum: 0xffc84a, saiga: 0xffc84a, mg42: 0xffc84a, barrett: 0xffc84a }; // dorées : armes premium des zones extérieures
   const machines = [];
   const vehicleSpawns = []; // motos : { type, x, z, yaw } (voir CONFIG.vehicles)
   let parkingInfo = null;   // parking des motos (voir parking.js), null si repli
@@ -1422,7 +1426,7 @@ export async function buildRealWorld(scene, renderer) {
         } else if (type === 'wall') {
           const W = CONFIG.weapons[id];
           const n0 = wallWeapons.length;
-          addWallBuy(id, W.name, W.price, W.ammoPrice, WALL_COLORS[id] || 0xff8833, spotIn(zi, 2, start ? 6 : 4, start ? 26 : 32, gaps), fx, fz);
+          addWallBuy(id, W.name, W.price, W.ammoPrice, WALL_COLORS[id] || 0xff8833, spotIn(zi, 2, start ? 6 : 4, start ? 26 : 32, gaps), fx, fz, !!zone.outer);
           if (wallWeapons.length > n0) wallWeapons[n0].zone = zi;
         } else if (zone.seed === 'cathedral' && cath && (type === 'pap' || type === 'clock')) {
           const fixed = type === 'pap' ? cath.pap : cath.clock;
@@ -1786,7 +1790,8 @@ export async function buildRealWorld(scene, renderer) {
     if (!d || d.open) return false;
     d.open = true;
     // zone que cette porte ouvre : celle qui était encore fermée (une porte lointaine achetée de loin peut n'en ouvrir aucune de neuve)
-    d.opens = !zoneOpen[d.a] ? d.a : !zoneOpen[d.b] ? d.b : d.toZone;
+    d.opened = [d.a, d.b].filter((z) => !zoneOpen[z]); // les zones que cette porte ouvre (deux si on l'achète de loin, aucune si déjà ouvertes)
+    d.opens = d.opened.length ? d.opened[0] : d.toZone;
     d.name = ZONE_NAMES[d.opens];
     for (const s of d.segs) s.off = true;
     if (d.leaves) { d.opening = 0; openingDoors.push(d); for (const m of d.meshes) m.traverse((o) => { if (o.isMesh && o.geometry.type === 'PlaneGeometry') o.visible = false; }); }

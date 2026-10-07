@@ -5,4 +5,5 @@ Bombe;Tue tous les zombies, +400 pts;
 Points doubles;Points x2;30
 Bidon d'essence;+2,5 L pour une moto (rare : seulement si une moto est à moitié vide, voir Motos);
 (règle) Chance de lâcher un bonus;5 % par zombie tué;
+(règle) Bonus d'ouverture;Munitions max ou Points doubles à la première ouverture d'une zone extérieure;
 (règle) Durée au sol;;25

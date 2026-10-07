@@ -48,17 +48,20 @@ const pageScript = `(() => {
   const data = {
     version: document.getElementById('version').textContent,
     start: { x: Math.round(w.startPos.x), z: Math.round(w.startPos.z) },
-    zones: zn.map((name, i) => ({ i, name, seed: w.zoneCenters[i] && { x: Math.round(w.zoneCenters[i].x), z: Math.round(w.zoneCenters[i].z) } })),
+    zones: zn.map((name, i) => ({ i, name, area: Math.round(w.zoneArea[i]), seed: w.zoneCenters[i] && { x: Math.round(w.zoneCenters[i].x), z: Math.round(w.zoneCenters[i].z) } })),
     stations: w.stations.map((s) => ({ zone: Z(s.x, s.z), x: Math.round(s.x), z: Math.round(s.z) })),
     walls: w.wallWeapons.map((v) => ({ id: v.id, price: v.price, ammo: v.ammoPrice, zone: Z(v.pos.x, v.pos.z), x: Math.round(v.pos.x), z: Math.round(v.pos.z) })),
     machines: w.machines.map((m) => ({ type: m.type, id: m.id || null, name: m.name, price: m.price, zone: m.zone, x: Math.round(m.pos.x), z: Math.round(m.pos.z) })),
     doors: w.doors.map((d) => ({ n: d.id + 1, price: d.price, a: d.a, b: d.b })),
   };
   // ---- image
-  const cr = w.mapCrop, K = 2.6, pad = 40, top = 90, panelW = 720;
+  // toute la Grande Île : échelle réduite pour que la carte reste à ~2000 px ; le panneau de droite a deux colonnes (emplacements | portes)
+  const cr = w.mapCrop, K = Math.min(2.6, 2000 / (cr.x1 - cr.x0)), pad = 40, top = 90, colW = 560, panelW = colW * 2 + 20;
   const mapW = Math.round((cr.x1 - cr.x0) * K), mapH = Math.round((cr.z1 - cr.z0) * K);
   const cv = document.createElement('canvas');
-  cv.width = pad + mapW + 30 + panelW + pad; cv.height = Math.max(top + mapH + 120, 1000);
+  const nItems = data.stations.length + data.walls.length + data.machines.length;
+  const doorRows = Math.ceil(w.doors.length / 3);
+  cv.width = pad + mapW + 30 + panelW + pad; cv.height = Math.max(top + mapH + 50 + 40 + doorRows * 20 + 120, top + 80 + (zn.length * 32 + nItems * 21) / 2 + 260);
   const x = cv.getContext('2d');
   x.fillStyle = '#0b0d10'; x.fillRect(0, 0, cv.width, cv.height);
   x.drawImage(img, (cr.x0 + mv.halfX) * mv.scale, (cr.z0 + mv.halfZ) * mv.scale, (cr.x1 - cr.x0) * mv.scale, (cr.z1 - cr.z0) * mv.scale, pad, top, mapW, mapH);
@@ -98,28 +101,32 @@ const pageScript = `(() => {
       txt(String(it.n), a, b + 4.5, '#fff', 12, 'center', true, false);
     }
     w.doors.forEach((d) => { const p = d.points[Math.floor(d.points.length / 2)]; const [a, b] = P(p.x, p.z); x.fillStyle = 'rgba(70,0,0,0.9)'; x.fillRect(a - 30, b - 24, 60, 18); txt('P' + (d.id + 1) + ' ' + d.price, a, b - 10, '#ffd2c8', 12, 'center', true, false); });
-    w.zoneCenters.forEach((c, i) => { if (!c) return; const [a, b] = P(c.x, c.z); txt(c.name.toUpperCase(), a, b - 26, COLS[i % COLS.length], 22); });
+    w.zoneCenters.forEach((c, i) => { if (!c) return; const [a, b] = P(c.x, c.z); txt(c.name.toUpperCase(), a, b - 26, COLS[i % COLS.length], 18); });
     { const [a, b] = P(w.startPos.x, w.startPos.z); x.fillStyle = '#ffd24a'; x.beginPath(); for (let k = 0; k < 10; k++) { const ang = -Math.PI / 2 + k * Math.PI / 5, r = k % 2 ? 6 : 14; x.lineTo(a + Math.cos(ang) * r, b + Math.sin(ang) * r); } x.closePath(); x.fill(); x.strokeStyle = '#000'; x.lineWidth = 2; x.stroke(); }
     // titre, nord, échelle
     txt(w.mapTitle || 'ZOMBIE SURVIVAL', pad, 48, '#ffd24a', 32, 'left');
     txt('Version ' + data.version + ' — carte générée depuis le jeu (node tools/make-docs.mjs)', pad, 74, '#999', 14, 'left', false, false);
     { const ax = pad + mapW - 30, ay = top + 40; x.fillStyle = '#fff'; x.beginPath(); x.moveTo(ax, ay - 26); x.lineTo(ax - 10, ay); x.lineTo(ax + 10, ay); x.fill(); txt('N', ax, ay + 20, '#fff', 18); }
     { const len = 50 * K, sx = pad + mapW - 30 - len, sy = top + mapH - 24; x.fillStyle = '#fff'; x.fillRect(sx, sy, len, 4); txt('50 m', sx + len / 2, sy - 8, '#fff', 13); }
-    // panneau de droite
+    // panneau de droite : les emplacements, en deux colonnes (la moitié des zones chacune)
     let px = pad + mapW + 30, py = top + 4;
     txt('EMPLACEMENTS', px, py + 14, '#ffd24a', 22, 'left'); py += 40;
+    const colTop = py;
     zn.forEach((name, zi) => {
+      if (zi === Math.ceil(zn.length / 2)) { px += colW + 20; py = colTop; }
       const list = items.filter((i) => i.zone === zi);
-      const doorsIn = w.doors.filter((d) => d.a === zi || d.b === zi).map((d) => 'P' + (d.id + 1)).join(', ');
-      txt(name.toUpperCase() + (zi === w.startZone ? '  (départ)' : ''), px, py, COLS[zi % COLS.length], 17, 'left'); txt('portes : ' + doorsIn, px + 420, py, '#ff9a8a', 13, 'left', false, false); py += 22;
+      txt(name.toUpperCase() + (zi === w.startZone ? '  (départ)' : ''), px, py, COLS[zi % COLS.length], 17, 'left'); py += 22;
       for (const it of list) { x.fillStyle = it.color; x.beginPath(); x.arc(px + 11, py - 4, 10, 0, 7); x.fill(); txt(String(it.n), px + 11, py, '#fff', 11, 'center', true, false); txt(it.label, px + 28, py + 1, '#ddd', 13, 'left', false, false); py += 21; }
       py += 10;
     });
-    txt('PORTES', px, py + 8, '#ffd24a', 22, 'left'); py += 32;
-    for (const d of w.doors) { txt('P' + (d.id + 1) + '   ' + d.price + ' pts   ' + zn[d.a] + ' ↔ ' + zn[d.b], px, py, '#ffb3a8', 14, 'left', false, false); py += 20; }
-    py += 14;
-    const leg = [['#ffd24a', '★', 'Départ'], ['#ff2a2a', '■', 'Porte payante (P = numéro)'], ['#c8ccd0', '■', 'Zone fermée (reste de l’île)'], ['#c9a65a', '—', 'Passage sous immeuble']];
-    for (const l of leg) { txt(l[1], px, py, l[0], 18, 'left', true, false); txt(l[2], px + 28, py, '#ddd', 14, 'left', false, false); py += 22; }
+    // les portes sous la carte, en trois colonnes, puis la légende
+    px = pad; py = top + mapH + 50;
+    txt('PORTES', px, py, '#ffd24a', 22, 'left'); py += 28;
+    const rows = Math.ceil(w.doors.length / 3), py0 = py;
+    w.doors.forEach((d, k) => { txt('P' + (d.id + 1) + '   ' + d.price + ' pts   ' + zn[d.a] + ' ↔ ' + zn[d.b], px + Math.floor(k / rows) * 640, py0 + (k % rows) * 20, '#ffb3a8', 14, 'left', false, false); });
+    py = py0 + rows * 20 + 30;
+    const leg = [['#ffd24a', '★', 'Départ'], ['#ff2a2a', '■', 'Porte payante (P = numéro)'], ['#c9a65a', '—', 'Passage sous immeuble']];
+    leg.forEach((l, k) => { txt(l[1], px + k * 360, py, l[0], 18, 'left', true, false); txt(l[2], px + k * 360 + 28, py, '#ddd', 14, 'left', false, false); });
     return cv.toDataURL('image/png');
   };
   return JSON.stringify(data);
@@ -168,19 +175,27 @@ table('07_points', 'Points', ['Action', 'Points'], [['Toucher un zombie', 10], [
 table('08_zombies', 'Zombies', ['Réglage', 'Valeur', 'Unité'], [
   ['Dégâts par coup', Zc.damage, 'PV'], ['Délai entre deux coups', Zc.attackCooldown, 's'], ['Portée d\'attaque', Zc.attackRange, 'm'], ['Maximum en vie en même temps', Zc.maxAlive, ''],
   ['Coureurs (à partir de la manche 4)', 25, '% (vitesse x1,5)'], [`Rampants (à partir de la manche ${Zc.crawlerRound})`, Zc.crawlerChance * 100, '% (vitesse x0,45)'],
-  ['Apparition par une fenêtre', 65, '%'], ['Réapparition si coincé depuis', 5, 's'], ['Réapparition si plus loin que', 90, 'm']]);
+  ['Apparition par une fenêtre', 65, '%'], ['Réapparition si coincé depuis', 5, 's'], ['Réapparition si plus loin que', 90, 'm'],
+  [`Chevaliers de fer (zone ${Zc.ironKnight.zone}, à partir de la manche ${Zc.ironKnight.fromRound})`, Zc.ironKnight.chance * 100, `% (${Zc.ironKnight.maxAlive} en vie au plus, santé x${String(Zc.ironKnight.healthMult).replace('.', ',')}, armure)`],
+  [`Pestiférés (zones ${Zc.pestilent.zones.join(', ')}, à partir de la manche ${Zc.pestilent.fromRound})`, Zc.pestilent.chance * 100, `% (${Zc.pestilent.maxAlive} en vie au plus, santé x${String(Zc.pestilent.healthMult).replace('.', ',')}, explosent à leur mort : 38 PV au plus à moins de 4,2 m, le PHD Flopper les ignore)`],
+  ['Poursuite : champ de chemin calculé jusqu\'à', Zc.flow.range, 'm de marche autour des joueurs (au-delà : tout droit)'],
+  ['Coop : joueur ciblé par l\'apparition', `poids 1 / (1 + n), n = zombies à moins de ${Zc.spawnBalance.radius} m`, ''], ['Coop : un client dessine les zombies à moins de', Zc.drawRange, 'm']]);
 const rounds = [];
 for (let r = 1; r <= 30; r++) rounds.push([r, Math.round(4 + r * 3), Math.round((4 + r * 3) * 1.75), Math.round((4 + r * 3) * 2.5), Math.round((4 + r * 3) * 3.25), r < 10 ? 70 + r * 30 : Math.round(340 * Math.pow(1.1, r - 9)), Math.min(1.6 + r * 0.2, 4.2), Math.max(0.4, 2 - r * 0.1)]);
 table('09_manches', 'Manches', ['Manche', 'Zombies solo', 'Zombies 2 joueurs', 'Zombies 3 joueurs', 'Zombies 4 joueurs', 'Santé d\'un zombie', 'Vitesse de base (m/s)', 'Intervalle d\'apparition (s)'], rounds);
-table('10_bonus', 'Bonus', ['Bonus', 'Effet', 'Durée (s)'], [['Munitions max', 'Réserves pleines + grenades au maximum', ''], ['Mort instantanée', 'Tout zombie touché meurt', C.powerups.buffDuration], ['Bombe', 'Tue tous les zombies, +400 pts', ''], ['Points doubles', 'Points x2', C.powerups.buffDuration], ['Bidon d\'essence', `+${String(C.vehicles.fuel.jerrican).replace('.', ',')} L pour une moto (rare : seulement si une moto est à moitié vide, voir Motos)`, ''], ['(règle) Chance de lâcher un bonus', `${C.powerups.dropChance * 100} % par zombie tué`, ''], ['(règle) Durée au sol', '', C.powerups.duration]]);
-table('11_zones', 'Zones du secteur', ['Zone', 'Départ', 'Lieu (x ; z en m)', 'Portes', 'Contenu prévu (config)', 'Bornes', 'Armes au mur', 'Machines'],
-  D.zones.map((z) => [z.name, z.i === D.zones.findIndex((q) => S.zones[q.i]?.start) ? 'oui' : '', z.seed ? `${z.seed.x} ; ${z.seed.z}` : '',
+table('10_bonus', 'Bonus', ['Bonus', 'Effet', 'Durée (s)'], [['Munitions max', 'Réserves pleines + grenades au maximum', ''], ['Mort instantanée', 'Tout zombie touché meurt', C.powerups.buffDuration], ['Bombe', 'Tue tous les zombies, +400 pts', ''], ['Points doubles', 'Points x2', C.powerups.buffDuration], ['Bidon d\'essence', `+${String(C.vehicles.fuel.jerrican).replace('.', ',')} L pour une moto (rare : seulement si une moto est à moitié vide, voir Motos)`, ''], ['(règle) Chance de lâcher un bonus', `${C.powerups.dropChance * 100} % par zombie tué`, ''], ['(règle) Bonus d\'ouverture', `${C.powerups.openingBonus.map((t) => ({ max_ammo: 'Munitions max', double_points: 'Points doubles' })[t] || t).join(' ou ')} à la première ouverture d'une zone extérieure`, ''], ['(règle) Durée au sol', '', C.powerups.duration]]);
+table('11_zones', 'Zones de la Grande Île', ['Zone', 'Départ', 'Type', 'Surface (m²)', 'Prix de la porte (pts)', 'Lieu (x ; z en m)', 'Portes', 'Contenu prévu (config)', 'Bornes', 'Armes au mur', 'Machines'],
+  D.zones.map((z) => [z.name, z.i === D.zones.findIndex((q) => S.zones[q.i]?.start) ? 'oui' : '', S.zones[z.i].outer ? 'extérieure' : 'secteur d\'origine', z.area, S.zones[z.i].start ? 0 : S.zones[z.i].doorPrice ?? '', z.seed ? `${z.seed.x} ; ${z.seed.z}` : '',
     D.doors.filter((d) => d.a === z.i || d.b === z.i).map((d) => `P${d.n}`).join(', '), (S.zones[z.i].items || []).join(', '),
     D.stations.filter((s) => s.zone === z.i).length, D.walls.filter((v) => v.zone === z.i).map((v) => W[v.id].name).join(', '),
     D.machines.filter((m) => m.zone === z.i).map((m) => m.name).join(', ')]));
 table('12_portes', 'Portes', ['Porte', 'Prix (pts)', 'Zone A', 'Zone B'], D.doors.map((d) => [`P${d.n}`, d.price, zname(d.a), zname(d.b)]));
 table('13_emplacements', 'Emplacements', ['N° sur la carte', 'Type', 'Nom', 'Zone', 'Prix (pts)', 'x (m, vers l\'est)', 'z (m, vers le sud)'],
   D.items.map((it) => [it.n, it.label.split(' : ')[0].split(' — ')[0], (it.id ? W[it.id].name : it.label.replace(/^Atout : /, '').split(' — ')[0]), zname(it.zone), it.price ?? (it.label.match(/(\d+) pts/)?.[1] ?? ''), it.x, it.z]));
+const Fn = C.finale;
+table('16_finale', 'Fin de partie : L\'Heure du Jugement (horloge astronomique, intérieur de la cathédrale)', ['Réglage', 'Valeur', 'Unité'], [
+  ['Manche minimale', Fn.minRound, ''], ['Zones ouvertes au moins', Fn.minZones, `(les ${D.zones.filter((z) => !S.zones[z.i].outer).length} zones d'origine + ${Fn.minZones - D.zones.filter((z) => !S.zones[z.i].outer).length} zones extérieures) : l'horloge affiche « n/${Fn.minZones} quartiers ouverts »`],
+  ['Prix', Fn.price, 'pts'], ['Santé du Bourreau (1 joueur)', Fn.bossHealth, '(+70 % par joueur en plus)'], ['Zombies simultanés (vague)', Fn.maxAlive, ''], ['Répit entre deux vagues', Fn.breather, 's']]);
 const VT = C.vehicles.types, VD = C.vehicles.damage, VF = C.vehicles.fuel, VR = C.vehicles.roadkill;
 const rk = (t, v) => t.roadkill.K * v * Math.min(1, 0.4 + 0.6 * (v - t.roadkill.vmin) / VR.rampSpeed);
 const vcol = (f) => Object.values(VT).map(f);
@@ -219,11 +234,12 @@ Carte annotée : [carte.png](carte.png). Armes de profil : [armes.png](armes.png
 
 Pour demander une modification, citez la ligne (ex. « Mitrailleuse RPK : chargeur 100 », « Mastodonte à 3000 pts », « porte P3 à 500 pts », « mettre la boîte mystère dans la zone Temple-Neuf »).
 
-## Secteur jouable
+## Grande Île
 
-Seul le secteur autour de la place du Marché-Neuf est ouvert ; le reste de la Grande Île est visible mais fermé par des barricades « ZONE FERMÉE ».
-Il est découpé en ${D.zones.length} zones, chacune construite autour d'un vrai lieu : chaque rue va à la zone la plus proche à pied (jusqu'à ${S.maxDist} m), et les portes se trouvent entre deux zones.
-Prix des portes : ${S.basePrice} pts pour une zone voisine du départ, +${S.priceStep} par zone plus loin. Le contenu de chaque zone se règle dans \`src/config.js\` → \`sector.zones[].items\`.
+Toute la Grande Île de Strasbourg est jouable : on commence place du Marché-Neuf et on ouvre les zones l'une après l'autre en payant les portes.
+Elle est découpée en ${D.zones.length} zones, chacune construite autour d'un vrai lieu : chaque rue va à la zone la plus proche à pied (jusqu'à ${S.maxDist} m pour les ${D.zones.filter((z) => !S.zones[z.i].outer).length} zones d'origine, sans limite pour les ${D.zones.filter((z) => S.zones[z.i].outer).length} zones extérieures), et les portes se trouvent entre deux zones voisines (une porte ouvre toute la limite entre les deux zones).
+Prix d'une porte : le plus cher des deux prix de zone (colonne « Prix de la porte ») ; zones extérieures : palier A 1500, B 2000, C 2500 pts. Le contenu de chaque zone se règle dans \`src/config.js\` → \`sector.zones[].items\`.
+À la première ouverture d'une zone extérieure, un bonus apparaît. La boîte mystère ne se déplace que dans une zone déjà ouverte. « Grand'Rue » et « Quai Schoepflin » sont des noms déduits du plan (à confirmer).
 
 `;
 for (const [key, t] of Object.entries(T)) md += `## ${t.title}\n\n${mdTable(t)}\n`;

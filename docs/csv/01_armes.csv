@@ -1,21 +1,24 @@
 ﻿id;Arme;Catégorie;Calibre;Type;Dégâts par balle;Plombs par tir;Multiplicateur tête;Cadence (tirs/s);DPS approx.;Chargeur;Réserve départ;Réserve max;Rechargement (s);Dispersion;Portée (m);Zombies traversés;Explosion rayon (m);Explosion dégâts;Prix au mur (pts);Prix munitions (pts);Où l'obtenir
-m1911;COLT M1911;pistolet;.45 ACP;coup par coup;48;1;2,6;5,5;264;7;42;84;1,5;0,01;50;1;;;400;150;mur Marché-Neuf, boîte mystère, arme de départ
-arex;AREX ZERO 1;pistolet;9 mm;coup par coup;34;1;2,4;7,5;255;17;68;136;1,4;0,009;55;1;;;700;250;mur Temple-Neuf, boîte mystère
-deagle;DESERT EAGLE;pistolet;.50 AE;coup par coup;165;1;3;2,4;396;7;35;56;1,9;0,011;70;2;;;1500;600;mur Cathédrale, boîte mystère
-magnum;COLT PYTHON .357;pistolet;.357 Magnum;coup par coup;190;1;3;3,2;608;6;48;72;2,2;0,006;80;2;;;boîte;500;boîte mystère
-rifle;M4A1;fusil d'assaut;5,56 mm;automatique;36;1;2,5;9,5;342;30;120;180;1,8;0,012;90;1;;;1200;300;mur Cathédrale, boîte mystère, arme de départ
-ak47;AK-47;fusil d'assaut;7,62×39 mm;automatique;46;1;2,3;8,5;391;30;120;210;2,4;0,017;90;1;;;1600;600;mur Grandes Arcades, boîte mystère
-famas;FAMAS F1;fusil d'assaut;5,56 mm;automatique;34;1;2,4;15;510;25;125;225;2,2;0,014;85;1;;;1300;500;mur Rue des Orfèvres, boîte mystère
-scar;SCAR-H;fusil d'assaut;7,62×51 mm;automatique;58;1;2,4;7,5;435;20;100;180;2,3;0,012;100;2;;;2200;800;mur Place Gutenberg, boîte mystère
-smg;MP40;pistolet-mitrailleur;9 mm;automatique;24;1;2,2;9,5;228;32;128;224;1,5;0,022;65;1;;;1000;500;mur Marché-Neuf, boîte mystère
-mp5;MP5;pistolet-mitrailleur;9 mm;automatique;26;1;2,2;13;338;30;150;270;1,8;0,017;65;1;;;1200;500;mur Temple-Neuf, boîte mystère
+m1911;COLT M1911;pistolet;.45 ACP;coup par coup;50;1;2,6;5,5;275;7;42;84;1,5;0,01;50;1;;;400;150;mur Marché-Neuf, boîte mystère, arme de départ
+arex;AREX ZERO 1;pistolet;9 mm;coup par coup;29;1;2,2;7,5;217,5;17;68;136;1,4;0,009;55;1;;;700;250;mur Temple-Neuf, mur Musée historique, boîte mystère
+deagle;DESERT EAGLE;pistolet;.50 AE;coup par coup;160;1;3;2,4;384;7;35;56;1,9;0,011;70;2;;;1500;600;mur Cathédrale, mur Saint-Pierre-le-Vieux, boîte mystère
+magnum;COLT PYTHON .357;pistolet;.357 Magnum;coup par coup;143;1;3;3,2;457,6;6;48;72;2,2;0,006;80;2;;;2000;500;mur Saint-Pierre-le-Jeune, boîte mystère
+rifle;M4A1;fusil d'assaut;5,56 mm;automatique;36;1;2,4;12,5;450;30;120;180;1,8;0,012;90;1;;;1200;300;mur Cathédrale, boîte mystère, arme de départ
+ak47;AK-47;fusil d'assaut;7,62×39 mm;automatique;54;1;2,3;10;540;30;120;210;2,4;0,017;90;1;;;1600;600;mur Grandes Arcades, mur Palais Rohan, boîte mystère
+famas;FAMAS F1;fusil d'assaut;5,56 mm;automatique;40;1;2,4;15;600;25;125;225;2,2;0,014;85;1;;;1300;500;mur Rue des Orfèvres, mur Hôtel de Neuwiller, boîte mystère
+scar;SCAR-H;fusil d'assaut;7,62×51 mm;automatique;78;1;2,5;10;780;20;100;180;2,3;0,018;100;2;;;2500;800;mur Place Gutenberg, mur Monument Stoeber, boîte mystère
+smg;MP40;pistolet-mitrailleur;9 mm;automatique;30;1;2,2;8,3;249;32;128;224;1,5;0,022;65;1;;;800;500;mur Marché-Neuf, mur Église Réformée, boîte mystère
+mp5;MP5;pistolet-mitrailleur;9 mm;automatique;26;1;2,2;13;338;30;150;270;1,8;0,017;65;1;;;1200;500;mur Temple-Neuf, mur Grand'Rue, boîte mystère
 p90;FN P90;pistolet-mitrailleur;5,7×28 mm;automatique;22;1;2;15;330;50;200;350;2,6;0,02;70;2;;;1800;700;mur Grandes Arcades, boîte mystère
-lmg;RPK;mitrailleuse;7,62×39 mm;automatique;44;1;2;10,5;462;75;300;450;3,6;0,028;90;1;;;2500;1000;mur Place Kléber, boîte mystère
-m249;M249 SAW;mitrailleuse;5,56 mm;automatique;40;1;2;12,5;500;100;300;500;4,2;0,032;90;1;;;3000;1200;mur Place Kléber, boîte mystère
-mg42;MG42;mitrailleuse;7,92×57 mm;automatique;46;1;2;19;874;50;250;450;4;0,04;90;1;;;boîte;1200;boîte mystère
-pkm;PKM;mitrailleuse;7,62×54R;automatique;55;1;2;10,5;577,5;100;300;500;4,8;0,03;100;2;;;3200;1300;mur Place Gutenberg, boîte mystère
-sniper;L96A1;fusil de précision;7,62×51 mm;coup par coup;340;1;3,5;1,1;374;5;30;45;2,8;0,0015;200;4;;;1750;700;mur Rue du Dôme, boîte mystère
-svd;DRAGUNOV SVD;fusil de précision;7,62×54R;coup par coup;230;1;3;3;690;10;40;70;2,6;0,004;180;3;;;2000;800;mur Rue du Dôme, boîte mystère
-barrett;BARRETT M82;fusil de précision;.50 BMG;coup par coup;700;1;3;1,6;1120;10;30;50;3,4;0,002;220;6;;;boîte;1500;boîte mystère
-shotgun;REMINGTON 870;fusil à pompe;12 ga;pompe;26;8;1,8;1,3;270,4;6;30;48;2,4;0,046;35;1;;;750;350;mur Marché-Neuf, boîte mystère
-raygun;PISTOLET À RAYONS;spéciale;énergie;coup par coup;700;1;1,5;4,2;2940;20;160;200;2,6;0,008;100;1;2,8;500;boîte;1500;boîte mystère
+lmg;RPK;mitrailleuse;7,62×39 mm;automatique;51;1;2;10;510;75;300;450;3,6;0,028;90;1;;;2500;1000;mur Place Kléber, mur Place Broglie, boîte mystère
+m249;M249 SAW;mitrailleuse;5,56 mm;automatique;40;1;2;12,5;500;100;300;500;4,2;0,032;90;1;;;3000;1200;mur Place Kléber, mur Saint-Étienne, boîte mystère
+mg42;MG42;mitrailleuse;7,92×57 mm;automatique;64;1;2;20;1280;50;250;450;5;0,04;90;2;;;4000;1200;mur Opéra, boîte mystère
+pkm;PKM;mitrailleuse;7,62×54R;automatique;64;1;2;10,5;672;100;300;500;4,8;0,03;100;2;;;3200;1300;mur Place Gutenberg, mur Préfecture, boîte mystère
+sniper;L96A1;fusil de précision;7,62×51 mm Match;coup par coup;340;1;3,5;1,1;374;5;30;45;2,8;0,0015;200;4;;;1750;700;mur Rue du Dôme, mur Ancienne Douane, boîte mystère
+svd;DRAGUNOV SVD;fusil de précision;7,62×54R 7N1;coup par coup;230;1;3;3;690;10;40;70;2,6;0,004;180;3;;;2000;800;mur Rue du Dôme, mur Quai Schoepflin, boîte mystère
+barrett;BARRETT M82;fusil de précision;.50 BMG;coup par coup;700;1;3;1,2;840;10;30;50;3,4;0,002;220;6;;;5000;1500;mur Petite France, boîte mystère
+shotgun;REMINGTON 870;fusil à pompe;12 ga;pompe;30;8;1,8;1,3;312;6;30;48;2,4;0,046;35;1;;;750;350;mur Marché-Neuf, mur Grand Séminaire, boîte mystère
+saiga;SAIGA-12;fusil à pompe;12 ga;coup par coup;27;8;1,8;3,5;756;8;32;64;2,6;0,05;35;1;;;3000;700;mur Saint-Thomas, boîte mystère
+crossbow;ARBALÈTE;spéciale;carreau 20″;coup par coup;420;1;3;1;420;1;20;40;1,7;0,003;80;6;;;2000;700;mur Homme de Fer, boîte mystère
+m79;M79;spéciale;40×46 mm;launcher;150;1;1;1;150;1;11;24;2,2;0,004;150;1;;;2500;1500;mur Homme de Fer, boîte mystère
+raygun;PISTOLET À RAYONS;spéciale;énergie;coup par coup;1000;1;1,5;4,2;4200;24;168;240;2,6;0,008;100;1;3,5;900;boîte;1500;boîte mystère

@@ -8,3 +8,8 @@ Rampants (à partir de la manche 4);12;% (vitesse x0,45)
 Apparition par une fenêtre;65;%
 Réapparition si coincé depuis;5;s
 Réapparition si plus loin que;90;m
+Chevaliers de fer (zone Homme de Fer, à partir de la manche 8);15;% (3 en vie au plus, santé x1,5, armure)
+Pestiférés (zones Petite France, Saint-Pierre-le-Vieux, à partir de la manche 10);12;% (3 en vie au plus, santé x1,6, explosent à leur mort : 38 PV au plus à moins de 4,2 m, le PHD Flopper les ignore)
+Poursuite : champ de chemin calculé jusqu'à;160;m de marche autour des joueurs (au-delà : tout droit)
+Coop : joueur ciblé par l'apparition;poids 1 / (1 + n), n = zombies à moins de 45 m;
+Coop : un client dessine les zombies à moins de;170;m

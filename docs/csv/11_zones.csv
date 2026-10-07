@@ -1,10 +1,28 @@
-﻿Zone;Départ;"Lieu (x ; z en m)";Portes;Contenu prévu (config);Bornes;Armes au mur;Machines
-Marché-Neuf;oui;"-1 ; -31";P4, P6;station, wall:m1911, wall:shotgun, wall:smg, perk:quickrevive, box;1;COLT M1911, REMINGTON 870, MP40;RÉANIMATION RAPIDE, BOÎTE MYSTÈRE
-Temple-Neuf;;"-35 ; -95";P2, P4, P5, P7;station, wall:arex, wall:mp5, perk:staminup, box;1;AREX ZERO 1, MP5;STAMIN-UP, BOÎTE MYSTÈRE
-Rue des Orfèvres;;"27 ; -58";P5, P6, P9, P10;wall:famas, perk:speedcola, box;0;FAMAS F1;SPEED COLA, BOÎTE MYSTÈRE
-Rue du Dôme;;"104 ; -118";P7, P10;station, wall:sniper, wall:svd, box;1;L96A1, DRAGUNOV SVD;BOÎTE MYSTÈRE
-Grandes Arcades;;"-110 ; -45";P1, P2, P3;station, wall:ak47, wall:p90, perk:mulekick, box;1;AK-47, FN P90;MULE KICK, BOÎTE MYSTÈRE
-Place Kléber;;"-199 ; -145";P1;station, perk:juggernog, wall:lmg, wall:m249, box;1;RPK, M249 SAW;MASTODONTE, BOÎTE MYSTÈRE
-Place Gutenberg;;"-20 ; 90";P3, P8;station, perk:doubletap, wall:scar, wall:pkm, box;1;SCAR-H, PKM;DOUBLE TAP, BOÎTE MYSTÈRE
-Cathédrale;;"103 ; 33";P8, P9, P11;station, wall:deagle, wall:rifle, box;1;DESERT EAGLE, M4A1;BOÎTE MYSTÈRE
-Intérieur de la Cathédrale;;"179 ; 40";P11;pap, clock, station, box;1;;PACK-A-PUNCH, HORLOGE ASTRONOMIQUE, BOÎTE MYSTÈRE
+﻿Zone;Départ;Type;Surface (m²);Prix de la porte (pts);"Lieu (x ; z en m)";Portes;Contenu prévu (config);Bornes;Armes au mur;Machines
+Marché-Neuf;oui;secteur d'origine;2287;0;"-1 ; -31";P29, P32;station, wall:m1911, wall:shotgun, wall:smg, perk:quickrevive, box;1;COLT M1911, REMINGTON 870, MP40;RÉANIMATION RAPIDE, BOÎTE MYSTÈRE
+Temple-Neuf;;secteur d'origine;4241;750;"-35 ; -95";P24, P25, P27, P29, P31, P33;station, wall:arex, wall:mp5, perk:staminup, box;1;AREX ZERO 1, MP5;STAMIN-UP, BOÎTE MYSTÈRE
+Rue des Orfèvres;;secteur d'origine;698;750;"27 ; -58";P31, P32, P36, P39;wall:famas, perk:speedcola, box;0;FAMAS F1;SPEED COLA, BOÎTE MYSTÈRE
+Rue du Dôme;;secteur d'origine;4694;1000;"104 ; -118";P33, P39, P40, P43, P48;station, wall:sniper, wall:svd, box;1;L96A1, DRAGUNOV SVD;BOÎTE MYSTÈRE
+Grandes Arcades;;secteur d'origine;5206;1000;"-110 ; -45";P17, P20, P24, P26;station, wall:ak47, wall:p90, perk:mulekick, box;1;AK-47, FN P90;MULE KICK, BOÎTE MYSTÈRE
+Place Kléber;;secteur d'origine;11757;1250;"-199 ; -145";P14, P15, P19, P20, P25;station, perk:juggernog, wall:lmg, wall:m249, box;1;RPK, M249 SAW;MASTODONTE, BOÎTE MYSTÈRE
+Place Gutenberg;;secteur d'origine;8624;1250;"-20 ; 90";P22, P23, P26, P28, P34, P37;station, perk:doubletap, wall:scar, wall:pkm, box;1;SCAR-H, PKM;DOUBLE TAP, BOÎTE MYSTÈRE
+Cathédrale;;secteur d'origine;6688;1000;"103 ; 33";P34, P36, P41, P43, P45, P46, P47;station, wall:deagle, wall:rifle, box;1;DESERT EAGLE, M4A1;BOÎTE MYSTÈRE
+Intérieur de la Cathédrale;;secteur d'origine;3593;5000;"179 ; 40";P45;pap, clock, station, box;1;;PACK-A-PUNCH, HORLOGE ASTRONOMIQUE, BOÎTE MYSTÈRE
+Homme de Fer;;secteur d'origine;10073;1500;"-290 ; -203";P8, P9, P11, P12, P15;station, wall:crossbow, wall:m79, perk:phdflopper, box;1;ARBALÈTE, M79;PHD FLOPPER, BOÎTE MYSTÈRE
+Saint-Pierre-le-Jeune;;extérieure;21007;1500;"-140 ; -340";P12, P13, P18, P19, P27, P30;station, wall:magnum, box;1;COLT PYTHON .357;BOÎTE MYSTÈRE
+Grand'Rue;;extérieure;19084;1500;"-400 ; 10";P4, P5, P6, P7, P11, P14, P16, P17, P23;station, wall:mp5, box;1;MP5;BOÎTE MYSTÈRE
+Grand Séminaire;;extérieure;18479;1500;"300 ; -60";P46, P48, P51, P53, P54, P55;station, wall:shotgun, box;1;REMINGTON 870;BOÎTE MYSTÈRE
+Palais Rohan;;extérieure;10259;1500;"261 ; 139";P47, P49, P53;wall:ak47;0;AK-47;
+Musée historique;;extérieure;14597;1500;"200 ; 215";P35, P37, P41, P49;station, wall:arex, box;1;AREX ZERO 1;BOÎTE MYSTÈRE
+Place Broglie;;extérieure;26090;2000;"150 ; -345";P30, P38, P40, P44, P50, P51;station, wall:lmg, box;1;RPK;BOÎTE MYSTÈRE
+Quai Schoepflin;;extérieure;12302;2000;"-20 ; -470";P18, P38, P42;wall:svd;0;DRAGUNOV SVD;
+Hôtel de Neuwiller;;extérieure;7283;2000;"-466 ; -266";P3, P9, P13;wall:famas;0;FAMAS F1;
+Monument Stoeber;;extérieure;15953;2000;"-490 ; -150";P2, P3, P6, P8;station, wall:scar, box;1;SCAR-H;BOÎTE MYSTÈRE
+Ancienne Douane;;extérieure;14052;2000;"30 ; 330";P21, P28, P35;station, wall:sniper;1;L96A1;
+Saint-Thomas;;extérieure;23394;2000;"-230 ; 250";P10, P16, P21, P22;station, wall:saiga, box;1;SAIGA-12;BOÎTE MYSTÈRE
+Église Réformée;;extérieure;6297;2000;"-329 ; 167";P7, P10;wall:smg;0;MP40;
+Opéra;;extérieure;18274;2500;"250 ; -450";P42, P44, P52;station, wall:mg42;1;MG42;
+Préfecture;;extérieure;15747;2500;"395 ; -335";P50, P52, P54, P56;station, wall:pkm, box;1;PKM;BOÎTE MYSTÈRE
+Saint-Étienne;;extérieure;14353;2500;"544 ; -86";P55, P56;station, wall:m249, box;1;M249 SAW;BOÎTE MYSTÈRE
+Saint-Pierre-le-Vieux;;extérieure;10465;2500;"-615 ; -55";P1, P2, P5;wall:deagle;0;DESERT EAGLE;
+Petite France;;extérieure;8248;2500;"-673 ; 136";P1, P4;wall:barrett;0;BARRETT M82;

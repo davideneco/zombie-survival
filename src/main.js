@@ -536,7 +536,7 @@ const game = {
     const p = this.player;
     if (m.type === 'clock') {
       const F = CONFIG.finale;
-      if (this.finale || this.finaleDone || this.round < F.minRound) { sfx.deny(); return; }
+      if (this.finale || this.finaleDone || !this.finaleReady()) { sfx.deny(); return; }
       if (this.points < F.price) { sfx.deny(); return; }
       this.points -= F.price;
       if (this.isClient) this.net?.send({ t: 'finale_req' });
@@ -757,11 +757,36 @@ const game = {
     const d = world.doors[id];
     sfx.buy();
     // première ouverture de la zone du parking des motos : on l'annonce (le « P » bleu de la carte indique l'endroit)
-    const pk = world.parking, firstPark = !!pk && !this.parkingSeen && d.opens === pk.zone;
+    const pk = world.parking, firstPark = !!pk && !this.parkingSeen && d.opened.includes(pk.zone);
     if (firstPark) this.parkingSeen = true;
     if (announce) {
       if (firstPark) hud.announce(`PARKING ${pk.name.replace(/^Place /, '').toUpperCase()} — ${pk.size} motos`, 'Repérez le « P » bleu sur la carte [M]', 4500);
       else hud.announce('PORTE OUVERTE', `Accès à ${d.name}`, 2500);
+    }
+    if (!this.isClient) this.openingBonus(d); // hôte ou solo : le bonus est ensuite annoncé aux clients par pu_spawn
+  },
+
+  // Première ouverture d'une zone extérieure (CONFIG.sector.zones[].outer) : un bonus (CONFIG.powerups.openingBonus) apparaît à quelques
+  // mètres de la porte, du côté de la nouvelle zone ; une seule fois par zone (même si une autre porte la touche plus tard)
+  openingBonus(d) {
+    for (const zi of d.opened || []) {
+      const Z = CONFIG.sector.zones[zi];
+      if (!Z || !Z.outer) continue;
+      this.bonusZones ||= new Set();
+      if (this.bonusZones.has(zi)) continue;
+      this.bonusZones.add(zi);
+      const list = CONFIG.powerups.openingBonus, type = list[Math.floor(Math.random() * list.length)];
+      // point libre dans la nouvelle zone, entre 3 et 9 m du milieu de la porte, le plus près possible
+      const mid = d.points[Math.floor(d.points.length / 2)];
+      let spot = null;
+      for (let r = 3; r <= 9 && !spot; r += 1.5) {
+        for (let a = 0; a < 16 && !spot; a++) {
+          const x = mid.x + Math.cos((a / 16) * Math.PI * 2) * r, z = mid.z + Math.sin((a / 16) * Math.PI * 2) * r;
+          if (world.zoneOf(x, z) === zi && !world.nav.isBlockedAt(x, z)) spot = { x, z };
+        }
+      }
+      if (!spot) { const c = world.zoneCenters[zi]; spot = c ? { x: c.x, z: c.z } : mid; }
+      this.spawnPowerup(new THREE.Vector3(spot.x, 0, spot.z), null, type);
     }
   },
 
@@ -806,11 +831,25 @@ const game = {
     if (!this.isClient) this.hostRespawnCheck?.(); // motos détruites : retour au parking (hôte)
   },
 
+  // Joueur autour duquel apparaît le prochain zombie : poids 1 / (1 + n), n = zombies vivants à moins de spawnBalance.radius m de lui.
+  // Des joueurs éloignés les uns des autres se partagent ainsi les zombies au lieu de les voir tous venir sur le même (maxAlive reste fixe).
+  spawnTarget(pool) {
+    if (pool.length < 2) return pool[0];
+    const R = CONFIG.zombie.spawnBalance.radius, wts = pool.map((pl) => {
+      let n = 0;
+      for (const z of this.zombies) if (!z.dead && Math.hypot(z.pos.x - pl.pos.x, z.pos.z - pl.pos.z) < R) n++;
+      return 1 / (1 + n);
+    });
+    let t = Math.random() * wts.reduce((a, b) => a + b, 0);
+    for (let i = 0; i < pool.length; i++) { t -= wts[i]; if (t <= 0) return pool[i]; }
+    return pool[pool.length - 1];
+  },
+
   pickSpawn() {
     // Les zombies apparaissent autour d'un joueur vivant tiré au hasard (hôte ou coéquipier).
     const alive = [this.player, ...this.remotes.values()].filter((pl) => !pl.dead && !pl.downed);
     const pool = alive.length ? alive : [this.player];
-    const pp = pool[Math.floor(Math.random() * pool.length)].pos;
+    const pp = this.spawnTarget(pool).pos;
     if (world.pickWindow) {
       if (Math.random() < 0.65) {
         const w = world.pickWindow(pp.x, pp.z, 11, 60, this.time);
@@ -849,8 +888,12 @@ const game = {
     const IK = Zc.ironKnight, sx0 = spawn.type === 'window' ? spawn.outside.x : spawn.pos.x, sz0 = spawn.type === 'window' ? spawn.outside.z : spawn.pos.z;
     const knight = !!IK && this.round >= IK.fromRound && !!world.zoneOf && world.zoneNames[world.zoneOf(sx0, sz0)] === IK.zone
       && this.zombies.filter((q) => q.ironKnight && !q.dead).length < IK.maxAlive && Math.random() < IK.chance;
+    // pestiféré (variante 'bloat') : zones, manche, chance et plafond de CONFIG.zombie.pestilent ; l'hôte tire (z_spawn porte kind)
+    const PE = Zc.pestilent;
+    const pest = !knight && !!PE && this.round >= PE.fromRound && !!world.zoneOf && PE.zones.includes(world.zoneNames[world.zoneOf(sx0, sz0)])
+      && this.zombies.filter((q) => q.pestilent && !q.dead).length < PE.maxAlive && Math.random() < PE.chance;
     let speed = this.zombieSpeed * (0.85 + Math.random() * 0.3);
-    if (!knight && this.round >= Zc.runnerRound && Math.random() < Zc.runnerChance) speed *= Zc.runnerMult; // coureur
+    if (!knight && !pest && this.round >= Zc.runnerRound && Math.random() < Zc.runnerChance) speed *= Zc.runnerMult; // coureur
     const onEvent = (name, z) => {
       const d = Math.hypot(z.pos.x - this.player.pos.x, z.pos.z - this.player.pos.z);
       const v = Math.max(0, 1 - d / 45);
@@ -859,10 +902,12 @@ const game = {
       else if (name === 'rumble') sfx.rumble(v);
       else if (name === 'emerge') { sfx.dirt(v); sfx.groan(Math.min(1, v * 1.4)); }
     };
-    const crawl = !knight && this.round >= Zc.crawlerRound && Math.random() < Zc.crawlerChance;
-    const hp = knight ? Math.round(this.zombieHealth * IK.healthMult) : this.zombieHealth;
-    const z = new Zombie(scene, spawn, hp, speed, onEvent, null, { crawler: crawl, kind: knight ? 'armored' : null });
+    const crawl = !knight && !pest && this.round >= Zc.crawlerRound && Math.random() < Zc.crawlerChance;
+    const hp = knight ? Math.round(this.zombieHealth * IK.healthMult) : pest ? Math.round(this.zombieHealth * PE.healthMult) : this.zombieHealth;
+    const kind = knight ? 'armored' : pest ? 'bloat' : null;
+    const z = new Zombie(scene, spawn, hp, speed, onEvent, null, { crawler: crawl, kind });
     if (knight) z.ironKnight = true;
+    if (pest) z.pestilent = true;
     this.zombies.push(z);
     if (!extra) this.toSpawn--;
 
@@ -880,7 +925,7 @@ const game = {
         hp: z.health,
         spd: speed, // avant les réductions de vitesse de la variante et du rampant : le client les réapplique dans makeKind / makeCrawler
         crawl: crawl ? 1 : 0,
-        kind: knight ? 'armored' : null,
+        kind,
       });
     }
   },
@@ -1432,7 +1477,7 @@ function setupNetworkHandlers(net) {
     else game.throwGrenade(o, v, false, m.from);
   });
   // Fin de partie
-  net.on('finale_req', () => { if (game.isHost && !game.finale && !game.finaleDone) game.startFinale(); });
+  net.on('finale_req', () => { if (game.isHost && !game.finale && !game.finaleDone && game.finaleReady()) game.startFinale(); }); // l'hôte revalide : manche et quartiers ouverts
   net.on('finale_start', () => { game.finale = { remote: true }; game.finaleIntro(); });
   net.on('finale_win', () => game.winFinale());
   net.on('finale_info', (m) => game.finaleInfo(m));

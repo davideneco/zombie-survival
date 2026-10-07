@@ -142,11 +142,21 @@ export function installFinale(game, { world, scene, hud, sfx, fx }) {
   Object.assign(game, {
     finale: null, finaleDone: false, shake: 0,
 
+    // quartiers (zones) déjà ouverts, et nombre requis : la ville doit être en grande partie libérée avant l'Heure du Jugement
+    openZones() { return world.zoneNames.reduce((n, _, i) => n + (world.isZoneOpen(i) ? 1 : 0), 0); },
+    // true si l'Heure du Jugement peut sonner : manche minimale et nombre de quartiers ouverts (l'hôte revalide les demandes des clients)
+    finaleReady() { const Fc = F(); return this.round >= Fc.minRound && this.openZones() >= (Fc.minZones || 0); },
+
     finalePrompt(m) {
       const Fc = F();
       if (this.finale) return 'L\'Heure du Jugement a sonné : tenez bon !';
       if (this.finaleDone) return 'L\'horloge s\'est tue. Strasbourg tient encore…';
-      if (this.round < Fc.minRound) return `L'horloge astronomique… (manche ${Fc.minRound} requise pour l'Heure du Jugement)`;
+      if (!this.finaleReady()) {
+        const need = [];
+        if (this.round < Fc.minRound) need.push(`manche ${Fc.minRound} requise`);
+        if (this.openZones() < (Fc.minZones || 0)) need.push(`${this.openZones()}/${Fc.minZones} quartiers ouverts`);
+        return `L'horloge astronomique… (${need.join(' · ')} pour l'Heure du Jugement)`;
+      }
       return `[E] Faire sonner l'Heure du Jugement : le Bourreau vous attend${Fc.price ? ` (${Fc.price} pts)` : ''}`;
     },
 

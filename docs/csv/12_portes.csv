@@ -1,12 +1,57 @@
 ﻿Porte;Prix (pts);Zone A;Zone B
-P1;1250;Grandes Arcades;Place Kléber
-P2;1000;Temple-Neuf;Grandes Arcades
-P3;1250;Grandes Arcades;Place Gutenberg
-P4;750;Marché-Neuf;Temple-Neuf
-P5;750;Temple-Neuf;Rue des Orfèvres
-P6;750;Marché-Neuf;Rue des Orfèvres
-P7;1000;Temple-Neuf;Rue du Dôme
-P8;1250;Place Gutenberg;Cathédrale
-P9;1000;Rue des Orfèvres;Cathédrale
-P10;1000;Rue des Orfèvres;Rue du Dôme
-P11;5000;Cathédrale;Intérieur de la Cathédrale
+P1;2500;Saint-Pierre-le-Vieux;Petite France
+P2;2500;Monument Stoeber;Saint-Pierre-le-Vieux
+P3;2000;Hôtel de Neuwiller;Monument Stoeber
+P4;2500;Grand'Rue;Petite France
+P5;2500;Grand'Rue;Saint-Pierre-le-Vieux
+P6;2000;Grand'Rue;Monument Stoeber
+P7;2000;Grand'Rue;Église Réformée
+P8;2000;Homme de Fer;Monument Stoeber
+P9;2000;Homme de Fer;Hôtel de Neuwiller
+P10;2000;Saint-Thomas;Église Réformée
+P11;1500;Homme de Fer;Grand'Rue
+P12;1500;Homme de Fer;Saint-Pierre-le-Jeune
+P13;2000;Saint-Pierre-le-Jeune;Hôtel de Neuwiller
+P14;1500;Place Kléber;Grand'Rue
+P15;1500;Place Kléber;Homme de Fer
+P16;2000;Grand'Rue;Saint-Thomas
+P17;1500;Grandes Arcades;Grand'Rue
+P18;2000;Saint-Pierre-le-Jeune;Quai Schoepflin
+P19;1500;Place Kléber;Saint-Pierre-le-Jeune
+P20;1250;Grandes Arcades;Place Kléber
+P21;2000;Ancienne Douane;Saint-Thomas
+P22;2000;Place Gutenberg;Saint-Thomas
+P23;1500;Place Gutenberg;Grand'Rue
+P24;1000;Temple-Neuf;Grandes Arcades
+P25;1250;Temple-Neuf;Place Kléber
+P26;1250;Grandes Arcades;Place Gutenberg
+P27;1500;Temple-Neuf;Saint-Pierre-le-Jeune
+P28;2000;Place Gutenberg;Ancienne Douane
+P29;750;Marché-Neuf;Temple-Neuf
+P30;2000;Saint-Pierre-le-Jeune;Place Broglie
+P31;750;Temple-Neuf;Rue des Orfèvres
+P32;750;Marché-Neuf;Rue des Orfèvres
+P33;1000;Temple-Neuf;Rue du Dôme
+P34;1250;Place Gutenberg;Cathédrale
+P35;2000;Musée historique;Ancienne Douane
+P36;1000;Rue des Orfèvres;Cathédrale
+P37;1500;Place Gutenberg;Musée historique
+P38;2000;Place Broglie;Quai Schoepflin
+P39;1000;Rue des Orfèvres;Rue du Dôme
+P40;2000;Rue du Dôme;Place Broglie
+P41;1500;Cathédrale;Musée historique
+P42;2500;Quai Schoepflin;Opéra
+P43;1000;Rue du Dôme;Cathédrale
+P44;2500;Place Broglie;Opéra
+P45;5000;Cathédrale;Intérieur de la Cathédrale
+P46;1500;Cathédrale;Grand Séminaire
+P47;1500;Cathédrale;Palais Rohan
+P48;1500;Rue du Dôme;Grand Séminaire
+P49;1500;Palais Rohan;Musée historique
+P50;2500;Place Broglie;Préfecture
+P51;2000;Grand Séminaire;Place Broglie
+P52;2500;Opéra;Préfecture
+P53;1500;Grand Séminaire;Palais Rohan
+P54;2500;Grand Séminaire;Préfecture
+P55;2500;Grand Séminaire;Saint-Étienne
+P56;2500;Préfecture;Saint-Étienne

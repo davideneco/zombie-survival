@@ -520,6 +520,12 @@ export class Zombie {
     if (this.net) {
       const n = this.net, k = Math.min(1, dt * 10);
       const bx = this.pos.x, bz = this.pos.z;
+      // plus loin que drawRange (m) du joueur local : ni dessiné ni animé (il suit seulement l'hôte) ; le Bourreau garde sa propre visibilité
+      if (!this.isBoss && Array.isArray(player) && player[0]) {
+        const far = Math.hypot(n.x - player[0].pos.x, n.z - player[0].pos.z) > CONFIG.zombie.drawRange;
+        if (far !== !this.group.visible) this.group.visible = !far;
+        if (far) { this.pos.x = n.x; this.pos.z = n.z; this.pos.y = n.y || 0; return; }
+      }
       this.pos.x += (n.x - this.pos.x) * k;
       this.pos.z += (n.z - this.pos.z) * k;
       this.pos.y += ((n.y || 0) - this.pos.y) * k;

@@ -38,10 +38,9 @@ export const CONFIG = {
       { name: 'Homme de Fer', seed: { x: -290, z: -203 }, isolatedRnd: true, doorPrice: 1500, items: ['station', 'wall:crossbow', 'wall:m79', 'perk:phdflopper', 'box'] },
       // ---- le reste de la Grande Île (v0.27.0) : zones `outer`, dans cet ordre (le tirage des zones d'origine ne bouge pas :
       // les zones `outer` ont leur propre générateur). Noms tirés des monuments OpenStreetMap ; « Grand'Rue » et « Quai Schoepflin »
-      // sont des noms déduits du plan (à confirmer). Armes premium (magnum, saiga, mg42, barrett) : v0.28.0 ; en attendant, une arme
-      // déjà vendable (ou aucune) à leur place.
+      // sont des noms déduits du plan (à confirmer). Armes premium au mur (v0.28.0) : magnum 2000, saiga 3000, mg42 4000, barrett 5000.
       // palier A : 1500
-      { name: 'Saint-Pierre-le-Jeune', outer: true, seed: { x: -140, z: -340 }, doorPrice: 1500, items: ['station', 'wall:rifle', 'box'] },
+      { name: 'Saint-Pierre-le-Jeune', outer: true, seed: { x: -140, z: -340 }, doorPrice: 1500, items: ['station', 'wall:magnum', 'box'] },
       { name: "Grand'Rue", outer: true, seed: { x: -400, z: 10 }, doorPrice: 1500, items: ['station', 'wall:mp5', 'box'] },
       { name: 'Grand Séminaire', outer: true, seed: { x: 300, z: -60 }, doorPrice: 1500, items: ['station', 'wall:shotgun', 'box'] },
       { name: 'Palais Rohan', outer: true, seed: { x: 260, z: 140 }, doorPrice: 1500, items: ['wall:ak47'] },
@@ -52,14 +51,14 @@ export const CONFIG = {
       { name: 'Hôtel de Neuwiller', outer: true, seed: { x: -450, z: -250 }, doorPrice: 2000, items: ['wall:famas'] },
       { name: 'Monument Stoeber', outer: true, seed: { x: -490, z: -150 }, doorPrice: 2000, items: ['station', 'wall:scar', 'box'] },
       { name: 'Ancienne Douane', outer: true, seed: { x: 30, z: 330 }, doorPrice: 2000, items: ['station', 'wall:sniper'] },
-      { name: 'Saint-Thomas', outer: true, seed: { x: -230, z: 250 }, doorPrice: 2000, items: ['station', 'wall:p90', 'box'] },
+      { name: 'Saint-Thomas', outer: true, seed: { x: -230, z: 250 }, doorPrice: 2000, items: ['station', 'wall:saiga', 'box'] },
       { name: 'Église Réformée', outer: true, seed: { x: -330, z: 170 }, doorPrice: 2000, items: ['wall:smg'] },
       // palier C : 2500
-      { name: 'Opéra', outer: true, seed: { x: 250, z: -450 }, doorPrice: 2500, items: ['station'] },
+      { name: 'Opéra', outer: true, seed: { x: 250, z: -450 }, doorPrice: 2500, items: ['station', 'wall:mg42'] },
       { name: 'Préfecture', outer: true, seed: { x: 400, z: -340 }, doorPrice: 2500, items: ['station', 'wall:pkm', 'box'] },
       { name: 'Saint-Étienne', outer: true, seed: { x: 540, z: -90 }, doorPrice: 2500, items: ['station', 'wall:m249', 'box'] },
       { name: 'Saint-Pierre-le-Vieux', outer: true, seed: { x: -620, z: -60 }, doorPrice: 2500, items: ['wall:deagle'] },
-      { name: 'Petite France', outer: true, seed: { x: -660, z: 150 }, doorPrice: 2500, items: ['wall:crossbow'] },
+      { name: 'Petite France', outer: true, seed: { x: -660, z: 150 }, doorPrice: 2500, items: ['wall:barrett'] },
     ],
   },
 
@@ -88,7 +87,7 @@ export const CONFIG = {
     m1911: { id: 'm1911', cat: 'pistol', name: 'COLT M1911', cal: '45acp', type: 'semi', magSize: 7, startReserve: 42, maxReserve: 84, fireRate: 5.5, reloadTime: 1.5, spread: 0.01, range: 50, price: 400, ammoPrice: 150 },
     arex: { id: 'arex', cat: 'pistol', name: 'AREX ZERO 1', cal: '9mm', mod: 1.1, type: 'semi', magSize: 17, startReserve: 68, maxReserve: 136, fireRate: 7.5, reloadTime: 1.4, spread: 0.009, range: 55, price: 700, ammoPrice: 250 },
     deagle: { id: 'deagle', cat: 'pistol', name: 'DESERT EAGLE', cal: '50ae', type: 'semi', magSize: 7, startReserve: 35, maxReserve: 56, fireRate: 2.4, reloadTime: 1.9, spread: 0.011, range: 70, price: 1500, ammoPrice: 600 },
-    magnum: { id: 'magnum', cat: 'pistol', name: 'COLT PYTHON .357', cal: '357', mod: 1.1, type: 'semi', magSize: 6, startReserve: 48, maxReserve: 72, fireRate: 3.2, reloadTime: 2.2, spread: 0.006, range: 80, boxOnly: true, ammoPrice: 500 },
+    magnum: { id: 'magnum', cat: 'pistol', name: 'COLT PYTHON .357', cal: '357', mod: 1.1, type: 'semi', magSize: 6, startReserve: 48, maxReserve: 72, fireRate: 3.2, reloadTime: 2.2, spread: 0.006, range: 80, price: 2000, ammoPrice: 500 },
     // ---- fusils d'assaut
     rifle: { id: 'rifle', cat: 'ar', name: 'M4A1', cal: '556', mod: 0.9, type: 'auto', magSize: 30, startReserve: 120, maxReserve: 180, fireRate: 12.5, reloadTime: 1.8, spread: 0.012, range: 90, price: 1200, ammoPrice: 300 },
     ak47: { id: 'ak47', cat: 'ar', name: 'AK-47', cal: '762x39', type: 'auto', magSize: 30, startReserve: 120, maxReserve: 210, fireRate: 10, reloadTime: 2.4, spread: 0.017, range: 90, price: 1600, ammoPrice: 600 },
@@ -101,16 +100,16 @@ export const CONFIG = {
     // ---- mitrailleuses
     lmg: { id: 'lmg', cat: 'mg', name: 'RPK', cal: '762x39', mod: 0.95, headMult: 2, type: 'auto', magSize: 75, startReserve: 300, maxReserve: 450, fireRate: 10, reloadTime: 3.6, spread: 0.028, range: 90, price: 2500, ammoPrice: 1000 },
     m249: { id: 'm249', cat: 'mg', name: 'M249 SAW', cal: '556', headMult: 2, type: 'auto', magSize: 100, startReserve: 300, maxReserve: 500, fireRate: 12.5, reloadTime: 4.2, spread: 0.032, range: 90, price: 3000, ammoPrice: 1200 },
-    mg42: { id: 'mg42', cat: 'mg', name: 'MG42', cal: '792x57', mod: 0.8, headMult: 2, type: 'auto', magSize: 50, startReserve: 250, maxReserve: 450, fireRate: 20, reloadTime: 5, spread: 0.04, range: 90, boxOnly: true, ammoPrice: 1200 },
+    mg42: { id: 'mg42', cat: 'mg', name: 'MG42', cal: '792x57', mod: 0.8, headMult: 2, type: 'auto', magSize: 50, startReserve: 250, maxReserve: 450, fireRate: 20, reloadTime: 5, spread: 0.04, range: 90, price: 4000, ammoPrice: 1200 },
     pkm: { id: 'pkm', cat: 'mg', name: 'PKM', cal: '762x54r', mod: 0.8, headMult: 2, type: 'auto', magSize: 100, startReserve: 300, maxReserve: 500, fireRate: 10.5, reloadTime: 4.8, spread: 0.03, range: 100, price: 3200, ammoPrice: 1300 },
     // ---- fusils de précision
     sniper: { id: 'sniper', cat: 'sniper', name: 'L96A1', cal: '762match', type: 'semi', magSize: 5, startReserve: 30, maxReserve: 45, fireRate: 1.1, reloadTime: 2.8, spread: 0.0015, range: 200, adsFov: 25, price: 1750, ammoPrice: 700 },
     svd: { id: 'svd', cat: 'sniper', name: 'DRAGUNOV SVD', cal: '762x54r7n1', type: 'semi', magSize: 10, startReserve: 40, maxReserve: 70, fireRate: 3, reloadTime: 2.6, spread: 0.004, range: 180, adsFov: 28, price: 2000, ammoPrice: 800 },
-    barrett: { id: 'barrett', cat: 'sniper', name: 'BARRETT M82', cal: '50bmg', type: 'semi', magSize: 10, startReserve: 30, maxReserve: 50, fireRate: 1.2, reloadTime: 3.4, spread: 0.002, range: 220, adsFov: 20, boxOnly: true, ammoPrice: 1500 },
+    barrett: { id: 'barrett', cat: 'sniper', name: 'BARRETT M82', cal: '50bmg', type: 'semi', magSize: 10, startReserve: 30, maxReserve: 50, fireRate: 1.2, reloadTime: 3.4, spread: 0.002, range: 220, adsFov: 20, price: 5000, ammoPrice: 1500 },
     // ---- fusil à pompe et arme spéciale
     shotgun: { id: 'shotgun', cat: 'shotgun', name: 'REMINGTON 870', cal: '12ga', type: 'shotgun', pellets: 8, magSize: 6, startReserve: 30, maxReserve: 48, fireRate: 1.3, reloadTime: 2.4, spread: 0.046, range: 35, price: 750, ammoPrice: 350 },
-    // fusil semi-automatique à pompe de salon : une salve de 8 plombs par clic, uniquement dans la boîte mystère
-    saiga: { id: 'saiga', cat: 'shotgun', name: 'SAIGA-12', cal: '12ga', mod: 0.9, type: 'semi', pellets: 8, magSize: 8, startReserve: 32, maxReserve: 64, fireRate: 3.5, reloadTime: 2.6, spread: 0.05, range: 35, boxOnly: true, ammoPrice: 700 },
+    // fusil semi-automatique à pompe de salon : une salve de 8 plombs par clic ; au mur de Saint-Thomas (3000 pts) et dans la boîte mystère
+    saiga: { id: 'saiga', cat: 'shotgun', name: 'SAIGA-12', cal: '12ga', mod: 0.9, type: 'semi', pellets: 8, magSize: 8, startReserve: 32, maxReserve: 64, fireRate: 3.5, reloadTime: 2.6, spread: 0.05, range: 35, price: 3000, ammoPrice: 700 },
     // arbalète : tir instantané (comme une balle), perce 6 zombies, silencieuse ; recharge seule après chaque tir (autoReload)
     // Pack-a-Punch : carreau explosif (papSplash, copié dans `splash` des stats améliorées)
     crossbow: { id: 'crossbow', cat: 'special', name: 'ARBALÈTE', cal: 'bolt', type: 'semi', magSize: 1, startReserve: 20, maxReserve: 40, fireRate: 1, reloadTime: 1.7, spread: 0.003, range: 80, tracer: 0xb08850, flash: false, autoReload: true, papSplash: { radius: 2.5, damage: 700, color: 0xff9a3a }, price: 2000, ammoPrice: 700 },
@@ -185,7 +184,8 @@ export const CONFIG = {
   // classique : ils sortent de la crypte, des galeries du triforium, des portes du parvis.
   finale: {
     price: 0,             // prix pour lancer l'événement
-    minRound: 8,          // manche minimale
+    minRound: 12,         // manche minimale
+    minZones: 18,         // zones ouvertes au moins (les 10 zones d'origine + 8 zones extérieures) : « 14/18 quartiers »
     maxAlive: 28,         // zombies simultanés pendant une vague
     bossHealth: 60000,    // santé du Bourreau (joueur seul) ; +70 % par joueur supplémentaire
     bossDamage: 45,       // coup de hache
@@ -281,6 +281,8 @@ export const CONFIG = {
     dropChance: 0.05,
     duration: 25,     // durée d'activité sur le sol avant disparition
     buffDuration: 30, // durée de l'effet temporaire (Insta-Kill, Points Doubles)
+    // à la première ouverture d'une zone extérieure : un de ces bonus apparaît dans la zone (tirage de l'hôte)
+    openingBonus: ['max_ammo', 'double_points'],
   },
 
   zombie: {
@@ -307,6 +309,13 @@ export const CONFIG = {
     // île coûterait 25 000 cases par image en permanence), par tranches de `budget` cases par image, relancé au plus toutes les
     // `interval` s. Un zombie plus loin va tout droit ; relocateZombies le ramène près des joueurs s'il reste coincé ou trop loin.
     flow: { range: 160, interval: 0.2, budget: 25000 },
+    // pestiféré (variante 'bloat' : gonflé de gaz, explose à sa mort : 38 dégâts au plus à moins de 4,2 m, le PHD Flopper les ignore) :
+    // dans les zones listées, à partir de la manche fromRound, `chance` par zombie, maxAlive en vie au plus, santé x healthMult
+    pestilent: { zones: ['Petite France', 'Saint-Pierre-le-Vieux'], fromRound: 10, chance: 0.12, maxAlive: 3, healthMult: 1.6 },
+    // apparition en coop : le joueur ciblé est tiré avec le poids 1 / (1 + n), n = zombies à moins de `radius` m de lui (les joueurs
+    // éloignés les uns des autres ne se partagent plus les zombies au hasard) ; un client ne dessine que ce qui est à moins de `drawRange` m
+    spawnBalance: { radius: 45 },
+    drawRange: 170,
   },
 };
 
