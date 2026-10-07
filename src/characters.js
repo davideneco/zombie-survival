@@ -472,6 +472,27 @@ export class Avatar {
   dispose() { this.root.parent?.remove(this.root); } // géométries et matériaux sont partagés : rien à libérer
 }
 
+// ---------------------------------------------------------------- Personnage assis sur une moto (coéquipier ou joueur local)
+// Le personnage devient un enfant de la moto (il en suit cap, inclinaison et position), assis sur la selle `seat`.
+// `holder` : le groupe qui porte l'avatar (avatar.root dedans, plus l'étiquette de nom pour un coéquipier). Il ne doit pas être
+// repeint en noir quand la moto devient une épave (userData.noWreck).
+export function mountAvatar(holder, v, seat, avatar) {
+  v.group.add(holder);
+  holder.userData.noWreck = true;
+  const h = v.model.seats[seat].hip;
+  holder.position.set(h[0], h[1] - 0.92 * avatar.ch.scale[1], h[2]);
+  holder.rotation.set(0, 0, 0);
+}
+export function dismountAvatar(holder) { holder.parent?.remove(holder); }
+// Pose et animation assis : s = { dt, aimYaw (cap visé), pitch, weapon, pap, reloading, aiming, fire }. Le conducteur a les deux mains
+// sur le guidon ; le buste du passager suit la visée (±1,3 rad autour de l'axe de la moto) pour pouvoir tirer.
+export function seatedUpdate(holder, v, seat, avatar, s) {
+  const d = Math.atan2(Math.sin(s.aimYaw - v.yaw), Math.cos(s.aimYaw - v.yaw));
+  holder.rotation.y = seat === 1 ? Math.max(-1.3, Math.min(1.3, d)) : 0;
+  avatar.setWeapon(s.weapon, s.pap);
+  avatar.update({ dt: s.dt, speed: 0, fwd: 0, pitch: s.pitch, reloading: s.reloading, aiming: s.aiming, fire: s.fire, seat: seat === 0 ? 1 : 2 });
+}
+
 // Portrait pour le menu : rendu une fois dans un petit contexte WebGL à part
 export function renderPortraits(size = 220) {
   const out = [];

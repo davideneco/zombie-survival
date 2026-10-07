@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { Avatar, charOf, slotColor } from './characters.js';
+import { Avatar, charOf, slotColor, mountAvatar, dismountAvatar, seatedUpdate } from './characters.js';
 
 export { slotColor };
 
@@ -75,19 +75,17 @@ export class RemotePlayer {
   // Un tir de ce joueur vient d'être signalé : éclair de bouche et recul
   fire() { this.fireNext = true; }
 
-  // Assis sur une moto : le personnage devient un enfant de la moto (il en suit cap, inclinaison et position)
+  // Assis sur une moto : le personnage devient un enfant de la moto (voir mountAvatar dans characters.js)
   setRide(v, seat) {
     if (this.ride && this.ride.v === v && this.ride.seat === seat) return;
     this.ride = { v, seat };
-    v.group.add(this.group);
-    const h = v.model.seats[seat].hip;
-    this.group.position.set(h[0], h[1] - 0.92 * this.avatar.ch.scale[1], h[2]);
-    this.group.rotation.set(0, 0, 0);
+    mountAvatar(this.group, v, seat, this.avatar);
   }
 
   clearRide() {
     if (!this.ride) return;
     this.ride = null;
+    dismountAvatar(this.group);
     this.scene.add(this.group);
     this.pos.copy(this.tpos);
     this.group.position.copy(this.pos);
@@ -98,10 +96,7 @@ export class RemotePlayer {
     if (this.ride) { // sur une moto : position et cap suivent la moto, jambes pliées ; le passager peut tourner le buste pour tirer
       const { v, seat } = this.ride;
       v.hipWorld(seat, this.pos);
-      const d = Math.atan2(Math.sin(this.tyaw - v.yaw), Math.cos(this.tyaw - v.yaw));
-      this.group.rotation.y = seat === 1 ? Math.max(-1.3, Math.min(1.3, d)) : 0;
-      this.avatar.setWeapon(this.weapon, this.pap);
-      this.avatar.update({ dt, speed: 0, fwd: 0, pitch: this.pitch, reloading: this.reloading, aiming: this.aiming, fire: this.fireNext, seat: seat === 0 ? 1 : 2 });
+      seatedUpdate(this.group, v, seat, this.avatar, { dt, aimYaw: this.tyaw, pitch: this.pitch, weapon: this.weapon, pap: this.pap, reloading: this.reloading, aiming: this.aiming, fire: this.fireNext });
       this.fireNext = false;
       this.tag.visible = true;
       return;

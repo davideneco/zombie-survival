@@ -1634,6 +1634,12 @@ export async function buildRealWorld(scene, renderer) {
     floorAt: (x, z, y, out) => levels.floorAt(x, z, y, out),
     collide: (pos, r) => collision.resolve(pos, r),
     rayHit: (ox, oy, oz, dx, dy, dz, maxT) => collision.rayHit(ox, oy, oz, dx, dy, dz, maxT),
+    // Hauteur du plafond à l'aplomb de (x, z) : voûtes de la cathédrale, passage sous immeuble (PASSAGE_H), sinon rien (ciel ouvert)
+    ceilingAt: (x, z) => {
+      const c = cath ? cath.ceilAt(x, z) : null;
+      if (c != null) return c;
+      return axisInside(x, z) ? PASSAGE_H : Infinity;
+    },
     update(px, pz, dt) {
       sky.position.set(px, 0, pz);
       for (let i = openingDoors.length - 1; i >= 0; i--) { // battants du grand portail

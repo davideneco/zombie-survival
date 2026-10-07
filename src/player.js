@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { CONFIG, falloffMult } from './config.js';
 import { buildWeaponModels } from './viewmodels.js';
+import { RideCam } from './rideCam.js';
 
 const ADS_DELTA = 20; // réduction du FOV en visée
 const PAP_TINT = 0x6a1fa8; // reflet violet des armes améliorées
@@ -19,8 +20,11 @@ export class Player {
     this.mouseDown = false;
     this.rc = new THREE.Raycaster();
     this._v = new THREE.Vector3();
+    this._v2 = new THREE.Vector3();
     this.perks = {};
     this.statsVersion = 0; // incrémenté quand les atouts changent (invalide le cache des stats d'arme)
+    this.lastMouse = -99;  // game.time du dernier mouvement de souris (recentrage de la vue du conducteur)
+    this.ride = new RideCam(this); // vue à la troisième personne sur une moto
 
     camera.rotation.order = 'YXZ';
     scene.add(camera);
@@ -87,6 +91,7 @@ export class Player {
     this.region = 0; this.wasGrounded = true;
     this.airT = 0; this.peakY = 0; this.jumpSprint = false; this.flopCd = 0; // PHD Flopper (plongeon)
     this.vehicle = null; // { v, seat } quand on est sur une moto
+    this.ride?.reset();
 
     // Inventaire d'armes
     this.inventory = CONFIG.startWeapons.map((id) => this.newWeapon(id));
@@ -214,6 +219,7 @@ export class Player {
       if (k === 'e') this.game.interact();
       if (k === 'f') this.setTorch(!this.torchOn);
       if (k === 'g') this.throwGrenade();
+      if (k === 'v' && this.vehicle) this.game.toggleVehicleView?.(); // moto : bascule troisième / première personne
       if (e.code === 'Space') e.preventDefault();
       if (this.locked) return; // arme dans le Pack-a-Punch
       if (e.code === 'Digit1') this.switchWeapon(0);
@@ -247,6 +253,7 @@ export class Player {
       const sens = 0.0022 * this.game.settings.sens * zoom;
       this.yaw -= e.movementX * sens;
       this.pitch -= e.movementY * sens;
+      this.lastMouse = this.game.time;
       this.pitch = Math.max(-Math.PI / 2 + 0.05, Math.min(Math.PI / 2 - 0.05, this.pitch));
     });
     this.aiming = false;
@@ -382,6 +389,7 @@ export class Player {
       this.vel.set(0, 0, 0);
       this.vy = 0; this.wasGrounded = true; this.region = 0; this.airT = 0; this.jumpSprint = false; // en moto : pas de plongeon
       this.yaw += veh.v.dyaw;
+      this.ride.steer(dt, veh, this.game.time - this.lastMouse); // vue externe : tangage borné, recentrage derrière la moto
     } else {
       let mx = (K.KeyD || K.ArrowRight ? 1 : 0) - (K.KeyA || K.ArrowLeft ? 1 : 0);
       let mz = (K.KeyW || K.ArrowUp ? 1 : 0) - (K.KeyS || K.ArrowDown ? 1 : 0);
@@ -433,7 +441,7 @@ export class Player {
     // ---- visée (ADS) ----
     this.aim += ((this.aiming && !this.downed ? 1 : 0) - this.aim) * Math.min(1, dt * 12);
     const base = this.game.settings.fov;
-    const fov = base - (cfg.adsFov ? base - cfg.adsFov : ADS_DELTA) * this.aim + (veh ? Math.min(12, Math.abs(veh.v.speed) * 0.55) : 0);
+    const fov = base - (cfg.adsFov ? base - cfg.adsFov : ADS_DELTA) * this.aim + (veh ? Math.min(12, Math.abs(veh.v.speed) * 0.55) * (1 - 0.5 * this.ride.k) : 0);
     if (Math.abs(fov - this.camera.fov) > 0.01) {
       this.camera.fov = fov;
       this.camera.updateProjectionMatrix();
@@ -441,7 +449,7 @@ export class Player {
     // lunette : on cache l'arme quand on vise au fusil de précision
     // (on cache le modèle de l'arme, pas le groupe entier qui contient la lumière de tir)
     // (jamais le groupe entier : il porte la lumière de tir, et masquer une lumière recompile tous les shaders)
-    this.vms[w.id].visible = !this.locked && !(cfg.adsFov && this.aim > 0.8) && !(veh && veh.seat === 0);
+    this.vms[w.id].visible = !this.locked && !(cfg.adsFov && this.aim > 0.8) && !(veh && veh.seat === 0) && !this.ride.external; // vue externe : c'est le personnage qui tient l'arme
     const bolts = this.bolts[w.id];
     if (bolts) { const show = w.ammo > 0 && (!w.reloading || w.reloadT > cfg.reloadTime * 0.6); for (const b of bolts) b.visible = show; } // le carreau n'est là que si l'arme est chargée
 
@@ -479,8 +487,11 @@ export class Player {
       ex = this._v.x; ey = this._v.y; ez = this._v.z;
       sh += Math.min(1, Math.abs(veh.v.speed) / veh.v.def.maxSpeed) * 0.05; // vibration du moteur
     }
-    this.camera.position.set(ex + (sh ? (Math.random() - 0.5) * sh * 0.25 : 0), ey + (sh ? (Math.random() - 0.5) * sh * 0.25 : 0), ez + (sh ? (Math.random() - 0.5) * sh * 0.25 : 0));
-    this.camera.rotation.set(this.pitch + this.recoil, this.yaw, veh ? veh.v.lean * 0.5 : 0);
+    // vue externe (troisième personne sur une moto, ou sortie de moto en cours) : RideCam pose la caméra ; sinon vue à la première personne
+    if (!this.ride.update(dt, veh, { x: this.pos.x, y: this.pos.y + eyeH, z: this.pos.z }, sh)) {
+      this.camera.position.set(ex + (sh ? (Math.random() - 0.5) * sh * 0.25 : 0), ey + (sh ? (Math.random() - 0.5) * sh * 0.25 : 0), ez + (sh ? (Math.random() - 0.5) * sh * 0.25 : 0));
+      this.camera.rotation.set(this.pitch + this.recoil, this.yaw, veh ? veh.v.lean * 0.5 : 0);
+    }
 
     // ---- animation de l'arme ----
     this.kick *= Math.max(0, 1 - dt * 14);
@@ -524,8 +535,10 @@ export class Player {
     // Sons
     this.game.weaponSound(cfg.id);
 
-    // Muzzle flash (l'arbalète n'en a pas)
-    if (cfg.flash !== false) {
+    // Muzzle flash (l'arbalète n'en a pas) ; en vue externe, c'est l'éclair du personnage (pas de lumière de tir)
+    const ext = this.ride.external;
+    if (ext && cfg.flash !== false) this.ride.fire();
+    else if (cfg.flash !== false) {
       this.flash.visible = true;
       this.flash.material.color.setHex(cfg.id === 'raygun' ? 0x66ff88 : cfg.pap ? 0xd28cff : 0xffcc66);
       this.flash.rotation.z = Math.random() * Math.PI;
@@ -538,13 +551,15 @@ export class Player {
     this.camera.updateMatrixWorld(true);
     const mul = (this.aiming ? (cfg.adsFov ? 0.05 : 0.4) : 1) * (moving ? 1.8 : 1);
     if (cfg.type === 'launcher') { this.fireLauncher(cfg, mul); return; }
-    const origin = this.muzzle.getWorldPosition(this._v.set(0, 0, 0)).clone();
+    // origine visuelle des traçantes : la bouche de l'arme (de la vue, ou du personnage en vue externe)
+    const origin = this.shotOrigin(ext);
     const pellets = cfg.pellets || 1;
 
     for (let p = 0; p < pellets; p++) {
       const sx = (Math.random() - 0.5) * 2 * cfg.spread * mul;
       const sy = (Math.random() - 0.5) * 2 * cfg.spread * mul;
       this.rc.setFromCamera({ x: sx, y: sy }, this.camera);
+      if (ext) this.rc.ray.origin.addScaledVector(this.rc.ray.direction, this.ride.dist); // vue externe : le rayon part du pilote (bras avancé)
       this.rc.far = cfg.range;
       // Grande carte : les murs sont testés par la grille de collision (rapide), seuls les zombies par maillage.
       const fast = !!this.world.rayHit;
@@ -576,14 +591,28 @@ export class Player {
     }
   }
 
+  // Bouche de l'arme d'où partent traçantes et projectiles : celle de la vue, ou (vue externe) celle du personnage sur sa moto ; tant que le
+  // personnage n'est pas encore visible (début de la montée), le point avancé de la caméra
+  shotOrigin(external) {
+    if (external) {
+      const m = this.ride.muzzleWorld(this._v.set(0, 0, 0));
+      if (m) return m.clone();
+      this.camera.getWorldDirection(this._v2);
+      return this.camera.position.clone().addScaledVector(this._v2, this.ride.dist);
+    }
+    return this.muzzle.getWorldPosition(this._v.set(0, 0, 0)).clone();
+  }
+
   // Lance-grenades : un vrai projectile (voir launcher.js). Il part de la bouche et vise le point visé par la caméra (au plus 40 m
   // devant) ; si le canon est plaqué contre un mur, il part de l'œil pour ne pas naître dans le mur.
   fireLauncher(cfg, mul) {
     const world = this.world;
     const sx = (Math.random() - 0.5) * 2 * cfg.spread * mul, sy = (Math.random() - 0.5) * 2 * cfg.spread * mul;
     this.rc.setFromCamera({ x: sx, y: sy }, this.camera);
+    const ext = this.ride.external;
+    if (ext) this.rc.ray.origin.addScaledVector(this.rc.ray.direction, this.ride.dist); // vue externe : le tir part du pilote
     const ro = this.rc.ray.origin.clone(), rd = this.rc.ray.direction.clone();
-    const origin = this.muzzle.getWorldPosition(this._v.set(0, 0, 0)).clone();
+    const origin = this.shotOrigin(ext);
     const toM = origin.clone().sub(ro), lenM = toM.length();
     if (world.rayHit && lenM > 1e-4) {
       toM.divideScalar(lenM);
@@ -612,7 +641,8 @@ export class Player {
     this.grenades--;
     this.camera.updateMatrixWorld(true);
     const dir = new THREE.Vector3(0, 0, -1).applyQuaternion(this.camera.quaternion);
-    const o = this.camera.position.clone().addScaledVector(dir, 0.6);
+    // vue externe : la grenade part de l'œil du pilote (pas de la caméra, 3 m derrière)
+    const o = (this.ride.external ? this.ride.eyeOrigin(this.vehicle, { x: this.pos.x, y: this.pos.y + CONFIG.player.eye, z: this.pos.z }, new THREE.Vector3()) : this.camera.position.clone()).addScaledVector(dir, 0.6);
     const v = dir.multiplyScalar(15).add(new THREE.Vector3(0, 3, 0)).add(new THREE.Vector3(this.vel.x, 0, this.vel.z));
     this.game.throwGrenade(o, v, true);
   }

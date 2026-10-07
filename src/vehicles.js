@@ -57,11 +57,15 @@ export class Vehicle {
     if (this.wreckLook === on) return;
     this.wreckLook = on;
     const wm = wreckMaterial();
-    this.group.traverse((o) => {
-      if (!o.isMesh) return;
-      if (on) { o.userData.mat0 ??= o.material; o.material = wm; }
-      else if (o.userData.mat0) o.material = o.userData.mat0;
-    });
+    const walk = (o) => {
+      if (o.userData.noWreck) return; // les personnages assis sur la moto (groupes fils) gardent leurs couleurs
+      if (o.isMesh) {
+        if (on) { o.userData.mat0 ??= o.material; o.material = wm; }
+        else if (o.userData.mat0) o.material = o.userData.mat0;
+      }
+      for (const c of o.children) walk(c);
+    };
+    walk(this.group);
   }
 
   get maxHp() { return this.def.hp; }

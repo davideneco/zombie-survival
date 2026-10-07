@@ -52,7 +52,7 @@ scene.add(moon, moon.target);
 const MOON_OFFSET = new THREE.Vector3(25, 55, 15);
 
 // ------------------------------------------------------- Options (client)
-const DEFAULT_SETTINGS = { brightness: 1.4, fov: 80, sens: 1, volume: 1, music: 0.5, quality: 1 };
+const DEFAULT_SETTINGS = { brightness: 1.4, fov: 80, sens: 1, volume: 1, music: 0.5, quality: 1, tpVehicle: true }; // tpVehicle : vue à la troisième personne sur une moto (touche V)
 const settings = { ...DEFAULT_SETTINGS };
 try { Object.assign(settings, JSON.parse(localStorage.getItem('zombie_settings') || '{}')); } catch {}
 
@@ -138,6 +138,18 @@ const game = {
   netTimer: 0,
   reviveTimer: 0,
   reviveTarget: null,
+
+  saveSettings() { try { localStorage.setItem('zombie_settings', JSON.stringify(settings)); } catch {} },
+
+  // Personnage du joueur local (celui des coéquipiers voient) : le choix du menu en solo, l'emplacement attribué en salon
+  localCharacter() { return charOf(this.isMultiplayer ? this.mySlot : this.charPref); },
+
+  // Touche V sur une moto : bascule troisième / première personne, mémorisée
+  toggleVehicleView() {
+    settings.tpVehicle = settings.tpVehicle === false;
+    this.saveSettings();
+    hud.popup(settings.tpVehicle ? 'VUE : 3E PERSONNE' : 'VUE : 1RE PERSONNE', 'bonus');
+  },
 
   hitTargets() {
     const list = world.blockers.slice();
@@ -1763,7 +1775,7 @@ for (const [key, input] of Object.entries(optInputs)) {
     applyVisualSettings();
     sfx.setVolume(settings.volume);
     sfx.setMusicVolume(settings.music);
-    try { localStorage.setItem('zombie_settings', JSON.stringify(settings)); } catch {}
+    game.saveSettings();
   });
 }
 

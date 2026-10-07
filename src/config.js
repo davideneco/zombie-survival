@@ -223,13 +223,24 @@ export const CONFIG = {
     // pushAccel m/s², freins et direction normaux). Borne du parking : « plein + réparation » (pricePerL pts par litre, plus les PV).
     // Jerrican : dropChance par zombie tué, seulement si une moto en état a moins de dropBelow de réservoir, un seul au sol ; +jerrican L.
     fuel: { lowBelow: 0.15, lowBeep: 4, missBelow: 0.05, missEvery: 1.5, missLen: 0.15, pushSpeed: 3, pushAccel: 3, pricePerL: 50, jerrican: 2.5, dropChance: 0.03, dropBelow: 0.5, respawn: 0.4 },
+    // Vue à la troisième personne (touche V : bascule avec la première personne, réglage `tpVehicle` mémorisé). La longueur du bras est propre
+    // à chaque moto (type.camArm). Pivot = œil + pivotUp (passager : + pivotRight à droite), lissé (follow, 1/s). Tangage borné. Caméra :
+    // trois rayons (décalés de rayOffset), recul `margin`, bras minimal `minArm`, retour à `retreat` m/s ; plafond - ceilingMargin, sol +
+    // floorMargin. Transitions (s) : montée mountTime, descente leaveTime, visée aimTime. Personnage visible si bras > avatarMin ; arme de
+    // la vue visible si bras < viewmodelMax. Conducteur : la vue revient derrière la moto après recenterAfter s sans souris (recenterRate rad/s).
+    cam: {
+      pivotUp: 0.35, pivotRight: 0.35, follow: 14, pitchMin: -0.7, pitchMax: 0.45,
+      rayOffset: 0.25, margin: 0.3, minArm: 0.8, retreat: 4, ceilingMargin: 0.35, floorMargin: 0.5,
+      mountTime: 0.35, leaveTime: 0.25, aimTime: 0.15, avatarMin: 0.8, viewmodelMax: 0.3,
+      recenterAfter: 1.5, recenterRate: 2, recenterPitch: -0.15,
+    },
     types: {
       moto: {
-        name: 'MOTO', seats: 1, hp: 300, tank: 6, idle: 0.004, gas: 0.012, perSpeed: 0.017, maxSpeed: 21, accel: 11, brake: 28, reverseSpeed: 3.5, drag: 0.12,
+        name: 'MOTO', seats: 1, camArm: 3.4, hp: 300, tank: 6, idle: 0.004, gas: 0.012, perSpeed: 0.017, maxSpeed: 21, accel: 11, brake: 28, reverseSpeed: 3.5, drag: 0.12,
         wheelbase: 1.35, maxSteer: 0.62, grip: 15, radius: 0.55, roadkill: { K: 16, vmin: 9, slowdown: 0.85 },
       },
       grosseMoto: {
-        name: 'GROSSE MOTO', seats: 2, hp: 500, tank: 10, idle: 0.005, gas: 0.016, perSpeed: 0.021, maxSpeed: 17, accel: 8, brake: 24, reverseSpeed: 3, drag: 0.12,
+        name: 'GROSSE MOTO', seats: 2, camArm: 4.0, hp: 500, tank: 10, idle: 0.005, gas: 0.016, perSpeed: 0.021, maxSpeed: 17, accel: 8, brake: 24, reverseSpeed: 3, drag: 0.12,
         wheelbase: 1.75, maxSteer: 0.5, grip: 11, radius: 0.7, roadkill: { K: 24, vmin: 7, slowdown: 0.90 },
       },
     },
