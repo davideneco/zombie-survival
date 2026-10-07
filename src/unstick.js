@@ -107,8 +107,10 @@ export function installUnstick(game, { world, hud, sfx }) {
     st.trapCheck -= dt;
     if (st.trapCheck <= 0) {
       st.trapCheck = 0.5;
-      const main = st.main(), l = st.labelAt(p.pos.x, p.pos.z);
-      st.trapT = l !== main ? st.trapT + 0.5 : 0;
+      const main = st.main(), l = st.labelAt(p.pos.x, p.pos.z), n = nav();
+      // seules les petites poches comptent : l'intérieur de la cathédrale, par exemple, forme de grandes composantes séparées de la ville
+      const small = l !== main && (l === 0 || n.components().sizes[l] * n.cell * n.cell < U.pocketMaxArea);
+      st.trapT = small ? st.trapT + 0.5 : 0;
     }
     const wasStuck = st.stuck;
     st.stuck = st.t >= U.stuckAfter || st.trapT >= U.trapAfter;

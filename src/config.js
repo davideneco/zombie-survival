@@ -206,8 +206,8 @@ export const CONFIG = {
   // hauteur toléré au sol d'arrivée (m), time = durée (s), camLift = élévation de la caméra (m), cooldown = délai avant un nouvel enjambement (s)
   vault: { reach: 0.9, maxAngle: 45, maxDepth: 1.3, clearance: 0.5, heightTol: 0.3, time: 0.5, camLift: 0.6, cooldown: 0.25 },
   // Se débloquer (touche K maintenue holdTime s, voir unstick.js) : l'invite apparaît si une touche de déplacement est maintenue stuckAfter s sans
-  // avancer de moveMin m, ou si la position est dans une poche fermée depuis trapAfter s ; arrivée à moins de maxDist m ; recharge cooldown s
-  unstick: { stuckAfter: 4, moveMin: 0.5, trapAfter: 3, holdTime: 2, maxDist: 40, cooldown: 30 },
+  // avancer de moveMin m, ou si la position est dans une poche fermée (moins de pocketMaxArea m²) depuis trapAfter s ; arrivée à moins de maxDist m ; recharge cooldown s
+  unstick: { stuckAfter: 4, moveMin: 0.5, trapAfter: 3, pocketMaxArea: 150, holdTime: 2, maxDist: 40, cooldown: 30 },
   // Couteau (touche V à pied ; clic gauche quand le chargeur ET la réserve sont vides). Toujours disponible, hors inventaire.
   // Dégâts = max(minDamage, healthFrac x santé des zombies de la manche) : 3 coups quelle que soit la manche dès la 10 ; dos ou tête x weakMult
   // (non cumulés). Armure du chevalier de fer ignorée (coup de miséricorde). Bourreau : dégâts fixes, x front de face, x back dans le dos.
