@@ -141,6 +141,7 @@ const game = {
   playerName: localStorage.getItem('zombie_name') || 'Joueur',
   charPref: Math.max(0, Math.min(CHARACTERS.length - 1, parseInt(localStorage.getItem('zombie_char') || '0', 10) || 0)), // personnage choisi dans le menu
   remotes: new Map(), // pid -> RemotePlayer
+  _pv: new THREE.Vector3(),
   netTimer: 0,
   reviveTimer: 0,
   reviveTarget: null,
@@ -268,6 +269,42 @@ const game = {
     if (!this.isMultiplayer) return;
     this.net?.send({ t: 'p_down' });
     this.checkTeamWipe();
+  },
+
+  // Repères des coéquipiers : triangles de la boussole, indicateurs fléchés des joueurs à terre hors de vue, vue du joueur à terre
+  updateTeamMarks() {
+    const p = this.player, marks = [], dmarks = [];
+    if (this.isMultiplayer) {
+      const W = window.innerWidth, H = window.innerHeight;
+      for (const r of this.remotes.values()) {
+        if (r.dead) continue;
+        const dx = r.pos.x - p.pos.x, dz = r.pos.z - p.pos.z, dist = Math.hypot(dx, dz), down = !!r.downed;
+        marks.push({ bearing: (Math.atan2(dx, -dz) * 180 / Math.PI + 360) % 360, color: r.color, down });
+        if (!down) continue;
+        const v = this._pv.set(r.pos.x, r.pos.y + 0.6, r.pos.z).project(camera);
+        const behind = v.z > 1;
+        let nx = behind ? -v.x : v.x, ny = behind ? -v.y : v.y;
+        if (!behind && Math.abs(nx) < 0.9 && Math.abs(ny) < 0.88) continue; // à l'écran : sa croix et son compte à rebours suffisent
+        const m = Math.hypot(nx, ny) || 1; nx /= m; ny /= m;
+        const k = Math.min(0.9 / Math.max(Math.abs(nx), 1e-4), 0.82 / Math.max(Math.abs(ny), 1e-4));
+        dmarks.push({ x: (nx * k * 0.5 + 0.5) * W, y: (-ny * k * 0.5 + 0.5) * H, angle: Math.atan2(nx, ny), text: `${r.name} · ${Math.round(dist)} m · ${r.bo} s`, color: r.color });
+      }
+    }
+    hud.drawCompass(p.yaw, marks);
+    hud.setDownMarks(dmarks);
+    // vue du joueur à terre
+    let info = null;
+    if (this.isMultiplayer && p.downed && !p.dead) {
+      let nearest = null, reviver = null;
+      for (const r of this.remotes.values()) {
+        if (r.dead || r.downed) continue;
+        const d = Math.hypot(r.pos.x - p.pos.x, r.pos.z - p.pos.z);
+        if (!nearest || d < nearest.dist) nearest = { name: r.name, dist: d };
+        if (r.rv != null && r.rv === this.net?.id) reviver = { name: r.name, left: Math.max(0, r.rvl) };
+      }
+      info = { sec: Math.ceil(p.bleedout), nearest, reviver };
+    }
+    hud.setDownedView(info);
   },
 
   checkTeamWipe() {
@@ -957,6 +994,9 @@ const game = {
       pap: p.curW.pap ? 1 : 0,
       rl: p.curW.reloading ? 1 : 0,
       ads: p.aiming ? 1 : 0,
+      bo: p.downed && !p.dead ? Math.ceil(p.bleedout) : 0,         // secondes avant la mort (à terre)
+      rv: this.reviveTarget ? this.reviveTarget.id : null,          // coéquipier que je suis en train de réanimer
+      rvl: this.reviveTarget ? Math.round((this.reviveTime() - this.reviveTimer) * 10) / 10 : 0,
     });
   },
 
@@ -1023,7 +1063,8 @@ const game = {
     p.update(dt, this.time);
 
     // Mise à jour des coéquipiers
-    for (const tm of this.remotes.values()) tm.update(dt);
+    RemotePlayer.tick(dt);
+    for (const tm of this.remotes.values()) tm.update(dt, this.view);
 
     // Buffs temporaires
     if (this.buffs.instaKill > 0) this.buffs.instaKill = Math.max(0, this.buffs.instaKill - dt);
@@ -1217,7 +1258,7 @@ const game = {
     hud.setHealth(p.health, p.maxHealth);
     hud.setNades(p.grenades);
     hud.setPerks(p.perks, CONFIG.perks);
-    hud.drawCompass(p.yaw);
+    this.updateTeamMarks();
     if (world.zoneOf) hud.setZone(world.zoneNames[world.zoneOf(p.pos.x, p.pos.z)]);
     hud.drawMap(world, p, [...this.remotes.values()], this.isMultiplayer ? slotColor(this.mySlot) : '#66ff99');
     hud.setAmmo(curW.ammo, curW.reserve, curW.reloading);
@@ -2019,3 +2060,13 @@ game.fx = fx;
 game.THREE = THREE;
 game.renderer = renderer;
 game.camera = camera;
+// Vue partagée avec les repères des coéquipiers (remote.js) : caméra, hauteur d'écran, test de visibilité (rayon 4 fois par seconde et par joueur)
+game.view = {
+  camera,
+  get height() { return renderer.domElement.clientHeight || window.innerHeight; },
+  occluded(from, pos, y) {
+    const dx = pos.x - from.x, dy = y - from.y, dz = pos.z - from.z, d = Math.hypot(dx, dy, dz);
+    if (d < 1) return false;
+    return world.rayHit(from.x, from.y, from.z, dx / d, dy / d, dz / d, d) < d - 0.6;
+  },
+};

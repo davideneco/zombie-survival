@@ -254,9 +254,11 @@ export class Hud {
       if (d > maxRange) continue;
       const px = cx + (rx / maxRange) * r;
       const py = cy + (rz / maxRange) * r;
-      ctx.fillStyle = tm.dead || tm.downed ? '#ff3333' : (tm.color || '#3a7bd5');
+      const down = tm.dead || tm.downed;
+      if (down && !tm.dead && performance.now() % 700 > 400) continue; // à terre : le point clignote ; mort : fixe
+      ctx.fillStyle = down ? '#ff3333' : (tm.color || '#3a7bd5');
       ctx.beginPath();
-      ctx.arc(px, py, 3.8, 0, Math.PI * 2);
+      ctx.arc(px, py, down ? 4.6 : 3.8, 0, Math.PI * 2);
       ctx.fill();
     }
 
@@ -329,7 +331,9 @@ export class Hud {
   }
 
   // Boussole : cap 0 = nord (-z), 90 = est (+x)
-  drawCompass(yaw) {
+  // marks : repères des coéquipiers [{ bearing (degrés, 0 = nord, 90 = est), color, down }] : triangle de la couleur du joueur, croix rouge
+  // s'il est à terre ; hors du champ affiché, le repère se colle au bord correspondant.
+  drawCompass(yaw, marks = []) {
     const ctx = this.compassCtx;
     if (!ctx) return;
     const W = 420, H = 30, span = 120; // degrés visibles
@@ -344,8 +348,67 @@ export class Hud {
       if (card) { ctx.font = 'bold 15px Arial'; ctx.fillText(card[0], x, 20); }
       else { ctx.fillRect(x - 0.5, 18, 1, 8); }
     }
+    for (const m of marks) {
+      let df = ((m.bearing - heading + 540) % 360) - 180;
+      const edge = Math.abs(df) > span / 2;
+      df = Math.max(-span / 2 + 6, Math.min(span / 2 - 6, df));
+      const x = W / 2 + (df / span) * W;
+      ctx.globalAlpha = edge ? 0.55 : 1;
+      if (m.down) { // croix rouge
+        ctx.fillStyle = '#000'; ctx.fillRect(x - 6, 12, 12, 12); ctx.fillRect(x - 3, 9, 6, 18);
+        ctx.fillStyle = '#e02820'; ctx.fillRect(x - 5, 14, 10, 8); ctx.fillRect(x - 2, 11, 4, 14);
+      } else {
+        ctx.fillStyle = '#000'; ctx.beginPath(); ctx.moveTo(x - 7, 11); ctx.lineTo(x + 7, 11); ctx.lineTo(x, 24); ctx.fill();
+        ctx.fillStyle = m.color || '#3a7bd5'; ctx.beginPath(); ctx.moveTo(x - 5, 12); ctx.lineTo(x + 5, 12); ctx.lineTo(x, 21); ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+    }
     ctx.fillStyle = '#ffd24a';
     ctx.beginPath(); ctx.moveTo(W / 2 - 6, 0); ctx.lineTo(W / 2 + 6, 0); ctx.lineTo(W / 2, 7); ctx.fill();
+  }
+
+  // Indicateurs fléchés au bord de l'écran vers les coéquipiers à terre hors de vue : list = [{ id, x, y, angle, text, color }]
+  setDownMarks(list) {
+    if (!this.downBox) {
+      this.downBox = document.createElement('div');
+      Object.assign(this.downBox.style, { position: 'absolute', inset: '0', pointerEvents: 'none', overflow: 'hidden' });
+      this.el.hud.appendChild(this.downBox);
+      this.downPool = [];
+    }
+    while (this.downPool.length < list.length) {
+      const d = document.createElement('div');
+      Object.assign(d.style, { position: 'absolute', left: '0', top: '0', display: 'none', font: 'bold 15px Arial, sans-serif', color: '#fff', textShadow: '0 0 4px #000, 0 0 2px #000', whiteSpace: 'nowrap', textAlign: 'center' });
+      d.innerHTML = '<div class="arr" style="width:0;height:0;margin:0 auto;border-left:12px solid transparent;border-right:12px solid transparent;border-bottom:22px solid #e02820;filter:drop-shadow(0 0 3px #000)"></div><div class="txt"></div>';
+      this.downBox.appendChild(d); this.downPool.push(d);
+    }
+    this.downPool.forEach((d, i) => {
+      const m = list[i];
+      if (!m) { if (d.style.display !== 'none') d.style.display = 'none'; return; }
+      d.style.display = 'block';
+      d.style.transform = `translate(${Math.round(m.x)}px, ${Math.round(m.y)}px) translate(-50%, -50%)`;
+      d.firstChild.style.transform = `rotate(${m.angle}rad)`;
+      const t = d.lastChild; if (t.textContent !== m.text) t.textContent = m.text;
+      t.style.color = m.color || '#fff';
+    });
+  }
+
+  // Vue du joueur à terre : compte à rebours au centre, distance au coéquipier debout le plus proche, et qui le réanime
+  // info = { sec, nearest: { name, dist } | null, reviver: { name, left } | null } ou null
+  setDownedView(info) {
+    if (!this.downView) {
+      this.downView = document.createElement('div');
+      Object.assign(this.downView.style, { position: 'absolute', left: '50%', top: '34%', transform: 'translateX(-50%)', textAlign: 'center', font: 'bold 20px Arial, sans-serif', color: '#fff', textShadow: '0 0 6px #000, 0 0 3px #000', display: 'none', letterSpacing: '2px', pointerEvents: 'none' });
+      this.el.hud.appendChild(this.downView);
+    }
+    const key = info ? `${info.sec}|${info.nearest ? info.nearest.name + Math.round(info.nearest.dist) : ''}|${info.reviver ? info.reviver.name + info.reviver.left.toFixed(1) : ''}` : '';
+    this._set('downview', key, () => {
+      this.downView.style.display = info ? 'block' : 'none';
+      if (!info) return;
+      const esc = (t) => String(t).replace(/[&<>"']/g, (c) => '&#' + c.charCodeAt(0) + ';');
+      this.downView.innerHTML = `<div style="font-size:64px;color:#ff4a3a;line-height:1">${info.sec} s</div><div style="font-size:16px;color:#ffb0a0">VOUS ÊTES À TERRE</div>`
+        + (info.reviver ? `<div style="margin-top:8px;color:#8cff9a">${esc(info.reviver.name)} vous réanime ${info.reviver.left.toFixed(1)} s</div>`
+          : info.nearest ? `<div style="margin-top:8px">Coéquipier le plus proche : ${esc(info.nearest.name)}, ${Math.round(info.nearest.dist)} m</div>` : '<div style="margin-top:8px;color:#bbb">Aucun coéquipier debout</div>');
+    });
   }
 
   toggleMap(show) {
@@ -463,10 +526,11 @@ export class Hud {
   setTeammates(list) {
     if (!this.el.teammates) return;
     if (!list || list.length === 0) {
-      this.el.teammates.innerHTML = '';
+      this._set('teammates', '', () => { this.el.teammates.innerHTML = ''; });
       return;
     }
-    this.el.teammates.innerHTML = list.map((p) => {
+    const key = list.map((p) => `${p.name}|${p.points || 0}|${Math.round(p.health)}|${p.dead ? 1 : 0}|${p.color}`).join(';');
+    this._set('teammates', key, () => { this.el.teammates.innerHTML = list.map((p) => {
       const isDown = p.dead || p.health <= 0;
       const pct = Math.max(0, Math.min(100, p.health));
       const col = p.color || '#3a7bd5';
@@ -479,7 +543,7 @@ export class Hud {
           <div class="tm-bar"><div class="tm-fill" style="width:${isDown ? 100 : pct}%; background:${isDown ? '#f33' : col}"></div></div>
         </div>
       `;
-    }).join('');
+    }).join(''); });
   }
 
   update(dt) {
