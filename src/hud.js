@@ -1,5 +1,5 @@
 const $ = (id) => document.getElementById(id);
-const SHORT = { m1911: '1911', arex: 'AREX', deagle: 'DEAGLE', magnum: 'PYTHON', rifle: 'M4A1', ak47: 'AK-47', famas: 'FAMAS', scar: 'SCAR', smg: 'MP40', mp5: 'MP5', p90: 'P90', lmg: 'RPK', m249: 'M249', mg42: 'MG42', pkm: 'PKM', sniper: 'L96', svd: 'SVD', barrett: 'M82', shotgun: '870', raygun: 'RAYONS' };
+const SHORT = { m1911: '1911', arex: 'AREX', deagle: 'DEAGLE', magnum: 'PYTHON', rifle: 'M4A1', ak47: 'AK-47', famas: 'FAMAS', scar: 'SCAR', smg: 'MP40', mp5: 'MP5', p90: 'P90', lmg: 'RPK', m249: 'M249', mg42: 'MG42', pkm: 'PKM', sniper: 'L96', svd: 'SVD', barrett: 'M82', shotgun: '870', raygun: 'RAYONS', saiga: 'SAIGA', crossbow: 'ARBALÈTE', m79: 'M79' };
 const CARDINALS = [['N', 0], ['NE', 45], ['E', 90], ['SE', 135], ['S', 180], ['SO', 225], ['O', 270], ['NO', 315]];
 
 export class Hud {

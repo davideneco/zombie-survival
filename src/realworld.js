@@ -1194,7 +1194,7 @@ export async function buildRealWorld(scene, renderer) {
     for (const d of doors) for (const p of d.points) m = Math.min(m, Math.hypot(p.x - x, p.z - z));
     return m;
   };
-  const WALL_COLORS = { shotgun: 0xff8833, smg: 0x3399ff, sniper: 0x88ccff, lmg: 0xff5533 };
+  const WALL_COLORS = { shotgun: 0xff8833, smg: 0x3399ff, sniper: 0x88ccff, lmg: 0xff5533, crossbow: 0xc89a50, m79: 0xff6a2a };
   const machines = [];
   const vehicleSpawns = []; // motos : { type, x, z, yaw } (voir CONFIG.vehicles)
   {

@@ -15,6 +15,7 @@ import { CHARACTERS, Avatar, charOf, renderPortraits } from './characters.js';
 import { makeTeddy } from './machines.js';
 import { installMachineFx } from './machineFx.js';
 import { installVehicles } from './vehicles.js';
+import { installLauncher } from './launcher.js';
 import { makeDisplay } from './weaponDisplay.js';
 
 document.getElementById('version').textContent = __GAME_VERSION__;
@@ -227,13 +228,15 @@ const game = {
     this.effects.push({ obj: line, life: 0.05, max: 0.05, sharedMat: true });
   },
 
-  onPlayerShot(origin, end, weaponId) {
+  // extra : { tc: couleur de la traînée, nt: 1 = pas de traînée (projectile) }
+  onPlayerShot(origin, end, weaponId, extra = {}) {
     if (!this.isMultiplayer) return;
     this.net?.send({
       t: 'p_shot',
       origin: { x: origin.x, y: origin.y, z: origin.z },
       end: { x: end.x, y: end.y, z: end.z },
       w: weaponId,
+      ...extra,
     });
   },
 
@@ -620,13 +623,15 @@ const game = {
 
   // Explosion : effets pour tout le monde ; dégâts aux zombies calculés par l'hôte (ou en solo).
   // owner : id du joueur distant à récompenser, null = joueur local.
-  explode(pos, radius, damage, owner, color, hurtsPlayers) {
+  // self : dégâts maximaux au joueur local (décroissent avec la distance) ; true = ceux des grenades ; faux = aucun
+  // (le M79 ne blesse que son tireur, une grenade blesse tout le monde). src : origine des dégâts reçus ('blast').
+  explode(pos, radius, damage, owner, color, self = false, src = 'blast') {
     fx.explosion(pos.x, pos.y, pos.z, radius, color);
     const p = this.player;
     const d = Math.hypot(p.pos.x - pos.x, p.pos.z - pos.z);
     sfx.explosion?.(Math.max(0.1, 1 - d / 60));
     if (d < radius * 1.8) p.recoil += 0.04 * (1 - d / (radius * 1.8));
-    if (hurtsPlayers && d < radius && !p.downed && !p.dead) p.hurt(CONFIG.grenade.selfDamage * (1 - d / radius));
+    if (self && d < radius && !p.downed && !p.dead) p.hurt((self === true ? CONFIG.grenade.selfDamage : self) * (1 - d / radius), src);
     if (this.isClient) return;
     this.areaDamage(pos, radius, damage, owner);
   },
@@ -662,14 +667,17 @@ const game = {
     else { this.kills += kills; if (kills) sfx.kill(); this.addPoints(pts); }
   },
 
-  // Impact explosif d'une arme (pistol à rayons)
-  splash(point, radius, damage) {
-    fx.explosion(point.x, point.y, point.z, radius, 0x44ff66);
+  // Impact explosif d'une arme (pistolet à rayons, carreau explosif de l'arbalète) : l'effet est vu par tout le monde,
+  // les dégâts sont calculés par l'hôte (un client lui envoie `splash`, l'hôte relaie l'effet aux autres par `boom`)
+  splash(point, radius, damage, color = 0x44ff66) {
+    fx.explosion(point.x, point.y, point.z, radius, color);
+    const pt = { x: point.x, y: point.y, z: point.z };
     if (this.isClient) {
-      this.net?.send({ t: 'splash', pt: { x: point.x, y: point.y, z: point.z }, r: radius, dmg: damage });
+      this.net?.send({ t: 'splash', pt, r: radius, dmg: damage, c: color });
       return;
     }
     this.areaDamage(point, radius, damage, null);
+    if (this.isMultiplayer) this.net?.send({ t: 'boom', pt, r: radius, c: color });
   },
 
   nearStation() {
@@ -824,6 +832,7 @@ const game = {
     this.powerups = [];
     for (const g of this.grenadesLive) scene.remove(g.mesh);
     this.grenadesLive = [];
+    this.resetShells();
     this.resetBoxRoll();
     this.resetPap();
     if (resetStats) this.resetBox();
@@ -906,6 +915,7 @@ const game = {
       this.relocateZombies(dt, targets);
     }
     this.updateGrenades(dt);
+    this.updateShells(dt);
     this.updateBoxRoll(dt);
     this.updatePap(dt);
     this.updateBoxMove(dt);
@@ -1137,6 +1147,7 @@ hud.setWeapon(game.player.curCfg.name, game.player.curCfg.caliber);
 installMachineFx(game, { world, hud, sfx, fx });
 installFinale(game, { world, scene, hud, sfx, fx });
 installVehicles(game, { world, scene, hud, sfx });
+installLauncher(game, { world, scene, fx });
 game.initVehicles();
 game.player.setCharacter(charOf(game.charPref));
 
@@ -1265,7 +1276,7 @@ function setupNetworkHandlers(net) {
   net.on('p_shot', (m) => {
     const o = new THREE.Vector3(m.origin.x, m.origin.y, m.origin.z);
     const e = new THREE.Vector3(m.end.x, m.end.y, m.end.z);
-    game.tracer(o, e);
+    if (!m.nt) game.tracer(o, e, m.tc); // pas de traînée pour un projectile (M79) ; couleur propre à l'arme (carreau)
     game.remotes.get(m.from)?.fire();
     const d = Math.hypot(m.origin.x - game.player.pos.x, m.origin.z - game.player.pos.z);
     if (d < 80) game.weaponSound(m.w, Math.max(0.25, 1 - d / 100), d);
@@ -1273,7 +1284,7 @@ function setupNetworkHandlers(net) {
 
   // Dégâts reçus
   net.on('hurt', (m) => {
-    game.player.hurt(m.amount);
+    game.player.hurt(m.amount, m.src || null); // src absent : coup de zombie
     if (m.kx || m.kz) { game.player.vel.x += m.kx || 0; game.player.vel.z += m.kz || 0; game.player.vy = Math.max(game.player.vy, 3.2); }
   });
 
@@ -1334,7 +1345,9 @@ function setupNetworkHandlers(net) {
 
   // Grenades lancées par un coéquipier : simulées localement (effets + dégâts côté hôte)
   net.on('nade', (m) => {
-    game.throwGrenade(new THREE.Vector3(m.o.x, m.o.y, m.o.z), new THREE.Vector3(m.v.x, m.v.y, m.v.z), false, m.from);
+    const o = new THREE.Vector3(m.o.x, m.o.y, m.o.z), v = new THREE.Vector3(m.v.x, m.v.y, m.v.z);
+    if (m.k === 'm79') game.launchShell(o, v, false, m.from, !!m.pap); // projectile de M79 ; sans k : grenade à main
+    else game.throwGrenade(o, v, false, m.from);
   });
   // Fin de partie
   net.on('finale_req', () => { if (game.isHost && !game.finale && !game.finaleDone) game.startFinale(); });
@@ -1361,7 +1374,14 @@ function setupNetworkHandlers(net) {
   // Impact explosif d'un coéquipier (pistolet à rayons) : dégâts appliqués par l'hôte
   net.on('splash', (m) => {
     if (!game.isHost) return;
+    const c = m.c ?? 0x44ff66;
     game.areaDamage(m.pt, m.r, m.dmg, m.from);
+    fx.explosion(m.pt.x, m.pt.y, m.pt.z, m.r, c); // l'hôte voit l'effet, puis le relaie aux autres clients (pas à l'émetteur : o)
+    game.net.send({ t: 'boom', pt: m.pt, r: m.r, c, o: m.from });
+  });
+  net.on('boom', (m) => {
+    if (m.o != null && m.o === net.id) return; // c'est notre propre impact : déjà affiché
+    fx.explosion(m.pt.x, m.pt.y, m.pt.z, m.r, m.c ?? 0x44ff66);
   });
   net.on('z_crawl', (m) => {
     const z = game.zombies.find((zb) => zb.id === m.id);
@@ -1840,6 +1860,7 @@ frame();
 
 window.game = game;
 game.scene = scene; // accès console / outils de test (tools/make-docs.mjs)
+game.fx = fx;
 game.THREE = THREE;
 game.renderer = renderer;
 game.camera = camera;

@@ -56,6 +56,8 @@ export class Player {
       s.headMult = base.headMult * 1.2;
       s.tracer = 0xc070ff;
       if (base.splash) s.splash = { radius: base.splash.radius * 1.3, damage: base.splash.damage * 2 };
+      if (base.papSplash) s.splash = { ...base.papSplash };                                   // arbalète : carreau explosif
+      if (base.blast) s.blast = { ...base.blast, radius: base.blast.radius * 1.3, damage: base.blast.damage * 2 }; // M79 : explosion x2, rayon x1,3
       if (base.pierce) s.pierce = base.pierce + 2;
       else s.pierce = 2;
     }
@@ -296,6 +298,13 @@ export class Player {
     const built = buildWeaponModels(this.vm);
     Object.assign(this.vms, built.vms);
     this.vmInfo = built.info;
+    // pièces cachées quand le chargeur est vide (carreau de l'arbalète)
+    this.bolts = {};
+    for (const [id, grp] of Object.entries(built.vms)) {
+      const list = [];
+      grp.traverse((o) => { if (o.userData.bolt) list.push(o); });
+      if (list.length) this.bolts[id] = list;
+    }
     // PISTOLET À RAYONS : corps rouge, ailettes, bulbe vert lumineux
     weapon('raygun', (grp, M) => {
       const red = new THREE.MeshStandardMaterial({ color: 0x9a2a1e, roughness: 0.4, metalness: 0.6 });
@@ -423,6 +432,8 @@ export class Player {
     // (on cache le modèle de l'arme, pas le groupe entier qui contient la lumière de tir)
     // (jamais le groupe entier : il porte la lumière de tir, et masquer une lumière recompile tous les shaders)
     this.vms[w.id].visible = !this.locked && !(cfg.adsFov && this.aim > 0.8) && !(veh && veh.seat === 0);
+    const bolts = this.bolts[w.id];
+    if (bolts) { const show = w.ammo > 0 && (!w.reloading || w.reloadT > cfg.reloadTime * 0.6); for (const b of bolts) b.visible = show; } // le carreau n'est là que si l'arme est chargée
 
     // ---- tir & rechargement ----
     if (this.downed || this.dead) {
@@ -439,7 +450,7 @@ export class Player {
       // Jusqu'à MAX_SHOTS_PER_FRAME tirs par image : le temps restant d'un tir est reporté au suivant (voir shoot),
       // donc la cadence réelle égale fireRate même quand une image dure plus qu'une période de tir.
       for (let n = 0; n < MAX_SHOTS_PER_FRAME && this.mouseDown && now >= this.nextShot; n++) {
-        if (w.ammo > 0) this.shoot(now, moving);
+        if (w.ammo > 0) { this.shoot(now, moving); if (cfg.autoReload && w.ammo <= 0) this.reload(); } // chargeur d'une cartouche : recharge seule
         else if (w.reserve > 0) { this.reload(); break; }
         else { this.nextShot = now + 0.3; this.game.sfx.empty(); break; }
         if (cfg.type === 'semi') { this.mouseDown = false; break; } // une balle par clic
@@ -465,7 +476,7 @@ export class Player {
     this.kick *= Math.max(0, 1 - dt * 14);
     const a = this.aim;
     let x = 0.22 * (1 - a), y = -0.22 + 0.06 * a, z = -0.45 + 0.05 * a;
-    let rx = this.kick * (cfg.type === 'shotgun' || cfg.type === 'semi' ? 0.22 : 0.12);
+    let rx = this.kick * (cfg.type === 'launcher' ? 0.45 : cfg.type === 'shotgun' || cfg.type === 'semi' ? 0.22 : 0.12);
     if (w.reloading) {
       const p = w.reloadT / cfg.reloadTime;
       const dip = Math.sin(Math.min(1, p) * Math.PI);
@@ -496,24 +507,27 @@ export class Player {
     this.kick = 1;
 
     // Recul
-    const heavy = cfg.type === 'shotgun' || cfg.type === 'semi';
-    this.recoil += (heavy ? 0.016 : 0.005) + Math.random() * 0.004;
+    const heavy = cfg.type === 'shotgun' || cfg.type === 'semi' || cfg.type === 'launcher';
+    this.recoil += (cfg.type === 'launcher' ? 0.05 : heavy ? 0.016 : 0.005) + Math.random() * 0.004;
     this.yaw += (Math.random() - 0.5) * 0.002;
 
     // Sons
     this.game.weaponSound(cfg.id);
 
-    // Muzzle flash
-    this.flash.visible = true;
-    this.flash.material.color.setHex(cfg.id === 'raygun' ? 0x66ff88 : cfg.pap ? 0xd28cff : 0xffcc66);
-    this.flash.rotation.z = Math.random() * Math.PI;
-    this.flash.scale.setScalar(heavy ? 1.4 : 0.8 + Math.random() * 0.5);
-    this.flashLight.intensity = heavy ? 40 : 25;
-    this.flashT = 0.045;
+    // Muzzle flash (l'arbalète n'en a pas)
+    if (cfg.flash !== false) {
+      this.flash.visible = true;
+      this.flash.material.color.setHex(cfg.id === 'raygun' ? 0x66ff88 : cfg.pap ? 0xd28cff : 0xffcc66);
+      this.flash.rotation.z = Math.random() * Math.PI;
+      this.flash.scale.setScalar(heavy ? 1.4 : 0.8 + Math.random() * 0.5);
+      this.flashLight.intensity = heavy ? 40 : 25;
+      this.flashT = 0.045;
+    }
 
     // Raycast(s)
     this.camera.updateMatrixWorld(true);
     const mul = (this.aiming ? (cfg.adsFov ? 0.05 : 0.4) : 1) * (moving ? 1.8 : 1);
+    if (cfg.type === 'launcher') { this.fireLauncher(cfg, mul); return; }
     const origin = this.muzzle.getWorldPosition(this._v.set(0, 0, 0)).clone();
     const pellets = cfg.pellets || 1;
 
@@ -546,10 +560,32 @@ export class Player {
         end = ro.clone().addScaledVector(rd, wallT);
         if (fast && wallT < cfg.range) this.game.impact(end);
       }
-      if (cfg.splash) this.game.splash(end, cfg.splash.radius, cfg.splash.damage);
+      if (cfg.splash) this.game.splash(end, cfg.splash.radius, cfg.splash.damage, cfg.splash.color);
       this.game.tracer(origin, end, cfg.tracer);
-      this.game.onPlayerShot?.(origin, end, cfg.id);
+      this.game.onPlayerShot?.(origin, end, cfg.id, { tc: cfg.tracer });
     }
+  }
+
+  // Lance-grenades : un vrai projectile (voir launcher.js). Il part de la bouche et vise le point visé par la caméra (au plus 40 m
+  // devant) ; si le canon est plaqué contre un mur, il part de l'œil pour ne pas naître dans le mur.
+  fireLauncher(cfg, mul) {
+    const world = this.world;
+    const sx = (Math.random() - 0.5) * 2 * cfg.spread * mul, sy = (Math.random() - 0.5) * 2 * cfg.spread * mul;
+    this.rc.setFromCamera({ x: sx, y: sy }, this.camera);
+    const ro = this.rc.ray.origin.clone(), rd = this.rc.ray.direction.clone();
+    const origin = this.muzzle.getWorldPosition(this._v.set(0, 0, 0)).clone();
+    const toM = origin.clone().sub(ro), lenM = toM.length();
+    if (world.rayHit && lenM > 1e-4) {
+      toM.divideScalar(lenM);
+      const hit = world.rayHit(ro.x, ro.y, ro.z, toM.x, toM.y, toM.z, lenM);
+      if (hit < lenM) origin.copy(ro).addScaledVector(toM, Math.max(0, hit - 0.05));
+    }
+    const far = Math.min(40, world.rayHit ? world.rayHit(ro.x, ro.y, ro.z, rd.x, rd.y, rd.z, 40) : 40);
+    const target = ro.clone().addScaledVector(rd, Math.max(far, 2));
+    const dir = target.sub(origin).normalize();
+    const vel = dir.clone().multiplyScalar(cfg.proj.speed);
+    this.game.launchShell(origin, vel, true, null, !!cfg.pap);
+    this.game.onPlayerShot?.(origin, origin.clone().addScaledVector(dir, 1), cfg.id, { nt: 1 });
   }
 
   reload() {
@@ -572,7 +608,8 @@ export class Player {
   }
 
   // -------------------------------------------------------------- Dégâts
-  hurt(amount) {
+  // src : origine des dégâts ('blast' explosion, 'crash' choc de moto ; absent = coup de zombie, Bourreau…)
+  hurt(amount, src = null) {
     if (this.downed || this.dead) return;
     this.health -= amount;
     this.lastHurt = this.game.time;

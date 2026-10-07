@@ -28,7 +28,7 @@ export const CONFIG = {
       // place de l'Homme de Fer (rotonde du tram), derrière la place Kléber : profondeur 4, donc 1500 pts calculés. Ajoutée en dernier :
       // le tirage des emplacements des autres zones ne change pas.
       // isolatedRnd : ses emplacements (et son décor) ne consomment pas le tirage commun aux autres zones
-      { name: 'Homme de Fer', seed: { x: -290, z: -203 }, isolatedRnd: true, items: ['station', 'box'] },
+      { name: 'Homme de Fer', seed: { x: -290, z: -203 }, isolatedRnd: true, items: ['station', 'wall:crossbow', 'wall:m79', 'box'] },
     ],
   },
 
@@ -78,6 +78,14 @@ export const CONFIG = {
     barrett: { id: 'barrett', cat: 'sniper', name: 'BARRETT M82', cal: '50bmg', type: 'semi', magSize: 10, startReserve: 30, maxReserve: 50, fireRate: 1.2, reloadTime: 3.4, spread: 0.002, range: 220, adsFov: 20, boxOnly: true, ammoPrice: 1500 },
     // ---- fusil à pompe et arme spéciale
     shotgun: { id: 'shotgun', cat: 'shotgun', name: 'REMINGTON 870', cal: '12ga', type: 'shotgun', pellets: 8, magSize: 6, startReserve: 30, maxReserve: 48, fireRate: 1.3, reloadTime: 2.4, spread: 0.046, range: 35, price: 750, ammoPrice: 350 },
+    // fusil semi-automatique à pompe de salon : une salve de 8 plombs par clic, uniquement dans la boîte mystère
+    saiga: { id: 'saiga', cat: 'shotgun', name: 'SAIGA-12', cal: '12ga', mod: 0.9, type: 'semi', pellets: 8, magSize: 8, startReserve: 32, maxReserve: 64, fireRate: 3.5, reloadTime: 2.6, spread: 0.05, range: 35, boxOnly: true, ammoPrice: 700 },
+    // arbalète : tir instantané (comme une balle), perce 6 zombies, silencieuse ; recharge seule après chaque tir (autoReload)
+    // Pack-a-Punch : carreau explosif (papSplash, copié dans `splash` des stats améliorées)
+    crossbow: { id: 'crossbow', cat: 'special', name: 'ARBALÈTE', cal: 'bolt', type: 'semi', magSize: 1, startReserve: 20, maxReserve: 40, fireRate: 1, reloadTime: 1.7, spread: 0.003, range: 80, tracer: 0xb08850, flash: false, autoReload: true, papSplash: { radius: 2.5, damage: 700, color: 0xff9a3a }, price: 2000, ammoPrice: 700 },
+    // lance-grenades : vrai projectile (proj : vitesse m/s, gravité m/s², armement en m, durée de vie en s). Explose à l'impact ou en
+    // fin de course ; avant l'armement : 150 dégâts directs sans explosion. blast.self : dégâts max au seul tireur.
+    m79: { id: 'm79', cat: 'special', name: 'M79', cal: '40mm', type: 'launcher', damage: 150, headMult: 1, magSize: 1, startReserve: 11, maxReserve: 24, fireRate: 1, reloadTime: 2.2, spread: 0.004, range: 150, autoReload: true, proj: { speed: 60, gravity: 6, arm: 4, fuse: 3 }, blast: { radius: 5, damage: 1200, self: 75, color: 0xff8a2a }, price: 2500, ammoPrice: 1500 },
     // énergie : pas de chute des dégâts ; le tir direct et la zone (splash) sont propres à l'arme
     raygun: { id: 'raygun', cat: 'special', name: 'PISTOLET À RAYONS', cal: 'energy', type: 'semi', damage: 1000, headMult: 1.5, magSize: 24, startReserve: 168, maxReserve: 240, fireRate: 4.2, reloadTime: 2.6, spread: 0.008, range: 100, splash: { radius: 3.5, damage: 900 }, tracer: 0x33ff55, boxOnly: true, ammoPrice: 1500 },
   },
@@ -100,6 +108,8 @@ export const CONFIG = {
     '762match': { name: '7,62×51 mm Match', base: 340, head: 3.5, pierce: 4, falloffStart: 80, falloffEnd: 200, minMult: 0.9 },
     '762x54r7n1': { name: '7,62×54R 7N1', base: 230, head: 3.0, pierce: 3, falloffStart: 80, falloffEnd: 200, minMult: 0.9 },
     '50bmg': { name: '.50 BMG', base: 700, head: 3.0, pierce: 6, falloffStart: 100, falloffEnd: 220, minMult: 0.95 },
+    bolt: { name: 'carreau 20″', base: 420, head: 3.0, pierce: 6, falloffStart: 30, falloffEnd: 70, minMult: 0.7 },
+    '40mm': { name: '40×46 mm' }, // pas de base : l'arme fixe ses dégâts
     energy: { name: 'énergie' }, // pas de base ni de chute : le pistolet à rayons règle ses propres dégâts
   },
   // Armes au départ (la première est en main)
@@ -110,6 +120,7 @@ export const CONFIG = {
     m1911: 'MUSTANG & SALLY', arex: 'ZÉRO ABSOLU', deagle: 'L\'AIGLE NOIR', magnum: 'LE VENGEUR', rifle: 'M4 ÉCLIPSE', ak47: 'AK-ENFER', famas: 'LE CLAIRON MAUDIT',
     scar: 'LE BALAFRÉ', smg: 'PM INFERNAL', mp5: 'MP-115', p90: 'LE FRELON', lmg: 'RPK DÉVASTATEUR', m249: 'LA FAUCHEUSE', mg42: 'LA SCIE D\'HITLER… BRISÉE',
     pkm: 'LE BULLDOZER', sniper: 'ŒIL DU DÉMON', svd: 'LA TSARINE', barrett: 'LE MARTEAU DE THOR', shotgun: 'LE BROYEUR', raygun: 'PORTE-TONNERRE',
+    saiga: 'LE HACHOIR', crossbow: 'LE CARREAU DE FER', m79: 'LE BOUTEFEU',
   },
 
   // Pack-a-Punch : durées de l'animation (s) ; l'arme améliorée attend offerTime secondes avant d'être rendue d'office
@@ -118,7 +129,7 @@ export const CONFIG = {
   // Boîte mystère : une seule boîte, qui change d'emplacement après un nombre aléatoire de tirages (1 à maxUses)
   box: {
     price: 950, spin: 4.4, offerTime: 10, maxUses: 30, // spin : durée du défilement des armes ; offerTime : temps pour prendre l'arme proposée
-    pool: { m1911: 2, arex: 3, deagle: 2, magnum: 2, rifle: 2, ak47: 3, famas: 3, scar: 2, smg: 2, mp5: 3, p90: 2, lmg: 2, m249: 2, mg42: 2, pkm: 2, sniper: 2, svd: 2, barrett: 1, shotgun: 3, raygun: 1 },
+    pool: { m1911: 2, arex: 3, deagle: 2, magnum: 2, rifle: 2, ak47: 3, famas: 3, scar: 2, smg: 2, mp5: 3, p90: 2, lmg: 2, m249: 2, mg42: 2, pkm: 2, sniper: 2, svd: 2, barrett: 1, shotgun: 3, raygun: 1, saiga: 3, crossbow: 2, m79: 1 },
   },
 
   // Atouts (machines) : prix et effet décrit dans le jeu

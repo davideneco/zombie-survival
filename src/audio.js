@@ -32,6 +32,10 @@ const GUNS = {
   sniper:  { cf: 3000, cd: 0.08,  cv: 1,    bf: 1200, bd: 0.4,  bv: 0.9,  tf: 85,  td: 0.35, tv: 0.9,  gf: 160, gd: 0.18, gv: 0.45, rv: 0.9,  ec: 0.45, ed: 0.26 },
   svd:     { cf: 3200, cd: 0.07,  cv: 0.95, bf: 1300, bd: 0.34, bv: 0.85, tf: 95,  td: 0.28, tv: 0.85, gf: 180, gd: 0.15, gv: 0.42, rv: 0.8,  ec: 0.4,  ed: 0.24 },
   barrett: { cf: 2400, cd: 0.09,  cv: 1,    bf: 900,  bd: 0.55, bv: 1,    tf: 62,  td: 0.5,  tv: 1,    gf: 120, gd: 0.25, gv: 0.5,  rv: 1,    ec: 0.55, ed: 0.3 },
+  // armes de la zone de l'Homme de Fer : saiga (sec et fort), arbalète (presque silencieuse), M79 (« bloop » grave)
+  saiga:    { cf: 3300, cd: 0.07,  cv: 0.95, bf: 2200, bd: 0.36, bv: 0.95, tf: 110, td: 0.3,  tv: 0.9,  gf: 190, gd: 0.18, gv: 0.45, rv: 0.75, ec: 0.35, ed: 0.2 },
+  crossbow: { cf: 1800, cd: 0.03,  cv: 0.35, bf: 600,  bd: 0.08, bv: 0.25, tf: 160, td: 0.12, tv: 0.45, gf: 90,  gd: 0.06, gv: 0.08, rv: 0.05, ec: 0,    ed: 0 },
+  m79:      { cf: 900,  cd: 0.04,  cv: 0.4,  bf: 500,  bd: 0.12, bv: 0.5,  tf: 70,  td: 0.18, tv: 0.9,  gf: 120, gd: 0.06, gv: 0.1,  rv: 0.2,  ec: 0.1,  ed: 0.18 },
 };
 // Morceau personnalisé : déposer un de ces fichiers dans public/music/ (voir le LISEZMOI de ce dossier)
 const CUSTOM_TRACKS = ['/music/theme.mp3', '/music/theme.ogg', '/music/theme.m4a', '/music/theme.wav'];
