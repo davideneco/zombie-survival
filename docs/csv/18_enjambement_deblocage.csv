@@ -1,0 +1,7 @@
+﻿Réglage;Valeur;Unité / remarque
+Enjambement;Espace face à un obstacle enjambable;à moins de 0,9 m, de face (moins de 45°), profondeur traversée 1,3 m au plus, case d'arrivée libre à ±0,3 m, dans une zone OUVERTE (jamais de contournement d'une porte payante)
+Durée;0,5;s (caméra +0,6 m, arme baissée, pas de tir)
+Enjambables (hauteur <= 1,15 m);banc, poubelle, jardinière, caisse seule, borne, vélos (profondeur <= 1,3 m), sacs de sable, barrière de foule, bloc béton;
+On marche dessus;palette (0,2 m);
+Non enjambables;voiture, fontaine, chalet, caisses empilées, porte payante, barricade scellée, parapet de quai, machines, bornes de munitions, garde-corps de la cathédrale;
+Se débloquer (K);maintenir 2 s;"l'invite apparaît si une touche de déplacement est maintenue 4 s sans avancer de 0,5 m, ou après 3 s dans une poche fermée ; arrivée à moins de 40 m dans une zone ouverte (sinon centre de zone) ; recharge 30 s ; impossible en moto, à terre, à l'étage"

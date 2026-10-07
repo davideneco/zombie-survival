@@ -1,0 +1,12 @@
+﻿Réglage;Valeur;Unité / remarque
+Touches;"V à pied ; clic gauche quand le chargeur ET la réserve sont vides";V reste la vue 3e / 1re personne en moto
+Portée / cône;1,8 / 35;"m / degrés de part et d'autre de la visée ; fente de 0,8 m si un zombie est à moins de 2,6 m et qu'on avance"
+Cadence;1 coup / 0,6 s;touche à 0,12 s, animation 0,55 s
+Dégâts;max(150, 0,34 x santé des zombies de la manche);"dos ou tête x 1,5 (non cumulés) ; l'armure du chevalier de fer est ignorée"
+Manche 1;150 par coup (100 PV);1 coup(s) de face, 1 dans le dos ou à la tête
+Manche 5;150 par coup (220 PV);2 coup(s) de face, 1 dans le dos ou à la tête
+Manche 10;150 par coup (374 PV);3 coup(s) de face, 2 dans le dos ou à la tête
+Manche 15;205 par coup (602 PV);3 coup(s) de face, 2 dans le dos ou à la tête
+Manche 20;330 par coup (970 PV);3 coup(s) de face, 2 dans le dos ou à la tête
+Bourreau;150 fixes;x 0,75 de face, x 2 dans le dos
+Points;10 par touche, 100 par mort;

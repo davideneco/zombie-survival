@@ -14,11 +14,11 @@ Grand'Rue;;extérieure;19084;1500;"-400 ; 10";P4, P5, P6, P7, P11, P14, P16, P17
 Grand Séminaire;;extérieure;18479;1500;"300 ; -60";P46, P48, P51, P53, P54, P55;station, wall:shotgun, box;1;REMINGTON 870;BOÎTE MYSTÈRE
 Palais Rohan;;extérieure;10259;1500;"261 ; 139";P47, P49, P53;wall:ak47;0;AK-47;
 Musée historique;;extérieure;14597;1500;"200 ; 215";P35, P37, P41, P49;station, wall:arex, box;1;AREX ZERO 1;BOÎTE MYSTÈRE
-Place Broglie;;extérieure;26090;2000;"150 ; -345";P30, P38, P40, P44, P50, P51;station, wall:lmg, box;1;RPK;BOÎTE MYSTÈRE
+Place Broglie;;extérieure;26144;2000;"150 ; -345";P30, P38, P40, P44, P50, P51;station, wall:lmg, box;1;RPK;BOÎTE MYSTÈRE
 Quai Schoepflin;;extérieure;12302;2000;"-20 ; -470";P18, P38, P42;wall:svd;0;DRAGUNOV SVD;
 Hôtel de Neuwiller;;extérieure;7283;2000;"-466 ; -266";P3, P9, P13;wall:famas;0;FAMAS F1;
-Monument Stoeber;;extérieure;15953;2000;"-490 ; -150";P2, P3, P6, P8;station, wall:scar, box;1;SCAR-H;BOÎTE MYSTÈRE
-Ancienne Douane;;extérieure;14052;2000;"30 ; 330";P21, P28, P35;station, wall:sniper;1;L96A1;
+Monument Stoeber;;extérieure;15990;2000;"-490 ; -150";P2, P3, P6, P8;station, wall:scar, box;1;SCAR-H;BOÎTE MYSTÈRE
+Ancienne Douane;;extérieure;14059;2000;"30 ; 330";P21, P28, P35;station, wall:sniper;1;L96A1;
 Saint-Thomas;;extérieure;23394;2000;"-230 ; 250";P10, P16, P21, P22;station, wall:saiga, box;1;SAIGA-12;BOÎTE MYSTÈRE
 Église Réformée;;extérieure;6297;2000;"-329 ; 167";P7, P10;wall:smg;0;MP40;
 Opéra;;extérieure;18274;2500;"250 ; -450";P42, P44, P52;station, wall:mg42;1;MG42;

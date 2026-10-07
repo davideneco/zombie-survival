@@ -1,6 +1,6 @@
 # Zombie Survival — fiche de référence
 
-Version du jeu : **v0.31.1 · c818465 · 2026-10-07** (package 0.31.1). Générée automatiquement par `node tools/make-docs.mjs` à partir de `src/config.js` et du jeu.
+Version du jeu : **v0.33.0 · de336c3 · 2026-10-07** (package 0.33.0). Générée automatiquement par `node tools/make-docs.mjs` à partir de `src/config.js` et du jeu.
 Carte annotée : [carte.png](carte.png). Armes de profil : [armes.png](armes.png). Les mêmes tableaux en tableur : dossier [csv/](csv/).
 
 Pour demander une modification, citez la ligne (ex. « Mitrailleuse RPK : chargeur 100 », « Mastodonte à 3000 pts », « porte P3 à 500 pts », « mettre la boîte mystère dans la zone Temple-Neuf »).
@@ -233,11 +233,11 @@ Prix d'une porte : le plus cher des deux prix de zone (colonne « Prix de la por
 | Grand Séminaire |  | extérieure | 18479 | 1500 | 300 ; -60 | P46, P48, P51, P53, P54, P55 | station, wall:shotgun, box | 1 | REMINGTON 870 | BOÎTE MYSTÈRE |
 | Palais Rohan |  | extérieure | 10259 | 1500 | 261 ; 139 | P47, P49, P53 | wall:ak47 | 0 | AK-47 |  |
 | Musée historique |  | extérieure | 14597 | 1500 | 200 ; 215 | P35, P37, P41, P49 | station, wall:arex, box | 1 | AREX ZERO 1 | BOÎTE MYSTÈRE |
-| Place Broglie |  | extérieure | 26090 | 2000 | 150 ; -345 | P30, P38, P40, P44, P50, P51 | station, wall:lmg, box | 1 | RPK | BOÎTE MYSTÈRE |
+| Place Broglie |  | extérieure | 26144 | 2000 | 150 ; -345 | P30, P38, P40, P44, P50, P51 | station, wall:lmg, box | 1 | RPK | BOÎTE MYSTÈRE |
 | Quai Schoepflin |  | extérieure | 12302 | 2000 | -20 ; -470 | P18, P38, P42 | wall:svd | 0 | DRAGUNOV SVD |  |
 | Hôtel de Neuwiller |  | extérieure | 7283 | 2000 | -466 ; -266 | P3, P9, P13 | wall:famas | 0 | FAMAS F1 |  |
-| Monument Stoeber |  | extérieure | 15953 | 2000 | -490 ; -150 | P2, P3, P6, P8 | station, wall:scar, box | 1 | SCAR-H | BOÎTE MYSTÈRE |
-| Ancienne Douane |  | extérieure | 14052 | 2000 | 30 ; 330 | P21, P28, P35 | station, wall:sniper | 1 | L96A1 |  |
+| Monument Stoeber |  | extérieure | 15990 | 2000 | -490 ; -150 | P2, P3, P6, P8 | station, wall:scar, box | 1 | SCAR-H | BOÎTE MYSTÈRE |
+| Ancienne Douane |  | extérieure | 14059 | 2000 | 30 ; 330 | P21, P28, P35 | station, wall:sniper | 1 | L96A1 |  |
 | Saint-Thomas |  | extérieure | 23394 | 2000 | -230 ; 250 | P10, P16, P21, P22 | station, wall:saiga, box | 1 | SAIGA-12 | BOÎTE MYSTÈRE |
 | Église Réformée |  | extérieure | 6297 | 2000 | -329 ; 167 | P7, P10 | wall:smg | 0 | MP40 |  |
 | Opéra |  | extérieure | 18274 | 2500 | 250 ; -450 | P42, P44, P52 | station, wall:mg42 | 1 | MG42 |  |
@@ -429,6 +429,33 @@ Prix d'une porte : le plus cher des deux prix de zone (colonne « Prix de la por
 | Bidon d'essence (bonus) | +2,5 L, 3 % par zombie tué si une moto est sous 50 % | idem |  |
 | Panne sèche | réserve < 15 % : bip, ratés < 5 %, à 0 : poussée 3 m/s | idem |  |
 
+## Couteau (toujours disponible, hors inventaire)
+
+| Réglage | Valeur | Unité / remarque |
+|---|---|---|
+| Touches | V à pied ; clic gauche quand le chargeur ET la réserve sont vides | V reste la vue 3e / 1re personne en moto |
+| Portée / cône | 1,8 / 35 | m / degrés de part et d'autre de la visée ; fente de 0,8 m si un zombie est à moins de 2,6 m et qu'on avance |
+| Cadence | 1 coup / 0,6 s | touche à 0,12 s, animation 0,55 s |
+| Dégâts | max(150, 0,34 x santé des zombies de la manche) | dos ou tête x 1,5 (non cumulés) ; l'armure du chevalier de fer est ignorée |
+| Manche 1 | 150 par coup (100 PV) | 1 coup(s) de face, 1 dans le dos ou à la tête |
+| Manche 5 | 150 par coup (220 PV) | 2 coup(s) de face, 1 dans le dos ou à la tête |
+| Manche 10 | 150 par coup (374 PV) | 3 coup(s) de face, 2 dans le dos ou à la tête |
+| Manche 15 | 205 par coup (602 PV) | 3 coup(s) de face, 2 dans le dos ou à la tête |
+| Manche 20 | 330 par coup (970 PV) | 3 coup(s) de face, 2 dans le dos ou à la tête |
+| Bourreau | 150 fixes | x 0,75 de face, x 2 dans le dos |
+| Points | 10 par touche, 100 par mort |  |
+
+## Enjambement et déblocage
+
+| Réglage | Valeur | Unité / remarque |
+|---|---|---|
+| Enjambement | Espace face à un obstacle enjambable | à moins de 0,9 m, de face (moins de 45°), profondeur traversée 1,3 m au plus, case d'arrivée libre à ±0,3 m, dans une zone OUVERTE (jamais de contournement d'une porte payante) |
+| Durée | 0,5 | s (caméra +0,6 m, arme baissée, pas de tir) |
+| Enjambables (hauteur <= 1,15 m) | banc, poubelle, jardinière, caisse seule, borne, vélos (profondeur <= 1,3 m), sacs de sable, barrière de foule, bloc béton |  |
+| On marche dessus | palette (0,2 m) |  |
+| Non enjambables | voiture, fontaine, chalet, caisses empilées, porte payante, barricade scellée, parapet de quai, machines, bornes de munitions, garde-corps de la cathédrale |  |
+| Se débloquer (K) | maintenir 2 s | l'invite apparaît si une touche de déplacement est maintenue 4 s sans avancer de 0,5 m, ou après 3 s dans une poche fermée ; arrivée à moins de 40 m dans une zone ouverte (sinon centre de zone) ; recharge 30 s ; impossible en moto, à terre, à l'étage |
+
 ## Commandes
 
 | Touche | Action |
@@ -447,6 +474,9 @@ Prix d'une porte : le plus cher des deux prix de zone (colonne « Prix de la por
 | Espace (en moto) | Frein à main |
 | V (en moto) | Vue à la 3e personne / à la 1re personne |
 | F | Lampe torche |
+| Espace (devant un obstacle bas) | Enjamber |
+| K (maintenir 2 s, si coincé) | Se débloquer |
+| V (à pied) | Coup de couteau (aussi : clic gauche quand le chargeur et la réserve sont vides) |
 | M | Carte |
 | Échap | Ferme la carte ou le menu debug ; sinon menu pause (reprise : Échap, ou clic si le navigateur refuse) |
 | F9 (hôte) | Menu debug de l'hôte : 1-4 joueur, T deux fois amener, Y rejoindre, N réanimer, U débloquer les zombies, P perfs |
