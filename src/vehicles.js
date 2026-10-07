@@ -153,23 +153,43 @@ export class Vehicle {
       }
     }
     this.speed = sp;
-    this.roadkill();
+    if (this.roadkill()) { this.pos.x = ox; this.pos.z = oz; } // arrêtée net par un zombie au contact : on ne le traverse pas
     this.syncNet();
   }
 
-  // Zombies écrasés : dégâts proportionnels à la vitesse, la moto ralentit un peu
+  // Dégâts d'un écrasement à la vitesse `speed` (m/s) : 0 sous le seuil vmin de la moto, puis K x v x r, r montant de 0,4 à 1 sur rampSpeed m/s
+  roadkillDamage(speed = this.speed) {
+    const RK = this.def.roadkill, v = Math.abs(speed);
+    if (v < RK.vmin) return 0;
+    return RK.K * v * Math.min(1, 0.4 + 0.6 * (v - RK.vmin) / CONFIG.vehicles.roadkill.rampSpeed);
+  }
+
+  // Zombies écrasés. Au-dessus du seuil de vitesse : dégâts, la moto perd de la vitesse. En dessous : aucun dégât, un zombie devant
+  // la moto la ralentit (vitesse plafonnée) puis l'arrête net au contact ; il n'est pas déplacé et continue de frapper le pilote.
+  // Renvoie true si un zombie au contact bloque la moto (le conducteur annule alors le déplacement de l'image).
   roadkill() {
-    const R = CONFIG.vehicles.roadkill, g = this.game, sp = this.speed;
-    if (Math.abs(sp) < R.minSpeed) return;
+    const R = CONFIG.vehicles.roadkill, RK = this.def.roadkill, g = this.game, sp = this.speed;
+    if (Math.abs(sp) < 0.05) return false;
     const dir = Math.sign(sp), fx = -Math.sin(this.yaw) * dir, fz = -Math.cos(this.yaw) * dir;
     const cx = this.pos.x + fx * 0.6, cz = this.pos.z + fz * 0.6, reach = this.def.radius + 0.45;
+    const fast = Math.abs(sp) >= RK.vmin;
+    let blocked = false;
     for (const z of g.zombies) {
-      if (!z.targetable || z.isBoss || (z._runOver || 0) > g.time) continue;
-      if (Math.hypot(z.pos.x - cx, z.pos.z - cz) > reach) continue;
-      z._runOver = g.time + R.cooldown;
-      g.hitZombie(z, false, new THREE.Vector3(z.pos.x, 1, z.pos.z), Math.abs(sp) * this.def.roadkill, 1);
-      this.speed *= R.slowdown;
+      if (!z.targetable || z.isBoss) continue;
+      const d = Math.hypot(z.pos.x - cx, z.pos.z - cz);
+      if (d > reach) continue;
+      if (fast) {
+        if ((z._runOver || 0) > g.time) continue;
+        z._runOver = g.time + R.cooldown;
+        const dmg = this.roadkillDamage(sp);
+        g.hitZombie(z, false, new THREE.Vector3(z.pos.x, 1, z.pos.z), dmg, 1);
+        this.speed *= RK.slowdown;
+      } else {
+        if (d < R.contactStop) { this.speed = 0; blocked = true; }
+        else this.speed = Math.sign(this.speed) * Math.min(Math.abs(this.speed), R.stopSpeed);
+      }
     }
+    return blocked;
   }
 
   // Choc : secousse, bruit ; au-dessus du seuil les occupants se blessent (jamais mortel)

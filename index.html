@@ -76,8 +76,15 @@
     #mapCanvas { width: 100%; height: 100%; }
 
     #prompt { position: absolute; left: 50%; top: 62%; transform: translateX(-50%); font-size: 22px; text-shadow: 0 0 4px #000; background: rgba(0,0,0,0.5); padding: 4px 16px; border-radius: 4px; display: none; }
-    #speedo { position: absolute; left: 50%; bottom: 7%; transform: translateX(-50%); font-size: 44px; font-weight: bold; text-shadow: 0 0 6px #000; display: none; letter-spacing: 2px; }
+    /* Tableau de bord de la moto : compteur (gris sous le seuil d'écrasement, rouge au-dessus) et jauge de vitesse avec son trait de seuil */
+    #vehHud { position: absolute; left: 50%; bottom: 3%; transform: translateX(-50%); width: 280px; text-align: center; display: none; text-shadow: 0 0 6px #000; }
+    #speedo { font-size: 44px; font-weight: bold; letter-spacing: 2px; color: #9aa0a6; line-height: 1.05; }
     #speedo small { font-size: 18px; color: #ccc; margin-left: 6px; }
+    #speedo.hot { color: #ff4a3a; }
+    .vbar { position: relative; height: 8px; margin-top: 4px; background: rgba(0,0,0,.6); border: 1px solid #555; }
+    .vbar i { position: absolute; left: 0; top: 0; bottom: 0; width: 0; background: #9aa0a6; }
+    .vbar b { position: absolute; top: -3px; bottom: -3px; width: 2px; background: #fff; box-shadow: 0 0 2px #000; }
+    #speedo.hot + .vbar i { background: #ff4a3a; }
     #announce { position: absolute; left: 50%; top: 22%; transform: translateX(-50%); text-align: center; font-size: 64px; color: #b01818; text-shadow: 0 0 10px #000; opacity: 0; transition: opacity .6s; }
     #announce small { display: block; font-size: 22px; color: #ddd; letter-spacing: 3px; }
     #announce.show { opacity: 1; }
@@ -148,7 +155,10 @@
       <canvas id="radarCanvas" width="120" height="120"></canvas>
     </div>
 
-    <div id="speedo"></div>
+    <div id="vehHud">
+      <div id="speedo"></div>
+      <div class="vbar" id="vSpeedBar"><i id="vSpeedFill"></i><b id="vSpeedTick"></b></div>
+    </div>
     <div id="roomBadge"></div>
     <div id="teammates"></div>
 

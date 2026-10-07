@@ -716,7 +716,13 @@ const game = {
     if (!world.openDoor(id)) return;
     const d = world.doors[id];
     sfx.buy();
-    if (announce) hud.announce('PORTE OUVERTE', `Accès à ${d.name}`, 2500);
+    // première ouverture de la zone du parking des motos : on l'annonce (le « P » bleu de la carte indique l'endroit)
+    const pk = world.parking, firstPark = !!pk && !this.parkingSeen && (d.a === pk.zone || d.b === pk.zone);
+    if (firstPark) this.parkingSeen = true;
+    if (announce) {
+      if (firstPark) hud.announce(`PARKING ${pk.name.replace(/^Place /, '').toUpperCase()} — ${pk.size} motos`, 'Repérez le « P » bleu sur la carte [M]', 4500);
+      else hud.announce('PORTE OUVERTE', `Accès à ${d.name}`, 2500);
+    }
   },
 
   nearWallWeapon() {
@@ -1122,7 +1128,7 @@ const game = {
 
     // Prompt contextuel
     let promptText = null;
-    hud.setSpeed(p.vehicle ? p.vehicle.v.speed : null);
+    hud.setVehicle(p.vehicle ? { speed: p.vehicle.v.speed, vmax: p.vehicle.v.def.maxSpeed, vmin: p.vehicle.v.def.roadkill.vmin } : null);
     if (p.vehicle) {
       promptText = p.vehicle.seat === 0 ? '[E] Descendre' : '[E] Descendre · clic gauche : tirer';
     } else if (downedTeammate) {

@@ -11,6 +11,7 @@ import { createProps } from './props.js';
 import { planCathedral, CEIL, pointInPoly as inPoly } from './cathedral.js';
 import { buildCathedral, augmentPlan, PORTAL_H } from './cath/index.js';
 import { HDF, isRotunda, isOpenShelter, rotundaInfo, shelterInfo, planHdf, railDist, buildHdfStructures, buildHdfDecor } from './hommedefer.js';
+import { parkingLayout, buildParkingDecor } from './parking.js';
 import { makePerkMachine, makeAmmoStation, makeWallBuy, addPosts, makeMysteryBox, makePackAPunch, makeAstronomicalClock } from './machines.js';
 
 // =====================================================================
@@ -1197,6 +1198,7 @@ export async function buildRealWorld(scene, renderer) {
   const WALL_COLORS = { shotgun: 0xff8833, smg: 0x3399ff, sniper: 0x88ccff, lmg: 0xff5533, crossbow: 0xc89a50, m79: 0xff6a2a };
   const machines = [];
   const vehicleSpawns = []; // motos : { type, x, z, yaw } (voir CONFIG.vehicles)
+  let parkingInfo = null;   // parking des motos (voir parking.js), null si repli
   {
     const placed = [];
     // Un atout trop près d'une porte gêne : son invite [E] (rayon 2,6 m) prend le pas sur celle de la porte (rayon 3,4 m),
@@ -1288,8 +1290,7 @@ export async function buildRealWorld(scene, renderer) {
       }
       if (rndState != null) rnd.load(rndState);
     });
-    // Motos : une par ligne de CONFIG.vehicles.spawns, sur un emplacement dégagé de la zone, loin des portes (même raison que
-    // les atouts : leur invite [E] masquerait celle de la porte), posée dans l'axe de la rue
+    // axe de la rue le plus long autour d'un point (orientation des motos du repli)
     const alongStreet = (x, z) => {
       let best = -1, ang = 0;
       for (let a = 0; a < 12; a++) {
@@ -1299,13 +1300,40 @@ export async function buildRealWorld(scene, renderer) {
       }
       return ang;
     };
-    for (const sp of CONFIG.vehicles?.spawns || []) {
-      const zi = ZONE_NAMES.indexOf(sp.zone);
-      if (zi < 0 || !seeds[zi] || !Number.isFinite(door_depth[zi])) continue;
-      const spot = spotIn(zi, 2, 6, 28, PERK_DOOR_GAPS) || spotIn(zi, 2, 6, 28); // 2 : dégagement en cases (entier)
-      if (!spot) continue;
-      const t = alongStreet(spot[0], spot[1]);
-      vehicleSpawns.push({ type: sp.type, x: spot[0], z: spot[1], yaw: Math.atan2(-Math.cos(t), -Math.sin(t)) });
+    // Parking : un seul endroit (CONFIG.vehicles.parking), emplacements fixes (aucun tirage, identiques chez tous les joueurs).
+    // Contrôle : tout le rectangle doit être dans la zone voulue, accessible à pied et dégagé ; sinon repli sur l'ancien tirage.
+    const debugMode = typeof location !== 'undefined' && new URLSearchParams(location.search).has('debug');
+    const PK = CONFIG.vehicles?.parking;
+    if (PK) {
+      const zi = ZONE_NAMES.indexOf(PK.zone), L = parkingLayout(PK);
+      let why = null;
+      if (zi < 0 || !seeds[zi] || !Number.isFinite(door_depth[zi])) why = `zone « ${PK.zone} » absente`;
+      else {
+        const R = PK.rect;
+        for (let dz = -R.d / 2; dz <= R.d / 2 + 1e-6 && !why; dz += 1.5) for (let dx = (R.dx || 0) - R.w / 2; dx <= (R.dx || 0) + R.w / 2 + 1e-6; dx += 1.25) {
+          const q = L.at(dx, dz), ix = nav.cx(q.x), iz = nav.cz(q.z);
+          if (zoneOf(q.x, q.z) !== zi) { why = `(${q.x.toFixed(1)} ; ${q.z.toFixed(1)}) hors de la zone`; break; }
+          if (!reachAt(q.x, q.z) || !clearance(ix, iz, 1)) { why = `(${q.x.toFixed(1)} ; ${q.z.toFixed(1)}) bloqué ou inaccessible`; break; }
+        }
+      }
+      if (why) { if (debugMode) console.warn('[parking] repli sur le tirage aléatoire des motos :', why); }
+      else {
+        for (const b of L.bays) vehicleSpawns.push({ type: b.type, x: b.x, z: b.z, yaw: b.yaw });
+        buildParkingDecor(scene, collision, lightSources, PK, L);
+        parkingInfo = { zone: zi, name: PK.zone, x: PK.x, z: PK.z, yaw: PK.yaw, pump: { x: L.pump.x, z: L.pump.z }, sign: { x: L.sign.x, z: L.sign.z }, inRect: L.inRect, points: L.points, size: L.bays.length };
+      }
+    }
+    if (!parkingInfo) {
+      // Repli : une moto par ligne de CONFIG.vehicles.spawns, sur un emplacement dégagé de la zone, loin des portes (même raison que
+      // les atouts : leur invite [E] masquerait celle de la porte), posée dans l'axe de la rue
+      for (const sp of CONFIG.vehicles?.spawns || []) {
+        const zi = ZONE_NAMES.indexOf(sp.zone);
+        if (zi < 0 || !seeds[zi] || !Number.isFinite(door_depth[zi])) continue;
+        const spot = spotIn(zi, 2, 6, 28, PERK_DOOR_GAPS) || spotIn(zi, 2, 6, 28); // 2 : dégagement en cases (entier)
+        if (!spot) continue;
+        const t = alongStreet(spot[0], spot[1]);
+        vehicleSpawns.push({ type: sp.type, x: spot[0], z: spot[1], yaw: Math.atan2(-Math.cos(t), -Math.sin(t)) });
+      }
     }
   }
   if (!stations.length) stations.push(new THREE.Vector3(startPos.x + 6, 0, startPos.z));
@@ -1397,8 +1425,10 @@ export async function buildRealWorld(scene, renderer) {
   // ---------------------------------------------------------------- Décor : mobilier réel (OSM) et objets de l'apocalypse
   {
     const inSec = (x, z) => zoneOf(x, z) >= 0;
-    const used = [startPos, ...stations, ...machines.map((m) => m.pos), ...wallWeapons.map((w) => w.pos), ...vehicleSpawns].map((v) => [v.x, v.z]);
-    const freeAt = (x, z, gap) => used.every(([ux, uz]) => Math.hypot(ux - x, uz - z) > gap);
+    const used = [startPos, ...stations, ...machines.map((m) => m.pos), ...wallWeapons.map((w) => w.pos), ...vehicleSpawns, ...(parkingInfo ? parkingInfo.points : [])].map((v) => [v.x, v.z]);
+    // le parking des motos réserve son emprise (marge 1,5 m) : ni mobilier, ni voiture, ni barricade dessus
+    const inParking = (x, z, margin = 0) => !!parkingInfo && parkingInfo.inRect(x, z, margin);
+    const freeAt = (x, z, gap) => !inParking(x, z, 1.5) && used.every(([ux, uz]) => Math.hypot(ux - x, uz - z) > gap);
     // mur le plus proche (orientation des bancs, vélos…) et axe de la rue (voitures)
     const wallDir = (x, z) => { let best = 99, ang = 0; for (let a = 0; a < 16; a++) { const t = (a / 16) * Math.PI * 2; const d = collision.rayHit(x, 1, z, Math.cos(t), 0, Math.sin(t), 6); if (d < best) { best = d; ang = t; } } return { dist: best, ang }; };
     const streetDir = (x, z) => { let best = -1, ang = 0; for (let a = 0; a < 12; a++) { const t = (a / 12) * Math.PI; const d = collision.rayHit(x, 1, z, Math.cos(t), 0, Math.sin(t), 40) + collision.rayHit(x, 1, z, -Math.cos(t), 0, -Math.sin(t), 40); if (d > best) { best = d; ang = t; } } return ang; };
@@ -1416,7 +1446,7 @@ export async function buildRealWorld(scene, renderer) {
     }
     for (const f of data.furniture || []) {
       const [x, z] = f.p;
-      if (!inSec(x, z) || insideBuilding(x, z) || (hdf && hdf.covers(x, z))) continue;
+      if (!inSec(x, z) || insideBuilding(x, z) || (hdf && hdf.covers(x, z)) || inParking(x, z, 0.8)) continue;
       const wd = wallDir(x, z);
       const rnd2 = isolatedZone[zoneOf(x, z)] ? rndIso : rnd; // mobilier d'une zone isolée : tirage à part
       if (f.kind === 'bench' && freeAt(x, z, 2.5)) {
@@ -1596,7 +1626,7 @@ export async function buildRealWorld(scene, renderer) {
   const stationPos = stations[0];
   return {
     half: Math.max(halfX, halfZ), blockers, spawnPoints: [], windowSpawns, pickWindow, pickGround,
-    stationPos, stations, wallWeapons, vehicleSpawns, doors, openDoor, zoneOf, startPos, nav, collision, machines, boxes, setActiveBox,
+    stationPos, stations, wallWeapons, vehicleSpawns, parking: parkingInfo, doors, openDoor, zoneOf, startPos, nav, collision, machines, boxes, setActiveBox,
     zoneNames: ZONE_NAMES, zoneCenters, startZone, sealedPoints, mapImage, mapView: { halfX, halfZ, scale: MAP_SCALE },
     mapCrop: { x0: secMinX - 60, x1: secMaxX + 60, z0: secMinZ - 50, z1: secMaxZ + 50 }, mapTitle: 'SECTEUR DU MARCHÉ-NEUF — STRASBOURG',
     cathedral: cath ? { seed: cath.seed, clock: cath.clock, insideInner: cath.insideInner, inner: cath.inner, P: cath.P, S: cath.S, T: cath.T, ceilAt: cath.ceilAt, info: cathInfo } : null,

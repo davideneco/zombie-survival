@@ -11,7 +11,10 @@ export class Hud {
       points: $('points'),
       round: $('roundNum'),
       prompt: $('prompt'),
+      vehHud: $('vehHud'),
       speedo: $('speedo'),
+      speedFill: $('vSpeedFill'),
+      speedTick: $('vSpeedTick'),
       announce: $('announce'),
       vignette: $('vignette'),
       nukeflash: $('nukeflash'),
@@ -124,12 +127,18 @@ export class Hud {
     });
   }
 
-  // Compteur de vitesse (sur une moto) : m/s -> km/h, null pour le masquer
-  setSpeed(ms) {
-    this._set('speedo', ms == null ? '' : Math.round(Math.abs(ms) * 3.6), () => {
-      this.el.speedo.style.display = ms == null ? 'none' : 'block';
-      this.el.speedo.innerHTML = ms == null ? '' : `${Math.round(Math.abs(ms) * 3.6)}<small>km/h</small>`;
+  // Tableau de bord de la moto : info = { speed (m/s), vmax, vmin (seuil d'écrasement) } ou null pour le masquer.
+  // Compteur gris sous le seuil d'écrasement, rouge au-dessus ; trait de seuil sur la jauge de vitesse.
+  setVehicle(info) {
+    this._set('vehOn', !!info, (on) => { this.el.vehHud.style.display = on ? 'block' : 'none'; });
+    if (!info) return;
+    const kmh = Math.round(Math.abs(info.speed) * 3.6), hot = Math.abs(info.speed) >= info.vmin;
+    this._set('speedo', `${kmh}|${hot}`, () => {
+      this.el.speedo.innerHTML = `${kmh}<small>km/h</small>`;
+      this.el.speedo.classList.toggle('hot', hot);
     });
+    this._set('speedbar', `${Math.round(Math.abs(info.speed) / info.vmax * 200)}`, () => { this.el.speedFill.style.width = `${Math.min(100, Math.abs(info.speed) / info.vmax * 100)}%`; });
+    this._set('speedtick', `${info.vmin}|${info.vmax}`, () => { this.el.speedTick.style.left = `${Math.min(100, info.vmin / info.vmax * 100)}%`; });
   }
 
   prompt(text) {
@@ -367,15 +376,27 @@ export class Hud {
       }
     }
     // machines, armes, munitions
-    const icon = (x, z, color, label) => {
-      const [px, py] = P(x, z);
+    const icon = (x, z, color, label, fx = null, fy = null) => {
+      const [px, py] = fx == null ? P(x, z) : [fx, fy];
       ctx.fillStyle = color; ctx.beginPath(); ctx.arc(px, py, 7, 0, Math.PI * 2); ctx.fill();
       ctx.strokeStyle = '#000'; ctx.lineWidth = 1.5; ctx.stroke();
       ctx.fillStyle = '#fff'; ctx.font = 'bold 10px Arial'; ctx.fillText(label, px, py + 3.5);
     };
     for (const s of world.stations || []) icon(s.x, s.z, '#2a9d4a', '⁍');
     for (const w of world.wallWeapons || []) icon(w.pos.x, w.pos.z, '#d98a2b', '⌐');
-    for (const v of world.vehicles || []) icon(v.pos.x, v.pos.z, '#e0c22e', v.type === 'moto' ? 'M' : 'G'); // motos : M (solo), G (grosse, 2 places)
+    // parking des motos : carré arrondi bleu « P » (forme différente des pastilles rondes) ; les motos garées s'affichent à côté (leurs
+    // positions sont à 2 m l'une de l'autre) ; une moto qui roule s'affiche à sa vraie place. M : moto (solo), G : grosse moto (2 places)
+    const pk = world.parking;
+    if (pk) {
+      const [qx, qy] = P(pk.x, pk.z);
+      ctx.fillStyle = '#2a6fd8'; ctx.strokeStyle = '#fff'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.roundRect(qx - 12, qy - 12, 24, 24, 6); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#fff'; ctx.font = 'bold 17px Arial'; ctx.fillText('P', qx, qy + 6);
+    }
+    for (const v of world.vehicles || []) {
+      if (pk && Math.hypot(v.pos.x - pk.x, v.pos.z - pk.z) < 9) { const [qx, qy] = P(pk.x, pk.z); icon(0, 0, '#e0c22e', v.type === 'moto' ? 'M' : 'G', qx + (v.type === 'moto' ? -17 : 17), qy + 19); }
+      else icon(v.pos.x, v.pos.z, '#e0c22e', v.type === 'moto' ? 'M' : 'G');
+    }
     for (const m of world.machines || []) if (m.type !== 'box' || m.active) icon(m.pos.x, m.pos.z, m.type === 'box' ? '#3f8fd8' : m.color, m.type === 'box' ? '?' : m.type === 'pap' ? 'P' : (m.letter || m.name[0]));
     // coéquipiers
     for (const tm of teammates) {
@@ -396,7 +417,7 @@ export class Hud {
     ctx.font = 'bold 26px Impact, Arial'; ctx.fillStyle = '#ffd24a';
     ctx.fillText(world.mapTitle || 'GRANDE ÎLE DE STRASBOURG', 30, 36);
     ctx.font = '13px Arial'; ctx.fillStyle = '#ccc';
-    ctx.fillText('▲ vous   ● vert : munitions   ● orange : arme murale   ● bleu ? : boîte mystère   P : Pack-a-Punch   ● couleurs : atouts   ■ rouge : porte verrouillée   ■ gris : zone fermée   — doré : passage sous immeuble   N ↑', 30, H - 18);
+    ctx.fillText('▲ vous   ● vert : munitions   ● orange : arme murale   ● bleu ? : boîte mystère   P : Pack-a-Punch   ● couleurs : atouts   ■ rouge : porte verrouillée   P bleu : motos   ■ gris : zone fermée   — doré : passage sous immeuble   N ↑', 30, H - 18);
   }
 
   setRoomBadge(code) {

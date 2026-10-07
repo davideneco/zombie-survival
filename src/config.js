@@ -177,24 +177,37 @@ export const CONFIG = {
   // (m/s²) : plus elle est faible, plus il faut ralentir pour tourner (rayon minimal = vitesse² / grip).
   vehicles: {
     mountRange: 2.6,   // distance maximale pour monter (m)
-    // Chaque ligne pose un véhicule dans la zone nommée (près de son lieu, sur un emplacement dégagé)
+    // Parking : un seul endroit, sur la place Gutenberg (à côté de l'entrée du parking souterrain). Les emplacements sont fixes
+    // (aucun tirage : identiques chez tous les joueurs). x, z : centre (m) ; yaw : cap des motos (0 = vers le nord, -z) ; dx / dz :
+    // décalage dans le repère du parking (dx vers la droite des motos, dz vers l'arrière). rect : emprise réservée au décor (m).
+    // Si le centre n'est pas dans la zone `zone`, les motos retombent sur `spawns` (ancien tirage, avec un avertissement en ?debug).
+    parking: {
+      zone: 'Place Gutenberg', x: -22, z: 70, yaw: 0,
+      bays: [{ type: 'moto', dx: -1.2 }, { type: 'grosseMoto', dx: 1.2 }],
+      slots: [-3.6, -1.2, 1.2, 3.6], // emplacements peints au sol (dx) ; 1,6 x 2,6 m ; les motos occupent les deux du milieu
+      pump: { dx: -6.5, dz: 0 }, sign: { dx: 0, dz: 5.5 },
+      rect: { w: 10, d: 12 },
+    },
+    // Repli (voir parking) : une ligne par moto, posée dans la zone nommée sur un emplacement dégagé
     spawns: [
       { type: 'moto', zone: 'Marché-Neuf' },
       { type: 'grosseMoto', zone: 'Marché-Neuf' },
     ],
-    // Écraser un zombie : dégâts = vitesse × roadkill (propre à chaque moto) au-dessus de minSpeed ; la moto perd un peu de vitesse
-    roadkill: { minSpeed: 5, slowdown: 0.93, cooldown: 0.5 },
+    // Écraser un zombie (propre à chaque moto, voir `roadkill` des types) : sous la vitesse vmin, aucun dégât et la moto est stoppée
+    // par le zombie (vitesse plafonnée à stopSpeed, arrêt net au contact) ; au-dessus, dégâts = K x v x r avec
+    // r = min(1, 0,4 + 0,6 x (v - vmin) / rampSpeed) ; chaque zombie écrasé freine la moto (x slowdown) ; cooldown entre deux coups au même zombie.
+    roadkill: { cooldown: 0.5, rampSpeed: 6, stopSpeed: 1.5, contactStop: 0.55 },
     // Choc contre un mur : au-dessus de minSpeed (vitesse perdue dans le choc), les occupants perdent damagePerMs PV par m/s en trop
     // (jamais mortel : il leur reste au moins 1 PV)
     crash: { minSpeed: 10, damagePerMs: 3.5, maxDamage: 45 },
     types: {
       moto: {
         name: 'MOTO', seats: 1, maxSpeed: 21, accel: 11, brake: 28, reverseSpeed: 3.5, drag: 0.12,
-        wheelbase: 1.35, maxSteer: 0.62, grip: 15, radius: 0.55, roadkill: 16,
+        wheelbase: 1.35, maxSteer: 0.62, grip: 15, radius: 0.55, roadkill: { K: 16, vmin: 9, slowdown: 0.85 },
       },
       grosseMoto: {
         name: 'GROSSE MOTO', seats: 2, maxSpeed: 17, accel: 8, brake: 24, reverseSpeed: 3, drag: 0.12,
-        wheelbase: 1.75, maxSteer: 0.5, grip: 11, radius: 0.7, roadkill: 24,
+        wheelbase: 1.75, maxSteer: 0.5, grip: 11, radius: 0.7, roadkill: { K: 24, vmin: 7, slowdown: 0.90 },
       },
     },
   },
