@@ -181,7 +181,20 @@ const game = {
     hud.popup(`+${n}`, cls);
   },
 
-  hitZombie(z, head, point, damage, headMult, fromPid = null) {
+  // Santé d'un zombie ordinaire à la manche r (courbe de CONFIG.zombie.health)
+  zombieHealthAt(r) {
+    const H = CONFIG.zombie.health;
+    return r < H.softRound ? H.base + r * H.perRound : Math.round(H.hardBase * Math.pow(H.hardGrowth, r - H.softRound + 1));
+  },
+
+  // Dégâts d'un coup de couteau sur z (voir CONFIG.knife) ; head / back : tête ou dos (x weakMult, non cumulés)
+  meleeDamage(z, head, back) {
+    const K = CONFIG.knife;
+    if (z.isBoss) return K.boss.dmg * (back ? K.boss.back : K.boss.front);
+    return Math.max(K.minDamage, K.healthFrac * this.zombieHealthAt(this.round)) * (head || back ? K.weakMult : 1);
+  },
+
+  hitZombie(z, head, point, damage, headMult, fromPid = null, mel = false) {
     if (this.isClient) {
       // Le client envoie l'impact à l'hôte
       fx.blood(point.x, point.y, point.z, false);
@@ -194,13 +207,15 @@ const game = {
         dmg: damage,
         mult: headMult,
         pt: { x: point.x, y: point.y, z: point.z },
+        ...(mel ? { mel: 1 } : null),
       });
       return;
     }
 
     // Traitement sur l'hôte (ou en solo)
     if (this.buffs.instaKill > 0 && !z.boss) damage = 999999;
-    const killed = z.damage(damage * (head ? headMult : 1), head);
+    // couteau : l'armure (chevalier de fer) est ignorée ; pas de bonus de tête ici (déjà dans les dégâts)
+    const killed = z.damage(mel ? damage / (z.armor || 1) : damage * (head ? headMult : 1), head);
 
     fx.blood(point.x, point.y, point.z, killed && !head);
     sfx.hit(head);
@@ -210,7 +225,8 @@ const game = {
     }
 
     const mult = this.buffs.doublePoints > 0 ? 2 : 1;
-    const award = (killed ? (head ? 100 : 60) : 10) * mult;
+    const K = CONFIG.knife;
+    const award = (mel ? (killed ? K.points.kill : K.points.hit) : (killed ? (head ? 100 : 60) : 10)) * mult;
 
     if (fromPid != null) {
       // Récompense pour un client distant
@@ -859,7 +875,7 @@ const game = {
     const r = this.round;
     const countMult = this.isMultiplayer ? 1 + this.remotes.size * 0.75 : 1;
     this.toSpawn = Math.round((4 + r * 3) * countMult);
-    this.zombieHealth = r < 10 ? 70 + r * 30 : Math.round(340 * Math.pow(1.1, r - 9));
+    this.zombieHealth = this.zombieHealthAt(r);
     this.zombieSpeed = Math.min(CONFIG.zombie.speedStart + r * CONFIG.zombie.speedPerRound, CONFIG.zombie.speedMax);
     this.spawnTimer = 1;
     hud.setRound(r);
@@ -994,6 +1010,7 @@ const game = {
       pap: p.curW.pap ? 1 : 0,
       rl: p.curW.reloading ? 1 : 0,
       ads: p.aiming ? 1 : 0,
+      mc: p.mc,                                                     // coups de couteau donnés (les coéquipiers animent leur avatar)
       bo: p.downed && !p.dead ? Math.ceil(p.bleedout) : 0,         // secondes avant la mort (à terre)
       rv: this.reviveTarget ? this.reviveTarget.id : null,          // coéquipier que je suis en train de réanimer
       rvl: this.reviveTarget ? Math.round((this.reviveTime() - this.reviveTimer) * 10) / 10 : 0,
@@ -1540,6 +1557,12 @@ function setupNetworkHandlers(net) {
     if (!game.isHost) return;
     const z = game.zombies.find((zb) => zb.id === m.zid);
     if (z) {
+      if (m.mel) { // couteau : l'hôte vérifie la portée et borne les dégâts (une seule valeur possible par zombie)
+        const rp = game.remotes.get(m.from), K = CONFIG.knife;
+        if (!rp || Math.hypot(rp.pos.x - z.pos.x, rp.pos.z - z.pos.z) > K.hostRange) return;
+        game.hitZombie(z, !!m.head, m.pt, Math.min(+m.dmg || 0, game.meleeDamage(z, true, true)), 1, m.from, true);
+        return;
+      }
       game.hitZombie(z, m.head, m.pt, m.dmg, m.mult, m.from);
     }
   });

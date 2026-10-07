@@ -299,6 +299,22 @@ export class Sfx {
     }
   }
 
+  // Couteau : 'swing' (souffle de la lame), 'flesh' (chair : choc mou et humide), 'metal' (armure : deux notes métalliques)
+  knife(kind = 'swing', v = 1) {
+    if (!this.ctx || v < 0.03) return;
+    if (kind === 'swing') {
+      this._noise(0.16, 0.38 * v, 900, 'bandpass', { f1: 3200, q: 1.1, atk: 0.04 });
+    } else if (kind === 'metal') {
+      this._noise(0.05, 0.5 * v, 3500, 'highpass', { atk: 0.001 });
+      this._tone('triangle', 2400, 1900, 0.18, 0.2 * v, { send: 0.25 });
+      this._tone('triangle', 3700, 3100, 0.12, 0.12 * v, { send: 0.25 });
+    } else {
+      this._noise(0.09, 0.55 * v, 700, 'lowpass', { f1: 220, q: 0.8 });
+      this._tone('sine', 150, 55, 0.12, 0.5 * v);
+      this._noise(0.04, 0.2 * v, 3000, 'bandpass', { atk: 0.001, at: 0.01 });
+    }
+  }
+
   empty() { // clic à vide
     if (!this.ctx) return;
     this._clack(0, 0.9, 3200);

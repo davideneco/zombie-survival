@@ -25,6 +25,7 @@ export class Player {
     this.statsVersion = 0; // incrémenté quand les atouts changent (invalide le cache des stats d'arme)
     this.lastMouse = -99;  // game.time du dernier mouvement de souris (recentrage de la vue du conducteur)
     this.ride = new RideCam(this); // vue à la troisième personne sur une moto
+    this.mc = 0; // compteur de coups de couteau (p_state.mc) : les coéquipiers jouent l'animation à chaque incrément
 
     camera.rotation.order = 'YXZ';
     scene.add(camera);
@@ -91,6 +92,7 @@ export class Player {
     this.region = 0; this.wasGrounded = true;
     this.airT = 0; this.peakY = 0; this.jumpSprint = false; this.flopCd = 0; // PHD Flopper (plongeon)
     this.vehicle = null; // { v, seat } quand on est sur une moto
+    this.meleeT = -1; this.meleeHit = true; this.nextMelee = 0; this.lunge = null; // couteau (voir melee)
     this.ride?.reset();
 
     // Inventaire d'armes
@@ -220,7 +222,7 @@ export class Player {
       if (k === 'e') this.game.interact();
       if (k === 'f') this.setTorch(!this.torchOn);
       if (k === 'g') this.throwGrenade();
-      if (k === 'v' && this.vehicle) this.game.toggleVehicleView?.(); // moto : bascule troisième / première personne
+      if (k === 'v') { if (this.vehicle) this.game.toggleVehicleView?.(); else this.melee(this.game.time); } // moto : bascule troisième / première personne ; à pied : couteau
       if (e.code === 'Space') e.preventDefault();
       if (this.locked) return; // arme dans le Pack-a-Punch
       if (e.code === 'Digit1') this.switchWeapon(0);
@@ -358,6 +360,7 @@ export class Player {
 
     this.vm.scale.setScalar(0.85);
     this.camera.add(this.vm);
+    this.buildKnife();
   }
 
   // --------------------------------------------------------------- Update
@@ -471,10 +474,17 @@ export class Player {
       for (let n = 0; n < MAX_SHOTS_PER_FRAME && this.mouseDown && now >= this.nextShot; n++) {
         if (w.ammo > 0) { this.shoot(now, moving); if (cfg.autoReload && w.ammo <= 0) this.reload(); } // chargeur d'une cartouche : recharge seule
         else if (w.reserve > 0) { this.reload(); break; }
-        else { this.nextShot = now + 0.3; this.game.sfx.empty(); break; }
+        else { // chargeur et réserve vides : coup de couteau à la place du clic à vide (maintenu : un coup toutes les cooldown s)
+          this.nextShot = now + 0.1;
+          if (this.meleeT < 0 && now >= this.nextMelee && !this.melee(now)) { this.nextShot = now + 0.3; this.game.sfx.empty(); }
+          break;
+        }
         if (cfg.type === 'semi') { this.mouseDown = false; break; } // une balle par clic
       }
     }
+
+    // ---- couteau : fente, instant de la touche, animation ----
+    this.updateMelee(dt, now);
 
     // ---- caméra ----
     this.recoil *= Math.max(0, 1 - dt * 8);
@@ -509,12 +519,127 @@ export class Player {
     if (sprinting) { rx += 0.25; x -= 0.05; y -= 0.05; }
     this.vm.position.set(x + (moving ? Math.sin(this.bobT * 0.5) * 0.008 : 0), y, z + this.kick * 0.07);
     this.vm.rotation.set(rx, sprinting ? 0.35 : 0, 0);
+    this.animateKnife(dt);
 
     // muzzle flash
     if (this.flashT > 0) {
       this.flashT -= dt;
       if (this.flashT <= 0) { this.flash.visible = false; this.flashLight.intensity = 0; }
     }
+  }
+
+  // ------------------------------------------------------------- Couteau
+  // Modèle (vue à la première personne) : lame argentée de 0,2 m avec pointe (cône à 4 faces), garde, manche noir, bras droit séparé
+  // (manche + main) ; visible seulement pendant le coup, pendant lequel l'arme tenue plonge de CONFIG.knife.dip m.
+  buildKnife() {
+    const g = new THREE.Group();
+    const steel = new THREE.MeshStandardMaterial({ color: 0xd8dce0, roughness: 0.4, metalness: 0.3, emissive: 0x2c3036 }); // pas de carte d'environnement : un métal pur resterait noir ou éblouirait
+    const dark = new THREE.MeshStandardMaterial({ color: 0x141416, roughness: 0.7 });
+    const box = (w, h, d, x, y, z, m, par = g) => { const o = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m); o.position.set(x, y, z); par.add(o); return o; };
+    const blade = new THREE.Group(); g.add(blade);
+    box(0.034, 0.012, 0.15, 0, 0, -0.075, steel, blade);                                   // lame
+    const tip = new THREE.Mesh(new THREE.ConeGeometry(0.0245, 0.05, 4), steel);            // pointe
+    tip.rotation.x = -Math.PI / 2; tip.rotation.z = Math.PI / 4; tip.scale.set(1, 1, 0.5); tip.position.set(0, 0, -0.175); blade.add(tip);
+    box(0.07, 0.016, 0.014, 0, 0, 0.005, dark, blade);                                     // garde
+    box(0.022, 0.026, 0.1, 0, 0, 0.062, dark, blade);                                      // manche
+    for (const z of [0.035, 0.06, 0.085]) box(0.025, 0.029, 0.006, 0, 0, z, steel, blade); // viroles
+    // bras droit séparé : main refermée sur le manche, avant-bras en manche (même tissu que les armes)
+    const hand = box(0.085, 0.085, 0.1, 0, -0.005, 0.08, new THREE.MeshStandardMaterial({ color: 0xc9a07a, roughness: 0.8 }), blade);
+    hand.userData.skin = true; this.handMats.push(hand.material);
+    const sl = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.32), this.sleeveMat); sl.position.set(0.03, -0.07, 0.2); sl.rotation.x = 0.5; blade.add(sl); // l'avant-bras descend vers le bas de l'écran
+    g.visible = false;
+    this.knifeVm = g; this.knifeBlade = blade;
+    this.camera.add(g);
+  }
+
+  // Lance un coup de couteau (touche V, ou clic gauche chargeur ET réserve vides). Renvoie false si impossible (recharge du coup, à terre…).
+  melee(now) {
+    const K = CONFIG.knife;
+    if (this.downed || this.dead || this.vehicle || this.locked || this.meleeT >= 0 || now < this.nextMelee || !this.game.started) return false;
+    this.nextMelee = now + K.cooldown;
+    this.meleeT = 0; this.meleeHit = false;
+    this.mc = (this.mc + 1) & 255;
+    this.game.sfx.knife?.('swing');
+    // fente : on avance de lunge m vers un zombie proche, si on avance (touche haut)
+    this.lunge = null;
+    if (this.keys.KeyW || this.keys.ArrowUp) {
+      const fx = -Math.sin(this.yaw), fz = -Math.cos(this.yaw);
+      let best = null, bd = K.lungeNear;
+      for (const z of this.game.zombies) {
+        if (!z.targetable || z.isBoss) continue;
+        const dx = z.pos.x - this.pos.x, dz = z.pos.z - this.pos.z, d = Math.hypot(dx, dz);
+        if (d < bd && (dx * fx + dz * fz) / (d || 1) > 0.6) { bd = d; best = z; }
+      }
+      if (best) this.lunge = { left: Math.min(K.lunge, Math.max(0, bd - 0.9)), fx, fz };
+    }
+    return true;
+  }
+
+  updateMelee(dt, now) {
+    const K = CONFIG.knife;
+    if (this.meleeT < 0) return;
+    if (this.downed || this.dead || this.vehicle) { this.meleeT = -1; this.lunge = null; return; }
+    this.meleeT += dt;
+    if (this.lunge && this.lunge.left > 0) {
+      const step = Math.min(this.lunge.left, (K.lunge / K.lungeTime) * dt);
+      this.lunge.left -= step;
+      this.pos.x += this.lunge.fx * step; this.pos.z += this.lunge.fz * step;
+      this.world.collide(this.pos, CONFIG.player.radius);
+    }
+    if (!this.meleeHit && this.meleeT >= K.hitDelay) { this.meleeHit = true; this.meleeStrike(); }
+    if (this.meleeT >= K.anim) this.meleeT = -1;
+  }
+
+  // Résolution du coup : rayon central contre les maillages (tête ou corps), sinon le zombie le plus proche dans le cône
+  meleeStrike() {
+    const K = CONFIG.knife, g = this.game, cam = this.camera;
+    cam.updateMatrixWorld(true);
+    this.rc.setFromCamera({ x: 0, y: 0 }, cam);
+    const ro = this.rc.ray.origin.clone(), rd = this.rc.ray.direction.clone();
+    const wallT = this.world.rayHit ? this.world.rayHit(ro.x, ro.y, ro.z, rd.x, rd.y, rd.z, K.range + 0.5) : K.range + 0.5;
+    let target = null, head = false, point = null;
+    this.rc.far = K.range + 0.4;
+    const hits = this.rc.intersectObjects(g.zombieTargets(), false);
+    for (const h of hits) {
+      if (h.distance > wallT) break;
+      const z = h.object.userData.zombie;
+      if (!z) continue;
+      target = z; head = !!h.object.userData.head; point = h.point; break;
+    }
+    if (!target) { // cône horizontal de K.cone degrés de part et d'autre de la visée
+      const cx = rd.x, cz = rd.z, cl = Math.hypot(cx, cz) || 1, cosMax = Math.cos((K.cone * Math.PI) / 180);
+      let bd = Infinity;
+      for (const z of g.zombies) {
+        if (!z.targetable) continue;
+        const dx = z.pos.x - this.pos.x, dz = z.pos.z - this.pos.z, d = Math.hypot(dx, dz);
+        if (d > K.range + 0.4 || d >= bd || Math.abs(z.pos.y - this.pos.y) > 1.6) continue;
+        if ((dx * cx + dz * cz) / (d * cl || 1) < cosMax) continue;
+        if (this.world.rayHit && d > 0.5 && this.world.rayHit(ro.x, ro.y, ro.z, dx / d, (z.pos.y + 1.1 - ro.y) / d, dz / d, d) < d - 0.4) continue; // un mur les sépare
+        bd = d; target = z; point = new THREE.Vector3(z.pos.x, z.pos.y + 1.1, z.pos.z);
+      }
+    }
+    if (!target) return; // dans le vide : seul le souffle
+    const dx = this.pos.x - target.pos.x, dz = this.pos.z - target.pos.z, dl = Math.hypot(dx, dz) || 1;
+    const back = (dx * Math.sin(target.yaw) + dz * Math.cos(target.yaw)) / dl < K.backCos; // on est dans son dos (cap du zombie : (sin, cos))
+    g.sfx.knife?.(target.kind === 'armored' || target.isBoss ? 'metal' : 'flesh');
+    g.hitZombie(target, head, point, g.meleeDamage(target, head, back), 1, null, true);
+  }
+
+  // Animation du couteau (tout est dans le repère de la caméra) : l'arme tenue plonge, la lame part de la droite vers le centre à la touche
+  // (hitDelay), puis revient ; un léger arc de haut en bas
+  animateKnife(dt) {
+    const K = CONFIG.knife, g = this.knifeVm;
+    if (!g) return;
+    const on = this.meleeT >= 0 && !this.downed && !this.dead;
+    g.visible = on;
+    if (!on) return;
+    const t = this.meleeT, hit = K.hitDelay;
+    const sm = (x) => x * x * (3 - 2 * x);
+    const s = t < hit ? sm(t / hit) : 1 - sm(Math.min(1, (t - hit) / (K.anim - hit)));
+    const dip = Math.sin(Math.min(1, t / K.anim) * Math.PI);
+    this.vm.position.y -= Math.min(1, dip * 1.6) * K.dip;      // l'arme plonge
+    g.position.set(0.26 - s * 0.2, -0.3 + s * 0.08, -0.22 - s * 0.32);
+    g.rotation.set(-0.15 - s * 0.35, 0.5 - s * 0.55, 0.1);
   }
 
   // ------------------------------------------------------------- Tir

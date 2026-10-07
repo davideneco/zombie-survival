@@ -388,6 +388,9 @@ export class Avatar {
     this.flash.position.set(0, 0.015, this.muzzleZ - 0.05);
   }
 
+  // Coup de couteau : le bras droit part en avant pendant CONFIG.knife.stab s, l'arme tenue plonge (jouée chez les coéquipiers : p_state.mc)
+  stab() { this.stabT = 0.35; }
+
   // Résout un bras : épaule (repère pitchG) -> cible, coude placé vers `pole`
   solveArm(arm, target) {
     const S = arm.sh.position;
@@ -456,11 +459,15 @@ export class Avatar {
     const back = this.hands.back, front = this.hands.front;
     const sc = this.scaleW;
     w.position.set(g.x - back.x * sc - this.ads * 0.04, g.y - back.y * sc + breathe - this.rl * 0.1 + this.ads * 0.02, g.z - back.z * sc + this.kick * 0.05 - this.ads * 0.06);
-    w.rotation.set(this.kick * 0.18 + this.rl * 0.6, 0, this.rl * -0.25);
+    let sb = 0;
+    if (this.stabT > 0) { this.stabT -= dt; const u = Math.max(0, this.stabT) / 0.35; sb = Math.sin(Math.min(1, 1 - u) * Math.PI); }
+    w.position.y -= sb * 0.18;
+    w.rotation.set(this.kick * 0.18 + this.rl * 0.6 + sb * 0.5, 0, this.rl * -0.25);
     // cibles des mains, dans le repère du pivot
     w.updateMatrix();
     const tr = new THREE.Vector3().copy(back).multiplyScalar(sc).applyMatrix4(w.matrix);
     const tl = front ? new THREE.Vector3().copy(front).multiplyScalar(sc).applyMatrix4(w.matrix) : new THREE.Vector3().copy(back).multiplyScalar(sc).add(new THREE.Vector3(-0.045, -0.035, -0.02)).applyMatrix4(w.matrix);
+    if (sb > 0) { tr.z -= sb * 0.34; tr.x -= sb * 0.1; tr.y += sb * 0.04; } // main droite : coup vers l'avant
     this.solveArm(this.arms[1], tr);
     this.solveArm(this.arms[0], tl);
     // éclair de bouche

@@ -200,6 +200,18 @@ export const CONFIG = {
     kindHealth: { normal: 1, runner: 0.8, crawler: 0.8, armored: 3, bloat: 1.6 },
   },
 
+  // Couteau (touche V à pied ; clic gauche quand le chargeur ET la réserve sont vides). Toujours disponible, hors inventaire.
+  // Dégâts = max(minDamage, healthFrac x santé des zombies de la manche) : 3 coups quelle que soit la manche dès la 10 ; dos ou tête x weakMult
+  // (non cumulés). Armure du chevalier de fer ignorée (coup de miséricorde). Bourreau : dégâts fixes, x front de face, x back dans le dos.
+  // La touche à hitDelay s ; fente de lunge m vers un zombie à moins de lungeNear m si on avance ; hostRange : portée maximale acceptée par l'hôte.
+  knife: {
+    range: 1.8, cone: 35, cooldown: 0.6, hitDelay: 0.12, anim: 0.55, dip: 0.3,
+    lunge: 0.8, lungeNear: 2.6, lungeTime: 0.12,
+    minDamage: 150, healthFrac: 0.34, weakMult: 1.5, backCos: -0.3,
+    boss: { dmg: 150, front: 0.75, back: 2 },
+    points: { hit: 10, kill: 100 },
+    stab: 0.35, hostRange: 4,
+  },
   grenade: { start: 2, max: 4, perRound: 2, fuse: 2.2, radius: 6.5, damage: 900, selfDamage: 60 },
 
   // Véhicules (motos). Touches : ZQSD / flèches pour conduire, Espace = frein à main, E = monter / descendre.
@@ -304,6 +316,9 @@ export const CONFIG = {
   },
 
   zombie: {
+    // santé de base d'un zombie : health.base + manche x health.perRound avant la manche health.softRound, ensuite
+    // health.hardBase x health.hardGrowth ^ (manche - softRound + 1)
+    health: { base: 70, perRound: 30, softRound: 10, hardBase: 340, hardGrowth: 1.1 },
     radius: 0.4,
     attackRange: 1.3,
     damage: 20,

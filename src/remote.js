@@ -122,6 +122,7 @@ export class RemotePlayer {
     this.aiming = !!s.ads;
     this.downed = !!s.downed;
     this.dead = !!s.dead;
+    if (s.mc != null) { if (this.mc != null && s.mc !== this.mc && !this.downed) this.avatar.stab(); this.mc = s.mc; } // coup de couteau
     this.bo = s.bo | 0;                  // secondes avant la mort (à terre)
     this.rv = s.rv ?? null;              // identifiant du joueur qu'il est en train de réanimer
     this.rvl = +s.rvl || 0;              // secondes restantes de cette réanimation
