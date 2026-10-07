@@ -3,5 +3,6 @@ Munitions max;Réserves pleines + grenades au maximum;
 Mort instantanée;Tout zombie touché meurt;30
 Bombe;Tue tous les zombies, +400 pts;
 Points doubles;Points x2;30
+Bidon d'essence;+2,5 L pour une moto (rare : seulement si une moto est à moitié vide, voir Motos);
 (règle) Chance de lâcher un bonus;5 % par zombie tué;
 (règle) Durée au sol;;25

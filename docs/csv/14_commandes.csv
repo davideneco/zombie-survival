@@ -8,9 +8,10 @@ Espace;Sauter
 R;Recharger
 1 / 2 / 3 / molette;Changer d'arme
 G;Grenade
-E;Acheter, ouvrir une porte, utiliser une machine, réanimer (maintenir), monter / descendre d'une moto
+E;Acheter, ouvrir une porte, utiliser une machine ou la borne des motos, réanimer (maintenir), monter / descendre d'une moto
 ZQSD / WASD (en moto);Accélérer, freiner / reculer, tourner
 Espace (en moto);Frein à main
+V (en moto);Vue à la 3e personne / à la 1re personne
 F;Lampe torche
 M;Carte
 Échap;Menu pause

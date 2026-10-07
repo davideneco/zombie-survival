@@ -485,7 +485,7 @@ export function installVehicles(game, { world, hud, sfx, scene }) {
       if (v.seats[seat] != null || !v.usable) return;
       if (!this.isMultiplayer) { v.seats[seat] = myId(); this.enterVehicle(v, seat); }
       else if (this.isHost) this.hostSeat(v.id, seat, myId());
-      else this.net?.send({ t: 'v_req', id: v.id, seat }); // réponse : v_seats
+      else { this.seatReq = { id: v.id, until: this.time + 4 }; this.net?.send({ t: 'v_req', id: v.id, seat }); } // réponse : v_seats
     },
 
     enterVehicle(v, seat) {
@@ -598,8 +598,9 @@ export function installVehicles(game, { world, hud, sfx, scene }) {
         const v = this.vehicles[m.id];
         if (!v) return;
         v.seats = m.seats.slice();
-        const me = v.seats.indexOf(myId());
-        if (me >= 0 && !this.player.vehicle) this.enterVehicle(v, me); // ma demande a été acceptée
+        const me = v.seats.indexOf(myId()), req = this.seatReq;
+        if (me >= 0 && !this.player.vehicle && req && req.id === v.id && this.time < req.until) { this.seatReq = null; this.enterVehicle(v, me); } // ma demande a été acceptée
+        else if (me < 0 && this.player.vehicle?.v === v) this.leaveVehicle(); // l'hôte ne me compte plus sur cette moto (explosion, départ…)
         else this.refreshRiders();
       });
     },

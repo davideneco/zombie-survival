@@ -172,7 +172,7 @@ table('08_zombies', 'Zombies', ['Réglage', 'Valeur', 'Unité'], [
 const rounds = [];
 for (let r = 1; r <= 30; r++) rounds.push([r, Math.round(4 + r * 3), Math.round((4 + r * 3) * 1.75), Math.round((4 + r * 3) * 2.5), Math.round((4 + r * 3) * 3.25), r < 10 ? 70 + r * 30 : Math.round(340 * Math.pow(1.1, r - 9)), Math.min(1.6 + r * 0.2, 4.2), Math.max(0.4, 2 - r * 0.1)]);
 table('09_manches', 'Manches', ['Manche', 'Zombies solo', 'Zombies 2 joueurs', 'Zombies 3 joueurs', 'Zombies 4 joueurs', 'Santé d\'un zombie', 'Vitesse de base (m/s)', 'Intervalle d\'apparition (s)'], rounds);
-table('10_bonus', 'Bonus', ['Bonus', 'Effet', 'Durée (s)'], [['Munitions max', 'Réserves pleines + grenades au maximum', ''], ['Mort instantanée', 'Tout zombie touché meurt', C.powerups.buffDuration], ['Bombe', 'Tue tous les zombies, +400 pts', ''], ['Points doubles', 'Points x2', C.powerups.buffDuration], ['(règle) Chance de lâcher un bonus', `${C.powerups.dropChance * 100} % par zombie tué`, ''], ['(règle) Durée au sol', '', C.powerups.duration]]);
+table('10_bonus', 'Bonus', ['Bonus', 'Effet', 'Durée (s)'], [['Munitions max', 'Réserves pleines + grenades au maximum', ''], ['Mort instantanée', 'Tout zombie touché meurt', C.powerups.buffDuration], ['Bombe', 'Tue tous les zombies, +400 pts', ''], ['Points doubles', 'Points x2', C.powerups.buffDuration], ['Bidon d\'essence', `+${String(C.vehicles.fuel.jerrican).replace('.', ',')} L pour une moto (rare : seulement si une moto est à moitié vide, voir Motos)`, ''], ['(règle) Chance de lâcher un bonus', `${C.powerups.dropChance * 100} % par zombie tué`, ''], ['(règle) Durée au sol', '', C.powerups.duration]]);
 table('11_zones', 'Zones du secteur', ['Zone', 'Départ', 'Lieu (x ; z en m)', 'Portes', 'Contenu prévu (config)', 'Bornes', 'Armes au mur', 'Machines'],
   D.zones.map((z) => [z.name, z.i === D.zones.findIndex((q) => S.zones[q.i]?.start) ? 'oui' : '', z.seed ? `${z.seed.x} ; ${z.seed.z}` : '',
     D.doors.filter((d) => d.a === z.i || d.b === z.i).map((d) => `P${d.n}`).join(', '), (S.zones[z.i].items || []).join(', '),
@@ -181,7 +181,26 @@ table('11_zones', 'Zones du secteur', ['Zone', 'Départ', 'Lieu (x ; z en m)', '
 table('12_portes', 'Portes', ['Porte', 'Prix (pts)', 'Zone A', 'Zone B'], D.doors.map((d) => [`P${d.n}`, d.price, zname(d.a), zname(d.b)]));
 table('13_emplacements', 'Emplacements', ['N° sur la carte', 'Type', 'Nom', 'Zone', 'Prix (pts)', 'x (m, vers l\'est)', 'z (m, vers le sud)'],
   D.items.map((it) => [it.n, it.label.split(' : ')[0].split(' — ')[0], (it.id ? W[it.id].name : it.label.replace(/^Atout : /, '').split(' — ')[0]), zname(it.zone), it.price ?? (it.label.match(/(\d+) pts/)?.[1] ?? ''), it.x, it.z]));
-table('14_commandes', 'Commandes', ['Touche', 'Action'], [['ZQSD / WASD', 'Se déplacer'], ['Souris', 'Viser'], ['Clic gauche', 'Tirer'], ['Clic droit', 'Viser à la mire'], ['Shift', 'Sprint'], ['Espace', 'Sauter'], ['R', 'Recharger'], ['1 / 2 / 3 / molette', 'Changer d\'arme'], ['G', 'Grenade'], ['E', 'Acheter, ouvrir une porte, utiliser une machine, réanimer (maintenir)'], ['F', 'Lampe torche'], ['M', 'Carte'], ['Échap', 'Menu pause']]);
+const VT = C.vehicles.types, VD = C.vehicles.damage, VF = C.vehicles.fuel, VR = C.vehicles.roadkill;
+const rk = (t, v) => t.roadkill.K * v * Math.min(1, 0.4 + 0.6 * (v - t.roadkill.vmin) / VR.rampSpeed);
+const vcol = (f) => Object.values(VT).map(f);
+const same = (x) => Object.values(VT).map((_, i) => (i ? 'idem' : x)); // règle commune aux deux motos
+table('15_motos', 'Motos (parking de la place Gutenberg : un panneau bleu « P », 2 motos, une borne plein + réparation)', ['Réglage', ...Object.values(VT).map((t) => t.name), 'Unité'], [
+  ['Places', ...vcol((t) => t.seats), ''], ['Points de vie', ...vcol((t) => t.hp), 'PV'], ['Vitesse max', ...vcol((t) => Math.round(t.maxSpeed * 3.6)), 'km/h'],
+  ['Réservoir', ...vcol((t) => t.tank), 'L'], ['Autonomie à fond', ...vcol((t) => +(t.tank / (t.idle + t.gas + t.perSpeed) / 60).toFixed(1)), 'min'],
+  ['Seuil d\'écrasement', ...vcol((t) => Math.round(t.roadkill.vmin * 3.6)), 'km/h (en dessous : aucun dégât, un zombie arrête la moto)'],
+  ['Dégâts d\'écrasement au seuil / à la vitesse max', ...vcol((t) => `${Math.round(rk(t, t.roadkill.vmin))} / ${Math.round(rk(t, t.maxSpeed))}`), 'PV de zombie'],
+  ['Usure par écrasement', ...same(`${VD.roadkillKill} (zombie tué) / ${VD.roadkillHurt} (survivant)`), 'PV de la moto'],
+  ['Choc contre un mur', ...same(`(vitesse perdue - ${VD.crashFree}) x ${VD.crashPerMs}`), 'PV de la moto'],
+  ['Coup de zombie sur un occupant', ...same(VD.zombieHit), 'PV de la moto (le joueur perd 20)'],
+  ['Explosion proche (grenade, M79…)', ...same(`${VD.explosion * 100} % des dégâts infligés aux zombies`), ''],
+  ['À 0 PV', ...same(`feu ${VD.burnTime} s, explosion (rayon ${VD.blast.radius} m, ${VD.blast.zombies} aux zombies, jusqu'à ${VD.blast.players} aux joueurs sans jamais les tuer), épave ${VD.wreckTime} s`), ''],
+  ['Retour au parking', ...same(`${VD.respawnRounds} manches après la destruction, PV pleins, ${VF.respawn * 100} % d'essence`), ''],
+  ['Borne du parking (à pied, moto à moins de ' + C.vehicles.pumpReach + ' m)', ...same(`${VF.pricePerL} pts par litre + ${VD.repairPrice} pts par PV`), 'plein + réparation'],
+  ['Bidon d\'essence (bonus)', ...same(`+${String(VF.jerrican).replace('.', ',')} L, ${VF.dropChance * 100} % par zombie tué si une moto est sous ${VF.dropBelow * 100} %`), ''],
+  ['Panne sèche', ...same(`réserve < ${VF.lowBelow * 100} % : bip, ratés < ${VF.missBelow * 100} %, à 0 : poussée ${VF.pushSpeed} m/s`), ''],
+]);
+table('14_commandes', 'Commandes', ['Touche', 'Action'], [['ZQSD / WASD', 'Se déplacer'], ['Souris', 'Viser'], ['Clic gauche', 'Tirer'], ['Clic droit', 'Viser à la mire'], ['Shift', 'Sprint'], ['Espace', 'Sauter'], ['R', 'Recharger'], ['1 / 2 / 3 / molette', 'Changer d\'arme'], ['G', 'Grenade'], ['E', 'Acheter, ouvrir une porte, utiliser une machine ou la borne des motos, réanimer (maintenir), monter / descendre d\'une moto'], ['ZQSD / WASD (en moto)', 'Accélérer, freiner / reculer, tourner'], ['Espace (en moto)', 'Frein à main'], ['V (en moto)', 'Vue à la 3e personne / à la 1re personne'], ['F', 'Lampe torche'], ['M', 'Carte'], ['Échap', 'Menu pause']]);
 
 // ------------------------------------------------------------------ CSV (séparateur ; , virgule décimale, UTF-8 avec BOM pour Excel)
 for (const f of fs.readdirSync(CSV)) if (f.endsWith('.csv')) fs.rmSync(path.join(CSV, f));

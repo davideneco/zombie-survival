@@ -193,6 +193,7 @@ Prix des portes : 750 pts pour une zone voisine du départ, +250 par zone plus l
 | Mort instantanée | Tout zombie touché meurt | 30 |
 | Bombe | Tue tous les zombies, +400 pts |  |
 | Points doubles | Points x2 | 30 |
+| Bidon d'essence | +2,5 L pour une moto (rare : seulement si une moto est à moitié vide, voir Motos) |  |
 | (règle) Chance de lâcher un bonus | 5 % par zombie tué |  |
 | (règle) Durée au sol |  | 25 |
 
@@ -272,6 +273,27 @@ Prix des portes : 750 pts pour une zone voisine du départ, +250 par zone plus l
 | 40 | HORLOGE ASTRONOMIQUE | HORLOGE ASTRONOMIQUE | Intérieur de la Cathédrale | 0 | 228 | 35 |
 | 41 | BOÎTE MYSTÈRE (emplacement possible) | BOÎTE MYSTÈRE (emplacement possible) | Intérieur de la Cathédrale | 950 | 185 | 10 |
 
+## Motos (parking de la place Gutenberg : un panneau bleu « P », 2 motos, une borne plein + réparation)
+
+| Réglage | MOTO | GROSSE MOTO | Unité |
+|---|---|---|---|
+| Places | 1 | 2 |  |
+| Points de vie | 300 | 500 | PV |
+| Vitesse max | 76 | 61 | km/h |
+| Réservoir | 6 | 10 | L |
+| Autonomie à fond | 3 | 4 | min |
+| Seuil d'écrasement | 32 | 25 | km/h (en dessous : aucun dégât, un zombie arrête la moto) |
+| Dégâts d'écrasement au seuil / à la vitesse max | 58 / 336 | 67 / 408 | PV de zombie |
+| Usure par écrasement | 5 (zombie tué) / 12 (survivant) | idem | PV de la moto |
+| Choc contre un mur | (vitesse perdue - 6) x 5 | idem | PV de la moto |
+| Coup de zombie sur un occupant | 10 | idem | PV de la moto (le joueur perd 20) |
+| Explosion proche (grenade, M79…) | 10 % des dégâts infligés aux zombies | idem |  |
+| À 0 PV | feu 2 s, explosion (rayon 5 m, 1000 aux zombies, jusqu'à 50 aux joueurs sans jamais les tuer), épave 20 s | idem |  |
+| Retour au parking | 2 manches après la destruction, PV pleins, 40 % d'essence | idem |  |
+| Borne du parking (à pied, moto à moins de 8 m) | 50 pts par litre + 2 pts par PV | idem | plein + réparation |
+| Bidon d'essence (bonus) | +2,5 L, 3 % par zombie tué si une moto est sous 50 % | idem |  |
+| Panne sèche | réserve < 15 % : bip, ratés < 5 %, à 0 : poussée 3 m/s | idem |  |
+
 ## Commandes
 
 | Touche | Action |
@@ -285,9 +307,10 @@ Prix des portes : 750 pts pour une zone voisine du départ, +250 par zone plus l
 | R | Recharger |
 | 1 / 2 / 3 / molette | Changer d'arme |
 | G | Grenade |
-| E | Acheter, ouvrir une porte, utiliser une machine, réanimer (maintenir), monter / descendre d'une moto |
+| E | Acheter, ouvrir une porte, utiliser une machine ou la borne des motos, réanimer (maintenir), monter / descendre d'une moto |
 | ZQSD / WASD (en moto) | Accélérer, freiner / reculer, tourner |
 | Espace (en moto) | Frein à main |
+| V (en moto) | Vue à la 3e personne / à la 1re personne |
 | F | Lampe torche |
 | M | Carte |
 | Échap | Menu pause |
