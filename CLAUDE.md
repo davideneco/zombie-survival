@@ -3,13 +3,14 @@
 Jeu coop de survie contre des zombies à Strasbourg (Three.js, serveur de dev Vite avec relais WebSocket intégré). Déployé sur Render depuis `main`.
 
 ## Délégation
-- Toute recherche large dans le code passe par `Explore` (sous-agent intégré).
-- Les décisions de conception et d'équilibrage passent par `game-designer` avant d'écrire du code.
-- L'implémentation d'un design arrêté passe par `gameplay-coder`.
-- Un bug non évident passe par `playtest-bug-hunter`.
+- Toute recherche dans le code passe par `explorer`.
+- Tout nouveau système (vagues, armes, véhicules, power-ups) passe d'abord par `game-designer`.
+- L'implémentation passe par `gameplay-coder`.
+- Un comportement bizarre ou un bug passe par `playtest-bug-hunter`.
 
 ## Conventions
+- Modules ES, config d'équilibrage dans `src/config.js`.
+- Pas de suite de tests : vérifier avec `npx vite build` et en pilotant le jeu avec Playwright (`?debug`) avant de conclure une tâche.
 - On travaille directement sur `main` ; pousser sur `main` redéploie Render.
 - Version de `package.json` incrémentée à chaque changement de jeu ; sujet de commit en anglais terminé par `(vX.Y.Z)`.
-- Valeurs d'équilibrage dans `src/config.js`.
 - Ne jamais commiter de musique protégée (`public/music/theme.*` est ignoré).
