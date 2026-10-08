@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { CONFIG } from './config.js';
+import { CONFIG, PAP_LEVELS } from './config.js';
 import { makeDisplay } from './weaponDisplay.js';
 import { makeTeddy } from './machines.js';
 
@@ -16,6 +16,7 @@ export function installMachineFx(game, { world, hud, sfx, fx }) {
   const nameOf = (pid) => (isMe(pid) ? 'Vous' : game.remotes.get(pid)?.name || 'Un joueur');
   const P = () => CONFIG.pap;
   const tmp = new THREE.Vector3();
+  const SPARKS = [null, [0xc060ff, 0xff9aff, 0x8a3aff], [0x5aa0ff, 0x9ac8ff, 0x1a6cff], [0xff8a30, 0xffc070, 0xff6a10]]; // étincelles du Pack-a-Punch selon le niveau visé
 
   // Faisceau de lumière au-dessus de la boîte pendant le tirage
   const beam = new THREE.Mesh(
@@ -199,35 +200,41 @@ export function installMachineFx(game, { world, hud, sfx, fx }) {
     resetBoxRoll() { this.endBoxRoll(); },
 
     // =============================================================== Pack-a-Punch
+    // Amélioration d'un niveau (0 -> I -> II -> III) : chaque niveau a son prix (PAP_LEVELS), payé avec ses propres points ; refusé au niveau III
     buyPap() {
       const p = this.player;
-      if (this.papAnim || p.curW.pap) return;
-      if (this.points < CONFIG.papPrice) { sfx.deny(); return; }
-      this.points -= CONFIG.papPrice;
+      const lv = (p.curW.pap | 0) + 1;
+      if (this.papAnim || lv >= PAP_LEVELS.length) return;
+      const price = PAP_LEVELS[lv].price;
+      if (this.points < price) { sfx.deny(); return; }
+      this.points -= price;
+      this._papPaid = price; // remboursé si l'hôte refuse (pap_deny)
       p.locked = true; // l'arme est dans la machine : on ne peut ni tirer ni la changer
       this._papIdx = p.weaponIdx;
       const w = p.curW.id;
-      if (this.isClient) this.net?.send({ t: 'pap_req', w });
-      else if (!this.hostPapStart(myId(), w)) { this.points += CONFIG.papPrice; p.locked = false; sfx.deny(); }
+      if (this.isClient) this.net?.send({ t: 'pap_req', w, lv });
+      else if (!this.hostPapStart(myId(), w, lv)) { this.points += price; this._papPaid = 0; p.locked = false; sfx.deny(); }
     },
-    hostPapStart(owner, w) {
+    hostPapStart(owner, w, lv = 1) {
       if (this.papAnim) return false;
-      const msg = { t: 'pap_start', owner, w };
+      lv = Math.max(1, Math.min(PAP_LEVELS.length - 1, lv | 0)); // niveau visé
+      const msg = { t: 'pap_start', owner, w, lv };
       this.net?.send(msg);
       this.startPapAnim(msg);
       return true;
     },
-    startPapAnim({ owner, w }) {
+    startPapAnim({ owner, w, lv = 1 }) {
       const m = (world.machines || []).find((x) => x.type === 'pap');
       if (!m || this.papAnim) return;
+      lv = Math.max(1, Math.min(PAP_LEVELS.length - 1, lv | 0));
       const d = getDisplay();
       m.group.add(d.root);
       const U = m.group.userData;
       d.root.position.set(U.anchor[0], U.anchor[1], U.anchor[2]);
       d.root.rotation.set(0, Math.PI / 2, 0);
       d.root.scale.setScalar(1);
-      d.show(w);
-      this.papAnim = { machine: m, owner, w, disp: d, phase: 'in', t: 0, age: 0, base: m.group.position.clone(), puffT: 0 };
+      d.show(w, lv - 1); // l'arme entre dans la machine avec son niveau actuel
+      this.papAnim = { machine: m, owner, w, lv, disp: d, phase: 'in', t: 0, age: 0, base: m.group.position.clone(), puffT: 0 };
       sfx.pap();
     },
     updatePap(dt) {
@@ -239,7 +246,7 @@ export function installMachineFx(game, { world, hud, sfx, fx }) {
       const spark = (n) => {
         tmp.set((Math.random() - 0.5) * 0.9, 0.55 + Math.random() * 0.5, 1.0);
         m.group.localToWorld(tmp);
-        fx.emit(tmp.x, tmp.y, tmp.z, { count: n, color: [0xc060ff, 0xff9aff, 0x8a3aff], speed: 1.6, up: 1.4, size: 0.045, life: 0.7, grav: 1 });
+        fx.emit(tmp.x, tmp.y, tmp.z, { count: n, color: SPARKS[a.lv] || SPARKS[1], speed: 1.6, up: 1.4, size: 0.045, life: 0.7, grav: 1 });
       };
       if (a.phase === 'in') { // l'arme glisse dans la fente
         const k = Math.min(1, a.t / cfg.inTime), e = k * k * (3 - 2 * k);
@@ -263,7 +270,7 @@ export function installMachineFx(game, { world, hud, sfx, fx }) {
         if (a.t >= cfg.workTime) {
           a.phase = 'out'; a.t = 0;
           m.group.position.copy(a.base);
-          D.showPap(a.w);
+          D.showPap(a.w, a.lv);
           D.root.visible = true;
           sfx.pap();
           spark(30);
@@ -284,6 +291,7 @@ export function installMachineFx(game, { world, hud, sfx, fx }) {
       // proposée au joueur : il doit venir la prendre
       D.root.rotation.y += dt * 1.2;
       D.root.position.y = U.anchor[1] + Math.sin(a.age * 3) * 0.05;
+      D.pulse(a.age); // niveau III : le reflet pulse
       if (Math.random() < dt * 8) spark(1);
       if (a.t >= cfg.offerTime) {
         if (isMe(a.owner)) this.takePap(true); // trop tard : on la lui rend automatiquement
@@ -298,7 +306,8 @@ export function installMachineFx(game, { world, hud, sfx, fx }) {
       if (p.inventory[idx]) p.switchWeapon(idx);
       p.upgradeCurrent();
       sfx.powerup();
-      hud.announce(p.curCfg.name, auto ? 'Arme améliorée : reprise automatiquement' : 'Arme améliorée au Pack-a-Punch !', 2800);
+      const lvName = `niveau ${PAP_LEVELS[p.curW.pap | 0].roman}`;
+      hud.announce(p.curCfg.name, auto ? `Arme améliorée (${lvName}) : reprise automatiquement` : `Arme améliorée au Pack-a-Punch ! (${lvName})`, 2800);
       this.net?.send({ t: 'pap_taken' });
       this.endPap();
     },
@@ -314,12 +323,13 @@ export function installMachineFx(game, { world, hud, sfx, fx }) {
     papPrompt(m) {
       const a = this.papAnim, p = this.player;
       if (a && a.machine === m) {
-        if (a.phase === 'offer') return isMe(a.owner) ? `[E] Récupérer ${CONFIG.papNames[a.w] || 'l’arme améliorée'}` : `${nameOf(a.owner)} récupère son arme…`;
+        if (a.phase === 'offer') return isMe(a.owner) ? `[E] Récupérer ${CONFIG.papNames[a.w] ? CONFIG.papNames[a.w] + (a.lv > 1 ? ' ' + PAP_LEVELS[a.lv].roman : '') : 'l’arme améliorée'}` : `${nameOf(a.owner)} récupère son arme…`;
         return isMe(a.owner) ? 'Amélioration en cours…' : `Amélioration de ${nameOf(a.owner)} en cours…`;
       }
       if (a) return 'Le Pack-a-Punch est occupé';
-      if (p.curW.pap) return `${p.curCfg.name} est déjà amélioré`;
-      return `[E] Pack-a-Punch : améliorer ${p.curCfg.name} (${CONFIG.papPrice} pts)`;
+      const lv = (p.curW.pap | 0) + 1;
+      if (lv >= PAP_LEVELS.length) return `${p.curCfg.name} est au niveau maximum`;
+      return `[E] Pack-a-Punch : ${lv > 1 ? 'passer' : 'améliorer'} ${p.curCfg.name} au niveau ${PAP_LEVELS[lv].roman} (${PAP_LEVELS[lv].price} pts)`;
     },
     resetPap() {
       this.endPap();

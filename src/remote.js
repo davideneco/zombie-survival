@@ -73,7 +73,7 @@ export class RemotePlayer {
     this.points = 0;
     this.dead = false;
     this.weapon = 'rifle';
-    this.pap = false;
+    this.pap = 0;
     this.reloading = false;
     this.aiming = false;
     this.seen = false;
@@ -117,7 +117,7 @@ export class RemotePlayer {
     this.health = s.hp;
     this.points = s.pts;
     this.weapon = s.w;
-    this.pap = !!s.pap;
+    this.pap = s.pap | 0; // niveau du Pack-a-Punch (0 à 3)
     this.reloading = !!s.rl;
     this.aiming = !!s.ads;
     this.downed = !!s.downed;

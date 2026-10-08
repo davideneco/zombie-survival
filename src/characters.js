@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { cloneWeapon, weaponKit } from './weaponDisplay.js';
+import { cloneWeapon, pulseWeapon, weaponKit } from './weaponDisplay.js';
 
 // =====================================================================
 //  Les personnages jouables : quatre survivants au physique, aux vêtements et à l'équipement distincts.
@@ -361,13 +361,16 @@ export class Avatar {
   }
 
   // -------------------------------------------------------------- arme tenue à deux mains
-  setWeapon(id, pap = false) {
-    const key = id + (pap ? '+' : '');
+  // level : niveau du Pack-a-Punch (0 à 3) : couleur du reflet et accessoires
+  setWeapon(id, level = 0) {
+    level = level | 0;
+    const key = id + (level ? '+' + level : '');
     if (this.weaponId === key) return;
     this.weaponId = key;
     if (this.weapon) this.pitchG.remove(this.weapon);
     const kit = weaponKit();
-    const w = cloneWeapon(kit.models[id] ? id : 'rifle', pap);
+    const w = cloneWeapon(kit.models[id] ? id : 'rifle', level);
+    this.wModel = w;
     this.scaleW = 1.15;
     this.weapon = new THREE.Group();
     w.scale.setScalar(this.scaleW);
@@ -414,6 +417,7 @@ export class Avatar {
   // s : { dt, speed, fwd (vitesse avant/arrière locale), pitch, reloading, aiming, downed, fire }
   update(s) {
     const dt = s.dt;
+    if (this.wModel) pulseWeapon(this.wModel, performance.now() / 1000); // niveau III : le reflet pulse
     if (s.seat) {
       // assis sur une moto : cuisses vers l'avant, genoux pliés, buste penché (plus pour le conducteur)
       for (const L of this.legs) { L.hip.rotation.set(1.2, 0, L.side * 0.12); L.knee.rotation.set(-1.4, 0, 0); }

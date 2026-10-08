@@ -315,7 +315,7 @@ export function installFinale(game, { world, scene, hud, sfx, fx }) {
       if (!this.isClient) { this.toSpawn = 0; this.intermission = 12; }
       sfx.powerup();
       this.addPoints(10000, 'bonus');
-      for (const w of this.player.inventory) w.reserve = this.player.statsOf(w).maxReserve;
+      for (const w of this.player.inventory) this.player.refill(w);
       this.player.releaseInputs();
       if (document.pointerLockElement) this._victory = true;
       document.exitPointerLock();

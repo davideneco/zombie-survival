@@ -1,10 +1,10 @@
 import * as THREE from 'three';
-import { CONFIG, falloffMult } from './config.js';
-import { buildWeaponModels } from './viewmodels.js';
+import { CONFIG, PAP_LEVELS, falloffMult, papPulse, papStats } from './config.js';
+import { buildWeaponModels, attachAccessories } from './viewmodels.js';
 import { RideCam } from './rideCam.js';
 
 const ADS_DELTA = 20; // réduction du FOV en visée
-const PAP_TINT = 0x6a1fa8; // reflet violet des armes améliorées
+const PAP_INTENSITY = 0.35; // intensité du reflet des armes améliorées (couleur : PAP_LEVELS[niveau].color)
 const MAX_SHOTS_PER_FRAME = 3; // plafond de tirs par image (armes automatiques très rapides ou image longue)
 const FIRE_RESUME_GAP = 0.1; // au-delà de ce retard sur nextShot, le tir ne se « rattrape » pas : on repart de l'instant présent
 
@@ -46,26 +46,13 @@ export class Player {
   get maxHealth() { return this.perks.juggernog ? 250 : CONFIG.player.maxHealth; }
   get maxWeapons() { return this.perks.mulekick ? 3 : 2; }
 
-  // Statistiques effectives d'une arme : base + Pack-a-Punch + atouts
+  // Statistiques effectives d'une arme : base + Pack-a-Punch (niveau w.pap, 0 à 3) + atouts
   statsOf(w) {
-    const key = `${w.pap ? 1 : 0}|${this.statsVersion}`;
+    const lv = w.pap | 0;
+    const key = `${lv}|${this.statsVersion}`;
     if (w._statsKey === key) return w._stats;
     const base = CONFIG.weapons[w.id];
-    const s = { ...base };
-    if (w.pap) {
-      s.pap = true;
-      s.name = CONFIG.papNames[w.id] || `${base.name} +`;
-      s.damage = base.damage * (w.id === 'raygun' ? 1.6 : 2.5);
-      s.magSize = Math.round(base.magSize * 1.5);
-      s.maxReserve = Math.round(base.maxReserve * 1.5);
-      s.headMult = base.headMult * 1.2;
-      s.tracer = 0xc070ff;
-      if (base.splash) s.splash = { radius: base.splash.radius * 1.3, damage: base.splash.damage * 2 };
-      if (base.papSplash) s.splash = { ...base.papSplash };                                   // arbalète : carreau explosif
-      if (base.blast) s.blast = { ...base.blast, radius: base.blast.radius * 1.3, damage: base.blast.damage * 2 }; // M79 : explosion x2, rayon x1,3
-      if (base.pierce) s.pierce = base.pierce + 2;
-      else s.pierce = 2;
-    }
+    const s = { ...base, ...papStats(base, lv) };
     if (this.perks.doubletap) { s.fireRate *= 1.33; s.damage *= 1.25; }
     if (this.perks.speedcola) s.reloadTime *= 0.5;
     w._statsKey = key;
@@ -114,7 +101,7 @@ export class Player {
 
   newWeapon(id) {
     const cfg = CONFIG.weapons[id];
-    return { id, ammo: cfg.magSize, reserve: cfg.startReserve, reloading: false, reloadT: 0, pap: false };
+    return { id, ammo: cfg.magSize, reserve: cfg.startReserve, reloading: false, reloadT: 0, pap: 0 };
   }
 
   // Apparence des bras en vue à la première personne
@@ -167,17 +154,22 @@ export class Player {
     }
   }
 
-  // Pack-a-Punch : améliore l'arme en main (chargeur et réserve pleins)
+  // Pack-a-Punch : améliore l'arme en main d'un niveau (0 -> I -> II -> III ; chargeur et réserve pleins)
   upgradeCurrent() {
     const w = this.curW;
-    if (w.pap) return false;
-    w.pap = true;
+    if ((w.pap | 0) >= PAP_LEVELS.length - 1) return false;
+    w.pap = (w.pap | 0) + 1;
     const s = this.statsOf(w);
     w.ammo = s.magSize;
-    w.reserve = s.maxReserve;
+    this.refill(w);
     w.reloading = false;
     this.switchWeapon(this.weaponIdx);
     return true;
+  }
+
+  // Réserve pleine (borne, mur, munitions max, Pack-a-Punch)
+  refill(w) {
+    w.reserve = this.statsOf(w).maxReserve;
   }
 
   switchWeapon(idx) {
@@ -193,8 +185,11 @@ export class Player {
     for (const [id, grp] of Object.entries(this.vms)) {
       grp.visible = id === w.id;
       if (grp.visible) {
+        attachAccessories(grp, w.id, w.pap | 0, grp, { local: true }); // accessoires du niveau (reconstruits seulement si le niveau change)
+        const L = PAP_LEVELS[w.pap | 0];
+        this.tintMats = new Set();
         grp.traverse((o) => {
-          if (o.isMesh && !o.userData.skin && !o.userData.glow) { o.material.emissive.setHex(w.pap ? PAP_TINT : 0x000000); o.material.emissiveIntensity = w.pap ? 0.35 : 1; }
+          if (o.isMesh && !o.userData.skin && !o.userData.glow) { o.material.emissive.setHex(L ? L.color : 0x000000); o.material.emissiveIntensity = L ? PAP_INTENSITY : 1; this.tintMats.add(o.material); }
         });
       }
     }
@@ -462,6 +457,8 @@ export class Player {
     // (on cache le modèle de l'arme, pas le groupe entier qui contient la lumière de tir)
     // (jamais le groupe entier : il porte la lumière de tir, et masquer une lumière recompile tous les shaders)
     this.vms[w.id].visible = !this.locked && !(cfg.adsFov && this.aim > 0.8) && !(veh && veh.seat === 0) && !this.ride.external; // vue externe : c'est le personnage qui tient l'arme
+    const pk = papPulse(w.pap | 0, now); // niveau III : le reflet pulse
+    if (pk !== 1 && this.tintMats) for (const m of this.tintMats) m.emissiveIntensity = PAP_INTENSITY * pk;
     const bolts = this.bolts[w.id];
     if (bolts) { const show = w.ammo > 0 && (!w.reloading || w.reloadT > cfg.reloadTime * 0.6); for (const b of bolts) b.visible = show; } // le carreau n'est là que si l'arme est chargée
 
@@ -719,7 +716,7 @@ export class Player {
     if (ext && cfg.flash !== false) this.ride.fire();
     else if (cfg.flash !== false) {
       this.flash.visible = true;
-      this.flash.material.color.setHex(cfg.id === 'raygun' ? 0x66ff88 : cfg.pap ? 0xd28cff : 0xffcc66);
+      this.flash.material.color.setHex(cfg.id === 'raygun' ? 0x66ff88 : cfg.pap ? PAP_LEVELS[cfg.pap].flash : 0xffcc66);
       this.flash.rotation.z = Math.random() * Math.PI;
       this.flash.scale.setScalar(heavy ? 1.4 : 0.8 + Math.random() * 0.5);
       this.flashLight.intensity = heavy ? 40 : 25;
@@ -802,7 +799,7 @@ export class Player {
     const target = ro.clone().addScaledVector(rd, Math.max(far, 2));
     const dir = target.sub(origin).normalize();
     const vel = dir.clone().multiplyScalar(cfg.proj.speed);
-    this.game.launchShell(origin, vel, true, null, !!cfg.pap);
+    this.game.launchShell(origin, vel, true, null, cfg.pap | 0);
     this.game.onPlayerShot?.(origin, origin.clone().addScaledVector(dir, 1), cfg.id, { nt: 1 });
   }
 

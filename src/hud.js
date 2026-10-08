@@ -106,11 +106,11 @@ export class Hud {
   }
 
   setInventory(inventory, activeIdx) {
-    const key = inventory.map((w, i) => `${i === activeIdx ? '*' : ''}${w.id}${w.pap ? '+' : ''}`).join(',');
+    const key = inventory.map((w, i) => `${i === activeIdx ? '*' : ''}${w.id}${'+'.repeat(w.pap | 0)}`).join(',');
     this._set('inv', key, () => {
       this.el.inv.innerHTML = inventory
         .map((w, i) => {
-          const name = (SHORT[w.id] || w.id) + (w.pap ? '+' : '');
+          const name = (SHORT[w.id] || w.id) + '+'.repeat(w.pap | 0);
           const isAct = i === activeIdx;
           return `<span style="color:${isAct ? '#ffd24a' : '#777'};font-weight:${isAct ? 'bold' : 'normal'}">${i + 1}: ${name}</span>`;
         })

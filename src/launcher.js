@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { CONFIG } from './config.js';
+import { CONFIG, papStats } from './config.js';
 
 // =====================================================================
 //  Lance-grenades M79 : un vrai projectile (CONFIG.weapons.m79.proj), simulé par pas de temps (delta time) chez tous les joueurs.
@@ -36,22 +36,22 @@ export function installLauncher(game, { world, scene, fx }) {
     return best;
   }
 
-  const blastOf = (pap) => {
-    const b = P().blast;
-    return pap ? { radius: b.radius * 1.3, damage: b.damage * 2, self: b.self, color: b.color } : b;
-  };
+  // explosion et coup direct d'un obus selon le niveau du Pack-a-Punch de l'arme qui l'a tiré (0 : obus ordinaire)
+  const statsOf = (lv) => (lv ? papStats(P(), lv) : P());
+  const blastOf = (lv) => statsOf(lv).blast;
 
   Object.assign(game, {
     shells,
 
-    // origin / vel : THREE.Vector3 ; mine : tiré par le joueur local ; owner : id du propriétaire sinon ; pap : version Pack-a-Punch
-    launchShell(origin, vel, mine, owner = null, pap = false) {
+    // origin / vel : THREE.Vector3 ; mine : tiré par le joueur local ; owner : id du propriétaire sinon ; pap : niveau du Pack-a-Punch (0 à 3)
+    launchShell(origin, vel, mine, owner = null, pap = 0) {
+      pap = Math.max(0, Math.min(3, pap | 0)); // niveau du Pack-a-Punch
       const mesh = new THREE.Mesh(SHELL_GEO, SHELL_MAT);
       mesh.position.copy(origin);
       scene.add(mesh);
       shells.push({ mesh, pos: origin.clone(), vel: vel.clone(), age: 0, dist: 0, mine, owner: mine ? null : owner, pap });
       if (mine && game.isMultiplayer) {
-        game.net?.send({ t: 'nade', k: 'm79', o: { x: origin.x, y: origin.y, z: origin.z }, v: { x: vel.x, y: vel.y, z: vel.z }, pap: pap ? 1 : 0 });
+        game.net?.send({ t: 'nade', k: 'm79', o: { x: origin.x, y: origin.y, z: origin.z }, v: { x: vel.x, y: vel.y, z: vel.z }, pap });
       }
     },
 
@@ -107,7 +107,7 @@ export function installLauncher(game, { world, scene, fx }) {
     }
     if (victim) {
       fx.blood(at.x, at.y, at.z, false);
-      if (!game.isClient) game.hitZombie(victim, false, at, P().damage * (s.pap ? 2.5 : 1), 1, s.owner); // hôte seulement ; points au propriétaire
+      if (!game.isClient) game.hitZombie(victim, false, at, statsOf(s.pap).damage, 1, s.owner); // hôte seulement ; points au propriétaire
     } else fx.dust(at.x, at.y, at.z);
   }
 }

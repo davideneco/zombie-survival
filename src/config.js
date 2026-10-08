@@ -1,4 +1,17 @@
 // Tous les réglages du jeu au même endroit : modifie-les pour équilibrer la difficulté.
+// Pack-a-Punch à 3 niveaux (w.pap = 0 à 3). Chaque niveau coûte son prix, payé par le joueur avec ses propres points, et améliore l'arme
+// DÉJÀ améliorée (I -> II -> III). Multiplicateurs sur les stats de base de l'arme (les atouts s'appliquent ensuite) :
+//  price : prix du niveau ; color : reflet de l'arme (émissif ; le niveau III pulse à pulseHz) ; tracer / flash : couleurs de tir
+//  dmg : dégâts (ray : pistolet à rayons) ; head : multiplicateur de tête ; pierce : zombies traversés en plus ; mag : chargeur ;
+//  magX : coefficient de chargeur en plus (accessoire : chargeur allongé, tambour) ; reserve : réserve max ; reload : durée de rechargement ;
+//  spread : dispersion ; ammo : coefficient du prix des munitions au mur.
+export const PAP_LEVELS = [
+  null,
+  { roman: 'I', price: 5000, color: 0x6a22b8, tracer: 0xc070ff, flash: 0xd28cff, dmg: 2.5, ray: 1.6, head: 1.2, pierce: 2, mag: 1.5, magX: 1, reserve: 1.5, reload: 1, spread: 1, ammo: 3 },
+  { roman: 'II', price: 10000, color: 0x1a6cff, tracer: 0x5aa0ff, flash: 0x8cc0ff, dmg: 3.5, ray: 2.2, head: 1.3, pierce: 3, mag: 1.5, magX: 1.33, reserve: 2, reload: 0.85, spread: 0.85, ammo: 4 },
+  { roman: 'III', price: 20000, color: 0xff6a10, tracer: 0xff8a30, flash: 0xffb060, dmg: 5, ray: 3, head: 1.4, pierce: 4, mag: 1.5, magX: 1.33, reserve: 2.5, reload: 0.75, spread: 0.7, ammo: 5, pulseHz: 2 },
+];
+
 export const CONFIG = {
   map: 'strasbourg', // 'strasbourg' (lieu réel OpenStreetMap) ou 'arena' (arène de test)
   // Strasbourg : toute la Grande Île (données dans public/data/area.json, voir tools/fetch-osm.mjs)
@@ -176,7 +189,8 @@ export const CONFIG = {
   // du Bourreau. Plongeon : sauter pendant un sprint, ou tomber de fallHeight m ou plus, au moins minAir s en l'air -> à l'atterrissage,
   // onde explosive de rayon `radius` aux pieds (dégâts = base + perRound x manche, aux zombies seulement), puis `cooldown` s de recharge.
   phd: { radius: 4.5, base: 1500, perRound: 100, cooldown: 5, minAir: 0.35, fallHeight: 2.5, color: 0xb06cff },
-  papPrice: 5000,
+  papPrice: PAP_LEVELS[1].price, // prix du niveau I ; voir PAP_LEVELS pour II et III
+  papLevels: PAP_LEVELS,
 
   // Fin de partie : « L'Heure du Jugement », déclenchée à l'horloge astronomique de la cathédrale.
   // Quatre actes : trois vagues (crypte, galeries, portes) -> le Bourreau dans la nef -> ascension de la tour sud
@@ -377,6 +391,39 @@ for (const w of Object.values(CONFIG.weapons)) {
     w.falloffEnd ??= c.falloffEnd;
     w.minMult ??= c.minMult;
   }
+}
+
+// Chargeur fixé à partir du niveau II par l'accessoire (tambour de 75 coups de l'AK-47…), au lieu du calcul général
+const PAP_MAG = { ak47: 75 };
+
+// Statistiques d'une arme au niveau lv (1 à 3) du Pack-a-Punch, à partir de ses stats de base ; {} au niveau 0. Les atouts (Double Tap,
+// Speed Cola) s'appliquent ensuite (Player.statsOf). Fonction pure : le jeu et tools/make-docs.mjs s'en servent.
+export function papStats(base, lv) {
+  const L = PAP_LEVELS[lv];
+  if (!L) return {};
+  const s = { pap: lv };
+  s.name = (CONFIG.papNames[base.id] || `${base.name} +`) + (lv > 1 ? ' ' + L.roman : '');
+  s.damage = base.damage * (base.id === 'raygun' ? L.ray : L.dmg);
+  s.headMult = base.headMult * L.head;
+  s.pierce = (base.pierce || 0) + L.pierce;
+  s.magSize = lv > 1 && PAP_MAG[base.id] ? PAP_MAG[base.id] : Math.round(base.magSize * L.mag * L.magX);
+  s.maxReserve = Math.round(base.maxReserve * L.reserve);
+  s.reloadTime = base.reloadTime * L.reload;
+  s.spread = base.spread * L.spread;
+  s.tracer = L.tracer;
+  if (base.splash) s.splash = { radius: base.splash.radius * 1.3, damage: base.splash.damage * 2 };            // pistolet à rayons
+  if (base.papSplash) s.splash = { ...base.papSplash };                                                        // arbalète : carreau explosif
+  if (base.blast) s.blast = { ...base.blast, radius: base.blast.radius * 1.3, damage: base.blast.damage * 2 }; // M79 : explosion x2, rayon x1,3
+  return s;
+}
+
+// Coefficient du prix des munitions au mur d'une arme de niveau lv (1 sans Pack-a-Punch)
+export const papAmmoMult = (lv) => PAP_LEVELS[lv | 0]?.ammo ?? 1;
+
+// Pulsation du reflet du niveau III (coefficient sur l'intensité émissive, autour de 1 ; 1 pour les autres niveaux). t en secondes.
+export function papPulse(lv, t) {
+  const L = PAP_LEVELS[lv];
+  return L && L.pulseHz ? 0.55 + 0.9 * (0.5 + 0.5 * Math.sin(2 * Math.PI * L.pulseHz * t)) : 1;
 }
 
 // Multiplicateur des dégâts selon la distance du tir (m) : 1 jusqu'à falloffStart, puis décroissance linéaire jusqu'à

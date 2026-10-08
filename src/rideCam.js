@@ -139,7 +139,7 @@ export class RideCam {
     this.holder.visible = this.dist > C.avatarMin;
     if (!this.holder.visible) return;
     const w = p.curW;
-    seatedUpdate(this.holder, veh.v, veh.seat, this.avatar, { dt, aimYaw: p.yaw, pitch: p.pitch, weapon: w.id, pap: !!w.pap, reloading: w.reloading, aiming: p.aiming, fire: this.fireNow });
+    seatedUpdate(this.holder, veh.v, veh.seat, this.avatar, { dt, aimYaw: p.yaw, pitch: p.pitch, weapon: w.id, pap: w.pap | 0, reloading: w.reloading, aiming: p.aiming, fire: this.fireNow });
     this.fireNow = false;
   }
 

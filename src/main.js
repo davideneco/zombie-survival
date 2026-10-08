@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { CONFIG } from './config.js';
+import { CONFIG, papAmmoMult } from './config.js';
 import { buildWorld } from './world.js';
 import { buildRealWorld } from './realworld.js';
 import { Player } from './player.js';
@@ -467,7 +467,7 @@ const game = {
       hud.popup('+2,5 L ESSENCE', 'bonus');
     } else if (p.type === 'max_ammo') {
       for (const w of this.player.inventory) {
-        w.reserve = this.player.statsOf(w).maxReserve;
+        this.player.refill(w);
       }
       this.player.grenades = CONFIG.grenade.max;
       hud.announce('MUNITIONS MAX !', 'Réserves pleines pour toute l’équipe', 2500);
@@ -517,7 +517,7 @@ const game = {
       if (p.curW.reserve >= cfg.maxReserve) return;
       if (this.points < cfg.ammoPrice) { sfx.deny(); return; }
       this.points -= cfg.ammoPrice;
-      p.curW.reserve = cfg.maxReserve;
+      p.refill(p.curW);
       sfx.buy();
       return;
     }
@@ -533,10 +533,10 @@ const game = {
       if (cur) {
         const max = p.statsOf(cur).maxReserve;
         if (cur.reserve >= max) return;
-        const price = cur.pap ? ww.ammoPrice * 3 : ww.ammoPrice;
+        const price = ww.ammoPrice * papAmmoMult(cur.pap);
         if (this.points < price) { sfx.deny(); return; }
         this.points -= price;
-        cur.reserve = max;
+        p.refill(cur);
         sfx.buy();
       } else {
         if (this.points < ww.price) { sfx.deny(); return; }
@@ -1008,7 +1008,7 @@ const game = {
       dead: p.dead,
       pts: this.points,
       w: p.curW.id,
-      pap: p.curW.pap ? 1 : 0,
+      pap: p.curW.pap | 0,                                           // niveau du Pack-a-Punch (0 à 3) : couleur et accessoires chez les coéquipiers
       rl: p.curW.reloading ? 1 : 0,
       ads: p.aiming ? 1 : 0,
       vt: p.vault ? Math.round(Math.min(1, p.vault.t / p.vault.dur) * 100) / 100 : 0, // progression de l'enjambement (animation des coéquipiers)
@@ -1313,7 +1313,7 @@ const game = {
       const ww = this.nearWallWeapon();
       const wState = p.inventory.find((w) => w.id === ww.id);
       if (wState) {
-        const price = wState.pap ? ww.ammoPrice * 3 : ww.ammoPrice;
+        const price = ww.ammoPrice * papAmmoMult(wState.pap);
         promptText = wState.reserve >= p.statsOf(wState).maxReserve
           ? `${ww.name} (Munitions pleines)`
           : `[E] Munitions ${ww.name} (${price} pts)`;
@@ -1577,7 +1577,7 @@ function setupNetworkHandlers(net) {
   // Grenades lancées par un coéquipier : simulées localement (effets + dégâts côté hôte)
   net.on('nade', (m) => {
     const o = new THREE.Vector3(m.o.x, m.o.y, m.o.z), v = new THREE.Vector3(m.v.x, m.v.y, m.v.z);
-    if (m.k === 'm79') game.launchShell(o, v, false, m.from, !!m.pap); // projectile de M79 ; sans k : grenade à main
+    if (m.k === 'm79') game.launchShell(o, v, false, m.from, m.pap | 0); // projectile de M79 ; sans k : grenade à main
     else game.throwGrenade(o, v, false, m.from);
   });
   // Fin de partie
@@ -1595,9 +1595,9 @@ function setupNetworkHandlers(net) {
   net.on('box_take', (m) => { if (game.isHost) game.hostBoxTake(m.from); });
   net.onHost('box_taken', (m) => game.onBoxTaken(m.pid));
   net.onHost('box_expire', () => { if (game.boxRoll?.phase === 'offer') { game.boxRoll.offerT = 0; } });
-  net.on('pap_req', (m) => { if (game.isHost && !game.hostPapStart(m.from, m.w)) net.send({ t: 'pap_deny' }, m.from); });
+  net.on('pap_req', (m) => { if (game.isHost && !game.hostPapStart(m.from, m.w, m.lv)) net.send({ t: 'pap_deny' }, m.from); });
   net.onHost('pap_start', (m) => game.startPapAnim(m));
-  net.onHost('pap_deny', () => { game.points += CONFIG.papPrice; game.player.locked = false; sfx.deny(); });
+  net.onHost('pap_deny', () => { game.points += game._papPaid || 0; game._papPaid = 0; game.player.locked = false; sfx.deny(); });
   net.on('pap_taken', () => game.endPap());
   net.onHost('box_state', (m) => { game.boxUses = m.uses; });
   net.onHost('box_move', (m) => { game.startBoxMove(m.idx); });

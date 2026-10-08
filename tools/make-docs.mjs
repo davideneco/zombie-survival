@@ -15,7 +15,7 @@ import WebSocket from 'ws';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const URL = process.argv[2] || 'http://localhost:5173/';
-const { CONFIG: C } = await import(path.join(ROOT, 'src/config.js'));
+const { CONFIG: C, PAP_LEVELS, papStats, papAmmoMult } = await import(path.join(ROOT, 'src/config.js'));
 const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf-8'));
 const DOCS = path.join(ROOT, 'docs'), CSV = path.join(DOCS, 'csv');
 fs.mkdirSync(CSV, { recursive: true });
@@ -155,12 +155,17 @@ const totalW = Object.values(C.box.pool).reduce((a, b) => a + b, 0);
 const P = C.player, Zc = C.zombie, S = C.sector;
 const zoneOfMachine = (id) => D.machines.filter((m) => m.id === id).map((m) => zname(m.zone)).join(', ');
 
+// Effets propres à une arme améliorée (colonne « Particularités »)
+const papExtras = (w, s) => [s.ether && `Éther : ${s.ether.chance * 100} % des touches, explosion ${s.ether.radius} m à ${s.ether.frac * 100} %`, s.gl && `lance-grenades sous canon : ${s.gl.shells} obus 40 mm (clic molette)`].filter(Boolean).join(' ; ');
 const T = {}; // nom -> { title, header, rows }
 const table = (key, title, header, rows) => { T[key] = { title, header, rows }; };
 table('01_armes', 'Armes', ['id', 'Arme', 'Catégorie', 'Calibre', 'Type', 'Dégâts par balle', 'Plombs par tir', 'Multiplicateur tête', 'Cadence (tirs/s)', 'DPS approx.', 'Chargeur', 'Réserve départ', 'Réserve max', 'Rechargement (s)', 'Dispersion', 'Portée (m)', 'Zombies traversés', 'Explosion rayon (m)', 'Explosion dégâts', 'Prix au mur (pts)', 'Prix munitions (pts)', 'Où l\'obtenir'],
   Object.values(W).map((w) => [w.id, w.name, ({ pistol: 'pistolet', ar: 'fusil d\'assaut', smg: 'pistolet-mitrailleur', mg: 'mitrailleuse', sniper: 'fusil de précision', shotgun: 'fusil à pompe', special: 'spéciale' })[w.cat] || '', w.caliber || '', typeName[w.type] || w.type, w.damage, w.pellets || 1, w.headMult, w.fireRate, w.damage * (w.pellets || 1) * w.fireRate, w.magSize, w.startReserve, w.maxReserve, w.reloadTime, fr(w.spread, 4), w.range, w.pierce || 1, w.splash?.radius ?? '', w.splash?.damage ?? '', w.price || (w.boxOnly ? 'boîte' : ''), w.ammoPrice, [...(where[w.id] || [])].join(', ')]));
-table('02_pack_a_punch', 'Pack-a-Punch (' + C.papPrice + ' pts)', ['id', 'Arme', 'Nom amélioré', 'Dégâts', 'Multiplicateur tête', 'Chargeur', 'Réserve max', 'Zombies traversés', 'Prix munitions au mur (pts)'],
-  Object.values(W).map((w) => [w.id, w.name, C.papNames[w.id], w.damage * (w.id === 'raygun' ? 1.6 : 2.5), w.headMult * 1.2, Math.round(w.magSize * 1.5), Math.round(w.maxReserve * 1.5), (w.pierce || 0) + 2, w.ammoPrice * 3]));
+table('02_pack_a_punch', 'Pack-a-Punch (3 niveaux : ' + PAP_LEVELS.slice(1).map((l) => l.roman + ' ' + l.price + ' pts').join(', ') + ')', ['id', 'Arme', 'Niveau', 'Nom amélioré', 'Prix du niveau (pts)', 'Dégâts', 'Multiplicateur tête', 'Chargeur', 'Réserve max', 'Zombies traversés', 'Rechargement (s)', 'Dispersion', 'Prix munitions au mur (pts)', 'Particularités'],
+  Object.values(W).flatMap((w) => [1, 2, 3].map((lv) => {
+    const s = { ...w, ...papStats(w, lv) };
+    return [w.id, w.name, PAP_LEVELS[lv].roman, s.name, PAP_LEVELS[lv].price, s.damage, s.headMult, s.magSize, s.maxReserve, s.pierce, s.reloadTime, fr(s.spread, 4), w.ammoPrice * papAmmoMult(lv), papExtras(w, s)];
+  })));
 table('03_boite_mystere', 'Boîte mystère (' + C.box.price + ' pts, une seule boîte : elle change d\'emplacement après 1 à ' + C.box.maxUses + ' tirages, en donnant un nounours remboursé)', ['id', 'Arme', 'Poids', 'Chance (%)'], Object.entries(C.box.pool).map(([id, p]) => [id, W[id].name, p, (p / totalW) * 100]));
 table('04_atouts', 'Atouts', ['id', 'Atout', 'Lettre', 'Effet', 'Prix (pts)', 'Prix solo (pts)', 'Zone'], Object.entries(C.perks).map(([id, p]) => [id, p.name, p.letter, p.desc, p.price, p.soloPrice ?? p.price, zoneOfMachine(id)]));
 table('05_grenades', 'Grenades', ['Réglage', 'Valeur', 'Unité'], [
@@ -268,7 +273,7 @@ md += `### Notes
 - **DPS approx.** : dégâts par seconde en continu, hors rechargement et hors tête.
 - **Dispersion** : plus c'est petit, plus c'est précis (÷2,5 en visée, ×1,8 en mouvement).
 - **Prix munitions** : à une borne de munitions (n'importe quelle arme en main) ou au mur de l'arme.
-- **Pack-a-Punch** : dégâts ×2,5 (×1,6 pour le pistolet à rayons), chargeur et réserve ×1,5, tête ×1,2, +2 zombies traversés.
+- **Pack-a-Punch** : trois niveaux, chacun payé par le joueur avec ses propres points et améliorant l'arme déjà améliorée (le niveau III est refusé au-delà). Dégâts ×2,5 / ×3,5 / ×5 (pistolet à rayons ×1,6 / ×2,2 / ×3), tête ×1,2 / ×1,3 / ×1,4, zombies traversés +2 / +3 / +4, chargeur ×1,5 (puis ×1,33 avec l'accessoire aux niveaux II et III), réserve ×1,5 / ×2 / ×2,5, rechargement ×0,85 (II) / ×0,75 (III), dispersion ×0,85 / ×0,7, prix des munitions au mur ×3 / ×4 / ×5. Reflet de l'arme : violet, bleu, or-rouge pulsant (III) ; des accessoires s'ajoutent à chaque niveau.
 - **Atouts** : on les perd tous quand on tombe à terre.
 `;
 fs.writeFileSync(path.join(DOCS, 'REFERENCE.md'), md);
