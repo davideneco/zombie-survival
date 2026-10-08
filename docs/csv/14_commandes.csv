@@ -1,9 +1,10 @@
-﻿Touche;Action
-ZQSD / WASD;Se déplacer
+﻿Touche par défaut;Action
+Options > Touches;"Change toutes les touches ci-dessous, sauf souris, molette, Échap et F9 (réglage local, gardé sur l'appareil ; échange proposé si une touche est déjà prise)"
+ZQSD / WASD / flèches;Se déplacer
 Souris;Viser
 Clic gauche;Tirer
 Clic droit;Viser à la mire
-Shift;Sprint
+Maj gauche;Sprint
 Espace;Sauter
 R;Recharger
 1 / 2 / 3 / molette;Changer d'arme
@@ -17,5 +18,6 @@ Espace (devant un obstacle bas);Enjamber
 K (maintenir 2 s, si coincé);Se débloquer
 V (à pied);Coup de couteau (aussi : clic gauche quand le chargeur et la réserve sont vides)
 M;Carte
-Échap;"Ferme la carte ou le menu debug ; sinon menu pause (reprise : Échap, ou clic si le navigateur refuse)"
+Clic molette;Lance-grenades sous le canon (fusil d'assaut Pack-a-Punch niveau III)
+Échap;"Ferme la carte ou le menu debug ; sinon menu pause (reprise : Échap, ou clic si le navigateur refuse) ; ferme aussi la capture d'une touche dans Options > Touches"
 F9 (hôte);Menu debug de l'hôte : 1-4 joueur, T deux fois amener, Y rejoindre, N réanimer, U débloquer les zombies, P perfs

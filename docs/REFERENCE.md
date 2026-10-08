@@ -1,6 +1,6 @@
 # Zombie Survival — fiche de référence
 
-Version du jeu : **v0.33.1 · b0b5c72 · 2026-10-08** (package 0.35.0). Générée automatiquement par `node tools/make-docs.mjs` à partir de `src/config.js` et du jeu.
+Version du jeu : **v0.35.1 · 2d194f7 · 2026-10-08** (package 0.35.1). Générée automatiquement par `node tools/make-docs.mjs` à partir de `src/config.js` et du jeu.
 Carte annotée : [carte.png](carte.png). Armes de profil : [armes.png](armes.png). Les mêmes tableaux en tableur : dossier [csv/](csv/).
 
 Pour demander une modification, citez la ligne (ex. « Mitrailleuse RPK : chargeur 100 », « Mastodonte à 3000 pts », « porte P3 à 500 pts », « mettre la boîte mystère dans la zone Temple-Neuf »).
@@ -479,7 +479,7 @@ Prix d'une porte : le plus cher des deux prix de zone (colonne « Prix de la por
 
 | Réglage | Valeur | Unité / remarque |
 |---|---|---|
-| Touches | V à pied ; clic gauche quand le chargeur ET la réserve sont vides | V reste la vue 3e / 1re personne en moto |
+| Touches | V à pied ; clic gauche quand le chargeur ET la réserve sont vides | V reste la vue 3e / 1re personne en moto (touches par défaut, modifiables dans Options > Touches) |
 | Portée / cône | 1,8 / 35 | m / degrés de part et d'autre de la visée ; fente de 0,8 m si un zombie est à moins de 2,6 m et qu'on avance |
 | Cadence | 1 coup / 0,6 s | touche à 0,12 s, animation 0,55 s |
 | Dégâts | max(150, 0,34 x santé des zombies de la manche) | dos ou tête x 1,5 (non cumulés) ; l'armure du chevalier de fer est ignorée |
@@ -502,15 +502,16 @@ Prix d'une porte : le plus cher des deux prix de zone (colonne « Prix de la por
 | Non enjambables | voiture, fontaine, chalet, caisses empilées, porte payante, barricade scellée, parapet de quai, machines, bornes de munitions, garde-corps de la cathédrale |  |
 | Se débloquer (K) | maintenir 2 s | l'invite apparaît si une touche de déplacement est maintenue 4 s sans avancer de 0,5 m, ou après 3 s dans une poche fermée ; arrivée à moins de 40 m dans une zone ouverte (sinon centre de zone) ; recharge 30 s ; impossible en moto, à terre, à l'étage |
 
-## Commandes
+## Commandes (touches par défaut, modifiables dans Options > Touches)
 
-| Touche | Action |
+| Touche par défaut | Action |
 |---|---|
-| ZQSD / WASD | Se déplacer |
+| Options > Touches | Change toutes les touches ci-dessous, sauf souris, molette, Échap et F9 (réglage local, gardé sur l'appareil ; échange proposé si une touche est déjà prise) |
+| ZQSD / WASD / flèches | Se déplacer |
 | Souris | Viser |
 | Clic gauche | Tirer |
 | Clic droit | Viser à la mire |
-| Shift | Sprint |
+| Maj gauche | Sprint |
 | Espace | Sauter |
 | R | Recharger |
 | 1 / 2 / 3 / molette | Changer d'arme |
@@ -524,7 +525,8 @@ Prix d'une porte : le plus cher des deux prix de zone (colonne « Prix de la por
 | K (maintenir 2 s, si coincé) | Se débloquer |
 | V (à pied) | Coup de couteau (aussi : clic gauche quand le chargeur et la réserve sont vides) |
 | M | Carte |
-| Échap | Ferme la carte ou le menu debug ; sinon menu pause (reprise : Échap, ou clic si le navigateur refuse) |
+| Clic molette | Lance-grenades sous le canon (fusil d'assaut Pack-a-Punch niveau III) |
+| Échap | Ferme la carte ou le menu debug ; sinon menu pause (reprise : Échap, ou clic si le navigateur refuse) ; ferme aussi la capture d'une touche dans Options > Touches |
 | F9 (hôte) | Menu debug de l'hôte : 1-4 joueur, T deux fois amener, Y rejoindre, N réanimer, U débloquer les zombies, P perfs |
 
 ### Notes

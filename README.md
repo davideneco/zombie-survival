@@ -18,19 +18,21 @@ Vous démarrez place du Marché-Neuf avec un pistolet, un fusil d'assaut et 500 
 - **Bonus** lâchés par les zombies : munitions max, mort instantanée, bombe, points doubles, bidons d'essence.
 - **Motos** : une moto et une grosse moto à deux places, garées à la place Gutenberg (et une autre à la place Broglie). Elles ont des points de vie, un réservoir d'essence, et n'écrasent les zombies qu'au-dessus d'une certaine vitesse.
 - **Fin de partie** : à partir de la manche 12, avec 18 quartiers ouverts, la cathédrale accueille la finale **« L'Heure du Jugement »** : un siège de l'horloge astronomique contre le boss, le Bourreau. Ensuite, le mode sans fin continue.
-- **À terre** : en coopération, un joueur à terre a 45 secondes pour être réanimé par un coéquipier (touche `E` maintenue).
+- **À terre** : en coopération, un joueur à terre a 45 secondes pour être réanimé par un coéquipier (touche d'interaction, `E` par défaut, maintenue).
 
 La fiche de référence complète (armes, atouts, zones, portes, manches, prix) est dans [`docs/REFERENCE.md`](docs/REFERENCE.md), avec la [carte annotée](docs/carte.png) et les mêmes tableaux au format tableur dans [`docs/csv/`](docs/csv/).
 
 ## Commandes
 
-| Touche | Action |
+Toutes les touches du clavier sont **modifiables dans Options > Touches** (accessible depuis le titre et depuis la pause) : cliquez sur une action, appuyez sur la nouvelle touche, `Échap` annule ; si la touche est déjà prise, le jeu propose d'échanger les deux actions ; « Réinitialiser » remet une action par défaut, « Tout réinitialiser » toutes. Le réglage est local (gardé dans le navigateur). Les touches fixes sont la souris, la molette, `Échap` et `F9`. Le tableau donne les touches **par défaut**.
+
+| Touche par défaut | Action |
 |---|---|
-| `Z Q S D` / `W A S D` | Se déplacer |
+| `Z Q S D` / `W A S D` (et flèches) | Se déplacer |
 | Souris | Viser |
 | Clic gauche | Tirer |
 | Clic droit | Viser à la mire |
-| `Shift` | Sprint |
+| `Maj gauche` | Sprint |
 | `Espace` | Sauter |
 | `Espace` (devant un obstacle bas) | Enjamber |
 | `R` | Recharger |
@@ -43,7 +45,7 @@ La fiche de référence complète (armes, atouts, zones, portes, manches, prix) 
 | `Échap` | Ferme la carte ou le menu ouvert ; sinon menu pause |
 | `K` (maintenir 2 s) | Se débloquer si vous êtes coincé |
 
-**En moto** : `Z Q S D` / `W A S D` accélérer, freiner, tourner ; `Espace` frein à main ; `V` change la vue (3e personne par défaut) ; `E` pour descendre.
+**En moto** : `Z Q S D` / `W A S D` accélérer, freiner, tourner ; `Espace` (la touche de saut) frein à main ; `V` change la vue (3e personne par défaut) ; `E` pour descendre.
 
 **Fusil d'assaut Pack-a-Punch niveau III** : clic molette pour tirer le lance-grenades sous le canon.
 
@@ -96,7 +98,7 @@ Posez un fichier `theme.mp3` (ou `.ogg`, `.m4a`, `.wav`) dans `public/music/` : 
 
 - **Écran noir ou jeu très lent** : vérifiez que l'accélération matérielle est activée dans le navigateur et que WebGL2 fonctionne (`about:gpu` dans Chrome). Le chargement initial de la carte prend quelques secondes.
 - **La souris ne se capture pas / la pause s'affiche** : cliquez sur la fenêtre de jeu. Le navigateur refuse parfois de recapturer la souris juste après `Échap`.
-- **Coincé dans le décor** : maintenez `K` 2 secondes ; en multijoueur, l'hôte peut vous téléporter avec `F9`.
+- **Coincé dans le décor** : maintenez `K` (touche par défaut de « se débloquer ») 2 secondes ; en multijoueur, l'hôte peut vous téléporter avec `F9`.
 - **Impossible de rejoindre un salon** : vérifiez le code, que tout le monde a la même version du jeu, et que le port est joignable (réseau local, pare-feu).
 
 ## Structure du projet

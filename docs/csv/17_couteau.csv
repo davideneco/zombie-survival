@@ -1,5 +1,5 @@
 ﻿Réglage;Valeur;Unité / remarque
-Touches;"V à pied ; clic gauche quand le chargeur ET la réserve sont vides";V reste la vue 3e / 1re personne en moto
+Touches;"V à pied ; clic gauche quand le chargeur ET la réserve sont vides";V reste la vue 3e / 1re personne en moto (touches par défaut, modifiables dans Options > Touches)
 Portée / cône;1,8 / 35;"m / degrés de part et d'autre de la visée ; fente de 0,8 m si un zombie est à moins de 2,6 m et qu'on avance"
 Cadence;1 coup / 0,6 s;touche à 0,12 s, animation 0,55 s
 Dégâts;max(150, 0,34 x santé des zombies de la manche);"dos ou tête x 1,5 (non cumulés) ; l'armure du chevalier de fer est ignorée"

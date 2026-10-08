@@ -16,6 +16,8 @@ import WebSocket from 'ws';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const URL = process.argv[2] || 'http://localhost:5173/';
 const { CONFIG: C, PAP_LEVELS, papStats, papAmmoMult } = await import(path.join(ROOT, 'src/config.js'));
+const { createKeybinds } = await import(path.join(ROOT, 'src/keybinds.js'));
+const KB0 = createKeybinds(), kn0 = (id) => KB0.nameOf(KB0.byId[id].def); // touches par défaut (CONFIG.keybinds)
 const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf-8'));
 const DOCS = path.join(ROOT, 'docs'), CSV = path.join(DOCS, 'csv');
 fs.mkdirSync(CSV, { recursive: true });
@@ -231,7 +233,7 @@ table('15_motos', 'Motos (deux parkings au panneau bleu « P », avec chacun une
 const KN = C.knife, zhp = (r) => (r < C.zombie.health.softRound ? C.zombie.health.base + r * C.zombie.health.perRound : Math.round(C.zombie.health.hardBase * Math.pow(C.zombie.health.hardGrowth, r - C.zombie.health.softRound + 1)));
 const kdmg = (r) => Math.max(KN.minDamage, KN.healthFrac * zhp(r));
 table('17_couteau', 'Couteau (toujours disponible, hors inventaire)', ['Réglage', 'Valeur', 'Unité / remarque'], [
-  ['Touches', 'V à pied ; clic gauche quand le chargeur ET la réserve sont vides', 'V reste la vue 3e / 1re personne en moto'],
+  ['Touches', `${kn0('knife')} à pied ; clic gauche quand le chargeur ET la réserve sont vides`, `${kn0('vehicleView')} reste la vue 3e / 1re personne en moto (touches par défaut, modifiables dans Options > Touches)`],
   ['Portée / cône', `${String(KN.range).replace('.', ',')} / ${KN.cone}`, 'm / degrés de part et d\'autre de la visée ; fente de ' + String(KN.lunge).replace('.', ',') + ' m si un zombie est à moins de ' + String(KN.lungeNear).replace('.', ',') + ' m et qu\'on avance'],
   ['Cadence', `1 coup / ${String(KN.cooldown).replace('.', ',')} s`, `touche à ${String(KN.hitDelay).replace('.', ',')} s, animation ${String(KN.anim).replace('.', ',')} s`],
   ['Dégâts', `max(${KN.minDamage}, ${String(KN.healthFrac).replace('.', ',')} x santé des zombies de la manche)`, 'dos ou tête x ' + String(KN.weakMult).replace('.', ',') + ' (non cumulés) ; l\'armure du chevalier de fer est ignorée'],
@@ -240,13 +242,24 @@ table('17_couteau', 'Couteau (toujours disponible, hors inventaire)', ['Réglage
   ['Points', `${KN.points.hit} par touche, ${KN.points.kill} par mort`, '']]);
 const VA = C.vault, US = C.unstick, fr1 = (n) => String(n).replace('.', ',');
 table('18_enjambement_deblocage', 'Enjambement et déblocage', ['Réglage', 'Valeur', 'Unité / remarque'], [
-  ['Enjambement', 'Espace face à un obstacle enjambable', `à moins de ${fr1(VA.reach)} m, de face (moins de ${VA.maxAngle}°), profondeur traversée ${fr1(VA.maxDepth)} m au plus, case d'arrivée libre à ±${fr1(VA.heightTol)} m, dans une zone OUVERTE (jamais de contournement d'une porte payante)`],
+  ['Enjambement', `${kn0('jump')} face à un obstacle enjambable`, `à moins de ${fr1(VA.reach)} m, de face (moins de ${VA.maxAngle}°), profondeur traversée ${fr1(VA.maxDepth)} m au plus, case d'arrivée libre à ±${fr1(VA.heightTol)} m, dans une zone OUVERTE (jamais de contournement d'une porte payante)`],
   ['Durée', fr1(VA.time), `s (caméra +${fr1(VA.camLift)} m, arme baissée, pas de tir)`],
   ['Enjambables (hauteur <= 1,15 m)', 'banc, poubelle, jardinière, caisse seule, borne, vélos (profondeur <= 1,3 m), sacs de sable, barrière de foule, bloc béton', ''],
   ['On marche dessus', 'palette (0,2 m)', ''],
   ['Non enjambables', 'voiture, fontaine, chalet, caisses empilées, porte payante, barricade scellée, parapet de quai, machines, bornes de munitions, garde-corps de la cathédrale', ''],
-  ['Se débloquer (K)', `maintenir ${US.holdTime} s`, `l'invite apparaît si une touche de déplacement est maintenue ${US.stuckAfter} s sans avancer de ${fr1(US.moveMin)} m, ou après ${US.trapAfter} s dans une poche fermée ; arrivée à moins de ${US.maxDist} m dans une zone ouverte (sinon centre de zone) ; recharge ${US.cooldown} s ; impossible en moto, à terre, à l'étage`]]);
-table('14_commandes', 'Commandes', ['Touche', 'Action'], [['ZQSD / WASD', 'Se déplacer'], ['Souris', 'Viser'], ['Clic gauche', 'Tirer'], ['Clic droit', 'Viser à la mire'], ['Shift', 'Sprint'], ['Espace', 'Sauter'], ['R', 'Recharger'], ['1 / 2 / 3 / molette', 'Changer d\'arme'], ['G', 'Grenade'], ['E', 'Acheter, ouvrir une porte, utiliser une machine ou la borne des motos, réanimer (maintenir), monter / descendre d\'une moto'], ['ZQSD / WASD (en moto)', 'Accélérer, freiner / reculer, tourner'], ['Espace (en moto)', 'Frein à main'], ['V (en moto)', 'Vue à la 3e personne / à la 1re personne'], ['F', 'Lampe torche'], ['Espace (devant un obstacle bas)', 'Enjamber'], ['K (maintenir 2 s, si coincé)', 'Se débloquer'], ['V (à pied)', 'Coup de couteau (aussi : clic gauche quand le chargeur et la réserve sont vides)'], ['M', 'Carte'], ['Échap', 'Ferme la carte ou le menu debug ; sinon menu pause (reprise : Échap, ou clic si le navigateur refuse)'], ['F9 (hôte)', 'Menu debug de l\'hôte : 1-4 joueur, T deux fois amener, Y rejoindre, N réanimer, U débloquer les zombies, P perfs']]);
+  [`Se débloquer (${kn0('unstick')})`, `maintenir ${US.holdTime} s`, `l'invite apparaît si une touche de déplacement est maintenue ${US.stuckAfter} s sans avancer de ${fr1(US.moveMin)} m, ou après ${US.trapAfter} s dans une poche fermée ; arrivée à moins de ${US.maxDist} m dans une zone ouverte (sinon centre de zone) ; recharge ${US.cooldown} s ; impossible en moto, à terre, à l'étage`]]);
+const kn = kn0;
+table('14_commandes', 'Commandes (touches par défaut, modifiables dans Options > Touches)', ['Touche par défaut', 'Action'], [
+  ['Options > Touches', 'Change toutes les touches ci-dessous, sauf souris, molette, Échap et F9 (réglage local, gardé sur l\'appareil ; échange proposé si une touche est déjà prise)'],
+  [`ZQSD / ${kn('forward')}${kn('left')}${kn('back')}${kn('right')} / flèches`, 'Se déplacer'], ['Souris', 'Viser'], ['Clic gauche', 'Tirer'], ['Clic droit', 'Viser à la mire'],
+  [kn('sprint'), 'Sprint'], [kn('jump'), 'Sauter'], [kn('reload'), 'Recharger'], [`${kn('weapon1')} / ${kn('weapon2')} / ${kn('weapon3')} / molette`, 'Changer d\'arme'], [kn('grenade'), 'Grenade'],
+  [kn('interact'), 'Acheter, ouvrir une porte, utiliser une machine ou la borne des motos, réanimer (maintenir), monter / descendre d\'une moto'],
+  [`ZQSD / ${kn('forward')}${kn('left')}${kn('back')}${kn('right')} (en moto)`, 'Accélérer, freiner / reculer, tourner'], [`${kn('jump')} (en moto)`, 'Frein à main'], [`${kn('vehicleView')} (en moto)`, 'Vue à la 3e personne / à la 1re personne'],
+  [kn('torch'), 'Lampe torche'], [`${kn('jump')} (devant un obstacle bas)`, 'Enjamber'], [`${kn('unstick')} (maintenir 2 s, si coincé)`, 'Se débloquer'],
+  [`${kn('knife')} (à pied)`, 'Coup de couteau (aussi : clic gauche quand le chargeur et la réserve sont vides)'], [kn('map'), 'Carte'],
+  ['Clic molette', 'Lance-grenades sous le canon (fusil d\'assaut Pack-a-Punch niveau III)'],
+  ['Échap', 'Ferme la carte ou le menu debug ; sinon menu pause (reprise : Échap, ou clic si le navigateur refuse) ; ferme aussi la capture d\'une touche dans Options > Touches'],
+  ['F9 (hôte)', 'Menu debug de l\'hôte : 1-4 joueur, T deux fois amener, Y rejoindre, N réanimer, U débloquer les zombies, P perfs']]);
 
 // ------------------------------------------------------------------ CSV (séparateur ; , virgule décimale, UTF-8 avec BOM pour Excel)
 for (const f of fs.readdirSync(CSV)) if (f.endsWith('.csv')) fs.rmSync(path.join(CSV, f));
