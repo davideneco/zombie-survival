@@ -188,13 +188,13 @@ export function installMachineFx(game, { world, hud, sfx, fx }) {
         if (r.phase === 'offer') {
           const cfg = CONFIG.weapons[r.result];
           const swap = p.inventory.length >= p.maxWeapons && !p.hasWeapon(r.result);
-          return `[E] Prendre ${cfg.name} — ${Math.ceil(r.offerT)} s${swap ? ' (remplace l’arme en main)' : ''}`;
+          return `${game.binds.tag('interact')} Prendre ${cfg.name} — ${Math.ceil(r.offerT)} s${swap ? ' (remplace l’arme en main)' : ''}`;
         }
         return 'La boîte mystère tourne…';
       }
       if (r) return 'Une boîte mystère est déjà en cours';
       const full = p.inventory.length >= p.maxWeapons;
-      return `[E] Boîte mystère : arme au hasard (${CONFIG.box.price} pts)${full ? ' — remplace l’arme en main' : ''}`;
+      return `${game.binds.tag('interact')} Boîte mystère : arme au hasard (${CONFIG.box.price} pts)${full ? ' — remplace l’arme en main' : ''}`;
     },
 
     resetBoxRoll() { this.endBoxRoll(); },
@@ -323,13 +323,13 @@ export function installMachineFx(game, { world, hud, sfx, fx }) {
     papPrompt(m) {
       const a = this.papAnim, p = this.player;
       if (a && a.machine === m) {
-        if (a.phase === 'offer') return isMe(a.owner) ? `[E] Récupérer ${CONFIG.papNames[a.w] ? CONFIG.papNames[a.w] + (a.lv > 1 ? ' ' + PAP_LEVELS[a.lv].roman : '') : 'l’arme améliorée'}` : `${nameOf(a.owner)} récupère son arme…`;
+        if (a.phase === 'offer') return isMe(a.owner) ? `${game.binds.tag('interact')} Récupérer ${CONFIG.papNames[a.w] ? CONFIG.papNames[a.w] + (a.lv > 1 ? ' ' + PAP_LEVELS[a.lv].roman : '') : 'l’arme améliorée'}` : `${nameOf(a.owner)} récupère son arme…`;
         return isMe(a.owner) ? 'Amélioration en cours…' : `Amélioration de ${nameOf(a.owner)} en cours…`;
       }
       if (a) return 'Le Pack-a-Punch est occupé';
       const lv = (p.curW.pap | 0) + 1;
       if (lv >= PAP_LEVELS.length) return `${p.curCfg.name} est au niveau maximum`;
-      return `[E] Pack-a-Punch : ${lv > 1 ? 'passer' : 'améliorer'} ${p.curCfg.name} au niveau ${PAP_LEVELS[lv].roman} (${PAP_LEVELS[lv].price} pts)`;
+      return `${game.binds.tag('interact')} Pack-a-Punch : ${lv > 1 ? 'passer' : 'améliorer'} ${p.curCfg.name} au niveau ${PAP_LEVELS[lv].roman} (${PAP_LEVELS[lv].price} pts)`;
     },
     resetPap() {
       this.endPap();

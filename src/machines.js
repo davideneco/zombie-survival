@@ -164,7 +164,7 @@ function ammoFront() {
     // écran : "RECHARGER [E]"
     if (!emis) { x.fillStyle = '#0a120a'; roundRect(x, 60, 40, w - 120, 170, 14); x.fill(); x.strokeStyle = '#222'; x.lineWidth = 8; x.stroke(); }
     neonText(x, 'MUNITIONS', w / 2, 100, 58, '#4dff7a', emis);
-    neonText(x, 'RECHARGER  [E]', w / 2, 165, 36, '#4dff7a', emis, 'Arial, sans-serif');
+    neonText(x, 'RECHARGER', w / 2, 165, 36, '#4dff7a', emis, 'Arial, sans-serif');
   };
   return [tex('ammo', 512, 1024, draw, false), tex('ammo', 512, 1024, draw, true)];
 }

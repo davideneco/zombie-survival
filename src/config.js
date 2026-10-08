@@ -377,6 +377,46 @@ export const CONFIG = {
   },
 };
 
+// Touches par défaut (modifiables dans Options > Touches, voir keybinds.js). Une liaison s'écrit 'code:KeyW' (touche PHYSIQUE : ZQSD en
+// AZERTY = WASD en QWERTY) ou 'key:r' (LETTRE TAPÉE, quel que soit le clavier). kind : comment une nouvelle liaison est lue, 'code' pour
+// les déplacements, le sprint, le saut et les armes 1-3 (position de la touche), 'key' pour les actions (lettre tapée si c'est une lettre,
+// sinon touche physique). ctx : 'all', 'foot' (à pied) ou 'moto' (en moto) : deux actions de contextes différents peuvent partager une touche.
+// alt : touche physique de secours (flèches), active tant qu'aucune action ne l'utilise.
+CONFIG.keybinds = [
+  { id: 'forward', group: 'Déplacement', label: 'Avancer', def: 'code:KeyW', kind: 'code', ctx: 'all', alt: 'ArrowUp' },
+  { id: 'left', group: 'Déplacement', label: 'Aller à gauche', def: 'code:KeyA', kind: 'code', ctx: 'all', alt: 'ArrowLeft' },
+  { id: 'back', group: 'Déplacement', label: 'Reculer', def: 'code:KeyS', kind: 'code', ctx: 'all', alt: 'ArrowDown' },
+  { id: 'right', group: 'Déplacement', label: 'Aller à droite', def: 'code:KeyD', kind: 'code', ctx: 'all', alt: 'ArrowRight' },
+  { id: 'sprint', group: 'Déplacement', label: 'Sprint', def: 'code:ShiftLeft', kind: 'code', ctx: 'all' },
+  { id: 'jump', group: 'Déplacement', label: 'Sauter · enjamber · frein à main (moto)', def: 'code:Space', kind: 'code', ctx: 'all' },
+  { id: 'reload', group: 'Combat', label: 'Recharger', def: 'key:r', kind: 'key', ctx: 'all' },
+  { id: 'weapon1', group: 'Combat', label: 'Arme 1', def: 'code:Digit1', kind: 'code', ctx: 'all' },
+  { id: 'weapon2', group: 'Combat', label: 'Arme 2', def: 'code:Digit2', kind: 'code', ctx: 'all' },
+  { id: 'weapon3', group: 'Combat', label: 'Arme 3', def: 'code:Digit3', kind: 'code', ctx: 'all' },
+  { id: 'grenade', group: 'Combat', label: 'Grenade', def: 'key:g', kind: 'key', ctx: 'all' },
+  { id: 'knife', group: 'Combat', label: 'Coup de couteau (à pied)', def: 'key:v', kind: 'key', ctx: 'foot' },
+  { id: 'torch', group: 'Équipement', label: 'Lampe torche', def: 'key:f', kind: 'key', ctx: 'all' },
+  { id: 'interact', group: 'Équipement', label: 'Interagir (acheter, porte, machine, réanimer, moto)', def: 'key:e', kind: 'key', ctx: 'all' },
+  { id: 'map', group: 'Équipement', label: 'Carte', def: 'key:m', kind: 'key', ctx: 'all' },
+  { id: 'vehicleView', group: 'Équipement', label: 'Changer de vue (en moto)', def: 'key:v', kind: 'key', ctx: 'moto' },
+  { id: 'unstick', group: 'Équipement', label: 'Se débloquer (maintenir)', def: 'key:k', kind: 'key', ctx: 'foot' },
+];
+// Touches fixes, affichées dans le menu mais non modifiables : [touche, action]
+CONFIG.fixedKeys = [
+  ['Souris', 'Viser'],
+  ['Clic gauche', 'Tirer'],
+  ['Clic droit', 'Viser à la mire'],
+  ['Molette', 'Changer d\'arme'],
+  ['Clic molette', 'Lance-grenades (fusil d\'assaut PaP III)'],
+  ['Échap', 'Pause · fermer la carte ou un menu'],
+  ['F9', 'Menu debug (hôte uniquement)'],
+];
+// Touches réservées : refusées à la capture (le navigateur ou le jeu s'en sert)
+CONFIG.reservedKeys = {
+  Escape: 'Échap annule la capture', F9: 'F9 ouvre le menu debug de l\'hôte', F5: 'F5 recharge la page', F11: 'F11 gère le plein écran', F12: 'F12 ouvre les outils du navigateur',
+  MetaLeft: 'cette touche appartient au système', MetaRight: 'cette touche appartient au système', ContextMenu: 'cette touche appartient au système',
+};
+
 // Résolution des calibres : chaque arme reçoit le nom du calibre, ses dégâts (base × mod), son multiplicateur de tête, sa
 // pénétration et sa chute des dégâts, sauf si elle les définit elle-même. Fait une seule fois, au chargement du module.
 for (const w of Object.values(CONFIG.weapons)) {

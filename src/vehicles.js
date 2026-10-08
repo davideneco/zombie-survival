@@ -176,8 +176,9 @@ export class Vehicle {
   drive(dt) {
     const D = this.def, g = this.game, K = g.player.keys;
     const on = this.state === 'ok'; // en feu : moteur coupé, roue libre, direction à plat
-    const fwdKey = on && !!(K.KeyW || K.ArrowUp), backKey = on && !!(K.KeyS || K.ArrowDown), hb = on && !!K.Space;
-    const steerIn = on ? (K.KeyD || K.ArrowRight ? 1 : 0) - (K.KeyA || K.ArrowLeft ? 1 : 0) : 0;
+    const B = g.binds;
+    const fwdKey = on && B.down('forward', K), backKey = on && B.down('back', K), hb = on && B.down('jump', K);
+    const steerIn = on ? (B.down('right', K) ? 1 : 0) - (B.down('left', K) ? 1 : 0) : 0;
     let sp = this.speed;
 
     // essence : réserve (bips), ratés sous missBelow, panne sèche (poussée au pas)
@@ -420,7 +421,7 @@ export function installVehicles(game, { world, hud, sfx, scene }) {
 
     vehiclePrompt(nv) {
       const v = nv.v, role = v.def.seats > 1 ? (nv.seat === 0 ? ' — conducteur' : ' — passager') : '';
-      return `[E] Monter sur la ${v.def.name.toLowerCase()}${role} (PV ${Math.round(v.hpFrac * 100)} % · essence ${Math.round(v.fuelFrac * 100)} %)`;
+      return `${game.binds.tag('interact')} Monter sur la ${v.def.name.toLowerCase()}${role} (PV ${Math.round(v.hpFrac * 100)} % · essence ${Math.round(v.fuelFrac * 100)} %)`;
     },
 
     // ----------------------------------------------------------- points de vie (écrits par l'hôte seul)
@@ -459,7 +460,7 @@ export function installVehicles(game, { world, hud, sfx, scene }) {
     startBurn(v) {
       if (v.state !== 'ok') return;
       v.hp = 0; v.state = 'burning'; v.burnT = R().damage.burnTime; v.alarmT = 0;
-      if (this.player.vehicle?.v === v) hud.announce('SAUTEZ !', '[E] : la moto va exploser', 1800);
+      if (this.player.vehicle?.v === v) hud.announce('SAUTEZ !', `${game.binds.tag('interact')} : la moto va exploser`, 1800);
     },
 
     // hôte : envoi des PV (au plus 5 fois par seconde), explosion à la fin de l'incendie, réapparition en attente
@@ -550,7 +551,8 @@ export function installVehicles(game, { world, hud, sfx, scene }) {
       p.mouseDown = false; p.aiming = false;
       v.syncNet();
       sfx.mount?.(v.type);
-      hud.announce(v.def.name, seat === 0 ? 'ZQSD : conduire · Espace : frein à main · E : descendre' : 'Vous êtes passager : tirez ! · E : descendre', 3500);
+      const B = game.binds, kE = B.label('interact');
+      hud.announce(v.def.name, seat === 0 ? `${B.moveLabel()} : conduire · ${B.label('jump')} : frein à main · ${kE} : descendre` : `Vous êtes passager : tirez ! · ${kE} : descendre`, 3500);
       this.refreshRiders();
     },
 
@@ -704,7 +706,7 @@ export function installVehicles(game, { world, hud, sfx, scene }) {
       if (!np.v) return 'Borne du parking : aucune moto à portée (8 m)';
       const sv = this.serviceOf(np.v), name = np.v.def.name;
       if (sv.cost <= 0) return `${name} : plein fait, en parfait état`;
-      return `[E] Plein + réparation ${name} : ${sv.cost} pts (essence ${Math.round(np.v.fuelFrac * 100)} % · PV ${Math.round(np.v.hpFrac * 100)} %)`;
+      return `${game.binds.tag('interact')} Plein + réparation ${name} : ${sv.cost} pts (essence ${Math.round(np.v.fuelFrac * 100)} % · PV ${Math.round(np.v.hpFrac * 100)} %)`;
     },
     usePump(np) {
       const v = np.v;

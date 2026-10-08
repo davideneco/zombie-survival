@@ -62,7 +62,7 @@ function pumpTexture() {
   x.textAlign = 'center'; x.fillStyle = '#ffb02e';
   x.font = 'bold 44px Impact, Arial, sans-serif'; x.fillText('ESSENCE', 128, 62);
   x.fillStyle = '#9fe6a0'; x.font = 'bold 26px Arial, sans-serif'; x.fillText('PLEIN + RÉPARATION', 128, 104);
-  x.fillStyle = '#ddd'; x.font = '20px Arial, sans-serif'; x.fillText('[E] à côté de la moto', 128, 138);
+  x.fillStyle = '#ddd'; x.font = '20px Arial, sans-serif'; x.fillText('à côté de la moto', 128, 138);
   const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace;
   return t;
 }

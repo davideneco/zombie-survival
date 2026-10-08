@@ -21,6 +21,8 @@ import { makeDisplay } from './weaponDisplay.js';
 import { installUi } from './ui.js';
 import { installDebugMenu } from './debugMenu.js';
 import { installUnstick } from './unstick.js';
+import { installKeybinds } from './keybinds.js';
+import { installKeysMenu } from './keysMenu.js';
 
 document.getElementById('version').textContent = __GAME_VERSION__;
 // Version du jeu (« v0.27.0 », sans le commit ni la date) : jointe au message `join`, et comparée à celle de l'hôte dans `sync`.
@@ -59,7 +61,7 @@ scene.add(moon, moon.target);
 const MOON_OFFSET = new THREE.Vector3(25, 55, 15);
 
 // ------------------------------------------------------- Options (client)
-const DEFAULT_SETTINGS = { brightness: 1.4, fov: 80, sens: 1, volume: 1, music: 0.5, quality: 1, tpVehicle: true }; // tpVehicle : vue à la troisième personne sur une moto (touche V)
+const DEFAULT_SETTINGS = { brightness: 1.4, fov: 80, sens: 1, volume: 1, music: 0.5, quality: 1, tpVehicle: true }; // tpVehicle : vue à la troisième personne sur une moto (touche « changer de vue »)
 const settings = { ...DEFAULT_SETTINGS };
 try { Object.assign(settings, JSON.parse(localStorage.getItem('zombie_settings') || '{}')); } catch {}
 
@@ -588,7 +590,7 @@ const game = {
     if (m.type === 'clock') return this.finalePrompt(m);
     if (m.type === 'perk') {
       if (p.perks[m.id]) return `${m.name} (déjà acquis)`;
-      return `[E] ${m.name} — ${CONFIG.perks[m.id].desc} (${this.perkPrice(m.id)} pts)`;
+      return `${game.binds.tag('interact')} ${m.name} — ${CONFIG.perks[m.id].desc} (${this.perkPrice(m.id)} pts)`;
     }
     if (m.type === 'pap') return this.papPrompt(m);
     return this.boxPrompt(m);
@@ -822,7 +824,7 @@ const game = {
     const pk = (world.parkings || []).find((q) => !this.parkingSeen?.has(q.zone) && d.opened.includes(q.zone)), firstPark = !!pk;
     if (firstPark) (this.parkingSeen ||= new Set()).add(pk.zone);
     if (announce) {
-      if (firstPark) hud.announce(`PARKING ${pk.name.replace(/^Place /, '').toUpperCase()} — ${pk.size} moto${pk.size > 1 ? 's' : ''}`, 'Repérez le « P » bleu sur la carte [M]', 4500);
+      if (firstPark) hud.announce(`PARKING ${pk.name.replace(/^Place /, '').toUpperCase()} — ${pk.size} moto${pk.size > 1 ? 's' : ''}`, `Repérez le « P » bleu sur la carte ${game.binds.tag('map')}`, 4500);
       else hud.announce('PORTE OUVERTE', `Accès à ${d.name}`, 2500);
     }
     if (!this.isClient) this.openingBonus(d); // hôte ou solo : le bonus est ensuite annoncé aux clients par pu_spawn
@@ -1212,7 +1214,7 @@ const game = {
 
     // Réanimation en continu (touche E maintenue par un joueur vivant)
     const downedTeammate = this.nearDownedTeammate();
-    if (downedTeammate && !p.downed && !p.dead && p.keys['letter:e']) {
+    if (downedTeammate && !p.downed && !p.dead && game.binds.down('interact', p.keys)) {
       this.reviveTarget = downedTeammate;
       this.reviveTimer += dt;
       if (this.reviveTimer >= this.reviveTime()) {
@@ -1299,14 +1301,15 @@ const game = {
     let promptText = null;
     hud.setVehicle(p.vehicle ? { speed: p.vehicle.v.speed, vmax: p.vehicle.v.def.maxSpeed, vmin: p.vehicle.v.def.roadkill.vmin, hp: p.vehicle.v.hp, hpMax: p.vehicle.v.maxHp, fuel: p.vehicle.v.fuelFrac } : null);
     if (p.vehicle) {
-      promptText = p.vehicle.v.state === 'burning' ? 'SAUTEZ ! [E]' : p.vehicle.seat === 0 ? '[E] Descendre' : '[E] Descendre · clic gauche : tirer';
+      const kE = game.binds.tag('interact');
+      promptText = p.vehicle.v.state === 'burning' ? `SAUTEZ ! ${kE}` : p.vehicle.seat === 0 ? `${kE} Descendre` : `${kE} Descendre · clic gauche : tirer`;
     } else if (downedTeammate) {
       const left = Math.max(0, this.reviveTime() - this.reviveTimer).toFixed(1);
-      promptText = `[E] Maintenir pour réanimer ${downedTeammate.name} (${left}s)`;
+      promptText = `${game.binds.tag('interact')} Maintenir pour réanimer ${downedTeammate.name} (${left}s)`;
     } else if (this.nearStation()) {
       promptText = curW.reserve >= curCfg.maxReserve
         ? 'Munitions au maximum'
-        : `[E] Munitions ${curCfg.name} (${curCfg.ammoPrice} pts)`;
+        : `${game.binds.tag('interact')} Munitions ${curCfg.name} (${curCfg.ammoPrice} pts)`;
     } else if (this.nearMachine()) {
       promptText = this.machinePrompt(this.nearMachine());
     } else if (this.nearWallWeapon()) {
@@ -1316,10 +1319,10 @@ const game = {
         const price = ww.ammoPrice * papAmmoMult(wState.pap);
         promptText = wState.reserve >= p.statsOf(wState).maxReserve
           ? `${ww.name} (Munitions pleines)`
-          : `[E] Munitions ${ww.name} (${price} pts)`;
+          : `${game.binds.tag('interact')} Munitions ${ww.name} (${price} pts)`;
       } else {
         const full = p.inventory.length >= p.maxWeapons;
-        promptText = `[E] Acheter ${ww.name} (${ww.price} pts)${full ? ' — remplace l’arme en main' : ''}`;
+        promptText = `${game.binds.tag('interact')} Acheter ${ww.name} (${ww.price} pts)${full ? ' — remplace l’arme en main' : ''}`;
       }
     } else if (this.nearPump()) {
       promptText = this.pumpPrompt(this.nearPump());
@@ -1328,9 +1331,9 @@ const game = {
     } else if (this.nearDoor()) {
       const d = this.nearDoor(), here = world.zoneOf(this.player.pos.x, this.player.pos.z);
       const to = here === d.a ? d.b : here === d.b ? d.a : d.toZone; // la zone de l'autre côté de la barrière
-      promptText = `[E] Ouvrir la porte vers ${world.zoneNames[to]} (${d.price} pts)`;
+      promptText = `${game.binds.tag('interact')} Ouvrir la porte vers ${world.zoneNames[to]} (${d.price} pts)`;
     }
-    if (!promptText && p.vaultReady && !p.vault) promptText = '[Espace] Enjamber';
+    if (!promptText && p.vaultReady && !p.vault) promptText = `${game.binds.tag('jump')} Enjamber`;
     const unstickPrompt = this.unstick?.prompt();
     if (unstickPrompt && !p.vehicle) promptText = unstickPrompt; // coincé : l'invite de déblocage passe avant les autres
     hud.prompt(promptText);
@@ -1341,6 +1344,7 @@ sfx.setVolume(settings.volume);
 sfx.setMusicVolume(settings.music);
 game.player = new Player(camera, scene, world, game);
 hud.setWeapon(game.player.curCfg.name, game.player.curCfg.caliber);
+installKeybinds(game, { hud }); // game.binds : touches modifiables (Options > Touches)
 installMachineFx(game, { world, hud, sfx, fx });
 installFinale(game, { world, scene, hud, sfx, fx });
 installVehicles(game, { world, scene, hud, sfx });
@@ -1487,7 +1491,7 @@ function setupNetworkHandlers(net) {
     rp.downed = true;
     const p = game.player, dx = rp.pos.x - p.pos.x, dz = rp.pos.z - p.pos.z;
     const dir = ['N', 'NE', 'E', 'SE', 'S', 'SO', 'O', 'NO'][Math.round(((Math.atan2(dx, -dz) * 180 / Math.PI + 360) % 360) / 45) % 8]; // cap 0 = nord (-z), 90 = est (+x)
-    hud.announce(`${String(rp.name).toUpperCase()} EST À TERRE`, `${Math.round(Math.hypot(dx, dz))} m ${dir} · maintenez [E] pour le réanimer`, 3500);
+    hud.announce(`${String(rp.name).toUpperCase()} EST À TERRE`, `${Math.round(Math.hypot(dx, dz))} m ${dir} · maintenez ${game.binds.tag('interact')} pour le réanimer`, 3500);
     sfx.down?.(Math.max(0.4, 1 - Math.hypot(dx, dz) / 120));
     game.checkTeamWipe();
   });
@@ -1772,7 +1776,8 @@ function lockAndPlay() {
   if (req && req.catch) req.catch(() => {});
 }
 
-installUi(game, { hud, canvas, lockAndPlay }); // pile de couches, Échap, carte (M), plein écran
+installUi(game, { hud, canvas, lockAndPlay }); // pile de couches, Échap, carte, plein écran
+installKeysMenu(game, { hud }); // Options > Touches
 
 // Clic direct sur le canvas en cours de partie pour reprendre le contrôle
 canvas.addEventListener('click', () => {

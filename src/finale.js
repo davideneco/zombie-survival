@@ -157,7 +157,7 @@ export function installFinale(game, { world, scene, hud, sfx, fx }) {
         if (this.openZones() < (Fc.minZones || 0)) need.push(`${this.openZones()}/${Fc.minZones} quartiers ouverts`);
         return `L'horloge astronomique… (${need.join(' · ')} pour l'Heure du Jugement)`;
       }
-      return `[E] Faire sonner l'Heure du Jugement : le Bourreau vous attend${Fc.price ? ` (${Fc.price} pts)` : ''}`;
+      return `${game.binds.tag('interact')} Faire sonner l'Heure du Jugement : le Bourreau vous attend${Fc.price ? ` (${Fc.price} pts)` : ''}`;
     },
 
     startFinale() {

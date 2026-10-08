@@ -100,7 +100,7 @@ export function installUnstick(game, { world, hud, sfx }) {
     st.cool = Math.max(0, st.cool - dt);
     const ok = game.started && game.playing && !game.over && !p.vehicle && !p.downed && !p.dead && !p.vault && !p.region;
     if (!ok) { st.t = 0; st.trapT = 0; st.stuck = false; st.holdT = 0; return; }
-    const held = K.KeyW || K.KeyA || K.KeyS || K.KeyD || K.ArrowUp || K.ArrowDown || K.ArrowLeft || K.ArrowRight;
+    const held = game.binds.anyMove(K);
     if (!held || Math.hypot(p.pos.x - st.ref.x, p.pos.z - st.ref.z) >= U.moveMin) { st.t = 0; st.ref.x = p.pos.x; st.ref.z = p.pos.z; }
     else st.t += dt;
     // poche fermée : vérifiée 2 fois par seconde (étiquette de la composante, calculée une fois par ouverture de porte)
@@ -115,7 +115,7 @@ export function installUnstick(game, { world, hud, sfx }) {
     const wasStuck = st.stuck;
     st.stuck = st.t >= U.stuckAfter || st.trapT >= U.trapAfter;
     if (st.stuck && !wasStuck) console.info('[UNSTICK] joueur coincé en', p.pos.x.toFixed(1), p.pos.z.toFixed(1), st.t >= U.stuckAfter ? '(touche maintenue sans avancer)' : '(poche fermée)');
-    if (st.stuck && K['letter:k']) {
+    if (st.stuck && game.binds.down('unstick', K)) {
       st.holdT += dt;
       if (st.holdT >= U.holdTime) { if (!st.trigger()) st.holdT = 0; }
     } else st.holdT = 0;
@@ -125,8 +125,8 @@ export function installUnstick(game, { world, hud, sfx }) {
   st.prompt = () => {
     if (!st.stuck) return null;
     if (st.cool > 0) return `Déblocage disponible dans ${Math.ceil(st.cool)} s`;
-    if (st.holdT > 0) return `[K] Maintenir pour se débloquer (${Math.max(0, U.holdTime - st.holdT).toFixed(1)} s)`;
-    return `[K] Maintenir ${U.holdTime} s : se débloquer`;
+    if (st.holdT > 0) return `${game.binds.tag('unstick')} Maintenir pour se débloquer (${Math.max(0, U.holdTime - st.holdT).toFixed(1)} s)`;
+    return `${game.binds.tag('unstick')} Maintenir ${U.holdTime} s : se débloquer`;
   };
   return st;
 }

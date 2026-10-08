@@ -209,8 +209,8 @@ export class Player {
 
   // ---------------------------------------------------------------- Input
   bindInput() {
-    // Déplacements : position physique de la touche (e.code), donc ZQSD en AZERTY = WASD en QWERTY.
-    // Actions : lettre réellement tapée (e.key), pour que R, E, F, G, M marchent quel que soit le clavier.
+    // Liaisons (game.binds, voir keybinds.js) : par défaut, déplacements, sprint, saut et armes 1-3 sur la position physique de la touche
+    // (e.code : ZQSD en AZERTY = WASD en QWERTY), actions sur la lettre réellement tapée (e.key) pour que R, E, F, G, M marchent sur tout clavier.
     const letter = (e) => (e.key && e.key.length === 1 ? e.key.toLowerCase() : '');
     window.addEventListener('keydown', (e) => {
       this.keys[e.code] = true;
@@ -218,16 +218,18 @@ export class Player {
       if (k) this.keys['letter:' + k] = true;
       if (!this.game.playing || e.repeat) return;
       if (this.game.debugMenu?.open) return; // menu debug (F9) : les lettres et chiffres lui sont réservés
-      if (k === 'r' && !this.locked && !(this.vehicle && this.vehicle.seat === 0)) this.reload();
-      if (k === 'e') this.game.interact();
-      if (k === 'f') this.setTorch(!this.torchOn);
-      if (k === 'g') this.throwGrenade();
-      if (k === 'v') { if (this.vehicle) this.game.toggleVehicleView?.(); else this.melee(this.game.time); } // moto : bascule troisième / première personne ; à pied : couteau
-      if (e.code === 'Space') e.preventDefault();
+      const B = this.game.binds;
+      if (B.is('reload', e) && !this.locked && !(this.vehicle && this.vehicle.seat === 0)) this.reload();
+      if (B.is('interact', e)) this.game.interact();
+      if (B.is('torch', e)) this.setTorch(!this.torchOn);
+      if (B.is('grenade', e)) this.throwGrenade();
+      if (this.vehicle) { if (B.is('vehicleView', e)) this.game.toggleVehicleView?.(); } // moto : bascule troisième / première personne
+      else if (B.is('knife', e)) this.melee(this.game.time); // à pied : couteau
+      if (B.isBound(e)) e.preventDefault(); // Espace (défilement), Tab, flèches : le navigateur ne doit pas réagir à une touche du jeu
       if (this.locked) return; // arme dans le Pack-a-Punch
-      if (e.code === 'Digit1') this.switchWeapon(0);
-      if (e.code === 'Digit2') this.switchWeapon(1);
-      if (e.code === 'Digit3') this.switchWeapon(2);
+      if (B.is('weapon1', e)) this.switchWeapon(0);
+      if (B.is('weapon2', e)) this.switchWeapon(1);
+      if (B.is('weapon3', e)) this.switchWeapon(2);
     });
     window.addEventListener('keyup', (e) => {
       this.keys[e.code] = false;
@@ -358,11 +360,12 @@ export class Player {
       this.yaw += veh.v.dyaw;
       this.ride.steer(dt, veh, this.game.time - this.lastMouse); // vue externe : tangage borné, recentrage derrière la moto
     } else {
-      let mx = (K.KeyD || K.ArrowRight ? 1 : 0) - (K.KeyA || K.ArrowLeft ? 1 : 0);
-      let mz = (K.KeyW || K.ArrowUp ? 1 : 0) - (K.KeyS || K.ArrowDown ? 1 : 0);
+      const B = this.game.binds;
+      let mx = (B.down('right', K) ? 1 : 0) - (B.down('left', K) ? 1 : 0);
+      let mz = (B.down('forward', K) ? 1 : 0) - (B.down('back', K) ? 1 : 0);
       if (this.vault) { mx = 0; mz = 0; } // enjambement en cours : le chemin est imposé
       moving = (mx !== 0 || mz !== 0) && !this.dead;
-      sprinting = !this.downed && !!K.ShiftLeft && mz > 0 && !this.aiming;
+      sprinting = !this.downed && B.down('sprint', K) && mz > 0 && !this.aiming;
       const stamin = this.perks.staminup ? 1.3 : 1;
       let speed = this.downed ? 1.2 : (sprinting ? P.sprintSpeed * stamin : P.walkSpeed * (this.perks.staminup ? 1.1 : 1));
       if (this.aiming && !this.downed) speed *= 0.6;
@@ -383,7 +386,7 @@ export class Player {
       onGround = this.pos.y <= ground + 0.02 && this.vy <= 0.5;
       this.vaultCd = Math.max(0, this.vaultCd - dt);
       this.vaultReady = onGround && !this.vault && !this.downed && !this.dead && !this.locked && this.vaultCd <= 0 && !!this.checkVault();
-      if (K.Space && onGround && !this.downed && !this.vault) {
+      if (B.down('jump', K) && onGround && !this.downed && !this.vault) {
         if (this.vaultReady && this.startVault()) { /* enjambement : pas de saut */ }
         else { this.vy = P.jumpSpeed; this.jumpSprint = sprinting; } // saut lancé en sprint : plongeon possible (PHD Flopper)
       }
@@ -579,7 +582,7 @@ export class Player {
     this.game.sfx.knife?.('swing');
     // fente : on avance de lunge m vers un zombie proche, si on avance (touche haut)
     this.lunge = null;
-    if (this.keys.KeyW || this.keys.ArrowUp) {
+    if (this.game.binds.down('forward', this.keys)) {
       const fx = -Math.sin(this.yaw), fz = -Math.cos(this.yaw);
       let best = null, bd = K.lungeNear;
       for (const z of this.game.zombies) {

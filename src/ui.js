@@ -1,7 +1,8 @@
 // Couches d'interface et touche Échap.
 //
 // La pile `game.ui.stack` est DÉDUITE de l'état réel de l'écran (aucune copie à tenir à jour) ; de la plus ancienne à la plus récente :
-//   'title' (titre), 'menu' (solo / multijoueur + salon), 'options', 'pause', écrans à bouton : 'enter' (PARTIE LANCÉE, NOUVELLE PARTIE,
+//   'title' (titre), 'menu' (solo / multijoueur + salon), 'options', 'keys' (Options > Touches) puis 'conflict' (touche déjà prise : échanger ?)
+//   ou 'capture' (« Appuyez sur une touche… »), 'pause', écrans à bouton : 'enter' (PARTIE LANCÉE, NOUVELLE PARTIE,
 //   PARTIE EN COURS), 'resume' (CLIQUEZ POUR REPRENDRE), 'victory', 'over' (ÉQUIPE ÉLIMINÉE) ; puis, par-dessus le jeu, 'map' / 'debug'
 //   dans l'ordre d'ouverture et 'banner' (bandeau léger « Cliquez pour reprendre »).
 // Échap ferme la couche du dessus ; en jeu sans couche ouverte, il ouvre la pause. Les fenêtres natives alert / confirm restent au navigateur.
@@ -29,6 +30,7 @@ export function installUi(game, { hud, canvas, lockAndPlay }) {
         else if (!hidden(el.menuPanel)) out.push('title', 'menu');
         else if (!hidden(el.pausePanel)) out.push('pause');
         else if (!hidden(el.optionsPanel)) out.push(this.optionsBack === 'pausePanel' ? 'pause' : 'title', 'options');
+        else if (!hidden(el.keysPanel)) out.push(this.optionsBack === 'pausePanel' ? 'pause' : 'title', 'options', 'keys', ...(game.keysMenu?.layer() || []));
         else {
           const t = hud.screenTitle || '';
           out.push(t.startsWith('VICTOIRE') ? 'victory' : t.startsWith('ÉQUIPE') ? 'over' : t === 'PAUSE' && !hidden(el.ovBtn) ? 'resume' : 'enter');
@@ -116,6 +118,8 @@ export function installUi(game, { hud, canvas, lockAndPlay }) {
         case 'map': this.toggleMap(false); break;
         case 'banner': this.pause(); break;
         case 'options': hud.showPanel(this.optionsBack); break;
+        case 'keys': hud.showPanel('optionsPanel'); break;
+        case 'capture': case 'conflict': game.keysMenu.cancel(); break; // d'abord la capture / la question d'échange, le menu Touches reste ouvert
         case 'menu':
           if (game.net) { if (confirm('Quitter le salon ?')) { game.net.close(); location.reload(); } }
           else hud.showPanel('titlePanel');
@@ -157,7 +161,7 @@ export function installUi(game, { hud, canvas, lockAndPlay }) {
     if (e.key === 'Escape' || e.code === 'Escape') {
       e.preventDefault();
       if (!e.repeat) ui.escape();
-    } else if (!e.repeat && e.key && e.key.toLowerCase() === 'm' && game.started && game.playing && !(document.activeElement && /^(INPUT|TEXTAREA)$/.test(document.activeElement.tagName))) ui.toggleMap(); // lettre tapée (e.key) : la touche M n'est pas au même endroit en AZERTY
+    } else if (!e.repeat && game.binds.is('map', e) && game.started && game.playing && !(document.activeElement && /^(INPUT|TEXTAREA)$/.test(document.activeElement.tagName))) ui.toggleMap(); // liaison « carte » : par défaut la lettre tapée (e.key), la touche M n'est pas au même endroit en AZERTY
   });
   document.addEventListener('pointerlockerror', () => { if (!game.playing) ui.resumeBlocked(); });
   document.addEventListener('fullscreenchange', () => {

@@ -39,6 +39,8 @@ export class Hud {
       titlePanel: $('titlePanel'),
       pausePanel: $('pausePanel'),
       optionsPanel: $('optionsPanel'),
+      keysPanel: $('keysPanel'),
+      mapHint: $('mapHint'),
       playerName: $('playerName'),
       btnSolo: $('btnSolo'),
       btnHost: $('btnHost'),
@@ -62,6 +64,12 @@ export class Hud {
     this.announceTimer = null;
   }
 
+  // Une touche a changé (game.binds) : les textes HUD qui la citent sont refaits à la prochaine mise à jour
+  refreshKeys() {
+    for (const k of ['inv', 'nades', 'ammo']) delete this.cache[k];
+    if (this.el.mapHint && this.binds) this.el.mapHint.textContent = `${this.binds.tag('map')} carte`;
+  }
+
   _set(key, value, apply) {
     if (this.cache[key] === value) return;
     this.cache[key] = value;
@@ -78,7 +86,7 @@ export class Hud {
   // gl : obus restants du lance-grenades sous canon (niveau III des fusils d'assaut), undefined sinon
   setAmmo(mag, reserve, reloading, gl) {
     this._set('ammo', `${mag}/${reserve}/${reloading}/${gl}`, () => {
-      const g = gl == null ? '' : ` <span style="font-size:18px;color:#ffb060">· 40 mm ×${gl} [molette]</span>`;
+      const g = gl == null ? '' : ` <span style="font-size:18px;color:#ffb060">· 40 mm ×${gl} [clic molette]</span>`;
       this.el.ammo.innerHTML = (reloading ? `<span>RECHARGEMENT…</span>` : `${mag} <span>/ ${reserve}</span>`) + g;
     });
   }
@@ -114,7 +122,7 @@ export class Hud {
         .map((w, i) => {
           const name = (SHORT[w.id] || w.id) + '+'.repeat(w.pap | 0);
           const isAct = i === activeIdx;
-          return `<span style="color:${isAct ? '#ffd24a' : '#777'};font-weight:${isAct ? 'bold' : 'normal'}">${i + 1}: ${name}</span>`;
+          return `<span style="color:${isAct ? '#ffd24a' : '#777'};font-weight:${isAct ? 'bold' : 'normal'}">${this.binds ? this.binds.label('weapon' + (i + 1)) : i + 1}: ${name}</span>`;
         })
         .join(' &nbsp;·&nbsp; ');
     });
@@ -318,7 +326,7 @@ export class Hud {
   }
 
   setNades(n) {
-    this._set('nades', n, () => { this.el.nades.textContent = `GRENADES [G] ${'● '.repeat(n)}${n ? '' : '—'}`; });
+    this._set('nades', n, () => { this.el.nades.textContent = `GRENADES ${this.binds ? this.binds.tag('grenade') : '[G]'} ${'● '.repeat(n)}${n ? '' : '—'}`; });
   }
 
   setPerks(perks, defs) {
@@ -561,9 +569,11 @@ export class Hud {
 
   // Affiche un seul panneau du menu (titlePanel, menuPanel, pausePanel, optionsPanel) ou aucun.
   showPanel(name) {
-    for (const k of ['titlePanel', 'menuPanel', 'pausePanel', 'optionsPanel']) {
+    for (const k of ['titlePanel', 'menuPanel', 'pausePanel', 'optionsPanel', 'keysPanel']) {
       this.el[k].classList.toggle('hidden', k !== name);
     }
+    this.el.overlay.classList.toggle('keysOpen', name === 'keysPanel'); // le menu Touches prend toute la place (titre masqué)
+    this.el.overlay.classList.toggle('optionsOpen', name === 'optionsPanel'); // options : titre masqué sur les petits écrans
   }
 
   showMenu(title, text) {
