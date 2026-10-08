@@ -1281,7 +1281,7 @@ const game = {
     this.updateTeamMarks();
     if (world.zoneOf) hud.setZone(world.zoneNames[world.zoneOf(p.pos.x, p.pos.z)]);
     hud.drawMap(world, p, [...this.remotes.values()], this.isMultiplayer ? slotColor(this.mySlot) : '#66ff99');
-    hud.setAmmo(curW.ammo, curW.reserve, curW.reloading);
+    hud.setAmmo(curW.ammo, curW.reserve, curW.reloading, curCfg.gl ? curW.gl : undefined);
     hud.setPoints(this.points);
     hud.setInventory(p.inventory, p.weaponIdx);
     hud.setPowerups(this.buffs);

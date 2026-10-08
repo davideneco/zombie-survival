@@ -8,21 +8,6 @@ import { CONFIG, PAP_LEVELS, papPulse } from './config.js';
 
 let KIT = null;
 
-function raygunModel() {
-  const g = new THREE.Group();
-  const red = new THREE.MeshStandardMaterial({ color: 0x9a2a1e, roughness: 0.4, metalness: 0.6 });
-  const grey = new THREE.MeshStandardMaterial({ color: 0x33363b, roughness: 0.5, metalness: 0.6 });
-  const dark = new THREE.MeshStandardMaterial({ color: 0x1b1b1d, roughness: 0.45, metalness: 0.7 });
-  const glow = new THREE.MeshStandardMaterial({ color: 0x55ff77, emissive: 0x33ff55, emissiveIntensity: 2 });
-  const box = (w, h, d, x, y, z, mat) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat); m.position.set(x, y, z); g.add(m); return m; };
-  box(0.07, 0.08, 0.22, 0, 0, -0.05, red);
-  for (let i = 0; i < 3; i++) box(0.12, 0.012, 0.03, 0, 0, -0.08 - i * 0.05, grey);
-  const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.035, 10, 8), glow);
-  bulb.position.set(0, 0, -0.2); g.add(bulb);
-  box(0.035, 0.11, 0.05, 0, -0.08, 0.05, dark).rotation.x = -0.25;
-  return g;
-}
-
 export function weaponKit() {
   if (KIT) return KIT;
   const holder = new THREE.Group();
@@ -39,9 +24,6 @@ export function weaponKit() {
     hands[id] = { front: hs.length > 1 ? hs[0] : null, back: hs[hs.length - 1] || new THREE.Vector3(0, -0.11, 0.08) };
     muzzles[id] = built.info[id].muzzle;
   }
-  models.raygun = raygunModel();
-  hands.raygun = { front: new THREE.Vector3(0, -0.09, 0.05), back: new THREE.Vector3(0, -0.12, 0.09) };
-  muzzles.raygun = -0.22;
   KIT = { models, hands, muzzles };
   return KIT;
 }

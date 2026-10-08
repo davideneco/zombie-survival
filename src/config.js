@@ -394,7 +394,7 @@ for (const w of Object.values(CONFIG.weapons)) {
 }
 
 // Chargeur fixé à partir du niveau II par l'accessoire (tambour de 75 coups de l'AK-47…), au lieu du calcul général
-const PAP_MAG = { ak47: 75 };
+const PAP_MAG = { ak47: 75, saiga: 20, crossbow: 3, m79: 3 };
 
 // Statistiques d'une arme au niveau lv (1 à 3) du Pack-a-Punch, à partir de ses stats de base ; {} au niveau 0. Les atouts (Double Tap,
 // Speed Cola) s'appliquent ensuite (Player.statsOf). Fonction pure : le jeu et tools/make-docs.mjs s'en servent.
@@ -414,6 +414,16 @@ export function papStats(base, lv) {
   if (base.splash) s.splash = { radius: base.splash.radius * 1.3, damage: base.splash.damage * 2 };            // pistolet à rayons
   if (base.papSplash) s.splash = { ...base.papSplash };                                                        // arbalète : carreau explosif
   if (base.blast) s.blast = { ...base.blast, radius: base.blast.radius * 1.3, damage: base.blast.damage * 2 }; // M79 : explosion x2, rayon x1,3
+  // ---- particularités par catégorie et par niveau (accessoires, voir viewmodels.js)
+  const cat = base.cat, id = base.id;
+  if (cat === 'mg') { s.zoom = 45; if (lv === 3) s.fireRate = base.fireRate * 1.15; }  // ACOG (champ de vision de la visée) ; canon lourd au niveau III
+  if (cat === 'shotgun') { s.spread *= 0.8; if (lv === 3) { s.pellets = 12; s.tracer = 0xff9a30; } } // choke ; souffle du dragon : 12 plombs orange
+  if (cat === 'sniper' && lv === 3) s.boom = { radius: 2, frac: 0.4, color: 0xff8a2a };           // balles explosives : explosion de 2 m à 40 % des dégâts du tir
+  if (lv === 3 && ['pistol', 'ar', 'smg', 'mg'].includes(cat)) s.ether = { chance: 0.2, radius: 2, frac: 0.5, color: 0x66ffe0 }; // Éther : 20 % des touches, explosion de 2 m à 50 %
+  if (lv === 3 && cat === 'ar') s.gl = { shells: 3, cooldown: 1 };                                   // lance-grenades sous canon (clic molette)
+  if (id === 'raygun') { s.pierce = [0, 2, 3, 6][lv]; s.splash = { radius: base.splash.radius * 1.3, damage: base.splash.damage * [0, 2, 2.8, 4][lv] }; }
+  if (id === 'crossbow' && lv === 3) s.splash = { ...base.papSplash, radius: base.papSplash.radius + 1, damage: base.papSplash.damage * 1.5 }; // fragmentation
+  if (id === 'm79') s.blast = { ...base.blast, radius: base.blast.radius * [0, 1.3, 1.45, 1.6][lv], damage: base.blast.damage * [0, 2, 3, 4.5][lv] };
   return s;
 }
 

@@ -101,7 +101,7 @@ export class Player {
 
   newWeapon(id) {
     const cfg = CONFIG.weapons[id];
-    return { id, ammo: cfg.magSize, reserve: cfg.startReserve, reloading: false, reloadT: 0, pap: 0 };
+    return { id, ammo: cfg.magSize, reserve: cfg.startReserve, reloading: false, reloadT: 0, pap: 0, gl: 0 };
   }
 
   // Apparence des bras en vue à la première personne
@@ -169,7 +169,9 @@ export class Player {
 
   // Réserve pleine (borne, mur, munitions max, Pack-a-Punch)
   refill(w) {
-    w.reserve = this.statsOf(w).maxReserve;
+    const s = this.statsOf(w);
+    w.reserve = s.maxReserve;
+    if (s.gl) w.gl = s.gl.shells; // obus du lance-grenades sous canon
   }
 
   switchWeapon(idx) {
@@ -186,6 +188,8 @@ export class Player {
       grp.visible = id === w.id;
       if (grp.visible) {
         attachAccessories(grp, w.id, w.pap | 0, grp, { local: true }); // accessoires du niveau (reconstruits seulement si le niveau change)
+        const bl = []; grp.traverse((o) => { if (o.userData.bolt) bl.push(o); }); // carreaux (arbalète), accessoires compris
+        if (bl.length) this.bolts[w.id] = bl;
         const L = PAP_LEVELS[w.pap | 0];
         this.tintMats = new Set();
         grp.traverse((o) => {
@@ -239,6 +243,7 @@ export class Player {
     document.addEventListener('mousedown', (e) => {
       if (!this.game.playing || this.game.debugMenu?.open) return;
       if (e.button === 0) this.mouseDown = true;
+      if (e.button === 1) { e.preventDefault(); this.fireGL(this.game.time); } // clic molette : lance-grenades sous canon (niveau III des fusils d'assaut)
       if (e.button === 2) this.aiming = true;
     });
     document.addEventListener('mouseup', (e) => {
@@ -248,7 +253,7 @@ export class Player {
     document.addEventListener('contextmenu', (e) => e.preventDefault());
     document.addEventListener('mousemove', (e) => {
       if (!this.game.playing) return;
-      const zoom = this.aim > 0.5 ? (this.curCfg.adsFov ? 0.3 : 0.6) : 1;
+      const zoom = this.aim > 0.5 ? (this.curCfg.adsFov ? 0.3 : this.curCfg.zoom ? 0.45 : 0.6) : 1;
       const sens = 0.0022 * this.game.settings.sens * zoom;
       this.yaw -= e.movementX * sens;
       this.pitch -= e.movementY * sens;
@@ -273,35 +278,10 @@ export class Player {
 
   // ------------------------------------------------------------ Viewmodels
   buildViewmodels() {
-    const mats = () => ({
-      dark: new THREE.MeshStandardMaterial({ color: 0x1b1b1d, roughness: 0.45, metalness: 0.7 }),
-      wood: new THREE.MeshStandardMaterial({ color: 0x4a3220, roughness: 0.8 }),
-      skin: new THREE.MeshStandardMaterial({ color: 0xc9a07a, roughness: 0.8 }),
-      grey: new THREE.MeshStandardMaterial({ color: 0x33363b, roughness: 0.5, metalness: 0.6 }),
-    });
-
     this.vm = new THREE.Group();
     this.vms = {};
 
-    const addBox = (parent, w, h, d, x, y, z, mat) => {
-      const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
-      m.position.set(x, y, z);
-      parent.add(m);
-      return m;
-    };
-    const hands = (grp, M, front, back) => {
-      addBox(grp, 0.09, 0.09, 0.14, front[0], front[1], front[2], M.skin).userData.skin = true;
-      addBox(grp, 0.09, 0.09, 0.1, back[0], back[1], back[2], M.skin).userData.skin = true;
-    };
-    const weapon = (id, build) => {
-      const grp = new THREE.Group();
-      build(grp, mats());
-      grp.visible = false;
-      this.vm.add(grp);
-      this.vms[id] = grp;
-    };
-
-    // Toutes les armes classiques : modèles détaillés (viewmodels.js)
+    // Toutes les armes : modèles détaillés (viewmodels.js)
     const built = buildWeaponModels(this.vm);
     Object.assign(this.vms, built.vms);
     this.vmInfo = built.info;
@@ -312,19 +292,6 @@ export class Player {
       grp.traverse((o) => { if (o.userData.bolt) list.push(o); });
       if (list.length) this.bolts[id] = list;
     }
-    // PISTOLET À RAYONS : corps rouge, ailettes, bulbe vert lumineux
-    weapon('raygun', (grp, M) => {
-      const red = new THREE.MeshStandardMaterial({ color: 0x9a2a1e, roughness: 0.4, metalness: 0.6 });
-      const glow = new THREE.MeshStandardMaterial({ color: 0x55ff77, emissive: 0x33ff55, emissiveIntensity: 2 });
-      addBox(grp, 0.07, 0.08, 0.22, 0, 0, -0.05, red);
-      for (let i = 0; i < 3; i++) addBox(grp, 0.12, 0.012, 0.03, 0, 0.0, -0.08 - i * 0.05, M.grey);
-      const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.035, 10, 8), glow);
-      bulb.position.set(0, 0, -0.2); bulb.userData.glow = true;
-      grp.add(bulb);
-      addBox(grp, 0.035, 0.11, 0.05, 0, -0.08, 0.05, M.dark).rotation.x = -0.25;
-      hands(grp, M, [0.0, -0.09, 0.05], [0, -0.11, 0.09]);
-    });
-
     // Mains et manches : couleurs du personnage choisi (setCharacter)
     this.sleeveMat = new THREE.MeshStandardMaterial({ color: 0x4a5530, roughness: 0.9 });
     this.handMats = [];
@@ -448,7 +415,7 @@ export class Player {
     // ---- visée (ADS) ----
     this.aim += ((this.aiming && !this.downed ? 1 : 0) - this.aim) * Math.min(1, dt * 12);
     const base = this.game.settings.fov;
-    const fov = base - (cfg.adsFov ? base - cfg.adsFov : ADS_DELTA) * this.aim + (veh ? Math.min(12, Math.abs(veh.v.speed) * 0.55) * (1 - 0.5 * this.ride.k) : 0);
+    const fov = base - (cfg.adsFov || cfg.zoom ? base - (cfg.adsFov || cfg.zoom) : ADS_DELTA) * this.aim + (veh ? Math.min(12, Math.abs(veh.v.speed) * 0.55) * (1 - 0.5 * this.ride.k) : 0);
     if (Math.abs(fov - this.camera.fov) > 0.01) {
       this.camera.fov = fov;
       this.camera.updateProjectionMatrix();
@@ -753,7 +720,9 @@ export class Player {
         if (seen.has(z)) continue;
         seen.add(z);
         // chute des dégâts selon la distance, propre à chaque zombie touché (calcul côté tireur : z_hit inchangé)
-        this.game.hitZombie(z, h.object.userData.head, h.point, cfg.damage * falloffMult(cfg, h.distance), cfg.headMult);
+        const dmg = cfg.damage * falloffMult(cfg, h.distance);
+        this.game.hitZombie(z, h.object.userData.head, h.point, dmg, cfg.headMult);
+        if (cfg.ether && Math.random() < cfg.ether.chance) this.game.splash(h.point, cfg.ether.radius, dmg * cfg.ether.frac, cfg.ether.color); // Éther (niveau III)
         end = h.point;
         if (--budget <= 0) { stopped = true; break; }
       }
@@ -762,6 +731,7 @@ export class Player {
         if (fast && wallT < cfg.range) this.game.impact(end);
       }
       if (cfg.splash) this.game.splash(end, cfg.splash.radius, cfg.splash.damage, cfg.splash.color);
+      if (cfg.boom) this.game.splash(end, cfg.boom.radius, cfg.damage * cfg.boom.frac, cfg.boom.color); // balles explosives (fusils de précision, niveau III)
       this.game.tracer(origin, end, cfg.tracer);
       this.game.onPlayerShot?.(origin, end, cfg.id, { tc: cfg.tracer });
     }
@@ -801,6 +771,20 @@ export class Player {
     const vel = dir.clone().multiplyScalar(cfg.proj.speed);
     this.game.launchShell(origin, vel, true, null, cfg.pap | 0);
     this.game.onPlayerShot?.(origin, origin.clone().addScaledVector(dir, 1), cfg.id, { nt: 1 });
+  }
+
+  // Lance-grenades sous canon (clic molette) : un obus de 40 mm, comme celui du M79 ordinaire (niveau 0), cooldown s entre deux coups
+  fireGL(now) {
+    const w = this.curW, cfg = this.curCfg;
+    if (!cfg.gl || w.gl <= 0 || now < (this.nextGL || 0) || this.locked || this.vault || this.downed || this.dead || (this.vehicle && this.vehicle.seat === 0)) return false;
+    w.gl--;
+    this.nextGL = now + cfg.gl.cooldown;
+    this.kick = 1; this.recoil += 0.04;
+    this.game.weaponSound('m79');
+    this.camera.updateMatrixWorld(true);
+    const M = CONFIG.weapons.m79;
+    this.fireLauncher({ id: 'm79', spread: M.spread, proj: M.proj, pap: 0 }, (this.aiming ? 0.4 : 1) * 1);
+    return true;
   }
 
   reload() {

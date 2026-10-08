@@ -75,9 +75,11 @@ export class Hud {
     this.lowHealth = 1 - h / max;
   }
 
-  setAmmo(mag, reserve, reloading) {
-    this._set('ammo', `${mag}/${reserve}/${reloading}`, () => {
-      this.el.ammo.innerHTML = reloading ? `<span>RECHARGEMENT…</span>` : `${mag} <span>/ ${reserve}</span>`;
+  // gl : obus restants du lance-grenades sous canon (niveau III des fusils d'assaut), undefined sinon
+  setAmmo(mag, reserve, reloading, gl) {
+    this._set('ammo', `${mag}/${reserve}/${reloading}/${gl}`, () => {
+      const g = gl == null ? '' : ` <span style="font-size:18px;color:#ffb060">· 40 mm ×${gl} [molette]</span>`;
+      this.el.ammo.innerHTML = (reloading ? `<span>RECHARGEMENT…</span>` : `${mag} <span>/ ${reserve}</span>`) + g;
     });
   }
 

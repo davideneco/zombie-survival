@@ -156,7 +156,13 @@ const P = C.player, Zc = C.zombie, S = C.sector;
 const zoneOfMachine = (id) => D.machines.filter((m) => m.id === id).map((m) => zname(m.zone)).join(', ');
 
 // Effets propres à une arme améliorée (colonne « Particularités »)
-const papExtras = (w, s) => [s.ether && `Éther : ${s.ether.chance * 100} % des touches, explosion ${s.ether.radius} m à ${s.ether.frac * 100} %`, s.gl && `lance-grenades sous canon : ${s.gl.shells} obus 40 mm (clic molette)`].filter(Boolean).join(' ; ');
+const papExtras = (w, s) => [
+  s.zoom && `viseur ACOG (zoom ${s.zoom}°)`, w.cat === 'mg' && s.pap === 3 && 'canon lourd : cadence x1,15', s.ether && `Éther : ${s.ether.chance * 100} % des touches, explosion ${s.ether.radius} m à ${s.ether.frac * 100} % des dégâts`,
+  s.gl && `lance-grenades sous canon : ${s.gl.shells} obus 40 mm (clic molette)`, s.boom && `balles explosives : explosion ${s.boom.radius} m à ${s.boom.frac * 100} % des dégâts`,
+  w.cat === 'shotgun' && `choke (dispersion x0,8)${s.pellets !== w.pellets ? ' ; souffle du dragon : ' + s.pellets + ' plombs' : ''}`,
+  w.type === 'launcher' && `explosion rayon ${fr(s.blast.radius)} m, ${fr(s.blast.damage, 0)} dégâts`, w.splash && `explosion à l'impact rayon ${fr(s.splash.radius)} m, ${fr(s.splash.damage, 0)} dégâts`,
+  w.papSplash && `carreau ${s.pap === 3 ? 'à fragmentation' : 'explosif'} : rayon ${fr(s.splash.radius)} m, ${fr(s.splash.damage, 0)} dégâts`,
+].filter(Boolean).join(' ; ');
 const T = {}; // nom -> { title, header, rows }
 const table = (key, title, header, rows) => { T[key] = { title, header, rows }; };
 table('01_armes', 'Armes', ['id', 'Arme', 'Catégorie', 'Calibre', 'Type', 'Dégâts par balle', 'Plombs par tir', 'Multiplicateur tête', 'Cadence (tirs/s)', 'DPS approx.', 'Chargeur', 'Réserve départ', 'Réserve max', 'Rechargement (s)', 'Dispersion', 'Portée (m)', 'Zombies traversés', 'Explosion rayon (m)', 'Explosion dégâts', 'Prix au mur (pts)', 'Prix munitions (pts)', 'Où l\'obtenir'],

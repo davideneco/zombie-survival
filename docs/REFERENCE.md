@@ -1,6 +1,6 @@
 # Zombie Survival — fiche de référence
 
-Version du jeu : **v0.33.1 · b0b5c72 · 2026-10-08** (package 0.34.0). Générée automatiquement par `node tools/make-docs.mjs` à partir de `src/config.js` et du jeu.
+Version du jeu : **v0.33.1 · b0b5c72 · 2026-10-08** (package 0.35.0). Générée automatiquement par `node tools/make-docs.mjs` à partir de `src/config.js` et du jeu.
 Carte annotée : [carte.png](carte.png). Armes de profil : [armes.png](armes.png). Les mêmes tableaux en tableur : dossier [csv/](csv/).
 
 Pour demander une modification, citez la ligne (ex. « Mitrailleuse RPK : chargeur 100 », « Mastodonte à 3000 pts », « porte P3 à 500 pts », « mettre la boîte mystère dans la zone Temple-Neuf »).
@@ -46,73 +46,73 @@ Prix d'une porte : le plus cher des deux prix de zone (colonne « Prix de la por
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|
 | m1911 | COLT M1911 | I | MUSTANG & SALLY | 5000 | 125 | 3,12 | 11 | 126 | 2 | 1,5 | 0,01 | 450 |  |
 | m1911 | COLT M1911 | II | MUSTANG & SALLY II | 10000 | 175 | 3,38 | 14 | 168 | 3 | 1,27 | 0,0085 | 600 |  |
-| m1911 | COLT M1911 | III | MUSTANG & SALLY III | 20000 | 250 | 3,64 | 14 | 210 | 4 | 1,13 | 0,007 | 750 |  |
+| m1911 | COLT M1911 | III | MUSTANG & SALLY III | 20000 | 250 | 3,64 | 14 | 210 | 4 | 1,13 | 0,007 | 750 | Éther : 20 % des touches, explosion 2 m à 50 % des dégâts |
 | arex | AREX ZERO 1 | I | ZÉRO ABSOLU | 5000 | 72,5 | 2,64 | 26 | 204 | 2 | 1,4 | 0,009 | 750 |  |
 | arex | AREX ZERO 1 | II | ZÉRO ABSOLU II | 10000 | 101,5 | 2,86 | 34 | 272 | 3 | 1,19 | 0,0076 | 1000 |  |
-| arex | AREX ZERO 1 | III | ZÉRO ABSOLU III | 20000 | 145 | 3,08 | 34 | 340 | 4 | 1,05 | 0,0063 | 1250 |  |
+| arex | AREX ZERO 1 | III | ZÉRO ABSOLU III | 20000 | 145 | 3,08 | 34 | 340 | 4 | 1,05 | 0,0063 | 1250 | Éther : 20 % des touches, explosion 2 m à 50 % des dégâts |
 | deagle | DESERT EAGLE | I | L'AIGLE NOIR | 5000 | 400 | 3,6 | 11 | 84 | 4 | 1,9 | 0,011 | 1800 |  |
 | deagle | DESERT EAGLE | II | L'AIGLE NOIR II | 10000 | 560 | 3,9 | 14 | 112 | 5 | 1,61 | 0,0093 | 2400 |  |
-| deagle | DESERT EAGLE | III | L'AIGLE NOIR III | 20000 | 800 | 4,2 | 14 | 140 | 6 | 1,42 | 0,0077 | 3000 |  |
+| deagle | DESERT EAGLE | III | L'AIGLE NOIR III | 20000 | 800 | 4,2 | 14 | 140 | 6 | 1,42 | 0,0077 | 3000 | Éther : 20 % des touches, explosion 2 m à 50 % des dégâts |
 | magnum | COLT PYTHON .357 | I | LE VENGEUR | 5000 | 357,5 | 3,6 | 9 | 108 | 4 | 2,2 | 0,006 | 1500 |  |
 | magnum | COLT PYTHON .357 | II | LE VENGEUR II | 10000 | 500,5 | 3,9 | 12 | 144 | 5 | 1,87 | 0,0051 | 2000 |  |
-| magnum | COLT PYTHON .357 | III | LE VENGEUR III | 20000 | 715 | 4,2 | 12 | 180 | 6 | 1,65 | 0,0042 | 2500 |  |
+| magnum | COLT PYTHON .357 | III | LE VENGEUR III | 20000 | 715 | 4,2 | 12 | 180 | 6 | 1,65 | 0,0042 | 2500 | Éther : 20 % des touches, explosion 2 m à 50 % des dégâts |
 | rifle | M4A1 | I | M4 ÉCLIPSE | 5000 | 90 | 2,88 | 45 | 270 | 2 | 1,8 | 0,012 | 900 |  |
 | rifle | M4A1 | II | M4 ÉCLIPSE II | 10000 | 126 | 3,12 | 60 | 360 | 3 | 1,53 | 0,0102 | 1200 |  |
-| rifle | M4A1 | III | M4 ÉCLIPSE III | 20000 | 180 | 3,36 | 60 | 450 | 4 | 1,35 | 0,0084 | 1500 |  |
+| rifle | M4A1 | III | M4 ÉCLIPSE III | 20000 | 180 | 3,36 | 60 | 450 | 4 | 1,35 | 0,0084 | 1500 | Éther : 20 % des touches, explosion 2 m à 50 % des dégâts ; lance-grenades sous canon : 3 obus 40 mm (clic molette) |
 | ak47 | AK-47 | I | AK-ENFER | 5000 | 135 | 2,76 | 45 | 315 | 2 | 2,4 | 0,017 | 1800 |  |
 | ak47 | AK-47 | II | AK-ENFER II | 10000 | 189 | 2,99 | 75 | 420 | 3 | 2,04 | 0,0145 | 2400 |  |
-| ak47 | AK-47 | III | AK-ENFER III | 20000 | 270 | 3,22 | 75 | 525 | 4 | 1,8 | 0,0119 | 3000 |  |
+| ak47 | AK-47 | III | AK-ENFER III | 20000 | 270 | 3,22 | 75 | 525 | 4 | 1,8 | 0,0119 | 3000 | Éther : 20 % des touches, explosion 2 m à 50 % des dégâts ; lance-grenades sous canon : 3 obus 40 mm (clic molette) |
 | famas | FAMAS F1 | I | LE CLAIRON MAUDIT | 5000 | 100 | 2,88 | 38 | 338 | 2 | 2,2 | 0,014 | 1500 |  |
 | famas | FAMAS F1 | II | LE CLAIRON MAUDIT II | 10000 | 140 | 3,12 | 50 | 450 | 3 | 1,87 | 0,0119 | 2000 |  |
-| famas | FAMAS F1 | III | LE CLAIRON MAUDIT III | 20000 | 200 | 3,36 | 50 | 563 | 4 | 1,65 | 0,0098 | 2500 |  |
+| famas | FAMAS F1 | III | LE CLAIRON MAUDIT III | 20000 | 200 | 3,36 | 50 | 563 | 4 | 1,65 | 0,0098 | 2500 | Éther : 20 % des touches, explosion 2 m à 50 % des dégâts ; lance-grenades sous canon : 3 obus 40 mm (clic molette) |
 | scar | SCAR-H | I | LE BALAFRÉ | 5000 | 195 | 3 | 30 | 270 | 4 | 2,3 | 0,018 | 2400 |  |
 | scar | SCAR-H | II | LE BALAFRÉ II | 10000 | 273 | 3,25 | 40 | 360 | 5 | 1,95 | 0,0153 | 3200 |  |
-| scar | SCAR-H | III | LE BALAFRÉ III | 20000 | 390 | 3,5 | 40 | 450 | 6 | 1,72 | 0,0126 | 4000 |  |
+| scar | SCAR-H | III | LE BALAFRÉ III | 20000 | 390 | 3,5 | 40 | 450 | 6 | 1,72 | 0,0126 | 4000 | Éther : 20 % des touches, explosion 2 m à 50 % des dégâts ; lance-grenades sous canon : 3 obus 40 mm (clic molette) |
 | smg | MP40 | I | PM INFERNAL | 5000 | 75 | 2,64 | 48 | 336 | 2 | 1,5 | 0,022 | 1500 |  |
 | smg | MP40 | II | PM INFERNAL II | 10000 | 105 | 2,86 | 64 | 448 | 3 | 1,27 | 0,0187 | 2000 |  |
-| smg | MP40 | III | PM INFERNAL III | 20000 | 150 | 3,08 | 64 | 560 | 4 | 1,13 | 0,0154 | 2500 |  |
+| smg | MP40 | III | PM INFERNAL III | 20000 | 150 | 3,08 | 64 | 560 | 4 | 1,13 | 0,0154 | 2500 | Éther : 20 % des touches, explosion 2 m à 50 % des dégâts |
 | mp5 | MP5 | I | MP-115 | 5000 | 65 | 2,64 | 45 | 405 | 2 | 1,8 | 0,017 | 1500 |  |
 | mp5 | MP5 | II | MP-115 II | 10000 | 91 | 2,86 | 60 | 540 | 3 | 1,53 | 0,0145 | 2000 |  |
-| mp5 | MP5 | III | MP-115 III | 20000 | 130 | 3,08 | 60 | 675 | 4 | 1,35 | 0,0119 | 2500 |  |
+| mp5 | MP5 | III | MP-115 III | 20000 | 130 | 3,08 | 60 | 675 | 4 | 1,35 | 0,0119 | 2500 | Éther : 20 % des touches, explosion 2 m à 50 % des dégâts |
 | p90 | FN P90 | I | LE FRELON | 5000 | 55 | 2,4 | 75 | 525 | 4 | 2,6 | 0,02 | 2100 |  |
 | p90 | FN P90 | II | LE FRELON II | 10000 | 77 | 2,6 | 100 | 700 | 5 | 2,21 | 0,017 | 2800 |  |
-| p90 | FN P90 | III | LE FRELON III | 20000 | 110 | 2,8 | 100 | 875 | 6 | 1,95 | 0,014 | 3500 |  |
-| lmg | RPK | I | RPK DÉVASTATEUR | 5000 | 127,5 | 2,4 | 113 | 675 | 2 | 3,6 | 0,028 | 3000 |  |
-| lmg | RPK | II | RPK DÉVASTATEUR II | 10000 | 178,5 | 2,6 | 150 | 900 | 3 | 3,06 | 0,0238 | 4000 |  |
-| lmg | RPK | III | RPK DÉVASTATEUR III | 20000 | 255 | 2,8 | 150 | 1125 | 4 | 2,7 | 0,0196 | 5000 |  |
-| m249 | M249 SAW | I | LA FAUCHEUSE | 5000 | 100 | 2,4 | 150 | 750 | 2 | 4,2 | 0,032 | 3600 |  |
-| m249 | M249 SAW | II | LA FAUCHEUSE II | 10000 | 140 | 2,6 | 200 | 1000 | 3 | 3,57 | 0,0272 | 4800 |  |
-| m249 | M249 SAW | III | LA FAUCHEUSE III | 20000 | 200 | 2,8 | 200 | 1250 | 4 | 3,15 | 0,0224 | 6000 |  |
-| mg42 | MG42 | I | LA SCIE D'HITLER… BRISÉE | 5000 | 160 | 2,4 | 75 | 675 | 4 | 5 | 0,04 | 3600 |  |
-| mg42 | MG42 | II | LA SCIE D'HITLER… BRISÉE II | 10000 | 224 | 2,6 | 100 | 900 | 5 | 4,25 | 0,034 | 4800 |  |
-| mg42 | MG42 | III | LA SCIE D'HITLER… BRISÉE III | 20000 | 320 | 2,8 | 100 | 1125 | 6 | 3,75 | 0,028 | 6000 |  |
-| pkm | PKM | I | LE BULLDOZER | 5000 | 160 | 2,4 | 150 | 750 | 4 | 4,8 | 0,03 | 3900 |  |
-| pkm | PKM | II | LE BULLDOZER II | 10000 | 224 | 2,6 | 200 | 1000 | 5 | 4,08 | 0,0255 | 5200 |  |
-| pkm | PKM | III | LE BULLDOZER III | 20000 | 320 | 2,8 | 200 | 1250 | 6 | 3,6 | 0,021 | 6500 |  |
+| p90 | FN P90 | III | LE FRELON III | 20000 | 110 | 2,8 | 100 | 875 | 6 | 1,95 | 0,014 | 3500 | Éther : 20 % des touches, explosion 2 m à 50 % des dégâts |
+| lmg | RPK | I | RPK DÉVASTATEUR | 5000 | 127,5 | 2,4 | 113 | 675 | 2 | 3,6 | 0,028 | 3000 | viseur ACOG (zoom 45°) |
+| lmg | RPK | II | RPK DÉVASTATEUR II | 10000 | 178,5 | 2,6 | 150 | 900 | 3 | 3,06 | 0,0238 | 4000 | viseur ACOG (zoom 45°) |
+| lmg | RPK | III | RPK DÉVASTATEUR III | 20000 | 255 | 2,8 | 150 | 1125 | 4 | 2,7 | 0,0196 | 5000 | viseur ACOG (zoom 45°) ; canon lourd : cadence x1,15 ; Éther : 20 % des touches, explosion 2 m à 50 % des dégâts |
+| m249 | M249 SAW | I | LA FAUCHEUSE | 5000 | 100 | 2,4 | 150 | 750 | 2 | 4,2 | 0,032 | 3600 | viseur ACOG (zoom 45°) |
+| m249 | M249 SAW | II | LA FAUCHEUSE II | 10000 | 140 | 2,6 | 200 | 1000 | 3 | 3,57 | 0,0272 | 4800 | viseur ACOG (zoom 45°) |
+| m249 | M249 SAW | III | LA FAUCHEUSE III | 20000 | 200 | 2,8 | 200 | 1250 | 4 | 3,15 | 0,0224 | 6000 | viseur ACOG (zoom 45°) ; canon lourd : cadence x1,15 ; Éther : 20 % des touches, explosion 2 m à 50 % des dégâts |
+| mg42 | MG42 | I | LA SCIE D'HITLER… BRISÉE | 5000 | 160 | 2,4 | 75 | 675 | 4 | 5 | 0,04 | 3600 | viseur ACOG (zoom 45°) |
+| mg42 | MG42 | II | LA SCIE D'HITLER… BRISÉE II | 10000 | 224 | 2,6 | 100 | 900 | 5 | 4,25 | 0,034 | 4800 | viseur ACOG (zoom 45°) |
+| mg42 | MG42 | III | LA SCIE D'HITLER… BRISÉE III | 20000 | 320 | 2,8 | 100 | 1125 | 6 | 3,75 | 0,028 | 6000 | viseur ACOG (zoom 45°) ; canon lourd : cadence x1,15 ; Éther : 20 % des touches, explosion 2 m à 50 % des dégâts |
+| pkm | PKM | I | LE BULLDOZER | 5000 | 160 | 2,4 | 150 | 750 | 4 | 4,8 | 0,03 | 3900 | viseur ACOG (zoom 45°) |
+| pkm | PKM | II | LE BULLDOZER II | 10000 | 224 | 2,6 | 200 | 1000 | 5 | 4,08 | 0,0255 | 5200 | viseur ACOG (zoom 45°) |
+| pkm | PKM | III | LE BULLDOZER III | 20000 | 320 | 2,8 | 200 | 1250 | 6 | 3,6 | 0,021 | 6500 | viseur ACOG (zoom 45°) ; canon lourd : cadence x1,15 ; Éther : 20 % des touches, explosion 2 m à 50 % des dégâts |
 | sniper | L96A1 | I | ŒIL DU DÉMON | 5000 | 850 | 4,2 | 8 | 68 | 6 | 2,8 | 0,0015 | 2100 |  |
 | sniper | L96A1 | II | ŒIL DU DÉMON II | 10000 | 1190 | 4,55 | 10 | 90 | 7 | 2,38 | 0,0013 | 2800 |  |
-| sniper | L96A1 | III | ŒIL DU DÉMON III | 20000 | 1700 | 4,9 | 10 | 113 | 8 | 2,1 | 0,001 | 3500 |  |
+| sniper | L96A1 | III | ŒIL DU DÉMON III | 20000 | 1700 | 4,9 | 10 | 113 | 8 | 2,1 | 0,001 | 3500 | balles explosives : explosion 2 m à 40 % des dégâts |
 | svd | DRAGUNOV SVD | I | LA TSARINE | 5000 | 575 | 3,6 | 15 | 105 | 5 | 2,6 | 0,004 | 2400 |  |
 | svd | DRAGUNOV SVD | II | LA TSARINE II | 10000 | 805 | 3,9 | 20 | 140 | 6 | 2,21 | 0,0034 | 3200 |  |
-| svd | DRAGUNOV SVD | III | LA TSARINE III | 20000 | 1150 | 4,2 | 20 | 175 | 7 | 1,95 | 0,0028 | 4000 |  |
+| svd | DRAGUNOV SVD | III | LA TSARINE III | 20000 | 1150 | 4,2 | 20 | 175 | 7 | 1,95 | 0,0028 | 4000 | balles explosives : explosion 2 m à 40 % des dégâts |
 | barrett | BARRETT M82 | I | LE MARTEAU DE THOR | 5000 | 1750 | 3,6 | 15 | 75 | 8 | 3,4 | 0,002 | 4500 |  |
 | barrett | BARRETT M82 | II | LE MARTEAU DE THOR II | 10000 | 2450 | 3,9 | 20 | 100 | 9 | 2,89 | 0,0017 | 6000 |  |
-| barrett | BARRETT M82 | III | LE MARTEAU DE THOR III | 20000 | 3500 | 4,2 | 20 | 125 | 10 | 2,55 | 0,0014 | 7500 |  |
-| shotgun | REMINGTON 870 | I | LE BROYEUR | 5000 | 75 | 2,16 | 9 | 72 | 2 | 2,4 | 0,046 | 1050 |  |
-| shotgun | REMINGTON 870 | II | LE BROYEUR II | 10000 | 105 | 2,34 | 12 | 96 | 3 | 2,04 | 0,0391 | 1400 |  |
-| shotgun | REMINGTON 870 | III | LE BROYEUR III | 20000 | 150 | 2,52 | 12 | 120 | 4 | 1,8 | 0,0322 | 1750 |  |
-| saiga | SAIGA-12 | I | LE HACHOIR | 5000 | 67,5 | 2,16 | 12 | 96 | 2 | 2,6 | 0,05 | 2100 |  |
-| saiga | SAIGA-12 | II | LE HACHOIR II | 10000 | 94,5 | 2,34 | 16 | 128 | 3 | 2,21 | 0,0425 | 2800 |  |
-| saiga | SAIGA-12 | III | LE HACHOIR III | 20000 | 135 | 2,52 | 16 | 160 | 4 | 1,95 | 0,035 | 3500 |  |
-| crossbow | ARBALÈTE | I | LE CARREAU DE FER | 5000 | 1050 | 3,6 | 2 | 60 | 8 | 1,7 | 0,003 | 2100 |  |
-| crossbow | ARBALÈTE | II | LE CARREAU DE FER II | 10000 | 1470 | 3,9 | 2 | 80 | 9 | 1,44 | 0,0026 | 2800 |  |
-| crossbow | ARBALÈTE | III | LE CARREAU DE FER III | 20000 | 2100 | 4,2 | 2 | 100 | 10 | 1,27 | 0,0021 | 3500 |  |
-| m79 | M79 | I | LE BOUTEFEU | 5000 | 375 | 1,2 | 2 | 36 | 2 | 2,2 | 0,004 | 4500 |  |
-| m79 | M79 | II | LE BOUTEFEU II | 10000 | 525 | 1,3 | 2 | 48 | 3 | 1,87 | 0,0034 | 6000 |  |
-| m79 | M79 | III | LE BOUTEFEU III | 20000 | 750 | 1,4 | 2 | 60 | 4 | 1,65 | 0,0028 | 7500 |  |
-| raygun | PISTOLET À RAYONS | I | PORTE-TONNERRE | 5000 | 1600 | 1,8 | 36 | 360 | 2 | 2,6 | 0,008 | 4500 |  |
-| raygun | PISTOLET À RAYONS | II | PORTE-TONNERRE II | 10000 | 2200 | 1,95 | 48 | 480 | 3 | 2,21 | 0,0068 | 6000 |  |
-| raygun | PISTOLET À RAYONS | III | PORTE-TONNERRE III | 20000 | 3000 | 2,1 | 48 | 600 | 4 | 1,95 | 0,0056 | 7500 |  |
+| barrett | BARRETT M82 | III | LE MARTEAU DE THOR III | 20000 | 3500 | 4,2 | 20 | 125 | 10 | 2,55 | 0,0014 | 7500 | balles explosives : explosion 2 m à 40 % des dégâts |
+| shotgun | REMINGTON 870 | I | LE BROYEUR | 5000 | 75 | 2,16 | 9 | 72 | 2 | 2,4 | 0,0368 | 1050 | choke (dispersion x0,8) |
+| shotgun | REMINGTON 870 | II | LE BROYEUR II | 10000 | 105 | 2,34 | 12 | 96 | 3 | 2,04 | 0,0313 | 1400 | choke (dispersion x0,8) |
+| shotgun | REMINGTON 870 | III | LE BROYEUR III | 20000 | 150 | 2,52 | 12 | 120 | 4 | 1,8 | 0,0258 | 1750 | choke (dispersion x0,8) ; souffle du dragon : 12 plombs |
+| saiga | SAIGA-12 | I | LE HACHOIR | 5000 | 67,5 | 2,16 | 12 | 96 | 2 | 2,6 | 0,04 | 2100 | choke (dispersion x0,8) |
+| saiga | SAIGA-12 | II | LE HACHOIR II | 10000 | 94,5 | 2,34 | 20 | 128 | 3 | 2,21 | 0,034 | 2800 | choke (dispersion x0,8) |
+| saiga | SAIGA-12 | III | LE HACHOIR III | 20000 | 135 | 2,52 | 20 | 160 | 4 | 1,95 | 0,028 | 3500 | choke (dispersion x0,8) ; souffle du dragon : 12 plombs |
+| crossbow | ARBALÈTE | I | LE CARREAU DE FER | 5000 | 1050 | 3,6 | 2 | 60 | 8 | 1,7 | 0,003 | 2100 | carreau explosif : rayon 2,5 m, 700 dégâts |
+| crossbow | ARBALÈTE | II | LE CARREAU DE FER II | 10000 | 1470 | 3,9 | 3 | 80 | 9 | 1,44 | 0,0026 | 2800 | carreau explosif : rayon 2,5 m, 700 dégâts |
+| crossbow | ARBALÈTE | III | LE CARREAU DE FER III | 20000 | 2100 | 4,2 | 3 | 100 | 10 | 1,27 | 0,0021 | 3500 | carreau à fragmentation : rayon 3,5 m, 1050 dégâts |
+| m79 | M79 | I | LE BOUTEFEU | 5000 | 375 | 1,2 | 2 | 36 | 2 | 2,2 | 0,004 | 4500 | explosion rayon 6,5 m, 2400 dégâts |
+| m79 | M79 | II | LE BOUTEFEU II | 10000 | 525 | 1,3 | 3 | 48 | 3 | 1,87 | 0,0034 | 6000 | explosion rayon 7,25 m, 3600 dégâts |
+| m79 | M79 | III | LE BOUTEFEU III | 20000 | 750 | 1,4 | 3 | 60 | 4 | 1,65 | 0,0028 | 7500 | explosion rayon 8 m, 5400 dégâts |
+| raygun | PISTOLET À RAYONS | I | PORTE-TONNERRE | 5000 | 1600 | 1,8 | 36 | 360 | 2 | 2,6 | 0,008 | 4500 | explosion à l'impact rayon 4,55 m, 1800 dégâts |
+| raygun | PISTOLET À RAYONS | II | PORTE-TONNERRE II | 10000 | 2200 | 1,95 | 48 | 480 | 3 | 2,21 | 0,0068 | 6000 | explosion à l'impact rayon 4,55 m, 2520 dégâts |
+| raygun | PISTOLET À RAYONS | III | PORTE-TONNERRE III | 20000 | 3000 | 2,1 | 48 | 600 | 6 | 1,95 | 0,0056 | 7500 | explosion à l'impact rayon 4,55 m, 3600 dégâts |
 
 ## Boîte mystère (950 pts, une seule boîte : elle change d'emplacement après 1 à 30 tirages, en donnant un nounours remboursé)
 
