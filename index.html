@@ -78,6 +78,10 @@
     #prompt { position: absolute; left: 50%; top: 62%; transform: translateX(-50%); white-space: nowrap; font-size: 22px; text-shadow: 0 0 4px #000; background: rgba(0,0,0,0.5); padding: 4px 16px; border-radius: 4px; display: none; }
     /* Tableau de bord de la moto : compteur (gris sous le seuil d'écrasement, rouge au-dessus) et jauge de vitesse avec son trait de seuil */
     #vehHud { position: absolute; left: 50%; bottom: 3%; transform: translateX(-50%); width: 280px; text-align: center; display: none; text-shadow: 0 0 6px #000; }
+    #vSwitch { display: none; margin: 0 auto 6px; padding: 4px 10px; width: fit-content; max-width: 100%; font: bold 13px/1.25 Arial, sans-serif; letter-spacing: 1px; color: #f4f4e8; background: rgba(10,12,16,0.72); border: 1px solid #5a6068; border-radius: 4px; }
+    #vSwitch small { display: block; font-weight: normal; letter-spacing: 0.5px; color: #b9bec4; }
+    #vSwitch.diverge { border-color: #e8c04a; color: #ffe08a; }
+    #vSwitch.locked { border-style: dashed; }
     #speedo { font-size: 44px; font-weight: bold; letter-spacing: 2px; color: #9aa0a6; line-height: 1.05; }
     #speedo small { font-size: 18px; color: #ccc; margin-left: 6px; }
     #speedo.hot { color: #ff4a3a; }
@@ -199,6 +203,7 @@
     </div>
 
     <div id="vehHud">
+      <div id="vSwitch"></div>
       <div id="speedo"></div>
       <div class="vbar" id="vSpeedBar"><i id="vSpeedFill"></i><b id="vSpeedTick"></b></div>
       <div class="vrow" id="vHpRow"><span>PV MOTO</span><div class="vbar"><i id="vHpFill"></i></div><em id="vHpTxt"></em></div>

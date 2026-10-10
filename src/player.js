@@ -230,6 +230,7 @@ export class Player {
         if (B.is('vehicleView', e)) this.game.toggleVehicleView?.();
         else if (B.is('tramGong', e)) this.game.tramGong?.();
         else if (B.is('tramDoors', e)) this.game.tramDoors?.();
+        else if (B.is('tramSwitch', e)) this.game.tramSwitch?.();
       }
       else if (this.onTram && B.is('tramGong', e)) this.game.tramGong?.(); // debout dans la rame : gong et portes aussi
       else if (this.onTram && B.is('tramDoors', e)) this.game.tramDoors?.();

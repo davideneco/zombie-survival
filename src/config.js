@@ -461,6 +461,19 @@ export const CONFIG = {
     power: { price: 2000, range: 2.6, respawnRounds: 2 },
     // gong : attire les zombies à moins de `range` m pendant `duration` s (ils le prennent pour cible du champ de flux) ; recharge `cooldown` s
     gong: { range: 50, duration: 8, cooldown: 3 },
+    // aiguillages (v0.41.0) : au croisement des lignes A / D et B / C / F (nœud de l'Homme de Fer), deux raccords en arc tangents aux deux voies relient les bras
+    // `from` et `to` (un bras est une extrémité d'une ligne vue du nœud : line, end 0 = côté des abscisses décroissantes ; name : son nom à l'écran). Chaque
+    // bras a donc deux sorties : tout droit, ou le raccord. Le conducteur règle l'aiguillage (touche tramSwitch) tant que le nez de la rame n'a pas dépassé le
+    // point de divergence (lockGap m avant : verrouillé). Rayon des raccords : r m (vitesse plafonnée à racine(grip x r) comme tout virage). Les raccords
+    // BW > AN et AS > BE (virages à plus de 100 degrés) sont impossibles : le quai de l'Homme de Fer, la rotonde.
+    junction: {
+      name: 'Homme de Fer', a: 'AD', b: 'BCF', lockGap: 3, signalDist: 14,
+      arms: {
+        AN: { line: 'AD', end: 0, name: 'Heurtoir nord (A / D)' }, AS: { line: 'AD', end: 1, name: 'Place Kléber (A / D)' },
+        BW: { line: 'BCF', end: 0, name: 'Alt Winmärik (B / C / F)' }, BE: { line: 'BCF', end: 1, name: 'Broglie (B / C / F)' },
+      },
+      turns: [{ from: 'BW', to: 'AS', r: 25 }, { from: 'AN', to: 'BE', r: 30 }],
+    },
     lines: [
       {
         id: 'AD', name: 'A / D', color: '#d8452b',
@@ -470,7 +483,7 @@ export const CONFIG = {
       {
         id: 'BCF', name: 'B / C / F', color: '#2b6fd8',
         pts: [[-516, -190], [-493, -188, 30], [-366, -231, 40], [-297, -239.8, 40], [-262, -240.6, 30], [-194, -236, 40], [-97, -233, 40], [-37, -237, 30], [8, -257.6, 30], [41.6, -271.2, 40], [127.6, -329.4, 40], [158, -366, 30], [205, -368, 30], [250, -374, 40], [284, -378, 40], [315, -398, 40], [345, -404, 40], [378, -404, 40], [398, -384, 40], [436, -334, 40], [480, -290]],
-        stops: [{ name: 'Alt Winmärik', at: [-438, -206.6], len: 34 }, { name: 'Homme de Fer', at: [-332.2, -235.3], len: 40 }, { name: 'Broglie', at: [63.3, -285.9], len: 34 }, { name: 'République', at: [228.8, -371.2], len: 34 }, { name: 'Préfecture', at: [456, -314], len: 30 }],
+        stops: [{ name: 'Alt Winmärik', at: [-438, -206.6], len: 34 }, { name: 'Homme de Fer', at: [-345.1, -233.7], len: 22 }, { name: 'Broglie', at: [63.3, -285.9], len: 34 }, { name: 'République', at: [228.8, -371.2], len: 34 }, { name: 'Préfecture', at: [456, -314], len: 30 }],
       },
     ],
   },
@@ -547,6 +560,7 @@ CONFIG.keybinds = [
   { id: 'vehicleView', group: 'Équipement', label: 'Changer de vue (en moto ou en tram)', def: 'key:v', kind: 'key', ctx: 'moto' },
   { id: 'tramGong', group: 'Équipement', label: 'Gong du tram (attire les zombies)', def: 'key:h', kind: 'key', ctx: 'moto' },
   { id: 'tramDoors', group: 'Équipement', label: 'Portes du tram (ouvrir / fermer)', def: 'key:o', kind: 'key', ctx: 'moto' },
+  { id: 'tramSwitch', group: 'Équipement', label: 'Aiguillage du tram : tout droit / dévié (conducteur)', def: 'key:b', kind: 'key', ctx: 'moto' },
   { id: 'unstick', group: 'Équipement', label: 'Se débloquer (maintenir)', def: 'key:k', kind: 'key', ctx: 'foot' },
 ];
 // Touches fixes, affichées dans le menu mais non modifiables : [touche, action]

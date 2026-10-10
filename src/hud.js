@@ -13,6 +13,7 @@ export class Hud {
       prompt: $('prompt'),
       vehHud: $('vehHud'),
       speedo: $('speedo'),
+      vSwitch: $('vSwitch'),
       speedFill: $('vSpeedFill'),
       speedTick: $('vSpeedTick'),
       hpFill: $('vHpFill'),
@@ -150,6 +151,15 @@ export class Hud {
     this._set('vlabels', `${info.name || 'MOTO'}|${info.fuelLabel || 'ESSENCE'}`, () => { // PV MOTO / ESSENCE, ou PV TRAM / ÉNERGIE
       this.el.hpFill.closest('.vrow').firstElementChild.textContent = `PV ${info.name || 'MOTO'}`;
       this.el.fuelRow.firstElementChild.textContent = info.fuelLabel || 'ESSENCE';
+    });
+    // aiguillage du tram (v0.41.0) : direction choisie au prochain nœud, verrou, distance
+    const sw = info.sw, swKey = sw ? `${sw.name}|${sw.diverge}|${sw.locked}|${Math.round(sw.dist / 5)}|${this.binds ? this.binds.label('tramSwitch') : ''}` : '';
+    this._set('vsw', swKey, () => {
+      const el = this.el.vSwitch;
+      el.style.display = sw ? 'block' : 'none';
+      if (!sw) return;
+      el.classList.toggle('diverge', sw.diverge); el.classList.toggle('locked', sw.locked);
+      el.innerHTML = `AIGUILLAGE ▸ ${sw.diverge ? 'DÉVIÉ' : 'TOUT DROIT'} : ${sw.name}<small>${sw.locked ? 'verrouillé' : `${this.binds ? this.binds.tag('tramSwitch') : ''} pour changer`} · dans ${sw.dist} m</small>`;
     });
     const kmh = Math.round(Math.abs(info.speed) * 3.6), hot = Math.abs(info.speed) >= info.vmin;
     this._set('speedo', `${kmh}|${hot}`, () => {
@@ -522,6 +532,16 @@ export class Hud {
         t.at(st.s, o); const [x, y] = P(o.x, o.z);
         ctx.fillStyle = '#fff'; ctx.strokeStyle = '#000'; ctx.lineWidth = 1.5; ctx.fillRect(x - 3.5, y - 3.5, 7, 7); ctx.strokeRect(x - 3.5, y - 3.5, 7, 7);
         ctx.lineWidth = 3; ctx.strokeStyle = '#000'; ctx.strokeText(st.name, x, y + 15); ctx.fillStyle = '#e6edf5'; ctx.fillText(st.name, x, y + 15);
+      }
+    }
+    // raccords des aiguillages (v0.41.0) : trait gris clair entre les deux lignes
+    for (const c of world.tram?.net.connectors || []) {
+      const o = {};
+      ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+      for (const [lw, col] of [[5, 'rgba(0,0,0,0.75)'], [3, '#cfd4da']]) {
+        ctx.lineWidth = lw; ctx.strokeStyle = col; ctx.beginPath();
+        for (let s = 0; s <= c.L + 4; s += 4) { c.at(Math.min(s, c.L), o); const [x, y] = P(o.x, o.z); if (s === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y); }
+        ctx.stroke();
       }
     }
     // machines, armes, munitions

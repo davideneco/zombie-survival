@@ -35,7 +35,10 @@ export class Tram {
     const T = CONFIG.tram, C = T.car, D = T.drive;
     this.game = game; this.scene = scene;
     this.index = index; this.id = TRAM_ID0 + index; this.type = 'tram'; this.isTram = true;
-    this.track = track; this.startS = startS;
+    this.track = track; this.startS = startS; this.line0 = track;
+    this.reg = game.world.tram?.trackById || { [track.id]: track }; // voies par identifiant : lignes et itinéraires des aiguillages (v0.41.0)
+    this.jn = game.world.tram?.net.junction || null;
+    this.sw = 0; // aiguillage : 0 tout droit, 1 dévié (voir junctionStep)
     this.def = { name: 'TRAM', seats: 16, camArm: C.camArm, maxSpeed: D.maxSpeed, hp: T.hp, zombieHit: T.zombieHit, roadkill: { vmin: T.hit.zombieSpeed }, tank: 1 };
     this.n = C.modules; this.M = C.module; this.L = this.n * this.M;
     this.seats = Array(16).fill(null);
@@ -65,6 +68,7 @@ export class Tram {
   }
 
   reset() {
+    this.track = this.line0; this.sw = 0; this.game.world.tram?.setSwitch?.(0);
     this.s = this.startS; this.v = 0; this.speed = 0;
     this.hp = this.def.hp; this.state = 'ok'; this.hpDirty = false; this.hpSendT = 0; this.respawnRound = 0; this.respawnPending = false; this.respawnRetry = 0;
     this.seats.fill(null); this.sendT = 0; this.hitCd = new Map(); this.limitMsg = 0; this.autoMsg = 0; this.fxAcc = 0;
@@ -89,7 +93,7 @@ export class Tram {
   seatDyaw(seat) { return this.seatModule(seat).pose.dyaw; }
   // sens de marche de la cabine de `seat` dans l'axe de la voie : +1 (cabine avant) ou -1 (cabine arrière)
   cabDir(seat) { return seat === 0 ? 1 : -1; }
-  syncNet() { this.net = { s: this.s, v: this.v, d: this.doors.open ? 1 : 0, t: 0 }; }
+  syncNet() { this.net = { s: this.s, v: this.v, d: this.doors.open ? 1 : 0, k: this.track.id, sw: this.sw, t: 0 }; }
 
   // ---- repère de la rame (v0.40.0, voir tramInterior.js) : u le long de la rame depuis son centre (+ vers l'avant), w à droite ; un point (u, w) est celui de
   // la voie à l'abscisse s + u décalé de w vers la droite (continu d'un module à l'autre)
@@ -153,6 +157,7 @@ export class Tram {
     if (this.doors.f < target) this.doors.f = Math.min(target, this.doors.f + rate); else if (this.doors.f > target) this.doors.f = Math.max(target, this.doors.f - rate);
     this.speed = this.v;
     this.apply(dt);
+    { const c = g.player.camera.position; this.group.visible = Math.hypot(c.x - this.pos.x, c.z - this.pos.z) < 260; } // loin (au-delà du brouillard) : les 10 maillages des modules ne sont pas envoyés au rendu (v0.41.0)
     this.updateEngine(dt, local);
     this.updateFx(dt);
     if (local && g.isMultiplayer && g.net?.connected) {
@@ -165,11 +170,13 @@ export class Tram {
     if (this.sound.gong > 0) this.sound.gong -= dt;
     if (this.gongCd > 0) this.gongCd -= dt; // recharge du gong (v0.39.3 : le compte à rebours ne descendait jamais, un seul gong par partie)
   }
-  sendState() { this.game.net?.send({ t: 't_state', id: this.id, s: r2(this.s), v: r2(this.v), d: this.doors.open ? 1 : 0 }); }
+  sendState() { this.game.net?.send({ t: 't_state', id: this.id, s: r2(this.s), v: r2(this.v), d: this.doors.open ? 1 : 0, k: this.track.id, sw: this.sw }); }
 
   // Rame d'un autre joueur : on rejoint l'état reçu (extrapolé à la vitesse reçue)
   follow(dt) {
     const n = this.net;
+    if (n.k && n.k !== this.track.id) this.adoptTrack(n.k); // le conducteur a changé de voie (aiguillage)
+    if (n.sw != null && n.sw !== this.sw) this.setSwitch(n.sw);
     n.s += n.v * dt;
     const k = Math.min(1, dt * 8);
     if (Math.abs(n.s - this.s) > 20) this.s = n.s;
@@ -179,6 +186,81 @@ export class Tram {
     this.s = clamp(this.s, 0, this.track.L);
   }
 
+  // ------------------------------------------------------------------ aiguillages (v0.41.0, voir tramTrack.js : buildJunction)
+  // Les itinéraires d'un virage (ligne, arc, ligne) suivent exactement les lignes hors de l'arc. Passer d'une voie à l'autre ne change donc rien à ce qu'on voit,
+  // pourvu que la rame soit ENTIÈREMENT sur une partie commune : le centre est reprojeté sur la nouvelle voie (même géométrie, même sens), aucun saut.
+  adoptTrack(id) {
+    const to = this.reg[id];
+    if (!to || to === this.track) return false;
+    const o = this._o3 || (this._o3 = {}), n = this._o4 || (this._o4 = {});
+    this.track.at(this.s, o);
+    const p = to.project(o.x, o.z, 3, this._pr2 || (this._pr2 = {}));
+    if (p.d > 0.3) return false;
+    to.at(p.s, n);
+    if (o.tx * n.tx + o.tz * n.tz < 0.5) return false; // l'autre voie va dans un autre sens : on ne change pas
+    this.track = to; this.s = p.s;
+    return true;
+  }
+  setSwitch(v) {
+    this.sw = v ? 1 : 0;
+    this.game.world.tram?.setSwitch?.(this.sw); // les quatre signaux du nœud
+    if (this.net) this.net.sw = this.sw;
+  }
+  // Réglage `sw` (0 tout droit, 1 dévié) : une rame entièrement sur la partie commune d'un bras (nez à plus de lockGap m du point de divergence) est sur la
+  // ligne (tout droit) ou sur l'itinéraire du virage (dévié) ; sinon elle garde sa voie jusqu'à ce qu'elle soit entièrement dégagée.
+  junctionStep() {
+    const jn = this.jn;
+    if (!jn) return;
+    const lock = CONFIG.tram.junction.lockGap, h = this.L / 2, X = this.track;
+    let want = null;
+    if (X.meta) { // sur un itinéraire : tout droit = retour sur la ligne dès que la rame est entièrement sur un bras
+      const m = X.meta;
+      if (!this.sw) { if (this.s + h < m.a0 - lock) want = m.aLine; else if (this.s - h > m.a1 + lock) want = m.bLine; }
+    } else if (this.sw) {
+      for (const r of jn.routes) {
+        const m = r.meta;
+        if (m.aLine === X.id && (m.da > 0 ? this.s + h < m.sa - lock : this.s - h > m.sa + lock)) want = r.id;
+        else if (m.bLine === X.id && (m.db > 0 ? this.s - h > m.sb + lock : this.s + h < m.sb - lock)) want = r.id;
+      }
+    }
+    if (want && want !== X.id) this.adoptTrack(want);
+  }
+  // Prochain nœud devant le nez : { arm (bras d'arrivée), exit (bras de sortie selon `sw`), dist (m du nez au point de divergence), locked } ; null s'il est franchi
+  approach() {
+    const jn = this.jn;
+    if (!jn) return null;
+    const J = CONFIG.tram.junction, h = this.L / 2, X = this.track;
+    const dir = Math.abs(this.v) > 0.3 ? Math.sign(this.v) : (this.hintDir || 1);
+    let arm, dn, turn;
+    if (X.meta) {
+      const m = X.meta; turn = jn.routes.find((r) => r.id === X.id);
+      if (dir > 0) { arm = m.from; dn = m.a0 - (this.s + h); } else { arm = m.to; dn = (this.s - h) - m.a1; }
+    } else {
+      arm = jn.armOf(X.id, dir);
+      turn = arm && jn.routes.find((r) => r.from === arm || r.to === arm);
+      if (!turn) return null;
+      const sd = turn.from === arm ? turn.meta.sa : turn.meta.sb;
+      dn = (sd - (this.s + dir * h)) * dir;
+    }
+    if (!(dn > 0)) return null;
+    const exit = this.sw ? (turn.from === arm ? turn.to : turn.from) : jn.opposite(arm);
+    return { arm, exit, name: J.arms[exit]?.name || exit, dist: dn, locked: dn < J.lockGap };
+  }
+  // touche d'aiguillage (conducteur) : bascule tout droit / dévié ; refusé quand le nez a dépassé le verrou
+  toggleSwitch() {
+    if (!this.jn || this.state !== 'ok') return false;
+    const a = this.approach();
+    if (a?.locked) { this.game.sfx.deny?.(); this.game.hud.announce('AIGUILLAGE VERROUILLÉ', 'Trop tard : le nez de la rame est sur l\'aiguille', 1600); return false; }
+    this.setSwitch(!this.sw);
+    this.junctionStep();
+    this.game.sfx.tramSwitch?.(this.distVol());
+    const x = this.approach();
+    this.game.hud.announce('AIGUILLAGE', x ? `Direction : ${x.name}` : (this.sw ? 'Réglé sur la voie déviée' : 'Réglé tout droit'), 1800);
+    this.syncNet();
+    if (this.game.isMultiplayer) this.sendState();
+    return true;
+  }
+
   // Sans conducteur : frein d'urgence jusqu'à l'arrêt
   freewheel(dt) {
     const D = CONFIG.tram.drive;
@@ -186,6 +268,7 @@ export class Tram {
     const dv = (this.state === 'ok' ? D.emergency : D.brake) * dt;
     this.v = Math.abs(this.v) <= dv ? 0 : this.v - Math.sign(this.v) * dv;
     this.integrate(dt);
+    this.junctionStep();
   }
 
   // ------------------------------------------------------------------ limites : gates, extrémités, virages
@@ -199,7 +282,7 @@ export class Tram {
     for (const gt of this.game.tramGates?.(tr.id) || []) {
       if (gt.door.open) continue;
       const d = dir > 0 ? gt.s - GAP - nose : nose - (gt.s + GAP);
-      if (d > -1 && d < best.d) best = { d, kind: 'gate' };
+      if (d > -1 && d < best.d) best = { d, kind: gt.decor ? 'obstacle' : 'gate' }; // (rame de décor : butée comme une porte fermée)
     }
     return best;
   }
@@ -248,6 +331,7 @@ export class Tram {
       this.warnT = (this.warnT ?? 0) - dt;
       if (this.warnT <= 0) { this.warnT = 3.5; if (!powered) hud_(g).announce('HORS TENSION', `Sous-station de l'Homme de Fer : ${T.power.price} pts, une seule fois pour l'équipe`, 3000); else hud_(g).announce('PORTES OUVERTES', `${B.label('tramDoors')} : fermer les portes avant de démarrer`, 2500); }
     }
+    this.hintDir = dir;
     let vf = this.v * dir; // vitesse dans le sens de la cabine
     this.throttle = 0;
     if (emg) { const dv = D.emergency * dt; vf = Math.abs(vf) <= dv ? 0 : vf - Math.sign(vf) * dv; if (Math.abs(vf) > 1) this.sound.squeal = 0.3; }
@@ -277,6 +361,7 @@ export class Tram {
       av = Math.max(lim.v, Math.min(av, Math.abs(this.v)) - br * dt * (av > lim.v + 1.5 ? 1.5 : 1));
       if (lim.why === 'curve' && av > lim.v - 0.01) this.alarm(dt, 'VIRAGE', 'Vitesse limitée : ' + Math.round(lim.v * 3.6) + ' km/h');
       else if (lim.kind === 'gate') this.alarm(dt, 'FEU ROUGE', 'Freinage automatique : porte de zone fermée');
+      else if (lim.kind === 'obstacle') this.alarm(dt, 'OBSTACLE', 'Rame à l\'arrêt devant : freinage automatique');
       else if (lim.kind === 'end') this.alarm(dt, 'HEURTOIR', 'Fin de ligne : freinage automatique');
       v = sgn * av;
     }
@@ -285,6 +370,7 @@ export class Tram {
     const sOld = this.s;
     this.integrate(dt);
     if (this.zombies(dt)) { this.s = sOld; this.v = 0; }
+    this.junctionStep();
     this.hitPlayers(dt);
     this.syncNet();
     if (this.doors.open && Math.abs(this.v) > D.doorSpeed) this.setDoors(false); // la rame ne roule jamais portes ouvertes
@@ -385,7 +471,10 @@ export class Tram {
   stopEngine() { if (this.engine) { this.engine.stop(); this.engine = null; } }
 
   // ------------------------------------------------------------------ pour le jeu : textes
-  hudInfo() { return { speed: this.v, vmax: CONFIG.tram.drive.maxSpeed, vmin: CONFIG.tram.hit.zombieSpeed, hp: this.hp, hpMax: this.maxHp, fuel: this.fuelFrac, name: 'TRAM', fuelLabel: 'ÉNERGIE' }; }
+  hudInfo() {
+    const a = this.approach(), show = !!a && a.dist < 160; // aiguillage devant : direction choisie, verrou
+    return { speed: this.v, vmax: CONFIG.tram.drive.maxSpeed, vmin: CONFIG.tram.hit.zombieSpeed, hp: this.hp, hpMax: this.maxHp, fuel: this.fuelFrac, name: 'TRAM', fuelLabel: 'ÉNERGIE', sw: show ? { name: a.name, diverge: !!this.sw, locked: a.locked, dist: Math.round(a.dist) } : null };
+  }
 }
 
 // ====================================================================== installation dans le jeu
@@ -412,6 +501,20 @@ export function installTram(game, { world, hud, sfx, scene }) {
       world.tramGoal = (target, z) => this.tramGoal(target, z);
       world.lure = null;
       for (const g of info.gates) (gatesBy[g.line] ||= []).push(g);
+      for (const [id, list] of Object.entries(info.routeGates || {})) gatesBy[id] = [...list]; // portes de zone vues des itinéraires des aiguillages
+      // rames de décor de l'Homme de Fer : des obstacles fixes (comme des portes fermées, un de chaque bout) sur la voie de la rame, lignes et itinéraires
+      const o = {}, ps = {};
+      for (const d of world.hdf?.trams || []) {
+        for (const trk of Object.values(info.trackById)) {
+          const onLine = trk.id === d.line;
+          for (const sEnd of [d.lo, d.hi]) {
+            let s = null;
+            if (onLine) s = sEnd;
+            else { info.net.byId[d.line].at(sEnd, o); const p = trk.project(o.x, o.z, 3, ps); if (p.d < 1) s = p.s; }
+            if (s != null) (gatesBy[trk.id] ||= []).push({ line: trk.id, s, door: { open: false }, decor: true });
+          }
+        }
+      }
       info.setPowered?.(false);
     },
     tramGates(lineId) { return gatesBy[lineId] || []; },
@@ -484,14 +587,14 @@ export function installTram(game, { world, hud, sfx, scene }) {
       const B = game.binds;
       if (t.isDriver(seat)) {
         const pw = this.tramPowered ? '' : ` · HORS TENSION : sous-station de l'Homme de Fer`;
-        return [`TRAM — conducteur${pw}`, `${B.moveLabel()} : conduire · ${B.label('jump')} : frein d'urgence · ${B.label('tramDoors')} : portes · ${B.label('tramGong')} : gong · ${B.label('vehicleView')} : vue · ${B.label('interact')} : se lever`];
+        return [`TRAM — conducteur${pw}`, `${B.moveLabel()} : conduire · ${B.label('jump')} : frein d'urgence · ${B.label('tramDoors')} : portes · ${B.label('tramSwitch')} : aiguillage · ${B.label('tramGong')} : gong · ${B.label('vehicleView')} : vue · ${B.label('interact')} : se lever`];
       }
       return ['TRAM — passager', `Vous êtes assis : tirez ! · ${B.label('tramGong')} : gong · ${B.label('vehicleView')} : vue · ${B.label('interact')} : se lever`];
     },
     tramRideHint(t, seat) {
       const B = game.binds, kE = tag('interact');
       if (t.state !== 'ok') return `${kE} Se lever (rame hors service)`;
-      if (t.isDriver(seat)) return `${kE} Se lever · ${tag('tramDoors')} portes ${t.doors.open ? '(ouvertes)' : '(fermées)'} · ${tag('tramGong')} gong · ${tag('jump')} frein d'urgence`;
+      if (t.isDriver(seat)) { const a = t.approach(); return `${kE} Se lever · ${tag('tramDoors')} portes ${t.doors.open ? '(ouvertes)' : '(fermées)'} · ${tag('tramGong')} gong · ${tag('jump')} frein d'urgence${a && a.dist < 160 ? ` · ${tag('tramSwitch')} aiguillage` : ''}`; }
       return `${kE} Se lever · clic gauche : tirer · ${tag('tramGong')} gong`;
     },
 
@@ -548,6 +651,12 @@ export function installTram(game, { world, hud, sfx, scene }) {
         this.net?.send({ t: 't_doors', id: t.id });
       } else t.toggleDoors();
     },
+    // Touche d'aiguillage (v0.41.0) : le conducteur assis choisit tout droit / dévié au nœud de l'Homme de Fer
+    tramSwitch() {
+      const rv = this.player.vehicle;
+      if (!rv?.v.isTram || !rv.v.isDriver(rv.seat)) return;
+      rv.v.toggleSwitch();
+    },
     // (coup de zombie sur un occupant de la rame : tramShield, voir tramInterior.js)
 
     // ----------------------------------------------------------- PV : l'hôte écrit (damageVehicle), pas de feu ni d'explosion
@@ -572,7 +681,7 @@ export function installTram(game, { world, hud, sfx, scene }) {
         if (!t?.isTram) return;
         const me = myId();
         if (t.seats[0] === me || t.seats[1] === me) return; // je conduis : je suis la source
-        t.net = { s: +m.s, v: +m.v, d: m.d ? 1 : 0, t: 0 };
+        t.net = { s: +m.s, v: +m.v, d: m.d ? 1 : 0, k: m.k || t.track.id, sw: m.sw ? 1 : 0, t: 0 };
       });
       net.on('t_doors', (m) => { // un occupant sans conducteur demande l'ouverture ou la fermeture des portes : l'hôte décide
         const t = this.rideById(m.id);
@@ -592,11 +701,13 @@ export function installTram(game, { world, hud, sfx, scene }) {
       net.onHost('t_wreck', (m) => { const t = this.rideById(m.id); if (t?.isTram && !this.isHost) this.startTramWreck(t); });
     },
     tramSnapshot() {
-      return this.trams.map((t) => ({ id: t.id, tr: 1, s: r2(t.s), v: r2(t.v), d: t.doors.open ? 1 : 0, seats: t.seats, hp: r2(t.hp), st: t.state, back: t.respawnRound, pw: this.tramPowered ? 1 : 0 }));
+      return this.trams.map((t) => ({ id: t.id, tr: 1, s: r2(t.s), v: r2(t.v), d: t.doors.open ? 1 : 0, k: t.track.id, sw: t.sw, seats: t.seats, hp: r2(t.hp), st: t.state, back: t.respawnRound, pw: this.tramPowered ? 1 : 0 }));
     },
     applyTramSnapshot(s) {
       const t = this.rideById(s.id);
       if (!t?.isTram) return;
+      if (s.k) t.track = t.reg[s.k] || t.track; // voie du conducteur (ligne ou itinéraire d'aiguillage)
+      t.setSwitch(s.sw ? 1 : 0);
       t.s = +s.s; t.v = +s.v; t.doors.open = !!s.d; t.doors.f = t.doors.open ? 1 : 0; t.seats = s.seats.slice(); t.syncNet(); t.apply(0, true);
       if (s.hp != null) t.hp = clamp(+s.hp, 0, t.maxHp);
       t.respawnRound = s.back || 0;

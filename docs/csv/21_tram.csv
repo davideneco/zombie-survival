@@ -1,6 +1,6 @@
 ﻿Ligne;Longueur;Arrêts (abscisse depuis le heurtoir de départ);Remarque
 A / D (AD);538 m;Place Kléber (268 m) · Gutenberg (518 m);"rayon de courbure minimal 40 m ; un heurtoir à chaque bout"
-B / C / F (BCF);1100 m;Alt Winmärik (81 m) · Homme de Fer (191 m) · Broglie (599 m) · République (793 m) · Préfecture (1066 m);"rayon de courbure minimal 30 m ; un heurtoir à chaque bout"
+B / C / F (BCF);1100 m;Alt Winmärik (81 m) · Homme de Fer (178 m) · Broglie (599 m) · République (793 m) · Préfecture (1066 m);"rayon de courbure minimal 30 m ; un heurtoir à chaque bout"
 Largeur libre;6,5 m;de part et d'autre de l'axe, vérifiée sur la grille de navigation;"décor (voitures, barricades) à 5 m de l'axe au moins ; arbres et lampadaires écartés du couloir"
 Portes de zone;feu rouge;une porte fermée qui coupe une voie est un heurtoir signalé par un feu (vert une fois ouverte);"la rame freine d'elle-même à 15 m ; l'ouvrir libère le tronçon"
 Rendu;rails : 1 appel (InstancedMesh);"quais + heurtoirs + mâts : 1 appel ; poteaux : 1 appel ; fils + feux : 1 appel";12 m entre deux poteaux, côtés alternés

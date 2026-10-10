@@ -644,7 +644,7 @@ export function buildHdfDecor(ctx) {
       if (doorDist(x, z) < 8) return null;
       if (used.some(([ux, uz]) => Math.hypot(ux - x, uz - z) < 3.5)) return null;
       if (Math.hypot(x - statueX, z - statueZ) < 9) return null; // la rame ne doit pas masquer la statue
-      for (const u of net.tracks) if (u !== t && u.project(x, z, 12, tmp2).d < 5) return null; // ni sur le croisement, ni contre l'autre voie
+      for (const u of [...net.tracks, ...(net.connectors || [])]) if (u !== t && u.project(x, z, 12, tmp2).d < 5) return null; // ni sur le croisement, ni contre l'autre voie, ni sur un raccord d'aiguillage (v0.41.0)
       const l = lateralFree(x, z, px, pz), r = lateralFree(x, z, -px, -pz);
       if (l < T.width / 2 + T.side || r < T.width / 2 + T.side) return null;
       minL = Math.min(minL, l); minR = Math.min(minR, r);

@@ -1,0 +1,10 @@
+﻿Réglage;Valeur;Remarque
+Nœud;"croisement de AD et BCF (-308 ; -238)";4 bras : Heurtoir nord (A / D) · Place Kléber (A / D) · Alt Winmärik (B / C / F) · Broglie (B / C / F)
+Raccord Alt Winmärik (B / C / F) <-> Place Kléber (A / D);arc de rayon 25 m, virage de 71° (31 m);"vitesse plafonnée à 18 km/h comme tout virage ; se parcourt dans les deux sens"
+Raccord Heurtoir nord (A / D) <-> Broglie (B / C / F);arc de rayon 30 m, virage de 65° (34 m);"vitesse plafonnée à 20 km/h comme tout virage ; se parcourt dans les deux sens"
+Sorties de chaque bras;tout droit, ou le raccord de ce bras;les deux autres virages (plus de 100°) sont impossibles : quai de l'Homme de Fer, rotonde
+Choix;B (conducteur assis) : tout droit / dévié;"réglage unique pour toute l'équipe, effectif tant que le nez est à plus de 3 m du point de divergence (verrouillé ensuite) ; une rame entièrement sur un bras prend la voie choisie, sans saut"
+Indications;"à l'écran : « AIGUILLAGE > TOUT DROIT / DÉVIÉ : direction », verrou et distance ; sur la voie : un signal à trois feux par bras";"feu ambre fixe, feu blanc en haut au centre (tout droit) ou du côté du virage (dévié) ; raccords gris sur la carte"
+Itinéraires;chaque virage est une voie complète (ligne d'arrivée, arc, ligne de départ) qui suit exactement les lignes hors de l'arc;"la rame change de voie par reprojection de son centre (même géométrie) ; portes de zone et rames de décor sont des butées sur chaque voie"
+Réseau;"t_state : k (voie) et sw (réglage) ; instantané des arrivants : idem";chaque machine suit la voie du conducteur sans saut visuel
+Quai de l'Homme de Fer;déplacé de 13 m vers l'ouest et raccourci (22 m) pour laisser la place au raccord;la rame y est garée, le nez à 8 m du point de divergence

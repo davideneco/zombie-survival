@@ -1,6 +1,6 @@
 # Zombie Survival — fiche de référence
 
-Version du jeu : **v0.40.0 · 48fe705 · 2026-10-10** (package 0.40.0). Générée automatiquement par `node tools/make-docs.mjs` à partir de `src/config.js` et du jeu.
+Version du jeu : **v0.40.0 · 48fe705 · 2026-10-10** (package 0.41.0). Générée automatiquement par `node tools/make-docs.mjs` à partir de `src/config.js` et du jeu.
 Carte annotée : [carte.png](carte.png). Armes de profil : [armes.png](armes.png). Les mêmes tableaux en tableur : dossier [csv/](csv/).
 
 Pour demander une modification, citez la ligne (ex. « Mitrailleuse RPK : chargeur 100 », « Mastodonte à 3000 pts », « porte P3 à 500 pts », « mettre la boîte mystère dans la zone Temple-Neuf »).
@@ -500,7 +500,7 @@ Prix d'une porte : le plus cher des deux prix de zone (colonne « Prix de la por
 | Ligne | Longueur | Arrêts (abscisse depuis le heurtoir de départ) | Remarque |
 |---|---|---|---|
 | A / D (AD) | 538 m | Place Kléber (268 m) · Gutenberg (518 m) | rayon de courbure minimal 40 m ; un heurtoir à chaque bout |
-| B / C / F (BCF) | 1100 m | Alt Winmärik (81 m) · Homme de Fer (191 m) · Broglie (599 m) · République (793 m) · Préfecture (1066 m) | rayon de courbure minimal 30 m ; un heurtoir à chaque bout |
+| B / C / F (BCF) | 1100 m | Alt Winmärik (81 m) · Homme de Fer (178 m) · Broglie (599 m) · République (793 m) · Préfecture (1066 m) | rayon de courbure minimal 30 m ; un heurtoir à chaque bout |
 | Largeur libre | 6,5 m | de part et d'autre de l'axe, vérifiée sur la grille de navigation | décor (voitures, barricades) à 5 m de l'axe au moins ; arbres et lampadaires écartés du couloir |
 | Portes de zone | feu rouge | une porte fermée qui coupe une voie est un heurtoir signalé par un feu (vert une fois ouverte) | la rame freine d'elle-même à 15 m ; l'ouvrir libère le tronçon |
 | Rendu | rails : 1 appel (InstancedMesh) | quais + heurtoirs + mâts : 1 appel ; poteaux : 1 appel ; fils + feux : 1 appel | 12 m entre deux poteaux, côtés alternés |
@@ -539,6 +539,20 @@ Prix d'une porte : le plus cher des deux prix de zone (colonne « Prix de la por
 | Zombies | ne rentrent pas dans la rame et ne la traversent pas | une porte ouverte les attire (ils se massent devant, à 0,55 m de la caisse) ; ils frappent le joueur à moins de 1,3 m ; ailleurs la caisse encaisse (2 PV) |
 | Tir, grenades, couteau, réanimation | comme à pied | la grenade garde la vitesse de la rame, ignore la caisse et rebondit sur le plancher ; pas de fente du couteau |
 | Menu debug (F9), déblocage | F9 : l'hôte rejoint un coéquipier debout dans la rame (repère local) ; K : replace dans l'allée | un joueur téléporté sort de la rame |
+
+## Tram : l'aiguillage du nœud de Homme de Fer (croisement des lignes A / D et B / C / F)
+
+| Réglage | Valeur | Remarque |
+|---|---|---|
+| Nœud | croisement de AD et BCF (-308 ; -238) | 4 bras : Heurtoir nord (A / D) · Place Kléber (A / D) · Alt Winmärik (B / C / F) · Broglie (B / C / F) |
+| Raccord Alt Winmärik (B / C / F) <-> Place Kléber (A / D) | arc de rayon 25 m, virage de 71° (31 m) | vitesse plafonnée à 18 km/h comme tout virage ; se parcourt dans les deux sens |
+| Raccord Heurtoir nord (A / D) <-> Broglie (B / C / F) | arc de rayon 30 m, virage de 65° (34 m) | vitesse plafonnée à 20 km/h comme tout virage ; se parcourt dans les deux sens |
+| Sorties de chaque bras | tout droit, ou le raccord de ce bras | les deux autres virages (plus de 100°) sont impossibles : quai de l'Homme de Fer, rotonde |
+| Choix | B (conducteur assis) : tout droit / dévié | réglage unique pour toute l'équipe, effectif tant que le nez est à plus de 3 m du point de divergence (verrouillé ensuite) ; une rame entièrement sur un bras prend la voie choisie, sans saut |
+| Indications | à l'écran : « AIGUILLAGE > TOUT DROIT / DÉVIÉ : direction », verrou et distance ; sur la voie : un signal à trois feux par bras | feu ambre fixe, feu blanc en haut au centre (tout droit) ou du côté du virage (dévié) ; raccords gris sur la carte |
+| Itinéraires | chaque virage est une voie complète (ligne d'arrivée, arc, ligne de départ) qui suit exactement les lignes hors de l'arc | la rame change de voie par reprojection de son centre (même géométrie) ; portes de zone et rames de décor sont des butées sur chaque voie |
+| Réseau | t_state : k (voie) et sw (réglage) ; instantané des arrivants : idem | chaque machine suit la voie du conducteur sans saut visuel |
+| Quai de l'Homme de Fer | déplacé de 13 m vers l'ouest et raccourci (22 m) pour laisser la place au raccord | la rame y est garée, le nez à 8 m du point de divergence |
 
 ## Motos (deux parkings au panneau bleu « P », avec chacun une borne plein + réparation : place Gutenberg, 2 motos ; place Broglie, 1 moto)
 
@@ -611,6 +625,7 @@ Prix d'une porte : le plus cher des deux prix de zone (colonne « Prix de la por
 | V (en moto) | Vue à la 3e personne / à la 1re personne |
 | WS / Espace (en tram, conducteur) | Accélérer / frein de service puis marche arrière ; frein d'urgence |
 | O / H (en tram) | Ouvrir ou fermer les portes (conducteur, à l'arrêt) ; gong qui attire les zombies |
+| B (en tram, conducteur) | Aiguillage : tout droit / dévié au nœud de l'Homme de Fer |
 | F | Lampe torche |
 | Espace (devant un obstacle bas) | Enjamber |
 | K (maintenir 2 s, si coincé) | Se débloquer |

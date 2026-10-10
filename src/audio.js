@@ -474,6 +474,12 @@ export class Sfx {
     this._tone('triangle', b, b, 0.3, 0.22 * v, { at: 0.2 });
     this._noise(0.35, 0.08 * v, 600, 'lowpass', { at: 0.3 }); // souffle des portes
   }
+  tramSwitch(v = 1) { // aiguille qui change de position : claquement métallique sourd, puis un léger écho
+    if (!this.ctx || v < 0.03) return;
+    this._noise(0.07, 0.3 * v, 1800, 'bandpass', { q: 2 });
+    this._tone('square', 190, 90, 0.09, 0.12 * v);
+    this._tone('triangle', 520, 380, 0.12, 0.08 * v, { at: 0.1 });
+  }
   tramBrake(v = 1, speed = 8) { // frein : grincement aigu et frottement
     if (!this.ctx || v < 0.03) return;
     const k = Math.min(1, speed / 14);

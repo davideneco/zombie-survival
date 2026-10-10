@@ -284,6 +284,17 @@ table('23_tram_interieur', 'Tram : l\'intérieur praticable (on marche dans la r
   ['Zombies', 'ne rentrent pas dans la rame et ne la traversent pas', `une porte ouverte les attire (ils se massent devant, à ${fr2(TW.doorSpot)} m de la caisse) ; ils frappent le joueur à moins de 1,3 m ; ailleurs la caisse encaisse (${TR.zombieHit} PV)`],
   ['Tir, grenades, couteau, réanimation', 'comme à pied', 'la grenade garde la vitesse de la rame, ignore la caisse et rebondit sur le plancher ; pas de fente du couteau'],
   ['Menu debug (F9), déblocage', `F9 : l'hôte rejoint un coéquipier debout dans la rame (repère local) ; ${kn0('unstick')} : replace dans l'allée`, 'un joueur téléporté sort de la rame']]);
+// ---- tram : les aiguillages (v0.41.0)
+const TJ = TR.junction, jct = (await import(path.join(ROOT, 'src/tramTrack.js'))).buildJunction(TJ, TNET.byId);
+table('24_tram_aiguillages', `Tram : l'aiguillage du nœud de ${TJ.name} (croisement des lignes A / D et B / C / F)`, ['Réglage', 'Valeur', 'Remarque'], [
+  ['Nœud', `croisement de ${TJ.a} et ${TJ.b} (${Math.round(jct.x)} ; ${Math.round(jct.z)})`, `4 bras : ${Object.values(TJ.arms).map((a) => a.name).join(' · ')}`],
+  ...jct.routes.map((r) => [`Raccord ${TJ.arms[r.from].name} <-> ${TJ.arms[r.to].name}`, `arc de rayon ${r.meta.r} m, virage de ${Math.round(Math.abs(r.meta.theta) * 180 / Math.PI)}° (${Math.round(r.meta.a1 - r.meta.a0)} m)`, `vitesse plafonnée à ${kmh(Math.sqrt(TD.grip * r.meta.r))} km/h comme tout virage ; se parcourt dans les deux sens`]),
+  ['Sorties de chaque bras', 'tout droit, ou le raccord de ce bras', 'les deux autres virages (plus de 100°) sont impossibles : quai de l\'Homme de Fer, rotonde'],
+  ['Choix', `${kn0('tramSwitch')} (conducteur assis) : tout droit / dévié`, `réglage unique pour toute l'équipe, effectif tant que le nez est à plus de ${TJ.lockGap} m du point de divergence (verrouillé ensuite) ; une rame entièrement sur un bras prend la voie choisie, sans saut`],
+  ['Indications', 'à l\'écran : « AIGUILLAGE > TOUT DROIT / DÉVIÉ : direction », verrou et distance ; sur la voie : un signal à trois feux par bras', 'feu ambre fixe, feu blanc en haut au centre (tout droit) ou du côté du virage (dévié) ; raccords gris sur la carte'],
+  ['Itinéraires', 'chaque virage est une voie complète (ligne d\'arrivée, arc, ligne de départ) qui suit exactement les lignes hors de l\'arc', 'la rame change de voie par reprojection de son centre (même géométrie) ; portes de zone et rames de décor sont des butées sur chaque voie'],
+  ['Réseau', 't_state : k (voie) et sw (réglage) ; instantané des arrivants : idem', 'chaque machine suit la voie du conducteur sans saut visuel'],
+  ['Quai de l\'Homme de Fer', `déplacé de 13 m vers l'ouest et raccourci (${TR.lines[1].stops[1].len} m) pour laisser la place au raccord`, 'la rame y est garée, le nez à 8 m du point de divergence']]);
 const VT = C.vehicles.types, VD = C.vehicles.damage, VF = C.vehicles.fuel, VR = C.vehicles.roadkill;
 const rk = (t, v) => t.roadkill.K * v * Math.min(1, 0.4 + 0.6 * (v - t.roadkill.vmin) / VR.rampSpeed);
 const vcol = (f) => Object.values(VT).map(f);
@@ -331,7 +342,7 @@ table('14_commandes', 'Commandes (touches par défaut, modifiables dans Options 
   [kn('sprint'), 'Sprint'], [kn('jump'), 'Sauter'], [kn('reload'), 'Recharger'], [`${kn('weapon1')} / ${kn('weapon2')} / ${kn('weapon3')} / molette`, 'Changer d\'arme'], [kn('grenade'), 'Grenade'],
   [kn('interact'), 'Acheter, ouvrir une porte, utiliser une machine ou la borne des motos, réanimer (maintenir), monter / descendre d\'une moto'],
   [`ZQSD / ${kn('forward')}${kn('left')}${kn('back')}${kn('right')} (en moto)`, 'Accélérer, freiner / reculer, tourner'], [`${kn('jump')} (en moto)`, 'Frein à main'], [`${kn('vehicleView')} (en moto)`, 'Vue à la 3e personne / à la 1re personne'],
-  [`${kn('forward')}${kn('back')} / ${kn('jump')} (en tram, conducteur)`, 'Accélérer / frein de service puis marche arrière ; frein d\'urgence'], [`${kn('tramDoors')} / ${kn('tramGong')} (en tram)`, 'Ouvrir ou fermer les portes (conducteur, à l\'arrêt) ; gong qui attire les zombies'],
+  [`${kn('forward')}${kn('back')} / ${kn('jump')} (en tram, conducteur)`, 'Accélérer / frein de service puis marche arrière ; frein d\'urgence'], [`${kn('tramDoors')} / ${kn('tramGong')} (en tram)`, 'Ouvrir ou fermer les portes (conducteur, à l\'arrêt) ; gong qui attire les zombies'], [`${kn('tramSwitch')} (en tram, conducteur)`, 'Aiguillage : tout droit / dévié au nœud de l\'Homme de Fer'],
   [kn('torch'), 'Lampe torche'], [`${kn('jump')} (devant un obstacle bas)`, 'Enjamber'], [`${kn('unstick')} (maintenir 2 s, si coincé)`, 'Se débloquer'],
   [`${kn('knife')} (à pied)`, 'Coup de couteau (aussi : clic gauche quand le chargeur et la réserve sont vides)'], [kn('map'), 'Carte'],
   ['Clic molette', 'Lance-grenades sous le canon (fusil d\'assaut Pack-a-Punch niveau III)'],

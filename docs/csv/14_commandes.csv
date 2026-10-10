@@ -15,6 +15,7 @@ Espace (en moto);Frein à main
 V (en moto);Vue à la 3e personne / à la 1re personne
 WS / Espace (en tram, conducteur);"Accélérer / frein de service puis marche arrière ; frein d'urgence"
 O / H (en tram);"Ouvrir ou fermer les portes (conducteur, à l'arrêt) ; gong qui attire les zombies"
+B (en tram, conducteur);Aiguillage : tout droit / dévié au nœud de l'Homme de Fer
 F;Lampe torche
 Espace (devant un obstacle bas);Enjamber
 K (maintenir 2 s, si coincé);Se débloquer

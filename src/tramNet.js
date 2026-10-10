@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { CONFIG } from './config.js';
-import { buildTracks } from './tramTrack.js';
+import { buildTracks, buildJunction } from './tramTrack.js';
 import { mergeParts } from './ironArmor.js';
 
 // =====================================================================
@@ -19,12 +19,21 @@ const EL = 2; // longueur d'un élément de voie (m)
 
 export function planTram() {
   const net = buildTracks(CONFIG.tram);
+  // aiguillages (v0.41.0) : raccords en arc au croisement de deux lignes ; les itinéraires complets (ligne, arc, ligne) sont des voies pour la rame (voir Tram)
+  net.junction = CONFIG.tram.junction ? buildJunction(CONFIG.tram.junction, net.byId, CONFIG.tram.step ?? 1) : null;
+  net.connectors = net.junction ? net.junction.connectors : [];
+  const lineDist = net.dist, tmpD = {};
+  net.dist = (x, z, max = 40) => { let m = lineDist(x, z, max); for (const c of net.connectors) { const d = c.project(x, z, max, tmpD).d; if (d < m) m = d; } return m; }; // décor, arbres, lampadaires évitent aussi les raccords
   if (typeof location !== 'undefined' && new URLSearchParams(location.search).has('debug')) { // contrôle de cohérence des tracés (mode ?debug)
     for (const t of net.tracks) {
       for (const w of t.warnings) console.warn('[tram]', w);
       const r = t.minRadius(0, t.L);
       if (r < CONFIG.tram.minRadius - 0.5) console.warn(`[tram] ${t.id} : rayon de courbure ${r.toFixed(1)} m < ${CONFIG.tram.minRadius} m`);
     }
+  }
+  for (const c of net.connectors) {
+    const r = c.minRadius(2, c.L - 2);
+    if (typeof location !== 'undefined' && new URLSearchParams(location.search).has('debug') && r < CONFIG.tram.minRadius - 0.5) console.warn(`[tram] raccord ${c.id} : rayon de courbure ${r.toFixed(1)} m < ${CONFIG.tram.minRadius} m`);
   }
   for (const t of net.tracks) {
     t.stops = (t.def.stops || []).map((st) => ({ ...st, line: t.id, s: t.project(st.at[0], st.at[1], 80, {}).s }));
@@ -79,13 +88,14 @@ export function buildTramNetwork(ctx) {
     const geo = mergeParts(rails);
     const list = [];
     for (const t of net.tracks) for (let s = 0; s + 1e-6 < t.L; s += EL) list.push([t, s]);
+    for (const t of net.connectors) for (let s = 0; s + 1e-6 < t.L; s += EL) list.push([t, s, 0.012]); // raccords : un peu plus hauts que les voies qu'ils rejoignent (pas de scintillement)
     const mesh = new THREE.InstancedMesh(geo, M.steel, list.length), m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0), one = new THREE.Vector3(1, 1, 1), p = new THREE.Vector3(), sc = new THREE.Vector3();
-    list.forEach(([t, s], k) => {
+    list.forEach(([t, s, dy = 0], k) => {
       const e = Math.min(t.L, s + EL);
       t.at(s, o); t.at(e, o2);
       const dx = o2.x - o.x, dz = o2.z - o.z, l = Math.hypot(dx, dz) || 1;
       q.setFromAxisAngle(up, Math.atan2(-dz, dx));
-      p.set((o.x + o2.x) / 2, 0, (o.z + o2.z) / 2);
+      p.set((o.x + o2.x) / 2, dy, (o.z + o2.z) / 2);
       m4.compose(p, q, sc.set(l / EL, 1, 1));
       mesh.setMatrixAt(k, m4);
     });
@@ -144,8 +154,8 @@ export function buildTramNetwork(ctx) {
   // ---------------------------------------------------------------- feux rouges des portes de zone qui coupent une voie
   const wires = { pos: [], col: [], idx: [] }, lamps = [];
   const segInt = (p, q, a, b) => { const rx = q[0] - p[0], rz = q[1] - p[1], sx = b[0] - a[0], sz = b[1] - a[1], d = rx * sz - rz * sx; if (Math.abs(d) < 1e-9) return null; const t = ((a[0] - p[0]) * sz - (a[1] - p[1]) * sx) / d, u = ((a[0] - p[0]) * rz - (a[1] - p[1]) * rx) / d; return t >= 0 && t <= 1 && u >= 0 && u <= 1 ? t : null; };
-  const lampBox = (x, y, z, hex) => { // petit cube sans éclairage (sommets colorés) : renvoie l'indice du premier sommet
-    const g = new THREE.BoxGeometry(0.34, 0.34, 0.34).toNonIndexed(), i0 = wires.pos.length / 3, c = new THREE.Color(hex);
+  const lampBox = (x, y, z, hex, size = 0.34) => { // petit cube sans éclairage (sommets colorés) : renvoie l'indice du premier sommet
+    const g = new THREE.BoxGeometry(size, size, size).toNonIndexed(), i0 = wires.pos.length / 3, c = new THREE.Color(hex);
     for (let i = 0; i < g.attributes.position.count; i++) { wires.pos.push(g.attributes.position.getX(i) + x, g.attributes.position.getY(i) + y, g.attributes.position.getZ(i) + z); wires.col.push(c.r, c.g, c.b); }
     for (let i = 0; i < g.attributes.position.count; i += 3) wires.idx.push(i0 + i, i0 + i + 1, i0 + i + 2);
     return { v0: i0, n: g.attributes.position.count };
@@ -177,6 +187,13 @@ export function buildTramNetwork(ctx) {
     }
   }
   info.gates.sort((a, b) => (a.line < b.line ? -1 : a.line > b.line ? 1 : a.s - b.s));
+  // portes de zone vues des itinéraires des aiguillages : la même porte, à l'abscisse de l'itinéraire (les itinéraires suivent les lignes hors des raccords)
+  info.routeGates = {};
+  if (net.junction) for (const r of net.junction.routes) {
+    const list = [];
+    for (const g of info.gates) { net.byId[g.line].at(g.s, o); const p = r.track.project(o.x, o.z, 3, o2); if (p.d < 0.8) list.push({ s: p.s, door: g.door, line: g.line, lamps: g.lamps }); }
+    info.routeGates[r.id] = list;
+  }
 
   // ---------------------------------------------------------------- sous-station (v0.39.0) : kiosque près du quai de la rame conduisible, voyant rouge puis vert
   {
@@ -210,6 +227,41 @@ export function buildTramNetwork(ctx) {
     }
   }
 
+  // ---------------------------------------------------------------- signaux d'aiguillage (v0.41.0) : un mât par bras, vu par la rame qui arrive
+  // Tête noire à trois feux : un feu ambre fixe (en bas), un feu blanc « tout droit » (en haut au centre) et un feu blanc « dévié » (en haut, du côté du virage).
+  // Les quatre mâts affichent le réglage courant (info.setSwitch) : tout droit ou dévié.
+  const jn = net.junction;
+  info.junction = jn; info.signals = [];
+  info.trackById = { ...net.byId, ...(jn ? jn.byId : {}) }; // lignes et itinéraires des aiguillages, par identifiant (voir Tram.adoptTrack)
+  if (jn) {
+    const J = T.junction, armIds = Object.keys(J.arms);
+    for (const id of armIds) {
+      const arm = J.arms[id], t = net.byId[arm.line], dirIn = arm.end === 0 ? 1 : -1; // sens de marche d'une rame qui vient de ce bras
+      const turn = jn.routes.find((r) => r.from === id || r.to === id);
+      if (!turn) continue;
+      const theta = turn.meta.theta * (turn.from === id ? 1 : -1), side = Math.sign(theta) || 1; // + : virage à droite pour la rame qui arrive de ce bras
+      const sNode = jn.sNode[arm.line], T0 = turn.meta.T;
+      // le mât est à gauche de la voie si le raccord part à droite (côté extérieur), 2,9 m de l'axe, à T + 3 m du nœud (juste avant la divergence), en évitant les poteaux de caténaire
+      let sm = sNode - dirIn * (T0 + 3), best = null;
+      for (const ds of [0, -2, 2, -4, 4, -6, 6]) {
+        const ss = sm + dirIn * ds; t.at(ss, o);
+        const sd = -side, x = o.x + -o.tz * sd * 3.4, z = o.z + o.tx * sd * 3.4;
+        let ok = collision.rayHit(x, 1, z, 1, 0, 0, 0.6) >= 0.6 && collision.rayHit(x, 1, z, -1, 0, 0, 0.6) >= 0.6 && collision.rayHit(x, 1, z, 0, 0, 1, 0.6) >= 0.6 && collision.rayHit(x, 1, z, 0, 0, -1, 0.6) >= 0.6;
+        ok = ok && net.dist(x, z, 4) >= 3.2 && (ctx.used || []).every(([ux, uz]) => Math.hypot(ux - x, uz - z) > 1.2);
+        if (ok) { best = { x, z, tx: o.tx * dirIn, tz: o.tz * dirIn, sd }; break; }
+      }
+      if (!best) continue;
+      const { x, z, tx, tz, sd } = best, ang = Math.atan2(-tz, tx), rx = -tz, rz = tx; // (rx, rz) : à droite de la marche
+      fixed.push(cylAt(0.05, 0.06, 2.6, x, 1.3, z, 0x3a3d42, 6));
+      fixed.push(boxAt(0.18, 1.2, 1.0, x - tx * 0.12, 3.1, z - tz * 0.12, 0x1b1d20, ang)); // tête, tournée vers la rame qui arrive
+      const lamp = (right, y, hex) => lampBox(x - tx * 0.22 + rx * right, y, z - tz * 0.22 + rz * right, hex, 0.28);
+      const rec = { arm: id, side, x, z, tx, tz, ref: lamp(0, 2.78, 0xffb030), straight: lamp(0, 3.42, 0x15181c), diverge: lamp(0.34 * side, 3.42, 0x15181c) };
+      info.signals.push(rec);
+      collision.addCircle(x, z, 0.1, 3.4).tram = true;
+      if (ctx.used) ctx.used.push([x, z]);
+    }
+  }
+
   // ---------------------------------------------------------------- caténaire : poteaux (InstancedMesh) et fils
   {
     const P = T.pole, arm = P.offset;
@@ -225,7 +277,7 @@ export function buildTramNetwork(ctx) {
         const side = k % 2 ? 1 : -1, nx = -o.tz * side, nz = o.tx * side, x = o.x + nx * P.offset, z = o.z + nz * P.offset;
         if (ring && Math.hypot(x - ring.x, z - ring.z) < ring.R + 1) continue; // sous la verrière de la rotonde : pas de poteau
         let near = Infinity;
-        for (const u of net.tracks) if (u !== t) near = Math.min(near, u.project(x, z, 12, o2).d);
+        for (const u of [...net.tracks, ...net.connectors]) if (u !== t) near = Math.min(near, u.project(x, z, 12, o2).d);
         if (near < 3.4) continue; // dans l'emprise de l'autre voie
         spots.push({ x, z, s, t });
       }
@@ -242,8 +294,8 @@ export function buildTramNetwork(ctx) {
     mesh.instanceMatrix.needsUpdate = true;
     add(mesh, 'poles');
     info.poles = spots.length;
-    // fils : un ruban tous les 6 m le long de chaque voie
-    for (const t of net.tracks) {
+    // fils : un ruban tous les 6 m le long de chaque voie (et de chaque raccord)
+    for (const t of [...net.tracks, ...net.connectors]) {
       let a = null;
       for (let s = 0; s <= t.L + 1e-6; s += 6) {
         t.at(Math.min(s, t.L), o);
@@ -283,6 +335,13 @@ export function buildTramNetwork(ctx) {
   // voyant de la sous-station : rouge hors tension, vert une fois le courant remis (tram.js : setPower)
   info.setPowered = (on) => { if (info.substation) setLamp(info.substation.lamp, on ? 0x30ff60 : 0xff2a1a); };
   info.setPowered(false);
+  // aiguillage (v0.41.0) : 0 tout droit, 1 dévié ; les quatre têtes de signal affichent le réglage
+  info.sw = 0;
+  info.setSwitch = (v) => {
+    info.sw = v ? 1 : 0;
+    for (const sg of info.signals) { setLamp(sg.straight, info.sw ? 0x15181c : 0xf4f4e8); setLamp(sg.diverge, info.sw ? 0xf4f4e8 : 0x15181c); }
+  };
+  info.setSwitch(0);
 
   // ---------------------------------------------------------------- distance au réseau (m) : décor, arbres, lampadaires
   info.dist = (x, z, max = 40) => net.dist(x, z, max);
@@ -294,6 +353,7 @@ export function buildTramNetwork(ctx) {
       if (p.d < T.furnitureGap) return true; // le couloir libre de la voie (3,25 m + marge de navigation + le meuble)
       for (const st of t.stops) if (Math.abs(p.s - st.s) < st.len / 2 + 1.5 && p.d < 2.4 / 2 + 0.25 + T.platform.width + 0.3) return true;
     }
+    for (const c of net.connectors) if (c.project(x, z, 6, o).d < T.furnitureGap) return true; // raccords des aiguillages
     return false;
   };
   return info;
