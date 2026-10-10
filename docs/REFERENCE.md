@@ -1,6 +1,6 @@
 # Zombie Survival — fiche de référence
 
-Version du jeu : **v0.35.1 · bc68243 · 2026-10-10** (package 0.36.0). Générée automatiquement par `node tools/make-docs.mjs` à partir de `src/config.js` et du jeu.
+Version du jeu : **v0.36.0 · 5c09973 · 2026-10-10** (package 0.36.1). Générée automatiquement par `node tools/make-docs.mjs` à partir de `src/config.js` et du jeu.
 Carte annotée : [carte.png](carte.png). Armes de profil : [armes.png](armes.png). Les mêmes tableaux en tableur : dossier [csv/](csv/).
 
 Pour demander une modification, citez la ligne (ex. « Mitrailleuse RPK : chargeur 100 », « Mastodonte à 3000 pts », « porte P3 à 500 pts », « mettre la boîte mystère dans la zone Temple-Neuf »).
@@ -448,7 +448,7 @@ Prix d'une porte : le plus cher des deux prix de zone (colonne « Prix de la por
 | Manche minimale | 12 |  |
 | Zones ouvertes au moins | 18 | (les 10 zones d'origine + 8 zones extérieures) : l'horloge affiche « n/18 quartiers ouverts » |
 | Prix | 0 | pts |
-| Santé du Bourreau (1 joueur) | 200000 | (+70 % par joueur en plus) |
+| Santé du Bourreau (1 joueur) | 350000 | (+70 % par joueur en plus) |
 | Zombies simultanés (vague) | 28 |  |
 | Répit entre deux vagues | 8 | s |
 

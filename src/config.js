@@ -201,7 +201,7 @@ export const CONFIG = {
     minRound: 12,         // manche minimale
     minZones: 18,         // zones ouvertes au moins (les 10 zones d'origine + 8 zones extérieures) : « 14/18 quartiers »
     maxAlive: 28,         // zombies simultanés pendant une vague
-    bossHealth: 200000,   // santé du Bourreau (joueur seul) ; +70 % par joueur supplémentaire
+    bossHealth: 350000,   // santé du Bourreau (joueur seul) ; +70 % par joueur supplémentaire (v0.36.1 : 200 000 -> 350 000, combat mesuré trop court)
     bossDamage: 45,       // coup de hache
     chargeDamage: 55,     // ruée
     slamDamage: 40,       // onde de choc (on l'évite en sautant)

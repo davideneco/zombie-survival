@@ -90,7 +90,7 @@
     .vrow .vbar { flex: 1; margin-top: 0; height: 9px; }
     .vrow em { width: 38px; text-align: left; font-style: normal; font-weight: bold; }
     .vrow.low .vbar { animation: pulse .5s infinite alternate; }
-    #announce { position: absolute; left: 50%; top: 22%; transform: translateX(-50%); text-align: center; font-size: 64px; color: #b01818; text-shadow: 0 0 10px #000; opacity: 0; transition: opacity .6s; }
+    #announce { position: absolute; left: 50%; top: max(22%, 200px); width: max-content; max-width: 92vw; transform: translateX(-50%); text-align: center; /* sous la barre de boss (top 128 px + 45 px) et le bandeau */ font-size: 64px; color: #b01818; text-shadow: 0 0 10px #000; opacity: 0; transition: opacity .6s; }
     #announce small { display: block; font-size: 22px; color: #ddd; letter-spacing: 3px; }
     #announce.show { opacity: 1; }
 
