@@ -239,6 +239,7 @@ export function installDebugMenu(game, { world, hud, sfx }) {
 
   // ------------------------------------------------------------------ clavier
   window.addEventListener('keydown', (e) => {
+    if (game.chat?.open) return; // saisie du chat : ni F9 ni les touches du menu
     if (e.code === 'F9') {
       e.preventDefault();
       if (!e.repeat) dbg.toggle();

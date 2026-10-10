@@ -562,7 +562,13 @@ CONFIG.keybinds = [
   { id: 'tramDoors', group: 'Équipement', label: 'Portes du tram (ouvrir / fermer)', def: 'key:o', kind: 'key', ctx: 'moto' },
   { id: 'tramSwitch', group: 'Équipement', label: 'Aiguillage du tram : tout droit / dévié (conducteur)', def: 'key:b', kind: 'key', ctx: 'moto' },
   { id: 'unstick', group: 'Équipement', label: 'Se débloquer (maintenir)', def: 'key:k', kind: 'key', ctx: 'foot' },
+  { id: 'chat', group: 'Équipement', label: 'Chat écrit (multijoueur) : ouvrir la saisie', def: 'code:Enter', kind: 'key', ctx: 'all' },
 ];
+// Chat écrit (v0.42.0, src/chat.js ; le relais server/rooms.mjs applique les mêmes limites, il ne fait pas confiance au client) :
+// maxLen : caractères par message (tronqué) ; rateCount messages par rateWindow secondes et par joueur (l'excédent est ignoré) ;
+// history : messages gardés (défilables à la molette pendant la saisie) ; visibleLines : lignes visibles ; fadeAfter : secondes avant que
+// les lignes s'estompent hors saisie, fadeTime : durée de l'estompage ; maxNet : taille maximale d'un message réseau (octets) sur le relais
+CONFIG.chat = { maxLen: 200, rateCount: 5, rateWindow: 4, history: 50, visibleLines: 8, fadeAfter: 8, fadeTime: 1.2, maxNet: 1 << 20 };
 // Touches fixes, affichées dans le menu mais non modifiables : [touche, action]
 CONFIG.fixedKeys = [
   ['Souris', 'Viser'],

@@ -37,6 +37,7 @@ export function installUi(game, { hud, canvas, lockAndPlay }) {
         }
       }
       out.push(...this.over);
+      if (game.chat?.open) out.push('chat'); // saisie du chat (chat.js) : au-dessus de la carte et du menu debug
       if (this.bannerOn) out.push('banner');
       return out;
     },
@@ -50,7 +51,8 @@ export function installUi(game, { hud, canvas, lockAndPlay }) {
       hud.toggleMap(on);
       if (on) this.open('map'); else this.close('map');
     },
-    closeOverlays() { // carte, menu debug
+    closeOverlays() { // carte, menu debug, saisie du chat
+      game.chat?.close({ send: false, relock: false });
       if (hud.mapOpen) hud.toggleMap(false);
       game.debugMenu?.close();
       this.over = [];
@@ -99,6 +101,7 @@ export function installUi(game, { hud, canvas, lockAndPlay }) {
     // La souris vient d'être libérée alors que la partie tournait = Échap (ou perte de focus) : carte / menu debug ouverts -> on les ferme
     // avec le bandeau léger ; sinon pause complète. Si l'écran montre déjà une couche (pause demandée par le jeu), rien à faire.
     onPointerUnlocked() {
+      if (game.chat?.absorbUnlock()) return; // libérée par le chat (ouverture de la saisie), ou saisie ouverte : ce n'est pas un appui d'Échap
       if (!game.started || game.over) return;
       if (!hidden(el.overlay)) return;
       if (game.summitFx?.orbit.on) { // Échap pendant la vue orbitale (souris déjà rendue) : on la passe ; l'écran « STRASBOURG LIBÉRÉE » suit
@@ -115,6 +118,7 @@ export function installUi(game, { hud, canvas, lockAndPlay }) {
 
     // ---------------------------------------------------------------- Échap
     escape() {
+      if (game.chat?.open) { game.chat.close({ send: false }); return 'chat'; } // la saisie du chat se ferme d'abord : ni pause, ni fin de la vue orbitale
       if (game.summitFx?.orbit.on) { game.summitFx.endOrbit(); return 'orbit'; } // vue orbitale de l'Aube : Échap la passe
       const ae = document.activeElement;
       if (ae && /^(INPUT|TEXTAREA)$/.test(ae.tagName) && ae.type !== 'range') { ae.blur(); return 'blur'; } // champ de texte : d'abord retirer le focus
@@ -167,7 +171,7 @@ export function installUi(game, { hud, canvas, lockAndPlay }) {
     if (e.key === 'Escape' || e.code === 'Escape') {
       e.preventDefault();
       if (!e.repeat) ui.escape();
-    } else if (!e.repeat && game.binds.is('map', e) && game.started && game.playing && !(document.activeElement && /^(INPUT|TEXTAREA)$/.test(document.activeElement.tagName))) ui.toggleMap(); // liaison « carte » : par défaut la lettre tapée (e.key), la touche M n'est pas au même endroit en AZERTY
+    } else if (!e.repeat && game.binds.is('map', e) && game.started && game.playing && !game.chat?.open && !(document.activeElement && /^(INPUT|TEXTAREA)$/.test(document.activeElement.tagName))) ui.toggleMap(); // liaison « carte » : par défaut la lettre tapée (e.key), la touche M n'est pas au même endroit en AZERTY
   });
   document.addEventListener('pointerlockerror', () => { if (!game.playing) ui.resumeBlocked(); });
   document.addEventListener('fullscreenchange', () => {

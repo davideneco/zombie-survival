@@ -146,6 +146,21 @@
     #keysStatus .grow { flex: 1 1 200px; }
     #keysStatus .btn { flex: none; }
 
+    /* Chat écrit (v0.42.0, src/chat.js) : journal + saisie en bas à gauche, au-dessus des points et des atouts. Hors du #hud : reste visible
+       pendant la vue orbitale. Chaque ligne a son propre fond sombre (lisible sur la neige comme sur la nuit) et s'estompe seule. */
+    #chat { position: fixed; left: 24px; bottom: 214px; width: min(400px, calc(100vw - 48px)); display: none; flex-direction: column; gap: 5px; pointer-events: none; font: 14px/18px Arial, sans-serif; color: #f2f2f2; user-select: none; }
+    #chat.on { display: flex; }
+    #chatLog { display: flex; flex-direction: column; max-height: calc(var(--chat-lines, 8) * 22px); overflow-y: hidden; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: #888 transparent; }
+    #chatLog::before { content: ''; flex: 1 1 0; }
+    #chat.typing #chatLog { overflow-y: auto; pointer-events: auto; }
+    .chat-line { flex: none; width: fit-content; max-width: 100%; margin-top: 2px; padding: 1px 7px; background: rgba(0,0,0,0.55); border-radius: 3px; text-shadow: 0 1px 2px #000; overflow-wrap: anywhere; transition: opacity .25s; }
+    .chat-line b { font-weight: bold; }
+    .chat-line.sys { color: #b4b4b4; font-style: italic; background: rgba(0,0,0,0.45); }
+    #chatRow { display: none; pointer-events: auto; }
+    #chat.typing #chatRow { display: block; }
+    #chatInput { width: 100%; padding: 6px 9px; font: 15px/20px Arial, sans-serif; color: #fff; background: rgba(0,0,0,0.82); border: 1px solid #ffd24a; border-radius: 4px; outline: none; user-select: text; }
+    #chatInput::placeholder { color: #9a9a9a; }
+
     /* Bandeau « Cliquez pour reprendre » (carte / menu debug fermés par Échap : souris libérée, pas la pause complète) */
     #resumeBanner { white-space: nowrap; position: fixed; left: 50%; top: 40%; transform: translateX(-50%); z-index: 40; padding: 14px 34px; font-size: 30px; letter-spacing: 4px; color: #fff; background: rgba(0,0,0,0.72); border: 2px solid #ffd24a; border-radius: 6px; cursor: pointer; text-shadow: 0 0 8px #000; }
     #resumeBanner small { display: block; font: 13px Arial, sans-serif; letter-spacing: 1px; color: #bbb; margin-top: 4px; text-align: center; }
@@ -238,6 +253,10 @@
   </div>
 
   <div id="mapOverlay"><canvas id="mapCanvas"></canvas></div>
+  <div id="chat">
+    <div id="chatLog"></div>
+    <div id="chatRow"><input id="chatInput" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="send" aria-label="Message du chat" /></div>
+  </div>
   <div id="resumeBanner" class="hidden">CLIQUEZ POUR REPRENDRE<small>Échap : pause</small></div>
   <div id="dbgMenu" class="hidden"></div>
 
@@ -268,6 +287,7 @@
       <div class="opt-row"><label for="optQuality">Qualité</label><input type="range" id="optQuality" min="0" max="2" step="1" /><output></output></div>
       <div class="opt-row"><label for="optVolume">Volume</label><input type="range" id="optVolume" min="0" max="1" step="0.05" /><output></output></div>
       <div class="opt-row"><label for="optMusic">Musique</label><input type="range" id="optMusic" min="0" max="1" step="0.05" /><output></output></div>
+      <button class="btn btn-sub btn-wide" id="btnChatShow" style="font-size:18px">AFFICHER LE CHAT : OUI</button>
       <button class="btn btn-sub btn-wide" id="btnKeys" style="font-size:18px">TOUCHES</button>
       <button class="btn btn-sub btn-wide" id="btnFullscreen" style="font-size:18px">PLEIN ÉCRAN : NON</button>
       <div style="font-size:12px;color:#999">Plein écran (Chrome / Edge) : Échap ouvre la pause sans libérer la souris.</div>

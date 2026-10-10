@@ -28,6 +28,7 @@ import { installDebugMenu } from './debugMenu.js';
 import { installUnstick } from './unstick.js';
 import { installKeybinds } from './keybinds.js';
 import { installKeysMenu } from './keysMenu.js';
+import { installChat } from './chat.js';
 const r2 = (v) => Math.round(v * 100) / 100;
 
 document.getElementById('version').textContent = __GAME_VERSION__;
@@ -67,7 +68,7 @@ scene.add(moon, moon.target);
 const MOON_OFFSET = new THREE.Vector3(25, 55, 15);
 
 // ------------------------------------------------------- Options (client)
-const DEFAULT_SETTINGS = { brightness: 1.4, fov: 80, sens: 1, volume: 1, music: 0.5, quality: 1, tpVehicle: true }; // tpVehicle : vue à la troisième personne sur une moto (touche « changer de vue »)
+const DEFAULT_SETTINGS = { brightness: 1.4, fov: 80, sens: 1, volume: 1, music: 0.5, quality: 1, tpVehicle: true, chat: true }; // chat : afficher le chat écrit (Options) ; tpVehicle : vue à la troisième personne sur une moto (touche « changer de vue »)
 const settings = { ...DEFAULT_SETTINGS };
 try { Object.assign(settings, JSON.parse(localStorage.getItem('zombie_settings') || '{}')); } catch {}
 
@@ -1499,14 +1500,21 @@ function setupNetworkHandlers(net) {
   });
   net.on('left', (m) => {
     game.onPeerLeft(m.id); // libère ses places de moto (hôte)
+    const gone = game.remotes.get(m.id);
+    if (gone) game.chat.system(`${gone.name} a quitté la partie.`); // ses messages restent dans le journal
     removeRemote(m.id);
     refreshLobby();
     game.checkTeamWipe();
   });
 
+  // Chat écrit : le relais diffuse à tous (expéditeur compris) ; `chat_lim` : notre message a dépassé le débit du relais
+  net.on('chat', (m) => game.chat.receive(m));
+  net.on('chat_lim', () => game.chat.limited());
+
   // Nouveau joueur
   net.on('peer', (m) => {
     addRemote(m.id, m.name, m.slot);
+    game.chat.system(`${m.name} a rejoint la partie.`);
     refreshLobby();
     sfx.buy();
     hud.announce('COÉQUIPIER', `${m.name} a rejoint !`, 2500);
@@ -1858,6 +1866,7 @@ function lockAndPlay() {
 
 installUi(game, { hud, canvas, lockAndPlay }); // pile de couches, Échap, carte, plein écran
 installKeysMenu(game, { hud }); // Options > Touches
+installChat(game, { hud, sfx, canvas }); // chat écrit (multijoueur)
 
 // Clic direct sur le canvas en cours de partie pour reprendre le contrôle
 canvas.addEventListener('click', () => {
@@ -2161,6 +2170,7 @@ function frame() {
   if (game.started && !game.over && !frozen) game.update(dt);
   else if (frozen) game.summitFx?.step(dt); // le ciel de l'Aube continue pendant la pause du solo
   hud.update(dt);
+  game.chat?.update(dt);
   updateMusicMood();
   // ombres de la lune : recalculées une image sur deux (à chaque image en qualité haute) : ~20 % de rendu en moins
   shadowFrame++;

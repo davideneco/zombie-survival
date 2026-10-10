@@ -216,6 +216,7 @@ export class Player {
     // (e.code : ZQSD en AZERTY = WASD en QWERTY), actions sur la lettre réellement tapée (e.key) pour que R, E, F, G, M marchent sur tout clavier.
     const letter = (e) => (e.key && e.key.length === 1 ? e.key.toLowerCase() : '');
     window.addEventListener('keydown', (e) => {
+      if (this.game.chat?.open) return; // saisie du chat : le jeu ne voit aucune touche (chat.js arrête déjà celles du champ)
       this.keys[e.code] = true;
       const k = letter(e);
       if (k) this.keys['letter:' + k] = true;
@@ -247,13 +248,13 @@ export class Player {
       if (k) this.keys['letter:' + k] = false;
     });
     window.addEventListener('wheel', (e) => {
-      if (!this.game.playing || this.locked) return;
+      if (!this.game.playing || this.locked || this.game.chat?.open) return; // pendant la saisie, la molette fait défiler le chat
       if (e.deltaY > 0) this.nextWeapon();
       else if (e.deltaY < 0) this.prevWeapon();
     });
 
     document.addEventListener('mousedown', (e) => {
-      if (!this.game.playing || this.game.debugMenu?.open) return;
+      if (!this.game.playing || this.game.debugMenu?.open || this.game.chat?.open) return;
       if (e.button === 0) this.mouseDown = true;
       if (e.button === 1) { e.preventDefault(); this.fireGL(this.game.time); } // clic molette : lance-grenades sous canon (niveau III des fusils d'assaut)
       if (e.button === 2) this.aiming = true;
@@ -264,7 +265,7 @@ export class Player {
     });
     document.addEventListener('contextmenu', (e) => e.preventDefault());
     document.addEventListener('mousemove', (e) => {
-      if (!this.game.playing) return;
+      if (!this.game.playing || this.game.chat?.open) return; // saisie : la souris est libérée, elle ne tourne plus la caméra
       const zoom = this.aim > 0.5 ? (this.curCfg.adsFov ? 0.3 : this.curCfg.zoom ? 0.45 : 0.6) : 1;
       const sens = 0.0022 * this.game.settings.sens * zoom;
       this.yaw -= e.movementX * sens;

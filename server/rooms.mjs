@@ -1,6 +1,8 @@
 // Relais multijoueur : salons à code de 4 lettres, 4 joueurs max.
 // Le serveur ne simule rien : le premier joueur (hôte) fait tourner le jeu, le serveur relaie les messages.
 import { WebSocketServer } from 'ws';
+import { CONFIG } from '../src/config.js';
+import { cleanChat } from '../src/chatText.js';
 
 const MAX_PLAYERS = 4;
 const CHAR_COUNT = 8; // personnages jouables (src/characters.js)
@@ -26,6 +28,18 @@ const freeSlot = (room, want = -1) => {
   return 0;
 };
 
+// ---- Chat écrit : le relais ne fait pas confiance au client (texte, taille, débit). Le nom affiché est celui du membre dans le salon.
+const CHAT = CONFIG.chat;
+const cleanText = (t) => cleanChat(t, CHAT.maxLen);
+// Débit : rateCount messages par rateWindow secondes et par joueur ; faux = excédent, à ignorer
+function chatAllowed(ws, now) {
+  const times = ws.chatTimes || (ws.chatTimes = []);
+  while (times.length && now - times[0] >= CHAT.rateWindow * 1000) times.shift();
+  if (times.length >= CHAT.rateCount) return false;
+  times.push(now);
+  return true;
+}
+
 function leave(ws) {
   const room = rooms.get(ws.room);
   if (!room) return;
@@ -42,6 +56,7 @@ function leave(ws) {
 function onMessage(ws, raw) {
   let msg;
   try { msg = JSON.parse(raw); } catch { return; }
+  if (!msg || typeof msg !== 'object') return; // `null`, un nombre… : rien à lire
   const name = String(msg.name || 'Joueur').slice(0, 12);
 
   if (msg.t === 'create') {
@@ -73,6 +88,15 @@ function onMessage(ws, raw) {
   // Tout le reste est relayé : msg.to = id précis, sinon tous les autres membres.
   const room = rooms.get(ws.room);
   if (!room) return;
+  // chat : diffusé à TOUS les membres, expéditeur compris (le client n'affiche rien en local : pas de doublon) ; jamais d'envoi ciblé
+  if (msg.t === 'chat') {
+    const text = cleanText(msg.text);
+    if (!text) return;
+    if (!chatAllowed(ws, Date.now())) return send(ws, { t: 'chat_lim', from: 0 });
+    const out = { t: 'chat', from: ws.pid, text };
+    for (const m of room.members.values()) send(m.ws, out);
+    return;
+  }
   // menu debug : seul l'hôte peut envoyer dbg_tp / dbg_note (dbg_ack est la réponse d'un client à l'hôte)
   if (typeof msg.t === 'string' && msg.t.startsWith('dbg_') && msg.t !== 'dbg_ack' && room.host !== ws.pid) return;
   if (msg.t === 'start' && room.host === ws.pid) room.started = true;
@@ -88,7 +112,7 @@ function onMessage(ws, raw) {
 
 // Attache le relais sur le chemin /mp d'un serveur HTTP existant (Vite dev ou preview).
 export function attachMultiplayer(httpServer) {
-  const wss = new WebSocketServer({ noServer: true });
+  const wss = new WebSocketServer({ noServer: true, maxPayload: CONFIG.chat.maxNet }); // un message plus gros ferme la connexion (aucun message de jeu n'approche 1 Mo)
   httpServer.on('upgrade', (req, socket, head) => {
     if (!req.url || !req.url.startsWith('/mp')) return; // laisse passer le HMR de Vite
     wss.handleUpgrade(req, socket, head, (ws) => wss.emit('connection', ws, req));

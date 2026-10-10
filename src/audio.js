@@ -493,6 +493,11 @@ export class Sfx {
     this._tone('sine', 1320, 1320, 0.1, 0.18);
     this._tone('sine', 1760, 1760, 0.2, 0.18, { at: 0.07 });
   }
+  chat(v = 1) { // message de chat reçu : deux petites notes douces (discret, bien moins fort que les alertes)
+    if (!this.ctx || v < 0.03) return;
+    this._tone('sine', 880, 880, 0.08, 0.07 * v);
+    this._tone('sine', 1175, 1175, 0.12, 0.07 * v, { at: 0.07 });
+  }
   deny() {
     if (!this.ctx) return;
     this._tone('square', 150, 120, 0.2, 0.15);

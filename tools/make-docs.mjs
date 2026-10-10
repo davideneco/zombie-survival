@@ -346,7 +346,8 @@ table('14_commandes', 'Commandes (touches par défaut, modifiables dans Options 
   [kn('torch'), 'Lampe torche'], [`${kn('jump')} (devant un obstacle bas)`, 'Enjamber'], [`${kn('unstick')} (maintenir 2 s, si coincé)`, 'Se débloquer'],
   [`${kn('knife')} (à pied)`, 'Coup de couteau (aussi : clic gauche quand le chargeur et la réserve sont vides)'], [kn('map'), 'Carte'],
   ['Clic molette', 'Lance-grenades sous le canon (fusil d\'assaut Pack-a-Punch niveau III)'],
-  ['Échap', 'Ferme la carte ou le menu debug ; sinon menu pause (reprise : Échap, ou clic si le navigateur refuse) ; ferme aussi la capture d\'une touche dans Options > Touches'],
+  [kn('chat'), 'Chat écrit (multijoueur) : ouvre la saisie en bas à gauche ; Entrée envoie, Échap annule ; aucune autre touche n\'agit pendant la saisie (200 caractères, 5 messages par 4 s ; option « Afficher le chat » dans Options)'],
+  ['Échap', 'Ferme la saisie du chat, la carte ou le menu debug ; sinon menu pause (reprise : Échap, ou clic si le navigateur refuse) ; ferme aussi la capture d\'une touche dans Options > Touches'],
   ['F9 (hôte)', 'Menu debug de l\'hôte : 1-4 joueur, T deux fois amener, Y rejoindre, N réanimer, U débloquer les zombies, P perfs']]);
 
 // ------------------------------------------------------------------ CSV (séparateur ; , virgule décimale, UTF-8 avec BOM pour Excel)
