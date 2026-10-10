@@ -80,6 +80,7 @@ export class Player {
     this.airT = 0; this.peakY = 0; this.jumpSprint = false; this.flopCd = 0; // PHD Flopper (plongeon)
     this.vehicle = null; // { v, seat } quand on est sur une moto
     this.meleeT = -1; this.meleeHit = true; this.nextMelee = 0; this.lunge = null; // couteau (voir melee)
+    this.hasAxe = false; this.pullQ = null; // Hache du Bourreau (récompense de la finale) ; attirance des Chaînes
     this.vault = null; this.vaultCd = 0; this.vaultReady = false; // enjambement (voir tryVault)
     this.ride?.reset();
 
@@ -378,6 +379,11 @@ export class Player {
       this.vel.z += (wz - this.vel.z) * k;
       this.pos.x += this.vel.x * dt;
       this.pos.z += this.vel.z * dt;
+      if (this.pullQ) { // attiré par les Chaînes du Bourreau : déplacement imposé sur pullQ.T s (la collision le borne)
+        const q = this.pullQ, k = Math.min(dt, q.t) / q.T;
+        this.pos.x += q.x * k; this.pos.z += q.z * k; q.t -= dt;
+        if (q.t <= 0) this.pullQ = null;
+      }
 
       // ---- saut / gravité (sol = niveau 0, ou balcon / escalier / plateforme sous les pieds) ----
       const fl = this._fl || (this._fl = { y: 0, region: 0 });
@@ -548,6 +554,28 @@ export class Player {
     if (u >= 1) { this.vault = null; this.vaultCd = CONFIG.vault.cooldown; this.world.collide(this.pos, CONFIG.player.radius); }
   }
 
+  // Chaînes du Bourreau : le joueur est tiré de (dx, dz) m en 0,3 s
+  pullBy(dx, dz) { this.pullQ = { x: dx, z: dz, t: 0.3, T: 0.3 }; this.vel.x *= 0.3; this.vel.z *= 0.3; }
+
+  // Hache du Bourreau (récompense de la finale) : remplace la lame du couteau dans la vue (manche long, large fer) ; le bras reste le même
+  buildAxe() {
+    const steel = new THREE.MeshStandardMaterial({ color: 0xc8ccd2, roughness: 0.35, metalness: 0.3, emissive: 0x2c3036 });
+    const wood = new THREE.MeshStandardMaterial({ color: 0x5a3c24, roughness: 0.85 });
+    const dark = new THREE.MeshStandardMaterial({ color: 0x141416, roughness: 0.7 });
+    const g = new THREE.Group();
+    const box = (w, h, d, x, y, z, m) => { const o = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m); o.position.set(x, y, z); g.add(o); return o; };
+    box(0.03, 0.03, 0.5, 0, 0, -0.08, wood);                // manche
+    box(0.036, 0.036, 0.02, 0, 0, 0.17, dark);              // talon
+    box(0.05, 0.05, 0.1, 0, 0, -0.26, dark);                // douille du fer
+    box(0.27, 0.026, 0.22, -0.135, 0, -0.29, steel);         // fer : plaque à plat (vue de dessus), vers la gauche
+    box(0.03, 0.03, 0.27, -0.275, 0, -0.29, steel);         // tranchant
+    box(0.12, 0.024, 0.08, 0.06, 0, -0.29, steel);          // contre-fer (le dos de la tête)
+    g.rotation.x = 0.05;
+    this.knifeBlade.add(g);
+    for (const o of this.knifePieces) o.visible = false; // la lame du couteau disparaît ; la main et la manche restent
+    this.axeVm = g;
+  }
+
   // ------------------------------------------------------------- Couteau
   // Modèle (vue à la première personne) : lame argentée de 0,2 m avec pointe (cône à 4 faces), garde, manche noir, bras droit séparé
   // (manche + main) ; visible seulement pendant le coup, pendant lequel l'arme tenue plonge de CONFIG.knife.dip m.
@@ -563,6 +591,7 @@ export class Player {
     box(0.07, 0.016, 0.014, 0, 0, 0.005, dark, blade);                                     // garde
     box(0.022, 0.026, 0.1, 0, 0, 0.062, dark, blade);                                      // manche
     for (const z of [0.035, 0.06, 0.085]) box(0.025, 0.029, 0.006, 0, 0, z, steel, blade); // viroles
+    this.knifePieces = blade.children.slice();                                             // (la lame et sa garde : remplacées par la hache, voir buildAxe)
     // bras droit séparé : main refermée sur le manche, avant-bras en manche (même tissu que les armes)
     const hand = box(0.085, 0.085, 0.1, 0, -0.005, 0.08, new THREE.MeshStandardMaterial({ color: 0xc9a07a, roughness: 0.8 }), blade);
     hand.userData.skin = true; this.handMats.push(hand.material);
@@ -642,7 +671,19 @@ export class Player {
     const dx = this.pos.x - target.pos.x, dz = this.pos.z - target.pos.z, dl = Math.hypot(dx, dz) || 1;
     const back = (dx * Math.sin(target.yaw) + dz * Math.cos(target.yaw)) / dl < K.backCos; // on est dans son dos (cap du zombie : (sin, cos))
     g.sfx.knife?.(target.kind === 'armored' || target.isBoss ? 'metal' : 'flesh');
-    g.hitZombie(target, head, point, g.meleeDamage(target, head, back), 1, null, true);
+    const bossHit = target.isBoss && !target.mini ? { back: target.isBack(this.pos.x, this.pos.z), ax: this.pos.x, az: this.pos.z } : null; // le Bourreau : dos décidé par la position de l'attaquant
+    g.hitZombie(target, head, point, g.meleeDamage(target, head, back), 1, null, true, bossHit);
+    if (this.hasAxe) { // Hache du Bourreau : touche aussi le zombie le plus proche de la cible (à moins de K.axe.splash m)
+      const A = K.axe;
+      let extra = 0;
+      for (const z of g.zombies) {
+        if (extra >= A.extra) break;
+        if (z === target || !z.targetable || z.isBoss || Math.abs(z.pos.y - target.pos.y) > 1.6) continue;
+        if (Math.hypot(z.pos.x - target.pos.x, z.pos.z - target.pos.z) > A.splash || Math.hypot(z.pos.x - this.pos.x, z.pos.z - this.pos.z) > K.range + A.splash + 0.4) continue;
+        extra++;
+        g.hitZombie(z, false, new THREE.Vector3(z.pos.x, z.pos.y + 1.1, z.pos.z), g.meleeDamage(z, false, false), 1, null, true);
+      }
+    }
   }
 
   // Animation du couteau (tout est dans le repère de la caméra) : l'arme tenue plonge, la lame part de la droite vers le centre à la touche
@@ -650,6 +691,8 @@ export class Player {
   animateKnife(dt) {
     const K = CONFIG.knife, g = this.knifeVm;
     if (!g) return;
+    if (this.hasAxe && !this.axeVm) this.buildAxe();
+    if (this.axeVm) { this.axeVm.visible = this.hasAxe; for (const o of this.knifePieces) o.visible = !this.hasAxe; }
     const on = this.meleeT >= 0 && !this.downed && !this.dead;
     g.visible = on;
     if (!on) return;
@@ -724,7 +767,7 @@ export class Player {
         seen.add(z);
         // chute des dégâts selon la distance, propre à chaque zombie touché (calcul côté tireur : z_hit inchangé)
         const dmg = cfg.damage * falloffMult(cfg, h.distance);
-        this.game.hitZombie(z, h.object.userData.head, h.point, dmg, cfg.headMult);
+        this.game.hitZombie(z, h.object.userData.head, h.point, dmg, cfg.headMult, null, false, cfg.id === 'raygun' ? { ray: true } : null);
         if (cfg.ether && Math.random() < cfg.ether.chance) this.game.splash(h.point, cfg.ether.radius, dmg * cfg.ether.frac, cfg.ether.color); // Éther (niveau III)
         end = h.point;
         if (--budget <= 0) { stopped = true; break; }

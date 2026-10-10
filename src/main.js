@@ -5,6 +5,7 @@ import { buildRealWorld } from './realworld.js';
 import { Player } from './player.js';
 import { Zombie, zombieTextures } from './zombie.js';
 import { Boss } from './boss.js';
+import { Tanner } from './tanner.js';
 import { installFinale } from './finale.js';
 import { Hud } from './hud.js';
 import { Sfx } from './audio.js';
@@ -193,11 +194,13 @@ const game = {
   // Dégâts d'un coup de couteau sur z (voir CONFIG.knife) ; head / back : tête ou dos (x weakMult, non cumulés)
   meleeDamage(z, head, back) {
     const K = CONFIG.knife;
-    if (z.isBoss) return K.boss.dmg * (back ? K.boss.back : K.boss.front);
-    return Math.max(K.minDamage, K.healthFrac * this.zombieHealthAt(this.round)) * (head || back ? K.weakMult : 1);
+    const ax = this.player.hasAxe ? K.axe.dmgMult : 1; // Hache du Bourreau (récompense de la finale)
+    if (z.isBoss && !z.mini) return K.boss.dmg * ax; // face / dos : appliqués par Boss.damage (finale.boss.sens), comme pour les balles
+    return Math.max(K.minDamage, K.healthFrac * this.zombieHealthAt(this.round)) * (head || back ? K.weakMult : 1) * ax;
   },
 
-  hitZombie(z, head, point, damage, headMult, fromPid = null, mel = false) {
+  // extra (le Bourreau) : { ray : tir direct du pistolet à rayons, back : coup de couteau porté dans son dos, ax, az : position de l'attaquant }
+  hitZombie(z, head, point, damage, headMult, fromPid = null, mel = false, extra = null) {
     if (this.isClient) {
       // Le client envoie l'impact à l'hôte
       fx.blood(point.x, point.y, point.z, false);
@@ -211,6 +214,7 @@ const game = {
         mult: headMult,
         pt: { x: point.x, y: point.y, z: point.z },
         ...(mel ? { mel: 1 } : null),
+        ...(extra && extra.ray ? { rg: 1 } : null),
       });
       return;
     }
@@ -218,7 +222,8 @@ const game = {
     // Traitement sur l'hôte (ou en solo)
     if (this.buffs.instaKill > 0 && !z.boss) damage = 999999;
     // couteau : l'armure (chevalier de fer) est ignorée ; pas de bonus de tête ici (déjà dans les dégâts)
-    const killed = z.damage(mel ? damage / (z.armor || 1) : damage * (head ? headMult : 1), head);
+    const hit = z.isBoss && !z.mini ? { x: extra?.ax ?? point.x, z: extra?.az ?? point.z, back: extra?.back, ray: !!extra?.ray, mel, pid: fromPid ?? this.net?.id ?? null } : null;
+    const killed = z.damage(mel ? damage / (z.armor || 1) : damage * (head ? headMult : 1), head, hit);
 
     fx.blood(point.x, point.y, point.z, killed && !head);
     sfx.hit(head);
@@ -393,7 +398,7 @@ const game = {
     targets = groundTargets;
     let moved = 0;
     for (const z of this.zombies) {
-      if (z.dead || z.spawnT > 0 || z.region || z.link || z.isBoss) continue;
+      if (z.dead || z.spawnT > 0 || z.region || z.link || (z.isBoss && !z.mini)) continue;
       let near = Infinity;
       for (const t of targets) near = Math.min(near, Math.hypot(t.pos.x - z.pos.x, t.pos.z - z.pos.z));
       if (!force) z.farT = near > 90 ? (z.farT || 0) + 1 : 0;
@@ -749,7 +754,7 @@ const game = {
       if (d > radius) continue;
       if (Math.abs(z.pos.y + 1 - pos.y) > 2.5) continue; // pas à travers le plafond ou le plancher (z.pos.y = pieds, +1 = torse)
       const dmg = this.buffs.instaKill > 0 && !z.boss ? 999999 : damage * Math.pow(1 - d / radius, 0.6);
-      const killed = z.damage(dmg, false);
+      const killed = z.damage(dmg, false, z.isBoss && !z.mini ? { zone: true } : null);
       fx.blood(z.pos.x, 1, z.pos.z, killed);
       if (killed) {
         kills++; pts += 60 * mult;
@@ -893,6 +898,37 @@ const game = {
       this.net?.send({ t: 'round_start', r, toSpawn: this.toSpawn });
     }
     if (!this.isClient) this.hostRespawnCheck?.(); // motos détruites : retour au parking (hôte)
+    if (!this.isClient) this.maybeSpawnTanner();
+  },
+
+  // Maître Tanneur (CONFIG.tanner) : aux manches fromRound, fromRound + every… si l'une de ses zones est ouverte (hôte ou solo)
+  maybeSpawnTanner() {
+    const T = CONFIG.tanner, r = this.round;
+    if (!T || r < T.fromRound || (r - T.fromRound) % T.every !== 0 || this.finale || this.zombies.some((z) => z.mini && !z.dead)) return false;
+    const open = T.zones.map((n) => world.zoneNames.indexOf(n)).filter((i) => i >= 0 && world.isZoneOpen(i));
+    if (!open.length) return false;
+    const zi = open[Math.floor(Math.random() * open.length)], zc = world.zoneCenters[zi];
+    if (!zc) return false;
+    let g = null;
+    for (let k = 0; k < 6 && !g; k++) g = world.pickGround?.(zc.x, zc.z, 0, 25 + k * 10);
+    const x = g ? g.x : zc.x, zz = g ? g.z : zc.z;
+    const np = 1 + this.remotes.size, hp = Math.round(T.healthMult * this.zombieHealthAt(r) * (1 + T.perPlayer * (np - 1)));
+    const z = new Tanner(scene, { type: 'ground', pos: new THREE.Vector3(x, 0, zz) }, hp, () => {}, null, { ctx: this.bossCtx });
+    z.skipSpawn(); z.pos.set(x, 0, zz); z.ctx = this.bossCtx;
+    this.zombies.push(z);
+    this.net?.send({ t: 'z_spawn', id: z.id, st: 'ground', fin: 1, boss: 1, tanner: 1, wi: -1, x, z: zz, y: 0, hp, spd: T.speed, crawl: 0, region: 0 });
+    const sub = `Il rôde dans ${world.zoneNames[zi]}…`;
+    hud.announce('MAÎTRE TANNEUR', sub, 4200);
+    if (this.isHost) this.net?.send({ t: 'finale_say', title: 'MAÎTRE TANNEUR', sub, ms: 4200 });
+    return true;
+  },
+
+  // Barre de vie du Maître Tanneur (la finale a la sienne) : calculée sur l'hôte / en solo, reçue par `mini_info` chez les clients
+  updateMiniBar(dt) {
+    if (this.isClient) { this.miniBarT = (this.miniBarT || 0) - dt; if (this.miniBarT <= 0) this.miniBar = null; return; }
+    const t = this.zombies.find((z) => z.mini && !z.dead);
+    this.miniBar = t ? { hp: Math.max(0, Math.round(t.health)), max: t.maxHealth, phase: 1, inv: false, name: t.name, thresholds: [] } : null;
+    if (t && this.isMultiplayer) { this.miniT = (this.miniT || 0) - dt; if (this.miniT <= 0) { this.miniT = 0.3; this.net?.send({ t: 'mini_info', hp: this.miniBar.hp, max: this.miniBar.max, name: t.name }); } }
   },
 
   // Joueur autour duquel apparaît le prochain zombie : poids 1 / (1 + n), n = zombies vivants à moins de spawnBalance.radius m de lui.
@@ -1036,6 +1072,7 @@ const game = {
     this.resetPap();
     if (resetStats) this.resetBox();
     if (resetStats) { this.finale = null; this.finaleDone = false; hud.setBanner?.(null); hud.setBossBar?.(null); }
+    this.clearBossFx?.();
     fx.clear();
 
     this.over = false;
@@ -1129,6 +1166,7 @@ const game = {
     this.updatePap(dt);
     this.updateBoxMove(dt);
 
+    this.updateMiniBar(dt);
     this.updateFinale(dt);
 
     // Gestion des manches (Hôte ou Solo UNIQUEMENT) — en pause pendant l'Heure du Jugement
@@ -1468,6 +1506,7 @@ function setupNetworkHandlers(net) {
           spawnT: z.spawnT,
           crawl: z.crawler ? 1 : 0,
           boss: z.isBoss ? 1 : 0,
+          tanner: z.mini ? 1 : 0,
           kind: z.kind || null,
           y: z.pos.y,
         })),
@@ -1514,7 +1553,8 @@ function setupNetworkHandlers(net) {
   // Dégâts reçus
   net.on('hurt', (m) => {
     game.player.hurt(m.amount, m.src || null); // src absent : coup de zombie
-    if (m.kx || m.kz) { game.player.vel.x += m.kx || 0; game.player.vel.z += m.kz || 0; game.player.vy = Math.max(game.player.vy, 3.2); }
+    if (m.src === 'chain') game.player.pullBy(m.kx || 0, m.kz || 0); // Chaînes du Bourreau : on est attiré de (kx, kz) m
+    else if (m.kx || m.kz) { game.player.vel.x += m.kx || 0; game.player.vel.z += m.kz || 0; game.player.vy = Math.max(game.player.vy, 3.2); }
   });
 
   // Points reçus (client)
@@ -1540,10 +1580,10 @@ function setupNetworkHandlers(net) {
       else if (name === 'rumble') sfx.rumble(v);
       else if (name === 'emerge') { sfx.dirt(v); sfx.groan(Math.min(1, v * 1.4)); }
     };
-    const z = m.boss ? new Boss(scene, spawn, m.hp, onEvent, m.id, {}) : new Zombie(scene, spawn, m.hp, m.spd, onEvent, m.id, { crawler: !!m.crawl, kind: m.kind || null });
+    const z = m.tanner ? new Tanner(scene, spawn, m.hp, onEvent, m.id, {}) : m.boss ? new Boss(scene, spawn, m.hp, onEvent, m.id, {}) : new Zombie(scene, spawn, m.hp, m.spd, onEvent, m.id, { crawler: !!m.crawl, kind: m.kind || null });
     if (m.run) z.runner = true;
-    if (m.fin) { z.skipSpawn(); z.pos.set(m.x, m.y || 0, m.z); if (m.boss) z.group.visible = false; }
-    z.net = { x: m.x, z: m.z, y: m.y || 0, yaw: 0, atk: false, bs: m.boss ? 9 : 0 };
+    if (m.fin) { z.skipSpawn(); z.pos.set(m.x, m.y || 0, m.z); if (m.boss && !m.tanner) z.group.visible = false; }
+    z.net = { x: m.x, z: m.z, y: m.y || 0, yaw: 0, atk: false, bs: m.boss && !m.tanner ? 9 : 0 };
     game.zombies.push(z);
   });
 
@@ -1571,10 +1611,11 @@ function setupNetworkHandlers(net) {
       if (m.mel) { // couteau : l'hôte vérifie la portée et borne les dégâts (une seule valeur possible par zombie)
         const rp = game.remotes.get(m.from), K = CONFIG.knife;
         if (!rp || Math.hypot(rp.pos.x - z.pos.x, rp.pos.z - z.pos.z) > K.hostRange) return;
-        game.hitZombie(z, !!m.head, m.pt, Math.min(+m.dmg || 0, game.meleeDamage(z, true, true)), 1, m.from, true);
+        const back = z.isBoss && !z.mini ? z.isBack(rp.pos.x, rp.pos.z) : false, ax = game.finaleDone ? K.axe.dmgMult : 1; // l'hôte décide du dos (le client envoie sa valeur de base)
+        game.hitZombie(z, !!m.head, m.pt, Math.min(+m.dmg || 0, game.meleeDamage(z, true, true) / (game.player.hasAxe ? K.axe.dmgMult : 1) * ax), 1, m.from, true, { back, ax: rp.pos.x, az: rp.pos.z });
         return;
       }
-      game.hitZombie(z, m.head, m.pt, m.dmg, m.mult, m.from);
+      game.hitZombie(z, m.head, m.pt, m.dmg, m.mult, m.from, false, { ray: !!m.rg });
     }
   });
 
@@ -1591,6 +1632,7 @@ function setupNetworkHandlers(net) {
   net.onHost('finale_info', (m) => game.finaleInfo(m));
   net.onHost('finale_say', (m) => hud.announce(m.title, m.sub, m.ms));
   net.onHost('boss_fx', (m) => game.bossEvent(m.name, m));
+  net.onHost('mini_info', (m) => { game.miniBar = { hp: m.hp, max: m.max, phase: 1, inv: false, name: m.name || 'MAÎTRE TANNEUR', thresholds: [] }; game.miniBarT = 1.5; });
 
   // Boîte mystère : l'hôte compte les tirages et décide des déplacements
   net.on('box_req', (m) => { if (game.isHost && !game.hostBoxRoll(m.from, m.owned || [])) net.send({ t: 'box_deny' }, m.from); });
@@ -1715,7 +1757,7 @@ function setupNetworkHandlers(net) {
       } else {
         spawn = { type: 'ground', pos: new THREE.Vector3(zd.x, 0, zd.z) };
       }
-      const z = zd.boss ? new Boss(scene, spawn, zd.hp, () => {}, zd.id, {}) : new Zombie(scene, spawn, zd.hp, zd.spd, () => {}, zd.id, { crawler: !!zd.crawl, kind: zd.kind || null });
+      const z = zd.tanner ? new Tanner(scene, spawn, zd.hp, () => {}, zd.id, {}) : zd.boss ? new Boss(scene, spawn, zd.hp, () => {}, zd.id, {}) : new Zombie(scene, spawn, zd.hp, zd.spd, () => {}, zd.id, { crawler: !!zd.crawl, kind: zd.kind || null });
       z.pos.set(zd.x, 0, zd.z);
       if (zd.spawnT <= 0) z.skipSpawn();
       z.net = { x: zd.x, z: zd.z, yaw: 0, atk: false };

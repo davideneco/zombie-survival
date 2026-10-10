@@ -1,0 +1,11 @@
+﻿Réglage;Valeur;Remarque
+Phases;I (100 -> 70 %) LE BOURREAU · II (70 % -> 45 %) LA SENTENCE · III (45 % -> 20 %) SUR LE TOIT · IV (20 % -> 0) LE JUGEMENT;"barre de vie coupée à chaque seuil ; invulnérable pendant les transitions (barre grise « INVULNÉRABLE »)"
+Vitesse par phase;2,2 / 2,4 / 2,7 / 3,3;m/s
+Coups de base;hache 45, ruée 55, onde de choc 40;"ruée annoncée 1,15 s ; on évite l'onde en sautant"
+Sensibilités;face (tête comprise) x0,75 · dos (lanterne-cœur) x2 (x2,5 pour les joueurs que la Sentence ne vise pas) · zone x0,25 · pistolet à rayons (tir direct) x0,35 · étourdi x1,5;le dos : produit scalaire (direction du boss vers le point d'impact, cap du boss) < -0,3
+Chaînes (toutes phases);annoncées 0,9 s, 25 dégâts, attirent de 5 m;"recharge 10 s ; portée 8 à 24 m"
+Le Glas (transition 70 %);10 s d'invulnérabilité, 3 ondes à 1,2 s, 35 dégâts chacune;"2 chevaliers de fer + 4 zombies (+2 par joueur en plus) ; phase IV : Glas toutes les 25 s, sans invulnérabilité"
+La Sentence (phase II);joueur marqué 8 s (couronne rouge), dégâts reçus x1,5;"le Bourreau ne poursuit que lui, à 3 m/s ; renforts toutes les 20 s ; bond vers la tour à 45 %"
+Le Couperet (phase III);hache lancée aller-retour, annoncée 1,2 s, 50 dégâts, couloir 1,5 x 18 m;ruée toutes les 5 s
+Le Bûcher (phase IV);3 cercles de feu (+1 par joueur en plus), rayon 2,5 m, annoncés 1,5 s, 15 dégâts/s pendant 6 s;"rage : vitesse 3,3 m/s ; après 10 min de combat, tous ses coups x1,5"
+Récompense;10000 points + Hache du Bourreau (remplace le couteau : dégâts x3, touche 2 zombies);Max Munitions lâché à sa mort

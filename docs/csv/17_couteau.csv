@@ -8,5 +8,6 @@ Manche 5;150 par coup (220 PV);2 coup(s) de face, 1 dans le dos ou à la tête
 Manche 10;150 par coup (374 PV);3 coup(s) de face, 2 dans le dos ou à la tête
 Manche 15;205 par coup (602 PV);3 coup(s) de face, 2 dans le dos ou à la tête
 Manche 20;330 par coup (970 PV);3 coup(s) de face, 2 dans le dos ou à la tête
-Bourreau;150 fixes;x 0,75 de face, x 2 dans le dos
+Bourreau;150 fixes;x 0,75 de face, x 2 dans le dos (les mêmes sensibilités que les balles)
+Hache du Bourreau;dégâts x3, touche 2 zombies;récompense de la finale : remplace le couteau
 Points;10 par touche, 100 par mort;

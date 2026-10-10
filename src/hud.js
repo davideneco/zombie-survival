@@ -309,20 +309,41 @@ export class Hud {
     this._set('banner', text || '', () => { this.banner.style.display = text ? 'block' : 'none'; this.banner.textContent = text || ''; });
   }
 
-  // Barre de vie du boss (haut de l'écran) : { hp, max, phase, name } ou null
+  // Barre de vie du boss (haut de l'écran) : { hp, max, phase, name, inv, thresholds } ou null.
+  // Le Bourreau : barre coupée aux seuils de phase (thresholds : 0,7 / 0,45 / 0,2), « I · LE BOURREAU »… « IV · LE JUGEMENT » ; grise et
+  // « INVULNÉRABLE » pendant les transitions. Le mini-boss (Maître Tanneur) : une seule barre sans coupure, sans numéro de phase.
   setBossBar(b) {
+    const ROMAN = ['I', 'II', 'III', 'IV'];
     if (!this.bossBar) {
       const w = document.createElement('div');
       Object.assign(w.style, { position: 'absolute', left: '50%', top: '128px', transform: 'translateX(-50%)', width: '520px', display: 'none', textAlign: 'center', textShadow: '0 0 6px #000' });
-      w.innerHTML = '<div class="bn" style="font-size:20px;letter-spacing:5px;color:#ffb0a0"></div><div style="height:14px;border:1px solid #a33;background:rgba(0,0,0,.65)"><div class="bf" style="height:100%;width:100%;background:linear-gradient(#e33,#900)"></div></div>';
+      w.innerHTML = '<div class="bn" style="font-size:20px;letter-spacing:5px;color:#ffb0a0"></div><div class="bt" style="position:relative;height:14px;border:1px solid #a33;background:rgba(0,0,0,.65)"><div class="bf" style="height:100%;width:100%;background:linear-gradient(#e33,#900)"></div><div class="bi" style="position:absolute;left:0;right:0;top:-1px;font-size:11px;line-height:16px;letter-spacing:6px;color:#e8eef8;display:none">INVULNÉRABLE</div></div>';
       this.el.hud.appendChild(w);
-      this.bossBar = { w, n: w.querySelector('.bn'), f: w.querySelector('.bf') };
+      this.bossBar = { w, n: w.querySelector('.bn'), t: w.querySelector('.bt'), f: w.querySelector('.bf'), i: w.querySelector('.bi'), ticks: [] };
     }
-    const k = b ? `${Math.round((b.hp / b.max) * 200)}|${b.phase}` : '';
+    const bb = this.bossBar, th = b && b.thresholds ? b.thresholds : [];
+    const k = b ? `${Math.round((b.hp / b.max) * 400)}|${b.phase}|${b.inv ? 1 : 0}|${b.name}|${th.length}` : '';
     this._set('bossbar', k, () => {
-      this.bossBar.w.style.display = b ? 'block' : 'none';
-      if (b) { this.bossBar.f.style.width = `${Math.max(0, (b.hp / b.max) * 100)}%`; this.bossBar.n.textContent = `${b.name}${b.phase >= 3 ? ' — FURIEUX' : ''}`; }
+      bb.w.style.display = b ? 'block' : 'none';
+      if (!b) return;
+      while (bb.ticks.length < th.length) { const t = document.createElement('div'); Object.assign(t.style, { position: 'absolute', top: '-3px', width: '2px', height: '20px', background: '#f2d0c8', opacity: '0.85' }); bb.t.appendChild(t); bb.ticks.push(t); }
+      bb.ticks.forEach((t, i) => { t.style.display = i < th.length ? 'block' : 'none'; if (i < th.length) t.style.left = `calc(${th[i] * 100}% - 1px)`; });
+      bb.f.style.width = `${Math.max(0, (b.hp / b.max) * 100)}%`;
+      bb.f.style.background = b.inv ? 'linear-gradient(#9aa0a8,#5a5f68)' : b.phase >= 4 ? 'linear-gradient(#ff7a2a,#b02000)' : 'linear-gradient(#e33,#900)';
+      bb.i.style.display = b.inv ? 'block' : 'none';
+      bb.n.textContent = th.length ? `${ROMAN[Math.max(0, Math.min(3, b.phase - 1))]} · ${b.name}` : b.name;
+      bb.n.style.color = b.inv ? '#c4ccd8' : '#ffb0a0';
     });
+  }
+
+  // Marque de la Sentence : bandeau rouge « CONDAMNÉ · 6 s » (null : retire)
+  setMark(text) {
+    if (!this.markEl) {
+      const e = document.createElement('div');
+      Object.assign(e.style, { position: 'absolute', left: '50%', bottom: '160px', transform: 'translateX(-50%)', padding: '6px 26px', background: 'rgba(120,0,0,0.78)', border: '2px solid #ff3a28', borderRadius: '4px', color: '#ffd8d0', fontSize: '24px', letterSpacing: '5px', textShadow: '0 0 8px #000', display: 'none' });
+      this.el.hud.appendChild(e); this.markEl = e;
+    }
+    this._set('mark', text || '', () => { this.markEl.style.display = text ? 'block' : 'none'; this.markEl.textContent = text || ''; });
   }
 
   setNades(n) {

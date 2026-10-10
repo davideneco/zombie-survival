@@ -1,0 +1,8 @@
+﻿Réglage;Valeur;Remarque
+Apparition;manches 15, 20, 25… (toutes les 5);si l'une des zones Petite France / Saint-Pierre-le-Vieux est ouverte
+Santé;30 x la santé d'un zombie de la manche (18060 à la manche 15);+50 % par joueur en plus
+Vitesse / coup;2 m/s / 30;
+Vomi;cône de 8 m (demi-angle 32°), annoncé 0,8 s : 20 dégâts puis 5/s pendant 4 s;"le PHD Flopper ne protège pas ; recharge 8 s"
+Appel;3 pestiférés;recharge 20 s
+À sa mort;explosion de rayon 6 m : 60 dégâts;le PHD Flopper protège
+Récompense;Max Munitions + 1500 points par joueur;

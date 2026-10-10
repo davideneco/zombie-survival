@@ -201,10 +201,35 @@ export const CONFIG = {
     minRound: 12,         // manche minimale
     minZones: 18,         // zones ouvertes au moins (les 10 zones d'origine + 8 zones extérieures) : « 14/18 quartiers »
     maxAlive: 28,         // zombies simultanés pendant une vague
-    bossHealth: 60000,    // santé du Bourreau (joueur seul) ; +70 % par joueur supplémentaire
+    bossHealth: 200000,   // santé du Bourreau (joueur seul) ; +70 % par joueur supplémentaire
     bossDamage: 45,       // coup de hache
     chargeDamage: 55,     // ruée
     slamDamage: 40,       // onde de choc (on l'évite en sautant)
+    // Le Bourreau en quatre phases (v0.36.0), séparées par les seuils de santé `thresholds` (fractions de la santé maximale) :
+    //   I (100 -> 70 %) la nef : hache, ruée, onde de choc et Chaînes ; transition 70 % : le Glas (invulnérable, renforts)
+    //   II (70 -> 45 %) la Sentence, renforts réguliers ; à 45 % il bondit vers la tour (acte III, l'escalier), invulnérable
+    //   III (45 -> 20 %) la plateforme : Couperet (hache lancée), ruée fréquente ; à 20 %, rugissement invulnérable
+    //   IV (20 -> 0 %) le Jugement : rage, Bûcher (cercles de feu), Glas régulier ; après `enrageAfter` s de combat, dégâts x `enrageMult`.
+    // sens : multiplicateurs des dégâts reçus (face, tête comprise ; dos = lanterne-cœur, plus fort encore sur les joueurs que la Sentence ne
+    // vise pas ; zone = explosions et éclaboussures ; ray = tir direct du pistolet à rayons ; stun = étourdi). Le dos se décide par le produit
+    // scalaire (direction du boss vers le point d'impact, cap du boss) < backCos. Le couteau garde ses propres dégâts de base (knife.boss).
+    boss: {
+      thresholds: [0.7, 0.45, 0.2],
+      names: ['LE BOURREAU', 'LA SENTENCE', 'SUR LE TOIT', 'LE JUGEMENT'],
+      speed: [2.2, 2.4, 2.7, 3.3],         // vitesse de marche par phase (m/s)
+      sens: { front: 0.75, back: 2, backSentence: 2.5, zone: 0.25, ray: 0.35, stun: 1.5, backCos: -0.3 },
+      // recharges (s) par phase : [I, II, III, IV] ; 0 = attaque absente de la phase
+      cd: { charge: [8, 7, 5, 4], slam: [9, 8, 9, 7], chain: [10, 10, 10, 10], sentence: [0, 20, 0, 0], summon: [0, 20, 0, 0], axe: [0, 0, 9, 8], fire: [0, 0, 0, 14], toll: [0, 0, 0, 25] },
+      gap: 1.3,                            // pause minimale entre deux attaques (s)
+      chain: { tel: 0.9, damage: 25, pull: 5, minDist: 8, maxDist: 24, width: 1.3 }, // Chaînes : annoncées, lancées vers le joueur le plus loin, l'attirent de `pull` m
+      glas: { invuln: 10, waves: 3, interval: 1.2, damage: 35, knights: 2, zombies: 4, perPlayer: 2, wavesLive: 3 }, // Le Glas : transition invulnérable (renforts), puis phase IV sans
+      sentence: { tel: 0.9, duration: 8, mult: 1.5, speed: 3.0 }, // Sentence : joueur marqué (couronne), dégâts reçus x mult, seul poursuivi à `speed`
+      couperet: { tel: 1.2, damage: 50, length: 18, width: 1.5, flight: 0.45 },  // hache lancée aller-retour, couloir length x width
+      pyre: { circles: 3, perPlayer: 1, radius: 2.5, tel: 1.5, dps: 15, duration: 6, tick: 0.25 }, // Bûcher : cercles de feu
+      rage: { roar: 2 },                   // rugissement invulnérable à 20 %
+      enrageAfter: 600, enrageMult: 1.5,   // après 10 min de combat, tous ses coups x 1,5
+      reward: { points: 10000 },           // + la Hache du Bourreau (knife.axe)
+    },
     breather: 8,          // secondes de répit entre deux vagues
     waves: [
       { name: 'La crypte s\'ouvre', where: 'crypt', count: 16, perPlayer: 4, kinds: { normal: 0.75, bloat: 0.15, crawler: 0.1 } },
@@ -230,11 +255,27 @@ export const CONFIG = {
     range: 1.8, cone: 35, cooldown: 0.6, hitDelay: 0.12, anim: 0.55, dip: 0.3,
     lunge: 0.8, lungeNear: 2.6, lungeTime: 0.12,
     minDamage: 150, healthFrac: 0.34, weakMult: 1.5, backCos: -0.3,
-    boss: { dmg: 150, front: 0.75, back: 2 },
+    boss: { dmg: 150 },   // Bourreau : dégâts de base ; face x finale.boss.sens.front, dos x sens.back (les mêmes que pour les balles)
+    // Hache du Bourreau (récompense de la finale, remplace le couteau) : dégâts x dmgMult, touche aussi un second zombie à moins de `splash` m du premier
+    axe: { dmgMult: 3, extra: 1, splash: 1.8 },
     points: { hit: 10, kill: 100 },
     stab: 0.35, hostRange: 4,
   },
   grenade: { start: 2, max: 4, perRound: 2, fuse: 2.2, radius: 6.5, damage: 900, selfDamage: 60 },
+
+  // Maître Tanneur (v0.36.0, tanner.js) : mini-boss, un pestiféré colossal. Apparaît à l'ouverture des manches fromRound, fromRound + every, …
+  // (manches 15, 20, 25…) dans la première des zones `zones` qui est ouverte. Santé = healthMult x santé d'un zombie de la manche, +perPlayer
+  // par joueur supplémentaire. Vomi : cône de `range` m (demi-angle `angle` degrés) annoncé `tel` s, `initial` dégâts puis `dps` par seconde
+  // pendant `duration` s (le PHD Flopper ne protège pas) ; appelle `summon.count` pestiférés ; à sa mort explose (rayon `explosion.radius`,
+  // `explosion.damage` dégâts, le PHD Flopper protège). Récompense : Max Munitions et `reward.points` points par joueur.
+  tanner: {
+    zones: ['Petite France', 'Saint-Pierre-le-Vieux'], fromRound: 15, every: 5,
+    healthMult: 30, perPlayer: 0.5, speed: 2.0, damage: 30,
+    vomit: { tel: 0.8, range: 8, angle: 32, initial: 20, dps: 5, duration: 4, tick: 0.5, cooldown: 8 },
+    summon: { count: 3, cooldown: 20, healthMult: 1.6 },
+    explosion: { radius: 6, damage: 60 },
+    reward: { points: 1500 },
+  },
 
   // Véhicules (motos). Touches : ZQSD / flèches pour conduire, Espace = frein à main, E = monter / descendre.
   // Le conducteur ne tire pas (les deux mains sur le guidon) ; le passager de la grosse moto, lui, tire normalement.

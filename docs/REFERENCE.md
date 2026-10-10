@@ -1,6 +1,6 @@
 # Zombie Survival — fiche de référence
 
-Version du jeu : **v0.35.1 · bc68243 · 2026-10-10** (package 0.35.2). Générée automatiquement par `node tools/make-docs.mjs` à partir de `src/config.js` et du jeu.
+Version du jeu : **v0.35.1 · bc68243 · 2026-10-10** (package 0.36.0). Générée automatiquement par `node tools/make-docs.mjs` à partir de `src/config.js` et du jeu.
 Carte annotée : [carte.png](carte.png). Armes de profil : [armes.png](armes.png). Les mêmes tableaux en tableur : dossier [csv/](csv/).
 
 Pour demander une modification, citez la ligne (ex. « Mitrailleuse RPK : chargeur 100 », « Mastodonte à 3000 pts », « porte P3 à 500 pts », « mettre la boîte mystère dans la zone Temple-Neuf »).
@@ -448,9 +448,36 @@ Prix d'une porte : le plus cher des deux prix de zone (colonne « Prix de la por
 | Manche minimale | 12 |  |
 | Zones ouvertes au moins | 18 | (les 10 zones d'origine + 8 zones extérieures) : l'horloge affiche « n/18 quartiers ouverts » |
 | Prix | 0 | pts |
-| Santé du Bourreau (1 joueur) | 60000 | (+70 % par joueur en plus) |
+| Santé du Bourreau (1 joueur) | 200000 | (+70 % par joueur en plus) |
 | Zombies simultanés (vague) | 28 |  |
 | Répit entre deux vagues | 8 | s |
+
+## Le Bourreau : phases, attaques et sensibilités
+
+| Réglage | Valeur | Remarque |
+|---|---|---|
+| Phases | I (100 -> 70 %) LE BOURREAU · II (70 % -> 45 %) LA SENTENCE · III (45 % -> 20 %) SUR LE TOIT · IV (20 % -> 0) LE JUGEMENT | barre de vie coupée à chaque seuil ; invulnérable pendant les transitions (barre grise « INVULNÉRABLE ») |
+| Vitesse par phase | 2,2 / 2,4 / 2,7 / 3,3 | m/s |
+| Coups de base | hache 45, ruée 55, onde de choc 40 | ruée annoncée 1,15 s ; on évite l'onde en sautant |
+| Sensibilités | face (tête comprise) x0,75 · dos (lanterne-cœur) x2 (x2,5 pour les joueurs que la Sentence ne vise pas) · zone x0,25 · pistolet à rayons (tir direct) x0,35 · étourdi x1,5 | le dos : produit scalaire (direction du boss vers le point d'impact, cap du boss) < -0,3 |
+| Chaînes (toutes phases) | annoncées 0,9 s, 25 dégâts, attirent de 5 m | recharge 10 s ; portée 8 à 24 m |
+| Le Glas (transition 70 %) | 10 s d'invulnérabilité, 3 ondes à 1,2 s, 35 dégâts chacune | 2 chevaliers de fer + 4 zombies (+2 par joueur en plus) ; phase IV : Glas toutes les 25 s, sans invulnérabilité |
+| La Sentence (phase II) | joueur marqué 8 s (couronne rouge), dégâts reçus x1,5 | le Bourreau ne poursuit que lui, à 3 m/s ; renforts toutes les 20 s ; bond vers la tour à 45 % |
+| Le Couperet (phase III) | hache lancée aller-retour, annoncée 1,2 s, 50 dégâts, couloir 1,5 x 18 m | ruée toutes les 5 s |
+| Le Bûcher (phase IV) | 3 cercles de feu (+1 par joueur en plus), rayon 2,5 m, annoncés 1,5 s, 15 dégâts/s pendant 6 s | rage : vitesse 3,3 m/s ; après 10 min de combat, tous ses coups x1,5 |
+| Récompense | 10000 points + Hache du Bourreau (remplace le couteau : dégâts x3, touche 2 zombies) | Max Munitions lâché à sa mort |
+
+## Maître Tanneur (mini-boss : Petite France ou Saint-Pierre-le-Vieux)
+
+| Réglage | Valeur | Remarque |
+|---|---|---|
+| Apparition | manches 15, 20, 25… (toutes les 5) | si l'une des zones Petite France / Saint-Pierre-le-Vieux est ouverte |
+| Santé | 30 x la santé d'un zombie de la manche (18060 à la manche 15) | +50 % par joueur en plus |
+| Vitesse / coup | 2 m/s / 30 |  |
+| Vomi | cône de 8 m (demi-angle 32°), annoncé 0,8 s : 20 dégâts puis 5/s pendant 4 s | le PHD Flopper ne protège pas ; recharge 8 s |
+| Appel | 3 pestiférés | recharge 20 s |
+| À sa mort | explosion de rayon 6 m : 60 dégâts | le PHD Flopper protège |
+| Récompense | Max Munitions + 1500 points par joueur |  |
 
 ## Motos (deux parkings au panneau bleu « P », avec chacun une borne plein + réparation : place Gutenberg, 2 motos ; place Broglie, 1 moto)
 
@@ -488,7 +515,8 @@ Prix d'une porte : le plus cher des deux prix de zone (colonne « Prix de la por
 | Manche 10 | 150 par coup (374 PV) | 3 coup(s) de face, 2 dans le dos ou à la tête |
 | Manche 15 | 205 par coup (602 PV) | 3 coup(s) de face, 2 dans le dos ou à la tête |
 | Manche 20 | 330 par coup (970 PV) | 3 coup(s) de face, 2 dans le dos ou à la tête |
-| Bourreau | 150 fixes | x 0,75 de face, x 2 dans le dos |
+| Bourreau | 150 fixes | x 0,75 de face, x 2 dans le dos (les mêmes sensibilités que les balles) |
+| Hache du Bourreau | dégâts x3, touche 2 zombies | récompense de la finale : remplace le couteau |
 | Points | 10 par touche, 100 par mort |  |
 
 ## Enjambement et déblocage

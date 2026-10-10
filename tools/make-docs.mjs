@@ -209,6 +209,28 @@ const Fn = C.finale;
 table('16_finale', 'Fin de partie : L\'Heure du Jugement (horloge astronomique, intérieur de la cathédrale)', ['Réglage', 'Valeur', 'Unité'], [
   ['Manche minimale', Fn.minRound, ''], ['Zones ouvertes au moins', Fn.minZones, `(les ${D.zones.filter((z) => !S.zones[z.i].outer).length} zones d'origine + ${Fn.minZones - D.zones.filter((z) => !S.zones[z.i].outer).length} zones extérieures) : l'horloge affiche « n/${Fn.minZones} quartiers ouverts »`],
   ['Prix', Fn.price, 'pts'], ['Santé du Bourreau (1 joueur)', Fn.bossHealth, '(+70 % par joueur en plus)'], ['Zombies simultanés (vague)', Fn.maxAlive, ''], ['Répit entre deux vagues', Fn.breather, 's']]);
+const zhp = (r) => (r < C.zombie.health.softRound ? C.zombie.health.base + r * C.zombie.health.perRound : Math.round(C.zombie.health.hardBase * Math.pow(C.zombie.health.hardGrowth, r - C.zombie.health.softRound + 1)));
+const FB = Fn.boss, pc = (x) => `${Math.round(x * 100)} %`, f1 = (x) => String(x).replace('.', ',');
+table('16b_bourreau', 'Le Bourreau : phases, attaques et sensibilités', ['Réglage', 'Valeur', 'Remarque'], [
+  ['Phases', `I (100 -> ${pc(FB.thresholds[0])}) ${FB.names[0]} · II (${pc(FB.thresholds[0])} -> ${pc(FB.thresholds[1])}) ${FB.names[1]} · III (${pc(FB.thresholds[1])} -> ${pc(FB.thresholds[2])}) ${FB.names[2]} · IV (${pc(FB.thresholds[2])} -> 0) ${FB.names[3]}`, 'barre de vie coupée à chaque seuil ; invulnérable pendant les transitions (barre grise « INVULNÉRABLE »)'],
+  ['Vitesse par phase', FB.speed.map((v) => f1(v)).join(' / '), 'm/s'],
+  ['Coups de base', `hache ${Fn.bossDamage}, ruée ${Fn.chargeDamage}, onde de choc ${Fn.slamDamage}`, 'ruée annoncée 1,15 s ; on évite l\'onde en sautant'],
+  ['Sensibilités', `face (tête comprise) x${f1(FB.sens.front)} · dos (lanterne-cœur) x${FB.sens.back} (x${f1(FB.sens.backSentence)} pour les joueurs que la Sentence ne vise pas) · zone x${f1(FB.sens.zone)} · pistolet à rayons (tir direct) x${f1(FB.sens.ray)} · étourdi x${f1(FB.sens.stun)}`, `le dos : produit scalaire (direction du boss vers le point d'impact, cap du boss) < ${f1(FB.sens.backCos)}`],
+  ['Chaînes (toutes phases)', `annoncées ${f1(FB.chain.tel)} s, ${FB.chain.damage} dégâts, attirent de ${FB.chain.pull} m`, `recharge ${FB.cd.chain[0]} s ; portée ${FB.chain.minDist} à ${FB.chain.maxDist} m`],
+  ['Le Glas (transition 70 %)', `${FB.glas.invuln} s d'invulnérabilité, ${FB.glas.waves} ondes à ${f1(FB.glas.interval)} s, ${FB.glas.damage} dégâts chacune`, `${FB.glas.knights} chevaliers de fer + ${FB.glas.zombies} zombies (+${FB.glas.perPlayer} par joueur en plus) ; phase IV : Glas toutes les ${FB.cd.toll[3]} s, sans invulnérabilité`],
+  ['La Sentence (phase II)', `joueur marqué ${FB.sentence.duration} s (couronne rouge), dégâts reçus x${f1(FB.sentence.mult)}`, `le Bourreau ne poursuit que lui, à ${f1(FB.sentence.speed)} m/s ; renforts toutes les ${FB.cd.summon[1]} s ; bond vers la tour à ${pc(FB.thresholds[1])}`],
+  ['Le Couperet (phase III)', `hache lancée aller-retour, annoncée ${f1(FB.couperet.tel)} s, ${FB.couperet.damage} dégâts, couloir ${f1(FB.couperet.width)} x ${FB.couperet.length} m`, `ruée toutes les ${FB.cd.charge[2]} s`],
+  ['Le Bûcher (phase IV)', `${FB.pyre.circles} cercles de feu (+${FB.pyre.perPlayer} par joueur en plus), rayon ${f1(FB.pyre.radius)} m, annoncés ${f1(FB.pyre.tel)} s, ${FB.pyre.dps} dégâts/s pendant ${FB.pyre.duration} s`, `rage : vitesse ${f1(FB.speed[3])} m/s ; après ${FB.enrageAfter / 60} min de combat, tous ses coups x${f1(FB.enrageMult)}`],
+  ['Récompense', `${FB.reward.points} points + Hache du Bourreau (remplace le couteau : dégâts x${C.knife.axe.dmgMult}, touche ${1 + C.knife.axe.extra} zombies)`, 'Max Munitions lâché à sa mort']]);
+const TN = C.tanner;
+table('19_maitre_tanneur', 'Maître Tanneur (mini-boss : Petite France ou Saint-Pierre-le-Vieux)', ['Réglage', 'Valeur', 'Remarque'], [
+  ['Apparition', `manches ${TN.fromRound}, ${TN.fromRound + TN.every}, ${TN.fromRound + 2 * TN.every}… (toutes les ${TN.every})`, `si l'une des zones ${TN.zones.join(' / ')} est ouverte`],
+  ['Santé', `${TN.healthMult} x la santé d'un zombie de la manche (${Math.round(TN.healthMult * zhp(TN.fromRound))} à la manche ${TN.fromRound})`, `+${pc(TN.perPlayer)} par joueur en plus`],
+  ['Vitesse / coup', `${f1(TN.speed)} m/s / ${TN.damage}`, ''],
+  ['Vomi', `cône de ${TN.vomit.range} m (demi-angle ${TN.vomit.angle}°), annoncé ${f1(TN.vomit.tel)} s : ${TN.vomit.initial} dégâts puis ${TN.vomit.dps}/s pendant ${TN.vomit.duration} s`, 'le PHD Flopper ne protège pas ; recharge ' + TN.vomit.cooldown + ' s'],
+  ['Appel', `${TN.summon.count} pestiférés`, `recharge ${TN.summon.cooldown} s`],
+  ['À sa mort', `explosion de rayon ${TN.explosion.radius} m : ${TN.explosion.damage} dégâts`, 'le PHD Flopper protège'],
+  ['Récompense', `Max Munitions + ${TN.reward.points} points par joueur`, '']]);
 const VT = C.vehicles.types, VD = C.vehicles.damage, VF = C.vehicles.fuel, VR = C.vehicles.roadkill;
 const rk = (t, v) => t.roadkill.K * v * Math.min(1, 0.4 + 0.6 * (v - t.roadkill.vmin) / VR.rampSpeed);
 const vcol = (f) => Object.values(VT).map(f);
@@ -230,7 +252,7 @@ table('15_motos', 'Motos (deux parkings au panneau bleu « P », avec chacun une
   ['Bidon d\'essence (bonus)', ...same(`+${String(VF.jerrican).replace('.', ',')} L, ${VF.dropChance * 100} % par zombie tué si une moto est sous ${VF.dropBelow * 100} %`), ''],
   ['Panne sèche', ...same(`réserve < ${VF.lowBelow * 100} % : bip, ratés < ${VF.missBelow * 100} %, à 0 : poussée ${VF.pushSpeed} m/s`), ''],
 ]);
-const KN = C.knife, zhp = (r) => (r < C.zombie.health.softRound ? C.zombie.health.base + r * C.zombie.health.perRound : Math.round(C.zombie.health.hardBase * Math.pow(C.zombie.health.hardGrowth, r - C.zombie.health.softRound + 1)));
+const KN = C.knife;
 const kdmg = (r) => Math.max(KN.minDamage, KN.healthFrac * zhp(r));
 table('17_couteau', 'Couteau (toujours disponible, hors inventaire)', ['Réglage', 'Valeur', 'Unité / remarque'], [
   ['Touches', `${kn0('knife')} à pied ; clic gauche quand le chargeur ET la réserve sont vides`, `${kn0('vehicleView')} reste la vue 3e / 1re personne en moto (touches par défaut, modifiables dans Options > Touches)`],
@@ -238,7 +260,8 @@ table('17_couteau', 'Couteau (toujours disponible, hors inventaire)', ['Réglage
   ['Cadence', `1 coup / ${String(KN.cooldown).replace('.', ',')} s`, `touche à ${String(KN.hitDelay).replace('.', ',')} s, animation ${String(KN.anim).replace('.', ',')} s`],
   ['Dégâts', `max(${KN.minDamage}, ${String(KN.healthFrac).replace('.', ',')} x santé des zombies de la manche)`, 'dos ou tête x ' + String(KN.weakMult).replace('.', ',') + ' (non cumulés) ; l\'armure du chevalier de fer est ignorée'],
   ...[1, 5, 10, 15, 20].map((r) => [`Manche ${r}`, `${Math.round(kdmg(r))} par coup (${zhp(r)} PV)`, `${Math.ceil(zhp(r) / kdmg(r))} coup(s) de face, ${Math.ceil(zhp(r) / (kdmg(r) * KN.weakMult))} dans le dos ou à la tête`]),
-  ['Bourreau', `${KN.boss.dmg} fixes`, `x ${String(KN.boss.front).replace('.', ',')} de face, x ${KN.boss.back} dans le dos`],
+  ['Bourreau', `${KN.boss.dmg} fixes`, `x ${String(Fn.boss.sens.front).replace('.', ',')} de face, x ${Fn.boss.sens.back} dans le dos (les mêmes sensibilités que les balles)`],
+  ['Hache du Bourreau', `dégâts x${KN.axe.dmgMult}, touche ${1 + KN.axe.extra} zombies`, 'récompense de la finale : remplace le couteau'],
   ['Points', `${KN.points.hit} par touche, ${KN.points.kill} par mort`, '']]);
 const VA = C.vault, US = C.unstick, fr1 = (n) => String(n).replace('.', ',');
 table('18_enjambement_deblocage', 'Enjambement et déblocage', ['Réglage', 'Valeur', 'Unité / remarque'], [
