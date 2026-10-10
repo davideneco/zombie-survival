@@ -13,6 +13,8 @@ E;Acheter, ouvrir une porte, utiliser une machine ou la borne des motos, réanim
 ZQSD / WASD (en moto);Accélérer, freiner / reculer, tourner
 Espace (en moto);Frein à main
 V (en moto);Vue à la 3e personne / à la 1re personne
+WS / Espace (en tram, conducteur);"Accélérer / frein de service puis marche arrière ; frein d'urgence"
+O / H (en tram);"Ouvrir ou fermer les portes (conducteur, à l'arrêt) ; gong qui attire les zombies"
 F;Lampe torche
 Espace (devant un obstacle bas);Enjamber
 K (maintenir 2 s, si coincé);Se débloquer

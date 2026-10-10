@@ -253,6 +253,25 @@ table('21_tram', 'Tram : réseau de voies (rails, quais, poteaux de caténaire, 
   ['Largeur libre', `${fr(TR.clearHalf * 2)} m`, 'de part et d\'autre de l\'axe, vérifiée sur la grille de navigation', `décor (voitures, barricades) à ${TR.decorGap} m de l'axe au moins ; arbres et lampadaires écartés du couloir`],
   ['Portes de zone', 'feu rouge', 'une porte fermée qui coupe une voie est un heurtoir signalé par un feu (vert une fois ouverte)', `la rame freine d'elle-même à ${TR.gate.signalDist} m ; l'ouvrir libère le tronçon`],
   ['Rendu', 'rails : 1 appel (InstancedMesh)', 'quais + heurtoirs + mâts : 1 appel ; poteaux : 1 appel ; fils + feux : 1 appel', `${TR.pole.every} m entre deux poteaux, côtés alternés`]]);
+// ---- tram : la rame conduisible (v0.39.0)
+const TC = TR.car, TD = TR.drive, TH = TR.hit, kmh = (v) => Math.round(v * 3.6), fr2 = (n) => String(n).replace('.', ',');
+table('22_tram_rame', 'Tram : la rame conduisible (une seule, garée au quai « Homme de Fer » de la ligne B / C / F ; les rames de décor ne roulent pas)', ['Réglage', 'Valeur', 'Remarque'], [
+  ['Rame', `${TC.modules} modules de ${fr2(TC.module)} m (${fr2(TC.modules * TC.module)} m), ${fr2(TC.width)} x ${fr2(TC.height)} m, plancher à ${fr2(TC.floor)} m`, `articulés : chaque module suit la voie ; cabine à chaque bout ; ${TC.doors} portes de ${fr2(TC.doorWidth)} m par côté`],
+  ['Places', `16 : 2 de conducteur (une par cabine) + ${2 * TC.perSide} de passagers assis`, 'les passagers tirent normalement (comme sur la grosse moto) ; la place de conducteur se prend près d\'un bout de la rame, les autres près de la caisse'],
+  ['Montée / descente', `${kn0('interact')}, à moins de ${fr2(TD.boardSpeed)} m/s`, 'en rame, l\'invite rappelle les touches ; descendre en marche est refusé'],
+  ['Conduite', `${kn0('forward')} accélérer · ${kn0('back')} frein de service (puis marche arrière) · ${kn0('jump')} frein d'urgence`, `touches modifiables dans Options > Touches ; conducteur de la cabine arrière : la rame roule dans l'autre sens`],
+  ['Vitesse max', `${TD.maxSpeed} m/s (${kmh(TD.maxSpeed)} km/h) ; marche arrière ${TD.reverse} m/s`, `accélération ${fr2(TD.accel)} m/s² (qui faiblit près du maximum), résistance ${fr2(TD.drag)} m/s²`],
+  ['Freinage', `service ${fr2(TD.brake)} m/s² · urgence ${TD.emergency} m/s²`, ''],
+  ['Virages', `vitesse plafonnée à racine(${fr2(TD.grip)} x R) m/s (R = 25 m : ${kmh(Math.sqrt(TD.grip * 25))} km/h) avec une alarme`, `la rame freine d'elle-même (${fr2(TD.autoBrake)} m/s²) en regardant ${TD.lookAhead} m devant ; pas de déraillement`],
+  ['Portes de zone fermées, heurtoirs', `freinage automatique à ${TR.gate.signalDist} m ou plus tôt si la vitesse l'exige (urgence ${TD.emergency} m/s²), arrêt à ${fr2(TR.gate.stopGap)} m de la porte`, 'ouvrir la porte libère le tronçon ; le nez s\'arrête à 1,2 m du heurtoir'],
+  ['Portes de la rame', `${kn0('tramDoors')} (conducteur) à moins de ${fr2(TD.doorSpeed)} m/s, ${fr2(TD.doorTime)} s, carillon`, 'pas de traction portes ouvertes ; elles se referment si la rame roule'],
+  ['Énergie', `sous-station de l'Homme de Fer : ${TR.power.price} pts, une seule fois pour toute l'équipe`, `${kn0('interact')} près du kiosque jaune ; ensuite la conduite est gratuite ; sans courant, la rame ne démarre pas`],
+  ['Gong', `${kn0('tramGong')} (tout occupant) : zombies à moins de ${TR.gong.range} m attirés pendant ${TR.gong.duration} s`, `recharge ${TR.gong.cooldown} s ; ils prennent la rame pour cible du champ de flux (sauf s'ils sont déjà sur un joueur)`],
+  ['Caméra', `${kn0('vehicleView')} : 3e personne (bras ${TC.camArm} m) / 1re personne dans la cabine`, 'même vue que pour les motos'],
+  ['PV', `${TR.hp}`, `coup de zombie sur la caisse : ${TR.zombieHit} PV ; passagers touchés seulement devant une porte ouverte ; à 0 PV : hors service, retour au dépôt ${TR.power.respawnRounds} manches plus tard`],
+  ['Joueur à pied heurté', `repoussé ; ${TH.playerDamage} dégâts au-dessus de ${TH.playerSpeed} m/s`, 'jamais mortel (il reste 1 PV)'],
+  ['Zombie heurté', `au-dessus de ${TH.zombieSpeed} m/s : ${TH.zombieK} x vitesse (${TH.zombieK * TD.maxSpeed} à la vitesse max) ; en dessous : aucun dégât, il bloque la rame`, `la rame ne ralentit pas ; un coup toutes les ${TH.zombieCooldown} s au même zombie`],
+  ['Obstacles', 'une boîte orientée par module, obstacles dynamiques de Collision (setDynamic)', 'les joueurs, les zombies et les motos sont repoussés ; les balles traversent']]);
 const VT = C.vehicles.types, VD = C.vehicles.damage, VF = C.vehicles.fuel, VR = C.vehicles.roadkill;
 const rk = (t, v) => t.roadkill.K * v * Math.min(1, 0.4 + 0.6 * (v - t.roadkill.vmin) / VR.rampSpeed);
 const vcol = (f) => Object.values(VT).map(f);
@@ -300,6 +319,7 @@ table('14_commandes', 'Commandes (touches par défaut, modifiables dans Options 
   [kn('sprint'), 'Sprint'], [kn('jump'), 'Sauter'], [kn('reload'), 'Recharger'], [`${kn('weapon1')} / ${kn('weapon2')} / ${kn('weapon3')} / molette`, 'Changer d\'arme'], [kn('grenade'), 'Grenade'],
   [kn('interact'), 'Acheter, ouvrir une porte, utiliser une machine ou la borne des motos, réanimer (maintenir), monter / descendre d\'une moto'],
   [`ZQSD / ${kn('forward')}${kn('left')}${kn('back')}${kn('right')} (en moto)`, 'Accélérer, freiner / reculer, tourner'], [`${kn('jump')} (en moto)`, 'Frein à main'], [`${kn('vehicleView')} (en moto)`, 'Vue à la 3e personne / à la 1re personne'],
+  [`${kn('forward')}${kn('back')} / ${kn('jump')} (en tram, conducteur)`, 'Accélérer / frein de service puis marche arrière ; frein d\'urgence'], [`${kn('tramDoors')} / ${kn('tramGong')} (en tram)`, 'Ouvrir ou fermer les portes (conducteur, à l\'arrêt) ; gong qui attire les zombies'],
   [kn('torch'), 'Lampe torche'], [`${kn('jump')} (devant un obstacle bas)`, 'Enjamber'], [`${kn('unstick')} (maintenir 2 s, si coincé)`, 'Se débloquer'],
   [`${kn('knife')} (à pied)`, 'Coup de couteau (aussi : clic gauche quand le chargeur et la réserve sont vides)'], [kn('map'), 'Carte'],
   ['Clic molette', 'Lance-grenades sous le canon (fusil d\'assaut Pack-a-Punch niveau III)'],

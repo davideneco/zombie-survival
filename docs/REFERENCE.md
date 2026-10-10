@@ -1,6 +1,6 @@
 # Zombie Survival — fiche de référence
 
-Version du jeu : **v0.37.2 · d9223ee · 2026-10-10** (package 0.38.0). Générée automatiquement par `node tools/make-docs.mjs` à partir de `src/config.js` et du jeu.
+Version du jeu : **v0.39.0 · 7fff467 · 2026-10-10** (package 0.39.0). Générée automatiquement par `node tools/make-docs.mjs` à partir de `src/config.js` et du jeu.
 Carte annotée : [carte.png](carte.png). Armes de profil : [armes.png](armes.png). Les mêmes tableaux en tableur : dossier [csv/](csv/).
 
 Pour demander une modification, citez la ligne (ex. « Mitrailleuse RPK : chargeur 100 », « Mastodonte à 3000 pts », « porte P3 à 500 pts », « mettre la boîte mystère dans la zone Temple-Neuf »).
@@ -505,6 +505,27 @@ Prix d'une porte : le plus cher des deux prix de zone (colonne « Prix de la por
 | Portes de zone | feu rouge | une porte fermée qui coupe une voie est un heurtoir signalé par un feu (vert une fois ouverte) | la rame freine d'elle-même à 15 m ; l'ouvrir libère le tronçon |
 | Rendu | rails : 1 appel (InstancedMesh) | quais + heurtoirs + mâts : 1 appel ; poteaux : 1 appel ; fils + feux : 1 appel | 12 m entre deux poteaux, côtés alternés |
 
+## Tram : la rame conduisible (une seule, garée au quai « Homme de Fer » de la ligne B / C / F ; les rames de décor ne roulent pas)
+
+| Réglage | Valeur | Remarque |
+|---|---|---|
+| Rame | 5 modules de 4,7 m (23,5 m), 2,4 x 3,4 m, plancher à 0,32 m | articulés : chaque module suit la voie ; cabine à chaque bout ; 4 portes de 1,3 m par côté |
+| Places | 16 : 2 de conducteur (une par cabine) + 14 de passagers assis | les passagers tirent normalement (comme sur la grosse moto) ; la place de conducteur se prend près d'un bout de la rame, les autres près de la caisse |
+| Montée / descente | E, à moins de 1,5 m/s | en rame, l'invite rappelle les touches ; descendre en marche est refusé |
+| Conduite | W accélérer · S frein de service (puis marche arrière) · Espace frein d'urgence | touches modifiables dans Options > Touches ; conducteur de la cabine arrière : la rame roule dans l'autre sens |
+| Vitesse max | 14 m/s (50 km/h) ; marche arrière 4 m/s | accélération 1,3 m/s² (qui faiblit près du maximum), résistance 0,2 m/s² |
+| Freinage | service 1,8 m/s² · urgence 3 m/s² |  |
+| Virages | vitesse plafonnée à racine(1 x R) m/s (R = 25 m : 18 km/h) avec une alarme | la rame freine d'elle-même (2,5 m/s²) en regardant 70 m devant ; pas de déraillement |
+| Portes de zone fermées, heurtoirs | freinage automatique à 15 m ou plus tôt si la vitesse l'exige (urgence 3 m/s²), arrêt à 2,5 m de la porte | ouvrir la porte libère le tronçon ; le nez s'arrête à 1,2 m du heurtoir |
+| Portes de la rame | O (conducteur) à moins de 1,2 m/s, 1,2 s, carillon | pas de traction portes ouvertes ; elles se referment si la rame roule |
+| Énergie | sous-station de l'Homme de Fer : 2000 pts, une seule fois pour toute l'équipe | E près du kiosque jaune ; ensuite la conduite est gratuite ; sans courant, la rame ne démarre pas |
+| Gong | H (tout occupant) : zombies à moins de 50 m attirés pendant 8 s | recharge 3 s ; ils prennent la rame pour cible du champ de flux (sauf s'ils sont déjà sur un joueur) |
+| Caméra | V : 3e personne (bras 12 m) / 1re personne dans la cabine | même vue que pour les motos |
+| PV | 3000 | coup de zombie sur la caisse : 2 PV ; passagers touchés seulement devant une porte ouverte ; à 0 PV : hors service, retour au dépôt 2 manches plus tard |
+| Joueur à pied heurté | repoussé ; 10 dégâts au-dessus de 5 m/s | jamais mortel (il reste 1 PV) |
+| Zombie heurté | au-dessus de 3 m/s : 40 x vitesse (560 à la vitesse max) ; en dessous : aucun dégât, il bloque la rame | la rame ne ralentit pas ; un coup toutes les 0.5 s au même zombie |
+| Obstacles | une boîte orientée par module, obstacles dynamiques de Collision (setDynamic) | les joueurs, les zombies et les motos sont repoussés ; les balles traversent |
+
 ## Motos (deux parkings au panneau bleu « P », avec chacun une borne plein + réparation : place Gutenberg, 2 motos ; place Broglie, 1 moto)
 
 | Réglage | MOTO | GROSSE MOTO | Unité |
@@ -574,6 +595,8 @@ Prix d'une porte : le plus cher des deux prix de zone (colonne « Prix de la por
 | ZQSD / WASD (en moto) | Accélérer, freiner / reculer, tourner |
 | Espace (en moto) | Frein à main |
 | V (en moto) | Vue à la 3e personne / à la 1re personne |
+| WS / Espace (en tram, conducteur) | Accélérer / frein de service puis marche arrière ; frein d'urgence |
+| O / H (en tram) | Ouvrir ou fermer les portes (conducteur, à l'arrêt) ; gong qui attire les zombies |
 | F | Lampe torche |
 | Espace (devant un obstacle bas) | Enjamber |
 | K (maintenir 2 s, si coincé) | Se débloquer |
