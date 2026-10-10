@@ -10,7 +10,8 @@ import { createArchitecture, BAY_W } from './architecture.js';
 import { createProps } from './props.js';
 import { planCathedral, CEIL, pointInPoly as inPoly } from './cathedral.js';
 import { buildCathedral, augmentPlan, PORTAL_H } from './cath/index.js';
-import { HDF, isRotunda, isOpenShelter, rotundaInfo, shelterInfo, planHdf, railDist, buildHdfStructures, buildHdfDecor } from './hommedefer.js';
+import { HDF, isRotunda, isOpenShelter, rotundaInfo, shelterInfo, planHdf, legacyRailDist, buildHdfStructures, buildHdfDecor } from './hommedefer.js';
+import { planTram, buildTramNetwork } from './tramNet.js';
 import { parkingLayout, buildParkingDecor } from './parking.js';
 import { makePerkMachine, makeAmmoStation, makeWallBuy, addPosts, makeMysteryBox, makePackAPunch, makeAstronomicalClock } from './machines.js';
 
@@ -629,12 +630,25 @@ export async function buildRealWorld(scene, renderer) {
     }
   }
 
+  // ---------------------------------------------------------------- Réseau de tram (v0.38.0)
+  // La géométrie des voies (CONFIG.tram.lines) est pure et connue d'avance : le décor, les arbres et les lampadaires évitent le couloir des voies
+  // (tramDist : distance de l'axe au point, m ; Infinity au-delà de 12 m). Les maillages, quais et feux viennent plus tard (buildTramNetwork).
+  const tramPlan = planTram();
+  const tramDist = (x, z) => tramPlan.dist(x, z, 12);
+  let tramInfo = null; // le réseau construit (rails, quais, poteaux, feux des portes)
+
   // ---------------------------------------------------------------- Arbres (instanciés)
   const treeMatrices = { trunk: [], leaf: [], leafCol: [] };
+  const trackTrees = []; // collisions des arbres supprimés sur les voies du tram
   {
     const leafCols = [0x3c5a2a, 0x4a6230, 0x566a2c].map((c) => new THREE.Color(c));
     const dummy = new THREE.Object3D();
     for (const [x, z] of data.trees) {
+      if (tramDist(x, z) < CONFIG.tram.treeGap) { // un arbre sur la voie : ni tronc ni feuillage dans la rame. Sa collision reste en place pendant le placement des objets
+        // (la grille de navigation décide des emplacements : les tirages de toute l'île ne bougent pas), puis elle est désactivée (trackTrees : voir plus bas)
+        if (onIsland(x, z)) trackTrees.push(collision.addCircle(x, z, 0.3));
+        continue;
+      }
       const th = rand(3.2, 4.5);
       dummy.position.set(x, th / 2, z); dummy.rotation.set(0, 0, 0); dummy.scale.set(1, th, 1); dummy.updateMatrix();
       treeMatrices.trunk.push(dummy.matrix.clone());
@@ -663,8 +677,7 @@ export async function buildRealWorld(scene, renderer) {
   if (rotundas.length) {
     const rotundaInfos = rotundas.map(rotundaInfo);
     const r0 = rotundaInfos[0];
-    collision.build(); // grille provisoire : le plan des rails lance des rayons
-    hdfPlan = planHdf(collision, r0.cx, r0.cz);
+    hdfPlan = planHdf(tramPlan, r0.cx, r0.cz);
     const nearShelters = shelters.map((pts) => shelterInfo(pts, [r0.cx, r0.cz])); // tous les abris de l'île (les abris vitrés des arrêts de bus et de tram ne sont plus des immeubles pleins)
     hdfStruct = buildHdfStructures({ scene, collision, lightSources, rotundas: rotundaInfos, shelters: nearShelters, plan: hdfPlan });
   }
@@ -673,7 +686,7 @@ export async function buildRealWorld(scene, renderer) {
   collision.build();
   const nav = new NavGrid(halfX, halfZ, collision, polygons, NAV_CELL, NAV_MARGIN, 1300);
   nav.vaultCost = CONFIG.zombie.vault.cost;
-  nav.segFilter = (it) => collision._blocks(it, 0); // la grille du sol ignore les obstacles d'étage (garde-corps, murs des tours…)
+  nav.segFilter = (it) => !it.tram && collision._blocks(it, 0); // la grille du sol ignore les obstacles d'étage (garde-corps, murs des tours…) et les poteaux de caténaire (solides mais fins)
   nav.outside = (x, z) => !onIsland(x, z);
   nav.carve = (b) => {
     for (const r of passageRuns) {
@@ -1373,9 +1386,19 @@ export async function buildRealWorld(scene, renderer) {
       // on élargit la recherche, puis on accepte moins d'espace autour (rues étroites)
       for (const [r, clear] of [[maxD, minClear], [maxD * 1.6, minClear], [maxD * 2.5, minClear], [maxD * 2.5, Math.max(1, minClear - 1)]]) {
         for (const gap of doorGaps) {
-          const c = shuffle(candidatesNear(a[0], a[1], clear, minD, r)
+          const sh = shuffle(candidatesNear(a[0], a[1], clear, minD, r)
             .filter((p) => zOf(p[0], p[1]) === zi && placed.every((q) => Math.hypot(q[0] - p[0], q[1] - p[1]) > 5) && (!gap || dDist(p[0], p[1]) >= gap)
-              && !((isolatedZone[zi] || outer) && hdfPlan && railDist(hdfPlan, p[0], p[1]) < 4)), rng)[0];
+              && !((isolatedZone[zi] || outer) && hdfPlan && legacyRailDist(hdfPlan, p[0], p[1]) < 4)), rng);
+          let c = sh[0];
+          // v0.38.0 : jamais à moins de itemGap (4,6 m) d'un rail du tram (toutes les lignes). Le tirage d'origine ne bouge pas : l'emplacement tiré reste celui
+          // que `placed` retient (les tirages suivants, dans toute l'île, sont donc les mêmes) ; seul l'objet se pose sur le candidat libre le plus proche.
+          const IG = CONFIG.tram.itemGap;
+          if (c && tramDist(c[0], c[1]) < IG) {
+            let best = null, bd = Infinity;
+            for (const p of sh) { if (tramDist(p[0], p[1]) < IG) continue; const d = Math.hypot(p[0] - c[0], p[1] - c[1]); if (d < bd) { bd = d; best = p; } }
+            placed.push(c);
+            return best || c;
+          }
           if (c) { placed.push(c); return c; }
         }
       }
@@ -1572,7 +1595,7 @@ export async function buildRealWorld(scene, renderer) {
     const poles = [], lanterns = [], caps = [];
     for (const [x, z] of data.lamps) {
       const ix = nav.cx(x), iz = nav.cz(z);
-      if (!nav.inside(ix, iz) || !onIsland(x, z)) continue;
+      if (!nav.inside(ix, iz) || !onIsland(x, z) || tramDist(x, z) < CONFIG.tram.lampGap) continue; // un lampadaire au milieu de la voie : écarté
       dummy.rotation.set(0, 0, 0); dummy.scale.set(1, 1, 1);
       dummy.position.set(x, 2.1, z); dummy.updateMatrix(); poles.push(dummy.matrix.clone());
       dummy.position.set(x, 4.35, z); dummy.updateMatrix(); lanterns.push(dummy.matrix.clone());
@@ -1604,13 +1627,16 @@ export async function buildRealWorld(scene, renderer) {
     // le parking des motos réserve son emprise (marge 1,5 m) : ni mobilier, ni voiture, ni barricade dessus
     const inParking = (x, z, margin = 0) => parkings.some((pk) => pk.inRect(x, z, margin));
     const freeAt = (x, z, gap) => !inParking(x, z, 1.5) && used.every(([ux, uz]) => Math.hypot(ux - x, uz - z) > gap);
+    const freeTram = (x, z, gap) => tramDist(x, z) >= CONFIG.tram.decorGap && freeAt(x, z, gap); // voitures, barricades, chalets : à 5 m au moins de l'axe de la voie (v0.38.0 : couloir libre de 6,5 m + marge de navigation + l'objet)
     // mur le plus proche (orientation des bancs, vélos…) et axe de la rue (voitures)
     const wallDir = (x, z) => { let best = 99, ang = 0; for (let a = 0; a < 16; a++) { const t = (a / 16) * Math.PI * 2; const d = collision.rayHit(x, 1, z, Math.cos(t), 0, Math.sin(t), 6); if (d < best) { best = d; ang = t; } } return { dist: best, ang }; };
     const streetDir = (x, z) => { let best = -1, ang = 0; for (let a = 0; a < 12; a++) { const t = (a / 12) * Math.PI; const d = collision.rayHit(x, 1, z, Math.cos(t), 0, Math.sin(t), 40) + collision.rayHit(x, 1, z, -Math.cos(t), 0, -Math.sin(t), 40); if (d > best) { best = d; ang = t; } } return ang; };
     // rotation (rotation.y) pour que le dos de l'objet (axe -z local) soit tourné vers la direction t
     const backTo = (t) => Math.atan2(-Math.cos(t), -Math.sin(t));
     const rndIso = seeded(77001);
-    // Place de l'Homme de Fer : rails, quais, rames, totems, statue (avant le mobilier : il évite l'emprise)
+    // Réseau de tram : rails, quais d'arrêt, heurtoirs, feux des portes, caténaire (avant le décor de la place : ses quais et ses rames évitent les poteaux)
+    tramInfo = buildTramNetwork({ scene, collision, lightSources, net: tramPlan, doors, hdfCenter: hdfStruct ? { x: hdfStruct.rotundas[0].cx, z: hdfStruct.rotundas[0].cz, R: hdfStruct.rotundas[0].R } : null });
+    // Place de l'Homme de Fer : rames de décor, quais, totems, statue (avant le mobilier : il évite l'emprise)
     const hdfZone = ZONE_NAMES.indexOf(HDF.zone);
     let hdf = null;
     if (hdfPlan && hdfZone >= 0 && seeds[hdfZone]) {
@@ -1619,37 +1645,42 @@ export async function buildRealWorld(scene, renderer) {
       hdfInfo = { ...hdf, structures: hdfStruct, plan: hdfPlan };
     }
     // un meuble OSM ; st = { bikes, cap } : vélos posés / plafond de la passe
-    const placeFurniture = (f, rnd2, st) => {
+    // dry : le meuble est sur la voie du tram (v0.38.0) : tout se passe comme s'il était posé (mêmes tirages, même réservation de place) sauf le modèle
+    // et la collision, pour que ni le tirage ni les autres objets de l'île ne bougent
+    const placeFurniture = (f, rnd2, st, dry = false) => {
       const [x, z] = f.p;
+      const place = (...a) => { if (!dry) props.place(...a); };
+      const cAdd = (...a) => { if (!dry) collision.addBox(...a); };
+      const cCircle = (...a) => (dry ? { x, z } : collision.addCircle(...a));
       const wd = wallDir(x, z);
       if (f.kind === 'bench' && freeAt(x, z, 2.5)) {
         const th = wd.dist < 4 ? backTo(wd.ang) : rnd2() * Math.PI * 2;
-        props.place('bench', x, z, th);
-        collision.addBox(x, z, 1.9, 0.6, -th, 1, undefined, 'prop', true); // banc : enjambable (Espace)
+        place('bench', x, z, th);
+        cAdd(x, z, 1.9, 0.6, -th, 1, undefined, 'prop', true); // banc : enjambable (Espace)
         used.push([x, z]);
       } else if (f.kind === 'waste_basket' && freeAt(x, z, 1.5)) {
-        props.place('bin', x, z, rnd2() * 6);
-        collision.addCircle(x, z, 0.26, 1, undefined, 'prop', true); // poubelle : enjambable
+        place('bin', x, z, rnd2() * 6);
+        cCircle(x, z, 0.26, 1, undefined, 'prop', true); // poubelle : enjambable
       } else if (f.kind === 'bollard') {
-        props.place('bollard', x, z);
-        collision.addCircle(x, z, 0.1, 0.9, undefined, 'prop', true); // borne : enjambable
+        place('bollard', x, z);
+        cCircle(x, z, 0.1, 0.9, undefined, 'prop', true); // borne : enjambable
       } else if (f.kind === 'bicycle_parking' && st.bikes < st.cap && freeAt(x, z, 2) && rnd2() < 0.6) {
         const th = wd.dist < 5 ? -wd.ang : rnd2() * Math.PI; // vélos perpendiculaires au mur
         const n = 1 + Math.floor(rnd2() * 3);
         for (let k = 0; k < n; k++) {
           const off = (k - (n - 1) / 2) * 0.65, ox = -Math.sin(wd.ang) * off, oz = Math.cos(wd.ang) * off;
-          props.place('bike', x + ox, z + oz, th, 1, null, 0, (rnd2() - 0.5) * 0.12);
+          place('bike', x + ox, z + oz, th, 1, null, 0, (rnd2() - 0.5) * 0.12);
           st.bikes++;
         }
-        collision.addBox(x, z, 1.7, n * 0.65, -th, 1, undefined, 'prop', true); // vélos : enjambables si la profondeur traversée est <= 1,3 m
+        cAdd(x, z, 1.7, n * 0.65, -th, 1, undefined, 'prop', true); // vélos : enjambables si la profondeur traversée est <= 1,3 m
         used.push([x, z]);
       } else if ((f.kind === 'artwork' || f.kind === 'memorial' || f.kind === 'monument') && wd.dist > 3 && freeAt(x, z, 4)) {
-        props.place('statue', x, z, rnd2() * 6);
-        collision.addCircle(x, z, 1.2, 4.5);
+        place('statue', x, z, rnd2() * 6);
+        cCircle(x, z, 1.2, 4.5);
         used.push([x, z]);
       } else if (f.kind === 'fountain' && freeAt(x, z, 4)) {
-        props.place('fountain', x, z);
-        fountainCircles.push(collision.addCircle(x, z, 1.6, 1.6)); // (hauteur corrigée en fin de construction : applyMapFixes)
+        place('fountain', x, z);
+        if (!dry) fountainCircles.push(cCircle(x, z, 1.6, 1.6)); // (hauteur corrigée en fin de construction : applyMapFixes)
         used.push([x, z]);
       }
     };
@@ -1657,7 +1688,7 @@ export async function buildRealWorld(scene, renderer) {
     for (const f of data.furniture || []) {
       const [x, z] = f.p;
       if (!inSec(x, z) || insideBuilding(x, z) || (hdf && hdf.covers(x, z)) || inParking(x, z, 0.8)) continue;
-      placeFurniture(f, isolatedZone[zoneOf1(x, z)] ? rndIso : rnd, legacyBikes); // mobilier d'une zone isolée : tirage à part
+      placeFurniture(f, isolatedZone[zoneOf1(x, z)] ? rndIso : rnd, legacyBikes, tramInfo.covers(x, z)); // mobilier d'une zone isolée : tirage à part
     }
     // chalets du marché de Noël sur les grandes places
     for (const name of ['Place Kléber', 'Cathédrale', 'Place Gutenberg']) {
@@ -1666,7 +1697,7 @@ export async function buildRealWorld(scene, renderer) {
       const [sx, sz] = seeds[zi];
       let placed = 0;
       for (const [x, z] of shuffle(candidatesNear(sx, sz, 4, 6, 32).filter((c) => zoneOf1(c[0], c[1]) === zi))) {
-        if (placed >= 4 || !freeAt(x, z, 6)) continue;
+        if (placed >= 4 || !freeTram(x, z, 6)) continue;
         const th = Math.atan2(sx - x, sz - z); // comptoir tourné vers le centre de la place
         props.place('chalet', x, z, th);
         collision.addBox(x, z, 3, 2, -th, 2.6);
@@ -1681,7 +1712,7 @@ export async function buildRealWorld(scene, renderer) {
     let cars = 0;
     for (const [x, z] of spots) {
       if (cars >= 14) break;
-      if (!freeAt(x, z, 11)) continue;
+      if (!freeTram(x, z, 11)) continue;
       const ang = streetDir(x, z) + (rnd() - 0.5) * 0.5;
       props.place('car', x, z, -ang, 1, new THREE.Color(carColors[Math.floor(rnd() * carColors.length)]));
       collision.addBox(x, z, 4.2, 1.75, ang, 1.5);
@@ -1694,7 +1725,7 @@ export async function buildRealWorld(scene, renderer) {
       let n = 0;
       for (const [x, z] of shuffle(randomSpots(80, 2))) {
         if (n >= count) break;
-        if (!freeAt(x, z, 5)) continue;
+        if (!freeTram(x, z, 5)) continue;
         const ang = streetDir(x, z) + (type === 'crate' ? rnd() * 3 : Math.PI / 2 + (rnd() - 0.5) * 0.6);
         props.place(type, x, z, -ang);
         const stacked = type === 'crate' && rnd() < 0.5; // caisse surmontée d'une seconde : 2 m, pas enjambable
@@ -1713,7 +1744,7 @@ export async function buildRealWorld(scene, renderer) {
       if (zoneOf(x, z) < 0 || inSec(x, z) || insideBuilding(x, z) || inParking(x, z, 0.8)) continue;
       // à 2,5 m au moins d'une porte : le mobilier ne cache ni la barrière ni son panneau
       if (doorDist(x, z) < 2.5) continue;
-      placeFurniture(f, rndOuter, outerBikes);
+      placeFurniture(f, rndOuter, outerBikes, tramInfo.covers(x, z));
     }
     // cases de la zone (tous les 3 m, accessibles et dégagées), mélangées par rndOuter
     const outerSpots = (zi, minClear) => shuffle(zoneList[zi].filter(([ix, iz]) => clearance(ix, iz, minClear)).map(([ix, iz]) => [nav.worldX(ix), nav.worldZ(iz)]), rndOuter);
@@ -1727,7 +1758,7 @@ export async function buildRealWorld(scene, renderer) {
         let placed = 0;
         for (const [x, z] of outerSpots(zi, 4)) {
           if (placed >= zone.chalets) break;
-          if (Math.hypot(x - sx, z - sz) > OD.chaletRadius || !freeAt(x, z, 6) || doorDist(x, z) < 6) continue;
+          if (Math.hypot(x - sx, z - sz) > OD.chaletRadius || !freeTram(x, z, 6) || doorDist(x, z) < 6) continue;
           const th = Math.atan2(sx - x, sz - z);
           props.place('chalet', x, z, th);
           collision.addBox(x, z, 3, 2, -th, 2.6);
@@ -1739,7 +1770,7 @@ export async function buildRealWorld(scene, renderer) {
       let c = 0;
       for (const [x, z] of outerSpots(zi, 3)) {
         if (c >= nCars) break;
-        if (!freeAt(x, z, 11) || doorDist(x, z) < 6) continue;
+        if (!freeTram(x, z, 11) || doorDist(x, z) < 6) continue;
         const ang = streetDir(x, z) + (rndOuter() - 0.5) * 0.5;
         props.place('car', x, z, -ang, 1, new THREE.Color(carColors[Math.floor(rndOuter() * carColors.length)]));
         collision.addBox(x, z, 4.2, 1.75, ang, 1.5);
@@ -1752,7 +1783,7 @@ export async function buildRealWorld(scene, renderer) {
         let n = 0;
         for (const [x, z] of spotsJ) {
           if (n >= want) break;
-          if (!freeAt(x, z, 5) || doorDist(x, z) < 4) continue;
+          if (!freeTram(x, z, 5) || doorDist(x, z) < 4) continue;
           const ang = streetDir(x, z) + (type === 'crate' ? rndOuter() * 3 : Math.PI / 2 + (rndOuter() - 0.5) * 0.6);
           props.place(type, x, z, -ang);
           const stacked = type === 'crate' && rndOuter() < 0.5;
@@ -1860,6 +1891,7 @@ export async function buildRealWorld(scene, renderer) {
   };
 
   // ---------------------------------------------------------------- Finalisation navigation
+  for (const c of trackTrees) c.off = true; // les arbres de la voie du tram n'existent plus (v0.38.0)
   applyMapFixes();
   collision.build();
   levels.build();
@@ -1945,7 +1977,7 @@ export async function buildRealWorld(scene, renderer) {
     isZoneOpen: (i) => !!zoneOpen[i], zoneArea, zoneOf1, // zoneOf1 : zone d'après le découpage d'origine (outils de test)
     mapCrop: { x0: Math.max(-halfX, secMinX - 40), x1: Math.min(halfX, secMaxX + 40), z0: Math.max(-halfZ, secMinZ - 40), z1: Math.min(halfZ, secMaxZ + 40) }, mapTitle: 'GRANDE ÎLE — STRASBOURG',
     cathedral: cath ? { seed: cath.seed, clock: cath.clock, insideInner: cath.insideInner, inner: cath.inner, P: cath.P, S: cath.S, T: cath.T, ceilAt: cath.ceilAt, info: cathInfo } : null,
-    levels, hdf: hdfInfo, mapFixes: { partWalls, fountains: fountainCircles.length }, // v0.35.2 : murs ajoutés aux façades des parties 3D (tests, outils)
+    levels, hdf: hdfInfo, tram: tramInfo, mapFixes: { partWalls, fountains: fountainCircles.length }, // v0.35.2 : murs ajoutés aux façades des parties 3D (tests, outils)
    
     sky: skyApi, setLampScale: (k) => { lampScale = k; lightTimer = 0; },
     floorAt: (x, z, y, out) => levels.floorAt(x, z, y, out),
@@ -1967,6 +1999,7 @@ export async function buildRealWorld(scene, renderer) {
         if (d.opening >= 1) openingDoors.splice(i, 1);
       }
       if (waterNormal) { waterNormal.offset.x += dt * 0.004; waterNormal.offset.y += dt * 0.0025; }
+      tramInfo?.update(dt); // feux des portes sur les voies (vert une fois la porte ouverte)
       lightTimer -= dt;
       if (lightTimer <= 0) { lightTimer = 0.4; assignLights(px, pz); }
     },

@@ -1,6 +1,6 @@
 # Zombie Survival — fiche de référence
 
-Version du jeu : **v0.36.2 · c7045ff · 2026-10-10** (package 0.37.2). Générée automatiquement par `node tools/make-docs.mjs` à partir de `src/config.js` et du jeu.
+Version du jeu : **v0.37.2 · d9223ee · 2026-10-10** (package 0.38.0). Générée automatiquement par `node tools/make-docs.mjs` à partir de `src/config.js` et du jeu.
 Carte annotée : [carte.png](carte.png). Armes de profil : [armes.png](armes.png). Les mêmes tableaux en tableur : dossier [csv/](csv/).
 
 Pour demander une modification, citez la ligne (ex. « Mitrailleuse RPK : chargeur 100 », « Mastodonte à 3000 pts », « porte P3 à 500 pts », « mettre la boîte mystère dans la zone Temple-Neuf »).
@@ -376,13 +376,13 @@ Prix d'une porte : le plus cher des deux prix de zone (colonne « Prix de la por
 | 17 | Arme au mur | DRAGUNOV SVD | Rue du Dôme | 2000 | 84 | -120 |
 | 18 | BOÎTE MYSTÈRE (emplacement possible) | BOÎTE MYSTÈRE (emplacement possible) | Rue du Dôme | 950 | 77 | -123 |
 | 19 | Borne de munitions | Borne de munitions | Grandes Arcades |  | -103 | -21 |
-| 20 | Arme au mur | AK-47 | Grandes Arcades | 1600 | -99 | -49 |
+| 20 | Arme au mur | AK-47 | Grandes Arcades | 1600 | -102 | -47 |
 | 21 | Arme au mur | FN P90 | Grandes Arcades | 1800 | -103 | -41 |
 | 22 | Atout | MULE KICK | Grandes Arcades | 4000 | -127 | -16 |
 | 23 | BOÎTE MYSTÈRE (emplacement possible) | BOÎTE MYSTÈRE (emplacement possible) | Grandes Arcades | 950 | -109 | -59 |
 | 24 | Borne de munitions | Borne de munitions | Place Kléber |  | -203 | -169 |
 | 25 | Arme au mur | RPK | Place Kléber | 2500 | -227 | -134 |
-| 26 | Arme au mur | M249 SAW | Place Kléber | 3000 | -179 | -127 |
+| 26 | Arme au mur | M249 SAW | Place Kléber | 3000 | -179 | -131 |
 | 27 | Atout | MASTODONTE | Place Kléber | 2500 | -207 | -113 |
 | 28 | BOÎTE MYSTÈRE (emplacement possible) | BOÎTE MYSTÈRE (emplacement possible) | Place Kléber | 950 | -184 | -141 |
 | 29 | Borne de munitions | Borne de munitions | Place Gutenberg |  | -1 | 81 |
@@ -417,7 +417,7 @@ Prix d'une porte : le plus cher des deux prix de zone (colonne « Prix de la por
 | 58 | Arme au mur | AREX ZERO 1 | Musée historique | 700 | 201 | 223 |
 | 59 | BOÎTE MYSTÈRE (emplacement possible) | BOÎTE MYSTÈRE (emplacement possible) | Musée historique | 950 | 195 | 211 |
 | 60 | Borne de munitions | Borne de munitions | Place Broglie |  | 155 | -330 |
-| 61 | Arme au mur | RPK | Place Broglie | 2500 | 161 | -366 |
+| 61 | Arme au mur | RPK | Place Broglie | 2500 | 161 | -369 |
 | 62 | BOÎTE MYSTÈRE (emplacement possible) | BOÎTE MYSTÈRE (emplacement possible) | Place Broglie | 950 | 149 | -362 |
 | 63 | Arme au mur | DRAGUNOV SVD | Quai Schoepflin | 2000 | -35 | -459 |
 | 64 | Arme au mur | FAMAS F1 | Hôtel de Neuwiller | 1300 | -479 | -265 |
@@ -494,6 +494,16 @@ Prix d'une porte : le plus cher des deux prix de zone (colonne « Prix de la por
 | 5. L'Aube | ciel : nuit -> jour en 30 s (fond, brouillard, lumières) ; tous les zombies en cendres ; vue orbitale 12 s (Échap la passe) ; écran « STRASBOURG LIBÉRÉE » et statistiques | aucun nouveau shader |
 | Récompenses | Bénédiction de l'Aube : les 7 atouts, gardés même à terre ; toutes les portes restantes gratuites ; trophée enregistré localement (localStorage) | les joueurs à terre sont relevés |
 | Nuit éternelle | le jour dure 60 s, puis la nuit retombe en 20 s ; zombies x1,3 de vie dès la manche suivante | les manches reprennent sans fin |
+
+## Tram : réseau de voies (rails, quais, poteaux de caténaire, heurtoirs ; tracés à la main dans CONFIG.tram.lines)
+
+| Ligne | Longueur | Arrêts (abscisse depuis le heurtoir de départ) | Remarque |
+|---|---|---|---|
+| A / D (AD) | 538 m | Place Kléber (268 m) · Gutenberg (518 m) | rayon de courbure minimal 40 m ; un heurtoir à chaque bout |
+| B / C / F (BCF) | 1100 m | Alt Winmärik (81 m) · Homme de Fer (191 m) · Broglie (599 m) · République (793 m) · Préfecture (1066 m) | rayon de courbure minimal 30 m ; un heurtoir à chaque bout |
+| Largeur libre | 6,5 m | de part et d'autre de l'axe, vérifiée sur la grille de navigation | décor (voitures, barricades) à 5 m de l'axe au moins ; arbres et lampadaires écartés du couloir |
+| Portes de zone | feu rouge | une porte fermée qui coupe une voie est un heurtoir signalé par un feu (vert une fois ouverte) | la rame freine d'elle-même à 15 m ; l'ouvrir libère le tronçon |
+| Rendu | rails : 1 appel (InstancedMesh) | quais + heurtoirs + mâts : 1 appel ; poteaux : 1 appel ; fils + feux : 1 appel | 12 m entre deux poteaux, côtés alternés |
 
 ## Motos (deux parkings au panneau bleu « P », avec chacun une borne plein + réparation : place Gutenberg, 2 motos ; place Broglie, 1 moto)
 

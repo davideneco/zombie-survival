@@ -1,14 +1,16 @@
 import * as THREE from 'three';
 import { halberdierGeometries, mergeParts } from './ironArmor.js';
+import { CONFIG } from './config.js';
 
 // =====================================================================
 //  Place de l'Homme de Fer (Strasbourg) : rotonde de verre du tram, abris de quai, rails, quais, rames Eurotram
 //  à l'arrêt, totems et statue de l'Homme de Fer.
 //  Décor 100 % déterministe : aucun Math.random, toutes les machines construisent exactement le même décor.
 //  Trois temps, comme le reste du monde réel (voir realworld.js) :
-//    planHdf            : axes des rails et phase des colonnes, par lancers de rayons (grille de collision déjà construite)
+//    planHdf            : phase des colonnes de la rotonde, d'après les voies de CONFIG.tram (v0.38.0 : plus de recherche par rayons)
 //    buildHdfStructures : rotonde et abris (avant la grille de collision définitive : colonnes et abris bloquent)
-//    buildHdfDecor      : rails, quais, rames, totems, statue (une fois les zones et les machines placées)
+//    buildHdfDecor      : quais et rames de décor posés sur les voies (les rails sont dessinés par tramNet.js), totems, statue (une fois les zones
+//                         et les machines placées)
 //  Matériaux nouveaux : verre, fer (statue), laiton (statue), acier (structures, quais, rails, pièces sombres des rames),
 //  livrée (rames et totems, un seul atlas). Aucune PointLight : seulement des entrées `lightSources`.
 // =====================================================================
@@ -19,8 +21,7 @@ export const HDF = {
   shelterHeight: 3,
   // Statue : angle sud-ouest de la façade ouest d'un immeuble (nœud OSM tourism=artwork), normale extérieure
   statue: { x: -267.7, z: -171.5, nx: -0.98, nz: 0.18, offset: 0.35, scale: 0.9, consoleTop: 2.15 },
-  rail: { gauge: 1.435, reach: 40, bed: 3.0 },
-  tram: { module: 4.7, body: 4.4, width: 2.4, height: 3.4, floor: 0.32, minReach: 8, maxReach: 45, side: 1.5 },
+  tram: { module: 4.7, body: 4.4, width: 2.4, height: 3.4, floor: 0.32, minReach: 14, maxReach: 60, side: 1.5 },
 };
 
 // Un `building=roof` en l'air (min_height >= 2,5 m) : la rotonde du tram. Les verrières posées au sol (sans min_height) restent
@@ -93,7 +94,7 @@ function mats() {
   return MATS;
 }
 
-// ------------------------------------------------------------------ plan : axes des rails et phase des colonnes
+// ------------------------------------------------------------------ plan : phase des colonnes de la rotonde
 function ringInfo(pts) {
   const n = pts.length;
   let cx = 0, cz = 0;
@@ -105,39 +106,34 @@ function ringInfo(pts) {
 
 export const rotundaInfo = (pts) => ({ pts, ...ringInfo(pts) });
 
-// Les deux directions les plus dégagées autour de la rotonde (lancers de rayons à 1 m du sol depuis un cercle de 14 m, juste hors
-// des colonnes), à au moins 40° l'une de l'autre ; puis la phase des colonnes qui les éloigne le plus des rails.
-export function planHdf(collision, cx, cz) {
-  const free = (deg) => { // trois rayons parallèles (axe et ±1,6 m) : le lit des rails (3 m) ne doit pas raser une façade
-    const a = (deg * Math.PI) / 180, ux = Math.cos(a), uz = Math.sin(a);
-    return 14 + Math.min(...[-1.6, 0, 1.6].map((o) => collision.rayHit(cx + ux * 14 - uz * o, 1, cz + uz * 14 + ux * o, ux, 0, uz, 80)));
-  };
-  const cand = [];
-  for (let d = 0; d < 180; d += 5) { const f = free(d), b = free(d + 180); cand.push({ deg: d, f, b, score: Math.min(f, 45) + Math.min(b, 45) }); }
-  const sep = (a, b) => { const d = Math.abs(a - b) % 180; return Math.min(d, 180 - d); };
-  const first = cand.reduce((p, c) => (c.score > p.score ? c : p), cand[0]);
-  const second = cand.filter((c) => sep(c.deg, first.deg) >= 40).reduce((p, c) => (!p || c.score > p.score ? c : p), null) || cand[0];
-  const axes = [first, second].map((a) => {
-    const r = (a.deg * Math.PI) / 180;
-    return { deg: a.deg, ux: Math.cos(r), uz: Math.sin(r), f: a.f, b: a.b };
-  });
-  const step = 360 / HDF.rotunda.columns;
-  let phase = 0, best = -1;
-  for (let ph = 0; ph < step; ph++) { // éloigne chaque axe de la colonne la plus proche
-    const away = (deg) => { const m = (((deg - ph) % step) + step) % step; return Math.min(m, step - m); };
-    const s = Math.min(away(axes[0].deg), away(axes[1].deg));
-    if (s > best) { best = s; phase = ph; }
+// Plan de la place (v0.38.0) : les voies viennent de CONFIG.tram (réseau tracé à la main : A / D à 64° sous la rotonde, B / C / F dans la rue
+// est-ouest au nord de la place) et la phase des colonnes de la rotonde de CONFIG.tram.hdf.colPhase (plus de recherche par lancers de rayons).
+// columnGap : distance minimale (m) entre une colonne et l'axe d'une voie, pour les outils de mesure et l'avertissement du mode ?debug.
+// net : planTram().
+export function planHdf(net, cx, cz) {
+  const H = CONFIG.tram.hdf, step = 360 / HDF.rotunda.columns;
+  let gap = Infinity;
+  for (let k = 0; k < HDF.rotunda.columns; k++) {
+    const a = ((H.colPhase + k * step) * Math.PI) / 180;
+    gap = Math.min(gap, net.dist(cx + Math.cos(a) * HDF.rotunda.colCircle, cz + Math.sin(a) * HDF.rotunda.colCircle, 30));
   }
-  return { axes, colPhase: phase, cx, cz };
+  if (gap < H.columnGap && typeof location !== 'undefined' && new URLSearchParams(location.search).has('debug')) console.warn(`[tram] colonne de la rotonde à ${gap.toFixed(2)} m d'une voie (minimum ${H.columnGap} m)`);
+  return { net, colPhase: H.colPhase, columnGap: gap, cx, cz };
 }
 
-// Distance d'un point au plus proche des deux axes de rails (m), Infinity au-delà de leur portée : les machines et les armes
-// murales de la zone ne se posent pas sur les rails
-export function railDist(plan, x, z) {
+// Distance d'un point au rail le plus proche du réseau (m), Infinity au-delà de 40 m : les machines, les armes murales, le décor et les
+// arbres ne se posent pas sur les rails (v0.38.0 : toutes les polylignes de CONFIG.tram.lines, plus seulement les deux axes de la place)
+export function railDist(plan, x, z) { return plan.net.dist(x, z, 40); }
+
+// Distance aux deux anciens axes de rails (60° et 110°, portée 42 m) des versions d'avant la v0.38.0. Elle ne sert plus qu'à garder le tirage
+// des emplacements (machines, armes murales, bornes) des zones `outer` et de l'Homme de Fer identique à celui des versions précédentes : le
+// filtre d'origine est conservé tel quel, le filtre sur le réseau actuel passe après le tirage (voir spotIn dans realworld.js).
+const LEGACY_AXES = [60, 110].map((d) => [Math.cos((d * Math.PI) / 180), Math.sin((d * Math.PI) / 180)]);
+export function legacyRailDist(plan, x, z) {
   let m = Infinity;
-  for (const a of plan.axes) {
-    const s = (x - plan.cx) * a.ux + (z - plan.cz) * a.uz, lat = Math.abs(-(x - plan.cx) * a.uz + (z - plan.cz) * a.ux);
-    if (s > -(HDF.rail.reach + 2) && s < HDF.rail.reach + 2) m = Math.min(m, lat);
+  for (const [ux, uz] of LEGACY_AXES) {
+    const s = (x - plan.cx) * ux + (z - plan.cz) * uz, lat = Math.abs(-(x - plan.cx) * uz + (z - plan.cz) * ux);
+    if (s > -42 && s < 42) m = Math.min(m, lat);
   }
   return m;
 }
@@ -459,36 +455,17 @@ const SIDE_SAMPLE = 1.5; // pas d'échantillonnage le long d'une rame (m)
 
 // ctx : { scene, collision, lightSources, plan, zi (indice de la zone), zoneOf(x, z), doorDist(x, z), used [[x, z]...] (déjà posés),
 //         obstacles [[x, z]...] (mobilier OSM à ne pas écraser), columns [[x, z]...] }
+// Les rails, les quais d'arrêt et les poteaux sont ceux du réseau (tramNet.js) ; ici : les rames de décor à l'arrêt (et leurs quais), les totems, la statue.
 export function buildHdfDecor(ctx) {
   const { scene, collision, lightSources, plan, zi, zoneOf, doorDist } = ctx;
-  const { cx, cz } = plan, T = HDF.tram, R = HDF.rail, M = mats();
+  const { cx, cz } = plan, net = plan.net, T = HDF.tram, M = mats();
   const used = ctx.used, cols = ctx.columns || [];
   const statueX = HDF.statue.x + HDF.statue.nx * HDF.statue.offset, statueZ = HDF.statue.z + HDF.statue.nz * HDF.statue.offset;
-  const info = { axes: plan.axes.map((a) => ({ deg: a.deg })), trams: [], totems: [], statue: null };
+  const info = { lines: net.tracks.map((t) => t.id), trams: [], totems: [], statue: null };
   const steel = [];  // pièces d'acier / dallage (sommets colorés)
+  const tmp = {}, tmp2 = {};
 
-  const ax = plan.axes.map((a) => ({ ...a, reachF: Math.min(R.reach, a.f - 2), reachB: Math.min(R.reach, a.b - 2) }));
-
-  // ---- rails : deux rails par axe (bandes d'acier, InstancedMesh) sur un lit sombre (aucun effet sur floorAt)
-  {
-    const railGeo = colorize(new THREE.BoxGeometry(1, 0.13, 0.07), 0xaab2ba);
-    const rails = new THREE.InstancedMesh(railGeo, M.steel, ax.length * 2);
-    const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0);
-    let k = 0;
-    for (const a of ax) {
-      const len = a.reachF + a.reachB, mid = (a.reachF - a.reachB) / 2, ang = Math.atan2(a.uz, a.ux);
-      q.setFromAxisAngle(up, -ang);
-      for (const s of [-1, 1]) {
-        m4.compose(new THREE.Vector3(cx + a.ux * mid - a.uz * s * (R.gauge / 2), 0.065, cz + a.uz * mid + a.ux * s * (R.gauge / 2)), q, new THREE.Vector3(len, 1, 1));
-        rails.setMatrixAt(k++, m4);
-      }
-      steel.push(boxAt(len, 0.03, R.bed, cx + a.ux * mid, 0.015, cz + a.uz * mid, 0x303133, -ang));
-    }
-    rails.frustumCulled = false; rails.instanceMatrix.needsUpdate = true; rails.receiveShadow = true;
-    rails.name = 'hdf:rails'; scene.add(rails);
-  }
-
-  // ---- rames : 33 m (7 modules), sinon 14 m (3 modules), sinon abandon
+  // ---- rames : 33 m (7 modules), sinon 14 m (3 modules), sinon abandon ; posées sur une partie droite d'une voie, près du croisement
   const lateralFree = (px, pz, dx, dz) => { // distance libre à partir d'un point, en ignorant les colonnes de la rotonde
     let d0 = 0;
     for (let k = 0; k < 4; k++) {
@@ -500,67 +477,75 @@ export function buildHdfDecor(ctx) {
     }
     return 3.4;
   };
-  const tryTram = (a, sign, s0, L) => {
-    const dx = sign * a.ux, dz = sign * a.uz, px = -dz, pz = dx;
-    const free = sign > 0 ? a.f : a.b;
-    if (s0 + L + 0.8 > free) return null;
+  // t : voie ; sRef : abscisse du point de la voie le plus proche du centre de la rotonde ; sign : côté (-1 vers le début de la ligne) ; d0 : distance
+  // du bout proche de la rame au point de référence ; L : longueur
+  const tryTram = (t, sRef, sign, d0, L) => {
+    const sA = sRef + sign * d0, sB = sA + sign * L, lo = Math.min(sA, sB), hi = Math.max(sA, sB), sMid = (lo + hi) / 2;
+    if (lo < 6 || hi > t.L - 6 || t.minRadius(lo - 1, hi + 1) < Infinity) return null; // partie droite seulement
     let minL = 9, minR = 9;
     const steps = Math.ceil(L / SIDE_SAMPLE);
     for (let k = 0; k <= steps; k++) {
-      const s = s0 + (L * k) / steps, x = cx + dx * s, z = cz + dz * s;
+      t.at(lo + (L * k) / steps, tmp);
+      const x = tmp.x, z = tmp.z, px = -tmp.tz, pz = tmp.tx;
       if (zoneOf(x, z) !== zi || zoneOf(x + px * 1.3, z + pz * 1.3) !== zi || zoneOf(x - px * 1.3, z - pz * 1.3) !== zi) return null;
       if (doorDist(x, z) < 8) return null;
       if (used.some(([ux, uz]) => Math.hypot(ux - x, uz - z) < 3.5)) return null;
       if (Math.hypot(x - statueX, z - statueZ) < 9) return null; // la rame ne doit pas masquer la statue
+      for (const u of net.tracks) if (u !== t && u.project(x, z, 12, tmp2).d < 5) return null; // ni sur le croisement, ni contre l'autre voie
       const l = lateralFree(x, z, px, pz), r = lateralFree(x, z, -px, -pz);
       if (l < T.width / 2 + T.side || r < T.width / 2 + T.side) return null;
       minL = Math.min(minL, l); minR = Math.min(minR, r);
     }
-    const ex = cx + dx * (s0 + L), ez = cz + dz * (s0 + L);
-    if (collision.rayHit(ex, 1, ez, dx, 0, dz, 0.8) < 0.7) return null;
+    t.at(hi, tmp);
+    if (collision.rayHit(tmp.x, 1, tmp.z, tmp.tx, 0, tmp.tz, 0.8) < 0.7) return null;
+    t.at(lo, tmp);
+    if (collision.rayHit(tmp.x, 1, tmp.z, -tmp.tx, 0, -tmp.tz, 0.8) < 0.7) return null;
+    t.at(sMid, tmp);
     for (const [ox, oz] of ctx.obstacles || []) { // mobilier OSM (bornes, bancs…) dans l'emprise
-      const s = (ox - cx) * dx + (oz - cz) * dz, lat = (ox - cx) * px + (oz - cz) * pz;
-      if (s > s0 - 0.5 && s < s0 + L + 0.5 && Math.abs(lat) < T.width / 2 + 0.6) return null;
+      const p = t.project(ox, oz, 6, tmp2);
+      if (p.s > lo - 0.5 && p.s < hi + 0.5 && p.d < T.width / 2 + 0.6) return null;
     }
-    return { axis: a, sign, s0, L, dx, dz, px, pz, minL, minR, modules: Math.round(L / T.module) };
+    // orientation : le nez du côté où l'on a cherché (comme avant : vers le point de référence ou à l'opposé)
+    const dx = sign * tmp.tx, dz = sign * tmp.tz;
+    return { track: t, line: t.id, sign, lo, hi, L, x: tmp.x, z: tmp.z, dx, dz, px: -dz, pz: dx, minL, minR, modules: Math.round(L / T.module) };
   };
   const placements = [];
-  for (const a of ax) {
+  for (const dc of CONFIG.tram.hdf.decor) {
+    const t = net.byId[dc.line], sRef = t.project(cx, cz, 80, {}).s;
     let found = null;
-    for (const mods of [7, 3]) {
+    for (const mods of dc.modules) {
       const L = mods * T.module;
-      for (let s0 = T.minReach; s0 + L <= T.maxReach + 1e-6 && !found; s0 += 1) for (const sign of [1, -1]) { found = tryTram(a, sign, s0, L); if (found) break; }
+      for (let d0 = T.minReach; d0 + L <= T.maxReach + 1e-6 && !found; d0 += 1) found = tryTram(t, sRef, dc.side, d0, L);
       if (found) break;
     }
-    if (found) placements.push(found);
+    if (found) { placements.push(found); used.push(...[0, 0.25, 0.5, 0.75, 1].map((f) => { t.at(found.lo + found.L * f, tmp); return [tmp.x, tmp.z]; })); }
   }
 
   // géométries des rames : une pour chaque longueur ; copies placées dans le monde puis fusionnées (2 maillages en tout)
   const bodies = [], darks = [], geoCache = {};
   for (const t of placements) {
     const g = geoCache[t.modules] || (geoCache[t.modules] = tramGeometries(t.modules));
-    const theta = Math.atan2(-t.dz, t.dx), sc = t.s0 + t.L / 2;
-    const place = (geo) => { const c = geo.clone(); c.rotateY(theta); c.translate(cx + t.dx * sc, 0, cz + t.dz * sc); return c; };
+    const theta = Math.atan2(-t.dz, t.dx);
+    const place = (geo) => { const c = geo.clone(); c.rotateY(theta); c.translate(t.x, 0, t.z); return c; };
     bodies.push(place(g.body)); darks.push(place(g.dark));
     // collision : une boîte orientée par module
     for (let i = 0; i < t.modules; i++) {
-      const s = t.s0 + T.module / 2 + i * T.module;
-      collision.addBox(cx + t.dx * s, cz + t.dz * s, T.body, T.width, Math.atan2(t.dz, t.dx), T.height);
+      const sm = -t.L / 2 + T.module / 2 + i * T.module; // le long de (dx, dz), depuis le milieu de la rame
+      collision.addBox(t.x + t.dx * sm, t.z + t.dz * sm, T.body, T.width, Math.atan2(t.dz, t.dx), T.height);
     }
     // quais : dallage clair + ligne podotactile de chaque côté, au ras du sol, aussi larges que la rue le permet
     for (const side of [-1, 1]) {
       const free = side > 0 ? t.minL : t.minR, w = Math.min(2.6, free - 0.2 - (T.width / 2 + 0.25));
       if (w < 0.9) continue;
-      const lat = T.width / 2 + 0.25 + w / 2, sMid = t.s0 + t.L / 2;
-      const bx = cx + t.dx * sMid + t.px * side * lat, bz = cz + t.dz * sMid + t.pz * side * lat, ang = -Math.atan2(t.dz, t.dx);
+      const lat = T.width / 2 + 0.25 + w / 2, ang = -Math.atan2(t.dz, t.dx);
+      const bx = t.x + t.px * side * lat, bz = t.z + t.pz * side * lat;
       steel.push(boxAt(t.L + 2, 0.05, w, bx, 0.025, bz, 0xa9a8a0, ang));
-      const ex = cx + t.dx * sMid + t.px * side * (T.width / 2 + 0.25 + 0.2);
-      const ez = cz + t.dz * sMid + t.pz * side * (T.width / 2 + 0.25 + 0.2);
+      const ex = t.x + t.px * side * (T.width / 2 + 0.25 + 0.2);
+      const ez = t.z + t.pz * side * (T.width / 2 + 0.25 + 0.2);
       steel.push(boxAt(t.L + 2, 0.058, 0.4, ex, 0.029, ez, 0xc9a93a, ang));
       t['w' + side] = { w, lat };
     }
-    used.push(...[0, 0.25, 0.5, 0.75, 1].map((f) => [cx + t.dx * (t.s0 + t.L * f), cz + t.dz * (t.s0 + t.L * f)]));
-    info.trams.push({ deg: t.axis.deg, sign: t.sign, s0: t.s0, L: t.L, modules: t.modules, x: cx + t.dx * sc, z: cz + t.dz * sc });
+    info.trams.push({ line: t.line, sign: t.sign, lo: t.lo, hi: t.hi, L: t.L, modules: t.modules, x: t.x, z: t.z });
   }
   if (bodies.length) {
     const a = atlas();
@@ -575,16 +560,17 @@ export function buildHdfDecor(ctx) {
     const spots = placements.map((t) => {
       const side = (t.w1 && (!t['w-1'] || t.w1.w >= t['w-1'].w)) ? 1 : (t['w-1'] ? -1 : 0);
       if (!side) return null;
-      const W = t['w' + side], s = t.s0 + t.L * 0.3, lat = T.width / 2 + 0.25 + W.w - 0.3;
-      return { x: cx + t.dx * s + t.px * side * lat, z: cz + t.dz * s + t.pz * side * lat, dx: t.dx, dz: t.dz };
+      const W = t['w' + side], sm = -t.L / 2 + t.L * 0.3, lat = T.width / 2 + 0.25 + W.w - 0.3;
+      return { x: t.x + t.dx * sm + t.px * side * lat, z: t.z + t.dz * sm + t.pz * side * lat, dx: t.dx, dz: t.dz };
     }).filter(Boolean);
-    for (const a of ax) { // complète avec des totems au bord des rails (côté de l'axe le plus dégagé)
+    for (const t of net.tracks) { // complète avec des totems au bord des rails (côté de la voie le plus dégagé)
       if (spots.length >= 2) break;
+      const sRef = t.project(cx, cz, 80, {}).s;
       for (const side of [1, -1]) {
         if (spots.length >= 2) break;
-        const dx = a.ux, dz = a.uz, px = -dz, pz = dx;
-        for (const s of [20, 24, 28]) {
-          const x = cx + dx * s + px * side * 2.6, z = cz + dz * s + pz * side * 2.6;
+        for (const so of [20, 24, 28, -20, -24, -28]) {
+          t.at(sRef + so, tmp);
+          const dx = tmp.tx, dz = tmp.tz, px = -dz, pz = dx, x = tmp.x + px * side * 2.6, z = tmp.z + pz * side * 2.6;
           if (zoneOf(x, z) === zi && collision.rayHit(x, 1, z, px * side, 0, pz * side, 1.2) >= 1.2 && collision.rayHit(x, 1, z, dx, 0, dz, 1.2) >= 1.2 && used.every(([ux, uz]) => Math.hypot(ux - x, uz - z) > 3)) { spots.push({ x, z, dx, dz }); break; }
         }
       }
@@ -619,15 +605,11 @@ export function buildHdfDecor(ctx) {
 
   if (steel.length) meshOf(scene, mergeParts(steel), M.steel, { receive: true, name: 'decor-steel' });
 
-  // zone occupée par le décor (rails, rames et quais, statue) : le mobilier OSM n'y est pas posé
+  // zone occupée par le décor (rames et quais, statue) : le mobilier OSM n'y est pas posé (les rails et les quais d'arrêt : tramNet.js)
   info.covers = (x, z) => {
-    for (const a of ax) {
-      const s = (x - cx) * a.ux + (z - cz) * a.uz, lat = -(x - cx) * a.uz + (z - cz) * a.ux;
-      if (s > -a.reachB && s < a.reachF && Math.abs(lat) < R.bed / 2 + 0.2) return true;
-    }
     for (const t of placements) {
-      const s = (x - cx) * t.dx + (z - cz) * t.dz, lat = (x - cx) * t.px + (z - cz) * t.pz;
-      if (s > t.s0 - 1.5 && s < t.s0 + t.L + 1.5 && Math.abs(lat) < T.width / 2 + 4.3) return true;
+      const s = (x - t.x) * t.dx + (z - t.z) * t.dz, lat = (x - t.x) * t.px + (z - t.z) * t.pz;
+      if (Math.abs(s) < t.L / 2 + 1.5 && Math.abs(lat) < T.width / 2 + 4.3) return true;
     }
     return Math.hypot(x - info.statue.x, z - info.statue.z) < 3;
   };

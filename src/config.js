@@ -409,6 +409,45 @@ export const CONFIG = {
     },
   },
 
+  // Tram (v0.38.0 : réseau de voies ; v0.39.0 : rame conduisible). Le plan d'Open Street Map n'a ni rues ni voies : les lignes sont tracées à la main
+  // (x vers l'est, z vers le sud, en mètres depuis le centre des données) le long des rues les plus larges, vérifiées par script : une ligne est une
+  // polyligne [[x, z, r?], ...], r étant le rayon (m, au moins minRadius) de l'arc de raccord posé au sommet (30 par défaut). Largeur libre exigée
+  // de part et d'autre de l'axe : `clearHalf` (6,5 m en tout) sur la grille de navigation.
+  //  - A / D : de l'angle nord-ouest de la place (heurtoir) à l'Homme de Fer (axe à 64° sous la rotonde), puis la place Kléber et la place Gutenberg
+  //  - B / C / F : de l'ouest (Alt Winmärik) à l'Homme de Fer (rue est-ouest au nord de la place), puis Broglie et le nord-est de l'île
+  // stops : arrêts { name, at: [x, z] (projeté sur la voie), len (quai, m) } ; chaque bout de ligne porte un heurtoir. Une porte de zone fermée qui
+  // coupe une voie est un heurtoir avec feu rouge (la rame freine d'elle-même) ; l'ouvrir libère le tronçon.
+  tram: {
+    minRadius: 25, step: 1, clearHalf: 3.25, decorGap: 5, furnitureGap: 4, itemGap: 4.6, lampGap: 3.9, treeGap: 4.1,
+    rail: { gauge: 1.435, bed: 3.0, element: 4, curveElement: 2, curveBelow: 300 },
+    // quais : largeur maximale (m) de chaque côté, hauteur de la dalle
+    platform: { width: 2.6, height: 0.07, edge: 0.4, minWidth: 0.9 },
+    // caténaire : un poteau tous les `every` m, côtés alternés, à `offset` m de l'axe ; hauteur du fil
+    pole: { every: 12, offset: 2.9, height: 6.0, wire: 5.5 },
+    // heurtoirs et feux : distance (m) du premier arrêt automatique (voir tram.js), recul du heurtoir par rapport à la porte
+    gate: { signalDist: 15, stopGap: 2.5, lamp: 0xff2a1a },
+    // plan de la place de l'Homme de Fer (lu par planHdf) : phase des 12 colonnes de la rotonde (°) : la même que depuis la v0.19.0, car la
+    // grille de navigation, donc le tirage des emplacements de toute l'île, en dépend ; columnGap : écart minimal (m) souhaité entre une colonne et
+    // l'axe d'une voie (avertissement en ?debug) ; ad : cap (°) de la ligne A / D sous la rotonde ; decor : rames de décor { line, side (-1 vers le
+    // début de la ligne, 1 vers la fin), modules } cherchées à moins de maxReach m du point de la ligne le plus proche de la rotonde
+    hdf: {
+      colPhase: 10, columnGap: 1.2, ad: 64,
+      decor: [{ line: 'AD', side: -1, modules: [7, 3] }, { line: 'AD', side: 1, modules: [7, 3] }],
+    },
+    lines: [
+      {
+        id: 'AD', name: 'A / D', color: '#d8452b',
+        pts: [[-343, -326], [-323.4, -270.5, 60], [-290.56, -203], [-270.84, -162.56, 40], [-236, -125, 40], [-124, -125, 45], [-101, -56, 40], [-58, 8, 40], [-22, 52]],
+        stops: [{ name: 'Place Kléber', at: [-196, -125], len: 34 }, { name: 'Gutenberg', at: [-34.7, 36.5], len: 30 }],
+      },
+      {
+        id: 'BCF', name: 'B / C / F', color: '#2b6fd8',
+        pts: [[-516, -190], [-493, -188, 30], [-366, -231, 40], [-297, -239.8, 40], [-262, -240.6, 30], [-194, -236, 40], [-97, -233, 40], [-37, -237, 30], [8, -257.6, 30], [41.6, -271.2, 40], [127.6, -329.4, 40], [158, -366, 30], [205, -368, 30], [250, -374, 40], [284, -378, 40], [315, -398, 40], [345, -404, 40], [378, -404, 40], [398, -384, 40], [436, -334, 40], [480, -290]],
+        stops: [{ name: 'Alt Winmärik', at: [-438, -206.6], len: 34 }, { name: 'Homme de Fer', at: [-332.2, -235.3], len: 40 }, { name: 'Broglie', at: [63.3, -285.9], len: 34 }, { name: 'République', at: [228.8, -371.2], len: 34 }, { name: 'Préfecture', at: [456, -314], len: 30 }],
+      },
+    ],
+  },
+
   powerups: {
     dropChance: 0.05,
     duration: 25,     // durée d'activité sur le sol avant disparition

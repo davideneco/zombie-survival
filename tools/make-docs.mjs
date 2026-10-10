@@ -244,6 +244,15 @@ table('20_acte_v_aube', 'Acte V « L\'Aube » (après la victoire sur le Bourrea
   ['5. L\'Aube', `ciel : nuit -> jour en ${SM.dawn.sky} s (fond, brouillard, lumières) ; tous les zombies en cendres ; vue orbitale ${SM.dawn.orbit} s (Échap la passe) ; écran « STRASBOURG LIBÉRÉE » et statistiques`, 'aucun nouveau shader'],
   ['Récompenses', 'Bénédiction de l\'Aube : les 7 atouts, gardés même à terre ; toutes les portes restantes gratuites ; trophée enregistré localement (localStorage)', 'les joueurs à terre sont relevés'],
   ['Nuit éternelle', `le jour dure ${SM.eternal.day} s, puis la nuit retombe en ${SM.eternal.dusk} s ; zombies x${f1(SM.eternal.healthMult)} de vie dès la manche suivante`, 'les manches reprennent sans fin']]);
+// ---- tram (v0.38.0 : réseau de voies ; la rame conduisible est décrite plus bas)
+const { buildTracks } = await import(path.join(ROOT, 'src/tramTrack.js'));
+const TR = C.tram, TNET = buildTracks(TR);
+const stopS = (t) => t.def.stops.map((st) => `${st.name} (${Math.round(t.project(st.at[0], st.at[1], 80, {}).s)} m)`).join(' · ');
+table('21_tram', 'Tram : réseau de voies (rails, quais, poteaux de caténaire, heurtoirs ; tracés à la main dans CONFIG.tram.lines)', ['Ligne', 'Longueur', 'Arrêts (abscisse depuis le heurtoir de départ)', 'Remarque'], [
+  ...TNET.tracks.map((t) => [`${t.name} (${t.id})`, `${Math.round(t.L)} m`, stopS(t), `rayon de courbure minimal ${Math.round(t.minRadius(0, t.L))} m ; un heurtoir à chaque bout`]),
+  ['Largeur libre', `${fr(TR.clearHalf * 2)} m`, 'de part et d\'autre de l\'axe, vérifiée sur la grille de navigation', `décor (voitures, barricades) à ${TR.decorGap} m de l'axe au moins ; arbres et lampadaires écartés du couloir`],
+  ['Portes de zone', 'feu rouge', 'une porte fermée qui coupe une voie est un heurtoir signalé par un feu (vert une fois ouverte)', `la rame freine d'elle-même à ${TR.gate.signalDist} m ; l'ouvrir libère le tronçon`],
+  ['Rendu', 'rails : 1 appel (InstancedMesh)', 'quais + heurtoirs + mâts : 1 appel ; poteaux : 1 appel ; fils + feux : 1 appel', `${TR.pole.every} m entre deux poteaux, côtés alternés`]]);
 const VT = C.vehicles.types, VD = C.vehicles.damage, VF = C.vehicles.fuel, VR = C.vehicles.roadkill;
 const rk = (t, v) => t.roadkill.K * v * Math.min(1, 0.4 + 0.6 * (v - t.roadkill.vmin) / VR.rampSpeed);
 const vcol = (f) => Object.values(VT).map(f);

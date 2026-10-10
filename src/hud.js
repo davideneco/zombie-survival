@@ -504,6 +504,22 @@ export class Hud {
         ctx.strokeText(`🔒 ${d.price}`, x, y - 7); ctx.fillStyle = '#ffb0a0'; ctx.fillText(`🔒 ${d.price}`, x, y - 7);
       }
     }
+    // lignes de tram (v0.38.0) : trait de la couleur de la ligne, arrêts en carrés blancs avec leur nom
+    for (const t of world.tram?.net.tracks || []) {
+      const col = t.def.color || '#ddd', o = {};
+      ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+      for (const [lw, c] of [[5, 'rgba(0,0,0,0.75)'], [3, col]]) {
+        ctx.lineWidth = lw; ctx.strokeStyle = c; ctx.beginPath();
+        for (let s = 0; s <= t.L + 6; s += 6) { t.at(Math.min(s, t.L), o); const [x, y] = P(o.x, o.z); if (s === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y); }
+        ctx.stroke();
+      }
+      ctx.font = 'bold 11px Arial';
+      for (const st of t.stops) {
+        t.at(st.s, o); const [x, y] = P(o.x, o.z);
+        ctx.fillStyle = '#fff'; ctx.strokeStyle = '#000'; ctx.lineWidth = 1.5; ctx.fillRect(x - 3.5, y - 3.5, 7, 7); ctx.strokeRect(x - 3.5, y - 3.5, 7, 7);
+        ctx.lineWidth = 3; ctx.strokeStyle = '#000'; ctx.strokeText(st.name, x, y + 15); ctx.fillStyle = '#e6edf5'; ctx.fillText(st.name, x, y + 15);
+      }
+    }
     // machines, armes, munitions
     const icon = (x, z, color, label, fx = null, fy = null) => {
       const [px, py] = fx == null ? P(x, z) : [fx, fy];
@@ -557,7 +573,7 @@ export class Hud {
     ctx.font = 'bold 26px Impact, Arial'; ctx.fillStyle = '#ffd24a';
     ctx.fillText(world.mapTitle || 'GRANDE ÎLE DE STRASBOURG', 30, 36);
     ctx.font = '13px Arial'; ctx.fillStyle = '#ccc';
-    ctx.fillText('▲ vous   ● vert : munitions   ● orange : arme murale   ● bleu ? : boîte mystère   P : Pack-a-Punch   ● couleurs : atouts   ■ rouge : porte verrouillée (prix)   P bleu : motos   — doré : passage sous immeuble   N ↑', 30, H - 18);
+    ctx.fillText('▲ vous   ● vert : munitions   ● orange : arme murale   ● bleu ? : boîte mystère   P : Pack-a-Punch   ● couleurs : atouts   ■ rouge : porte verrouillée (prix)   P bleu : motos   — doré : passage sous immeuble   ━ lignes de tram   N ↑', 30, H - 18);
   }
 
   setRoomBadge(code) {
