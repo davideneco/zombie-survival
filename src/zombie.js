@@ -576,6 +576,7 @@ export class Zombie {
       this.appear -= dt;
       const k = Math.max(0, Math.min(1, 1 - this.appear / this._appearT)), e = k * k * (3 - 2 * k);
       this.group.scale.setScalar(this._sc0 * (0.15 + 0.85 * e));
+      if (!this.net && this.appear > 0) { this.attacking = false; this.walkT += dt * 1.2; this._pose(this.walkT, 0.15, 1.2, 0.5, 0.2); return; } // il se dresse sur son parapet avant de bondir
     }
 
     // ----- Flash rouge quand touché -----
