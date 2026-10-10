@@ -450,7 +450,7 @@ const game = {
     halo.scale.setScalar(0.9);
     grp.add(halo);
 
-    grp.position.set(pos.x, (pos.y || 0) + 0.9, pos.z);
+    grp.position.set(pos.x, Math.max(0, pos.y || 0) + 0.9, pos.z);
     scene.add(grp);
 
     const pu = {
@@ -459,12 +459,12 @@ const game = {
       grp,
       life: CONFIG.powerups.duration,
       maxLife: CONFIG.powerups.duration,
-      baseY: 0.9,
+      baseY: Math.max(0, pos.y || 0) + 0.9, // à la hauteur de l'étage où le zombie est tombé (terrasse de la flèche…)
     };
     this.powerups.push(pu);
 
     if (this.isHost) {
-      this.net?.send({ t: 'pu_spawn', id: puid, type, x: pos.x, z: pos.z });
+      this.net?.send({ t: 'pu_spawn', id: puid, type, x: pos.x, y: pos.y || 0, z: pos.z });
     }
     return pu;
   },
@@ -1230,7 +1230,7 @@ const game = {
 
       // Ramassage par le joueur local
       const d = Math.hypot(p.pos.x - pu.grp.position.x, p.pos.z - pu.grp.position.z);
-      if (d < 1.7) {
+      if (d < 1.7 && Math.abs(p.pos.y + 0.9 - pu.baseY) < 3) { // (même étage : un bonus tombé sur la terrasse ne se ramasse pas depuis la rue)
         if (this.isClient) {
           if (!pu.pending) { pu.pending = true; this.net?.send({ t: 'pu_pickup', id: pu.id }); }
           pu.grp.visible = false;
@@ -1650,7 +1650,7 @@ function setupNetworkHandlers(net) {
   net.onHost('finale_win', () => game.winFinale());
   net.onHost('finale_info', (m) => game.finaleInfo(m));
   net.onHost('dawn', (m) => game.dawnRun(m.k || 0)); // Acte V : l'Aube se lève (k : secondes déjà écoulées chez un joueur qui arrive en cours)
-  net.onHost('finale_say', (m) => hud.announce(m.title, m.sub, m.ms));
+  net.onHost('finale_say', (m) => hud.announce(m.title, game.keyed ? game.keyed(m.sub) : m.sub, m.ms));
   net.onHost('boss_fx', (m) => game.bossEvent(m.name, m));
   net.onHost('mini_info', (m) => { game.miniBar = { hp: m.hp, max: m.max, phase: 1, inv: false, name: m.name || 'MAÎTRE TANNEUR', thresholds: [] }; game.miniBarT = 1.5; });
 
@@ -1690,7 +1690,7 @@ function setupNetworkHandlers(net) {
 
   // Bonus
   net.onHost('pu_spawn', (m) => {
-    game.spawnPowerup(new THREE.Vector3(m.x, 0, m.z), m.id, m.type);
+    game.spawnPowerup(new THREE.Vector3(m.x, m.y || 0, m.z), m.id, m.type);
   });
   net.on('pu_pickup', (m) => {
     if (!game.isHost) return;

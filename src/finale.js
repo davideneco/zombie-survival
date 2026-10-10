@@ -368,7 +368,10 @@ export function installFinale(game, { world, scene, hud, sfx, fx }) {
 
   const bossBarOf = (b) => (b ? (b[4] ? { hp: b[0], max: b[1], phase: 1, inv: false, name: 'L\'ANGE DU JUGEMENT', thresholds: [] } : { hp: b[0], max: b[1], phase: b[2], inv: !!b[3], name: F().boss.names[Math.max(0, Math.min(3, b[2] - 1))], thresholds: F().boss.thresholds }) : null);
   const alive = () => game.zombies.filter((z) => !z.dead && !z.isBoss).length;
-  const announce = (title, sub, ms) => { hud.announce(title, sub, ms); if (game.isHost) game.net?.send({ t: 'finale_say', title, sub, ms }); };
+  // `{interact}` dans un texte : remplacé par la touche d'interaction de CHAQUE joueur (touches modifiables : keybinds.js)
+  const keyed = (t) => (t ? String(t).replace(/\{interact\}/g, game.binds.tag('interact')) : t);
+  game.keyed = keyed;
+  const announce = (title, sub, ms) => { hud.announce(title, keyed(sub), ms); if (game.isHost) game.net?.send({ t: 'finale_say', title, sub, ms }); };
   const info = (force = false) => {
     const f = game.finale;
     if (!f || f.remote) return;
@@ -503,7 +506,7 @@ export function installFinale(game, { world, scene, hud, sfx, fx }) {
         if (ramp) {
           if (ps.some((p) => regionOf(p) === R.TIP)) {
             f.state = 'summit_fanal'; f.t = 0; f.fan = 0;
-            announce('LE FANAL D\'ERWIN', `Tous ensemble : maintenez ${game.binds.tag('interact')} près du Fanal !`, 5200);
+            announce('LE FANAL D\'ERWIN', 'Tous ensemble : maintenez {interact} près du Fanal !', 5200);
           }
         } else {
           const Fn = Sc.fanal, hold = ps.filter((p) => (p === game.player ? game.fanalHold : !!p.fh && nearFanal(p, 1.2)));
@@ -824,6 +827,7 @@ export function installFinale(game, { world, scene, hud, sfx, fx }) {
     // réseau : événements reçus par les clients
     bossEvent: showBossEvent,
     finaleInfo(m) {
+      if (!this.finale && this.dawnOn) return; // l'Acte V est fini chez nous : un message en retard ne le ressuscite pas
       if (!this.finale) this.finale = { remote: true };
       this.finale.banner = m.b;
       if (m.st) { const f = this.finale; f.st = m.st; f.fan = m.fan || 0; f.fh = m.fh | 0; f.fs = m.fs | 0; if (!this.summitFx?.shown) this.summitFx?.show(); }

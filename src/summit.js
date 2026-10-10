@@ -106,8 +106,7 @@ export function installSummit(game, { world, scene, hud, sfx, fx, hemi, moon, mo
     pickC(SKY.fog, k, scene.fog.color); scene.fog.density = pickN(SKY.density, k) * (CONFIG.map === 'arena' ? 1.15 : 1);
     pickC(SKY.hemiSky, k, hemi.color); pickC(SKY.hemiGround, k, hemi.groundColor); hemi.intensity = pickN(SKY.hemi, k) * b;
     pickC(SKY.sun, k, moon.color); moon.intensity = pickN(SKY.sunI, k);
-    const e = k < 0.5 ? sm(k * 2) : 1 + sm((k - 0.5) * 2) - 1, i0 = k < 0.5 ? 0 : 1, i1 = k < 0.5 ? 1 : 2, u = k < 0.5 ? sm(k * 2) : sm((k - 0.5) * 2);
-    void e;
+    const i0 = k < 0.5 ? 0 : 1, i1 = k < 0.5 ? 1 : 2, u = k < 0.5 ? sm(k * 2) : sm((k - 0.5) * 2);
     moonOffset.set(SKY.sunPos[i0][0] + (SKY.sunPos[i1][0] - SKY.sunPos[i0][0]) * u, SKY.sunPos[i0][1] + (SKY.sunPos[i1][1] - SKY.sunPos[i0][1]) * u, SKY.sunPos[i0][2] + (SKY.sunPos[i1][2] - SKY.sunPos[i0][2]) * u);
     world.sky?.setGradient(pickS(SKY.domeTop, k), pickS(SKY.domeMid, k), pickS(SKY.domeBot, k));
     if (world.sky?.stars) world.sky.stars.visible = k < 0.28;

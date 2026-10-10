@@ -231,6 +231,19 @@ table('19_maitre_tanneur', 'Maître Tanneur (mini-boss : Petite France ou Saint-
   ['Appel', `${TN.summon.count} pestiférés`, `recharge ${TN.summon.cooldown} s`],
   ['À sa mort', `explosion de rayon ${TN.explosion.radius} m : ${TN.explosion.damage} dégâts`, 'le PHD Flopper protège'],
   ['Récompense', `Max Munitions + ${TN.reward.points} points par joueur`, '']]);
+const SM = C.summit, SA = SM.angel, SG = SM.gargoyles, SR = SM.ramp;
+table('20_acte_v_aube', 'Acte V « L\'Aube » (après la victoire sur le Bourreau : montée de la flèche, Fanal d\'Erwin)', ['Étape', 'Valeur', 'Remarque'], [
+  ['Ascension', 'faisceau de lumière depuis la pointe : plateforme 67,5 m -> escalier 3 tours -> terrasse 104 m -> rampe 6 tours -> pointe 128 m', 'texte : « La flèche s\'illumine : montez allumer le Fanal d\'Erwin » ; les manches sont suspendues pendant tout l\'acte'],
+  ['1. Gargouilles (terrasse)', `${SG.count} zombies de pierre (+${SG.perPlayer} par joueur en plus), ${SG.maxAlive} simultanées, une toutes les ${f1(SG.interval)} s`, `coureurs (vitesse x${f1(SG.speed)}, vie x${f1(C.finale.kindHealth.gargoyle)}, armure x0,8) qui surgissent des parapets à plus de ${SG.minDist} m des joueurs (${f1(SG.appear)} s d'apparition)`],
+  ['2. L\'Ange du Jugement', `${SA.health} PV (+${pc(SA.perPlayer)} par joueur en plus) ; tourne hors de la tour, cercle de ${SA.radius} m à ${SA.height} m, ${SA.omega}°/s`, `point faible : la trompette (x${SA.weak}, quelle que soit l'arme) ; récompense ${SA.reward} points par joueur`],
+  ['Trompette', `cône de ${SA.trumpet.range} m (demi-angle ${SA.trumpet.angle}°), annoncé ${f1(SA.trumpet.tel)} s, ${SA.trumpet.damage} dégâts`, `recharge ${SA.trumpet.cooldown} s ; la flèche protège`],
+  ['Plumes', `éventail de ${SA.plumes.count} plumes (${SA.plumes.spread}° d'écart), annoncé ${f1(SA.plumes.tel)} s, ${SA.plumes.damage} dégâts chacune`, `recharge ${SA.plumes.cooldown} s ; arrêtées par la flèche`],
+  ['Jugement', `un joueur est marqué ${SA.judgment.tel} s puis frappé d'un rayon : ${SA.judgment.damage} dégâts`, `dès ${pc(SA.judgment.fromHealth)} de vie ; recharge ${SA.judgment.cooldown} s ; on se cache derrière la flèche`],
+  ['3. La rampe', `rafale toutes les ${SR.interval} s : poussée de ${f1(SR.push)} m/s pendant ${SR.duration} s (annoncée 0,8 s)`, `les garde-corps et la paroi retiennent ; ${SR.gargoyles.count} gargouilles montent toutes les ${SR.gargoyles.every} s (${SR.gargoyles.maxAlive} au plus)`],
+  ['4. Le Fanal d\'Erwin', `chaque joueur debout maintient la touche d'interaction ${SM.fanal.hold} s à moins de ${f1(SM.fanal.range)} m`, `jauge commune : avance de (joueurs qui tiennent / joueurs debout) x 1/${SM.fanal.hold} par seconde, retombe quand personne ne tient`],
+  ['5. L\'Aube', `ciel : nuit -> jour en ${SM.dawn.sky} s (fond, brouillard, lumières) ; tous les zombies en cendres ; vue orbitale ${SM.dawn.orbit} s (Échap la passe) ; écran « STRASBOURG LIBÉRÉE » et statistiques`, 'aucun nouveau shader'],
+  ['Récompenses', 'Bénédiction de l\'Aube : les 7 atouts, gardés même à terre ; toutes les portes restantes gratuites ; trophée enregistré localement (localStorage)', 'les joueurs à terre sont relevés'],
+  ['Nuit éternelle', `le jour dure ${SM.eternal.day} s, puis la nuit retombe en ${SM.eternal.dusk} s ; zombies x${f1(SM.eternal.healthMult)} de vie dès la manche suivante`, 'les manches reprennent sans fin']]);
 const VT = C.vehicles.types, VD = C.vehicles.damage, VF = C.vehicles.fuel, VR = C.vehicles.roadkill;
 const rk = (t, v) => t.roadkill.K * v * Math.min(1, 0.4 + 0.6 * (v - t.roadkill.vmin) / VR.rampSpeed);
 const vcol = (f) => Object.values(VT).map(f);

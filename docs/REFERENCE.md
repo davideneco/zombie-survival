@@ -1,6 +1,6 @@
 # Zombie Survival — fiche de référence
 
-Version du jeu : **v0.36.0 · 5c09973 · 2026-10-10** (package 0.36.1). Générée automatiquement par `node tools/make-docs.mjs` à partir de `src/config.js` et du jeu.
+Version du jeu : **v0.36.2 · c7045ff · 2026-10-10** (package 0.37.1). Générée automatiquement par `node tools/make-docs.mjs` à partir de `src/config.js` et du jeu.
 Carte annotée : [carte.png](carte.png). Armes de profil : [armes.png](armes.png). Les mêmes tableaux en tableur : dossier [csv/](csv/).
 
 Pour demander une modification, citez la ligne (ex. « Mitrailleuse RPK : chargeur 100 », « Mastodonte à 3000 pts », « porte P3 à 500 pts », « mettre la boîte mystère dans la zone Temple-Neuf »).
@@ -478,6 +478,22 @@ Prix d'une porte : le plus cher des deux prix de zone (colonne « Prix de la por
 | Appel | 3 pestiférés | recharge 20 s |
 | À sa mort | explosion de rayon 6 m : 60 dégâts | le PHD Flopper protège |
 | Récompense | Max Munitions + 1500 points par joueur |  |
+
+## Acte V « L'Aube » (après la victoire sur le Bourreau : montée de la flèche, Fanal d'Erwin)
+
+| Étape | Valeur | Remarque |
+|---|---|---|
+| Ascension | faisceau de lumière depuis la pointe : plateforme 67,5 m -> escalier 3 tours -> terrasse 104 m -> rampe 6 tours -> pointe 128 m | texte : « La flèche s'illumine : montez allumer le Fanal d'Erwin » ; les manches sont suspendues pendant tout l'acte |
+| 1. Gargouilles (terrasse) | 24 zombies de pierre (+6 par joueur en plus), 10 simultanées, une toutes les 1,1 s | coureurs (vitesse x1,5, vie x1,2, armure x0,8) qui surgissent des parapets à plus de 5 m des joueurs (0,7 s d'apparition) |
+| 2. L'Ange du Jugement | 40000 PV (+70 % par joueur en plus) ; tourne hors de la tour, cercle de 14 m à 106 m, 10°/s | point faible : la trompette (x2, quelle que soit l'arme) ; récompense 5000 points par joueur |
+| Trompette | cône de 10 m (demi-angle 20°), annoncé 1 s, 40 dégâts | recharge 7 s ; la flèche protège |
+| Plumes | éventail de 5 plumes (12° d'écart), annoncé 0,7 s, 15 dégâts chacune | recharge 5 s ; arrêtées par la flèche |
+| Jugement | un joueur est marqué 3 s puis frappé d'un rayon : 70 dégâts | dès 60 % de vie ; recharge 16 s ; on se cache derrière la flèche |
+| 3. La rampe | rafale toutes les 6 s : poussée de 2,5 m/s pendant 1 s (annoncée 0,8 s) | les garde-corps et la paroi retiennent ; 2 gargouilles montent toutes les 7 s (6 au plus) |
+| 4. Le Fanal d'Erwin | chaque joueur debout maintient la touche d'interaction 6 s à moins de 3,2 m | jauge commune : avance de (joueurs qui tiennent / joueurs debout) x 1/6 par seconde, retombe quand personne ne tient |
+| 5. L'Aube | ciel : nuit -> jour en 30 s (fond, brouillard, lumières) ; tous les zombies en cendres ; vue orbitale 12 s (Échap la passe) ; écran « STRASBOURG LIBÉRÉE » et statistiques | aucun nouveau shader |
+| Récompenses | Bénédiction de l'Aube : les 7 atouts, gardés même à terre ; toutes les portes restantes gratuites ; trophée enregistré localement (localStorage) | les joueurs à terre sont relevés |
+| Nuit éternelle | le jour dure 60 s, puis la nuit retombe en 20 s ; zombies x1,3 de vie dès la manche suivante | les manches reprennent sans fin |
 
 ## Motos (deux parkings au panneau bleu « P », avec chacun une borne plein + réparation : place Gutenberg, 2 motos ; place Broglie, 1 moto)
 
