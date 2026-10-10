@@ -332,7 +332,8 @@ export function createArchitecture({ renderer, plasterImg, roofP, rnd }) {
   // OSM, bandeaux de devanture contre un mur…) se disputaient le même pixel (z-fighting). Chaque matériau reçoit un décalage de profondeur
   // propre (polygonOffset, 1 unité par rang) : le plus grand rang gagne toujours, sans scintillement (tools/stuck-scan.mjs, étape zfight).
   const RANK = { plaster: 0, timber: 4, sandstone: 7, modern: 10, gothic: 11, shop: 12, dormer: 18, flood: 22 };
-  const rankMat = (mat, style, variant) => { const r = (RANK[style] ?? 0) + variant + 1; mat.polygonOffset = true; mat.polygonOffsetFactor = -0.5 * r; mat.polygonOffsetUnits = -r; return mat; };
+  // (2 unités par rang : l'intervalle intermédiaire sert à départager deux tuiles de 160 m, voir finish)
+  const rankMat = (mat, style, variant) => { const r = (RANK[style] ?? 0) + variant + 1; mat.polygonOffset = true; mat.polygonOffsetFactor = -r; mat.polygonOffsetUnits = -2 * r; return mat; };
   const matFor = (style, variant) => {
     const key = `${style}:${variant}`;
     if (!mats[key]) {
@@ -676,6 +677,24 @@ export function createArchitecture({ renderer, plasterImg, roofP, rnd }) {
       // Découpe en tuiles de 96 m : la caméra ne dessine que les morceaux de ville devant elle et à portée du brouillard
       // (sinon toute la ville, ~600 000 triangles, était dessinée à chaque image).
       const T = 160;
+      // Deux triangles coplanaires de même matériau dans deux tuiles voisines (bâtiments OSM aux emprises qui se chevauchent : toits, façades) se
+      // disputaient le pixel : chaque tuile a un rang de décalage de profondeur (polygonOffset) propre à sa parité, donc deux tuiles voisines
+      // ne rendent jamais à la même profondeur (v0.35.2). Murs : 2 rangs (un demi-pas entre deux matériaux), toits : 4 rangs (aussi en diagonale).
+      const variants = new Map();
+      const tileMat = (mat, t, levels) => {
+        const rk = levels === 4 ? (t.ix & 1) | ((t.iz & 1) << 1) : (t.ix + t.iz) & 1;
+        if (!rk) return mat;
+        const key = `${rk}`;
+        let per = variants.get(mat); if (!per) variants.set(mat, per = {});
+        if (!per[key]) {
+          const m = mat.clone();
+          m.polygonOffset = true;
+          m.polygonOffsetFactor = mat.polygonOffsetFactor - 0.5 * rk;
+          m.polygonOffsetUnits = mat.polygonOffsetUnits - rk;
+          per[key] = m;
+        }
+        return per[key];
+      };
       const split = (b) => {
         const tiles = new Map();
         const P = b.pos, N = b.nor, U = b.uv, C = b.col, I = b.idx;
@@ -684,7 +703,7 @@ export function createArchitecture({ renderer, plasterImg, roofP, rnd }) {
           const cx = (P[a * 3] + P[bb * 3] + P[c * 3]) / 3, cz = (P[a * 3 + 2] + P[bb * 3 + 2] + P[c * 3 + 2]) / 3;
           const k = Math.floor(cx / T) * 4096 + Math.floor(cz / T);
           let t = tiles.get(k);
-          if (!t) { t = { pos: [], nor: [], uv: [], col: [], idx: [], map: new Map() }; tiles.set(k, t); }
+          if (!t) { t = { pos: [], nor: [], uv: [], col: [], idx: [], map: new Map(), ix: Math.floor(cx / T), iz: Math.floor(cz / T) }; tiles.set(k, t); }
           for (const v of [a, bb, c]) {
             let j = t.map.get(v);
             if (j === undefined) {
@@ -697,8 +716,8 @@ export function createArchitecture({ renderer, plasterImg, roofP, rnd }) {
         }
         return [...tiles.values()];
       };
-      for (const [key, { mat, b }] of Object.entries(mats)) for (const t of split(b)) { const m = toMesh(t, mat); if (m) m.name = 'arch:' + key; }
-      for (const t of split(roofB)) { const r = toMesh(t, roofMat); if (r) r.name = 'arch:roof'; }
+      for (const [key, { mat, b }] of Object.entries(mats)) for (const t of split(b)) { const m = toMesh(t, tileMat(mat, t, 2)); if (m) m.name = 'arch:' + key; }
+      for (const t of split(roofB)) { const r = toMesh(t, tileMat(roofMat, t, 4)); if (r) r.name = 'arch:roof'; }
     },
   };
 }

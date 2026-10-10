@@ -6,7 +6,7 @@
 //   variables : ONLY=comp,pockets,bots,rays,zfight (étapes à lancer ; défaut toutes) · SEED=1 · BOTS=200 · BOT_SECONDS=60 · RAYS=2000
 //               PLAYWRIGHT=/chemin/vers/playwright/index.mjs (si le module n'est pas résoluble) · CHROME=/chemin/chrome (sinon celui de Playwright)
 //
-// Étapes (toutes toutes portes ouvertes) :
+// Étapes (toutes portes ouvertes) :
 //   comp     composantes connexes des cases libres de world.nav (NavGrid.components) : la principale contient le départ.
 //   pockets  pour chaque poche non principale proche de la principale (moins de 3 m) : un joueur simulé (vrai Player.update, collision de rayon
 //            0,4) tente d'y entrer et d'en sortir pendant 3 s depuis 8 directions. Entrée possible mais sortie impossible = POCHE-PIÈGE.
@@ -216,7 +216,8 @@ if (ONLY.includes('rays')) {
       const vis = (o) => { for (let q = o; q; q = q.parent) if (!q.visible || q === game.camera) return false; return true; }; // maillage et tous ses parents visibles, hors armes de la vue (enfants de la caméra)
       if (!m.isMesh || !vis(m) || m.userData.zombie || !m.geometry) return; // les InstancedMesh (mobilier, arbres) comptent aussi
       const mat = Array.isArray(m.material) ? m.material[0] : m.material;
-      if (!mat || (mat.transparent && mat.opacity < 0.2) || mat.depthWrite === false || mat.blending === THREE.AdditiveBlending) return;
+      const glass = /glass/.test(m.name || ''); // vitres des abris et des rames : translucides (depthWrite faux) mais visibles : un mur de verre n'est pas un mur invisible
+      if (!mat || (mat.transparent && mat.opacity < 0.2) || (mat.depthWrite === false && !glass) || mat.blending === THREE.AdditiveBlending) return;
       m.updateMatrixWorld(true); if (m.isInstancedMesh && !m.boundingSphere) m.computeBoundingSphere(); meshes.push(m);
     });
     const nameOf = (m) => m.name || m.parent?.name || m.material?.name || '(sans nom)';

@@ -53,7 +53,7 @@ function wheel(R, tireR, width, rimMat) {
   g.add(new THREE.Mesh(tire, M.rubber));
   const rimR = R - tireR * 1.7;
   g.add(new THREE.Mesh(new THREE.TorusGeometry(rimR, 0.014, 6, 24).rotateY(Math.PI / 2), rimMat));
-  for (let k = 0; k < 6; k++) box(g, 0.022, rimR * 2, 0.026, rimMat, 0, 0, 0, (k * Math.PI) / 6);
+  for (let k = 0; k < 6; k++) box(g, 0.022 - k * 0.0006, rimR * 2, 0.026 - k * 0.0006, rimMat, 0, 0, 0, (k * Math.PI) / 6); // épaisseurs différentes : les faces des rayons ne sont jamais coplanaires (z-fighting au croisement)
   g.add(new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, width * 0.7, 10).rotateZ(Math.PI / 2), M.steel));
   g.add(new THREE.Mesh(new THREE.CylinderGeometry(rimR * 0.62, rimR * 0.62, 0.008, 18).rotateZ(Math.PI / 2), M.steel)).position.x = width * 0.32;
   box(g, 0.05, 0.03, 0.03, M.tail, 0, rimR, 0); // une valve rouge : repère visuel de la rotation

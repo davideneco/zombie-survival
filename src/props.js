@@ -119,7 +119,7 @@ export function createProps() {
   // Banc : lattes en bois, pieds en fonte
   {
     const slats = [], legs = [];
-    for (let i = 0; i < 3; i++) slats.push(box(1.8, 0.04, 0.11, 0, 0.45, -0.18 + i * 0.13));
+    for (let i = 0; i < 3; i++) slats.push(box(1.8, 0.04, 0.11, 0, 0.456, -0.18 + i * 0.13)); // 0,456 : le dessous (0,436) n'est plus coplanaire avec l'assise des pieds (0,43), qui scintillait
     for (let i = 0; i < 3; i++) slats.push(box(1.8, 0.11, 0.035, 0, 0.62 + i * 0.13, -0.27, -0.18));
     for (const x of [-0.75, 0.75]) legs.push(extrude([[-0.25, 0], [-0.18, 0], [-0.1, 0.43], [0.22, 0.43], [0.25, 0], [0.32, 0], [0.26, 0.48], [-0.02, 0.48], [-0.08, 0.95], [-0.15, 0.95], [-0.2, 0.47]], 0.05, 0).rotateY(Math.PI / 2).translate(x, 0, 0));
     P.bench = [[merge(slats), M.wood], [merge(legs), M.iron]];

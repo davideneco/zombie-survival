@@ -132,7 +132,7 @@ export function makePerkMachine(id, perk, price) {
   // fronton arrondi
   const top = new THREE.Mesh(new THREE.CylinderGeometry(W / 2, W / 2, D, 20, 1, false, 0, Math.PI), paint);
   top.rotation.z = Math.PI / 2; top.rotation.y = Math.PI / 2; top.position.y = H + 0.08; g.add(top);
-  const face = new THREE.Mesh(new THREE.PlaneGeometry(W - 0.08, H - 0.1), front); face.position.set(0, H / 2 + 0.1, D / 2 + 0.005); g.add(face);
+  const face = new THREE.Mesh(new THREE.PlaneGeometry(W - 0.08, H - 0.1), front); face.position.set(0, H / 2 + 0.1, D / 2 + 0.012); g.add(face);
   // socle, bandes chromées, néons latéraux
   const base = new THREE.Mesh(new THREE.BoxGeometry(W + 0.1, 0.12, D + 0.1), dark); base.position.y = 0.06; g.add(base);
   for (const sx of [-1, 1]) {
@@ -175,7 +175,7 @@ export function makeAmmoStation() {
   const [map, emap] = ammoFront();
   const front = new THREE.MeshStandardMaterial({ map, emissiveMap: emap, emissive: 0xffffff, emissiveIntensity: 0.8, roughness: 0.85, metalness: 0.1 });
   const body = new THREE.Mesh(new THREE.BoxGeometry(W, H, D), olive); body.position.y = H / 2; g.add(body);
-  const face = new THREE.Mesh(new THREE.PlaneGeometry(W - 0.04, H - 0.04), front); face.position.set(0, H / 2, D / 2 + 0.005); g.add(face);
+  const face = new THREE.Mesh(new THREE.PlaneGeometry(W - 0.04, H - 0.04), front); face.position.set(0, H / 2, D / 2 + 0.012); g.add(face);
   // caisse ouverte posée dessus, pleine de cartouches
   const crateMat = new THREE.MeshStandardMaterial({ color: 0x3e4428, roughness: 0.8, metalness: 0.4 });
   const crate = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.28, 0.5), crateMat); crate.position.set(0, H + 0.14, 0); g.add(crate);
@@ -301,7 +301,7 @@ export function makeMysteryBox() {
   const lid = new THREE.Group(); lid.position.set(0, H + 0.05, -D / 2); g.add(lid);
   const lidMesh = new THREE.Mesh(new THREE.CylinderGeometry(D / 2, D / 2, W, 16, 1, false, 0, Math.PI), wood);
   lidMesh.rotation.z = Math.PI / 2; lidMesh.scale.set(1, 1, 0.45); lidMesh.position.set(0, 0, D / 2); lid.add(lidMesh);
-  for (const sx of [-0.55, 0, 0.55]) { const band = new THREE.Mesh(new THREE.CylinderGeometry(D / 2 + 0.01, D / 2 + 0.01, 0.07, 16, 1, false, 0, Math.PI), iron); band.rotation.z = Math.PI / 2; band.scale.set(1, 1, 0.45); band.position.set(sx, 0, D / 2); lid.add(band); }
+  for (const sx of [-0.55, 0, 0.55]) { const band = new THREE.Mesh(new THREE.CylinderGeometry(D / 2 + 0.025, D / 2 + 0.025, 0.07, 16, 1, false, 0, Math.PI), iron); band.rotation.z = Math.PI / 2; band.scale.set(1, 1, 0.45); band.position.set(sx, -0.004, D / 2); lid.add(band); } // 4 mm plus bas : sa face plane (dessous du couvercle ouvert) n'est plus coplanaire avec celle du couvercle
   const lock = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.2, 0.05), iron); lock.position.set(0, H - 0.02, D / 2 + 0.03); g.add(lock);
   // faisceau de lumière bleue (repère de loin)
   const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.32, 30, 14, 1, true), new THREE.MeshBasicMaterial({ color: 0x5fb8ff, transparent: true, opacity: 0.1, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
@@ -334,7 +334,7 @@ export function makePackAPunch() {
   const [map, emap] = papFront();
   const front = new THREE.MeshStandardMaterial({ map, emissiveMap: emap, emissive: 0xffffff, emissiveIntensity: 1.0, roughness: 0.75, metalness: 0.2 });
   const body = new THREE.Mesh(new THREE.BoxGeometry(W, H, D), metal); body.position.y = H / 2; g.add(body);
-  const face = new THREE.Mesh(new THREE.PlaneGeometry(W - 0.06, H - 0.06), front); face.position.set(0, H / 2, D / 2 + 0.005); g.add(face);
+  const face = new THREE.Mesh(new THREE.PlaneGeometry(W - 0.06, H - 0.06), front); face.position.set(0, H / 2, D / 2 + 0.012); g.add(face);
   // rouleaux et tuyaux sur le dessus
   const roller = new THREE.MeshStandardMaterial({ color: 0x55525c, roughness: 0.35, metalness: 0.9 });
   for (const z of [-0.3, 0.1]) { const r = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, W - 0.2, 16), roller); r.rotation.z = Math.PI / 2; r.position.set(0, H + 0.12, z); g.add(r); }

@@ -259,8 +259,8 @@ export function buildInterior(scene, plan, { collision, lightSources, props }) {
       const a = [ox + axis.vx * hw * side, oz + axis.vz * hw * side], b = [ix + axis.vx * hw * side, iz + axis.vz * hw * side];
       collision.addSegment(a[0], a[1], b[0], b[1]);
       const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
-      const m = add(new THREE.Mesh(new THREE.BoxGeometry(0.6, PORTAL_H + 1, len), stone));
-      m.position.set((a[0] + b[0]) / 2 + axis.vx * 0.3 * side, (PORTAL_H + 1) / 2, (a[1] + b[1]) / 2 + axis.vz * 0.3 * side);
+      const m = add(new THREE.Mesh(new THREE.BoxGeometry(0.6, PORTAL_H + 0.95, len), stone)); // 5 cm sous le linteau : plus de dessus coplanaire
+      m.position.set((a[0] + b[0]) / 2 + axis.vx * 0.3 * side, (PORTAL_H + 0.95) / 2, (a[1] + b[1]) / 2 + axis.vz * 0.3 * side);
       m.rotation.y = Math.atan2(b[0] - a[0], b[1] - a[1]);
     }
     const len = Math.hypot(ix - ox, iz - oz);

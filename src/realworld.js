@@ -360,19 +360,29 @@ export async function buildRealWorld(scene, renderer) {
     }
     return best;
   };
-  const supportedRuns = (k, ax, az, bx, bz) => {
-    const parts = partsOf.get(k) || [];
-    const len = Math.hypot(bx - ax, bz - az), n = Math.max(1, Math.ceil(len / 0.5));
+  // Portions d'une arête du contour que porte une partie 3D (le mur dessiné) : à moins d'un mètre de la partie (marge pour un contour légèrement
+  // décalé), par pas de 0,5 m et avec un pas de plus à chaque extrémité. `tight` (v0.35.2) : à moins de SUPPORT_TOL m, pas de 0,25 m et bissection
+  // des extrémités, donc aucun mur ne dépasse son maillage de plus de SUPPORT_TOL (avant : jusqu'à 1,5 m, un petit mur invisible devant le Palais
+  // Rohan). L'ancienne règle sert à placer le décor, les machines et les armes (leur position ne change pas) ; la correction est appliquée
+  // à la fin (applyMapFixes), juste avant la grille de navigation définitive.
+  const SUPPORT_TOL = 0.35;
+  const supportedRuns = (k, ax, az, bx, bz, tight = false) => {
+    const parts = partsOf.get(k) || [], tol = tight ? SUPPORT_TOL : 1;
+    const len = Math.hypot(bx - ax, bz - az), n = Math.max(1, Math.ceil(len / (tight ? 0.25 : 0.5)));
+    const okAt = (t) => {
+      const x = ax + (bx - ax) * t, z = az + (bz - az) * t;
+      return parts.some((q) => x >= q.minX - 1 && x <= q.maxX + 1 && z >= q.minZ - 1 && z <= q.maxZ + 1 && (pointInPoly(x, z, q.pts) || distToRing(x, z, q.pts) < tol));
+    };
+    const edge = (tIn, tOut) => { for (let i = 0; i < 6; i++) { const m = (tIn + tOut) / 2; if (okAt(m)) tIn = m; else tOut = m; } return tIn; }; // dernier point soutenu entre tIn (soutenu) et tOut (non)
     const runs = [];
     let start = -1;
     for (let i = 0; i <= n; i++) {
-      const t = i / n, x = ax + (bx - ax) * t, z = az + (bz - az) * t;
-      const ok = i < n + 1 && parts.some((q) => x >= q.minX - 1 && x <= q.maxX + 1 && z >= q.minZ - 1 && z <= q.maxZ + 1 && (pointInPoly(x, z, q.pts) || distToRing(x, z, q.pts) < 1));
-      if (ok && start < 0) start = Math.max(0, (i - 1) / n);
-      if (!ok && start >= 0) { runs.push([start, Math.min(1, i / n)]); start = -1; }
+      const t = i / n, ok = okAt(t);
+      if (ok && start < 0) start = i === 0 ? 0 : tight ? edge(t, (i - 1) / n) : (i - 1) / n;
+      if (!ok && start >= 0) { runs.push([start, tight ? edge((i - 1) / n, t) : i / n]); start = -1; }
     }
     if (start >= 0) runs.push([start, 1]);
-    return runs;
+    return runs.filter(([a, b]) => b > a);
   };
   // intersection de deux listes d'intervalles triés
   const clipRuns = (runs, cuts) => {
@@ -390,6 +400,8 @@ export async function buildRealWorld(scene, renderer) {
   };
 
   // Place de départ ; brèches (bâtiments effondrés) seulement si aucun passage ne la relie à la ville
+  const fountainCircles = []; // vasques de fontaine (collision corrigée à la fin : applyMapFixes)
+  const partialEdges = []; // arêtes de contour des bâtiments à parties 3D : leurs murs sont resserrés à la fin (applyMapFixes)
   const breach = findBreaches(blds.map((b) => b.pts), halfX, halfZ, CONFIG.startHint, CONFIG.cityHint, CONFIG.breaches, NAV_CELL, NAV_MARGIN, passages);
   const rubble = [];
   const ghostBuild = (g) => {
@@ -433,7 +445,9 @@ export async function buildRealWorld(scene, renderer) {
       for (const [t0, t1] of cuts) { if (t0 > t) solid.push([t, t0]); t = t1; }
       if (t < 1) solid.push([t, 1]);
       if (partial) solid = clipRuns(supportedRuns(k, ax, az, bx, bz), cuts);
-      for (const [t0, t1] of solid) if ((t1 - t0) * len > 0.05) collision.addSegment(ax + dx * t0, az + dz * t0, ax + dx * t1, az + dz * t1);
+      const made = [];
+      for (const [t0, t1] of solid) if ((t1 - t0) * len > 0.05) made.push(collision.addSegment(ax + dx * t0, az + dz * t0, ax + dx * t1, az + dz * t1));
+      if (partial) partialEdges.push({ k, ax, az, bx, bz, cuts, made });
       if (len < 0.3 || partial) continue;
       facadeSegs.push([ax, az, bx, bz, dz / len, -dx / len, Math.max(1, Math.round(len / BAY_W)), len]);
     }
@@ -445,6 +459,7 @@ export async function buildRealWorld(scene, renderer) {
   }
 
   for (const g of tailGhosts) ghostBuild(g);
+
 
   // Parties 3D (OSM building:part) : cathédrale, églises, tours
   for (const prt of data.parts || []) {
@@ -1634,7 +1649,7 @@ export async function buildRealWorld(scene, renderer) {
         used.push([x, z]);
       } else if (f.kind === 'fountain' && freeAt(x, z, 4)) {
         props.place('fountain', x, z);
-        collision.addCircle(x, z, 1.6, 1.6);
+        fountainCircles.push(collision.addCircle(x, z, 1.6, 1.6)); // (hauteur corrigée en fin de construction : applyMapFixes)
         used.push([x, z]);
       }
     };
@@ -1774,7 +1789,72 @@ export async function buildRealWorld(scene, renderer) {
     scene.add(sky);
   }
 
+  // ---------------------------------------------------------------- Corrections de collision (v0.35.2), appliquées en fin de construction
+  // Elles passent APRÈS le placement du décor, des machines, des armes et des motos : ceux-ci s'appuient sur la collision et sur le tirage
+  // `rnd` (orientation des bancs, cases candidates…), donc une collision modifiée plus tôt les déplacerait partout sur l'île.
+  let partWalls = 0;
+  const applyMapFixes = () => {
+    // (1) murs du contour resserrés sur le maillage (voir supportedRuns) : le mur ne dépasse plus le bâtiment dessiné de plus de SUPPORT_TOL m
+    for (const e of partialEdges) {
+      const len = Math.hypot(e.bx - e.ax, e.bz - e.az), dx = e.bx - e.ax, dz = e.bz - e.az;
+      const solid = clipRuns(supportedRuns(e.k, e.ax, e.az, e.bx, e.bz, true), e.cuts).filter(([t0, t1]) => (t1 - t0) * len > 0.05);
+      for (const sg of e.made) sg.dead = true;
+      for (const [t0, t1] of solid) collision.addSegment(e.ax + dx * t0, e.az + dz * t0, e.ax + dx * t1, e.az + dz * t1);
+    }
+    collision.segs = collision.segs.filter((sg) => !sg.dead);
+    // (2) fontaine : vasque de 0,6 m de haut (les balles passent au-dessus, comme le maillage), colonne et coupe au-dessus
+    for (const c of fountainCircles) { c.h = 0.6; collision.addCircle(c.x, c.z, 0.2, 1.3); collision.addCircle(c.x, c.z, 0.6, 1.6, 1.3); }
+    // (3) façades des parties 3D que le contour ne porte pas : une partie dessinée en retrait ou en saillie du contour OSM, ou rattachée à un
+    // autre bâtiment, avait un mur visible sans collision (murs traversables à Saint-Thomas et au Palais Rohan). Chaque arête d'une partie
+    // qui touche le sol, côté extérieur (pas une cloison entre deux parties) et sans mur de collision à moins de 0,3 m, reçoit son segment ;
+    // les passages sous immeubles et la cathédrale (intérieur modélisé à part) sont exclus.
+    {
+    const G = 8, segGrid = new Map(), partGrid = new Map(), grounded = [];
+    const cellsOf = (x0, z0, x1, z1, f) => { for (let gx = Math.floor(x0 / G); gx <= Math.floor(x1 / G); gx++) for (let gz = Math.floor(z0 / G); gz <= Math.floor(z1 / G); gz++) f(gx * 4096 + gz); };
+    for (const sg of collision.segs) if (sg.kind === 'wall' && sg.h === Infinity) cellsOf(Math.min(sg.ax, sg.bx) - 0.4, Math.min(sg.az, sg.bz) - 0.4, Math.max(sg.ax, sg.bx) + 0.4, Math.max(sg.az, sg.bz) + 0.4, (key) => { const a = segGrid.get(key); if (a) a.push(sg); else segGrid.set(key, [sg]); });
+    for (const prt of data.parts || []) {
+      const pts = cleanRing(prt.pts);
+      if (pts.length < 3 || (parseFloat(prt.tags?.min_height) || 0) >= 0.5 || Math.abs(polyArea(pts)) < 1) continue;
+      const c = pts.reduce((a, q) => [a[0] + q[0] / pts.length, a[1] + q[1] / pts.length], [0, 0]);
+      if (cath && inPoly(c[0], c[1], cath.outline)) continue;
+      let minX = Infinity, minZ = Infinity, maxX = -Infinity, maxZ = -Infinity;
+      for (const [x, z] of pts) { minX = Math.min(minX, x); maxX = Math.max(maxX, x); minZ = Math.min(minZ, z); maxZ = Math.max(maxZ, z); }
+      // même règle de hauteur que le rendu (arch.part) : une partie sans hauteur et rattachée à aucun bâtiment n'est pas dessinée, donc ne bloque pas
+      const th = parseFloat(prt.tags?.height), height = Number.isFinite(th) ? th : prt._k != null && !prt.tags?.min_height ? blds[prt._k].h || 12 : null;
+      if (height == null || height - (parseFloat(prt.tags?.min_height) || 0) < 0.4) continue;
+      const q = { pts, minX, minZ, maxX, maxZ, h: height };
+      grounded.push(q);
+      cellsOf(minX - 0.5, minZ - 0.5, maxX + 0.5, maxZ + 0.5, (key) => { const a = partGrid.get(key); if (a) a.push(q); else partGrid.set(key, [q]); });
+    }
+    const inParts = (x, z) => (partGrid.get(Math.floor(x / G) * 4096 + Math.floor(z / G)) || []).some((q) => x >= q.minX && x <= q.maxX && z >= q.minZ && z <= q.maxZ && pointInPoly(x, z, q.pts));
+    const covered = (x, z) => (segGrid.get(Math.floor(x / G) * 4096 + Math.floor(z / G)) || []).some((sg) => {
+      const ex = sg.bx - sg.ax, ez = sg.bz - sg.az, l2 = ex * ex + ez * ez; let t = l2 ? ((x - sg.ax) * ex + (z - sg.az) * ez) / l2 : 0; t = t < 0 ? 0 : t > 1 ? 1 : t;
+      return Math.hypot(sg.ax + ex * t - x, sg.az + ez * t - z) < 0.3;
+    });
+    for (const q of grounded) {
+      const pts = q.pts;
+      for (let i = 0; i < pts.length; i++) {
+        const [ax, az] = pts[i], [bx, bz] = pts[(i + 1) % pts.length], dx = bx - ax, dz = bz - az, len = Math.hypot(dx, dz);
+        if (len < 0.3) continue;
+        const nx = dz / len, nz = -dx / len, n = Math.max(1, Math.ceil(len / 0.5));
+        const cuts = cutIntervals(passages, ax, az, bx, bz, axisInside);
+        const need = (t) => { // ce point de l'arête doit-il recevoir un mur ?
+          if (cuts.some(([c0, c1]) => t >= c0 - 0.001 && t <= c1 + 0.001)) return false;
+          const x = ax + dx * t, z = az + dz * t;
+          if (inParts(x + nx * 0.3, z + nz * 0.3) && inParts(x - nx * 0.3, z - nz * 0.3)) return false; // cloison entre deux parties
+          return !covered(x, z);
+        };
+        let start = -1;
+        const flush = (t1) => { if (start >= 0 && (t1 - start) * len > 0.3) { collision.addSegment(ax + dx * start, az + dz * start, ax + dx * t1, az + dz * t1, q.h < 2.6 ? q.h : Infinity); partWalls++; } start = -1; };
+        for (let k = 0; k <= n; k++) { const t = k / n; if (need(t)) { if (start < 0) start = Math.max(0, (k - 0.5) / n); } else flush(Math.min(1, (k - 0.5) / n)); }
+        flush(1);
+      }
+    }
+  }
+  };
+
   // ---------------------------------------------------------------- Finalisation navigation
+  applyMapFixes();
   collision.build();
   levels.build();
   levels.buildNavs(NavGrid, collision);
@@ -1859,7 +1939,8 @@ export async function buildRealWorld(scene, renderer) {
     isZoneOpen: (i) => !!zoneOpen[i], zoneArea, zoneOf1, // zoneOf1 : zone d'après le découpage d'origine (outils de test)
     mapCrop: { x0: Math.max(-halfX, secMinX - 40), x1: Math.min(halfX, secMaxX + 40), z0: Math.max(-halfZ, secMinZ - 40), z1: Math.min(halfZ, secMaxZ + 40) }, mapTitle: 'GRANDE ÎLE — STRASBOURG',
     cathedral: cath ? { seed: cath.seed, clock: cath.clock, insideInner: cath.insideInner, inner: cath.inner, P: cath.P, S: cath.S, T: cath.T, ceilAt: cath.ceilAt, info: cathInfo } : null,
-    levels, hdf: hdfInfo,
+    levels, hdf: hdfInfo, mapFixes: { partWalls, fountains: fountainCircles.length }, // v0.35.2 : murs ajoutés aux façades des parties 3D (tests, outils)
+   
     floorAt: (x, z, y, out) => levels.floorAt(x, z, y, out),
     collide: (pos, r, out) => collision.resolve(pos, r, out),
     rayHit: (ox, oy, oz, dx, dy, dz, maxT) => collision.rayHit(ox, oy, oz, dx, dy, dz, maxT),
