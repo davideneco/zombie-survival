@@ -150,6 +150,7 @@ export class Tram {
       if (this.sendT <= 0) { this.sendT = 0.05; this.sendState(); } // l'hôte simule la rame sans conducteur : il diffuse
     }
     if (this.sound.gong > 0) this.sound.gong -= dt;
+    if (this.gongCd > 0) this.gongCd -= dt; // recharge du gong (v0.39.3 : le compte à rebours ne descendait jamais, un seul gong par partie)
   }
   sendState() { this.game.net?.send({ t: 't_state', id: this.id, s: r2(this.s), v: r2(this.v), d: this.doors.open ? 1 : 0 }); }
 
