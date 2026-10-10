@@ -199,7 +199,7 @@ export class Tram {
     for (let d = 2; d <= D.lookAhead; d += 2) {
       const c = capAt(nose + dir * d);
       if (c === Infinity) continue;
-      const allowed = Math.sqrt(c * c + 2 * D.autoBrake * d);
+      const allowed = Math.sqrt(c * c + 2 * D.autoBrake * 0.85 * d); // marge : on freine un peu plus tôt que nécessaire
       if (allowed < lim) { lim = allowed; why = 'curve'; }
     }
     const a = this.ahead(dir);
@@ -259,7 +259,8 @@ export class Tram {
     let av = Math.abs(v);
     if (av > lim.v) {
       const br = lim.why === 'curve' ? D.autoBrake : D.emergency;
-      av = Math.max(lim.v, av - br * dt * (av > lim.v + 1.5 ? 1.5 : 1));
+      // le frein automatique part de la vitesse de l'image précédente : la traction de cette image (touche d'avance maintenue) ne le contrarie pas (v0.39.2)
+      av = Math.max(lim.v, Math.min(av, Math.abs(this.v)) - br * dt * (av > lim.v + 1.5 ? 1.5 : 1));
       if (lim.why === 'curve' && av > lim.v - 0.01) this.alarm(dt, 'VIRAGE', 'Vitesse limitée : ' + Math.round(lim.v * 3.6) + ' km/h');
       else if (lim.kind === 'gate') this.alarm(dt, 'FEU ROUGE', 'Freinage automatique : porte de zone fermée');
       else if (lim.kind === 'end') this.alarm(dt, 'HEURTOIR', 'Fin de ligne : freinage automatique');
