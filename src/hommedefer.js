@@ -420,7 +420,7 @@ export function carGeometries() {
       const dir = i === 0 ? -1 : 1, Xc = dir * (L / 2 - 2.45), Xd = dir * (L / 2 - 1.95);
       inter.push(tr(boxAt(0.5, 0.55, 1.9, Xd, 0.95, 0, 0x2a2f36)));                          // pupitre
       inter.push(tr(boxAt(0.46, 0.04, 1.7, Xd - dir * 0.04, 1.26, 0, 0x171b21)));            // dessus incliné (plat)
-      inter.push(tr(boxAt(0.05, 0.3, 0.55, Xd - dir * 0.2, 1.42, 0, 0x172a3a)));              // écran
+      inter.push(tr(boxAt(0.05, 0.18, 0.5, Xd - dir * 0.2, 1.36, 0, 0x172a3a)));              // écran (bas : il ne doit pas boucher la vue du conducteur, dont l'œil est à 1,56 m)
       inter.push(tr(colorize(new THREE.CylinderGeometry(0.03, 0.03, 0.22, 6).translate(Xd - dir * 0.08, 1.4, -0.45), 0xb9c0c7)));
       inter.push(tr(boxAt(0.4, 0.08, 0.42, Xc, 0.5, 0, 0x2a2d31)));                           // siège : assise
       inter.push(tr(boxAt(0.4, 0.08, 0.42, Xc, 0.82, 0, 0x2a2d31)));
