@@ -658,6 +658,8 @@ export class Zombie {
     // gong du tram (v0.39.0) : à moins de `range` m du gong, un zombie qui n'est pas déjà sur un joueur va vers le tram (sa cible du champ de flux)
     const lure = world.lure;
     if (lure && lure.t > 0 && !this.region && !this.link && Math.hypot(lure.x - this.pos.x, lure.z - this.pos.z) < (lure.range || 50) && Math.hypot(gx - this.pos.x, gz - this.pos.z) > 5) { gx = lure.x; gz = lure.z; chase = false; }
+    // cible dans une rame aux portes ouvertes (v0.40.0) : le zombie va d'abord devant la porte ouverte la plus proche (il ne peut ni entrer ni traverser la caisse)
+    if (chase && !this.region && !this.link) { const tg = world.tramGoal?.(target, this); if (tg) { gx = tg.x; gz = tg.z; chase = false; } }
     const dx = gx - this.pos.x;
     const dz = gz - this.pos.z;
     const dist = Math.hypot(dx, dz);

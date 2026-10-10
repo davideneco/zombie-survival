@@ -444,6 +444,13 @@ export const CONFIG = {
     // freine d'elle-même (autoBrake) en regardant lookAhead m devant : pas de déraillement. Portes de zone fermées : même freinage automatique
     // (gate.signalDist). Les portes de la rame ne s'ouvrent et ne se ferment qu'à moins de doorSpeed m/s ; on monte ou descend à moins de boardSpeed m/s.
     drive: { maxSpeed: 14, accel: 1.3, brake: 1.8, emergency: 3, reverse: 4, drag: 0.2, grip: 1.0, lookAhead: 70, autoBrake: 2.5, doorTime: 1.2, doorSpeed: 1.2, boardSpeed: 1.5 },
+    // intérieur praticable (v0.40.0, voir tramInterior.js) : on marche dans la rame à `speed` x la vitesse de marche normale, rayon `radius` m (l'allée entre
+    // les banquettes est étroite), parois à `wall` m de l'axe (épaisseur `thick`), plancher de la rame à car.floor ; le plancher s'arrête `endGap` m avant
+    // le bout du nez. Les portes ne laissent passer que si elles sont ouvertes à plus de `doorOpen` (0 à 1) ET la rame roule à moins de drive.boardSpeed.
+    // Monter à pied : appuyer contre une porte ouverte (écart latéral `boardW`, poussée d'au moins `boardPush` m/s) ou interagir à moins de `boardReach` m
+    // d'une porte ouverte ; descendre : dépasser `exitW` m de l'axe dans l'ouverture. S'asseoir : siège libre à moins de `seatReach` m. Debout à côté du siège
+    // en se levant : `stand` m de l'axe. Zombies : une porte ouverte se tient à `doorSpot` m de la caisse (les zombies s'y massent), frappe à 1,3 m.
+    walk: { radius: 0.3, wall: 1.15, thick: 0.15, endGap: 1.55, doorOpen: 0.6, boardW: 1.78, boardPush: 0.8, boardReach: 2.4, exitW: 1.45, seatReach: 1.35, stand: 0.4, doorSpot: 0.55, enterEase: 9 },
     // PV et chocs. Joueur à pied : repoussé, `playerDamage` PV au-dessus de `playerSpeed` m/s (jamais mortel) ; zombie : au-dessus de `zombieSpeed` m/s, dégâts =
     // zombieK x vitesse (et la rame ne ralentit pas), en dessous il bloque la rame (arrêt net) ; heurtoir : au-dessus de bufferFree m/s la rame perd
     // (vitesse - bufferFree) x bufferPerMs PV ; coup de zombie sur la caisse : zombieHit PV (les passagers ne sont atteints que par une porte ouverte)

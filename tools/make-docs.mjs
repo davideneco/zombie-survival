@@ -257,8 +257,8 @@ table('21_tram', 'Tram : réseau de voies (rails, quais, poteaux de caténaire, 
 const TC = TR.car, TD = TR.drive, TH = TR.hit, kmh = (v) => Math.round(v * 3.6), fr2 = (n) => String(n).replace('.', ',');
 table('22_tram_rame', 'Tram : la rame conduisible (une seule, garée au quai « Homme de Fer » de la ligne B / C / F ; les rames de décor ne roulent pas)', ['Réglage', 'Valeur', 'Remarque'], [
   ['Rame', `${TC.modules} modules de ${fr2(TC.module)} m (${fr2(TC.modules * TC.module)} m), ${fr2(TC.width)} x ${fr2(TC.height)} m, plancher à ${fr2(TC.floor)} m`, `articulés : chaque module suit la voie ; cabine à chaque bout ; ${TC.doors} portes de ${fr2(TC.doorWidth)} m par côté`],
-  ['Places', `16 : 2 de conducteur (une par cabine) + ${2 * TC.perSide} de passagers assis`, 'les passagers tirent normalement (comme sur la grosse moto) ; la place de conducteur se prend près d\'un bout de la rame, les autres près de la caisse'],
-  ['Montée / descente', `${kn0('interact')}, à moins de ${fr2(TD.boardSpeed)} m/s`, 'en rame, l\'invite rappelle les touches ; descendre en marche est refusé'],
+  ['Places', `16 : 2 de conducteur (une par cabine) + ${2 * TC.perSide} de passagers assis`, 'les passagers tirent normalement (comme sur la grosse moto) ; portes fermées, la place de conducteur se prend près d\'un bout de la rame, les autres près de la caisse (voir l\'intérieur praticable ci-dessous)'],
+  ['Montée / descente', `${kn0('interact')} ou marcher contre une porte ouverte (rame à moins de ${fr2(TD.boardSpeed)} m/s)`, 'à pied par les portes ouvertes ; assis, on se lève dans la rame ; descendre en marche est refusé'],
   ['Conduite', `${kn0('forward')} accélérer · ${kn0('back')} frein de service (puis marche arrière) · ${kn0('jump')} frein d'urgence`, `touches modifiables dans Options > Touches ; conducteur de la cabine arrière : la rame roule dans l'autre sens`],
   ['Vitesse max', `${TD.maxSpeed} m/s (${kmh(TD.maxSpeed)} km/h) ; marche arrière ${TD.reverse} m/s`, `accélération ${fr2(TD.accel)} m/s² (qui faiblit près du maximum), résistance ${fr2(TD.drag)} m/s²`],
   ['Freinage', `service ${fr2(TD.brake)} m/s² · urgence ${TD.emergency} m/s²`, ''],
@@ -271,7 +271,19 @@ table('22_tram_rame', 'Tram : la rame conduisible (une seule, garée au quai « 
   ['PV', `${TR.hp}`, `coup de zombie sur la caisse : ${TR.zombieHit} PV ; passagers touchés seulement devant une porte ouverte ; à 0 PV : hors service, retour au dépôt ${TR.power.respawnRounds} manches plus tard`],
   ['Joueur à pied heurté', `repoussé ; ${TH.playerDamage} dégâts au-dessus de ${TH.playerSpeed} m/s`, 'jamais mortel (il reste 1 PV)'],
   ['Zombie heurté', `au-dessus de ${TH.zombieSpeed} m/s : ${TH.zombieK} x vitesse (${TH.zombieK * TD.maxSpeed} à la vitesse max) ; en dessous : aucun dégât, il bloque la rame`, `la rame ne ralentit pas ; un coup toutes les ${TH.zombieCooldown} s au même zombie`],
-  ['Obstacles', 'une boîte orientée par module, obstacles dynamiques de Collision (setDynamic)', 'les joueurs, les zombies et les motos sont repoussés ; les balles traversent']]);
+  ['Obstacles', 'une boîte orientée par module, obstacles dynamiques de Collision (setDynamic)', 'les joueurs à pied, les zombies et les motos sont repoussés ; les balles traversent']]);
+// ---- tram : l'intérieur praticable (v0.40.0)
+const TW = TR.walk;
+table('23_tram_interieur', 'Tram : l\'intérieur praticable (on marche dans la rame, même quand elle roule)', ['Réglage', 'Valeur', 'Remarque'], [
+  ['Repère de la rame', 'u le long de la rame (+ vers l\'avant), w à droite, y hauteur des pieds', `le joueur debout est un point (u, w) de la voie à l'abscisse s + u : il suit la rame sans glisser, modules articulés compris ; réseau : p_state porte vh (identifiant de la rame), lx = w, ly = y, lz = -u, lyw (cap relatif)`],
+  ['Collision locale', `cercle de ${fr2(TW.radius)} m contre des boîtes (sièges, pupitres, bouts, parois à ${fr2(TW.wall)} m de l'axe)`, `allée entre les banquettes étroite ; plancher à ${fr2(TC.floor)} m ; pas de saut ni d'enjambement dans la rame`],
+  ['Monter à pied', `rame à moins de ${fr2(TD.boardSpeed)} m/s, portes ouvertes à plus de ${Math.round(TW.doorOpen * 100)} %`, `pousser contre une porte ouverte (à moins de ${fr2(TW.boardW)} m de l'axe) ou ${kn0('interact')} à moins de ${fr2(TW.boardReach)} m d'une porte`],
+  ['Descendre à pied', `dépasser ${fr2(TW.exitW)} m de l'axe dans une ouverture`, 'refusé tant que la rame roule (message « TRAM EN MARCHE ») ; les portes ne s\'ouvrent qu\'à l\'arrêt'],
+  ['S\'asseoir / se lever', `${kn0('interact')} à moins de ${fr2(TW.seatReach)} m d'un siège libre ; ${kn0('interact')} assis : on se lève dans la rame`, 'conducteur ou passager ; les coéquipiers voient l\'avatar assis ou debout'],
+  ['Portes (touche)', `${kn0('tramDoors')} : conducteur ; sinon, quand personne ne conduit, n'importe quel occupant (via l'hôte)`, `${kn0('tramGong')} : gong depuis l'intérieur aussi`],
+  ['Zombies', 'ne rentrent pas dans la rame et ne la traversent pas', `une porte ouverte les attire (ils se massent devant, à ${fr2(TW.doorSpot)} m de la caisse) ; ils frappent le joueur à moins de 1,3 m ; ailleurs la caisse encaisse (${TR.zombieHit} PV)`],
+  ['Tir, grenades, couteau, réanimation', 'comme à pied', 'la grenade garde la vitesse de la rame, ignore la caisse et rebondit sur le plancher ; pas de fente du couteau'],
+  ['Menu debug (F9), déblocage', `F9 : l'hôte rejoint un coéquipier debout dans la rame (repère local) ; ${kn0('unstick')} : replace dans l'allée`, 'un joueur téléporté sort de la rame']]);
 const VT = C.vehicles.types, VD = C.vehicles.damage, VF = C.vehicles.fuel, VR = C.vehicles.roadkill;
 const rk = (t, v) => t.roadkill.K * v * Math.min(1, 0.4 + 0.6 * (v - t.roadkill.vmin) / VR.rampSpeed);
 const vcol = (f) => Object.values(VT).map(f);

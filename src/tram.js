@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { CONFIG } from './config.js';
 import { carGeometries, atlas, HDF } from './hommedefer.js';
 import { fx } from './fx.js';
+import { interiorOf } from './tramInterior.js';
 
 // =====================================================================
 //  Rame de tram conduisible (v0.39.0).
@@ -57,6 +58,7 @@ export class Tram {
     const pass = sd.filter((s) => !s.driver).sort((a, b) => a.module - b.module || a.side - b.side || b.hip[2] - a.hip[2]);
     this.model = { group: this.group, seats: [front, rear, ...pass].map((s) => ({ hip: s.hip, eye: s.eye, ry: s.ry, module: s.module, driver: s.driver, twist: s.driver ? 0 : 2.2 })), wheelRadius: 0.4, steer: null, wheels: [] };
     this.doorSpots = CAR.doorsAt;
+    this.interior = interiorOf(this); // sièges, pupitres, parois : collision locale du joueur debout (v0.40.0)
     this.doors = { open: false, f: 0 };
     this.engine = null; this.sound = { gong: 0, chime: 0, alarm: 0, squeal: 0 };
     this.reset();
@@ -88,6 +90,17 @@ export class Tram {
   // sens de marche de la cabine de `seat` dans l'axe de la voie : +1 (cabine avant) ou -1 (cabine arrière)
   cabDir(seat) { return seat === 0 ? 1 : -1; }
   syncNet() { this.net = { s: this.s, v: this.v, d: this.doors.open ? 1 : 0, t: 0 }; }
+
+  // ---- repère de la rame (v0.40.0, voir tramInterior.js) : u le long de la rame depuis son centre (+ vers l'avant), w à droite ; un point (u, w) est celui de
+  // la voie à l'abscisse s + u décalé de w vers la droite (continu d'un module à l'autre)
+  frame(u, out) { return this.track.at(clamp(this.s + u, 0, this.track.L), out); }
+  walkToWorld(u, w, y, out) { const o = this._wf || (this._wf = {}); this.frame(u, o); out.x = o.x - o.tz * w; out.z = o.z + o.tx * w; out.y = y; return out; }
+  worldToWalk(x, z, out) { const r = this._wp || (this._wp = {}); this.track.project(x, z, 10, r); out.u = r.s - this.s; out.w = r.d === Infinity ? 99 : r.side * r.d; return out; }
+  // les portes laissent passer : ouvertes (à plus de walk.doorOpen) et rame (presque) arrêtée
+  walkOpen() { return this.doors.f >= CONFIG.tram.walk.doorOpen && Math.abs(this.v) <= CONFIG.tram.drive.boardSpeed; }
+  // module qui porte l'abscisse u (avatars des coéquipiers debout)
+  moduleAt(u) { return clamp(Math.floor((u + this.L / 2) / this.M), 0, this.n - 1); }
+  moduleU(i) { return -this.L / 2 + this.M / 2 + i * this.M; }
 
   // point local d'un module (repère « groupe » : x droite, y haut, z arrière) -> monde
   localToWorld(modIdx, p, out) {
@@ -328,7 +341,7 @@ export class Tram {
   // Joueur local à pied touché par une rame rapide (chaque machine règle son propre joueur : jamais mortel)
   hitPlayers(dt) {
     const g = this.game, p = g.player, H = CONFIG.tram.hit;
-    if (p.vehicle || p.downed || p.dead) return;
+    if (p.vehicle || p.onTram || p.downed || p.dead) return; // (debout dans la rame : solidaire d'elle, jamais heurté)
     if (Math.abs(this.v) < H.playerSpeed) return;
     for (const m of this.mods) {
       const dx = p.pos.x - m.pose.x, dz = p.pos.z - m.pose.z;
@@ -396,6 +409,7 @@ export function installTram(game, { world, hud, sfx, scene }) {
       this.trams.push(t);
       world.trams = this.trams;
       world.shield = (target, z) => this.tramShield(target, z);
+      world.tramGoal = (target, z) => this.tramGoal(target, z);
       world.lure = null;
       for (const g of info.gates) (gatesBy[g.line] ||= []).push(g);
       info.setPowered?.(false);
@@ -423,6 +437,9 @@ export function installTram(game, { world, hud, sfx, scene }) {
     nearTram() {
       const p = this.player;
       if (p.vehicle || p.downed || p.dead) return null;
+      if (p.onTram) return this.nearSeatInside(); // debout dans la rame : un siège libre à portée
+      const door = this.nearOpenDoor(); // porte ouverte : on monte à pied
+      if (door) return door;
       let best = null;
       for (const t of this.trams) {
         if (!t.usable || Math.abs(t.v) > T.drive.boardSpeed) continue;
@@ -432,7 +449,7 @@ export function installTram(game, { world, hud, sfx, scene }) {
           dBody = Math.min(dBody, Math.hypot(Math.max(0, Math.abs(lx) - HDF.tram.body / 2), Math.max(0, Math.abs(lz) - HDF.tram.width / 2)));
         }
         if (dBody > 2.2) continue;
-        // bouts : à moins de 4 m du nez, la cabine (si libre) ; sinon la place de passager libre la plus proche
+        // portes fermées : directement à une place. Bouts : à moins de 4 m du nez, la cabine (si libre) ; sinon la place de passager libre la plus proche
         let seat = -1, bd = Infinity;
         for (const [cab, mi] of [[0, t.n - 1], [1, 0]]) {
           if (t.seats[cab] != null) continue;
@@ -454,8 +471,11 @@ export function installTram(game, { world, hud, sfx, scene }) {
       return best;
     },
     tramPrompt(nv) {
-      const t = nv.v, seat = nv.seat, role = t.isDriver(seat) ? ` — conducteur (cabine ${seat === 0 ? 'avant' : 'arrière'})` : ' — passager';
+      const t = nv.v, seat = nv.seat;
+      if (nv.foot) return `${tag('interact')} Monter dans le tram (porte ouverte, PV ${Math.round(t.hpFrac * 100)} %)`;
+      const role = t.isDriver(seat) ? ` — conducteur (cabine ${seat === 0 ? 'avant' : 'arrière'})` : ' — passager';
       const power = this.tramPowered ? '' : ' · hors tension';
+      if (nv.sit) return `${tag('interact')} S'asseoir${role}${power}`;
       return `${tag('interact')} Monter dans le tram${role} (PV ${Math.round(t.hpFrac * 100)} %${power})`;
     },
 
@@ -464,15 +484,15 @@ export function installTram(game, { world, hud, sfx, scene }) {
       const B = game.binds;
       if (t.isDriver(seat)) {
         const pw = this.tramPowered ? '' : ` · HORS TENSION : sous-station de l'Homme de Fer`;
-        return [`TRAM — conducteur${pw}`, `${B.moveLabel()} : conduire · ${B.label('jump')} : frein d'urgence · ${B.label('tramDoors')} : portes · ${B.label('tramGong')} : gong · ${B.label('vehicleView')} : vue`];
+        return [`TRAM — conducteur${pw}`, `${B.moveLabel()} : conduire · ${B.label('jump')} : frein d'urgence · ${B.label('tramDoors')} : portes · ${B.label('tramGong')} : gong · ${B.label('vehicleView')} : vue · ${B.label('interact')} : se lever`];
       }
-      return ['TRAM — passager', `Vous êtes assis : tirez ! · ${B.label('tramGong')} : gong · ${B.label('vehicleView')} : vue · ${B.label('interact')} : descendre (rame à l'arrêt)`];
+      return ['TRAM — passager', `Vous êtes assis : tirez ! · ${B.label('tramGong')} : gong · ${B.label('vehicleView')} : vue · ${B.label('interact')} : se lever`];
     },
     tramRideHint(t, seat) {
       const B = game.binds, kE = tag('interact');
-      if (t.state !== 'ok') return `${kE} Descendre (rame hors service)`;
-      if (t.isDriver(seat)) return `${kE} Descendre · ${tag('tramDoors')} portes ${t.doors.open ? '(ouvertes)' : '(fermées)'} · ${tag('tramGong')} gong · ${tag('jump')} frein d'urgence`;
-      return `${kE} Descendre · clic gauche : tirer · ${tag('tramGong')} gong`;
+      if (t.state !== 'ok') return `${kE} Se lever (rame hors service)`;
+      if (t.isDriver(seat)) return `${kE} Se lever · ${tag('tramDoors')} portes ${t.doors.open ? '(ouvertes)' : '(fermées)'} · ${tag('tramGong')} gong · ${tag('jump')} frein d'urgence`;
+      return `${kE} Se lever · clic gauche : tirer · ${tag('tramGong')} gong`;
     },
 
     // ----------------------------------------------------------- sous-station (2000 pts, une fois pour l'équipe)
@@ -508,9 +528,8 @@ export function installTram(game, { world, hud, sfx, scene }) {
 
     // ----------------------------------------------------------- gong, portes (touches en rame)
     tramGong() {
-      const rv = this.player.vehicle;
-      if (!rv?.v.isTram) return;
-      const t = rv.v;
+      const rv = this.player.vehicle, t = rv?.v.isTram ? rv.v : this.player.onTram?.v;
+      if (!t) return;
       if (t.gongCd > 0) return;
       t.gongCd = T.gong.cooldown;
       sfx.tramGong?.(1);
@@ -518,24 +537,18 @@ export function installTram(game, { world, hud, sfx, scene }) {
       else { this.setLure(t); if (this.isMultiplayer) this.net?.send({ t: 't_gong_fx', id: t.id }); }
     },
     setLure(t) { world.lure = { x: t.pos.x, z: t.pos.z, t: T.gong.duration, range: T.gong.range }; },
+    // Touche des portes : le conducteur (assis) ; sinon, quand personne ne conduit, n'importe quel occupant (assis ou debout), via l'hôte
     tramDoors() {
-      const rv = this.player.vehicle;
-      if (!rv?.v.isTram || !rv.v.isDriver(rv.seat)) return;
-      rv.v.toggleDoors();
+      const p = this.player, rv = p.vehicle, t = rv?.v.isTram ? rv.v : p.onTram?.v;
+      if (!t) return;
+      if (rv && rv.v.isDriver(rv.seat)) { t.toggleDoors(); return; }
+      if (t.hasDriver) { sfx.deny(); hud.announce('PORTES', 'Le conducteur commande les portes', 1500); return; }
+      if (this.isClient) {
+        if (Math.abs(t.v) > T.drive.doorSpeed) { sfx.deny(); return; }
+        this.net?.send({ t: 't_doors', id: t.id });
+      } else t.toggleDoors();
     },
-    // coup de zombie sur un occupant de la rame (hôte) : la caisse l'encaisse, sauf devant une porte ouverte (voir zombie.js)
-    tramShield(target, z) {
-      const rv = target === this.player ? this.player.vehicle : target?.ride;
-      if (!rv?.v?.isTram) return false;
-      const t = rv.v;
-      if (t.doors.f > 0.4) {
-        for (const d of t.doorSpots) {
-          t.localToWorld(d.module, [d.side * (HDF.tram.width / 2), 0, -d.x], tmpW);
-          if (Math.hypot(z.pos.x - tmpW.x, z.pos.z - tmpW.z) < 1.9) return false; // à une porte ouverte : le passager est touché
-        }
-      }
-      return true;
-    },
+    // (coup de zombie sur un occupant de la rame : tramShield, voir tramInterior.js)
 
     // ----------------------------------------------------------- PV : l'hôte écrit (damageVehicle), pas de feu ni d'explosion
     hostBreakTram(t) {
@@ -560,6 +573,10 @@ export function installTram(game, { world, hud, sfx, scene }) {
         const me = myId();
         if (t.seats[0] === me || t.seats[1] === me) return; // je conduis : je suis la source
         t.net = { s: +m.s, v: +m.v, d: m.d ? 1 : 0, t: 0 };
+      });
+      net.on('t_doors', (m) => { // un occupant sans conducteur demande l'ouverture ou la fermeture des portes : l'hôte décide
+        const t = this.rideById(m.id);
+        if (this.isHost && t?.isTram && !t.hasDriver) t.toggleDoors();
       });
       net.on('t_gong', (m) => {
         const t = this.rideById(m.id);

@@ -19,6 +19,7 @@ import { makeTeddy } from './machines.js';
 import { installMachineFx } from './machineFx.js';
 import { installVehicles } from './vehicles.js';
 import { installTram } from './tram.js';
+import { installTramWalk } from './tramInterior.js';
 import { wreckMaterial } from './vehicleModels.js';
 import { installLauncher } from './launcher.js';
 import { makeDisplay } from './weaponDisplay.js';
@@ -27,6 +28,7 @@ import { installDebugMenu } from './debugMenu.js';
 import { installUnstick } from './unstick.js';
 import { installKeybinds } from './keybinds.js';
 import { installKeysMenu } from './keysMenu.js';
+const r2 = (v) => Math.round(v * 100) / 100;
 
 document.getElementById('version').textContent = __GAME_VERSION__;
 // Version du jeu (« v0.27.0 », sans le commit ni la date) : jointe au message `join`, et comparée à celle de l'hôte dans `sync`.
@@ -569,7 +571,7 @@ const game = {
 
     // 5) Moto ou rame : monter (avant la porte : les motos sont posées loin des portes)
     const nv = this.nearVehicle();
-    if (nv) { this.tryMount(nv.v, nv.seat); return; }
+    if (nv) { if (nv.foot) this.boardTramOnFoot(nv); else this.tryMount(nv.v, nv.seat); return; }
 
     // 6) Porte payante
     const door = this.nearDoor();
@@ -704,9 +706,9 @@ const game = {
     mesh.position.copy(origin);
     mesh.castShadow = true;
     scene.add(mesh);
-    this.grenadesLive.push({ mesh, pos: origin.clone(), vel: vel.clone(), t: CONFIG.grenade.fuse, mine, owner: mine ? null : fromPid });
+    this.grenadesLive.push({ mesh, pos: origin.clone(), vel: vel.clone(), t: CONFIG.grenade.fuse, mine, owner: mine ? null : fromPid, tram: mine ? this.player.onTram?.v || null : null }); // tram : lancée de l'intérieur d'une rame (v0.40.0) : elle ignore la caisse et rebondit sur le plancher
     if (mine && this.isMultiplayer) {
-      this.net?.send({ t: 'nade', o: { x: origin.x, y: origin.y, z: origin.z }, v: { x: vel.x, y: vel.y, z: vel.z } });
+      this.net?.send({ t: 'nade', o: { x: origin.x, y: origin.y, z: origin.z }, v: { x: vel.x, y: vel.y, z: vel.z }, tr: this.player.onTram ? this.player.onTram.v.id : undefined });
     }
   },
 
@@ -720,14 +722,15 @@ const game = {
       g.pos.addScaledVector(g.vel, dt);
       // rebonds sur les murs : on se sert de la collision du monde pour trouver la normale
       const pushed = g.pos.clone();
-      world.collide(pushed, 0.12);
+      world.collide(pushed, 0.12, null, g.tram ? 'tram' + g.tram.id : null);
       const nx = pushed.x - g.pos.x, nz = pushed.z - g.pos.z, l = Math.hypot(nx, nz);
       if (l > 1e-4) {
         const ux = nx / l, uz = nz / l, dot = g.vel.x * ux + g.vel.z * uz;
         if (dot < 0) { g.vel.x -= 1.6 * dot * ux; g.vel.z -= 1.6 * dot * uz; }
         g.pos.x = pushed.x; g.pos.z = pushed.z;
       }
-      const gy = world.floorAt ? world.floorAt(g.pos.x, g.pos.z, g.pos.y + 0.3, this._gfl || (this._gfl = { y: 0, region: 0 })).y + 0.09 : 0.09;
+      let gy = world.floorAt ? world.floorAt(g.pos.x, g.pos.z, g.pos.y + 0.3, this._gfl || (this._gfl = { y: 0, region: 0 })).y + 0.09 : 0.09;
+      if (g.tram && g.pos.y > 0.2) { const tl = g.tram.worldToWalk(g.pos.x, g.pos.z, this._gtl || (this._gtl = { u: 0, w: 0 })); if (Math.abs(tl.w) < 1.15 && Math.abs(tl.u) < g.tram.interior.uEnd) gy = CONFIG.tram.car.floor + 0.09; } // plancher de la rame
       if (g.pos.y < gy) { g.pos.y = gy; g.vel.y = Math.abs(g.vel.y) * 0.35; g.vel.x *= 0.6; g.vel.z *= 0.6; if (g.vel.y < 0.6) g.vel.y = 0; }
       g.mesh.position.copy(g.pos);
       g.mesh.rotation.x += dt * 8;
@@ -1068,6 +1071,7 @@ const game = {
       bo: p.downed && !p.dead ? Math.ceil(p.bleedout) : 0,         // secondes avant la mort (à terre)
       rv: this.reviveTarget ? this.reviveTarget.id : null,          // coéquipier que je suis en train de réanimer
       rvl: this.reviveTarget ? Math.round((this.reviveTime() - this.reviveTimer) * 10) / 10 : 0,
+      ...(p.onTram ? { vh: p.onTram.v.id, lx: r2(p.onTram.w), ly: r2(p.onTram.y), lz: r2(-p.onTram.u), lyw: r2(Math.atan2(Math.sin(p.yaw - p.onTram.fy), Math.cos(p.yaw - p.onTram.fy))) } : null), // debout dans une rame (v0.40.0) : position dans le repère de la rame (lx : à droite, ly : hauteur, lz : vers l'arrière) et cap relatif
     });
   },
 
@@ -1391,6 +1395,7 @@ const game = {
       const to = here === d.a ? d.b : here === d.b ? d.a : d.toZone; // la zone de l'autre côté de la barrière
       promptText = `${game.binds.tag('interact')} Ouvrir la porte vers ${world.zoneNames[to]} (${this.freeDoors ? 'gratuit' : `${d.price} pts`})`;
     }
+    if (!promptText && p.onTram && !p.vehicle) promptText = this.tramWalkHint(p.onTram.v); // debout dans la rame
     const fanalPrompt = this.fanalPrompt?.();
     if (fanalPrompt && !p.vehicle) promptText = fanalPrompt;
     if (!promptText && p.vaultReady && !p.vault) promptText = `${game.binds.tag('jump')} Enjamber`;
@@ -1410,6 +1415,8 @@ installSummit(game, { world, scene, hud, sfx, fx, hemi, moon, moonOffset: MOON_O
 installFinale(game, { world, scene, hud, sfx, fx });
 installVehicles(game, { world, scene, hud, sfx });
 installTram(game, { world, scene, hud, sfx });
+installTramWalk(game, { world, hud, sfx }); // intérieur praticable de la rame (v0.40.0)
+RemotePlayer.rideOf = (id) => game.rideById(id); // coéquipiers debout dans une rame : leur position est dans le repère de la rame
 installLauncher(game, { world, scene, fx });
 installDebugMenu(game, { world, hud, sfx });
 installUnstick(game, { world, hud, sfx });
@@ -1651,7 +1658,7 @@ function setupNetworkHandlers(net) {
   net.on('nade', (m) => {
     const o = new THREE.Vector3(m.o.x, m.o.y, m.o.z), v = new THREE.Vector3(m.v.x, m.v.y, m.v.z);
     if (m.k === 'm79') game.launchShell(o, v, false, m.from, m.pap | 0); // projectile de M79 ; sans k : grenade à main
-    else game.throwGrenade(o, v, false, m.from);
+    else { game.throwGrenade(o, v, false, m.from); if (m.tr != null) { const t = game.rideById(m.tr | 0); if (t?.isTram) game.grenadesLive[game.grenadesLive.length - 1].tram = t; } } // lancée de l'intérieur d'une rame
   });
   // Fin de partie
   net.on('finale_req', () => { if (game.isHost && !game.finale && !game.finaleDone && game.finaleReady()) game.startFinale(); }); // l'hôte revalide : manche et quartiers ouverts

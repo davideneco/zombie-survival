@@ -80,6 +80,8 @@ export class RemotePlayer {
     this.fireNext = false;
     this.vel = new THREE.Vector3();
     this.ride = null; // { v, seat } quand il est assis sur une moto
+    this.tr = null;   // { id, u, w, y, yw } debout dans une rame (v0.40.0) : repère de la rame (voir tramInterior.js), reçu dans p_state (vh, lz, lx, ly, lyw)
+    this.trL = null;  // position lissée dans ce repère { t (rame), u, w, y, yw, mod }
 
     this.avatar = new Avatar(charOf(slot));
     this.group = new THREE.Group();
@@ -128,6 +130,7 @@ export class RemotePlayer {
     this.bo = s.bo | 0;                  // secondes avant la mort (à terre)
     this.rv = s.rv ?? null;              // identifiant du joueur qu'il est en train de réanimer
     this.rvl = +s.rvl || 0;              // secondes restantes de cette réanimation
+    this.tr = s.vh != null ? { id: s.vh | 0, u: -(+s.lz || 0), w: +s.lx || 0, y: +s.ly || 0, yw: +s.lyw || 0 } : null; // debout dans une rame
   }
 
   hurt(amount, kx = 0, kz = 0, src = null) { this.net.send({ t: 'hurt', amount, kx, kz, src }, this.id); } // src : 'blast' | 'crash' | absent (coup)
@@ -164,17 +167,36 @@ export class RemotePlayer {
     }
     const k = Math.min(1, dt * 12);
     const px = this.pos.x, pz = this.pos.z;
-    this.pos.lerp(this.tpos, k);
-    let d = this.tyaw - this.yaw;
-    d = Math.atan2(Math.sin(d), Math.cos(d));
-    this.yaw += d * k;
-    this.group.position.copy(this.pos);
-    this.group.rotation.y = this.yaw;
-    // vitesse réelle (m/s) et sens par rapport à l'avant du personnage
-    const vx = (this.pos.x - px) / Math.max(dt, 1e-3), vz = (this.pos.z - pz) / Math.max(dt, 1e-3);
+    const tram = this.tr ? RemotePlayer.rideOf?.(this.tr.id) : null;
+    let ya, vx, vz; // ya : cap du personnage dans son repère (celui de la rame pour un passager debout)
+    if (tram?.isTram) { // debout dans une rame : le personnage est un enfant du module qui le porte (il suit la rame sans glisser) ; vitesse et sens de marche mesurés dans la rame
+      const T = this.tr, L = this.trL && this.trL.t === tram ? this.trL : (this.trL = { t: tram, u: T.u, w: T.w, y: T.y, yw: T.yw, mod: -1 });
+      const pu = L.u, pw = L.w;
+      L.u += (T.u - L.u) * k; L.w += (T.w - L.w) * k; L.y += (T.y - L.y) * k;
+      L.yw += Math.atan2(Math.sin(T.yw - L.yw), Math.cos(T.yw - L.yw)) * k;
+      const mi = tram.moduleAt(L.u);
+      if (L.mod !== mi || this.group.parent !== tram.mods[mi].g) { tram.mods[mi].g.add(this.group); L.mod = mi; }
+      this.group.position.set(L.w, L.y, -(L.u - tram.moduleU(mi)));
+      this.group.rotation.y = L.yw;
+      tram.walkToWorld(L.u, L.w, L.y, this.pos); // position monde (zombies, repères)
+      this.yaw = L.yw + tram.frame(L.u, this._tf || (this._tf = {})).yaw;
+      vx = (L.w - pw) / Math.max(dt, 1e-3); vz = -(L.u - pu) / Math.max(dt, 1e-3); // repère du module : x à droite, z vers l'arrière
+      ya = L.yw;
+    } else {
+      if (this.trL) { this.trL = null; if (this.group.parent !== this.scene) { this.group.parent?.remove(this.group); this.scene.add(this.group); } this.pos.copy(this.tpos); } // il est descendu
+      this.pos.lerp(this.tpos, k);
+      let d = this.tyaw - this.yaw;
+      d = Math.atan2(Math.sin(d), Math.cos(d));
+      this.yaw += d * k;
+      this.group.position.copy(this.pos);
+      this.group.rotation.y = this.yaw;
+      // vitesse réelle (m/s) et sens par rapport à l'avant du personnage
+      vx = (this.pos.x - px) / Math.max(dt, 1e-3); vz = (this.pos.z - pz) / Math.max(dt, 1e-3);
+      ya = this.yaw;
+    }
     this.vel.x += (vx - this.vel.x) * Math.min(1, dt * 8); this.vel.z += (vz - this.vel.z) * Math.min(1, dt * 8);
     const speed = Math.hypot(this.vel.x, this.vel.z);
-    const fwd = -(this.vel.x * Math.sin(this.yaw) + this.vel.z * Math.cos(this.yaw)); // -z = avant
+    const fwd = -(this.vel.x * Math.sin(ya) + this.vel.z * Math.cos(ya)); // -z = avant
     const isDown = this.downed || this.dead;
     this.avatar.setWeapon(this.weapon, this.pap);
     this.avatar.update({ dt, speed: isDown ? 0 : speed, fwd, pitch: this.pitch, reloading: this.reloading, aiming: this.aiming, fire: this.fireNext });
@@ -227,7 +249,7 @@ export class RemotePlayer {
   }
 
   dispose() {
-    this.scene.remove(this.group);
+    this.group.parent?.remove(this.group); // (dans une rame : enfant d'un module)
     this.scene.remove(this.mark); this.scene.remove(this.bleed);
     for (const sp of [this.tag, this.mark, this.bleed]) { sp.material.map.dispose(); sp.material.dispose(); }
   }

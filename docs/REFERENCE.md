@@ -1,6 +1,6 @@
 # Zombie Survival — fiche de référence
 
-Version du jeu : **v0.39.0 · 7fff467 · 2026-10-10** (package 0.39.0). Générée automatiquement par `node tools/make-docs.mjs` à partir de `src/config.js` et du jeu.
+Version du jeu : **v0.40.0 · 48fe705 · 2026-10-10** (package 0.40.0). Générée automatiquement par `node tools/make-docs.mjs` à partir de `src/config.js` et du jeu.
 Carte annotée : [carte.png](carte.png). Armes de profil : [armes.png](armes.png). Les mêmes tableaux en tableur : dossier [csv/](csv/).
 
 Pour demander une modification, citez la ligne (ex. « Mitrailleuse RPK : chargeur 100 », « Mastodonte à 3000 pts », « porte P3 à 500 pts », « mettre la boîte mystère dans la zone Temple-Neuf »).
@@ -510,8 +510,8 @@ Prix d'une porte : le plus cher des deux prix de zone (colonne « Prix de la por
 | Réglage | Valeur | Remarque |
 |---|---|---|
 | Rame | 5 modules de 4,7 m (23,5 m), 2,4 x 3,4 m, plancher à 0,32 m | articulés : chaque module suit la voie ; cabine à chaque bout ; 4 portes de 1,3 m par côté |
-| Places | 16 : 2 de conducteur (une par cabine) + 14 de passagers assis | les passagers tirent normalement (comme sur la grosse moto) ; la place de conducteur se prend près d'un bout de la rame, les autres près de la caisse |
-| Montée / descente | E, à moins de 1,5 m/s | en rame, l'invite rappelle les touches ; descendre en marche est refusé |
+| Places | 16 : 2 de conducteur (une par cabine) + 14 de passagers assis | les passagers tirent normalement (comme sur la grosse moto) ; portes fermées, la place de conducteur se prend près d'un bout de la rame, les autres près de la caisse (voir l'intérieur praticable ci-dessous) |
+| Montée / descente | E ou marcher contre une porte ouverte (rame à moins de 1,5 m/s) | à pied par les portes ouvertes ; assis, on se lève dans la rame ; descendre en marche est refusé |
 | Conduite | W accélérer · S frein de service (puis marche arrière) · Espace frein d'urgence | touches modifiables dans Options > Touches ; conducteur de la cabine arrière : la rame roule dans l'autre sens |
 | Vitesse max | 14 m/s (50 km/h) ; marche arrière 4 m/s | accélération 1,3 m/s² (qui faiblit près du maximum), résistance 0,2 m/s² |
 | Freinage | service 1,8 m/s² · urgence 3 m/s² |  |
@@ -524,7 +524,21 @@ Prix d'une porte : le plus cher des deux prix de zone (colonne « Prix de la por
 | PV | 3000 | coup de zombie sur la caisse : 2 PV ; passagers touchés seulement devant une porte ouverte ; à 0 PV : hors service, retour au dépôt 2 manches plus tard |
 | Joueur à pied heurté | repoussé ; 10 dégâts au-dessus de 5 m/s | jamais mortel (il reste 1 PV) |
 | Zombie heurté | au-dessus de 3 m/s : 40 x vitesse (560 à la vitesse max) ; en dessous : aucun dégât, il bloque la rame | la rame ne ralentit pas ; un coup toutes les 0.5 s au même zombie |
-| Obstacles | une boîte orientée par module, obstacles dynamiques de Collision (setDynamic) | les joueurs, les zombies et les motos sont repoussés ; les balles traversent |
+| Obstacles | une boîte orientée par module, obstacles dynamiques de Collision (setDynamic) | les joueurs à pied, les zombies et les motos sont repoussés ; les balles traversent |
+
+## Tram : l'intérieur praticable (on marche dans la rame, même quand elle roule)
+
+| Réglage | Valeur | Remarque |
+|---|---|---|
+| Repère de la rame | u le long de la rame (+ vers l'avant), w à droite, y hauteur des pieds | le joueur debout est un point (u, w) de la voie à l'abscisse s + u : il suit la rame sans glisser, modules articulés compris ; réseau : p_state porte vh (identifiant de la rame), lx = w, ly = y, lz = -u, lyw (cap relatif) |
+| Collision locale | cercle de 0,3 m contre des boîtes (sièges, pupitres, bouts, parois à 1,15 m de l'axe) | allée entre les banquettes étroite ; plancher à 0,32 m ; pas de saut ni d'enjambement dans la rame |
+| Monter à pied | rame à moins de 1,5 m/s, portes ouvertes à plus de 60 % | pousser contre une porte ouverte (à moins de 1,78 m de l'axe) ou E à moins de 2,4 m d'une porte |
+| Descendre à pied | dépasser 1,45 m de l'axe dans une ouverture | refusé tant que la rame roule (message « TRAM EN MARCHE ») ; les portes ne s'ouvrent qu'à l'arrêt |
+| S'asseoir / se lever | E à moins de 1,35 m d'un siège libre ; E assis : on se lève dans la rame | conducteur ou passager ; les coéquipiers voient l'avatar assis ou debout |
+| Portes (touche) | O : conducteur ; sinon, quand personne ne conduit, n'importe quel occupant (via l'hôte) | H : gong depuis l'intérieur aussi |
+| Zombies | ne rentrent pas dans la rame et ne la traversent pas | une porte ouverte les attire (ils se massent devant, à 0,55 m de la caisse) ; ils frappent le joueur à moins de 1,3 m ; ailleurs la caisse encaisse (2 PV) |
+| Tir, grenades, couteau, réanimation | comme à pied | la grenade garde la vitesse de la rame, ignore la caisse et rebondit sur le plancher ; pas de fente du couteau |
+| Menu debug (F9), déblocage | F9 : l'hôte rejoint un coéquipier debout dans la rame (repère local) ; K : replace dans l'allée | un joueur téléporté sort de la rame |
 
 ## Motos (deux parkings au panneau bleu « P », avec chacun une borne plein + réparation : place Gutenberg, 2 motos ; place Broglie, 1 moto)
 

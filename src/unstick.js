@@ -78,6 +78,18 @@ export function installUnstick(game, { world, hud, sfx }) {
   st.trigger = () => {
     const p = game.player;
     if (st.cool > 0 || p.vehicle || p.downed || p.dead || p.region) return false;
+    if (p.onTram) { // coincé dans une rame : on est reposé dans l'allée, au plus près (repère local de la rame, jamais hors de la caisse)
+      const O = p.onTram, from = { u: +O.u.toFixed(2), w: +O.w.toFixed(2) };
+      game.placeInTram(O.v, O.u, 0);
+      st.cool = U.cooldown; st.stuck = false; st.t = 0; st.trapT = 0; st.holdT = 0; st.ref.x = p.pos.x; st.ref.z = p.pos.z;
+      const line = `${game.time.toFixed(0)} s : débloqué dans la rame (u ${from.u} ; w ${from.w}) vers l'allée`;
+      st.log.push(line); if (st.log.length > 50) st.log.shift();
+      console.info('[UNSTICK]', line);
+      game.debugMenu?.say?.(line);
+      hud.announce('DÉBLOQUÉ', 'Replacé dans l\'allée de la rame', 2200);
+      sfx.vault?.();
+      return true;
+    }
     const spot = st.findSpot(p.pos.x, p.pos.z);
     if (!spot) return false;
     const from = { x: +p.pos.x.toFixed(2), z: +p.pos.z.toFixed(2) };
@@ -107,7 +119,7 @@ export function installUnstick(game, { world, hud, sfx }) {
     st.trapCheck -= dt;
     if (st.trapCheck <= 0) {
       st.trapCheck = 0.5;
-      const main = st.main(), l = st.labelAt(p.pos.x, p.pos.z), n = nav();
+      const main = st.main(), l = p.onTram ? main : st.labelAt(p.pos.x, p.pos.z), n = nav(); // (debout dans une rame : pas de poche de la grille)
       // seules les petites poches comptent : l'intérieur de la cathédrale, par exemple, forme de grandes composantes séparées de la ville
       const small = l !== main && (l === 0 || n.components().sizes[l] * n.cell * n.cell < U.pocketMaxArea);
       st.trapT = small ? st.trapT + 0.5 : 0;

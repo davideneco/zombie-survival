@@ -80,6 +80,7 @@ export class Player {
     this.region = 0; this.wasGrounded = true;
     this.airT = 0; this.peakY = 0; this.jumpSprint = false; this.flopCd = 0; // PHD Flopper (plongeon)
     this.vehicle = null; // { v, seat } quand on est sur une moto
+    this.onTram = null;  // { v, u, w, y, fy } debout dans une rame (v0.40.0, voir tramInterior.js) : position en repère local de la rame
     this.meleeT = -1; this.meleeHit = true; this.nextMelee = 0; this.lunge = null; // couteau (voir melee)
     this.hasAxe = false; this.pullQ = null; this.gustQ = null; // Hache du Bourreau (récompense de la finale) ; attirance des Chaînes
     this.vault = null; this.vaultCd = 0; this.vaultReady = false; // enjambement (voir tryVault)
@@ -230,6 +231,8 @@ export class Player {
         else if (B.is('tramGong', e)) this.game.tramGong?.();
         else if (B.is('tramDoors', e)) this.game.tramDoors?.();
       }
+      else if (this.onTram && B.is('tramGong', e)) this.game.tramGong?.(); // debout dans la rame : gong et portes aussi
+      else if (this.onTram && B.is('tramDoors', e)) this.game.tramDoors?.();
       else if (B.is('knife', e)) this.melee(this.game.time); // à pied : couteau
       if (B.isBound(e)) e.preventDefault(); // Espace (défilement), Tab, flèches : le navigateur ne doit pas réagir à une touche du jeu
       if (this.locked) return; // arme dans le Pack-a-Punch
@@ -382,46 +385,51 @@ export class Player {
       const k = Math.min(1, dt * 12);
       this.vel.x += (wx - this.vel.x) * k;
       this.vel.z += (wz - this.vel.z) * k;
-      this.pos.x += this.vel.x * dt;
-      this.pos.z += this.vel.z * dt;
-      if (this.gustQ) { // rafale de la rampe de la flèche (Acte V) : vitesse imposée pendant gustQ.t s (la collision, donc les garde-corps, la borne)
-        const q = this.gustQ;
-        this.pos.x += q.x * Math.min(dt, q.t); this.pos.z += q.z * Math.min(dt, q.t); q.t -= dt;
-        if (q.t <= 0) this.gustQ = null;
-      }
-      if (this.pullQ) { // attiré par les Chaînes du Bourreau : déplacement imposé sur pullQ.T s (la collision le borne)
-        const q = this.pullQ, k = Math.min(dt, q.t) / q.T;
-        this.pos.x += q.x * k; this.pos.z += q.z * k; q.t -= dt;
-        if (q.t <= 0) this.pullQ = null;
-      }
+      if (this.onTram) { // debout dans une rame : déplacement, collisions et position monde viennent du repère local de la rame
+        this.game.tramWalkStep(this, dt);
+        this.region = 0; this.wasGrounded = true; this.airT = 0; this.jumpSprint = false; this.vy = 0;
+      } else {
+        this.pos.x += this.vel.x * dt;
+        this.pos.z += this.vel.z * dt;
+        if (this.gustQ) { // rafale de la rampe de la flèche (Acte V) : vitesse imposée pendant gustQ.t s (la collision, donc les garde-corps, la borne)
+          const q = this.gustQ;
+          this.pos.x += q.x * Math.min(dt, q.t); this.pos.z += q.z * Math.min(dt, q.t); q.t -= dt;
+          if (q.t <= 0) this.gustQ = null;
+        }
+        if (this.pullQ) { // attiré par les Chaînes du Bourreau : déplacement imposé sur pullQ.T s (la collision le borne)
+          const q = this.pullQ, k = Math.min(dt, q.t) / q.T;
+          this.pos.x += q.x * k; this.pos.z += q.z * k; q.t -= dt;
+          if (q.t <= 0) this.pullQ = null;
+        }
 
-      // ---- saut / gravité (sol = niveau 0, ou balcon / escalier / plateforme sous les pieds) ----
-      const fl = this._fl || (this._fl = { y: 0, region: 0 });
-      if (this.world.floorAt) this.world.floorAt(this.pos.x, this.pos.z, this.pos.y, fl); else { fl.y = 0; fl.region = 0; }
-      const ground = fl.y;
-      onGround = this.pos.y <= ground + 0.02 && this.vy <= 0.5;
-      this.vaultCd = Math.max(0, this.vaultCd - dt);
-      this.vaultReady = onGround && !this.vault && !this.downed && !this.dead && !this.locked && this.vaultCd <= 0 && !!this.checkVault();
-      if (B.down('jump', K) && onGround && !this.downed && !this.vault && !this.game.camLock) {
-        if (this.vaultReady && this.startVault()) { /* enjambement : pas de saut */ }
-        else { this.vy = P.jumpSpeed; this.jumpSprint = sprinting; } // saut lancé en sprint : plongeon possible (PHD Flopper)
-      }
-      this.vy -= P.gravity * dt;
-      this.pos.y += this.vy * dt;
-      if (this.pos.y <= ground) { this.pos.y = ground; this.vy = 0; }
-      else if (this.wasGrounded && this.vy <= 0 && this.pos.y - ground < 0.45) { this.pos.y = ground; this.vy = 0; } // on colle à la pente en descendant
-      this.wasGrounded = this.pos.y <= ground + 0.02;
-      this.region = fl.region;
+        // ---- saut / gravité (sol = niveau 0, ou balcon / escalier / plateforme sous les pieds) ----
+        const fl = this._fl || (this._fl = { y: 0, region: 0 });
+        if (this.world.floorAt) this.world.floorAt(this.pos.x, this.pos.z, this.pos.y, fl); else { fl.y = 0; fl.region = 0; }
+        const ground = fl.y;
+        onGround = this.pos.y <= ground + 0.02 && this.vy <= 0.5;
+        this.vaultCd = Math.max(0, this.vaultCd - dt);
+        this.vaultReady = onGround && !this.vault && !this.downed && !this.dead && !this.locked && this.vaultCd <= 0 && !!this.checkVault();
+        if (B.down('jump', K) && onGround && !this.downed && !this.vault && !this.game.camLock) {
+          if (this.vaultReady && this.startVault()) { /* enjambement : pas de saut */ }
+          else { this.vy = P.jumpSpeed; this.jumpSprint = sprinting; } // saut lancé en sprint : plongeon possible (PHD Flopper)
+        }
+        this.vy -= P.gravity * dt;
+        this.pos.y += this.vy * dt;
+        if (this.pos.y <= ground) { this.pos.y = ground; this.vy = 0; }
+        else if (this.wasGrounded && this.vy <= 0 && this.pos.y - ground < 0.45) { this.pos.y = ground; this.vy = 0; } // on colle à la pente en descendant
+        this.wasGrounded = this.pos.y <= ground + 0.02;
+        this.region = fl.region;
 
-      // ---- PHD Flopper : temps en l'air, hauteur de chute ; à l'atterrissage, onde explosive (voir onLand)
-      if (!this.wasGrounded) { this.airT += dt; this.peakY = Math.max(this.peakY, this.pos.y); }
-      else {
-        if (this.airT > 0) this.onLand(this.airT, this.peakY - ground);
-        this.airT = 0; this.peakY = ground; this.jumpSprint = false;
-      }
+        // ---- PHD Flopper : temps en l'air, hauteur de chute ; à l'atterrissage, onde explosive (voir onLand)
+        if (!this.wasGrounded) { this.airT += dt; this.peakY = Math.max(this.peakY, this.pos.y); }
+        else {
+          if (this.airT > 0) this.onLand(this.airT, this.peakY - ground);
+          this.airT = 0; this.peakY = ground; this.jumpSprint = false;
+        }
 
-      if (this.vault) this.stepVault(dt); // chemin imposé : pas de collision (on passe par-dessus l'obstacle)
-      else this.world.collide(this.pos, P.radius);
+        if (this.vault) this.stepVault(dt); // chemin imposé : pas de collision (on passe par-dessus l'obstacle)
+        else this.world.collide(this.pos, P.radius);
+      }
     }
 
     this.flopCd = Math.max(0, this.flopCd - dt);
@@ -631,7 +639,7 @@ export class Player {
         const dx = z.pos.x - this.pos.x, dz = z.pos.z - this.pos.z, d = Math.hypot(dx, dz);
         if (d < bd && (dx * fx + dz * fz) / (d || 1) > 0.6) { bd = d; best = z; }
       }
-      if (best) this.lunge = { left: Math.min(K.lunge, Math.max(0, bd - 0.9)), fx, fz };
+      if (best && !this.onTram) this.lunge = { left: Math.min(K.lunge, Math.max(0, bd - 0.9)), fx, fz }; // (pas de fente dans une rame : la position vient du repère local)
     }
     return true;
   }
@@ -862,6 +870,7 @@ export class Player {
     // vue externe : la grenade part de l'œil du pilote (pas de la caméra, 3 m derrière)
     const o = (this.ride.external ? this.ride.eyeOrigin(this.vehicle, { x: this.pos.x, y: this.pos.y + CONFIG.player.eye, z: this.pos.z }, new THREE.Vector3()) : this.camera.position.clone()).addScaledVector(dir, 0.6);
     const v = dir.multiplyScalar(15).add(new THREE.Vector3(0, 3, 0)).add(new THREE.Vector3(this.vel.x, 0, this.vel.z));
+    if (this.onTram) { const t = this.onTram.v, q = t.frame(this.onTram.u, this._tq || (this._tq = {})); v.x += q.tx * t.v; v.z += q.tz * t.v; } // lancée depuis une rame qui roule : elle garde la vitesse de la rame
     this.game.throwGrenade(o, v, true);
   }
 

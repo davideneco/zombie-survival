@@ -190,6 +190,7 @@ export function installDebugMenu(game, { world, hud, sfx }) {
   // pose le joueur local (vitesse et saut remis à zéro, p_state envoyé tout de suite)
   dbg.place = function place(x, y, z, region = 0) {
     const p = game.player;
+    game.tramWalkOff?.(); // debout dans une rame : on la quitte (la position redevient celle du monde)
     p.pos.set(x, y, z);
     p.vel.set(0, 0, 0); p.vy = 0; p.wasGrounded = true; p.region = region;
     p.airT = 0; p.jumpSprint = false;
@@ -202,6 +203,15 @@ export function installDebugMenu(game, { world, hud, sfx }) {
     const rp = e?.rp;
     if (!rp) return say(e ? `${e.name} est déconnecté` : 'joueur inconnu', true);
     const p = game.player;
+    const trm = rp.tr && !rp.ride ? game.rideById(rp.tr.id) : null;
+    if (trm?.isTram) { // le coéquipier est debout dans la rame : l'hôte y monte, dans l'allée à côté de lui (repère local de la rame)
+      if (p.vehicle) game.leaveVehicle(true);
+      game.placeInTram(trm, rp.tr.u + 0.8, 0);
+      say(`hôte téléporté dans la rame près de ${e.name}`);
+      net()?.send({ t: 'dbg_note', text: `L'hôte a rejoint ${e.name}` });
+      hud.toast(`Vous avez rejoint ${e.name}`);
+      return;
+    }
     const c = { x: rp.tpos.x, y: rp.tpos.y, z: rp.tpos.z }, region = rp.ride ? 0 : (rp.region || 0);
     const spot = findSafeSpot(world, c, region, [...dbg.recentAvoid(), ...[...game.remotes.values()].filter((q) => q !== rp).map((q) => ({ x: q.pos.x, y: q.pos.y, z: q.pos.z }))]);
     if (!spot) return say(`aucune case sûre près de ${e.name}`, true);

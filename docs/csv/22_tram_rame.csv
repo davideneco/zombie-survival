@@ -1,7 +1,7 @@
 ﻿Réglage;Valeur;Remarque
 Rame;5 modules de 4,7 m (23,5 m), 2,4 x 3,4 m, plancher à 0,32 m;"articulés : chaque module suit la voie ; cabine à chaque bout ; 4 portes de 1,3 m par côté"
-Places;16 : 2 de conducteur (une par cabine) + 14 de passagers assis;"les passagers tirent normalement (comme sur la grosse moto) ; la place de conducteur se prend près d'un bout de la rame, les autres près de la caisse"
-Montée / descente;E, à moins de 1,5 m/s;"en rame, l'invite rappelle les touches ; descendre en marche est refusé"
+Places;16 : 2 de conducteur (une par cabine) + 14 de passagers assis;"les passagers tirent normalement (comme sur la grosse moto) ; portes fermées, la place de conducteur se prend près d'un bout de la rame, les autres près de la caisse (voir l'intérieur praticable ci-dessous)"
+Montée / descente;E ou marcher contre une porte ouverte (rame à moins de 1,5 m/s);"à pied par les portes ouvertes ; assis, on se lève dans la rame ; descendre en marche est refusé"
 Conduite;W accélérer · S frein de service (puis marche arrière) · Espace frein d'urgence;"touches modifiables dans Options > Touches ; conducteur de la cabine arrière : la rame roule dans l'autre sens"
 Vitesse max;"14 m/s (50 km/h) ; marche arrière 4 m/s";accélération 1,3 m/s² (qui faiblit près du maximum), résistance 0,2 m/s²
 Freinage;service 1,8 m/s² · urgence 3 m/s²;
@@ -14,4 +14,4 @@ Caméra;V : 3e personne (bras 12 m) / 1re personne dans la cabine;même vue que 
 PV;3000;"coup de zombie sur la caisse : 2 PV ; passagers touchés seulement devant une porte ouverte ; à 0 PV : hors service, retour au dépôt 2 manches plus tard"
 Joueur à pied heurté;"repoussé ; 10 dégâts au-dessus de 5 m/s";jamais mortel (il reste 1 PV)
 Zombie heurté;"au-dessus de 3 m/s : 40 x vitesse (560 à la vitesse max) ; en dessous : aucun dégât, il bloque la rame";"la rame ne ralentit pas ; un coup toutes les 0.5 s au même zombie"
-Obstacles;une boîte orientée par module, obstacles dynamiques de Collision (setDynamic);"les joueurs, les zombies et les motos sont repoussés ; les balles traversent"
+Obstacles;une boîte orientée par module, obstacles dynamiques de Collision (setDynamic);"les joueurs à pied, les zombies et les motos sont repoussés ; les balles traversent"

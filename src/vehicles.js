@@ -398,6 +398,7 @@ export function installVehicles(game, { world, hud, sfx, scene }) {
       for (const v of this.vehicles) v.reset();
       this.resetTrams?.();
       this.player.vehicle = null;
+      this.tramWalkOff?.();
       this.refreshRiders();
     },
 
@@ -406,6 +407,7 @@ export function installVehicles(game, { world, hud, sfx, scene }) {
       if (p.vehicle && (p.downed || p.dead)) this.leaveVehicle(true); // à terre : on est éjecté
       for (const v of this.vehicles) v.update(dt);
       this.updateTrams?.(dt);
+      this.updateTramBoarding?.(dt); // monter à pied en poussant contre une porte ouverte
       if (!this.isClient) for (const v of this.rides()) this.hostVehicleTick(v, dt);
     },
 
@@ -453,7 +455,8 @@ export function installVehicles(game, { world, hud, sfx, scene }) {
     // Un zombie vient de frapper `target` (le joueur local ou un coéquipier) : s'il est sur une moto, elle perd zombieHit PV (hôte)
     onZombieStrike(target) {
       const rv = target === this.player ? this.player.vehicle : target?.ride;
-      if (rv?.v) this.damageVehicle(rv.v, rv.v.def.zombieHit ?? R().damage.zombieHit, 'zombie'); // une rame : 2 PV par coup sur la caisse
+      const v = rv?.v || this.tramOfTarget?.(target); // une rame : aussi pour un occupant debout
+      if (v) this.damageVehicle(v, v.def.zombieHit ?? R().damage.zombieHit, 'zombie'); // une rame : 2 PV par coup sur la caisse
     },
 
     // Mise à feu (hôte) : v_hp puis v_burn à tous
@@ -539,6 +542,7 @@ export function installVehicles(game, { world, hud, sfx, scene }) {
       v.reset();
       if (!v.isTram) v.fuel = v.def.tank * R().fuel.respawn; // revient avec 40 % d'essence
       if (this.player.vehicle?.v === v) this.player.vehicle = null;
+      if (this.player.onTram?.v === v) this.tramWalkOff?.(); // la rame retourne au dépôt : on n'y est plus
       this.refreshRiders();
     },
 
@@ -553,6 +557,7 @@ export function installVehicles(game, { world, hud, sfx, scene }) {
     enterVehicle(v, seat) {
       const p = this.player;
       if (p.vehicle) return;
+      this.tramWalkOff?.(); // assis : la position vient du siège
       p.vehicle = { v, seat };
       p.yaw = v.seatYaw(seat) + (v.model.seats[seat].ry || 0); p.pitch = 0; // (une rame : la place regarde vers l'avant, l'arrière ou l'allée)
       p.mouseDown = false; p.aiming = false;
@@ -592,27 +597,11 @@ export function installVehicles(game, { world, hud, sfx, scene }) {
       this.freeMySeat(v, seat);
     },
 
-    // Descente d'une rame : à l'arrêt (sauf éjection), côté de la place (le conducteur : à droite), sur le quai ou la chaussée
+    // Se lever d'un siège de la rame (v0.40.0) : on reste DANS la rame, debout à côté du siège, quelle que soit sa vitesse ; on en sort à pied par une porte
+    // ouverte (voir tramInterior.js). `force` : levé d'office (à terre, place retirée par l'hôte) : même chose.
     leaveTram(v, seat, force) {
-      const p = this.player;
-      if (!force && Math.abs(v.v) > CONFIG.tram.drive.boardSpeed) { sfx.deny(); hud.announce('TRAM EN MARCHE', 'Arrêtez la rame pour descendre', 1600); return; }
-      const ms = v.model.seats[seat], q = v.mods[ms.module].pose, rx = -q.tz, rz = q.tx;
-      const side = ms.hip[0] === 0 ? 1 : Math.sign(ms.hip[0]);
-      v.hipWorld(seat, pt);
-      let ex = pt.x, ez = pt.z, best = null;
-      for (const sd of [side, -side]) {
-        const o = { x: q.x + rx * sd * (CONFIG.tram.car.width / 2 + 0.75) + q.tx * (-ms.hip[2]), y: 0.1, z: q.z + rz * sd * (CONFIG.tram.car.width / 2 + 0.75) + q.tz * (-ms.hip[2]) };
-        const t0 = { x: o.x, z: o.z };
-        world.collide(o, 0.4);
-        const moved = Math.hypot(o.x - t0.x, o.z - t0.z);
-        if (!best || moved < best.moved) best = { x: o.x, z: o.z, moved };
-        if (moved < 0.3) break;
-      }
-      ex = best.x; ez = best.z;
-      world.floorAt?.(ex, ez, 0.1, fl);
-      p.pos.set(ex, world.floorAt ? fl.y : 0, ez);
-      p.vel.set(0, 0, 0); p.vy = 0; p.vehicle = null;
-      sfx.knock?.(0.5);
+      this.standInTram(v, seat);
+      sfx.knock?.(0.3);
       this.freeMySeat(v, seat);
     },
     freeMySeat(v, seat) {
