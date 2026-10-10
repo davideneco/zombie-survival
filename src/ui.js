@@ -33,7 +33,7 @@ export function installUi(game, { hud, canvas, lockAndPlay }) {
         else if (!hidden(el.keysPanel)) out.push(this.optionsBack === 'pausePanel' ? 'pause' : 'title', 'options', 'keys', ...(game.keysMenu?.layer() || []));
         else {
           const t = hud.screenTitle || '';
-          out.push(t.startsWith('VICTOIRE') ? 'victory' : t.startsWith('ÉQUIPE') ? 'over' : t === 'PAUSE' && !hidden(el.ovBtn) ? 'resume' : 'enter');
+          out.push(t.startsWith('VICTOIRE') || t.startsWith('STRASBOURG') ? 'victory' : t.startsWith('ÉQUIPE') ? 'over' : t === 'PAUSE' && !hidden(el.ovBtn) ? 'resume' : 'enter');
         }
       }
       out.push(...this.over);
@@ -101,6 +101,11 @@ export function installUi(game, { hud, canvas, lockAndPlay }) {
     onPointerUnlocked() {
       if (!game.started || game.over) return;
       if (!hidden(el.overlay)) return;
+      if (game.summitFx?.orbit.on) { // Échap pendant la vue orbitale (souris déjà rendue) : on la passe ; l'écran « STRASBOURG LIBÉRÉE » suit
+        game.playing = false; game.player.releaseInputs();
+        game.summitFx.endOrbit();
+        return;
+      }
       const hadOver = this.over.length > 0;
       game.playing = false;
       game.player.releaseInputs();
@@ -110,6 +115,7 @@ export function installUi(game, { hud, canvas, lockAndPlay }) {
 
     // ---------------------------------------------------------------- Échap
     escape() {
+      if (game.summitFx?.orbit.on) { game.summitFx.endOrbit(); return 'orbit'; } // vue orbitale de l'Aube : Échap la passe
       const ae = document.activeElement;
       if (ae && /^(INPUT|TEXTAREA)$/.test(ae.tagName) && ae.type !== 'range') { ae.blur(); return 'blur'; } // champ de texte : d'abord retirer le focus
       const t = this.top();

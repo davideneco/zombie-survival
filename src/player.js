@@ -80,7 +80,7 @@ export class Player {
     this.airT = 0; this.peakY = 0; this.jumpSprint = false; this.flopCd = 0; // PHD Flopper (plongeon)
     this.vehicle = null; // { v, seat } quand on est sur une moto
     this.meleeT = -1; this.meleeHit = true; this.nextMelee = 0; this.lunge = null; // couteau (voir melee)
-    this.hasAxe = false; this.pullQ = null; // Hache du Bourreau (récompense de la finale) ; attirance des Chaînes
+    this.hasAxe = false; this.pullQ = null; this.gustQ = null; // Hache du Bourreau (récompense de la finale) ; attirance des Chaînes
     this.vault = null; this.vaultCd = 0; this.vaultReady = false; // enjambement (voir tryVault)
     this.ride?.reset();
 
@@ -364,7 +364,7 @@ export class Player {
       const B = this.game.binds;
       let mx = (B.down('right', K) ? 1 : 0) - (B.down('left', K) ? 1 : 0);
       let mz = (B.down('forward', K) ? 1 : 0) - (B.down('back', K) ? 1 : 0);
-      if (this.vault) { mx = 0; mz = 0; } // enjambement en cours : le chemin est imposé
+      if (this.vault || this.game.camLock) { mx = 0; mz = 0; } // enjambement en cours : le chemin est imposé ; vue orbitale de l'Aube : immobile
       moving = (mx !== 0 || mz !== 0) && !this.dead;
       sprinting = !this.downed && B.down('sprint', K) && mz > 0 && !this.aiming;
       const stamin = this.perks.staminup ? 1.3 : 1;
@@ -379,6 +379,11 @@ export class Player {
       this.vel.z += (wz - this.vel.z) * k;
       this.pos.x += this.vel.x * dt;
       this.pos.z += this.vel.z * dt;
+      if (this.gustQ) { // rafale de la rampe de la flèche (Acte V) : vitesse imposée pendant gustQ.t s (la collision, donc les garde-corps, la borne)
+        const q = this.gustQ;
+        this.pos.x += q.x * Math.min(dt, q.t); this.pos.z += q.z * Math.min(dt, q.t); q.t -= dt;
+        if (q.t <= 0) this.gustQ = null;
+      }
       if (this.pullQ) { // attiré par les Chaînes du Bourreau : déplacement imposé sur pullQ.T s (la collision le borne)
         const q = this.pullQ, k = Math.min(dt, q.t) / q.T;
         this.pos.x += q.x * k; this.pos.z += q.z * k; q.t -= dt;
@@ -392,7 +397,7 @@ export class Player {
       onGround = this.pos.y <= ground + 0.02 && this.vy <= 0.5;
       this.vaultCd = Math.max(0, this.vaultCd - dt);
       this.vaultReady = onGround && !this.vault && !this.downed && !this.dead && !this.locked && this.vaultCd <= 0 && !!this.checkVault();
-      if (B.down('jump', K) && onGround && !this.downed && !this.vault) {
+      if (B.down('jump', K) && onGround && !this.downed && !this.vault && !this.game.camLock) {
         if (this.vaultReady && this.startVault()) { /* enjambement : pas de saut */ }
         else { this.vy = P.jumpSpeed; this.jumpSprint = sprinting; } // saut lancé en sprint : plongeon possible (PHD Flopper)
       }
@@ -425,7 +430,7 @@ export class Player {
     this.aim += ((this.aiming && !this.downed ? 1 : 0) - this.aim) * Math.min(1, dt * 12);
     const base = this.game.settings.fov;
     const fov = base - (cfg.adsFov || cfg.zoom ? base - (cfg.adsFov || cfg.zoom) : ADS_DELTA) * this.aim + (veh ? Math.min(12, Math.abs(veh.v.speed) * 0.55) * (1 - 0.5 * this.ride.k) : 0);
-    if (Math.abs(fov - this.camera.fov) > 0.01) {
+    if (!this.game.camLock && Math.abs(fov - this.camera.fov) > 0.01) {
       this.camera.fov = fov;
       this.camera.updateProjectionMatrix();
     }
@@ -555,6 +560,8 @@ export class Player {
   }
 
   // Chaînes du Bourreau : le joueur est tiré de (dx, dz) m en 0,3 s
+  // rafale (Acte V) : pousse de (vx, vz) m/s pendant dur s
+  gustBy(vx, vz, dur) { this.gustQ = { x: vx, z: vz, t: dur }; }
   pullBy(dx, dz) { this.pullQ = { x: dx, z: dz, t: 0.3, T: 0.3 }; this.vel.x *= 0.3; this.vel.z *= 0.3; }
 
   // Hache du Bourreau (récompense de la finale) : remplace la lame du couteau dans la vue (manche long, large fer) ; le bras reste le même
@@ -888,7 +895,7 @@ export class Player {
     this.downed = true;
     this.bleedout = 45;
     this.health = 0;
-    this.clearPerks(); // à terre : on perd tous ses atouts
+    if (!this.game.blessed) this.clearPerks(); // à terre : on perd tous ses atouts (sauf sous la Bénédiction de l'Aube)
     if (solo && hadQR) {
       this.selfRevive = 4;
       this.game.hud.announce('À TERRE !', 'Réanimation rapide : vous vous relevez…', 3500);

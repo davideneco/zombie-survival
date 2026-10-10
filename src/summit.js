@@ -53,10 +53,10 @@ export function installSummit(game, { world, scene, hud, sfx, fx, hemi, moon, mo
   // ----------------------------------------------------------------- le faisceau
   let beam = null, fanal = null, sun = null;
   const buildBeam = () => {
-    const g = new THREE.Group(); g.position.set(T.x, TOWER.tip, T.z);
-    const tex = fall(['#000000', '#ffffff'], 128);
-    const inner = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 1.15, 260, 16, 1, true), additive(0xfff0c0, 0.75, { map: tex, fog: false }));
-    const outer = new THREE.Mesh(new THREE.CylinderGeometry(1.9, 3.2, 260, 16, 1, true), additive(0xffd890, 0.28, { map: tex, fog: false }));
+    const g = new THREE.Group(); g.position.set(T.x, TOWER.needle + 0.5, T.z); // il part de la pointe de l'aiguille : le balcon (128 m) reste sous la lumière, pas dedans
+    const tex = fall(['#4a4a4a', '#ffffff'], 128); // clair à la base, jamais éteint : le faisceau reste visible haut dans le ciel
+    const inner = new THREE.Mesh(new THREE.CylinderGeometry(2.4, 0.4, 260, 20, 1, true), additive(0xffe4a0, 0.7, { map: tex, fog: false }));
+    const outer = new THREE.Mesh(new THREE.CylinderGeometry(7.5, 1.3, 260, 20, 1, true), additive(0xffb860, 0.32, { map: tex, fog: false }));
     inner.position.y = outer.position.y = 130; inner.frustumCulled = outer.frustumCulled = false;
     g.add(inner, outer); scene.add(g);
     return { g, inner, outer, k: 1 };
@@ -64,7 +64,7 @@ export function installSummit(game, { world, scene, hud, sfx, fx, hemi, moon, mo
 
   // ----------------------------------------------------------------- le Fanal d'Erwin
   const buildFanal = () => {
-    const g = new THREE.Group(); g.position.set(fanalPos.x, fanalPos.y, fanalPos.z);
+    const g = new THREE.Group(); g.position.set(fanalPos.x, fanalPos.y, fanalPos.z); g.scale.setScalar(1.8);
     const iron = new THREE.MeshStandardMaterial({ color: 0x3a3d44, roughness: 0.45, metalness: 0.9, emissive: 0x14161a });
     const add = (geo, mat, x = 0, y = 0, z = 0) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); g.add(m); return m; };
     add(new THREE.CylinderGeometry(0.24, 0.3, 0.09, 12), iron, 0, 0.045, 0);
@@ -141,10 +141,12 @@ export function installSummit(game, { world, scene, hud, sfx, fx, hemi, moon, mo
     orbit.on = true; orbit.t = 0; orbit.dur = D.orbit; orbit.onEnd = onEnd;
     orbit.a0 = Math.atan2(p.pos.z - T.z, p.pos.x - T.x) + Math.PI * 0.35;
     game.camLock = true; p.locked = true; p.releaseInputs?.();
+    hud.el.hud.style.visibility = 'hidden'; hud.el.announce.style.visibility = 'visible'; // vue de cinéma : ni arme ni interface (sauf l'annonce)
   };
   const endOrbit = () => {
     if (!orbit.on) return;
     orbit.on = false; game.camLock = false; game.player.locked = false;
+    hud.el.hud.style.visibility = ''; hud.el.announce.style.visibility = '';
     camera.fov = game.settings.fov; camera.updateProjectionMatrix();
     const f = orbit.onEnd; orbit.onEnd = null; f?.();
   };
@@ -163,8 +165,13 @@ export function installSummit(game, { world, scene, hud, sfx, fx, hemi, moon, mo
   const step = (dt) => {
     if (beam) { // le faisceau palpite ; ignition : plus large et plus clair
       const t = performance.now() / 1000, pulse = 0.9 + 0.1 * Math.sin(t * 2.4), w = beam.boost || 1;
-      beam.inner.material.opacity = 0.75 * pulse * beam.k * Math.min(1.3, w); beam.outer.material.opacity = 0.28 * pulse * beam.k * w;
-      beam.g.scale.set(w, 1, w);
+      beam.inner.material.opacity = 0.7 * pulse * beam.k * Math.min(1.3, w); beam.outer.material.opacity = 0.32 * pulse * beam.k * w;
+      // visible de toute la ville sans reculer le plan de coupe de la caméra (170 m, le brouillard cache le reste) : le faisceau est homothétique
+      // de la caméra, de rapport f <= 1 tel que sa pointe reste dans le champ ; l'image à l'écran est la même, la profondeur seule change
+      const c = camera.position, dx = T.x - c.x, dz = T.z - c.z, y0 = TOWER.needle + 0.5;
+      const f = Math.min(1, S().beamFit / Math.hypot(dx, dz, y0 + 260 - c.y));
+      beam.g.position.set(c.x + dx * f, c.y + (y0 - c.y) * f, c.z + dz * f);
+      beam.g.scale.set(w * f, f, w * f);
     }
     if (fanal) {
       const F = fanal; F.t += dt;
@@ -172,8 +179,8 @@ export function installSummit(game, { world, scene, hud, sfx, fx, hemi, moon, mo
       const s = F.lit ? 2.2 : target * 1.25, sy = s * flick * (F.lit ? 1.5 : 1);
       F.flame.scale.set(s, sy, s);
       F.f1.material.opacity = (F.lit ? 0.75 : 0.25 + 0.35 * F.p); F.f2.material.opacity = F.lit ? 0.9 : 0.35 + 0.4 * F.p; F.f3.material.opacity = F.lit ? 1 : 0.4 + 0.5 * F.p;
-      F.glow.material.opacity = F.lit ? 0.45 : 0.28 * F.p; F.glow.scale.setScalar(F.lit ? 2.4 : 1 + F.p);
-      if (F.lit && Math.random() < dt * 30) fx.emit(fanalPos.x, fanalPos.y + 0.9, fanalPos.z, { count: 1, color: [0xffc060, 0xfff0c0, 0xff8a20], speed: 0.5, up: 2.6, size: 0.1, life: 1.2, grav: -1, spread: 0.3, glow: true });
+      F.glow.material.opacity = F.lit ? 0.22 : 0.2 * F.p; F.glow.scale.setScalar(F.lit ? 1.5 : 0.7 + 0.6 * F.p);
+      if (F.lit && Math.random() < dt * 30) fx.emit(fanalPos.x, fanalPos.y + 1.6, fanalPos.z, { count: 1, color: [0xffc060, 0xfff0c0, 0xff8a20], speed: 0.5, up: 2.6, size: 0.1, life: 1.2, grav: -1, spread: 0.3, glow: true });
     }
     skyStep(dt);
   };
@@ -181,6 +188,7 @@ export function installSummit(game, { world, scene, hud, sfx, fx, hemi, moon, mo
   // ----------------------------------------------------------------- API
   const api = {
     sky, orbit, T, fanalPos,
+    get shown() { return !!beam; },
     showBeam() { if (!beam && C) beam = buildBeam(); },
     showFanal() { if (!fanal && fanalPos) fanal = buildFanal(); },
     show() { api.showBeam(); api.showFanal(); },

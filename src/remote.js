@@ -123,6 +123,7 @@ export class RemotePlayer {
     this.downed = !!s.downed;
     this.dead = !!s.dead;
     if (s.mc != null) { if (this.mc != null && s.mc !== this.mc && !this.downed) this.avatar.stab(); this.mc = s.mc; } // coup de couteau
+    this.fh = s.fh | 0;                  // maintient la touche d'interaction au Fanal d'Erwin (Acte V)
     this.vt = +s.vt || 0;                // progression de l'enjambement (0 : à plat)
     this.bo = s.bo | 0;                  // secondes avant la mort (à terre)
     this.rv = s.rv ?? null;              // identifiant du joueur qu'il est en train de réanimer

@@ -244,6 +244,7 @@ export const CONFIG = {
   // Étapes (états `summit_*` de finale.js) : 1 gargouilles sur la terrasse, 2 l'Ange du Jugement, 3 la rampe (rafales + gargouilles qui montent),
   // 4 le Fanal (chaque joueur debout le maintient `fanal.hold` s : progression commune), 5 l'Aube. Ensuite : la « Nuit éternelle ».
   summit: {
+    beamFit: 150,                    // distance maximale (m) de la pointe du faisceau à la caméra : au-delà il est réduit vers la caméra (visible de toute la ville)
     // gargouilles : zombies de pierre (variante `gargoyle`, coureurs) qui surgissent des parapets de la terrasse
     gargoyles: {
       count: 24, perPlayer: 6,       // total de l'étape 1 (+ par joueur en plus)
@@ -266,10 +267,10 @@ export const CONFIG = {
     },
     // rampe : une rafale toute les `interval` s pousse le joueur de `push` m/s pendant `duration` s (les garde-corps le retiennent) ;
     // des gargouilles montent depuis le bas de la rampe
-    ramp: { interval: 6, push: 2.5, duration: 1, outward: 0.6, gargoyles: { every: 7, count: 2, maxAlive: 6, ahead: 24 } },
+    ramp: { interval: 6, push: 2.5, duration: 1, outward: 0.6, gargoyles: { every: 7, count: 2, maxAlive: 6, behind: 24 } }, // behind : distance (m de rampe) sous le joueur le plus haut où surgissent les gargouilles qui montent
     // Fanal d'Erwin (balcon de la pointe) : chaque joueur debout le maintient `hold` s à moins de `range` m ; progression commune
     // (chaque tenant fait avancer la jauge de 1/hold par seconde, divisé par le nombre de joueurs debout)
-    fanal: { hold: 6, range: 2.8 },
+    fanal: { hold: 6, range: 3.2, decay: 0.5 }, // decay : la jauge retombe à decay/hold par seconde quand personne ne maintient la touche
     // l'Aube : le ciel passe de la nuit au jour en `sky` s, vue orbitale `orbit` s (Échap la passe), cendres des zombies ; la Bénédiction de l'Aube
     // donne tous les atouts (gardés à terre) et rend les portes gratuites
     dawn: { sky: 30, orbit: 12, ash: 1.6, orbitRadius: [30, 22], orbitHeight: [132, 146] },

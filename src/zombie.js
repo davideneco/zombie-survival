@@ -59,7 +59,7 @@ function skinTexture(base) {
 // Pierre grise fissurée et mousseuse (gargouilles de l'Acte V)
 function stoneTexture() {
   return canvasTex(128, (x, s) => {
-    x.fillStyle = '#8b8b86'; x.fillRect(0, 0, s, s);
+    x.fillStyle = '#74746f'; x.fillRect(0, 0, s, s);
     blobs(x, s, 46, ['rgba(60,60,58,A)', 'rgba(170,170,162,A)', 'rgba(110,112,106,A)'], 6, 24, 0.4);
     blobs(x, s, 7, ['rgba(70,92,52,A)'], 5, 13, 0.45); // mousse
     x.strokeStyle = 'rgba(30,30,30,0.6)'; x.lineWidth = 1.2; // fissures
@@ -323,7 +323,7 @@ export class Zombie {
       // gargouille de pierre (Acte V) : coureur gris fissuré, cornes et ailes de chauve-souris repliées ; elle surgit d'un parapet
       this.armor = 0.8; this.runner = true; this.limp = false;
       const stone = A.stoneTex || (A.stoneTex = stoneTexture());
-      for (const m of this.mats) { m.map = stone; m.bumpMap = stone; m.color.setRGB(0.85, 0.86, 0.84); m.bumpScale = 1.1; m.roughness = 0.95; }
+      for (const m of this.mats) { m.map = stone; m.bumpMap = stone; m.color.setRGB(0.36, 0.38, 0.4); m.bumpScale = 1.3; m.roughness = 1; }
       this.group.scale.multiplyScalar(1.1);
       const eye = A.gargEye || (A.gargEye = new THREE.MeshBasicMaterial({ color: 0xff7a24 }));
       for (const e of this.eyes) { e.material = eye; e.scale.setScalar(1.5); }
@@ -332,7 +332,7 @@ export class Zombie {
       if (!A.wingGeo) { // aile de chauve-souris : contour festonné dans le plan, doublement visible
         const sh = new THREE.Shape(); sh.moveTo(0, 0); sh.lineTo(0.2, 0.55); sh.lineTo(0.55, 0.78); sh.lineTo(0.45, 0.42); sh.lineTo(0.78, 0.5); sh.lineTo(0.62, 0.2); sh.lineTo(0.84, 0.18); sh.lineTo(0.5, -0.1); sh.lineTo(0.1, -0.18); sh.closePath();
         A.wingGeo = new THREE.ShapeGeometry(sh);
-        A.wingMat = new THREE.MeshStandardMaterial({ color: 0x77776f, roughness: 0.95, side: THREE.DoubleSide, map: stone, bumpMap: stone });
+        A.wingMat = new THREE.MeshStandardMaterial({ color: 0x55575a, roughness: 1, side: THREE.DoubleSide, map: stone, bumpMap: stone });
       }
       this.wings = [];
       for (const sx of [-1, 1]) {

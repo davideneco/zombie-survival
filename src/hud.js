@@ -303,7 +303,7 @@ export class Hud {
   setBanner(text) {
     if (!this.banner) {
       this.banner = document.createElement('div');
-      Object.assign(this.banner.style, { position: 'absolute', left: '50%', top: '86px', transform: 'translateX(-50%)', padding: '6px 22px', background: 'rgba(90,0,0,0.75)', border: '1px solid #ff5040', borderRadius: '4px', color: '#ffd8c8', fontSize: '22px', letterSpacing: '3px', textShadow: '0 0 6px #000', display: 'none' });
+      Object.assign(this.banner.style, { position: 'absolute', left: '50%', top: '86px', transform: 'translateX(-50%)', width: 'max-content', maxWidth: '92vw', boxSizing: 'border-box', textAlign: 'center', padding: '6px 22px', background: 'rgba(90,0,0,0.75)', border: '1px solid #ff5040', borderRadius: '4px', color: '#ffd8c8', fontSize: '22px', letterSpacing: '3px', textShadow: '0 0 6px #000', display: 'none' });
       this.el.hud.appendChild(this.banner);
     }
     this._set('banner', text || '', () => { this.banner.style.display = text ? 'block' : 'none'; this.banner.textContent = text || ''; });
@@ -344,6 +344,18 @@ export class Hud {
       this.el.hud.appendChild(e); this.markEl = e;
     }
     this._set('mark', text || '', () => { this.markEl.style.display = text ? 'block' : 'none'; this.markEl.textContent = text || ''; });
+  }
+
+  // Jauge du Fanal d'Erwin (Acte V) : barre dorée au bas de l'écran, avec un texte ; frac entre 0 et 1, null la retire
+  setFanal(frac, text) {
+    if (!this.fanalEl) {
+      const e = document.createElement('div');
+      Object.assign(e.style, { position: 'absolute', left: '50%', bottom: '118px', transform: 'translateX(-50%)', width: '380px', display: 'none', textAlign: 'center', color: '#ffe9b0', fontSize: '18px', letterSpacing: '3px', textShadow: '0 0 8px #000' });
+      e.innerHTML = '<div class="ft"></div><div style="height:12px;margin-top:6px;border:1px solid #d9a441;background:rgba(0,0,0,.65)"><div class="ff" style="height:100%;width:0;background:linear-gradient(#ffe08a,#ff8a1c)"></div></div>';
+      this.el.hud.appendChild(e); this.fanalEl = { e, t: e.querySelector('.ft'), f: e.querySelector('.ff') };
+    }
+    const f = this.fanalEl, on = frac != null;
+    this._set('fanal', on ? `${Math.round(frac * 200)}|${text}` : '', () => { f.e.style.display = on ? 'block' : 'none'; if (on) { f.t.textContent = text || ''; f.f.style.width = `${Math.round(frac * 100)}%`; } });
   }
 
   setNades(n) {

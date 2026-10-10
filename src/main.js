@@ -6,6 +6,8 @@ import { Player } from './player.js';
 import { Zombie, zombieTextures } from './zombie.js';
 import { Boss } from './boss.js';
 import { Tanner } from './tanner.js';
+import { Angel } from './angel.js';
+import { installSummit } from './summit.js';
 import { installFinale } from './finale.js';
 import { Hud } from './hud.js';
 import { Sfx } from './audio.js';
@@ -223,7 +225,8 @@ const game = {
     if (this.buffs.instaKill > 0 && !z.boss) damage = 999999;
     // couteau : l'armure (chevalier de fer) est ignorée ; pas de bonus de tête ici (déjà dans les dégâts)
     const hit = z.isBoss && !z.mini ? { x: extra?.ax ?? point.x, z: extra?.az ?? point.z, back: extra?.back, ray: !!extra?.ray, mel, pid: fromPid ?? this.net?.id ?? null } : null;
-    const killed = z.damage(mel ? damage / (z.armor || 1) : damage * (head ? headMult : 1), head, hit);
+    // Ange du Jugement : trompette = dégâts x weakMult quelle que soit l'arme (pas le bonus de tête de l'arme)
+    const killed = z.damage(mel ? damage / (z.armor || 1) : z.weakMult ? damage * (head ? z.weakMult : 1) : damage * (head ? headMult : 1), head, hit);
 
     fx.blood(point.x, point.y, point.z, killed && !head);
     sfx.hit(head);
@@ -257,7 +260,8 @@ const game = {
       // Chance d'apparition d'un bonus COD ; le Bourreau, lui, lâche toujours des munitions max
       this.onFinaleKill(z);
       this.maybeDropFuel(z.pos); // bidon d'essence (rare, seulement si une moto est à moitié vide)
-      if (z.isBoss) this.spawnPowerup(z.pos, null, 'max_ammo');
+      if (z.isAngel) { /* l'Ange tourne hors de la tour : ses points suffisent */ }
+      else if (z.isBoss) this.spawnPowerup(z.pos, null, 'max_ammo');
       else if (Math.random() < CONFIG.powerups.dropChance) this.spawnPowerup(z.pos);
     }
     return killed; // (client : undefined, l'hôte tranche)
@@ -566,12 +570,16 @@ const game = {
     // 6) Porte payante
     const door = this.nearDoor();
     if (door) {
-      if (this.points < door.price) { sfx.deny(); return; }
-      this.points -= door.price;
+      const price = this.doorPrice(door);
+      if (this.points < price) { sfx.deny(); return; }
+      this.points -= price;
       this.openDoor(door.id);
       if (this.isMultiplayer) this.net?.send({ t: 'door_open', id: door.id });
     }
   },
+
+  // Bénédiction de l'Aube : toutes les portes restantes sont gratuites
+  doorPrice(d) { return this.freeDoors ? 0 : d.price; },
 
   reviveTime() { return this.player.perks.quickrevive ? 1.2 : 2.5; },
 
@@ -761,7 +769,8 @@ const game = {
         if (this.isMultiplayer) this.net?.send({ t: 'z_dead', id: z.id, head: false });
         this.onFinaleKill(z);
         this.maybeDropFuel(z.pos);
-        if (z.isBoss) this.spawnPowerup(z.pos, null, 'max_ammo');
+        if (z.isAngel) { /* l'Ange tourne hors de la tour : ses points suffisent */ }
+      else if (z.isBoss) this.spawnPowerup(z.pos, null, 'max_ammo');
         else if (Math.random() < CONFIG.powerups.dropChance) this.spawnPowerup(z.pos);
       } else {
         pts += 10 * mult;
@@ -883,7 +892,7 @@ const game = {
     const r = this.round;
     const countMult = this.isMultiplayer ? 1 + this.remotes.size * 0.75 : 1;
     this.toSpawn = Math.round((4 + r * 3) * countMult);
-    this.zombieHealth = this.zombieHealthAt(r);
+    this.zombieHealth = this.zombieHealthAt(r) * (this.eternal ? CONFIG.summit.eternal.healthMult : 1); // Nuit éternelle (après l'Aube) : +30 % de vie
     this.zombieSpeed = Math.min(CONFIG.zombie.speedStart + r * CONFIG.zombie.speedPerRound, CONFIG.zombie.speedMax);
     this.spawnTimer = 1;
     hud.setRound(r);
@@ -1050,6 +1059,7 @@ const game = {
       rl: p.curW.reloading ? 1 : 0,
       ads: p.aiming ? 1 : 0,
       vt: p.vault ? Math.round(Math.min(1, p.vault.t / p.vault.dur) * 100) / 100 : 0, // progression de l'enjambement (animation des coéquipiers)
+      fh: this.fanalHold ? 1 : 0,                                   // Fanal d'Erwin : je maintiens la touche (Acte V)
       mc: p.mc,                                                     // coups de couteau donnés (les coéquipiers animent leur avatar)
       bo: p.downed && !p.dead ? Math.ceil(p.bleedout) : 0,         // secondes avant la mort (à terre)
       rv: this.reviveTarget ? this.reviveTarget.id : null,          // coéquipier que je suis en train de réanimer
@@ -1071,7 +1081,8 @@ const game = {
     this.resetBoxRoll();
     this.resetPap();
     if (resetStats) this.resetBox();
-    if (resetStats) { this.finale = null; this.finaleDone = false; hud.setBanner?.(null); hud.setBossBar?.(null); }
+    if (resetStats) { this.finale = null; this.finaleDone = false; this.eternal = false; this.blessed = false; this.freeDoors = false; this.dawnOn = false; hud.setBanner?.(null); hud.setBossBar?.(null); hud.setFanal?.(null); }
+    this.summitFx?.clear();
     this.clearBossFx?.();
     fx.clear();
 
@@ -1119,6 +1130,8 @@ const game = {
     this.player.active = this.playing;
     this.updateVehicles(dt);
     p.update(dt, this.time);
+    this.summitFx?.cameraStep(dt); // vue orbitale de l'Aube : prend la caméra après le joueur
+    this.summitFx?.step(dt);
     this.unstick?.update(dt);
 
     // Mise à jour des coéquipiers
@@ -1369,8 +1382,10 @@ const game = {
     } else if (this.nearDoor()) {
       const d = this.nearDoor(), here = world.zoneOf(this.player.pos.x, this.player.pos.z);
       const to = here === d.a ? d.b : here === d.b ? d.a : d.toZone; // la zone de l'autre côté de la barrière
-      promptText = `${game.binds.tag('interact')} Ouvrir la porte vers ${world.zoneNames[to]} (${d.price} pts)`;
+      promptText = `${game.binds.tag('interact')} Ouvrir la porte vers ${world.zoneNames[to]} (${this.freeDoors ? 'gratuit' : `${d.price} pts`})`;
     }
+    const fanalPrompt = this.fanalPrompt?.();
+    if (fanalPrompt && !p.vehicle) promptText = fanalPrompt;
     if (!promptText && p.vaultReady && !p.vault) promptText = `${game.binds.tag('jump')} Enjamber`;
     const unstickPrompt = this.unstick?.prompt();
     if (unstickPrompt && !p.vehicle) promptText = unstickPrompt; // coincé : l'invite de déblocage passe avant les autres
@@ -1384,6 +1399,7 @@ game.player = new Player(camera, scene, world, game);
 hud.setWeapon(game.player.curCfg.name, game.player.curCfg.caliber);
 installKeybinds(game, { hud }); // game.binds : touches modifiables (Options > Touches)
 installMachineFx(game, { world, hud, sfx, fx });
+installSummit(game, { world, scene, hud, sfx, fx, hemi, moon, moonOffset: MOON_OFFSET, camera }); // Acte V : faisceau, Fanal, ciel de l'Aube, vue orbitale
 installFinale(game, { world, scene, hud, sfx, fx });
 installVehicles(game, { world, scene, hud, sfx });
 installLauncher(game, { world, scene, fx });
@@ -1494,6 +1510,7 @@ function setupNetworkHandlers(net) {
         box: (world.boxes || []).findIndex((b) => b.active),
         finale: game.finale ? 1 : null,
         finaleDone: game.finaleDone,
+        summit: game.finaleDone && (game.finale || game.dawnOn) ? { st: game.summitState?.() || null, fan: game.finale?.fan || 0, dawn: game.dawnOn ? Math.round((game.time - game.dawnT0) * 10) / 10 : null, eternal: !!game.eternal } : null, // Acte V en cours (ou Aube passée)
         vehicles: game.vehicleSnapshot(),
         zombies: game.zombies.map((z) => ({
           id: z.id,
@@ -1506,7 +1523,8 @@ function setupNetworkHandlers(net) {
           spawnT: z.spawnT,
           crawl: z.crawler ? 1 : 0,
           boss: z.isBoss ? 1 : 0,
-          tanner: z.mini ? 1 : 0,
+          tanner: z.mini && !z.isAngel ? 1 : 0,
+          angel: z.isAngel ? 1 : 0,
           kind: z.kind || null,
           y: z.pos.y,
         })),
@@ -1580,10 +1598,11 @@ function setupNetworkHandlers(net) {
       else if (name === 'rumble') sfx.rumble(v);
       else if (name === 'emerge') { sfx.dirt(v); sfx.groan(Math.min(1, v * 1.4)); }
     };
-    const z = m.tanner ? new Tanner(scene, spawn, m.hp, onEvent, m.id, {}) : m.boss ? new Boss(scene, spawn, m.hp, onEvent, m.id, {}) : new Zombie(scene, spawn, m.hp, m.spd, onEvent, m.id, { crawler: !!m.crawl, kind: m.kind || null });
+    const z = m.angel ? new Angel(scene, spawn, m.hp, onEvent, m.id, {}) : m.tanner ? new Tanner(scene, spawn, m.hp, onEvent, m.id, {}) : m.boss ? new Boss(scene, spawn, m.hp, onEvent, m.id, {}) : new Zombie(scene, spawn, m.hp, m.spd, onEvent, m.id, { crawler: !!m.crawl, kind: m.kind || null });
     if (m.run) z.runner = true;
-    if (m.fin) { z.skipSpawn(); z.pos.set(m.x, m.y || 0, m.z); if (m.boss && !m.tanner) z.group.visible = false; }
-    z.net = { x: m.x, z: m.z, y: m.y || 0, yaw: 0, atk: false, bs: m.boss && !m.tanner ? 9 : 0 };
+    if (m.fin) { z.skipSpawn(); z.pos.set(m.x, m.y || 0, m.z); if (m.boss && !m.tanner && !m.angel) z.group.visible = false; }
+    z.net = { x: m.x, z: m.z, y: m.y || 0, yaw: 0, atk: false, bs: m.angel ? 25 : m.boss && !m.tanner ? 9 : 0 };
+    if (m.angel) z.region = m.region || 0;
     game.zombies.push(z);
   });
 
@@ -1630,6 +1649,7 @@ function setupNetworkHandlers(net) {
   net.onHost('finale_start', () => { game.finale = { remote: true }; game.finaleIntro(); });
   net.onHost('finale_win', () => game.winFinale());
   net.onHost('finale_info', (m) => game.finaleInfo(m));
+  net.onHost('dawn', (m) => game.dawnRun(m.k || 0)); // Acte V : l'Aube se lève (k : secondes déjà écoulées chez un joueur qui arrive en cours)
   net.onHost('finale_say', (m) => hud.announce(m.title, m.sub, m.ms));
   net.onHost('boss_fx', (m) => game.bossEvent(m.name, m));
   net.onHost('mini_info', (m) => { game.miniBar = { hp: m.hp, max: m.max, phase: 1, inv: false, name: m.name || 'MAÎTRE TANNEUR', thresholds: [] }; game.miniBarT = 1.5; });
@@ -1743,7 +1763,8 @@ function setupNetworkHandlers(net) {
     for (const id of m.doors || []) game.openDoor(id, false);
     if (m.box != null && m.box >= 0) world.setActiveBox?.(m.box);
     game.finaleDone = !!m.finaleDone;
-    game.finale = m.finale != null ? { remote: true } : null;
+    game.finale = m.finale != null ? { remote: true, ...(m.summit ? { st: m.summit.st, fan: m.summit.fan } : null) } : null;
+    if (m.summit) game.applySummitSync?.(m.summit);
     game.applyVehicleSnapshot(m.vehicles);
 
     // Supprimer d'éventuels zombies locaux existants
@@ -1757,10 +1778,11 @@ function setupNetworkHandlers(net) {
       } else {
         spawn = { type: 'ground', pos: new THREE.Vector3(zd.x, 0, zd.z) };
       }
-      const z = zd.tanner ? new Tanner(scene, spawn, zd.hp, () => {}, zd.id, {}) : zd.boss ? new Boss(scene, spawn, zd.hp, () => {}, zd.id, {}) : new Zombie(scene, spawn, zd.hp, zd.spd, () => {}, zd.id, { crawler: !!zd.crawl, kind: zd.kind || null });
-      z.pos.set(zd.x, 0, zd.z);
+      const z = zd.angel ? new Angel(scene, spawn, zd.hp, () => {}, zd.id, {}) : zd.tanner ? new Tanner(scene, spawn, zd.hp, () => {}, zd.id, {}) : zd.boss ? new Boss(scene, spawn, zd.hp, () => {}, zd.id, {}) : new Zombie(scene, spawn, zd.hp, zd.spd, () => {}, zd.id, { crawler: !!zd.crawl, kind: zd.kind || null });
+      z.pos.set(zd.x, zd.y || 0, zd.z);
       if (zd.spawnT <= 0) z.skipSpawn();
-      z.net = { x: zd.x, z: zd.z, yaw: 0, atk: false };
+      z.net = { x: zd.x, z: zd.z, y: zd.y || 0, yaw: 0, atk: false, bs: zd.angel ? 0 : undefined };
+      if (zd.angel) z.region = 1;
       game.zombies.push(z);
     }
   });
@@ -2121,6 +2143,7 @@ function frame() {
   // Solo : le menu pause fige le jeu. En multijoueur la partie continue.
   const frozen = !game.isMultiplayer && !game.playing && game.started && !game.over && !q.has('debug');
   if (game.started && !game.over && !frozen) game.update(dt);
+  else if (frozen) game.summitFx?.step(dt); // le ciel de l'Aube continue pendant la pause du solo
   hud.update(dt);
   updateMusicMood();
   // ombres de la lune : recalculées une image sur deux (à chaque image en qualité haute) : ~20 % de rendu en moins

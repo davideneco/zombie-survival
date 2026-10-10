@@ -45,6 +45,7 @@ export class Angel extends Boss {
     const gold = new THREE.MeshStandardMaterial({ color: 0xf0c040, roughness: 0.3, metalness: 0.8, emissive: 0x7a5410 });
     const glow = new THREE.MeshBasicMaterial({ color: 0xffe9a0, transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
     this.angelMats = [white, gold];
+    white.userData.em = 0x7a6e50; gold.userData.em = 0x7a5410;
     this.glowMat = glow;
     const rig = this.rig = new THREE.Group(); this.group.add(rig);
     const add = (geo, mat, parent, x = 0, y = 0, z = 0) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); parent.add(m); return m; };
@@ -54,7 +55,8 @@ export class Angel extends Boss {
     add(new THREE.CylinderGeometry(0.2, 0.23, 0.55, 12), white, rig, 0, 1.38, 0);
     add(new THREE.CylinderGeometry(0.205, 0.205, 0.07, 12), gold, rig, 0, 1.12, 0);
     this.headG = new THREE.Group(); this.headG.position.set(0, 1.74, 0.01); rig.add(this.headG);
-    add(new THREE.SphereGeometry(0.15, 14, 10), white, this.headG);
+    const skin = new THREE.MeshStandardMaterial({ color: 0xf2d2b0, roughness: 0.6, emissive: 0x3a2a1a }); skin.userData.em = 0x3a2a1a; this.angelMats.push(skin);
+    add(new THREE.SphereGeometry(0.15, 14, 10), skin, this.headG);
     const hair = add(new THREE.SphereGeometry(0.162, 14, 10, 0, Math.PI * 2, 0, Math.PI * 0.55), gold, this.headG, 0, 0.015, -0.01);
     hair.scale.set(1, 1.05, 1.05);
     for (const sx of [-1, 1]) add(new THREE.SphereGeometry(0.018, 6, 6), new THREE.MeshBasicMaterial({ color: 0xbfe6ff }), this.headG, sx * 0.055, 0.02, 0.135);
@@ -67,7 +69,7 @@ export class Angel extends Boss {
     const trumpet = this.trumpet = new THREE.Group(); hand.add(trumpet);
     add(new THREE.CylinderGeometry(0.026, 0.026, 0.66, 8), gold, trumpet, 0, -0.33, 0);
     this.bell = add(new THREE.CylinderGeometry(0.03, 0.2, 0.3, 14, 1, true), gold, trumpet, 0, -0.77, 0);
-    this.bell.material = gold.clone(); this.bell.material.side = THREE.DoubleSide; this.angelMats.push(this.bell.material);
+    this.bell.material = gold.clone(); this.bell.material.side = THREE.DoubleSide; this.bell.material.userData = { em: 0x7a5410 }; this.angelMats.push(this.bell.material);
     this.bellGlow = add(new THREE.CircleGeometry(0.19, 14), glow.clone(), trumpet, 0, -0.93, 0); this.bellGlow.rotation.x = Math.PI / 2; this.bellGlow.material.opacity = 0; this.bellGlow.visible = false;
     // ailes : 9 plumes-plans par aile en éventail (la gauche est le miroir de la droite)
     this.wings = [];
@@ -152,7 +154,7 @@ export class Angel extends Boss {
     }
     this.t += dt; this.stateT += dt;
     this.hitFlash = Math.max(0, this.hitFlash - dt);
-    for (const m of this.angelMats) m.emissive.setHex(this.hitFlash > 0 ? 0x884400 : m === this.angelMats[1] ? 0x7a5410 : 0x7a6e50);
+    for (const m of this.angelMats) m.emissive.setHex(this.hitFlash > 0 ? 0x884400 : m.userData.em ?? 0x7a6e50);
     for (const k of Object.keys(this.cool)) this.cool[k] -= dt;
     const c = this.center, ctx = this.ctx;
     const all = targets.filter((p) => p && !p.dead && !p.downed && this.exposed(p));
