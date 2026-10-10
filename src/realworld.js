@@ -1635,7 +1635,7 @@ export async function buildRealWorld(scene, renderer) {
     const backTo = (t) => Math.atan2(-Math.cos(t), -Math.sin(t));
     const rndIso = seeded(77001);
     // Réseau de tram : rails, quais d'arrêt, heurtoirs, feux des portes, caténaire (avant le décor de la place : ses quais et ses rames évitent les poteaux)
-    tramInfo = buildTramNetwork({ scene, collision, lightSources, net: tramPlan, doors, hdfCenter: hdfStruct ? { x: hdfStruct.rotundas[0].cx, z: hdfStruct.rotundas[0].cz, R: hdfStruct.rotundas[0].R } : null });
+    tramInfo = buildTramNetwork({ scene, collision, lightSources, net: tramPlan, doors, used, hdfCenter: hdfStruct ? { x: hdfStruct.rotundas[0].cx, z: hdfStruct.rotundas[0].cz, R: hdfStruct.rotundas[0].R } : null });
     // Place de l'Homme de Fer : rames de décor, quais, totems, statue (avant le mobilier : il évite l'emprise)
     const hdfZone = ZONE_NAMES.indexOf(HDF.zone);
     let hdf = null;
@@ -1981,7 +1981,7 @@ export async function buildRealWorld(scene, renderer) {
    
     sky: skyApi, setLampScale: (k) => { lampScale = k; lightTimer = 0; },
     floorAt: (x, z, y, out) => levels.floorAt(x, z, y, out),
-    collide: (pos, r, out) => collision.resolve(pos, r, out),
+    collide: (pos, r, out, ignore) => collision.resolve(pos, r, out, ignore),
     rayHit: (ox, oy, oz, dx, dy, dz, maxT) => collision.rayHit(ox, oy, oz, dx, dy, dz, maxT),
     // Hauteur du plafond à l'aplomb de (x, z) : voûtes de la cathédrale, passage sous immeuble (PASSAGE_H), sinon rien (ciel ouvert)
     ceilingAt: (x, z) => {

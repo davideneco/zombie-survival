@@ -655,6 +655,9 @@ export class Zombie {
       gx = e[0]; gz = e[2]; chase = false;
       if (Math.hypot(gx - this.pos.x, gz - this.pos.z) < 1.3) { this.link = { link: L, dir: hop.dir, s: hop.dir > 0 ? 0 : L.length }; return; }
     }
+    // gong du tram (v0.39.0) : à moins de `range` m du gong, un zombie qui n'est pas déjà sur un joueur va vers le tram (sa cible du champ de flux)
+    const lure = world.lure;
+    if (lure && lure.t > 0 && !this.region && !this.link && Math.hypot(lure.x - this.pos.x, lure.z - this.pos.z) < (lure.range || 50) && Math.hypot(gx - this.pos.x, gz - this.pos.z) > 5) { gx = lure.x; gz = lure.z; chase = false; }
     const dx = gx - this.pos.x;
     const dz = gz - this.pos.z;
     const dist = Math.hypot(dx, dz);
@@ -731,8 +734,8 @@ export class Zombie {
       this.attackWindup -= dt;
       if (this.attackWindup < 0) {
         if (Math.hypot(target.pos.x - this.pos.x, target.pos.z - this.pos.z) < Z.attackRange + 0.5 && Math.abs(target.pos.y - this.pos.y) < 2.6) {
-          target.hurt(this.attackDamage || Z.damage);
-          world.onStrike?.(target); // crochet des motos : la moto de la victime perd des PV (hôte)
+          if (!world.shield?.(target, this)) target.hurt(this.attackDamage || Z.damage); // une rame : la caisse encaisse (sauf devant une porte ouverte)
+          world.onStrike?.(target); // crochet des motos et des rames : le véhicule de la victime perd des PV (hôte)
         }
         this.attackCd = Z.attackCooldown;
         this.attackWindup = -1;

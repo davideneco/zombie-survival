@@ -63,7 +63,7 @@ function ribbon(out, a, b, w, col) {
 }
 
 // ------------------------------------------------------------------ construction
-// ctx : { scene, collision, lightSources, net (planTram), doors, hdfCenter: { x, z, R } | null }
+// ctx : { scene, collision, lightSources, net (planTram), doors, hdfCenter: { x, z, R } | null, used [[x, z]...] (objets déjà posés : la sous-station les évite) }
 export function buildTramNetwork(ctx) {
   const { scene, collision, lightSources, net, doors } = ctx;
   const T = CONFIG.tram, M = mats(), o = {}, o2 = {};
@@ -178,6 +178,38 @@ export function buildTramNetwork(ctx) {
   }
   info.gates.sort((a, b) => (a.line < b.line ? -1 : a.line > b.line ? 1 : a.s - b.s));
 
+  // ---------------------------------------------------------------- sous-station (v0.39.0) : kiosque près du quai de la rame conduisible, voyant rouge puis vert
+  {
+    const cl = net.byId[T.car.start.line], st = cl.stops.find((q) => q.name === T.car.start.stop) || cl.stops[0], used = ctx.used || [];
+    let spot = null;
+    for (const so of [0, -9, 9, -16, 16, -23, 23]) {
+      if (spot) break;
+      cl.at(st.s + so, o);
+      for (const sgn of [1, -1]) {
+        const x = o.x - o.tz * sgn * 6.4, z = o.z + o.tx * sgn * 6.4;
+        let ok = net.dist(x, z, 12) >= 5.5 && used.every(([ux, uz]) => Math.hypot(ux - x, uz - z) > 3.5);
+        for (let a = 0; ok && a < 8; a++) ok = collision.rayHit(x, 1, z, Math.cos(a * Math.PI / 4), 0, Math.sin(a * Math.PI / 4), 1.8) >= 1.8;
+        if (ok) { spot = { x, z, tx: o.tx, tz: o.tz, sgn }; break; }
+      }
+    }
+    if (spot) {
+      const ang = Math.atan2(-spot.tz, spot.tx), nx = -spot.tz * -spot.sgn, nz = spot.tx * -spot.sgn; // la face avant regarde la voie
+      const at = (w, h, d, x, y, zz, col) => fixed.push(boxAt(w, h, d, spot.x + spot.tx * x + nx * zz, y, spot.z + spot.tz * x + nz * zz, col, ang));
+      at(1.7, 2.1, 1.1, 0, 1.05, 0, 0x6b7076);          // armoire
+      at(1.9, 0.12, 1.3, 0, 2.16, 0, 0x4a4f55);         // toit
+      at(0.7, 1.5, 0.05, -0.3, 1.0, 0.56, 0x3a3f45);    // porte
+      at(0.7, 0.12, 0.06, -0.3, 0.3, 0.58, 0xe3b72e);   // bande de danger
+      at(0.55, 0.55, 0.04, 0.5, 1.5, 0.56, 0xe8c04a);   // panneau « éclair »
+      at(0.18, 0.3, 0.05, 0.5, 1.5, 0.585, 0x14161a);
+      fixed.push(cylAt(0.05, 0.05, 1.4, spot.x + spot.tx * 0.7 + nx * 0.35, 2.9, spot.z + spot.tz * 0.7 + nz * 0.35, 0x3a3f45, 6)); // mât du voyant
+      const lamp = lampBox(spot.x + spot.tx * 0.7 + nx * 0.35, 3.7, spot.z + spot.tz * 0.7 + nz * 0.35, 0xff2a1a);
+      collision.addBox(spot.x, spot.z, 1.7, 1.1, Math.atan2(spot.tz, spot.tx), 2.2); // le kiosque est un objet : il bloque
+      lightSources.push({ x: spot.x + nx * 1.4, y: 3.2, z: spot.z + nz * 1.4, color: 0xffd080, intensity: 8, dist: 9 });
+      info.substation = { x: spot.x, z: spot.z, lamp };
+      used.push([spot.x, spot.z]);
+    }
+  }
+
   // ---------------------------------------------------------------- caténaire : poteaux (InstancedMesh) et fils
   {
     const P = T.pole, arm = P.offset;
@@ -248,6 +280,9 @@ export function buildTramNetwork(ctx) {
     }
   };
   info.update(0, true);
+  // voyant de la sous-station : rouge hors tension, vert une fois le courant remis (tram.js : setPower)
+  info.setPowered = (on) => { if (info.substation) setLamp(info.substation.lamp, on ? 0x30ff60 : 0xff2a1a); };
+  info.setPowered(false);
 
   // ---------------------------------------------------------------- distance au réseau (m) : décor, arbres, lampadaires
   info.dist = (x, z, max = 40) => net.dist(x, z, max);

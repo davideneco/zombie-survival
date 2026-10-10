@@ -86,6 +86,9 @@ export class Vehicle {
   eyeWorld(seat, out) { return this.toWorld(this.model.seats[seat].eye, out); }
 
   get hasDriver() { return this.seats[0] != null; }
+  isDriver(seat) { return seat === 0; }          // la place de conducteur (les rames de tram en ont deux : une par cabine)
+  seatYaw() { return this.yaw; }                  // cap de la place (les modules d'une rame ont chacun le leur)
+  seatDyaw() { return this.dyaw; }
   freeSeat() { return this.seats.findIndex((s) => s == null); }
 
   // ------------------------------------------------------------------ boucle
@@ -393,15 +396,17 @@ export function installVehicles(game, { world, hud, sfx, scene }) {
 
     resetVehicles() {
       for (const v of this.vehicles) v.reset();
+      this.resetTrams?.();
       this.player.vehicle = null;
       this.refreshRiders();
     },
 
     updateVehicles(dt) {
       const p = this.player;
-      if (p.vehicle && (p.downed || p.dead)) this.leaveVehicle(); // à terre : on est éjecté
+      if (p.vehicle && (p.downed || p.dead)) this.leaveVehicle(true); // à terre : on est éjecté
       for (const v of this.vehicles) v.update(dt);
-      if (!this.isClient) for (const v of this.vehicles) this.hostVehicleTick(v, dt);
+      this.updateTrams?.(dt);
+      if (!this.isClient) for (const v of this.rides()) this.hostVehicleTick(v, dt);
     },
 
     // Moto la plus proche avec une place libre : { v, seat } (conducteur d'abord)
@@ -416,10 +421,11 @@ export function installVehicles(game, { world, hud, sfx, scene }) {
         const d = Math.hypot(p.pos.x - v.pos.x, p.pos.z - v.pos.z);
         if (d < bd) { bd = d; best = { v, seat }; }
       }
-      return best;
+      return best || this.nearTram?.() || null;
     },
 
     vehiclePrompt(nv) {
+      if (nv.v.isTram) return this.tramPrompt(nv);
       const v = nv.v, role = v.def.seats > 1 ? (nv.seat === 0 ? ' — conducteur' : ' — passager') : '';
       return `${game.binds.tag('interact')} Monter sur la ${v.def.name.toLowerCase()}${role} (PV ${Math.round(v.hpFrac * 100)} % · essence ${Math.round(v.fuelFrac * 100)} %)`;
     },
@@ -447,11 +453,12 @@ export function installVehicles(game, { world, hud, sfx, scene }) {
     // Un zombie vient de frapper `target` (le joueur local ou un coéquipier) : s'il est sur une moto, elle perd zombieHit PV (hôte)
     onZombieStrike(target) {
       const rv = target === this.player ? this.player.vehicle : target?.ride;
-      if (rv?.v) this.damageVehicle(rv.v, R().damage.zombieHit, 'zombie');
+      if (rv?.v) this.damageVehicle(rv.v, rv.v.def.zombieHit ?? R().damage.zombieHit, 'zombie'); // une rame : 2 PV par coup sur la caisse
     },
 
     // Mise à feu (hôte) : v_hp puis v_burn à tous
     igniteVehicle(v) {
+      if (v.isTram) { this.hostBreakTram(v); return; } // une rame n'explose pas : elle tombe en panne (hors service jusqu'au dépôt)
       if (v.state !== 'ok') return;
       this.flushVehicleHp(v);
       if (this.isMultiplayer) this.net?.send({ t: 'v_burn', id: v.id });
@@ -517,7 +524,7 @@ export function installVehicles(game, { world, hud, sfx, scene }) {
     // ----------------------------------------------------------- réapparition au parking (hôte)
     // À chaque début de manche : les motos détruites dont la manche de retour est arrivée reviennent (si personne n'est sur l'emplacement)
     hostRespawnCheck() {
-      for (const v of this.vehicles) {
+      for (const v of this.rides()) {
         if ((v.state === 'wreck' || v.state === 'gone' || v.state === 'burning') && v.respawnRound > 0 && this.round >= v.respawnRound) { v.respawnPending = true; v.respawnRetry = 0; }
       }
     },
@@ -530,7 +537,7 @@ export function installVehicles(game, { world, hud, sfx, scene }) {
     },
     respawnVehicle(v) {
       v.reset();
-      v.fuel = v.def.tank * R().fuel.respawn; // revient avec 40 % d'essence
+      if (!v.isTram) v.fuel = v.def.tank * R().fuel.respawn; // revient avec 40 % d'essence
       if (this.player.vehicle?.v === v) this.player.vehicle = null;
       this.refreshRiders();
     },
@@ -547,19 +554,21 @@ export function installVehicles(game, { world, hud, sfx, scene }) {
       const p = this.player;
       if (p.vehicle) return;
       p.vehicle = { v, seat };
-      p.yaw = v.yaw; p.pitch = 0;
+      p.yaw = v.seatYaw(seat) + (v.model.seats[seat].ry || 0); p.pitch = 0; // (une rame : la place regarde vers l'avant, l'arrière ou l'allée)
       p.mouseDown = false; p.aiming = false;
       v.syncNet();
-      sfx.mount?.(v.type);
+      if (v.isTram) sfx.tramChime?.(true, 0.6); else sfx.mount?.(v.type);
       const B = game.binds, kE = B.label('interact');
-      hud.announce(v.def.name, seat === 0 ? `${B.moveLabel()} : conduire · ${B.label('jump')} : frein à main · ${kE} : descendre` : `Vous êtes passager : tirez ! · ${kE} : descendre`, 3500);
+      if (v.isTram) { const [a, b] = this.tramEnterText(v, seat); hud.announce(a, b, 4500); }
+      else hud.announce(v.def.name, seat === 0 ? `${B.moveLabel()} : conduire · ${B.label('jump')} : frein à main · ${kE} : descendre` : `Vous êtes passager : tirez ! · ${kE} : descendre`, 3500);
       this.refreshRiders();
     },
 
-    leaveVehicle() {
+    leaveVehicle(force = false) {
       const p = this.player, rv = p.vehicle;
       if (!rv) return;
       const { v, seat } = rv;
+      if (v.isTram) { this.leaveTram(v, seat, force); return; }
       // on descend sur le côté (gauche pour le conducteur, droite pour le passager), sinon de l'autre côté
       const c = Math.cos(v.yaw), s = Math.sin(v.yaw);
       v.hipWorld(seat, pt);
@@ -580,6 +589,33 @@ export function installVehicles(game, { world, hud, sfx, scene }) {
         if (this.isMultiplayer) this.net?.send({ t: 'v_state', id: v.id, x: r2(v.pos.x), z: r2(v.pos.z), yaw: r2(v.yaw), spd: 0, st: 0, ln: 0, fu: r1(v.fuel) }); // l'essence passe au prochain conducteur
       }
       sfx.knock?.(0.5);
+      this.freeMySeat(v, seat);
+    },
+
+    // Descente d'une rame : à l'arrêt (sauf éjection), côté de la place (le conducteur : à droite), sur le quai ou la chaussée
+    leaveTram(v, seat, force) {
+      const p = this.player;
+      if (!force && Math.abs(v.v) > CONFIG.tram.drive.boardSpeed) { sfx.deny(); hud.announce('TRAM EN MARCHE', 'Arrêtez la rame pour descendre', 1600); return; }
+      const ms = v.model.seats[seat], q = v.mods[ms.module].pose, rx = -q.tz, rz = q.tx;
+      const side = ms.hip[0] === 0 ? 1 : Math.sign(ms.hip[0]);
+      v.hipWorld(seat, pt);
+      let ex = pt.x, ez = pt.z, best = null;
+      for (const sd of [side, -side]) {
+        const o = { x: q.x + rx * sd * (CONFIG.tram.car.width / 2 + 0.75) + q.tx * (-ms.hip[2]), y: 0.1, z: q.z + rz * sd * (CONFIG.tram.car.width / 2 + 0.75) + q.tz * (-ms.hip[2]) };
+        const t0 = { x: o.x, z: o.z };
+        world.collide(o, 0.4);
+        const moved = Math.hypot(o.x - t0.x, o.z - t0.z);
+        if (!best || moved < best.moved) best = { x: o.x, z: o.z, moved };
+        if (moved < 0.3) break;
+      }
+      ex = best.x; ez = best.z;
+      world.floorAt?.(ex, ez, 0.1, fl);
+      p.pos.set(ex, world.floorAt ? fl.y : 0, ez);
+      p.vel.set(0, 0, 0); p.vy = 0; p.vehicle = null;
+      sfx.knock?.(0.5);
+      this.freeMySeat(v, seat);
+    },
+    freeMySeat(v, seat) {
       if (!this.isMultiplayer) v.seats[seat] = null;
       else if (this.isHost) { v.seats[seat] = null; this.broadcastSeats(v); }
       else { v.seats[seat] = null; this.net?.send({ t: 'v_leave', id: v.id }); }
@@ -588,7 +624,7 @@ export function installVehicles(game, { world, hud, sfx, scene }) {
 
     // ----------------------------------------------------------- places (arbitrées par l'hôte)
     hostSeat(vid, seat, pid) {
-      const v = this.vehicles[vid];
+      const v = this.rideById(vid);
       if (!v || seat < 0 || seat >= v.seats.length || !v.usable) { if (v && pid !== myId()) this.net?.send({ t: 'v_deny', id: vid }, pid); return; }
       if (v.seats[seat] != null && v.seats[seat] !== pid) { if (pid !== myId()) this.net?.send({ t: 'v_deny', id: vid }, pid); return; }
       this.freeSeatsOf(pid, v, seat);
@@ -600,7 +636,7 @@ export function installVehicles(game, { world, hud, sfx, scene }) {
 
     // libère les places d'un joueur (sauf `keep` : la place qu'il vient de prendre)
     freeSeatsOf(pid, keepV = null, keepSeat = -1) {
-      for (const v of this.vehicles) v.seats.forEach((s, i) => { if (s === pid && !(v === keepV && i === keepSeat)) { v.seats[i] = null; if (v !== keepV) this.broadcastSeats(v); } });
+      for (const v of this.rides()) v.seats.forEach((s, i) => { if (s === pid && !(v === keepV && i === keepSeat)) { v.seats[i] = null; if (v !== keepV) this.broadcastSeats(v); } });
     },
 
     broadcastSeats(v) { if (this.isMultiplayer) this.net?.send({ t: 'v_seats', id: v.id, seats: v.seats }); },
@@ -608,14 +644,14 @@ export function installVehicles(game, { world, hud, sfx, scene }) {
     onPeerLeft(pid) {
       if (!this.isHost) return;
       this.freeSeatsOf(pid);
-      for (const v of this.vehicles) this.broadcastSeats(v);
+      for (const v of this.rides()) this.broadcastSeats(v);
       this.refreshRiders();
     },
 
     // coéquipiers assis sur une moto : leur personnage est posé sur la selle
     refreshRiders() {
       const riding = new Map();
-      for (const v of this.vehicles) v.seats.forEach((pid, i) => { if (pid != null && pid !== myId()) riding.set(pid, { v, seat: i }); });
+      for (const v of this.rides()) v.seats.forEach((pid, i) => { if (pid != null && pid !== myId()) riding.set(pid, { v, seat: i }); });
       for (const [pid, rp] of this.remotes) {
         const r = riding.get(pid);
         if (r) rp.setRide(r.v, r.seat); else rp.clearRide();
@@ -624,6 +660,7 @@ export function installVehicles(game, { world, hud, sfx, scene }) {
 
     // ----------------------------------------------------------- réseau
     bindVehicleNet(net) {
+      this.bindTramNet?.(net); // messages de la rame (t_*)
       net.on('v_state', (m) => {
         const v = this.vehicles[m.id];
         if (!v || v.seats[0] === myId()) return;
@@ -633,7 +670,7 @@ export function installVehicles(game, { world, hud, sfx, scene }) {
       net.on('v_req', (m) => { if (this.isHost) this.hostSeat(m.id, m.seat, m.from); });
       net.on('v_leave', (m) => {
         if (!this.isHost) return;
-        const v = this.vehicles[m.id];
+        const v = this.rideById(m.id);
         if (!v) return;
         v.seats.forEach((s, i) => { if (s === m.from) v.seats[i] = null; });
         this.broadcastSeats(v);
@@ -641,32 +678,35 @@ export function installVehicles(game, { world, hud, sfx, scene }) {
       });
       net.onHost('v_deny', () => hud.announce('PLACE INDISPONIBLE', 'Place prise ou moto hors d\'usage.', 1800));
       // points de vie : l'hôte les écrit (v_dmg des clients), les autres les reçoivent
-      net.on('v_dmg', (m) => { const v = this.vehicles[m.id]; if (this.isHost && v) this.damageVehicle(v, clamp(+m.amt || 0, 0, 200), m.src || ''); });
-      net.onHost('v_hp', (m) => { const v = this.vehicles[m.id]; if (v && !this.isHost && v.state === 'ok') v.hp = clamp(+m.hp, 0, v.maxHp); });
+      net.on('v_dmg', (m) => { const v = this.rideById(m.id); if (this.isHost && v) this.damageVehicle(v, clamp(+m.amt || 0, 0, 200), m.src || ''); });
+      net.onHost('v_hp', (m) => { const v = this.rideById(m.id); if (v && !this.isHost && v.state === 'ok') v.hp = clamp(+m.hp, 0, v.maxHp); });
       net.onHost('v_burn', (m) => { const v = this.vehicles[m.id]; if (v && !this.isHost) this.startBurn(v); });
       net.onHost('v_boom', (m) => { const v = this.vehicles[m.id]; if (v && !this.isHost) this.onVehicleBoom(v, m.x, m.z, false); });
-      net.onHost('v_respawn', (m) => { const v = this.vehicles[m.id]; if (v && !this.isHost) this.respawnVehicle(v); });
+      net.onHost('v_respawn', (m) => { const v = this.rideById(m.id); if (v && !this.isHost) this.respawnVehicle(v); });
       // borne du parking : le client a déjà payé ; l'hôte vérifie et rend la différence (v_refund)
       net.onHost('v_fuel', (m) => { const v = this.vehicles[m.id]; if (v && !this.isHost) this.setFuel(v, m.fu); });
       net.on('v_service', (m) => { if (this.isHost) this.hostService(m.id, m.from, +m.paid || 0); });
       net.onHost('v_refund', (m) => { if (+m.pts > 0) { this.points += Math.round(m.pts); hud.announce('BORNE', `Remboursé : ${Math.round(m.pts)} pts`, 1800); } });
       net.onHost('v_seats', (m) => {
-        const v = this.vehicles[m.id];
+        const v = this.rideById(m.id);
         if (!v) return;
         v.seats = m.seats.slice();
         const me = v.seats.indexOf(myId()), req = this.seatReq;
         if (me >= 0 && !this.player.vehicle && req && req.id === v.id && this.time < req.until) { this.seatReq = null; this.enterVehicle(v, me); } // ma demande a été acceptée
-        else if (me < 0 && this.player.vehicle?.v === v) this.leaveVehicle(); // l'hôte ne me compte plus sur cette moto (explosion, départ…)
+        else if (me < 0 && this.player.vehicle?.v === v) this.leaveVehicle(true); // l'hôte ne me compte plus sur cette moto (explosion, départ…)
         else this.refreshRiders();
       });
     },
 
+    // (les messages de la rame : voir bindTramNet dans tram.js)
+
     // Nouvel arrivant : positions, occupants, PV et état de toutes les motos (wreck : secondes d'épave restantes ; back : manche de retour)
     vehicleSnapshot() {
-      return this.vehicles.map((v) => ({ id: v.id, x: v.pos.x, z: v.pos.z, yaw: v.yaw, seats: v.seats, hp: r2(v.hp), fu: r2(v.fuel), st: v.state, wreck: r2(v.wreckT), back: v.respawnRound }));
+      return [...this.vehicles.map((v) => ({ id: v.id, x: v.pos.x, z: v.pos.z, yaw: v.yaw, seats: v.seats, hp: r2(v.hp), fu: r2(v.fuel), st: v.state, wreck: r2(v.wreckT), back: v.respawnRound })), ...(this.tramSnapshot?.() || [])];
     },
     applyVehicleSnapshot(list) {
       for (const s of list || []) {
+        if (s.tr) { this.applyTramSnapshot(s); continue; } // une rame (id >= 100)
         const v = this.vehicles[s.id];
         if (!v) continue;
         v.pos.set(s.x, 0, s.z); v.yaw = s.yaw; v.speed = 0; v.seats = s.seats.slice(); v.syncNet(); v.apply();

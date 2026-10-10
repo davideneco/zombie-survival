@@ -337,10 +337,147 @@ function tramGeometries(n) {
   return { body: mergeParts(body), dark: mergeParts(dark) };
 }
 
+// ====================================================================================================================
+//  Rame conduisible (v0.39.0) : un maillage par module (articulés sur la voie, voir tram.js). Repère d'un module : x le long de la rame (nez avant
+//  en +x), y vers le haut, z de côté (+z : droite), origine au milieu du module. Retourne :
+//    modules : [{ body (livrée), dark (acier + intérieur, sommets colorés), leaves: [{ v0, n, dir }] (sommets de dark qui coulissent : vantaux) }]
+//    seats   : [{ module, x, y, z (siège, repère du module), eyeUp, face (cap : 0 vers l'avant, PI vers l'arrière, +-PI/2 vers l'allée), driver }]
+//    doorsAt : [{ module, x (centre de la porte, repère du module), side }]
+// ====================================================================================================================
+export function carGeometries() {
+  const C = CONFIG.tram.car, T = HDF.tram, n = C.modules, M = T.module, L = n * M, half = M / 2 - 0.15, NOSE = 1.7, SEG = 6;
+  const doors = carDoorStarts(), wins = carWindowStarts();
+  const sideUV = (x, y) => [(x + L / 2) / LIVERY_M, 0.5 + 0.5 * tClamp(y)];
+  const noseUV = (flip) => (x, y, z) => [Math.min(0.49, Math.max(0.01, 0.25 + (flip * z / 2.4) * 0.5)), Math.min(0.49, Math.max(0.01, (y / 3.5) * 0.5))];
+  const vc = (g) => (g.index ? g.index.count : g.attributes.position.count); // sommets après toNonIndexed
+  const modules = [], seats = [], doorsAt = [];
+  // sièges : abscisses (depuis le nez arrière) des assis de chaque côté, entre les portes
+  const seatXs = [4.9, 5.75, 6.6, 10.4, 11.75, 13.1, 17.55];
+  const SIT = 0.77; // dessus de l'assise
+  for (let i = 0; i < n; i++) {
+    const c = -L / 2 + M / 2 + i * M;
+    const body = [], dark = [], leafParts = [], inter = [], leaves = [];
+    const tr = (g) => g.translate(-c, 0, 0);
+    // l'intérieur s'arrête juste dans le nez des modules d'extrémité (au-delà, la caisse se resserre : le plancher et le plafond en sortiraient)
+    const lo = i === 0 ? c - half + NOSE - 0.3 : c - M / 2 + 0.08, hi = i === n - 1 ? c + half - NOSE + 0.3 : c + M / 2 - 0.08;
+    // ---- caisse : nez aux deux bouts, flanc, soufflet vers le module suivant
+    let x0 = c - half, x1 = c + half;
+    if (i === 0) {
+      const xs = x0 + NOSE, st = [];
+      for (let k = SEG; k >= 0; k--) { const t = k / SEG; st.push({ x: xs - NOSE * t, s: Math.sqrt(Math.max(0, 1 - t * t)) }); }
+      body.push(tr(sweep(st, noseUV(1)))); x0 = xs;
+    }
+    if (i === n - 1) {
+      const xs = x1 - NOSE, st = [];
+      for (let k = 0; k <= SEG; k++) { const t = k / SEG; st.push({ x: xs + NOSE * t, s: Math.sqrt(Math.max(0, 1 - t * t)) }); }
+      body.push(tr(sweep(st, noseUV(-1)))); x1 = xs;
+    }
+    body.push(tr(sweep([{ x: x0, s: 1 }, { x: x1, s: 1 }], sideUV)));
+    if (i < n - 1) dark.push(tr(sweep([{ x: c + half - 0.02, s: 0.97 }, { x: c + M / 2, s: 0.92 }, { x: c + M - half + 0.02, s: 0.97 }], () => [0, 0], 0x14161a)));
+    for (const k of [-1, 1]) dark.push(tr(boxAt(1.3, 0.3, 1.9, c + k * 1.3, 0.2, 0, 0x1e2125))); // bogies
+    { const u0 = i === 0 ? c - 0.5 : c - M / 2 + 0.3, u1 = i === n - 1 ? c + 0.5 : c + M / 2 - 0.3; // dessous (il s'arrête avant le nez, qui se resserre)
+      dark.push(tr(boxAt(u1 - u0, 0.05, 2.3, (u0 + u1) / 2, 0.3, 0, 0x14161a))); }
+    if (i === 1 || i === n - 2) { // pantographes
+      dark.push(tr(boxAt(1.4, 0.08, 0.9, c, 3.44, 0, 0x2a2d31)));
+      for (const sx of [-1, 1]) dark.push(tr(strut([c + sx * 0.7, 3.46, 0], [c, 4.1, 0], 0.03, 0x2a2d31)));
+      dark.push(tr(boxAt(0.1, 0.06, 1.9, c, 4.12, 0, 0x2a2d31)));
+    }
+    // ---- intérieur : plancher, plafond, bas et haut des parois (les fenêtres restent ouvertes : vue de l'intérieur, la caisse n'a qu'une face), montants, mains courantes
+    const doorSpans = doors.map((d) => [d - L / 2, d - L / 2 + C.doorWidth]); // repère de la rame
+    inter.push(tr(boxAt(hi - lo, 0.03, 2.3, (lo + hi) / 2, 0.335, 0, 0x30343a)));
+    inter.push(tr(boxAt(hi - lo, 0.04, 2.1, (lo + hi) / 2, 2.97, 0, 0xd5d9dc)));
+    for (const side of [-1, 1]) {
+      // bas de paroi : interrompu par les portes
+      let a = lo;
+      for (const [d0, d1] of [...doorSpans.filter(([d0, d1]) => d1 > lo && d0 < hi), [hi + 1, hi + 2]]) {
+        const b = Math.min(hi, d0);
+        if (b - a > 0.05) inter.push(tr(boxAt(b - a, 0.7, 0.035, (a + b) / 2, 0.7, side * 1.15, 0x8a9097)));
+        a = Math.max(a, d1);
+      }
+      inter.push(tr(boxAt(hi - lo, 0.55, 0.04, (lo + hi) / 2, 2.67, side * 1.15, 0xc9ced2)));  // haut de paroi
+      for (const w of wins) { const wx = w - L / 2; if (wx > lo && wx < hi) inter.push(tr(boxAt(0.1, 1.35, 0.07, wx - 0.12, 1.72, side * 1.15, 0xb7bdc3))); } // montants entre les fenêtres
+      for (const [d0, d1] of doorSpans) for (const dx of [d0 - 0.06, d1 + 0.06]) if (dx > lo && dx < hi) inter.push(tr(boxAt(0.1, 2.1, 0.08, dx, 1.4, side * 1.15, 0xb7bdc3))); // cadres de porte
+    }
+    // mains courantes jaunes : une au plafond, des barres près des portes
+    inter.push(tr(new THREE.CylinderGeometry(0.025, 0.025, hi - lo, 6).rotateZ(Math.PI / 2).translate((lo + hi) / 2, 2.78, 0)));
+    inter[inter.length - 1] = colorize(inter[inter.length - 1], 0xe8c04a);
+    for (const [d0, d1] of doorSpans) {
+      const dc = (d0 + d1) / 2;
+      if (dc > lo && dc < hi) for (const side of [-1, 1]) inter.push(tr(colorize(new THREE.CylinderGeometry(0.03, 0.03, 2.5, 6).translate(dc + 0.8, 1.55, side * 0.65), 0xe8c04a)));
+    }
+    // ---- sièges de passagers (longitudinaux, face à l'allée)
+    for (const side of [-1, 1]) for (const X of seatXs) {
+      const x = X - L / 2;
+      if (x <= lo + 0.1 || x >= hi - 0.1) continue;
+      const zc = side * 0.93;
+      inter.push(tr(boxAt(0.52, 0.07, 0.4, x, SIT - 0.035, zc, 0x2f5fa3)));              // assise
+      inter.push(tr(boxAt(0.5, 0.36, 0.34, x, 0.55, zc + side * 0.03, 0x20252b)));        // coffre sous l'assise
+      inter.push(tr(boxAt(0.52, 0.5, 0.05, x, SIT + 0.27, side * 1.1, 0x234a86)));        // dossier contre la paroi
+      seats.push({ module: i, x: x - c, y: SIT + 0.02, z: zc, eyeUp: 0.62, face: side * Math.PI / 2, driver: false, side }); // x : repère du module
+    }
+    // ---- cabines (module 0 : arrière, module n - 1 : avant) : pupitre, siège du conducteur, montants de pare-brise
+    if (i === 0 || i === n - 1) {
+      const dir = i === 0 ? -1 : 1, Xc = dir * (L / 2 - 2.45), Xd = dir * (L / 2 - 1.95);
+      inter.push(tr(boxAt(0.5, 0.55, 1.9, Xd, 0.95, 0, 0x2a2f36)));                          // pupitre
+      inter.push(tr(boxAt(0.46, 0.04, 1.7, Xd - dir * 0.04, 1.26, 0, 0x171b21)));            // dessus incliné (plat)
+      inter.push(tr(boxAt(0.05, 0.3, 0.55, Xd - dir * 0.2, 1.42, 0, 0x172a3a)));              // écran
+      inter.push(tr(colorize(new THREE.CylinderGeometry(0.03, 0.03, 0.22, 6).translate(Xd - dir * 0.08, 1.4, -0.45), 0xb9c0c7)));
+      inter.push(tr(boxAt(0.4, 0.08, 0.42, Xc, 0.5, 0, 0x2a2d31)));                           // siège : assise
+      inter.push(tr(boxAt(0.4, 0.08, 0.42, Xc, 0.82, 0, 0x2a2d31)));
+      inter.push(tr(boxAt(0.05, 0.6, 0.4, Xc - dir * 0.2, 1.1, 0, 0x2a2d31)));               // dossier (derrière le conducteur)
+      inter.push(tr(boxAt(0.12, 0.45, 0.12, Xc, 0.55, 0, 0x14161a)));                         // pied
+      for (const side of [-1, 1]) inter.push(tr(boxAt(0.1, 1.6, 0.1, Xd - dir * 0.35, 1.7, side * 1.05, 0x3c424a))); // montants de pare-brise
+      seats.push({ module: i, x: Xc - c, y: 0.84, z: 0, eyeUp: 0.72, face: i === 0 ? Math.PI : 0, driver: true, side: 0 });
+    }
+    // ---- vantaux des portes : deux par porte et par côté, collés à l'extérieur de la caisse
+    for (let d = 0; d < doors.length; d++) {
+      const [d0, d1] = doorSpans[d], dc = (d0 + d1) / 2;
+      if (dc < lo || dc > hi) continue;
+      for (const side of [-1, 1]) {
+        doorsAt.push({ module: i, x: dc - c, side });
+        for (const dir of [-1, 1]) {
+          const lx = dc + dir * (C.doorWidth / 4);
+          const fr = tr(boxAt(C.doorWidth / 2 - 0.02, 2.0, 0.05, lx, 1.4, side * 1.24, 0x7e868e)), gl = tr(boxAt(C.doorWidth / 2 - 0.2, 1.15, 0.03, lx, 1.75, side * 1.27, 0x16212c));
+          leafParts.push(fr, gl);
+          leaves.push({ k: leafParts.length - 2, dir, side });
+        }
+      }
+    }
+    // fusion : [dark..., leaves..., interior...] ; les vantaux sont repérés par leur rang dans le tableau
+    const parts = [...dark, ...leafParts, ...inter], counts = parts.map(vc);
+    const leafFirst = dark.length;
+    const leafRanges = leaves.map((lf) => { const k = leafFirst + lf.k; let v0 = 0; for (let j = 0; j < k; j++) v0 += counts[j]; return { v0, n: counts[k] + counts[k + 1], dir: lf.dir, side: lf.side }; });
+    modules.push({ body: mergeParts(body), dark: mergeParts(parts), leaves: leafRanges, c });
+  }
+  // sièges : repère du module -> position dans le repère « groupe » (x : droite, z : arrière) du module ; le cap est l'angle de rotation du siège
+  const seatOut = seats.map((s) => ({ module: s.module, hip: [s.z, s.y, -s.x], eye: [s.z, s.y + s.eyeUp, -s.x], ry: s.face, driver: s.driver, side: s.side }));
+  return { modules, seats: seatOut, doorsAt, L };
+}
+
 // ------------------------------------------------------------------ atlas de la livrée (1024 x 512) : flanc, nez, totem
-let ATLAS = null;
-function atlas() {
-  if (ATLAS) return ATLAS;
+// Rame conduisible : début (m depuis le nez arrière) des 4 portes de chaque côté ; elles tombent dans les modules 0, 1, 3 et 4, symétriques par rapport au milieu
+export function carDoorStarts() {
+  const C = CONFIG.tram.car, M = HDF.tram.module, L = C.modules * M, a = 2.95, b = M + 2.95;
+  return [a, b, L - b - C.doorWidth, L - a - C.doorWidth];
+}
+// et des fenêtres (1,05 m) qui comblent le flanc entre les portes, les jonctions des modules et les cabines
+export function carWindowStarts() {
+  const C = CONFIG.tram.car, M = HDF.tram.module, L = C.modules * M, doors = carDoorStarts(), out = [];
+  for (let x = 1.9; x + 1.05 <= L - 1.9 + 1e-6; x += 1.4) {
+    if (doors.some((d) => x < d + C.doorWidth + 0.15 && x + 1.05 > d - 0.15)) continue;
+    let joint = false; for (let k = 1; k < C.modules; k++) if (x < k * M + 0.25 && x + 1.05 > k * M - 0.25) joint = true;
+    if (!joint) out.push(+x.toFixed(2));
+  }
+  return out;
+}
+
+// variant : 'decor' (rames de décor : 7 modules, deux portes ouvertes par module, sang) ou 'car' (rame conduisible : 5 modules, 4 portes par côté, propre)
+const ATLASES = {};
+export function atlas(variant = 'decor') {
+  if (ATLASES[variant]) return ATLASES[variant];
+  const car = variant === 'car', CAR = CONFIG.tram.car;
+  // portes de la rame conduisible : repère de la livrée (m depuis le nez arrière), 4 par côté : deux dans les modules 0 et 1, deux (symétriques) dans les modules 3 et 4
+  const carDoors = car ? carDoorStarts() : [];
   const draw = (x, emis) => {
     const rnd = mulberry(8128);
     x.setTransform(1, 0, 0, 1, 0, 0);
@@ -354,16 +491,16 @@ function atlas() {
       x.fillStyle = '#8a9097'; x.fillRect(0, liveryY(0.84), 1024, liveryY(0.66) - liveryY(0.84)); // liseré
       x.fillStyle = '#3c424a'; x.fillRect(0, liveryY(2.52), 1024, liveryY(2.42) - liveryY(2.52)); // bandeau haut
     }
-    for (let i = 0; i < 7; i++) {
+    for (let i = 0; i < (car ? CAR.modules : 7); i++) {
       const X = i * HDF.tram.module;
       // bandeau vitré sombre (entre les portes) : 1,85..2,85 m du module
-      if (!emis) {
+      if (!emis && !car) {
         const g = x.createLinearGradient(0, liveryY(2.4), 0, liveryY(1.15)); g.addColorStop(0, '#202c38'); g.addColorStop(1, '#10161c');
         x.fillStyle = g; x.fillRect((X + 1.85) * M, liveryY(2.4), 1.0 * M, liveryY(1.15) - liveryY(2.4));
         x.fillStyle = 'rgba(140,170,190,0.14)'; x.beginPath(); x.moveTo((X + 1.95) * M, liveryY(2.4)); x.lineTo((X + 2.4) * M, liveryY(2.4)); x.lineTo((X + 2.1) * M, liveryY(1.15)); x.lineTo((X + 1.85) * M, liveryY(1.15)); x.fill();
       }
-      // deux portes ouvertes : encadrement, vide sombre, éclairage intérieur, vantaux repliés
-      for (const dx of [0.45, 2.95]) {
+      // deux portes ouvertes : encadrement, vide sombre, éclairage intérieur, vantaux repliés (rame conduisible : les portes de carDoorStarts, aucune de plus)
+      for (const dx of car ? [] : [0.45, 2.95]) {
         const px = (X + dx) * M, pw = 1.3 * M, py = liveryY(2.35), ph = liveryY(0.45) - liveryY(2.35);
         if (!emis) {
           x.fillStyle = '#6b7279'; x.fillRect(px - 5, py - 5, pw + 10, ph + 5);
@@ -376,8 +513,24 @@ function atlas() {
         }
       }
     }
+    if (car && !emis) for (const w0 of carWindowStarts()) { // rame conduisible : fenêtres entre les portes
+      const g = x.createLinearGradient(0, liveryY(2.4), 0, liveryY(1.15)); g.addColorStop(0, '#202c38'); g.addColorStop(1, '#10161c');
+      x.fillStyle = g; x.fillRect(w0 * M, liveryY(2.4), 1.05 * M, liveryY(1.15) - liveryY(2.4));
+      x.fillStyle = 'rgba(140,170,190,0.14)'; x.beginPath(); x.moveTo((w0 + 0.1) * M, liveryY(2.4)); x.lineTo((w0 + 0.55) * M, liveryY(2.4)); x.lineTo((w0 + 0.25) * M, liveryY(1.15)); x.lineTo(w0 * M, liveryY(1.15)); x.fill();
+    }
+    for (const x0 of carDoors) { // rame conduisible : l'embrasure des portes (le vide sombre, le marchepied) ; les vantaux sont des pièces mobiles (voir carGeometries)
+      const px = x0 * M, pw = CAR.doorWidth * M, py = liveryY(2.35), ph = liveryY(0.45) - liveryY(2.35);
+      if (!emis) {
+        x.fillStyle = '#6b7279'; x.fillRect(px - 5, py - 5, pw + 10, ph + 5);
+        x.fillStyle = '#07090b'; x.fillRect(px, py, pw, ph);
+        x.fillStyle = '#e8c04a'; x.fillRect(px, liveryY(0.5), pw, liveryY(0.45) - liveryY(0.5));
+      } else {
+        const g = x.createLinearGradient(0, py, 0, py + ph); g.addColorStop(0, 'rgba(255,214,150,0.55)'); g.addColorStop(1, 'rgba(255,170,90,0.12)');
+        x.fillStyle = g; x.fillRect(px + 8, py + 4, pw - 16, ph - 8);
+      }
+    }
     // sang : coulures et éclaboussures autour des portes et sur le bas de caisse (tirage reproductible)
-    if (!emis) {
+    if (!emis && !car) {
       for (let k = 0; k < 46; k++) {
         const i = Math.floor(rnd() * 7), dx = rnd() < 0.5 ? 0.45 + rnd() * 1.3 : 2.95 + rnd() * 1.3;
         const px = (i * HDF.tram.module + dx) * M, py = liveryY(2.3 - rnd() * 1.7), a = 0.35 + rnd() * 0.4;
@@ -430,9 +583,9 @@ function atlas() {
     x.restore();
   };
   const mk = (emis) => canvasTex(1024, 512, (x) => draw(x, emis));
-  ATLAS = { map: mk(false), emissive: mk(true) };
-  ATLAS.mat = new THREE.MeshStandardMaterial({ map: ATLAS.map, emissiveMap: ATLAS.emissive, emissive: 0xffffff, emissiveIntensity: 0.9, roughness: 0.55, metalness: 0.2 });
-  return ATLAS;
+  const A = ATLASES[variant] = { map: mk(false), emissive: mk(true) };
+  A.mat = new THREE.MeshStandardMaterial({ map: A.map, emissiveMap: A.emissive, emissive: 0xffffff, emissiveIntensity: 0.9, roughness: 0.55, metalness: 0.2 });
+  return A;
 }
 
 // Totem : boîte 0,4 x 2,8 x 0,15 m ; UV vers la zone « totem » de l'atlas (face avant ET arrière, texte à l'endroit des deux côtés)

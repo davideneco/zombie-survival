@@ -41,6 +41,7 @@ export class Player {
     this.reset();
   }
 
+  get driving() { const v = this.vehicle; return !!v && v.v.isDriver(v.seat); } // aux commandes d'une moto ou d'une rame : pas de tir, pas de rechargement
   get curW() { return this.inventory[this.weaponIdx]; }
   get curCfg() { return this.statsOf(this.curW); }
   get maxHealth() { return this.perks.juggernog ? 250 : CONFIG.player.maxHealth; }
@@ -220,11 +221,15 @@ export class Player {
       if (!this.game.playing || e.repeat) return;
       if (this.game.debugMenu?.open) return; // menu debug (F9) : les lettres et chiffres lui sont réservés
       const B = this.game.binds;
-      if (B.is('reload', e) && !this.locked && !(this.vehicle && this.vehicle.seat === 0)) this.reload();
+      if (B.is('reload', e) && !this.locked && !this.driving) this.reload();
       if (B.is('interact', e)) this.game.interact();
       if (B.is('torch', e)) this.setTorch(!this.torchOn);
       if (B.is('grenade', e)) this.throwGrenade();
-      if (this.vehicle) { if (B.is('vehicleView', e)) this.game.toggleVehicleView?.(); } // moto : bascule troisième / première personne
+      if (this.vehicle) { // moto, rame : bascule troisième / première personne, gong et portes de la rame
+        if (B.is('vehicleView', e)) this.game.toggleVehicleView?.();
+        else if (B.is('tramGong', e)) this.game.tramGong?.();
+        else if (B.is('tramDoors', e)) this.game.tramDoors?.();
+      }
       else if (B.is('knife', e)) this.melee(this.game.time); // à pied : couteau
       if (B.isBound(e)) e.preventDefault(); // Espace (défilement), Tab, flèches : le navigateur ne doit pas réagir à une touche du jeu
       if (this.locked) return; // arme dans le Pack-a-Punch
@@ -358,7 +363,7 @@ export class Player {
       this.pos.set(this._v.x, veh.v.pos.y, this._v.z);
       this.vel.set(0, 0, 0);
       this.vy = 0; this.wasGrounded = true; this.region = 0; this.airT = 0; this.jumpSprint = false; // en moto : pas de plongeon
-      this.yaw += veh.v.dyaw;
+      this.yaw += veh.v.seatDyaw(veh.seat);
       this.ride.steer(dt, veh, this.game.time - this.lastMouse); // vue externe : tangage borné, recentrage derrière la moto
     } else {
       const B = this.game.binds;
@@ -437,7 +442,7 @@ export class Player {
     // lunette : on cache l'arme quand on vise au fusil de précision
     // (on cache le modèle de l'arme, pas le groupe entier qui contient la lumière de tir)
     // (jamais le groupe entier : il porte la lumière de tir, et masquer une lumière recompile tous les shaders)
-    this.vms[w.id].visible = !this.locked && !(cfg.adsFov && this.aim > 0.8) && !(veh && veh.seat === 0) && !this.ride.external; // vue externe : c'est le personnage qui tient l'arme
+    this.vms[w.id].visible = !this.locked && !(cfg.adsFov && this.aim > 0.8) && !this.driving && !this.ride.external; // vue externe : c'est le personnage qui tient l'arme
     const pk = papPulse(w.pap | 0, now); // niveau III : le reflet pulse
     if (pk !== 1 && this.tintMats) for (const m of this.tintMats) m.emissiveIntensity = PAP_INTENSITY * pk;
     const bolts = this.bolts[w.id];
@@ -454,7 +459,7 @@ export class Player {
         w.reserve -= take;
         w.reloading = false;
       }
-    } else if (!this.locked && !this.vault && !(veh && veh.seat === 0)) {
+    } else if (!this.locked && !this.vault && !this.driving) {
       // Jusqu'à MAX_SHOTS_PER_FRAME tirs par image : le temps restant d'un tir est reporté au suivant (voir shoot),
       // donc la cadence réelle égale fireRate même quand une image dure plus qu'une période de tir.
       for (let n = 0; n < MAX_SHOTS_PER_FRAME && this.mouseDown && now >= this.nextShot; n++) {
@@ -829,7 +834,7 @@ export class Player {
   // Lance-grenades sous canon (clic molette) : un obus de 40 mm, comme celui du M79 ordinaire (niveau 0), cooldown s entre deux coups
   fireGL(now) {
     const w = this.curW, cfg = this.curCfg;
-    if (!cfg.gl || w.gl <= 0 || now < (this.nextGL || 0) || this.locked || this.vault || this.downed || this.dead || (this.vehicle && this.vehicle.seat === 0)) return false;
+    if (!cfg.gl || w.gl <= 0 || now < (this.nextGL || 0) || this.locked || this.vault || this.downed || this.dead || this.driving) return false;
     w.gl--;
     this.nextGL = now + cfg.gl.cooldown;
     this.kick = 1; this.recoil += 0.04;
@@ -850,7 +855,7 @@ export class Player {
   }
 
   throwGrenade() {
-    if (this.downed || this.dead || this.grenades <= 0 || (this.vehicle && this.vehicle.seat === 0)) return;
+    if (this.downed || this.dead || this.grenades <= 0 || this.driving) return;
     this.grenades--;
     this.camera.updateMatrixWorld(true);
     const dir = new THREE.Vector3(0, 0, -1).applyQuaternion(this.camera.quaternion);

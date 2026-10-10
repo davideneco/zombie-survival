@@ -424,6 +424,63 @@ export class Sfx {
     this._noise(0.2, 0.4 * v, 3000, 'bandpass', { at: 0.04, q: 1.2 });
   }
 
+  // ------------------------------------------------------------ Tram (v0.39.0)
+  // Moteur de traction : ronronnement grave (dents de scie filtrées) dont la hauteur monte avec la vitesse, sifflement des onduleurs à l'accélération,
+  // roulement des roues sur les rails. set(vitesse 0..1, traction 0..1, volume 0..1) ; stop() l'éteint.
+  createTramEngine() {
+    if (!this.ctx) return null;
+    const c = this.ctx;
+    const out = c.createGain(); out.gain.value = 0;
+    const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 500; lp.Q.value = 1.2;
+    const osc = (type, g) => { const o = c.createOscillator(), n = c.createGain(); o.type = type; n.gain.value = g; o.connect(n).connect(lp); o.start(); return o; };
+    const o1 = osc('sawtooth', 0.45), o2 = osc('triangle', 0.35), sub = osc('sine', 0.5);
+    lp.connect(out);
+    const whine = c.createOscillator(), wg = c.createGain(); whine.type = 'sine'; wg.gain.value = 0; whine.connect(wg).connect(out); whine.start();
+    const roll = c.createBufferSource(), rf = c.createBiquadFilter(), rg = c.createGain();
+    roll.buffer = this.noiseBuf; roll.loop = true; rf.type = 'bandpass'; rf.frequency.value = 300; rf.Q.value = 0.5; rg.gain.value = 0;
+    roll.connect(rf).connect(rg).connect(out); roll.start();
+    const tick = c.createOscillator(), tg = c.createGain(), tl = c.createGain(); // joints de rails : un tic-tac qui s'accélère
+    tick.type = 'square'; tick.frequency.value = 2; tg.gain.value = 0.5; tl.gain.value = 0; tick.connect(tg).connect(tl).connect(rg.gain);
+    tick.start();
+    out.connect(this.bus);
+    return {
+      set: (ratio, traction, vol) => {
+        const t = c.currentTime, f = 38 + ratio * 70;
+        o1.frequency.setTargetAtTime(f, t, 0.08); o2.frequency.setTargetAtTime(f * 2.01, t, 0.08); sub.frequency.setTargetAtTime(f * 0.5, t, 0.08);
+        lp.frequency.setTargetAtTime(300 + ratio * 700 + traction * 300, t, 0.1);
+        whine.frequency.setTargetAtTime(500 + ratio * 1500, t, 0.1); wg.gain.setTargetAtTime(traction * 0.03 * (0.4 + ratio), t, 0.1);
+        rf.frequency.setTargetAtTime(200 + ratio * 900, t, 0.1); rg.gain.setTargetAtTime(ratio * 0.28, t, 0.15);
+        tick.frequency.setTargetAtTime(1 + ratio * 14, t, 0.15); tl.gain.setTargetAtTime(ratio * 0.12, t, 0.15);
+        out.gain.setTargetAtTime(vol * (0.1 + 0.12 * ratio + traction * 0.05), t, 0.1);
+      },
+      stop: () => {
+        const t = c.currentTime;
+        out.gain.setTargetAtTime(0, t, 0.1);
+        for (const n of [o1, o2, sub, whine, roll, tick]) n.stop(t + 0.5);
+      },
+    };
+  }
+  tramGong(v = 1) { // gong : deux coups de bronze qui sonnent longtemps (partiels inharmoniques)
+    if (!this.ctx || v < 0.03) return;
+    for (const [at, vv] of [[0, 1], [0.34, 0.8]]) {
+      for (const [f, gv, d] of [[196, 0.5, 2.4], [312, 0.38, 1.9], [489, 0.3, 1.4], [706, 0.22, 1.0], [1034, 0.14, 0.7]]) this._tone('sine', f * 1.003, f * 0.995, d, gv * v * vv, { at, atk: 0.004, send: 0.35 });
+      this._noise(0.12, 0.5 * v * vv, 1800, 'bandpass', { at, q: 0.8, atk: 0.001 });
+    }
+  }
+  tramChime(open = true, v = 1) { // carillon des portes : deux notes, montantes à l'ouverture, descendantes à la fermeture
+    if (!this.ctx || v < 0.03) return;
+    const [a, b] = open ? [880, 1175] : [1175, 880];
+    this._tone('triangle', a, a, 0.22, 0.22 * v);
+    this._tone('triangle', b, b, 0.3, 0.22 * v, { at: 0.2 });
+    this._noise(0.35, 0.08 * v, 600, 'lowpass', { at: 0.3 }); // souffle des portes
+  }
+  tramBrake(v = 1, speed = 8) { // frein : grincement aigu et frottement
+    if (!this.ctx || v < 0.03) return;
+    const k = Math.min(1, speed / 14);
+    this._noise(0.16, 0.22 * v * k, 3400 + speed * 120, 'bandpass', { q: 4 });
+    this._tone('sawtooth', 1500 + speed * 90, 1100 + speed * 60, 0.15, 0.05 * v * k);
+  }
+
   // ------------------------------------------------------------ Interface et ambiance
   buy() {
     if (!this.ctx) return;

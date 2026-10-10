@@ -488,20 +488,22 @@ export class Avatar {
 // `holder` : le groupe qui porte l'avatar (avatar.root dedans, plus l'étiquette de nom pour un coéquipier). Il ne doit pas être
 // repeint en noir quand la moto devient une épave (userData.noWreck).
 export function mountAvatar(holder, v, seat, avatar) {
-  v.group.add(holder);
+  (v.seatParent ? v.seatParent(seat) : v.group).add(holder); // une rame : le module qui porte la place
   holder.userData.noWreck = true;
   const h = v.model.seats[seat].hip;
   holder.position.set(h[0], h[1] - 0.92 * avatar.ch.scale[1], h[2]);
-  holder.rotation.set(0, 0, 0);
+  holder.rotation.set(0, v.model.seats[seat].ry || 0, 0);
 }
 export function dismountAvatar(holder) { holder.parent?.remove(holder); }
 // Pose et animation assis : s = { dt, aimYaw (cap visé), pitch, weapon, pap, reloading, aiming, fire }. Le conducteur a les deux mains
-// sur le guidon ; le buste du passager suit la visée (±1,3 rad autour de l'axe de la moto) pour pouvoir tirer.
+// sur le guidon (ou le pupitre) ; le buste du passager suit la visée (±1,3 rad autour de l'axe de la moto, ±2,2 rad en tram, où il est assis
+// de profil) pour pouvoir tirer.
 export function seatedUpdate(holder, v, seat, avatar, s) {
-  const d = Math.atan2(Math.sin(s.aimYaw - v.yaw), Math.cos(s.aimYaw - v.yaw));
-  holder.rotation.y = seat === 1 ? Math.max(-1.3, Math.min(1.3, d)) : 0;
+  const si = v.model.seats[seat], base = si.ry || 0, driver = v.isDriver ? v.isDriver(seat) : seat === 0;
+  const d = Math.atan2(Math.sin(s.aimYaw - (v.seatYaw ? v.seatYaw(seat) : v.yaw) - base), Math.cos(s.aimYaw - (v.seatYaw ? v.seatYaw(seat) : v.yaw) - base)), tw = si.twist ?? 1.3;
+  holder.rotation.y = base + (driver ? 0 : Math.max(-tw, Math.min(tw, d)));
   avatar.setWeapon(s.weapon, s.pap);
-  avatar.update({ dt: s.dt, speed: 0, fwd: 0, pitch: s.pitch, reloading: s.reloading, aiming: s.aiming, fire: s.fire, seat: seat === 0 ? 1 : 2 });
+  avatar.update({ dt: s.dt, speed: 0, fwd: 0, pitch: s.pitch, reloading: s.reloading, aiming: s.aiming, fire: s.fire, seat: driver ? 1 : 2 });
 }
 
 // Portrait pour le menu : rendu une fois dans un petit contexte WebGL à part

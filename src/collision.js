@@ -11,6 +11,7 @@ export class Collision {
     this.circles = [];
     this.floors = [];
     this.vaults = [];   // obstacles enjambables : { id, h, segs | circle }
+    this.dyn = new Map(); // obstacles DYNAMIQUES (v0.39.0) : clé -> { boxes } ; boîtes orientées qui bougent (rames du tram), mises à jour par leur propriétaire
     this.grid = new Map();
     this.stamp = 0;
   }
@@ -33,6 +34,20 @@ export class Collision {
     this.circles.push(c);
     return c;
   }
+
+  // Obstacles dynamiques : liste de boîtes orientées { x, z, w, d, rot, h } (même convention qu'addBox : w le long de (cos rot, sin rot)), remplacée à chaque
+  // appel pour la clé donnée. Ils repoussent les cercles de resolve() (joueurs, zombies, motos) mais ne sont pas dans la grille : les balles et les rayons
+  // de caméra les traversent. `kind` : nature pour les dégâts des motos ('prop' : un objet physique).
+  setDynamic(key, boxes, kind = 'prop') {
+    let e = this.dyn.get(key);
+    if (!e) this.dyn.set(key, e = { boxes: [], kind });
+    e.boxes.length = 0;
+    for (const b of boxes) {
+      const c = Math.cos(b.rot), s = Math.sin(b.rot), hx = b.w / 2, hz = b.d / 2;
+      e.boxes.push({ x: b.x, z: b.z, hx, hz, c, s, h: b.h ?? 3.4, r2: (Math.hypot(hx, hz) + 1.2) ** 2 });
+    }
+  }
+  clearDynamic(key) { this.dyn.delete(key); }
 
   // Dalles horizontales (planchers des étages) qui arrêtent les balles : triangles [ax,az,bx,bz,cx,cz] à la hauteur y
   addFloor(y, tris) {
@@ -134,7 +149,8 @@ export class Collision {
   // Pousse `pos` (x,z) hors des obstacles et le garde dans la zone de jeu.
   // out (facultatif) : reçoit la poussée la plus forte { kind: 'wall' | 'prop' | null, push, nx, nz } (normale unitaire vers l'extérieur) ;
   // le bord de la zone de jeu compte comme un mur.
-  resolve(pos, radius, out = null) {
+  // ignore : clé d'un obstacle dynamique à ne pas compter (ses propres occupants)
+  resolve(pos, radius, out = null, ignore = null) {
     const c = this.cell, py = pos.y || 0;
     let bestPush = 0, bestKind = null, bnx = 0, bnz = 0;
     for (let pass = 0; pass < 2; pass++) {
@@ -174,6 +190,28 @@ export class Collision {
               }
             }
           }
+        }
+      }
+    }
+    // obstacles dynamiques (rames) : le point le plus proche de la boîte, dans son repère ; au centre, on sort par la face la plus proche
+    if (this.dyn.size) {
+      for (const [key, e] of this.dyn) {
+        if (key === ignore) continue;
+        for (const b of e.boxes) {
+          if (py >= b.h - 0.3) continue;
+          const dx = pos.x - b.x, dz = pos.z - b.z;
+          if (dx * dx + dz * dz > b.r2 + radius * radius + 2 * radius) continue;
+          const lx = b.c * dx + b.s * dz, lz = -b.s * dx + b.c * dz;
+          const cx = Math.max(-b.hx, Math.min(b.hx, lx)), cz = Math.max(-b.hz, Math.min(b.hz, lz));
+          const ex = lx - cx, ez = lz - cz, d2 = ex * ex + ez * ez;
+          if (d2 >= radius * radius) continue;
+          let nx, nz, push;
+          if (d2 > 1e-8) { const d = Math.sqrt(d2); push = radius - d; nx = ex / d; nz = ez / d; }
+          else if (b.hx - Math.abs(lx) < b.hz - Math.abs(lz)) { nx = lx < 0 ? -1 : 1; nz = 0; push = b.hx - Math.abs(lx) + radius; }
+          else { nx = 0; nz = lz < 0 ? -1 : 1; push = b.hz - Math.abs(lz) + radius; }
+          const wx = b.c * nx - b.s * nz, wz = b.s * nx + b.c * nz; // normale en repère monde
+          pos.x += wx * push; pos.z += wz * push;
+          if (push > bestPush) { bestPush = push; bestKind = e.kind; bnx = wx; bnz = wz; }
         }
       }
     }

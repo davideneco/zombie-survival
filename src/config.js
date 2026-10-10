@@ -434,6 +434,26 @@ export const CONFIG = {
       colPhase: 10, columnGap: 1.2, ad: 64,
       decor: [{ line: 'AD', side: -1, modules: [7, 3] }, { line: 'AD', side: 1, modules: [7, 3] }],
     },
+    // ---- rame conduisible (v0.39.0) : une seule, garée au quai « Homme de Fer » de la ligne B / C / F ; les rames de décor ne roulent pas
+    // car : 5 modules de `module` m (23,5 m en tout), cabine à chaque bout, `doors` portes de `doorWidth` m par côté, sièges : 2 de conducteur (un par
+    // cabine) + `perSide` assis de chaque côté (16 en tout) ; les passagers sont assis (l'intérieur praticable : v0.40.0)
+    car: { modules: 5, module: 4.7, width: 2.4, height: 3.4, floor: 0.32, doors: 4, doorWidth: 1.3, perSide: 7, camArm: 12, start: { line: 'BCF', stop: 'Homme de Fer' } },
+    // conduite : une position 1D `s` le long de la voie ; vitesses en m/s, accélérations en m/s². Accélération : accel (qui faiblit vers la vitesse
+    // maximale) ; frein de service : brake (touche de recul) ; frein d'urgence : emergency (touche de saut, Espace par défaut) ; marche arrière :
+    // reverse m/s au plus ; drag : résistance. Virage : la vitesse est plafonnée à sqrt(grip x R) (R : rayon de la voie) avec une alarme, et la rame
+    // freine d'elle-même (autoBrake) en regardant lookAhead m devant : pas de déraillement. Portes de zone fermées : même freinage automatique
+    // (gate.signalDist). Les portes de la rame ne s'ouvrent et ne se ferment qu'à moins de doorSpeed m/s ; on monte ou descend à moins de boardSpeed m/s.
+    drive: { maxSpeed: 14, accel: 1.3, brake: 1.8, emergency: 3, reverse: 4, drag: 0.2, grip: 1.0, lookAhead: 70, autoBrake: 2.5, doorTime: 1.2, doorSpeed: 1.2, boardSpeed: 1.5 },
+    // PV et chocs. Joueur à pied : repoussé, `playerDamage` PV au-dessus de `playerSpeed` m/s (jamais mortel) ; zombie : au-dessus de `zombieSpeed` m/s, dégâts =
+    // zombieK x vitesse (et la rame ne ralentit pas), en dessous il bloque la rame (arrêt net) ; heurtoir : au-dessus de bufferFree m/s la rame perd
+    // (vitesse - bufferFree) x bufferPerMs PV ; coup de zombie sur la caisse : zombieHit PV (les passagers ne sont atteints que par une porte ouverte)
+    hp: 3000, zombieHit: 2,
+    hit: { playerSpeed: 5, playerDamage: 10, zombieSpeed: 3, zombieK: 40, zombieCooldown: 0.5, bufferFree: 4, bufferPerMs: 40, crashMin: 8, crashDamagePerMs: 3.5, crashMax: 45 },
+    // énergie : la sous-station de l'Homme de Fer coûte `price` pts, payée une fois pour toute l'équipe ; ensuite la conduite est gratuite.
+    // À 0 PV la rame est hors service jusqu'au retour au dépôt, `respawnRounds` manches plus tard (PV pleins)
+    power: { price: 2000, range: 2.6, respawnRounds: 2 },
+    // gong : attire les zombies à moins de `range` m pendant `duration` s (ils le prennent pour cible du champ de flux) ; recharge `cooldown` s
+    gong: { range: 50, duration: 8, cooldown: 3 },
     lines: [
       {
         id: 'AD', name: 'A / D', color: '#d8452b',
@@ -507,7 +527,7 @@ CONFIG.keybinds = [
   { id: 'back', group: 'Déplacement', label: 'Reculer', def: 'code:KeyS', kind: 'code', ctx: 'all', alt: 'ArrowDown' },
   { id: 'right', group: 'Déplacement', label: 'Aller à droite', def: 'code:KeyD', kind: 'code', ctx: 'all', alt: 'ArrowRight' },
   { id: 'sprint', group: 'Déplacement', label: 'Sprint', def: 'code:ShiftLeft', kind: 'code', ctx: 'all' },
-  { id: 'jump', group: 'Déplacement', label: 'Sauter · enjamber · frein à main (moto)', def: 'code:Space', kind: 'code', ctx: 'all' },
+  { id: 'jump', group: 'Déplacement', label: 'Sauter · enjamber · frein à main (moto) · frein d\'urgence (tram)', def: 'code:Space', kind: 'code', ctx: 'all' },
   { id: 'reload', group: 'Combat', label: 'Recharger', def: 'key:r', kind: 'key', ctx: 'all' },
   { id: 'weapon1', group: 'Combat', label: 'Arme 1', def: 'code:Digit1', kind: 'code', ctx: 'all' },
   { id: 'weapon2', group: 'Combat', label: 'Arme 2', def: 'code:Digit2', kind: 'code', ctx: 'all' },
@@ -517,7 +537,9 @@ CONFIG.keybinds = [
   { id: 'torch', group: 'Équipement', label: 'Lampe torche', def: 'key:f', kind: 'key', ctx: 'all' },
   { id: 'interact', group: 'Équipement', label: 'Interagir (acheter, porte, machine, réanimer, moto)', def: 'key:e', kind: 'key', ctx: 'all' },
   { id: 'map', group: 'Équipement', label: 'Carte', def: 'key:m', kind: 'key', ctx: 'all' },
-  { id: 'vehicleView', group: 'Équipement', label: 'Changer de vue (en moto)', def: 'key:v', kind: 'key', ctx: 'moto' },
+  { id: 'vehicleView', group: 'Équipement', label: 'Changer de vue (en moto ou en tram)', def: 'key:v', kind: 'key', ctx: 'moto' },
+  { id: 'tramGong', group: 'Équipement', label: 'Gong du tram (attire les zombies)', def: 'key:h', kind: 'key', ctx: 'moto' },
+  { id: 'tramDoors', group: 'Équipement', label: 'Portes du tram (ouvrir / fermer)', def: 'key:o', kind: 'key', ctx: 'moto' },
   { id: 'unstick', group: 'Équipement', label: 'Se débloquer (maintenir)', def: 'key:k', kind: 'key', ctx: 'foot' },
 ];
 // Touches fixes, affichées dans le menu mais non modifiables : [touche, action]

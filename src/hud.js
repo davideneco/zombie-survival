@@ -147,6 +147,10 @@ export class Hud {
   setVehicle(info) {
     this._set('vehOn', !!info, (on) => { this.el.vehHud.style.display = on ? 'block' : 'none'; });
     if (!info) return;
+    this._set('vlabels', `${info.name || 'MOTO'}|${info.fuelLabel || 'ESSENCE'}`, () => { // PV MOTO / ESSENCE, ou PV TRAM / ÉNERGIE
+      this.el.hpFill.closest('.vrow').firstElementChild.textContent = `PV ${info.name || 'MOTO'}`;
+      this.el.fuelRow.firstElementChild.textContent = info.fuelLabel || 'ESSENCE';
+    });
     const kmh = Math.round(Math.abs(info.speed) * 3.6), hot = Math.abs(info.speed) >= info.vmin;
     this._set('speedo', `${kmh}|${hot}`, () => {
       this.el.speedo.innerHTML = `${kmh}<small>km/h</small>`;
@@ -553,6 +557,12 @@ export class Hud {
         ctx.font = 'bold 10px Arial'; ctx.lineWidth = 3; ctx.strokeStyle = '#000'; ctx.strokeText(`${lab}+2`, qx, qy + 20); ctx.fillStyle = '#ccc'; ctx.fillText(`${lab}+2`, qx, qy + 20);
       } else icon(0, 0, col, lab, qx, qy);
     }
+    for (const t of world.trams || []) { // la rame (v0.39.0) : carré « T » de la couleur de ses PV, hors service : croix grise
+      const f = t.hp / t.maxHp, col = f < 0.25 ? '#d83a2e' : f < 0.5 ? '#e8892b' : '#4aa3ff', [qx, qy] = P(t.pos.x, t.pos.z);
+      if (t.state === 'wreck') { ctx.strokeStyle = '#000'; ctx.lineWidth = 5; ctx.beginPath(); ctx.moveTo(qx - 7, qy - 7); ctx.lineTo(qx + 7, qy + 7); ctx.moveTo(qx + 7, qy - 7); ctx.lineTo(qx - 7, qy + 7); ctx.stroke(); ctx.strokeStyle = '#9aa0a6'; ctx.lineWidth = 3; ctx.stroke(); }
+      else { ctx.fillStyle = col; ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.beginPath(); ctx.roundRect(qx - 9, qy - 9, 18, 18, 4); ctx.fill(); ctx.stroke(); ctx.fillStyle = '#fff'; ctx.font = 'bold 13px Arial'; ctx.fillText('T', qx, qy + 4.5); }
+    }
+    if (world.tram?.substation) { const [qx, qy] = P(world.tram.substation.x, world.tram.substation.z); ctx.fillStyle = '#e8c04a'; ctx.strokeStyle = '#000'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(qx, qy, 7, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); ctx.fillStyle = '#000'; ctx.font = 'bold 11px Arial'; ctx.fillText('⚡', qx, qy + 4); } // sous-station du tram
     for (const m of world.machines || []) if (m.type !== 'box' || m.active) icon(m.pos.x, m.pos.z, m.type === 'box' ? '#3f8fd8' : m.color, m.type === 'box' ? '?' : m.type === 'pap' ? 'P' : (m.letter || m.name[0]));
     // coéquipiers
     for (const tm of teammates) {

@@ -53,7 +53,7 @@ export class RideCam {
 
   wantThird(veh) {
     const p = this.p;
-    return !!veh && p.game.settings.tpVehicle !== false && !(veh.seat === 1 && p.aiming); // visée du passager : retour en première personne
+    return !!veh && p.game.settings.tpVehicle !== false && !(!veh.v.isDriver(veh.seat) && p.aiming); // visée du passager : retour en première personne
   }
 
   // Appelé à chaque image (après le tir) : renvoie true si la caméra a été placée ici (sinon Player pose la vue à la première personne).
@@ -85,7 +85,7 @@ export class RideCam {
     if (veh) {
       veh.v.eyeWorld(veh.seat, t);
       t.y += C.pivotUp;
-      if (veh.seat === 1) { t.x += cy * C.pivotRight; t.z -= sy * C.pivotRight; }
+      if (!veh.v.isDriver(veh.seat)) { t.x += cy * C.pivotRight; t.z -= sy * C.pivotRight; } // passager : épaule droite
     } else t.set(foot.x, foot.y, foot.z); // sortie de moto : le pivot rejoint l'œil du joueur à pied
     if (!this.hasPivot) { this.pivot.copy(t); this.hasPivot = true; }
     else this.pivot.lerp(t, 1 - Math.exp(-C.follow * dt));
@@ -162,8 +162,8 @@ export class RideCam {
     const C = CONFIG.vehicles.cam, p = this.p;
     if (this.k < 0.5) return;
     p.pitch = clamp(p.pitch, C.pitchMin, C.pitchMax);
-    if (veh.seat === 0 && sinceMouse > C.recenterAfter) { // regard libre ; sans souris depuis 1,5 s : la vue revient derrière la moto à 2 rad/s
-      const dy = angDiff(veh.v.yaw, p.yaw);
+    if (veh.v.isDriver(veh.seat) && sinceMouse > C.recenterAfter) { // regard libre ; sans souris depuis 1,5 s : la vue revient derrière la moto (la rame : derrière la cabine) à 2 rad/s
+      const dy = angDiff(veh.v.seatYaw(veh.seat) + (veh.v.model.seats[veh.seat].ry || 0), p.yaw);
       p.yaw += Math.sign(dy) * Math.min(Math.abs(dy), C.recenterRate * dt);
       const dp = C.recenterPitch - p.pitch;
       p.pitch += Math.sign(dp) * Math.min(Math.abs(dp), C.recenterRate * 0.4 * dt);

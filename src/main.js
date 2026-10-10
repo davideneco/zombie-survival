@@ -18,6 +18,7 @@ import { CHARACTERS, Avatar, charOf, renderPortraits } from './characters.js';
 import { makeTeddy } from './machines.js';
 import { installMachineFx } from './machineFx.js';
 import { installVehicles } from './vehicles.js';
+import { installTram } from './tram.js';
 import { wreckMaterial } from './vehicleModels.js';
 import { installLauncher } from './launcher.js';
 import { makeDisplay } from './weaponDisplay.js';
@@ -563,7 +564,10 @@ const game = {
     const np = this.nearPump();
     if (np) { this.usePump(np); return; }
 
-    // 5) Moto : monter (avant la porte : les motos sont posées loin des portes)
+    // 4c) Sous-station du tram (Homme de Fer) : 2000 pts, une fois pour l'équipe
+    if (this.nearSubstation?.()) { this.useSubstation(); return; }
+
+    // 5) Moto ou rame : monter (avant la porte : les motos sont posées loin des portes)
     const nv = this.nearVehicle();
     if (nv) { this.tryMount(nv.v, nv.seat); return; }
 
@@ -1154,7 +1158,8 @@ const game = {
     if (world.nav && (this.isHost || !this.isMultiplayer)) {
       const targets = [p, ...this.remotes.values()].filter((pl) => !pl.dead && !pl.downed);
       if (targets.length) {
-        const gt = this.fieldTargets(0, targets);
+        const gt = [...this.fieldTargets(0, targets)];
+        if (world.lure) gt.push({ x: world.lure.x, z: world.lure.z }); // gong du tram : le champ de flux a une cible de plus (les zombies à moins de 50 m)
         if (gt.length) {
           if (world.nav.updateField) {
             // champ borné autour des joueurs (CONFIG.zombie.flow), relancé au plus toutes les `interval` s une fois fini
@@ -1350,10 +1355,10 @@ const game = {
 
     // Prompt contextuel
     let promptText = null;
-    hud.setVehicle(p.vehicle ? { speed: p.vehicle.v.speed, vmax: p.vehicle.v.def.maxSpeed, vmin: p.vehicle.v.def.roadkill.vmin, hp: p.vehicle.v.hp, hpMax: p.vehicle.v.maxHp, fuel: p.vehicle.v.fuelFrac } : null);
+    hud.setVehicle(p.vehicle ? (p.vehicle.v.isTram ? p.vehicle.v.hudInfo() : { speed: p.vehicle.v.speed, vmax: p.vehicle.v.def.maxSpeed, vmin: p.vehicle.v.def.roadkill.vmin, hp: p.vehicle.v.hp, hpMax: p.vehicle.v.maxHp, fuel: p.vehicle.v.fuelFrac }) : null);
     if (p.vehicle) {
       const kE = game.binds.tag('interact');
-      promptText = p.vehicle.v.state === 'burning' ? `SAUTEZ ! ${kE}` : p.vehicle.seat === 0 ? `${kE} Descendre` : `${kE} Descendre · clic gauche : tirer`;
+      promptText = p.vehicle.v.isTram ? this.tramRideHint(p.vehicle.v, p.vehicle.seat) : p.vehicle.v.state === 'burning' ? `SAUTEZ ! ${kE}` : p.vehicle.seat === 0 ? `${kE} Descendre` : `${kE} Descendre · clic gauche : tirer`;
     } else if (downedTeammate) {
       const left = Math.max(0, this.reviveTime() - this.reviveTimer).toFixed(1);
       promptText = `${game.binds.tag('interact')} Maintenir pour réanimer ${downedTeammate.name} (${left}s)`;
@@ -1377,6 +1382,8 @@ const game = {
       }
     } else if (this.nearPump()) {
       promptText = this.pumpPrompt(this.nearPump());
+    } else if (this.nearSubstation?.()) {
+      promptText = this.substationPrompt();
     } else if (this.nearVehicle()) {
       promptText = this.vehiclePrompt(this.nearVehicle());
     } else if (this.nearDoor()) {
@@ -1402,10 +1409,12 @@ installMachineFx(game, { world, hud, sfx, fx });
 installSummit(game, { world, scene, hud, sfx, fx, hemi, moon, moonOffset: MOON_OFFSET, camera }); // Acte V : faisceau, Fanal, ciel de l'Aube, vue orbitale
 installFinale(game, { world, scene, hud, sfx, fx });
 installVehicles(game, { world, scene, hud, sfx });
+installTram(game, { world, scene, hud, sfx });
 installLauncher(game, { world, scene, fx });
 installDebugMenu(game, { world, hud, sfx });
 installUnstick(game, { world, hud, sfx });
 game.initVehicles();
+game.initTrams();
 game.player.setCharacter(charOf(game.charPref));
 
 // Choix du personnage (menu) : cartes avec portrait, rendu une seule fois

@@ -181,7 +181,7 @@ export function installDebugMenu(game, { world, hud, sfx }) {
     if (!game.started || game.over) return ack(false, 'partie non lancée');
     const v = spotValid(world, x, y, z, region);
     if (!v.ok) { say(`téléportation refusée : ${v.reason}`, true); return ack(false, v.reason); }
-    if (p.vehicle) game.leaveVehicle();   // en moto : on descend d'abord (v_leave)
+    if (p.vehicle) game.leaveVehicle(true);   // en moto ou en rame : on descend d'abord (v_leave)
     dbg.place(x, v.y, z, region);
     hud.announce('TÉLÉPORTÉ PAR L’HÔTE', '', 2500);
     say(`téléporté par l'hôte (${x.toFixed(1)} ; ${z.toFixed(1)})`);
@@ -205,7 +205,7 @@ export function installDebugMenu(game, { world, hud, sfx }) {
     const c = { x: rp.tpos.x, y: rp.tpos.y, z: rp.tpos.z }, region = rp.ride ? 0 : (rp.region || 0);
     const spot = findSafeSpot(world, c, region, [...dbg.recentAvoid(), ...[...game.remotes.values()].filter((q) => q !== rp).map((q) => ({ x: q.pos.x, y: q.pos.y, z: q.pos.z }))]);
     if (!spot) return say(`aucune case sûre près de ${e.name}`, true);
-    if (p.vehicle) game.leaveVehicle();
+    if (p.vehicle) game.leaveVehicle(true);
     dbg.place(spot.x, spot.y, spot.z, spot.region);
     say(`hôte téléporté près de ${e.name} (${spot.x.toFixed(1)} ; ${spot.z.toFixed(1)})`);
     net()?.send({ t: 'dbg_note', text: `L'hôte a rejoint ${e.name}` });
