@@ -13,6 +13,7 @@ const WIN_CLIMB = 1.5;    // durée de l'enjambement
 const GND_DELAY = 1.1;    // délai : la terre tremble
 const GND_RISE = 2.2;     // durée de la remontée
 
+const ASH = new THREE.Color(0xb9b5ab); // couleur des cendres (l'Aube)
 const pick = (a) => a[Math.floor(Math.random() * a.length)];
 const rnd = (a, b) => a + Math.random() * (b - a);
 
@@ -52,6 +53,22 @@ function skinTexture(base) {
     x.fillStyle = 'rgba(100,8,8,0.7)';                              // traînées de sang
     for (let i = 0; i < 7; i++) { const px = Math.random() * s; x.fillRect(px, Math.random() * s * 0.5, rnd(1, 3), rnd(10, 40)); }
     for (let i = 0; i < 900; i++) { x.fillStyle = `rgba(0,0,0,${Math.random() * 0.08})`; x.fillRect(Math.random() * s, Math.random() * s, 1, 1); }
+  });
+}
+
+// Pierre grise fissurée et mousseuse (gargouilles de l'Acte V)
+function stoneTexture() {
+  return canvasTex(128, (x, s) => {
+    x.fillStyle = '#8b8b86'; x.fillRect(0, 0, s, s);
+    blobs(x, s, 46, ['rgba(60,60,58,A)', 'rgba(170,170,162,A)', 'rgba(110,112,106,A)'], 6, 24, 0.4);
+    blobs(x, s, 7, ['rgba(70,92,52,A)'], 5, 13, 0.45); // mousse
+    x.strokeStyle = 'rgba(30,30,30,0.6)'; x.lineWidth = 1.2; // fissures
+    for (let i = 0; i < 8; i++) {
+      x.beginPath(); let px = Math.random() * s, py = Math.random() * s; x.moveTo(px, py);
+      for (let k = 0; k < 6; k++) { px += rnd(-12, 12); py += rnd(-4, 14); x.lineTo(px, py); }
+      x.stroke();
+    }
+    for (let i = 0; i < 1200; i++) { x.fillStyle = `rgba(0,0,0,${Math.random() * 0.1})`; x.fillRect(Math.random() * s, Math.random() * s, 1, 1); }
   });
 }
 
@@ -285,7 +302,8 @@ export class Zombie {
     for (const m of this.mats) m.color.multiplyScalar(0.55);
   }
 
-  // Variantes de la fin de partie : 'armored' (croisé en armure : encaisse, plus lent) et 'bloat' (pestiféré gonflé de gaz : explose à sa mort)
+  // Variantes de la fin de partie : 'armored' (croisé en armure : encaisse, plus lent), 'bloat' (pestiféré gonflé de gaz : explose à sa mort) et
+  // 'gargoyle' (Acte V : coureur de pierre qui surgit d'un parapet)
   makeKind(kind) {
     this.kind = kind;
     const A = assets();
@@ -301,6 +319,28 @@ export class Zombie {
       const cuirass = new THREE.Mesh(k.cuirass, metal);
       cuirass.position.set(0, 0.1, 0.0); cuirass.scale.set(0.64, 0.92, 0.5); this.spine.add(cuirass);
       this.arms.forEach((a, i) => { const pad = new THREE.Mesh(k.pauldrons[i], metal); pad.scale.setScalar(0.72); a.shoulder.add(pad); });
+    } else if (kind === 'gargoyle') {
+      // gargouille de pierre (Acte V) : coureur gris fissuré, cornes et ailes de chauve-souris repliées ; elle surgit d'un parapet
+      this.armor = 0.8; this.runner = true; this.limp = false;
+      const stone = A.stoneTex || (A.stoneTex = stoneTexture());
+      for (const m of this.mats) { m.map = stone; m.bumpMap = stone; m.color.setRGB(0.85, 0.86, 0.84); m.bumpScale = 1.1; m.roughness = 0.95; }
+      this.group.scale.multiplyScalar(1.1);
+      const eye = A.gargEye || (A.gargEye = new THREE.MeshBasicMaterial({ color: 0xff7a24 }));
+      for (const e of this.eyes) { e.material = eye; e.scale.setScalar(1.5); }
+      const hornGeo = A.hornGeo || (A.hornGeo = new THREE.ConeGeometry(0.03, 0.17, 6));
+      for (const sx of [-1, 1]) { const h = new THREE.Mesh(hornGeo, this.skinMat); h.position.set(sx * 0.07, 0.17, 0.0); h.rotation.set(-0.35, 0, -sx * 0.45); this.headGroup.add(h); }
+      if (!A.wingGeo) { // aile de chauve-souris : contour festonné dans le plan, doublement visible
+        const sh = new THREE.Shape(); sh.moveTo(0, 0); sh.lineTo(0.2, 0.55); sh.lineTo(0.55, 0.78); sh.lineTo(0.45, 0.42); sh.lineTo(0.78, 0.5); sh.lineTo(0.62, 0.2); sh.lineTo(0.84, 0.18); sh.lineTo(0.5, -0.1); sh.lineTo(0.1, -0.18); sh.closePath();
+        A.wingGeo = new THREE.ShapeGeometry(sh);
+        A.wingMat = new THREE.MeshStandardMaterial({ color: 0x77776f, roughness: 0.95, side: THREE.DoubleSide, map: stone, bumpMap: stone });
+      }
+      this.wings = [];
+      for (const sx of [-1, 1]) {
+        const w = new THREE.Mesh(A.wingGeo, A.wingMat); w.scale.set(sx, 1, 1);
+        const pivot = new THREE.Group(); pivot.position.set(sx * 0.08, 0.5, -0.14); pivot.rotation.set(0.1, sx * 0.9, 0); pivot.add(w); w.position.set(0, 0, 0); this.spine.add(pivot);
+        this.wings.push(pivot);
+      }
+      this.appear = this._appearT = CONFIG.summit.gargoyles.appear; this._sc0 = this.group.scale.x; this.group.scale.setScalar(this._sc0 * 0.15);
     } else if (kind === 'bloat') {
       this.explodes = true; this.speed *= 0.7; this.runner = false;
       const sc = this.group.scale.x;
@@ -340,6 +380,26 @@ export class Zombie {
       a.shoulder.rotation.z = a.side * 0.25;
       a.elbow.rotation.x = -0.25 - Math.max(0, -pull) * 0.7;
     });
+  }
+
+  // L'Aube (Acte V) : le zombie tombe en cendres (pâlit, s'affaisse et s'envole en poussière grise) ; il compte comme mort, sans tache de sang
+  becomeAsh() {
+    if (this.dead) return;
+    this.damage(1e9, false);
+    this.ashT = 0; this._decal = true;
+    if (this.mound) { this.scene.remove(this.mound); this.mound = null; }
+    this.group.visible = true; this.group.rotation.x = 0; this.group.rotation.z = 0;
+    this._ashY = this.group.scale.y;
+    this._ashCol = this.mats.map((m) => m.color.clone());
+    fx.emit(this.pos.x, this.pos.y + 1.1, this.pos.z, { count: 7, color: [0xcfcac0, 0x9a968c, 0xe6e2d6], speed: 1.1, up: 1.8, size: 0.13, life: 1.3, grav: -0.6, spread: 0.55, glow: true });
+  }
+  _ashStep(dt) {
+    this.ashT += dt; this.deathT += dt;
+    const D = CONFIG.summit.dawn.ash, k = Math.min(1, this.ashT / D);
+    this.mats.forEach((m, i) => { m.color.copy(this._ashCol[i]).lerp(ASH, Math.min(1, k * 1.6)); m.emissive.setRGB(0.16 * k, 0.16 * k, 0.15 * k); });
+    this.group.scale.y = this._ashY * (1 - 0.94 * k * k);
+    if (this.ashT < D && Math.random() < dt * 22) fx.emit(this.pos.x, this.pos.y + 1.6 * (1 - k), this.pos.z, { count: 2, color: [0xcfcac0, 0x9a968c, 0xe6e2d6], speed: 0.8, up: 1.5, size: 0.1, life: 1.1, grav: -0.5, spread: 0.45, glow: true });
+    if (this.ashT > D + 0.1) this.group.visible = false;
   }
 
   // Peut-on lui tirer dessus ? (visible et pas encore sorti = déjà touchable à moitié)
@@ -413,6 +473,7 @@ export class Zombie {
     this.headGroup.rotation.z = Math.sin(walk * 0.8) * 0.16;
     this.headGroup.rotation.y = Math.cos(walk * 0.4) * 0.14;
     this.jaw.rotation.x = 0.22 + (Math.sin(walk * 1.3) * 0.5 + 0.5) * 0.28;
+    if (this.wings) { const f = Math.sin(walk * 1.5) * 0.16; this.wings[0].rotation.y = -0.9 - f; this.wings[1].rotation.y = 0.9 + f; } // gargouille : les ailes battent
   }
 
   // ---------------------------------------------------------- Apparition
@@ -494,6 +555,7 @@ export class Zombie {
 
     // ----- Mort : chute + tâche de sang -----
     if (this.dead) {
+      if (this.ashT != null) { this._ashStep(dt); return; } // l'Aube : il part en cendres
       this.deathT += dt;
       const p = Math.min(1, this.deathT / 0.6);
       const f = 1 - Math.pow(1 - p, 2);
@@ -507,6 +569,13 @@ export class Zombie {
       if (!this._decal && this.deathT > 0.4) { this._decal = true; fx.decal(this.pos.x, this.pos.z, 1.7); }
       if (this.deathT > 2.5) this.pos.y -= dt * 0.8;
       return;
+    }
+
+    // ----- Gargouille : elle gonfle sur son parapet avant de bondir -----
+    if (this.appear > 0) {
+      this.appear -= dt;
+      const k = Math.max(0, Math.min(1, 1 - this.appear / this._appearT)), e = k * k * (3 - 2 * k);
+      this.group.scale.setScalar(this._sc0 * (0.15 + 0.85 * e));
     }
 
     // ----- Flash rouge quand touché -----

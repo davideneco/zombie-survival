@@ -236,7 +236,45 @@ export const CONFIG = {
       { name: 'Les galeries', where: 'galleries', count: 20, perPlayer: 5, kinds: { normal: 0.4, runner: 0.3, crawler: 0.1, armored: 0.2 } },
       { name: 'Les portes de la ville', where: 'portal', count: 24, perPlayer: 6, kinds: { normal: 0.3, runner: 0.25, armored: 0.25, bloat: 0.2 } },
     ],
-    kindHealth: { normal: 1, runner: 0.8, crawler: 0.8, armored: 3, bloat: 1.6 },
+    kindHealth: { normal: 1, runner: 0.8, crawler: 0.8, armored: 3, bloat: 1.6, gargoyle: 1.2 },
+  },
+
+  // Acte V « L'Aube » (v0.37.0, summit.js / angel.js / finale.js) : après la victoire sur le Bourreau, la flèche de la cathédrale s'illumine
+  // d'un faisceau ; il faut monter (plateforme 67,5 m -> escalier 104 m -> rampe 128 m) et allumer le Fanal d'Erwin à la pointe.
+  // Étapes (états `summit_*` de finale.js) : 1 gargouilles sur la terrasse, 2 l'Ange du Jugement, 3 la rampe (rafales + gargouilles qui montent),
+  // 4 le Fanal (chaque joueur debout le maintient `fanal.hold` s : progression commune), 5 l'Aube. Ensuite : la « Nuit éternelle ».
+  summit: {
+    // gargouilles : zombies de pierre (variante `gargoyle`, coureurs) qui surgissent des parapets de la terrasse
+    gargoyles: {
+      count: 24, perPlayer: 6,       // total de l'étape 1 (+ par joueur en plus)
+      maxAlive: 10, interval: 1.1,   // simultanées, délai entre deux apparitions (s)
+      speed: 1.5,                    // multiple de la vitesse des zombies de la manche
+      appear: 0.7,                   // durée de l'apparition sur le parapet (s)
+      minDist: 5,                    // distance minimale d'apparition à un joueur (m)
+    },
+    // L'Ange du Jugement : boss secret qui tourne hors de la tour (cercle de `radius` m autour de l'axe, à `height` m), scripté.
+    // Point faible : la trompette (dégâts x weak). Attaques : Trompette (cône annoncé), Plumes (éventail de projectiles), Jugement (marque).
+    angel: {
+      health: 40000, perPlayer: 0.7, // PV (+70 % par joueur en plus)
+      radius: 14, height: 106, omega: 10, bob: 0.4, scale: 2.6, // cercle (m), altitude (m), vitesse angulaire (degrés/s), flottement (m), taille du modèle
+      weak: 2,                       // trompette : dégâts x2 (quelle que soit l'arme)
+      gap: 2.2, first: 3,            // pause minimale entre deux attaques (s), délai de la première
+      trumpet: { tel: 1, damage: 40, range: 10, angle: 20, cooldown: 7, dur: 0.6 },   // cône de `range` m, demi-angle en degrés, annoncé `tel` s
+      plumes: { tel: 0.7, count: 5, damage: 15, speed: 16, spread: 12, cooldown: 5, life: 2, radius: 0.75 }, // éventail de `count` plumes, `spread` degrés d'écart
+      judgment: { tel: 3, damage: 70, cooldown: 16, fromHealth: 0.6 }, // un joueur est marqué `tel` s puis frappé d'un rayon, sauf s'il se cache derrière la flèche
+      reward: 5000,                  // points par joueur
+    },
+    // rampe : une rafale toute les `interval` s pousse le joueur de `push` m/s pendant `duration` s (les garde-corps le retiennent) ;
+    // des gargouilles montent depuis le bas de la rampe
+    ramp: { interval: 6, push: 2.5, duration: 1, outward: 0.6, gargoyles: { every: 7, count: 2, maxAlive: 6, ahead: 24 } },
+    // Fanal d'Erwin (balcon de la pointe) : chaque joueur debout le maintient `hold` s à moins de `range` m ; progression commune
+    // (chaque tenant fait avancer la jauge de 1/hold par seconde, divisé par le nombre de joueurs debout)
+    fanal: { hold: 6, range: 2.8 },
+    // l'Aube : le ciel passe de la nuit au jour en `sky` s, vue orbitale `orbit` s (Échap la passe), cendres des zombies ; la Bénédiction de l'Aube
+    // donne tous les atouts (gardés à terre) et rend les portes gratuites
+    dawn: { sky: 30, orbit: 12, ash: 1.6, orbitRadius: [30, 22], orbitHeight: [132, 146] },
+    // Nuit éternelle : le jour dure `day` s puis la nuit retombe en `dusk` s ; les zombies ont `healthMult` x plus de vie dès la manche suivante
+    eternal: { day: 60, dusk: 20, healthMult: 1.3 },
   },
 
   // Enjambement (Espace devant un obstacle enjambable de moins de 1,15 m : banc, poubelle, jardinière, caisse, borne, vélos si profondeur <= 1,3 m,

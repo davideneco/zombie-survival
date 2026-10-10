@@ -1768,23 +1768,29 @@ export async function buildRealWorld(scene, renderer) {
 
   // ---------------------------------------------------------------- Ciel nocturne (suit le joueur)
   const sky = new THREE.Group();
+  let skyApi = null; // dégradé et étoiles, repeints par l'Acte V (summit.js : l'Aube) : même texture, aucun nouveau shader
   {
     const c = document.createElement('canvas'); c.width = 4; c.height = 256;
     const x = c.getContext('2d');
-    const g = x.createLinearGradient(0, 0, 0, 256);
-    g.addColorStop(0, '#04070d'); g.addColorStop(0.55, '#0c1522'); g.addColorStop(1, '#1b2535');
-    x.fillStyle = g; x.fillRect(0, 0, 4, 256);
+    const paint = (top, mid, bot) => {
+      const g = x.createLinearGradient(0, 0, 0, 256);
+      g.addColorStop(0, top); g.addColorStop(0.55, mid); g.addColorStop(1, bot);
+      x.fillStyle = g; x.fillRect(0, 0, 4, 256);
+    };
+    paint('#04070d', '#0c1522', '#1b2535');
     const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace;
     const dome = new THREE.Mesh(new THREE.SphereGeometry(300, 24, 16), new THREE.MeshBasicMaterial({ map: tex, side: THREE.BackSide, fog: false, depthWrite: false }));
     dome.renderOrder = -1;
     sky.add(dome);
+    skyApi = { group: sky, dome, setGradient: (top, mid, bot) => { paint(top, mid, bot); tex.needsUpdate = true; }, stars: null };
     const sp = [];
     for (let i = 0; i < 500; i++) {
       const th = rnd() * Math.PI * 2, ph = rnd() * 1.2;
       sp.push(Math.cos(th) * Math.cos(ph) * 290, Math.sin(ph) * 290 + 10, Math.sin(th) * Math.cos(ph) * 290);
     }
     const sg = new THREE.BufferGeometry(); sg.setAttribute('position', new THREE.Float32BufferAttribute(sp, 3));
-    sky.add(new THREE.Points(sg, new THREE.PointsMaterial({ color: 0xdde6ff, size: 1.4, sizeAttenuation: false, fog: false })));
+    skyApi.stars = new THREE.Points(sg, new THREE.PointsMaterial({ color: 0xdde6ff, size: 1.4, sizeAttenuation: false, fog: false }));
+    sky.add(skyApi.stars);
     sky.scale.setScalar(0.5); // ciel à 150 m : dans le champ de la caméra (170 m)
     scene.add(sky);
   }
@@ -1908,7 +1914,7 @@ export async function buildRealWorld(scene, renderer) {
     scene.add(l);
     lightPool.push(l);
   }
-  let lightTimer = 0;
+  let lightTimer = 0, lampScale = 1; // lampScale : l'Aube éteint peu à peu les lampadaires (summit.js)
   const assignLights = (px, pz) => {
     const sorted = lightSources
       .filter((s) => !(s.door && s.door.open) && !(s.box && !s.box.active))
@@ -1918,7 +1924,7 @@ export async function buildRealWorld(scene, renderer) {
     lightPool.forEach((l, i) => {
       const e = sorted[i];
       if (!e) { l.intensity = 0; return; }
-      l.color.setHex(e.s.color); l.intensity = e.s.intensity; l.distance = e.s.dist; l.position.set(e.s.x, e.s.y, e.s.z);
+      l.color.setHex(e.s.color); l.intensity = e.s.intensity * lampScale; l.distance = e.s.dist; l.position.set(e.s.x, e.s.y, e.s.z);
     });
   };
   // Boîte mystère : une seule active parmi tous ses emplacements possibles
@@ -1941,6 +1947,7 @@ export async function buildRealWorld(scene, renderer) {
     cathedral: cath ? { seed: cath.seed, clock: cath.clock, insideInner: cath.insideInner, inner: cath.inner, P: cath.P, S: cath.S, T: cath.T, ceilAt: cath.ceilAt, info: cathInfo } : null,
     levels, hdf: hdfInfo, mapFixes: { partWalls, fountains: fountainCircles.length }, // v0.35.2 : murs ajoutés aux façades des parties 3D (tests, outils)
    
+    sky: skyApi, setLampScale: (k) => { lampScale = k; lightTimer = 0; },
     floorAt: (x, z, y, out) => levels.floorAt(x, z, y, out),
     collide: (pos, r, out) => collision.resolve(pos, r, out),
     rayHit: (ox, oy, oz, dx, dy, dz, maxT) => collision.rayHit(ox, oy, oz, dx, dy, dz, maxT),
