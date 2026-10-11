@@ -1,6 +1,6 @@
 # Zombie Survival — fiche de référence
 
-Version du jeu : **v0.40.0 · 48fe705 · 2026-10-10** (package 0.41.0). Générée automatiquement par `node tools/make-docs.mjs` à partir de `src/config.js` et du jeu.
+Version du jeu : **v0.42.0 · 719fad9 · 2026-10-10** (package 0.42.0). Générée automatiquement par `node tools/make-docs.mjs` à partir de `src/config.js` et du jeu.
 Carte annotée : [carte.png](carte.png). Armes de profil : [armes.png](armes.png). Les mêmes tableaux en tableur : dossier [csv/](csv/).
 
 Pour demander une modification, citez la ligne (ex. « Mitrailleuse RPK : chargeur 100 », « Mastodonte à 3000 pts », « porte P3 à 500 pts », « mettre la boîte mystère dans la zone Temple-Neuf »).
@@ -632,7 +632,8 @@ Prix d'une porte : le plus cher des deux prix de zone (colonne « Prix de la por
 | V (à pied) | Coup de couteau (aussi : clic gauche quand le chargeur et la réserve sont vides) |
 | M | Carte |
 | Clic molette | Lance-grenades sous le canon (fusil d'assaut Pack-a-Punch niveau III) |
-| Échap | Ferme la carte ou le menu debug ; sinon menu pause (reprise : Échap, ou clic si le navigateur refuse) ; ferme aussi la capture d'une touche dans Options > Touches |
+| Entrée | Chat écrit (multijoueur) : ouvre la saisie en bas à gauche ; Entrée envoie, Échap annule ; aucune autre touche n'agit pendant la saisie (200 caractères, 5 messages par 4 s ; option « Afficher le chat » dans Options) |
+| Échap | Ferme la saisie du chat, la carte ou le menu debug ; sinon menu pause (reprise : Échap, ou clic si le navigateur refuse) ; ferme aussi la capture d'une touche dans Options > Touches |
 | F9 (hôte) | Menu debug de l'hôte : 1-4 joueur, T deux fois amener, Y rejoindre, N réanimer, U débloquer les zombies, P perfs |
 
 ### Notes
