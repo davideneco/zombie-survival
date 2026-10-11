@@ -20,7 +20,7 @@ export function installChat(game, { hud, sfx, canvas }) {
   const C = CONFIG.chat;
   const root = $('chat'), log = $('chatLog'), input = $('chatInput'), btnShow = $('btnChatShow');
   const lines = [];                     // { el, age, op, name, text, sys } : du plus ancien au plus récent
-  const S = { open: false, wasLocked: false, unlockPending: false, relockPending: false, relockT: 0, unlockT: 0, dirty: true, stick: true, sent: [], shown: false };
+  const S = { open: false, wasLocked: false, unlockPending: false, relockPending: false, relockT: 0, unlockT: 0, dirty: true, stick: true, sent: [], shown: false, boss: false };
   root.style.setProperty('--chat-lines', C.visibleLines);
   input.maxLength = C.maxLen;
   input.placeholder = 'Message…  Entrée : envoyer · Échap : annuler';
@@ -31,7 +31,7 @@ export function installChat(game, { hud, sfx, canvas }) {
 
   const chat = game.chat = {
     get open() { return S.open; },
-    lines, // lecture seule (outils de test)
+    lines, state: S, // lecture seule (outils de test)
 
     // ---------------------------------------------------------------- journal
     add(name, color, text, sys = false) {
@@ -71,12 +71,13 @@ export function installChat(game, { hud, sfx, canvas }) {
       if (!visible()) { hud.toast('Chat masqué : Options > Afficher le chat'); return; }
       if (!inGame()) return;
       S.open = true;
+      S.relockPending = false; // une reprise de la souris encore en attente (saisie fermée puis rouverte aussitôt) n'a plus lieu d'être
       S.wasLocked = document.pointerLockElement === canvas;
       game.player.releaseInputs(); // plus aucune touche ni aucun bouton « enfoncé » : le joueur ne bouge pas tout seul
       if (S.wasLocked) {
         S.unlockPending = true; document.exitPointerLock();
         clearTimeout(S.unlockT); // si l'événement n'arrive jamais, on ne garde pas un « Échap » à avaler
-        S.unlockT = setTimeout(() => { if (S.unlockPending) { S.unlockPending = false; if (S.relockPending) { S.relockPending = false; relockPointer(); } } }, 1000);
+        S.unlockT = setTimeout(() => { if (S.unlockPending) { S.unlockPending = false; if (S.relockPending) { S.relockPending = false; if (!S.open) relockPointer(); } } }, 1000);
       }
       root.classList.add('typing');
       input.value = '';
@@ -113,7 +114,7 @@ export function installChat(game, { hud, sfx, canvas }) {
     absorbUnlock() {
       if (S.unlockPending) {
         S.unlockPending = false;
-        if (S.relockPending) { S.relockPending = false; relockPointer(); }
+        if (S.relockPending) { S.relockPending = false; if (!S.open) relockPointer(); }
         return true;
       }
       return S.open;
@@ -142,17 +143,26 @@ export function installChat(game, { hud, sfx, canvas }) {
           l.el.style.display = op <= 0.01 ? 'none' : '';
         }
       }
+      const boss = !!hud.bossBar && hud.bossBar.w.style.display === 'block'; // barre de boss affichée : l'écran bas réduit le journal (index.html)
+      if (boss !== S.boss) { S.boss = boss; root.classList.toggle('boss', boss); S.dirty = true; }
       if (S.dirty) {
         S.dirty = false;
         if (S.stick || !S.open) log.scrollTop = log.scrollHeight;
+        syncCut();
       }
     },
   };
 
+  // première ligne coupée par le haut du journal : fondu (classe cut, voir index.html)
+  function syncCut() { root.classList.toggle('cut', log.scrollTop > 1); }
+  log.addEventListener('scroll', syncCut);
+  window.addEventListener('resize', () => { S.dirty = true; });
+
   // ---------------------------------------------------------------- pointer lock
   function relockPointer() {
-    if (document.pointerLockElement === canvas || !game.started || game.over) return;
-    if (S.unlockPending) { S.relockPending = true; return; } // la libération n'est pas encore arrivée : on attend son événement
+    if (!game.started || game.over) return;
+    if (S.unlockPending) { S.relockPending = true; return; } // la libération n'est pas encore arrivée (pointerLockElement l'indique encore) : on attend son événement
+    if (document.pointerLockElement === canvas) return;
     let req;
     try { req = canvas.requestPointerLock(); } catch { req = null; }
     const refused = () => { // le navigateur refuse (pas de geste récent) : bandeau « Cliquez pour reprendre », comme après un Échap

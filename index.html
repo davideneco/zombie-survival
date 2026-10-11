@@ -146,13 +146,18 @@
     #keysStatus .grow { flex: 1 1 200px; }
     #keysStatus .btn { flex: none; }
 
-    /* Chat écrit (v0.42.0, src/chat.js) : journal + saisie en bas à gauche, au-dessus des points et des atouts. Hors du #hud : reste visible
-       pendant la vue orbitale. Chaque ligne a son propre fond sombre (lisible sur la neige comme sur la nuit) et s'estompe seule. */
+    /* Chat écrit (v0.42.0, src/chat.js) : journal + saisie à GAUCHE, hors du #hud (reste visible pendant la vue orbitale) mais AVANT lui dans le
+       DOM : le HUD (cartes des équipiers, invite, barre de boss, annonces) est dessiné par-dessus, jamais l'inverse. Chaque ligne a son fond sombre
+       (lisible sur la neige comme sur la nuit) et s'estompe seule. Écran assez haut (720 px et plus) : en bas à gauche, au-dessus des atouts et des
+       points, sous les cartes des équipiers. Écran bas (moins de 720 px, comme 800x450) : la colonne de gauche est déjà pleine, le chat passe à droite
+       d'elle (à la même hauteur, au-dessus des atouts), sur 6 lignes au plus, 2 si une barre de boss est affichée. */
     #chat { position: fixed; left: 24px; bottom: 214px; width: min(400px, calc(100vw - 48px)); display: none; flex-direction: column; gap: 5px; pointer-events: none; font: 14px/18px Arial, sans-serif; color: #f2f2f2; user-select: none; }
     #chat.on { display: flex; }
+    body:has(#mapOverlay.show) #chat { z-index: 5; } /* carte ouverte : le chat reste au-dessus de la carte */
     #chatLog { display: flex; flex-direction: column; max-height: calc(var(--chat-lines, 8) * 22px); overflow-y: hidden; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: #888 transparent; }
     #chatLog::before { content: ''; flex: 1 1 0; }
     #chat.typing #chatLog { overflow-y: auto; pointer-events: auto; }
+    #chat.cut #chatLog { -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 16px); mask-image: linear-gradient(to bottom, transparent 0, #000 16px); } /* première ligne coupée : fondu */
     .chat-line { flex: none; width: fit-content; max-width: 100%; margin-top: 2px; padding: 1px 7px; background: rgba(0,0,0,0.55); border-radius: 3px; text-shadow: 0 1px 2px #000; overflow-wrap: anywhere; transition: opacity .25s; }
     .chat-line b { font-weight: bold; }
     .chat-line.sys { color: #b4b4b4; font-style: italic; background: rgba(0,0,0,0.45); }
@@ -160,6 +165,14 @@
     #chat.typing #chatRow { display: block; }
     #chatInput { width: 100%; padding: 6px 9px; font: 15px/20px Arial, sans-serif; color: #fff; background: rgba(0,0,0,0.82); border: 1px solid #ffd24a; border-radius: 4px; outline: none; user-select: text; }
     #chatInput::placeholder { color: #9a9a9a; }
+    @media (max-height: 800px) { #chat.typing #chatLog { max-height: calc((var(--chat-lines, 8) - 2) * 22px); } } /* la saisie prend la place de deux lignes : le journal ne monte pas sur les cartes des équipiers */
+    @media (max-height: 719px) {
+      #chat { left: 190px; width: max(180px, min(400px, calc(50vw - 218px))); }
+      #chatLog { max-height: calc(min(var(--chat-lines, 8), 6) * 22px); }
+      #chat.typing #chatLog { max-height: calc((min(var(--chat-lines, 8), 6) - 1) * 22px); }
+      #chat.boss #chatLog { max-height: 44px; }
+      #chat.boss.typing #chatLog { max-height: 22px; }
+    }
 
     /* Bandeau « Cliquez pour reprendre » (carte / menu debug fermés par Échap : souris libérée, pas la pause complète) */
     #resumeBanner { white-space: nowrap; position: fixed; left: 50%; top: 40%; transform: translateX(-50%); z-index: 40; padding: 14px 34px; font-size: 30px; letter-spacing: 4px; color: #fff; background: rgba(0,0,0,0.72); border: 2px solid #ffd24a; border-radius: 6px; cursor: pointer; text-shadow: 0 0 8px #000; }
@@ -209,6 +222,10 @@
 </head>
 <body>
   <div id="version"></div>
+  <div id="chat">
+    <div id="chatLog"></div>
+    <div id="chatRow"><input id="chatInput" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="send" aria-label="Message du chat" /></div>
+  </div>
   <div id="hud">
     <div id="vignette"></div>
     <div id="nukeflash"></div>
@@ -253,10 +270,6 @@
   </div>
 
   <div id="mapOverlay"><canvas id="mapCanvas"></canvas></div>
-  <div id="chat">
-    <div id="chatLog"></div>
-    <div id="chatRow"><input id="chatInput" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="send" aria-label="Message du chat" /></div>
-  </div>
   <div id="resumeBanner" class="hidden">CLIQUEZ POUR REPRENDRE<small>Échap : pause</small></div>
   <div id="dbgMenu" class="hidden"></div>
 
