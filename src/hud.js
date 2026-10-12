@@ -631,7 +631,7 @@ export class Hud {
     ctx.font = 'bold 26px Impact, Arial'; ctx.fillStyle = '#ffd24a';
     ctx.fillText(world.mapTitle || 'GRANDE ÎLE DE STRASBOURG', 30, 36);
     ctx.font = '13px Arial'; ctx.fillStyle = '#ccc';
-    ctx.fillText('▲ vous   ● vert : munitions   ● orange : arme murale   ● bleu ? : boîte mystère   P : Pack-a-Punch   ● couleurs : atouts   ■ rouge : porte verrouillée (prix)   P bleu : motos   V turquoise : station de vélos   — doré : passage sous immeuble   ━ lignes de tram   N ↑', 30, H - 18);
+    ctx.fillText('▲ vous   ● vert : munitions   ● orange : arme murale   ● bleu ? : boîte mystère   P : Pack-a-Punch   ● couleurs : atouts   ■ rouge : porte verrouillée (prix)   P bleu : motos   V turquoise : vélos   — doré : passage sous immeuble   ━ lignes de tram   N ↑', 30, H - 18);
   }
 
   setRoomBadge(code) {
