@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { merge } from './props.js';
 
 // Modèles 3D des motos, construits à la main avec des formes simples. Repère local : l'origine est au sol, au milieu de
 // l'empattement ; l'avant de la moto est vers -z, la droite vers +x. Chaque constructeur renvoie
@@ -175,4 +176,86 @@ export function buildGrosseMoto() {
   };
 }
 
-export const BUILDERS = { moto: buildMoto, grosseMoto: buildGrosseMoto };
+// ---------------------------------------------------------------- VÉLO : cadre diamant, roues à rayons, couleurs variées (v0.43.0)
+// Géométries FUSIONNÉES à couleurs par sommet (merge de props.js) et un seul matériau partagé : 5 maillages par vélo (cadre, roue arrière, fourche
+// avec guidon, roue avant, pédalier), donc 5 appels de dessin ; aucune lumière (le vélo n'a ni phare ni sonnette). La fourche tourne avec le guidon ;
+// les roues tournent avec `wheelRot` (vehicles.js) et le pédalier à `crankRatio` fois leur vitesse. Les géométries sont partagées entre vélos
+// de même variante.
+export const VELO_COLORS = [0x2f6fb3, 0xb3392f, 0x2f9a6a, 0xe0a82e, 0x7b4fa8, 0xd9dbe0, 0xe0742e, 0x2a8fa8];
+let VELO_MAT = null;
+const veloMat = () => VELO_MAT || (VELO_MAT = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.5, metalness: 0.35 }));
+const veloGeo = {};
+function colored(g, hex) { // couleur par sommet
+  const c = new THREE.Color(hex), n = g.attributes.position.count, a = new Float32Array(n * 3);
+  for (let i = 0; i < n; i++) { a[i * 3] = c.r; a[i * 3 + 1] = c.g; a[i * 3 + 2] = c.b; }
+  g.setAttribute('color', new THREE.BufferAttribute(a, 3));
+  return g;
+}
+const vBox = (w, h, d, hex, x = 0, y = 0, z = 0, rx = 0, ry = 0, rz = 0) => {
+  const g = new THREE.BoxGeometry(w, h, d);
+  if (rx || ry || rz) g.applyMatrix4(new THREE.Matrix4().makeRotationFromEuler(new THREE.Euler(rx, ry, rz)));
+  return colored(g.translate(x, y, z), hex);
+};
+function vTube(a, b, r, hex, seg = 6) { // cylindre entre deux points
+  const A = new THREE.Vector3(...a), B = new THREE.Vector3(...b), g = new THREE.CylinderGeometry(r, r, A.distanceTo(B), seg);
+  g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(SHARED_UP, B.clone().sub(A).normalize()));
+  const m = A.clone().add(B).multiplyScalar(0.5);
+  return colored(g.translate(m.x, m.y, m.z), hex);
+}
+function veloParts(variant) {
+  const paint = VELO_COLORS[variant % VELO_COLORS.length], dark = 0x24262a, chrome = 0xc4c9d1, rubber = 0x111214, seatC = 0x1a1a1c;
+  const R = 0.34, tr = 0.028, rimR = R - tr * 2 - 0.008;
+  if (!veloGeo.wheel) { // roue : pneu, jante, 16 rayons, moyeu, deux catadioptres orange (on voit qu'elle tourne)
+    const parts = [colored(new THREE.TorusGeometry(R - tr, tr, 8, 28).rotateY(Math.PI / 2), rubber), colored(new THREE.TorusGeometry(rimR, 0.009, 6, 28).rotateY(Math.PI / 2), 0xb8bec6),
+      colored(new THREE.CylinderGeometry(0.022, 0.022, 0.09, 8).rotateZ(Math.PI / 2), 0x8e949c)];
+    for (let k = 0; k < 8; k++) parts.push(colored(new THREE.BoxGeometry(0.005 + k * 0.0002, rimR * 2, 0.005 + k * 0.0002).rotateX((k * Math.PI) / 8), 0xcfd3d8)); // épaisseurs différentes : pas de z-fighting
+    parts.push(vBox(0.05, 0.03, 0.012, 0xe08a1c, 0, rimR * 0.92, 0), vBox(0.05, 0.03, 0.012, 0xe08a1c, 0, -rimR * 0.92, 0));
+    veloGeo.wheel = merge(parts);
+  }
+  if (!veloGeo.crank) veloGeo.crank = merge([ // plateau, deux manivelles, pédales
+    colored(new THREE.CylinderGeometry(0.085, 0.085, 0.006, 16).rotateZ(Math.PI / 2).translate(0.045, 0, 0), dark),
+    vBox(0.012, 0.17, 0.025, 0x9aa0a8, 0.07, -0.085, 0), vBox(0.012, 0.17, 0.025, 0x9aa0a8, -0.07, 0.085, 0),
+    vBox(0.09, 0.015, 0.07, rubber, 0.105, -0.17, 0), vBox(0.09, 0.015, 0.07, rubber, -0.105, 0.17, 0)]);
+  if (!veloGeo.fork) {
+    const f = [];
+    for (const sx of [-1, 1]) {
+      f.push(vTube([sx * 0.045, -0.02, 0], [sx * 0.045, -0.4, 0], 0.013, dark, 6));
+      f.push(vTube([sx * 0.31, 0.29, -0.12], [sx * 0.4, 0.29, -0.17], 0.017, rubber, 7)); // poignées
+      f.push(vBox(0.012, 0.012, 0.07, dark, sx * 0.26, 0.3, -0.15)); // leviers de frein
+    }
+    f.push(vBox(0.12, 0.022, 0.03, dark, 0, -0.01, 0), vTube([0, -0.01, 0], [0, 0.3, 0], 0.012, chrome), vTube([0, 0.28, 0], [0, 0.29, -0.1], 0.014, chrome), vTube([-0.31, 0.29, -0.12], [0.31, 0.29, -0.12], 0.011, chrome));
+    veloGeo.fork = merge(f);
+  }
+  const key = 'body' + (variant % VELO_COLORS.length);
+  if (!veloGeo[key]) {
+    const BB = [0, 0.3, 0.1], RA = [0, 0.34, 0.525], ST = [0, 0.79, 0.225], b = [
+      vTube([0, 0.722, -0.407], [0, 0.865, -0.363], 0.024, paint, 8), // tube de direction
+      vTube([0, 0.835, -0.368], ST, 0.018, paint), vTube([0, 0.75, -0.4], BB, 0.022, paint), vTube(BB, ST, 0.018, paint), // tube supérieur, diagonal, de selle
+      vTube(ST, [0, 0.88, 0.248], 0.014, chrome), // tige de selle
+      vBox(0.13, 0.045, 0.25, seatC, 0, 0.905, 0.265), vBox(0.07, 0.04, 0.12, seatC, 0, 0.905, 0.15), // selle
+      vBox(0.045, 0.045, 0.015, 0xd02828, 0, 0.62, 0.575), // catadioptre arrière
+      vTube([0.045, 0.39, 0.1], [0.045, 0.37, 0.525], 0.004, dark, 4), // chaîne
+    ];
+    for (const sx of [-1, 1]) { b.push(vTube([sx * 0.03, 0.77, 0.225], [sx * 0.055, 0.34, 0.525], 0.011, paint), vTube([sx * 0.035, 0.3, 0.1], [sx * 0.055, 0.34, 0.525], 0.012, paint)); }
+    veloGeo[key] = merge(b);
+  }
+  return { body: veloGeo[key], fork: veloGeo.fork, wheel: veloGeo.wheel, crank: veloGeo.crank, R };
+}
+export function buildVelo(variant = 0) {
+  const P = veloParts(Math.abs(variant | 0)), mat = veloMat(), rake = 0.3, wb = 1.05;
+  const root = new THREE.Group();
+  root.add(new THREE.Mesh(P.body, mat));
+  const rear = new THREE.Mesh(P.wheel, mat); rear.position.set(0, P.R, wb / 2); root.add(rear);
+  const crank = new THREE.Mesh(P.crank, mat); crank.position.set(0, 0.3, 0.1); root.add(crank);
+  const steerG = new THREE.Group(); // axe de direction : incliné de `rake`, la fourche tourne autour
+  steerG.position.set(0, 0.722, -0.407); steerG.rotation.x = rake; root.add(steerG);
+  const fork = new THREE.Group(); steerG.add(fork);
+  fork.add(new THREE.Mesh(P.fork, mat));
+  const front = new THREE.Mesh(P.wheel, mat); front.position.set(0, -0.4, 0); fork.add(front);
+  return {
+    group: finish(root), steer: fork, wheels: [front, rear], crank, crankRatio: 0.5, wheelRadius: P.R, length: 1.75,
+    seats: [{ hip: [0, 0.915, 0.23], eye: [0, 1.54, 0.13] }],
+  };
+}
+
+export const BUILDERS = { moto: buildMoto, grosseMoto: buildGrosseMoto, velo: buildVelo };

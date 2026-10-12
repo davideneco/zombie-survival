@@ -55,19 +55,24 @@ const extrude = (shapePts, depth, bevel = 0.04) => {
   g.translate(0, 0, -depth / 2);
   return g;
 };
-function merge(list) {
+// Fusionne des géométries en une seule (un seul appel de dessin). Si TOUTES ont un attribut `color`, il est conservé (couleurs par sommet :
+// matériau à vertexColors, voir les vélos de vehicleModels.js).
+export function merge(list) {
   const geos = list.map((g) => (g.index ? g.toNonIndexed() : g));
-  const pos = [], nor = [], uv = [];
+  const withColor = geos.every((g) => g.attributes.color);
+  const pos = [], nor = [], uv = [], col = [];
   for (const g of geos) {
     pos.push(...g.attributes.position.array);
     nor.push(...g.attributes.normal.array);
     if (g.attributes.uv) uv.push(...g.attributes.uv.array);
     else uv.push(...new Array((g.attributes.position.count) * 2).fill(0));
+    if (withColor) col.push(...g.attributes.color.array);
   }
   const out = new THREE.BufferGeometry();
   out.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
   out.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
   out.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  if (withColor) out.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
   out.computeBoundingSphere();
   return out;
 }

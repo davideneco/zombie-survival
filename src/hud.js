@@ -148,6 +148,8 @@ export class Hud {
   setVehicle(info) {
     this._set('vehOn', !!info, (on) => { this.el.vehHud.style.display = on ? 'block' : 'none'; });
     if (!info) return;
+    const noFuel = info.fuel == null; // vélo : pas de réservoir, donc pas de jauge
+    this._set('vnofuel', noFuel, () => { this.el.fuelRow.style.display = noFuel ? 'none' : ''; });
     this._set('vlabels', `${info.name || 'MOTO'}|${info.fuelLabel || 'ESSENCE'}`, () => { // PV MOTO / ESSENCE, ou PV TRAM / ÉNERGIE
       this.el.hpFill.closest('.vrow').firstElementChild.textContent = `PV ${info.name || 'MOTO'}`;
       this.el.fuelRow.firstElementChild.textContent = info.fuelLabel || 'ESSENCE';
@@ -161,13 +163,16 @@ export class Hud {
       el.classList.toggle('diverge', sw.diverge); el.classList.toggle('locked', sw.locked);
       el.innerHTML = `AIGUILLAGE ▸ ${sw.diverge ? 'DÉVIÉ' : 'TOUT DROIT'} : ${sw.name}<small>${sw.locked ? 'verrouillé' : `${this.binds ? this.binds.tag('tramSwitch') : ''} pour changer`} · dans ${sw.dist} m</small>`;
     });
-    const kmh = Math.round(Math.abs(info.speed) * 3.6), hot = Math.abs(info.speed) >= info.vmin;
+    const kmh = Math.round(Math.abs(info.speed) * 3.6), hot = Math.abs(info.speed) >= info.vmin; // (vélo : vmin 99 > vmax, jamais « hot »)
     this._set('speedo', `${kmh}|${hot}`, () => {
       this.el.speedo.innerHTML = `${kmh}<small>km/h</small>`;
       this.el.speedo.classList.toggle('hot', hot);
     });
     this._set('speedbar', `${Math.round(Math.abs(info.speed) / info.vmax * 200)}`, () => { this.el.speedFill.style.width = `${Math.min(100, Math.abs(info.speed) / info.vmax * 100)}%`; });
-    this._set('speedtick', `${info.vmin}|${info.vmax}`, () => { this.el.speedTick.style.left = `${Math.min(100, info.vmin / info.vmax * 100)}%`; });
+    this._set('speedtick', `${info.vmin}|${info.vmax}`, () => { // repère du seuil d'écrasement ; masqué quand il est hors échelle (vélo : aucun écrasement)
+      this.el.speedTick.style.display = info.vmin >= info.vmax ? 'none' : '';
+      this.el.speedTick.style.left = `${Math.min(100, info.vmin / info.vmax * 100)}%`;
+    });
     // points de vie de la moto : verte, orange sous 50 %, rouge sous 25 %
     const f = info.hpMax > 0 ? Math.max(0, info.hp / info.hpMax) : 0, pct = Math.round(f * 100);
     this._set('vhp', pct, () => {
@@ -177,7 +182,7 @@ export class Hud {
     });
     // essence : ambre, rouge clignotant sous 15 %
     const ff = Math.max(0, info.fuel ?? 0), fp = Math.round(ff * 100);
-    this._set('vfuel', fp, () => {
+    if (!noFuel) this._set('vfuel', fp, () => {
       this.el.fuelFill.style.width = `${fp}%`;
       this.el.fuelFill.style.background = ff < 0.15 ? '#e03030' : '#e8b030';
       this.el.fuelTxt.textContent = `${fp} %`;
@@ -562,7 +567,30 @@ export class Hud {
       ctx.beginPath(); ctx.roundRect(qx - 12, qy - 12, 24, 24, 6); ctx.fill(); ctx.stroke();
       ctx.fillStyle = '#fff'; ctx.font = 'bold 17px Arial'; ctx.fillText('P', qx, qy + 6);
     }
+    // stations de vélos (v0.43.0) : pastille turquoise « V » + nombre de vélos disponibles (grisée quand il n'en reste aucun) ; un vélo ne s'affiche
+    // seul que loin de sa station (en route, abandonné) : petite pastille de la couleur de ses PV, ou croix grise « V+1 » si cassé
+    const BIKE = '#1fa89a';
+    for (const st of world.bikeStations || []) {
+      const here = (world.vehicles || []).filter((v) => v.station === st.index && v.state === 'ok' && Math.hypot(v.pos.x - v.spawn.x, v.pos.z - v.spawn.z) < 6).length;
+      const [qx, qy] = P(st.x, st.z);
+      ctx.globalAlpha = here ? 1 : 0.4;
+      ctx.fillStyle = BIKE; ctx.strokeStyle = '#fff'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(qx, qy, 9, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#fff'; ctx.font = 'bold 13px Arial'; ctx.fillText('V', qx, qy + 4.5);
+      if (st.size > 1) { ctx.fillStyle = '#10201e'; ctx.beginPath(); ctx.arc(qx + 9, qy + 8, 5.5, 0, Math.PI * 2); ctx.fill(); ctx.fillStyle = '#fff'; ctx.font = 'bold 9px Arial'; ctx.fillText(String(here), qx + 9, qy + 11.2); }
+      ctx.globalAlpha = 1;
+    }
     for (const v of world.vehicles || []) {
+      if (v.station >= 0) {
+        const away = Math.hypot(v.pos.x - v.spawn.x, v.pos.z - v.spawn.z) >= 6, [wx, wy] = P(v.pos.x, v.pos.z);
+        if (!away || v.state === 'gone') continue;
+        if (v.state === 'wreck') { ctx.strokeStyle = '#000'; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(wx - 5, wy - 5); ctx.lineTo(wx + 5, wy + 5); ctx.moveTo(wx + 5, wy - 5); ctx.lineTo(wx - 5, wy + 5); ctx.stroke(); ctx.strokeStyle = '#9aa0a6'; ctx.lineWidth = 2; ctx.stroke(); ctx.font = 'bold 10px Arial'; ctx.lineWidth = 3; ctx.strokeStyle = '#000'; ctx.strokeText('V+1', wx, wy + 17); ctx.fillStyle = '#ccc'; ctx.fillText('V+1', wx, wy + 17); continue; }
+        const hf = v.hp / v.maxHp;
+        ctx.fillStyle = hf < 0.25 ? '#d83a2e' : hf < 0.5 ? '#e8892b' : BIKE; ctx.strokeStyle = '#000'; ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.arc(wx, wy, 6, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+        ctx.fillStyle = '#fff'; ctx.font = 'bold 9px Arial'; ctx.fillText('V', wx, wy + 3.2);
+        continue;
+      }
       const lab = v.type === 'moto' ? 'M' : 'G', f = v.hp / v.maxHp;
       const col = f < 0.25 ? '#d83a2e' : f < 0.5 ? '#e8892b' : '#e0c22e'; // jaune, orange sous 50 % des PV, rouge sous 25 %
       const pk = pks.find((q) => Math.hypot(v.pos.x - q.x, v.pos.z - q.z) < 9) || pks.find((q) => Math.hypot(v.spawn.x - q.x, v.spawn.z - q.z) < 9); // parking de la moto (garée ou d'attache)
@@ -603,7 +631,7 @@ export class Hud {
     ctx.font = 'bold 26px Impact, Arial'; ctx.fillStyle = '#ffd24a';
     ctx.fillText(world.mapTitle || 'GRANDE ÎLE DE STRASBOURG', 30, 36);
     ctx.font = '13px Arial'; ctx.fillStyle = '#ccc';
-    ctx.fillText('▲ vous   ● vert : munitions   ● orange : arme murale   ● bleu ? : boîte mystère   P : Pack-a-Punch   ● couleurs : atouts   ■ rouge : porte verrouillée (prix)   P bleu : motos   — doré : passage sous immeuble   ━ lignes de tram   N ↑', 30, H - 18);
+    ctx.fillText('▲ vous   ● vert : munitions   ● orange : arme murale   ● bleu ? : boîte mystère   P : Pack-a-Punch   ● couleurs : atouts   ■ rouge : porte verrouillée (prix)   P bleu : motos   V turquoise : station de vélos   — doré : passage sous immeuble   ━ lignes de tram   N ↑', 30, H - 18);
   }
 
   setRoomBadge(code) {

@@ -389,8 +389,13 @@ export class Sfx {
       },
     };
   }
-  mount(kind) { // démarreur puis un coup d'accélérateur
+  mount(kind) { // démarreur puis un coup d'accélérateur ; vélo : claquement de selle et cliquetis de roue libre
     if (!this.ctx) return;
+    if (kind === 'velo') {
+      this._noise(0.07, 0.25, 700, 'lowpass');
+      for (let i = 0; i < 6; i++) this._tone('square', 2400 - i * 90, 2000 - i * 90, 0.012, 0.05, { at: 0.12 + i * 0.045 });
+      return;
+    }
     const big = kind === 'grosseMoto';
     this._tone('sawtooth', big ? 45 : 70, big ? 80 : 120, 0.45, 0.25, { dist: true });
     this._noise(0.25, 0.2, 900, 'lowpass', { f1: 300 });

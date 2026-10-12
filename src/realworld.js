@@ -13,6 +13,7 @@ import { buildCathedral, augmentPlan, PORTAL_H } from './cath/index.js';
 import { HDF, isRotunda, isOpenShelter, rotundaInfo, shelterInfo, planHdf, legacyRailDist, buildHdfStructures, buildHdfDecor } from './hommedefer.js';
 import { planTram, buildTramNetwork } from './tramNet.js';
 import { parkingLayout, buildParkingDecor } from './parking.js';
+import { bikeStationLayout, buildBikeStationDecor } from './bikeStation.js';
 import { makePerkMachine, makeAmmoStation, makeWallBuy, addPosts, makeMysteryBox, makePackAPunch, makeAstronomicalClock } from './machines.js';
 
 // =====================================================================
@@ -1371,6 +1372,8 @@ export async function buildRealWorld(scene, renderer) {
   const machines = [];
   const vehicleSpawns = []; // motos : { type, x, z, yaw } (voir CONFIG.vehicles)
   const parkings = [];      // parkings des motos (voir parking.js) ; vide si repli
+  let bikeCheck = null;     // (outil de test) vérification d'une station de vélos
+  const bikeStations = [];  // stations de vélos (voir bikeStation.js) : { index, zone, name, x, z, yaw, size, group }
   {
     const placed = [];
     // Un atout trop près d'une porte gêne : son invite [E] (rayon 2,6 m) prend le pas sur celle de la porte (rayon 3,4 m),
@@ -1794,6 +1797,44 @@ export async function buildRealWorld(scene, renderer) {
         }
       }
     });
+    // ---- stations de vélos (v0.43.0, CONFIG.vehicles.bikeStations), posées en DERNIER : elles ne consomment aucun tirage et ne sont pas dans `used` pendant
+    // le placement du décor, donc le décor, les machines, les armes, les portes et les motos restent exactement ceux de la v0.42.0. Chaque station est
+    // vérifiée contre ce qui a été posé (`used` complet et collisions) : emprise entièrement dans sa zone, accessible, dégagée, à 8 m au moins des
+    // portes (leur invite [E] ne doit pas être masquée), à 5 m au moins d'un rail du tram, hors du décor de l'Homme de Fer ; sinon elle est ignorée
+    // (avertissement en ?debug). Les vélos suivent les motos dans `vehicleSpawns` (leur identifiant en dépend : moins de 97, les rames commencent à 100).
+    const BG = CONFIG.vehicles?.bikeStation;
+    const bikeDebug = typeof location !== 'undefined' && new URLSearchParams(location.search).has('debug');
+    const probeOut = { kind: null, push: 0, nx: 0, nz: 0 };
+    const stationProblem = (ST) => {
+      const zi = ZONE_NAMES.indexOf(ST.zone), L = bikeStationLayout(ST, BG);
+      if (zi < 0 || !seeds[zi] || !Number.isFinite(door_depth[zi])) return [`zone « ${ST.zone} » absente`, L];
+      const at = (q) => `(${q.x.toFixed(1)} ; ${q.z.toFixed(1)})`;
+      for (const q of L.samples) {
+        if (zoneOf(q.x, q.z) !== zi) return [`${at(q)} hors de la zone`, L];
+        if (!reachAt(q.x, q.z) || !clearance(nav.cx(q.x), nav.cz(q.z), 1)) return [`${at(q)} bloqué ou inaccessible`, L];
+        if (insideBuilding(q.x, q.z)) return [`${at(q)} dans un bâtiment`, L];
+        if (tramDist(q.x, q.z) < BG.tramGap || tramInfo.covers(q.x, q.z) || (hdf && hdf.covers(q.x, q.z))) return [`${at(q)} trop près du tram (${BG.tramGap} m) ou du décor de l'Homme de Fer`, L];
+        const pr = { x: q.x, y: 0.1, z: q.z };
+        probeOut.push = 0; collision.resolve(pr, BG.probeR, probeOut);
+        if (probeOut.push > 1e-3) return [`${at(q)} un obstacle du décor`, L];
+      }
+      for (const q of L.points) {
+        if (doorDist(q.x, q.z) < BG.doorGap) return [`${at(q)} à moins de ${BG.doorGap} m d'une porte`, L];
+        for (const [ux, uz] of used) if (Math.hypot(ux - q.x, uz - q.z) < BG.usedGap) return [`${at(q)} à moins de ${BG.usedGap} m d'un objet posé (${ux.toFixed(1)} ; ${uz.toFixed(1)})`, L];
+      }
+      for (const o of bikeStations) if (Math.hypot(o.x - ST.x, o.z - ST.z) < BG.stationGap) return [`à moins de ${BG.stationGap} m de la station « ${o.name} »`, L];
+      return [null, L];
+    };
+    const noBikes = bikeDebug && new URLSearchParams(location.search).has('nobikes'); // (?debug&nobikes : monde sans station, pour comparer)
+    for (const ST of noBikes ? [] : CONFIG.vehicles?.bikeStations || []) {
+      const [why, L] = stationProblem(ST);
+      if (why) { if (bikeDebug) console.warn(`[station] « ${ST.zone} » (${ST.x} ; ${ST.z}) ignorée :`, why); continue; }
+      const index = bikeStations.length, zi = ZONE_NAMES.indexOf(ST.zone);
+      L.bikes.forEach((b, i) => vehicleSpawns.push({ type: 'velo', x: b.x, z: b.z, yaw: b.yaw, variant: ST.colors?.[i] ?? index * 3 + i, station: index }));
+      const { group } = buildBikeStationDecor(scene, collision, ST, L, BG);
+      bikeStations.push({ index, zone: zi, name: ST.zone, x: ST.x, z: ST.z, yaw: ST.yaw, size: ST.bikes, group });
+    }
+    bikeCheck = (ST) => stationProblem({ bikes: 1, yaw: 0, ...ST })[0]; // outil de test : pourquoi cette station serait-elle refusée (null : acceptée) ?
     props.finish(scene);
   }
 
@@ -1972,7 +2013,7 @@ export async function buildRealWorld(scene, renderer) {
   const stationPos = stations[0];
   return {
     half: Math.max(halfX, halfZ), blockers, spawnPoints: [], windowSpawns, pickWindow, pickGround,
-    stationPos, stations, wallWeapons, vehicleSpawns, parkings, doors, openDoor, zoneOf, startPos, nav, collision, machines, boxes, setActiveBox,
+    stationPos, stations, wallWeapons, vehicleSpawns, parkings, bikeStations, bikeCheck, doors, openDoor, zoneOf, startPos, nav, collision, machines, boxes, setActiveBox,
     zoneNames: ZONE_NAMES, zoneCenters, startZone, sealedPoints, mapImage, mapView: { halfX, halfZ, scale: MAP_SCALE },
     isZoneOpen: (i) => !!zoneOpen[i], zoneArea, zoneOf1, // zoneOf1 : zone d'après le découpage d'origine (outils de test)
     mapCrop: { x0: Math.max(-halfX, secMinX - 40), x1: Math.min(halfX, secMaxX + 40), z0: Math.max(-halfZ, secMinZ - 40), z1: Math.min(halfZ, secMaxZ + 40) }, mapTitle: 'GRANDE ÎLE — STRASBOURG',

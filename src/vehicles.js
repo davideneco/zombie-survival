@@ -3,13 +3,15 @@ import { CONFIG } from './config.js';
 import { BUILDERS, wreckMaterial } from './vehicleModels.js';
 import { fx } from './fx.js';
 
-// Motos : conduite, places (conducteur / passager), collisions, zombies écrasés, synchro réseau.
+// Motos et vélos : conduite, places (conducteur / passager), collisions, zombies écrasés, synchro réseau.
 //  - Le client du CONDUCTEUR simule la moto et diffuse son état 20 fois par seconde ; tous les autres l'interpolent.
 //  - Les places sont arbitrées par l'hôte (deux joueurs ne peuvent pas prendre la même) et diffusées à tous.
 //  - Un passager voit la moto bouger comme les autres ; son personnage (vu par les coéquipiers) est posé sur la selle.
 //  - Points de vie : l'HÔTE est seul à les écrire (v_dmg des clients -> v_hp à tous). À 0 PV : en feu 2 s (v_burn), explosion (v_boom :
 //    chaque machine montre l'effet, éjecte son joueur et applique ses propres dégâts), épave, puis retour au parking (v_respawn).
 //  - État : 'ok' | 'burning' | 'wreck' (épave visible, sans collision) | 'gone' (disparue, revient à la manche respawnRound).
+//  - Le vélo (type sans réservoir et sans explosion : def.tank 0, def.blast null) suit les mêmes règles, mais à 0 PV il est seulement CASSÉ :
+//    pas d'incendie ni d'explosion (v_break), épave def.wreckTime s puis retour à sa station gratuitement (v_respawn).
 
 const angDiff = (a, b) => Math.atan2(Math.sin(a - b), Math.cos(a - b));
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -26,7 +28,8 @@ export class Vehicle {
     this.type = type;
     this.def = CONFIG.vehicles.types[type];
     this.spawn = { x: spawn.x, z: spawn.z, yaw: spawn.yaw };
-    this.model = BUILDERS[type]();
+    this.model = BUILDERS[type](spawn.variant ?? 0);
+    this.station = spawn.station ?? -1; // station de vélos d'attache (-1 : une moto de parking)
     this.group = this.model.group;
     this.group.rotation.order = 'YXZ';
     scene.add(this.group);
@@ -70,7 +73,8 @@ export class Vehicle {
   }
 
   get maxHp() { return this.def.hp; }
-  get fuelFrac() { return this.fuel / this.def.tank; }
+  get hasTank() { return this.def.tank > 0; }                       // un vélo n'a pas de réservoir
+  get fuelFrac() { return this.hasTank ? this.fuel / this.def.tank : 1; } // (sans réservoir : toujours « plein », jamais 0/0)
   get hpFrac() { return this.hp / this.def.hp; }
   get usable() { return this.state === 'ok'; }
 
@@ -121,6 +125,7 @@ export class Vehicle {
   // de fx.emit seulement (aucune lumière). Déduite des PV : chaque machine l'affiche pour elle-même, rien à synchroniser.
   updateFx(dt) {
     const g = this.game, D = CONFIG.vehicles.damage.smoke, cam = g.player.camera.position;
+    if (this.def.fx === false) return; // un vélo ne fume pas
     if (Math.hypot(cam.x - this.pos.x, cam.z - this.pos.z) > 70) return;
     let grey = 0, black = 0, flame = 0;
     if (this.state === 'ok') {
@@ -152,13 +157,14 @@ export class Vehicle {
     this.group.position.copy(this.pos);
     if (this.state === 'wreck') { // couchée sur le flanc (côté fixé par le numéro), à plat sur le sol
       this.group.rotation.set(0, this.yaw, (this.id % 2 ? 1 : -1) * 1.5);
-      this.group.position.y += 0.45;
+      this.group.position.y += this.def.wreckLift ?? 0.45;
       return;
     }
     this.group.rotation.set(0, this.yaw, this.lean);
     m.steer.rotation.y = -this.steerAngle;
     this.wheelRot += (this.speed / m.wheelRadius) * dt;
     for (const w of m.wheels) w.rotation.x = -this.wheelRot;
+    if (m.crank) m.crank.rotation.x = -this.wheelRot * m.crankRatio; // le pédalier tourne avec les roues
   }
 
   // Moto d'un autre joueur (ou garée) : on rejoint doucement le dernier état reçu
@@ -184,16 +190,16 @@ export class Vehicle {
     const steerIn = on ? (B.down('right', K) ? 1 : 0) - (B.down('left', K) ? 1 : 0) : 0;
     let sp = this.speed;
 
-    // essence : réserve (bips), ratés sous missBelow, panne sèche (poussée au pas)
-    const FU = CONFIG.vehicles.fuel, frac = this.fuelFrac, dry = on && this.fuel <= 0;
+    // essence : réserve (bips), ratés sous missBelow, panne sèche (poussée au pas) ; un vélo (sans réservoir) n'a rien de tout cela
+    const FU = CONFIG.vehicles.fuel, tank = this.hasTank, frac = this.fuelFrac, dry = tank && on && this.fuel <= 0;
     let miss = false;
-    if (on && !dry && frac < FU.missBelow) {
+    if (tank && on && !dry && frac < FU.missBelow) {
       this.missCd -= dt;
       if (this.missT > 0) this.missT -= dt;
       else if (this.missCd <= 0) { this.missT = FU.missLen; this.missCd = FU.missEvery * (0.7 + 0.6 * Math.random()); g.sfx.cough?.(0.8); }
       miss = this.missT > 0;
     } else this.missT = 0;
-    if (on && !dry && frac < FU.lowBelow) { this.beepT -= dt; if (this.beepT <= 0) { this.beepT = FU.lowBeep; g.sfx.beep?.(); } } else this.beepT = 0;
+    if (tank && on && !dry && frac < FU.lowBelow) { this.beepT -= dt; if (this.beepT <= 0) { this.beepT = FU.lowBeep; g.sfx.beep?.(); } } else this.beepT = 0;
     if (dry && !this.dryNoted) { this.dryNoted = true; g.sfx.cough?.(1); g.hud.announce('PANNE SÈCHE', 'Plus d\'essence : la moto n\'avance plus qu\'au pas', 3500); }
     if (!dry && this.fuel > 0) this.dryNoted = false;
 
@@ -216,7 +222,7 @@ export class Vehicle {
     }
     sp = clamp(sp, -D.reverseSpeed, D.maxSpeed);
     // consommation : ralenti + gaz (marche arrière x 0,6) ; moteur coupé (en feu) ou réservoir vide : rien
-    if (on && this.fuel > 0) {
+    if (tank && on && this.fuel > 0) {
       const gas = this.throttle === 0 ? 0 : (D.gas + D.perSpeed * Math.abs(sp) / D.maxSpeed) * (this.throttle < 0 ? 0.6 : 1);
       this.fuel = Math.max(0, this.fuel - (D.idle + gas) * dt);
     }
@@ -228,7 +234,7 @@ export class Vehicle {
     const maxYaw = (D.grip * (hb ? 1.6 : 1)) / Math.max(3, Math.abs(sp)); // limite d'adhérence : à haute vitesse, on ne tourne plus sec
     yawRate = clamp(yawRate, -maxYaw, maxYaw);
     this.yaw += yawRate * dt;
-    this.lean += (clamp(yawRate * Math.abs(sp) * 0.035, -0.55, 0.55) - this.lean) * Math.min(1, dt * 6);
+    this.lean += (clamp(yawRate * Math.abs(sp) * (D.leanK ?? 0.035), -0.55, 0.55) - this.lean) * Math.min(1, dt * 6);
 
     // déplacement + collisions (murs, voitures, mobilier) ; on ne monte pas d'escalier ni ne descend de trou
     const fx = -Math.sin(this.yaw), fz = -Math.cos(this.yaw);
@@ -346,7 +352,7 @@ export class Vehicle {
   // s'abîme de max(0, impact - crashFree) x crashPerMs), 'wall' (architecture : D.wall x ce montant, 0 par défaut) ou 'moto' (autre moto :
   // les dégâts de la moto sont calculés par collideBikes, seuls la secousse, le bruit et le pilote sont traités ici)
   crash(impact, kind = 'prop') {
-    const C = CONFIG.vehicles.crash, g = this.game;
+    const C = this.def.crash || CONFIG.vehicles.crash, g = this.game; // chute propre au type (le vélo), sinon celle des motos
     if (impact < 3) return;
     g.shake = Math.max(g.shake || 0, Math.min(1, impact / 22));
     g.sfx.crash?.(Math.min(1, impact / 20));
@@ -365,7 +371,7 @@ export class Vehicle {
   // ------------------------------------------------------------------ son du moteur
   updateEngine(dt, local) {
     const g = this.game;
-    const running = this.seats[0] != null && this.state === 'ok' && this.fuel > 0; // pas de conducteur, en feu ou à sec : moteur arrêté
+    const running = this.hasTank && this.seats[0] != null && this.state === 'ok' && this.fuel > 0; // pas de conducteur, en feu ou à sec : moteur arrêté (un vélo n'a pas de moteur)
     if (running && !this.engine) this.engine = g.sfx.createEngine?.(this.type) || null;
     if (!running && this.engine) this.stopEngine();
     if (!this.engine) return;
@@ -406,9 +412,26 @@ export function installVehicles(game, { world, hud, sfx, scene }) {
       const p = this.player;
       if (p.vehicle && (p.downed || p.dead)) this.leaveVehicle(true); // à terre : on est éjecté
       for (const v of this.vehicles) v.update(dt);
+      this.cullParkedBikes(dt);
       this.updateTrams?.(dt);
       this.updateTramBoarding?.(dt); // monter à pied en poussant contre une porte ouverte
       if (!this.isClient) for (const v of this.rides()) this.hostVehicleTick(v, dt);
+    },
+
+    // Vélos garés loin du joueur : non dessinés (16 à 24 vélos de 5 maillages ne doivent pas ajouter des centaines d'appels de rendu) ; stations idem.
+    // Un vélo conduit (même par un coéquipier) reste toujours visible. Test toutes les 0,25 s.
+    cullParkedBikes(dt) {
+      this.cullT = (this.cullT || 0) - dt;
+      if (this.cullT > 0) return;
+      this.cullT = 0.25;
+      const c = this.player.camera.position;
+      for (const v of this.vehicles) {
+        const cd = v.def.cullDist;
+        if (!cd || v.state === 'gone') continue;
+        v.group.visible = v.hasDriver || Math.hypot(v.pos.x - c.x, v.pos.z - c.z) < cd;
+      }
+      const sd = R().bikeStation?.cullDist ?? 90;
+      for (const st of world.bikeStations || []) st.group.visible = Math.hypot(st.x - c.x, st.z - c.z) < sd;
     },
 
     // Moto la plus proche avec une place libre : { v, seat } (conducteur d'abord)
@@ -429,7 +452,8 @@ export function installVehicles(game, { world, hud, sfx, scene }) {
     vehiclePrompt(nv) {
       if (nv.v.isTram) return this.tramPrompt(nv);
       const v = nv.v, role = v.def.seats > 1 ? (nv.seat === 0 ? ' — conducteur' : ' — passager') : '';
-      return `${game.binds.tag('interact')} Monter sur la ${v.def.name.toLowerCase()}${role} (PV ${Math.round(v.hpFrac * 100)} % · essence ${Math.round(v.fuelFrac * 100)} %)`;
+      const fuel = v.hasTank ? ` · essence ${Math.round(v.fuelFrac * 100)} %` : ''; // un vélo n'a pas de réservoir
+      return `${game.binds.tag('interact')} Monter sur ${v.def.det || 'la'} ${v.def.name.toLowerCase()}${role} (PV ${Math.round(v.hpFrac * 100)} %${fuel})`;
     },
 
     // ----------------------------------------------------------- points de vie (écrits par l'hôte seul)
@@ -463,6 +487,7 @@ export function installVehicles(game, { world, hud, sfx, scene }) {
     igniteVehicle(v) {
       if (v.isTram) { this.hostBreakTram(v); return; } // une rame n'explose pas : elle tombe en panne (hors service jusqu'au dépôt)
       if (v.state !== 'ok') return;
+      if (v.def.blast === null) { this.hostBreakVehicle(v); return; } // un vélo n'explose pas : il est cassé
       this.flushVehicleHp(v);
       if (this.isMultiplayer) this.net?.send({ t: 'v_burn', id: v.id });
       this.startBurn(v);
@@ -470,7 +495,28 @@ export function installVehicles(game, { world, hud, sfx, scene }) {
     startBurn(v) {
       if (v.state !== 'ok') return;
       v.hp = 0; v.state = 'burning'; v.burnT = R().damage.burnTime; v.alarmT = 0;
-      if (this.player.vehicle?.v === v) hud.announce('SAUTEZ !', `${game.binds.tag('interact')} : la moto va exploser`, 1800);
+      if (this.player.vehicle?.v === v) hud.announce('SAUTEZ !', `${game.binds.tag('interact')} : ${v.def.det || 'la'} ${v.def.name.toLowerCase()} va exploser`, 1800);
+    },
+
+    // Vélo cassé (hôte) : v_hp puis v_break à tous ; ni incendie ni explosion. Épave, puis retour à la station à la manche suivante (v_respawn)
+    hostBreakVehicle(v) {
+      if (v.state !== 'ok') return;
+      this.flushVehicleHp(v);
+      if (this.isMultiplayer) this.net?.send({ t: 'v_break', id: v.id });
+      this.onVehicleBreak(v);
+      if (this.isMultiplayer) this.broadcastSeats(v);
+    },
+    // Chaque machine : épave (matériau noir partagé), le cycliste chute (sans dégâts de plus : la chute éventuelle a eu lieu au choc)
+    onVehicleBreak(v) {
+      if (v.state !== 'ok' && v.state !== 'burning') return;
+      const p = this.player, mine = p.vehicle?.v === v;
+      v.state = 'wreck'; v.wreckT = v.def.wreckTime ?? R().damage.wreckTime; v.hp = 0; v.speed = 0; v.hpDirty = false;
+      v.respawnRound = this.round + (v.def.respawnRounds ?? R().damage.respawnRounds);
+      v.setWreckLook(true);
+      if (mine) { this.ejectFromVehicle(v, 2); hud.announce('VÉLO CASSÉ', 'Il revient à sa station à la manche suivante', 2600); }
+      v.seats.fill(null);
+      sfx.crash?.(0.5);
+      this.refreshRiders();
     },
 
     // hôte : envoi des PV (au plus 5 fois par seconde), explosion à la fin de l'incendie, réapparition en attente
@@ -517,11 +563,11 @@ export function installVehicles(game, { world, hud, sfx, scene }) {
     },
 
     // Descente forcée (explosion) : le joueur est projeté loin de la moto
-    ejectFromVehicle(v) {
+    ejectFromVehicle(v, push = 5) { // push : vitesse de projection (m/s) ; un vélo cassé : chute douce
       const p = this.player;
       this.leaveVehicle();
       const dx = p.pos.x - v.pos.x, dz = p.pos.z - v.pos.z, l = Math.hypot(dx, dz) || 1;
-      p.vel.set((dx / l) * 5, 0, (dz / l) * 5); p.vy = 4;
+      p.vel.set((dx / l) * push, 0, (dz / l) * push); p.vy = push > 3 ? 4 : 2;
     },
 
     // ----------------------------------------------------------- réapparition au parking (hôte)
@@ -540,7 +586,7 @@ export function installVehicles(game, { world, hud, sfx, scene }) {
     },
     respawnVehicle(v) {
       v.reset();
-      if (!v.isTram) v.fuel = v.def.tank * R().fuel.respawn; // revient avec 40 % d'essence
+      if (!v.isTram) v.fuel = v.def.tank * R().fuel.respawn; // revient avec 40 % d'essence (un vélo : sans réservoir)
       if (this.player.vehicle?.v === v) this.player.vehicle = null;
       if (this.player.onTram?.v === v) this.tramWalkOff?.(); // la rame retourne au dépôt : on n'y est plus
       this.refreshRiders();
@@ -565,7 +611,7 @@ export function installVehicles(game, { world, hud, sfx, scene }) {
       if (v.isTram) sfx.tramChime?.(true, 0.6); else sfx.mount?.(v.type);
       const B = game.binds, kE = B.label('interact');
       if (v.isTram) { const [a, b] = this.tramEnterText(v, seat); hud.announce(a, b, 4500); }
-      else hud.announce(v.def.name, seat === 0 ? `${B.moveLabel()} : conduire · ${B.label('jump')} : frein à main · ${kE} : descendre` : `Vous êtes passager : tirez ! · ${kE} : descendre`, 3500);
+      else hud.announce(v.def.name, seat === 0 ? `${B.moveLabel()} : conduire · ${B.label('jump')} : ${v.hasTank ? 'frein à main' : 'frein'} · ${kE} : descendre` : `Vous êtes passager : tirez ! · ${kE} : descendre`, 3500);
       this.refreshRiders();
     },
 
@@ -670,6 +716,7 @@ export function installVehicles(game, { world, hud, sfx, scene }) {
       net.on('v_dmg', (m) => { const v = this.rideById(m.id); if (this.isHost && v) this.damageVehicle(v, clamp(+m.amt || 0, 0, 200), m.src || ''); });
       net.onHost('v_hp', (m) => { const v = this.rideById(m.id); if (v && !this.isHost && v.state === 'ok') v.hp = clamp(+m.hp, 0, v.maxHp); });
       net.onHost('v_burn', (m) => { const v = this.vehicles[m.id]; if (v && !this.isHost) this.startBurn(v); });
+      net.onHost('v_break', (m) => { const v = this.vehicles[m.id]; if (v && !this.isHost) this.onVehicleBreak(v); });
       net.onHost('v_boom', (m) => { const v = this.vehicles[m.id]; if (v && !this.isHost) this.onVehicleBoom(v, m.x, m.z, false); });
       net.onHost('v_respawn', (m) => { const v = this.rideById(m.id); if (v && !this.isHost) this.respawnVehicle(v); });
       // borne du parking : le client a déjà payé ; l'hôte vérifie et rend la différence (v_refund)
@@ -720,7 +767,7 @@ export function installVehicles(game, { world, hud, sfx, scene }) {
       if (!pk) return null;
       let best = null, bd = R().pumpReach;
       for (const v of this.vehicles) {
-        if (!v.usable) continue;
+        if (!v.usable || !v.hasTank) continue; // la borne ne sert que les motos (un vélo n'a ni réservoir ni réparation payante)
         const d = Math.hypot(v.pos.x - pk.pump.x, v.pos.z - pk.pump.z);
         if (d <= bd) { bd = d; best = v; }
       }
@@ -728,7 +775,7 @@ export function installVehicles(game, { world, hud, sfx, scene }) {
     },
     // Ce que la borne ferait pour la moto : { cost (pts), missing (PV), liters }
     serviceOf(v) {
-      const missing = Math.max(0, v.maxHp - v.hp), liters = Math.max(0, v.def.tank - v.fuel);
+      const missing = Math.max(0, v.maxHp - v.hp), liters = v.hasTank ? Math.max(0, v.def.tank - v.fuel) : 0;
       return { missing, liters, cost: Math.ceil(missing * R().damage.repairPrice + liters * R().fuel.pricePerL - 1e-6) };
     },
     pumpPrompt(np) {
@@ -751,6 +798,7 @@ export function installVehicles(game, { world, hud, sfx, scene }) {
     },
     // Essence absolue d'une moto (hôte : à la borne ou au bidon ; v_fuel : les autres l'adoptent, conducteur compris)
     setFuel(v, fu, broadcast = false) {
+      if (!v.hasTank) return;
       v.fuel = clamp(+fu, 0, v.def.tank);
       v.fuelLock = performance.now() + 300; // un v_state déjà en route avec l'ancienne valeur ne doit pas l'écraser
       if (broadcast && this.isMultiplayer) this.net?.send({ t: 'v_fuel', id: v.id, fu: r2(v.fuel) });
@@ -760,14 +808,14 @@ export function installVehicles(game, { world, hud, sfx, scene }) {
     maybeDropFuel(pos) {
       const F = R().fuel;
       if (this.isClient || Math.random() >= F.dropChance) return;
-      if (this.powerups.some((q) => q.type === 'fuel') || !this.vehicles.some((v) => v.usable && v.fuelFrac < F.dropBelow)) return;
+      if (this.powerups.some((q) => q.type === 'fuel') || !this.vehicles.some((v) => v.usable && v.hasTank && v.fuelFrac < F.dropBelow)) return;
       this.spawnPowerup(pos, null, 'fuel');
     },
     // Bidon ramassé par `pid` (hôte) : +jerrican L à la moto du ramasseur, sinon à la moto la plus vide
     hostFuelPickup(pid) {
       const F = R().fuel;
-      let v = this.vehicles.find((q) => q.usable && q.seats.includes(pid));
-      if (!v) v = this.vehicles.filter((q) => q.usable).sort((a, b) => a.fuelFrac - b.fuelFrac)[0];
+      let v = this.vehicles.find((q) => q.usable && q.hasTank && q.seats.includes(pid));
+      if (!v) v = this.vehicles.filter((q) => q.usable && q.hasTank).sort((a, b) => a.fuelFrac - b.fuelFrac)[0];
       if (v) this.setFuel(v, v.fuel + F.jerrican, true);
       return v;
     },
@@ -776,7 +824,7 @@ export function installVehicles(game, { world, hud, sfx, scene }) {
     hostService(vid, pid, paid) {
       const v = this.vehicles[vid];
       const refund = (pts) => { if (pts <= 0) return; if (pid == null) this.points += pts; else this.net?.send({ t: 'v_refund', pts }, pid); };
-      if (!v || !v.usable) { refund(paid); return; }
+      if (!v || !v.usable || !v.hasTank) { refund(paid); return; }
       const sv = this.serviceOf(v);
       if (sv.cost <= 0 || sv.cost > paid) { refund(paid); return; } // déjà en parfait état, ou plus abîmée depuis : on rend tout
       v.hp = v.maxHp;

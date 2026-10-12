@@ -348,6 +348,36 @@ export const CONFIG = {
         rect: { w: 10, d: 12 },
       },
     ],
+    // Stations de vélos (v0.43.0) : vélos GRATUITS répartis sur l'île, 1 ou 2 par station (`bikes`), jamais plus d'une station par zone. Chaque station est
+    // un rangement d'arceaux avec un petit panneau « VÉLOS » ; les vélos suivent les motos dans l'ordre de ce tableau (leur identifiant en dépend : au plus
+    // 96 véhicules en tout, les rames de tram commencent à 100). x, z : centre (m) ; yaw : cap des vélos (0 = vers le nord, -z) ; colors : variantes de
+    // couleur de cadre (facultatif). Une station est posée APRÈS tout le décor (aucun tirage touché) et vérifiée : voir realworld.js (rectangle dégagé,
+    // dans sa zone, à 8 m au moins d'une porte, à 5 m d'un rail), sinon elle est ignorée (avertissement « [station] » en ?debug).
+    bikeStations: [
+      { zone: 'Marché-Neuf', x: -3.3, z: -26.7, yaw: 0, bikes: 2 },
+      { zone: 'Temple-Neuf', x: -41.3, z: -88.1, yaw: 4.974, bikes: 1 },
+      { zone: 'Rue des Orfèvres', x: 26.6, z: -54.9, yaw: -4.189, bikes: 1 },
+      { zone: 'Rue du Dôme', x: 100.9, z: -147.5, yaw: -1.833, bikes: 1 },
+      { zone: 'Grandes Arcades', x: -127.9, z: -9.7, yaw: 1.571, bikes: 1 },
+      { zone: 'Place Kléber', x: -245.6, z: -145.4, yaw: 0, bikes: 1 },
+      { zone: 'Place Gutenberg', x: -27.1, z: 93.1, yaw: -2.094, bikes: 2 },
+      { zone: 'Cathédrale', x: 109.1, z: 29.2, yaw: 4.974, bikes: 2 },
+      { zone: 'Homme de Fer', x: -303.6, z: -208, yaw: 0, bikes: 1 },
+      { zone: 'Saint-Pierre-le-Jeune', x: -144.4, z: -336.3, yaw: 2.356, bikes: 1 },
+      { zone: "Grand'Rue", x: -382.1, z: 15.9, yaw: 2.618, bikes: 1 },
+      { zone: 'Grand Séminaire', x: 307.1, z: -49.4, yaw: -2.618, bikes: 1 },
+      { zone: 'Musée historique', x: 181, z: 228.2, yaw: 2.356, bikes: 1 },
+      { zone: 'Place Broglie', x: 152.4, z: -340.4, yaw: -3.142, bikes: 2 },
+      { zone: 'Quai Schoepflin', x: -12.9, z: -469.2, yaw: -2.618, bikes: 1 },
+      { zone: 'Ancienne Douane', x: 32.4, z: 330.1, yaw: 2.094, bikes: 1 },
+      { zone: 'Saint-Thomas', x: -194.9, z: 226.9, yaw: -3.142, bikes: 1 },
+      { zone: 'Opéra', x: 280.7, z: -463.8, yaw: -1.833, bikes: 1 },
+      { zone: 'Préfecture', x: 419.3, z: -297.4, yaw: 5.76, bikes: 1 },
+    ],
+    // Géométrie et contrôles d'une station : spacing = écart entre deux vélos (m), signOffset = poteau du panneau au-delà du dernier arceau, rect = emprise
+    // vérifiée (profondeur d, pas de la grille), doorGap / tramGap / usedGap / stationGap = distances minimales aux portes, aux rails, aux objets posés et
+    // à une autre station (m), probeR = rayon du test de collision ; cullDist = au-delà, la station et ses vélos garés ne sont pas dessinés
+    bikeStation: { spacing: 1.0, signOffset: 0.9, rect: { d: 2.6, step: 0.9 }, doorGap: 8, tramGap: 5, usedGap: 1.8, stationGap: 12, probeR: 0.3, cullDist: 90 },
     // Repli (voir parkings) : une ligne par moto, posée dans la zone nommée sur un emplacement dégagé
     spawns: [
       { type: 'moto', zone: 'Marché-Neuf' },
@@ -405,6 +435,16 @@ export const CONFIG = {
       grosseMoto: {
         name: 'GROSSE MOTO', seats: 2, camArm: 4.0, hp: 500, tank: 10, idle: 0.005, gas: 0.016, perSpeed: 0.021, maxSpeed: 17, accel: 8, brake: 24, reverseSpeed: 3, drag: 0.12,
         wheelbase: 1.75, maxSteer: 0.5, grip: 11, radius: 0.7, bikeRadius: 0.55, roadkill: { K: 24, vmin: 7, slowdown: 0.90 },
+      },
+      // Vélo (v0.43.0) : gratuit, réparti par stations (bikeStations), une place, pas de réservoir (tank 0 : aucune jauge, aucune panne sèche, aucun bidon),
+      // jamais d'écrasement (roadkill.vmin 99 : un zombie au contact arrête le vélo net, comme une moto lente), le cycliste ne tire pas (conducteur).
+      // crash : propre au type (chute plus tôt et plus douce que la moto, jamais mortelle ; remplace vehicles.crash) ; blast null : à 0 PV le vélo est
+      // simplement CASSÉ (ni incendie, ni explosion) : épave wreckTime s puis retour à sa station respawnRounds manche plus tard. det : article du nom.
+      // fx false : ni fumée ni flammes. wreckLift : hauteur de l'épave couchée. cullDist : au-delà, le vélo garé n'est pas dessiné (appels de rendu).
+      velo: {
+        name: 'VÉLO', hudName: 'VÉLO', det: 'le', seats: 1, camArm: 3.0, hp: 150, tank: 0, maxSpeed: 12, accel: 4.5, brake: 10, reverseSpeed: 1.2, drag: 0.1,
+        wheelbase: 1.05, maxSteer: 0.72, grip: 13, radius: 0.4, bikeRadius: 0.3, roadkill: { K: 0, vmin: 99, slowdown: 1 },
+        crash: { minSpeed: 6, damagePerMs: 4, maxDamage: 25 }, blast: null, wreckTime: 10, respawnRounds: 1, fx: false, wreckLift: 0.36, cullDist: 90, leanK: 0.05,
       },
     },
   },
