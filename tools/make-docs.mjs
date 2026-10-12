@@ -318,7 +318,7 @@ table('15_motos', 'Motos (deux parkings au panneau bleu « P », avec chacun une
   ['Panne sèche', ...same(`réserve < ${VF.lowBelow * 100} % : bip, ratés < ${VF.missBelow * 100} %, à 0 : poussée ${VF.pushSpeed} m/s`), ''],
 ]);
 // vélos (v0.43.0) : un type sans réservoir, posé en stations
-const BV = C.vehicles.types.velo, BG = C.vehicles.bikeStation, nb = D.bikes.reduce((a, b) => a + b.n, 0), kmh = (v) => Math.round(v * 3.6);
+const BV = C.vehicles.types.velo, BG = C.vehicles.bikeStation, nb = D.bikes.reduce((a, b) => a + b.n, 0);
 table('15b_velos', `Vélos (gratuits, ${D.bikes.length} stations et ${nb} vélos : arceaux et panneau « VÉLOS » turquoise, pastille « V » sur la carte)`, ['Réglage', 'Valeur', 'Unité / remarque'], [
   ['Places', BV.seats, 'le cycliste ne tire pas (comme le conducteur d\'une moto) ; pas de sonnette, pas de nouvelle touche'],
   ['Points de vie', BV.hp, 'PV'], ['Vitesse max', kmh(BV.maxSpeed), `km/h (accélération ${fr(BV.accel)} m/s², frein ${BV.brake} m/s², marche arrière ${fr(BV.reverseSpeed)} m/s)`],
@@ -332,8 +332,8 @@ table('15b_velos', `Vélos (gratuits, ${D.bikes.length} stations et ${nb} vélos
   ['Coup de zombie sur un occupant', VD.zombieHit, 'PV du vélo (le joueur perd 20)'],
   ['Explosion proche (grenade, M79…)', `${VD.explosion * 100} % des dégâts infligés aux zombies`, ''],
   ['À 0 PV', `vélo CASSÉ : ni incendie ni explosion, le cycliste chute sans dégât ; épave ${BV.wreckTime} s`, ''],
-  ['Retour à la station', `${BV.respawnRounds} manche après la casse, PV pleins, gratuit`, 'si personne n\'est à moins de ' + VD.respawnClear + ' m de l\'emplacement'],
-  ['Station', `1 à 2 vélos, arceaux tous les ${BG.spacing} m, panneau « VÉLOS » ; posée après tout le décor`, `contrôles : dans sa zone, accessible et dégagée, à ${BG.doorGap} m au moins d'une porte, à ${BG.tramGap} m d'un rail`],
+  ['Retour à la station', `${BV.respawnRounds} manche après la casse, PV pleins, gratuit`, 'si personne n\'est à moins de ' + fr(VD.respawnClear) + ' m de l\'emplacement'],
+  ['Station', `1 à 2 vélos, arceaux tous les ${fr(BG.spacing)} m, panneau « VÉLOS » ; posée après tout le décor`, `contrôles : dans sa zone, accessible et dégagée, à ${BG.doorGap} m au moins d'une porte, à ${BG.tramGap} m d'un rail`],
   ['Rendu', `5 maillages par vélo, aucune lumière ; vélos et stations non dessinés au-delà de ${BV.cullDist} m`, 'les ~100 vélos de décor (mobilier OpenStreetMap) restent du décor : on ne peut pas les enfourcher']]);
 table('15c_stations_velos', `Stations de vélos (${D.bikes.length} stations, ${nb} vélos)`, ['N°', 'Zone', 'x (m)', 'z (m)', 'Vélos'], D.bikes.map((b, i) => [i + 1, zname(b.zone), b.x, b.z, b.n]));
 const KN = C.knife;
