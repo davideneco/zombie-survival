@@ -1,0 +1,17 @@
+﻿Réglage;Valeur;Unité / remarque
+Places;1;"le cycliste ne tire pas (comme le conducteur d'une moto) ; pas de sonnette, pas de nouvelle touche"
+Points de vie;150;PV
+Vitesse max;43;km/h (accélération 4,5 m/s², frein 10 m/s², marche arrière 1,2 m/s)
+Conduite;"WASD accélérer, freiner / reculer, tourner ; Espace frein ; V vue ; E monter / descendre";"les mêmes touches que les motos ; la touche du gong du tram (H) ne fait rien à vélo"
+Réservoir;aucun;ni jauge, ni panne sèche, ni borne, ni bidon
+Écrasement;jamais;un zombie au contact arrête le vélo net, sans dégât pour lui
+Chute du cycliste;(vitesse perdue - 6) x 4, au plus 25;"PV du cycliste (jamais mortel ; le PHD Flopper protège)"
+Choc contre un objet physique (voiture, mobilier, arbre, machine…);(vitesse perdue - 6) x 5;PV du vélo
+Choc contre un mur (façade, quai, parapet, porte, marche, bord de l'île);aucun dégât pour le vélo;le cycliste se blesse pareil (chute ci-dessus)
+Choc contre une moto ou un autre vélo;(vitesse d'approche - 4) x 4, pour chacun;PV (un vélo ou une moto garés sont des obstacles fixes)
+Coup de zombie sur un occupant;10;PV du vélo (le joueur perd 20)
+Explosion proche (grenade, M79…);10 % des dégâts infligés aux zombies;
+À 0 PV;"vélo CASSÉ : ni incendie ni explosion, le cycliste chute sans dégât ; épave 10 s";
+Retour à la station;1 manche après la casse, PV pleins, gratuit;si personne n'est à moins de 1,5 m de l'emplacement
+Station;"1 à 2 vélos, arceaux tous les 1 m, panneau « VÉLOS » ; posée après tout le décor";contrôles : dans sa zone, accessible et dégagée, à 8 m au moins d'une porte, à 5 m d'un rail, à 6 m d'une borne, d'un atout ou d'une arme murale (leur invite masquerait « monter »)
+Rendu;"5 maillages par vélo, aucune lumière ; vélos et stations non dessinés au-delà de 90 m";les ~100 vélos de décor (mobilier OpenStreetMap) restent du décor : on ne peut pas les enfourcher

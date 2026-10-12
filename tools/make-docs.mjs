@@ -333,7 +333,7 @@ table('15b_velos', `Vélos (gratuits, ${D.bikes.length} stations et ${nb} vélos
   ['Explosion proche (grenade, M79…)', `${VD.explosion * 100} % des dégâts infligés aux zombies`, ''],
   ['À 0 PV', `vélo CASSÉ : ni incendie ni explosion, le cycliste chute sans dégât ; épave ${BV.wreckTime} s`, ''],
   ['Retour à la station', `${BV.respawnRounds} manche après la casse, PV pleins, gratuit`, 'si personne n\'est à moins de ' + fr(VD.respawnClear) + ' m de l\'emplacement'],
-  ['Station', `1 à 2 vélos, arceaux tous les ${fr(BG.spacing)} m, panneau « VÉLOS » ; posée après tout le décor`, `contrôles : dans sa zone, accessible et dégagée, à ${BG.doorGap} m au moins d'une porte, à ${BG.tramGap} m d'un rail`],
+  ['Station', `1 à 2 vélos, arceaux tous les ${fr(BG.spacing)} m, panneau « VÉLOS » ; posée après tout le décor`, `contrôles : dans sa zone, accessible et dégagée, à ${BG.doorGap} m au moins d'une porte, à ${BG.tramGap} m d'un rail, à ${BG.itemGap} m d'une borne, d'un atout ou d'une arme murale (leur invite masquerait « monter »)`],
   ['Rendu', `5 maillages par vélo, aucune lumière ; vélos et stations non dessinés au-delà de ${BV.cullDist} m`, 'les ~100 vélos de décor (mobilier OpenStreetMap) restent du décor : on ne peut pas les enfourcher']]);
 table('15c_stations_velos', `Stations de vélos (${D.bikes.length} stations, ${nb} vélos)`, ['N°', 'Zone', 'x (m)', 'z (m)', 'Vélos'], D.bikes.map((b, i) => [i + 1, zname(b.zone), b.x, b.z, b.n]));
 const KN = C.knife;

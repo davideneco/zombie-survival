@@ -316,7 +316,7 @@ export const CONFIG = {
     reward: { points: 1500 },
   },
 
-  // Véhicules (motos). Touches : ZQSD / flèches pour conduire, Espace = frein à main, E = monter / descendre.
+  // Véhicules (motos et vélo). Touches : ZQSD / flèches pour conduire, Espace = frein à main (frein à vélo), E = monter / descendre.
   // Le conducteur ne tire pas (les deux mains sur le guidon) ; le passager de la grosse moto, lui, tire normalement.
   // Vitesses en m/s (le joueur marche à 5 et sprinte à 8 ; les zombies vont de 1,7 à 3,8). grip : accélération latérale maximale
   // (m/s²) : plus elle est faible, plus il faut ralentir pour tourner (rayon minimal = vitesse² / grip).

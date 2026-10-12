@@ -1,6 +1,6 @@
 # Zombie Survival — fiche de référence
 
-Version du jeu : **v0.42.0 · 719fad9 · 2026-10-10** (package 0.42.0). Générée automatiquement par `node tools/make-docs.mjs` à partir de `src/config.js` et du jeu.
+Version du jeu : **v0.43.0 · 41930d5 · 2026-10-12** (package 0.43.0). Générée automatiquement par `node tools/make-docs.mjs` à partir de `src/config.js` et du jeu.
 Carte annotée : [carte.png](carte.png). Armes de profil : [armes.png](armes.png). Les mêmes tableaux en tableur : dossier [csv/](csv/).
 
 Pour demander une modification, citez la ligne (ex. « Mitrailleuse RPK : chargeur 100 », « Mastodonte à 3000 pts », « porte P3 à 500 pts », « mettre la boîte mystère dans la zone Temple-Neuf »).
@@ -577,6 +577,51 @@ Prix d'une porte : le plus cher des deux prix de zone (colonne « Prix de la por
 | Bidon d'essence (bonus) | +2,5 L, 3 % par zombie tué si une moto est sous 50 % | idem |  |
 | Panne sèche | réserve < 15 % : bip, ratés < 5 %, à 0 : poussée 3 m/s | idem |  |
 
+## Vélos (gratuits, 19 stations et 23 vélos : arceaux et panneau « VÉLOS » turquoise, pastille « V » sur la carte)
+
+| Réglage | Valeur | Unité / remarque |
+|---|---|---|
+| Places | 1 | le cycliste ne tire pas (comme le conducteur d'une moto) ; pas de sonnette, pas de nouvelle touche |
+| Points de vie | 150 | PV |
+| Vitesse max | 43 | km/h (accélération 4,5 m/s², frein 10 m/s², marche arrière 1,2 m/s) |
+| Conduite | WASD accélérer, freiner / reculer, tourner ; Espace frein ; V vue ; E monter / descendre | les mêmes touches que les motos ; la touche du gong du tram (H) ne fait rien à vélo |
+| Réservoir | aucun | ni jauge, ni panne sèche, ni borne, ni bidon |
+| Écrasement | jamais | un zombie au contact arrête le vélo net, sans dégât pour lui |
+| Chute du cycliste | (vitesse perdue - 6) x 4, au plus 25 | PV du cycliste (jamais mortel ; le PHD Flopper protège) |
+| Choc contre un objet physique (voiture, mobilier, arbre, machine…) | (vitesse perdue - 6) x 5 | PV du vélo |
+| Choc contre un mur (façade, quai, parapet, porte, marche, bord de l'île) | aucun dégât pour le vélo | le cycliste se blesse pareil (chute ci-dessus) |
+| Choc contre une moto ou un autre vélo | (vitesse d'approche - 4) x 4, pour chacun | PV (un vélo ou une moto garés sont des obstacles fixes) |
+| Coup de zombie sur un occupant | 10 | PV du vélo (le joueur perd 20) |
+| Explosion proche (grenade, M79…) | 10 % des dégâts infligés aux zombies |  |
+| À 0 PV | vélo CASSÉ : ni incendie ni explosion, le cycliste chute sans dégât ; épave 10 s |  |
+| Retour à la station | 1 manche après la casse, PV pleins, gratuit | si personne n'est à moins de 1,5 m de l'emplacement |
+| Station | 1 à 2 vélos, arceaux tous les 1 m, panneau « VÉLOS » ; posée après tout le décor | contrôles : dans sa zone, accessible et dégagée, à 8 m au moins d'une porte, à 5 m d'un rail, à 6 m d'une borne, d'un atout ou d'une arme murale (leur invite masquerait « monter ») |
+| Rendu | 5 maillages par vélo, aucune lumière ; vélos et stations non dessinés au-delà de 90 m | les ~100 vélos de décor (mobilier OpenStreetMap) restent du décor : on ne peut pas les enfourcher |
+
+## Stations de vélos (19 stations, 23 vélos)
+
+| N° | Zone | x (m) | z (m) | Vélos |
+|---|---|---|---|---|
+| 1 | Marché-Neuf | -3 | -27 | 2 |
+| 2 | Temple-Neuf | -41 | -88 | 1 |
+| 3 | Rue des Orfèvres | 27 | -55 | 1 |
+| 4 | Rue du Dôme | 102 | -148 | 1 |
+| 5 | Grandes Arcades | -128 | -10 | 1 |
+| 6 | Place Kléber | -246 | -145 | 1 |
+| 7 | Place Gutenberg | -27 | 93 | 2 |
+| 8 | Cathédrale | 117 | 26 | 2 |
+| 9 | Homme de Fer | -304 | -208 | 1 |
+| 10 | Saint-Pierre-le-Jeune | -144 | -336 | 1 |
+| 11 | Grand'Rue | -382 | 16 | 1 |
+| 12 | Grand Séminaire | 300 | -57 | 1 |
+| 13 | Musée historique | 181 | 228 | 1 |
+| 14 | Place Broglie | 152 | -340 | 2 |
+| 15 | Quai Schoepflin | -13 | -469 | 1 |
+| 16 | Ancienne Douane | 32 | 330 | 1 |
+| 17 | Saint-Thomas | -195 | 227 | 1 |
+| 18 | Opéra | 281 | -464 | 1 |
+| 19 | Préfecture | 419 | -297 | 1 |
+
 ## Couteau (toujours disponible, hors inventaire)
 
 | Réglage | Valeur | Unité / remarque |
@@ -619,10 +664,10 @@ Prix d'une porte : le plus cher des deux prix de zone (colonne « Prix de la por
 | R | Recharger |
 | 1 / 2 / 3 / molette | Changer d'arme |
 | G | Grenade |
-| E | Acheter, ouvrir une porte, utiliser une machine ou la borne des motos, réanimer (maintenir), monter / descendre d'une moto |
-| ZQSD / WASD (en moto) | Accélérer, freiner / reculer, tourner |
-| Espace (en moto) | Frein à main |
-| V (en moto) | Vue à la 3e personne / à la 1re personne |
+| E | Acheter, ouvrir une porte, utiliser une machine ou la borne des motos, réanimer (maintenir), monter / descendre d'une moto ou d'un vélo |
+| ZQSD / WASD (en moto ou à vélo) | Accélérer, freiner / reculer, tourner |
+| Espace (en moto ou à vélo) | Frein à main (frein à vélo) |
+| V (en moto ou à vélo) | Vue à la 3e personne / à la 1re personne |
 | WS / Espace (en tram, conducteur) | Accélérer / frein de service puis marche arrière ; frein d'urgence |
 | O / H (en tram) | Ouvrir ou fermer les portes (conducteur, à l'arrêt) ; gong qui attire les zombies |
 | B (en tram, conducteur) | Aiguillage : tout droit / dévié au nœud de l'Homme de Fer |
