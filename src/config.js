@@ -357,15 +357,15 @@ export const CONFIG = {
       { zone: 'Marché-Neuf', x: -3.3, z: -26.7, yaw: 0, bikes: 2 },
       { zone: 'Temple-Neuf', x: -41.3, z: -88.1, yaw: 4.974, bikes: 1 },
       { zone: 'Rue des Orfèvres', x: 26.6, z: -54.9, yaw: -4.189, bikes: 1 },
-      { zone: 'Rue du Dôme', x: 100.9, z: -147.5, yaw: -1.833, bikes: 1 },
+      { zone: 'Rue du Dôme', x: 102.1, z: -148.5, yaw: -1.571, bikes: 1 },
       { zone: 'Grandes Arcades', x: -127.9, z: -9.7, yaw: 1.571, bikes: 1 },
       { zone: 'Place Kléber', x: -245.6, z: -145.4, yaw: 0, bikes: 1 },
       { zone: 'Place Gutenberg', x: -27.1, z: 93.1, yaw: -2.094, bikes: 2 },
-      { zone: 'Cathédrale', x: 109.1, z: 29.2, yaw: 4.974, bikes: 2 },
+      { zone: 'Cathédrale', x: 117.1, z: 26.3, yaw: 2.094, bikes: 2 },
       { zone: 'Homme de Fer', x: -303.6, z: -208, yaw: 0, bikes: 1 },
       { zone: 'Saint-Pierre-le-Jeune', x: -144.4, z: -336.3, yaw: 2.356, bikes: 1 },
       { zone: "Grand'Rue", x: -382.1, z: 15.9, yaw: 2.618, bikes: 1 },
-      { zone: 'Grand Séminaire', x: 307.1, z: -49.4, yaw: -2.618, bikes: 1 },
+      { zone: 'Grand Séminaire', x: 299.6, z: -57.2, yaw: 2.094, bikes: 1 },
       { zone: 'Musée historique', x: 181, z: 228.2, yaw: 2.356, bikes: 1 },
       { zone: 'Place Broglie', x: 152.4, z: -340.4, yaw: -3.142, bikes: 2 },
       { zone: 'Quai Schoepflin', x: -12.9, z: -469.2, yaw: -2.618, bikes: 1 },
@@ -375,9 +375,9 @@ export const CONFIG = {
       { zone: 'Préfecture', x: 419.3, z: -297.4, yaw: 5.76, bikes: 1 },
     ],
     // Géométrie et contrôles d'une station : spacing = écart entre deux vélos (m), signOffset = poteau du panneau au-delà du dernier arceau, rect = emprise
-    // vérifiée (profondeur d, pas de la grille), doorGap / tramGap / usedGap / stationGap = distances minimales aux portes, aux rails, aux objets posés et
-    // à une autre station (m), probeR = rayon du test de collision ; cullDist = au-delà, la station et ses vélos garés ne sont pas dessinés
-    bikeStation: { spacing: 1.0, signOffset: 0.9, rect: { d: 2.6, step: 0.9 }, doorGap: 8, tramGap: 5, usedGap: 1.8, stationGap: 12, probeR: 0.3, cullDist: 90 },
+    // vérifiée (profondeur d, pas de la grille), doorGap / tramGap / usedGap / itemGap / stationGap = distances minimales aux portes, aux rails, aux objets posés, aux bornes, atouts et armes
+    // murales (leur invite [E] masquerait « monter ») et à une autre station (m), probeR = rayon du test de collision ; cullDist = au-delà, la station et ses vélos garés ne sont pas dessinés
+    bikeStation: { spacing: 1.0, signOffset: 0.9, rect: { d: 2.6, step: 0.9 }, doorGap: 8, tramGap: 5, usedGap: 1.8, itemGap: 6, stationGap: 12, probeR: 0.3, cullDist: 90 },
     // Repli (voir parkings) : une ligne par moto, posée dans la zone nommée sur un emplacement dégagé
     spawns: [
       { type: 'moto', zone: 'Marché-Neuf' },

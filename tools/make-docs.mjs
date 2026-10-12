@@ -55,6 +55,7 @@ const pageScript = `(() => {
     walls: w.wallWeapons.map((v) => ({ id: v.id, price: v.price, ammo: v.ammoPrice, zone: Z(v.pos.x, v.pos.z), x: Math.round(v.pos.x), z: Math.round(v.pos.z) })),
     machines: w.machines.map((m) => ({ type: m.type, id: m.id || null, name: m.name, price: m.price, zone: m.zone, x: Math.round(m.pos.x), z: Math.round(m.pos.z) })),
     doors: w.doors.map((d) => ({ n: d.id + 1, price: d.price, a: d.a, b: d.b })),
+    bikes: (w.bikeStations || []).map((s) => ({ zone: Z(s.x, s.z), x: Math.round(s.x), z: Math.round(s.z), n: s.size })),
   };
   // ---- image
   // toute la Grande Île : échelle réduite pour que la carte reste à ~2000 px ; le panneau de droite a deux colonnes (emplacements | portes)
@@ -295,7 +296,7 @@ table('24_tram_aiguillages', `Tram : l'aiguillage du nœud de ${TJ.name} (croise
   ['Itinéraires', 'chaque virage est une voie complète (ligne d\'arrivée, arc, ligne de départ) qui suit exactement les lignes hors de l\'arc', 'la rame change de voie par reprojection de son centre (même géométrie) ; portes de zone et rames de décor sont des butées sur chaque voie'],
   ['Réseau', 't_state : k (voie) et sw (réglage) ; instantané des arrivants : idem', 'chaque machine suit la voie du conducteur sans saut visuel'],
   ['Quai de l\'Homme de Fer', `déplacé de 13 m vers l'ouest et raccourci (${TR.lines[1].stops[1].len} m) pour laisser la place au raccord`, 'la rame y est garée, le nez à 8 m du point de divergence']]);
-const VT = C.vehicles.types, VD = C.vehicles.damage, VF = C.vehicles.fuel, VR = C.vehicles.roadkill;
+const VT = Object.fromEntries(Object.entries(C.vehicles.types).filter(([, t]) => t.tank > 0)), VD = C.vehicles.damage, VF = C.vehicles.fuel, VR = C.vehicles.roadkill;
 const rk = (t, v) => t.roadkill.K * v * Math.min(1, 0.4 + 0.6 * (v - t.roadkill.vmin) / VR.rampSpeed);
 const vcol = (f) => Object.values(VT).map(f);
 const same = (x) => Object.values(VT).map((_, i) => (i ? 'idem' : x)); // règle commune aux deux motos
@@ -316,6 +317,25 @@ table('15_motos', 'Motos (deux parkings au panneau bleu « P », avec chacun une
   ['Bidon d\'essence (bonus)', ...same(`+${String(VF.jerrican).replace('.', ',')} L, ${VF.dropChance * 100} % par zombie tué si une moto est sous ${VF.dropBelow * 100} %`), ''],
   ['Panne sèche', ...same(`réserve < ${VF.lowBelow * 100} % : bip, ratés < ${VF.missBelow * 100} %, à 0 : poussée ${VF.pushSpeed} m/s`), ''],
 ]);
+// vélos (v0.43.0) : un type sans réservoir, posé en stations
+const BV = C.vehicles.types.velo, BG = C.vehicles.bikeStation, nb = D.bikes.reduce((a, b) => a + b.n, 0), kmh = (v) => Math.round(v * 3.6);
+table('15b_velos', `Vélos (gratuits, ${D.bikes.length} stations et ${nb} vélos : arceaux et panneau « VÉLOS » turquoise, pastille « V » sur la carte)`, ['Réglage', 'Valeur', 'Unité / remarque'], [
+  ['Places', BV.seats, 'le cycliste ne tire pas (comme le conducteur d\'une moto) ; pas de sonnette, pas de nouvelle touche'],
+  ['Points de vie', BV.hp, 'PV'], ['Vitesse max', kmh(BV.maxSpeed), `km/h (accélération ${fr(BV.accel)} m/s², frein ${BV.brake} m/s², marche arrière ${fr(BV.reverseSpeed)} m/s)`],
+  ['Conduite', `${kn0('forward')}${kn0('left')}${kn0('back')}${kn0('right')} accélérer, freiner / reculer, tourner ; ${kn0('jump')} frein ; ${kn0('vehicleView')} vue ; ${kn0('interact')} monter / descendre`, 'les mêmes touches que les motos ; la touche du gong du tram (' + kn0('tramGong') + ') ne fait rien à vélo'],
+  ['Réservoir', 'aucun', 'ni jauge, ni panne sèche, ni borne, ni bidon'],
+  ['Écrasement', 'jamais', 'un zombie au contact arrête le vélo net, sans dégât pour lui'],
+  ['Chute du cycliste', `(vitesse perdue - ${BV.crash.minSpeed}) x ${BV.crash.damagePerMs}, au plus ${BV.crash.maxDamage}`, 'PV du cycliste (jamais mortel ; le PHD Flopper protège)'],
+  ['Choc contre un objet physique (voiture, mobilier, arbre, machine…)', `(vitesse perdue - ${VD.crashFree}) x ${VD.crashPerMs}`, 'PV du vélo'],
+  ['Choc contre un mur (façade, quai, parapet, porte, marche, bord de l\'île)', VD.wall ? `${VD.wall * 100} % du choc contre un objet` : 'aucun dégât pour le vélo', 'le cycliste se blesse pareil (chute ci-dessus)'],
+  ['Choc contre une moto ou un autre vélo', `(vitesse d'approche - ${VD.motoHit.free}) x ${VD.motoHit.perMs}, pour chacun`, 'PV (un vélo ou une moto garés sont des obstacles fixes)'],
+  ['Coup de zombie sur un occupant', VD.zombieHit, 'PV du vélo (le joueur perd 20)'],
+  ['Explosion proche (grenade, M79…)', `${VD.explosion * 100} % des dégâts infligés aux zombies`, ''],
+  ['À 0 PV', `vélo CASSÉ : ni incendie ni explosion, le cycliste chute sans dégât ; épave ${BV.wreckTime} s`, ''],
+  ['Retour à la station', `${BV.respawnRounds} manche après la casse, PV pleins, gratuit`, 'si personne n\'est à moins de ' + VD.respawnClear + ' m de l\'emplacement'],
+  ['Station', `1 à 2 vélos, arceaux tous les ${BG.spacing} m, panneau « VÉLOS » ; posée après tout le décor`, `contrôles : dans sa zone, accessible et dégagée, à ${BG.doorGap} m au moins d'une porte, à ${BG.tramGap} m d'un rail`],
+  ['Rendu', `5 maillages par vélo, aucune lumière ; vélos et stations non dessinés au-delà de ${BV.cullDist} m`, 'les ~100 vélos de décor (mobilier OpenStreetMap) restent du décor : on ne peut pas les enfourcher']]);
+table('15c_stations_velos', `Stations de vélos (${D.bikes.length} stations, ${nb} vélos)`, ['N°', 'Zone', 'x (m)', 'z (m)', 'Vélos'], D.bikes.map((b, i) => [i + 1, zname(b.zone), b.x, b.z, b.n]));
 const KN = C.knife;
 const kdmg = (r) => Math.max(KN.minDamage, KN.healthFrac * zhp(r));
 table('17_couteau', 'Couteau (toujours disponible, hors inventaire)', ['Réglage', 'Valeur', 'Unité / remarque'], [
@@ -340,8 +360,8 @@ table('14_commandes', 'Commandes (touches par défaut, modifiables dans Options 
   ['Options > Touches', 'Change toutes les touches ci-dessous, sauf souris, molette, Échap et F9 (réglage local, gardé sur l\'appareil ; échange proposé si une touche est déjà prise)'],
   [`ZQSD / ${kn('forward')}${kn('left')}${kn('back')}${kn('right')} / flèches`, 'Se déplacer'], ['Souris', 'Viser'], ['Clic gauche', 'Tirer'], ['Clic droit', 'Viser à la mire'],
   [kn('sprint'), 'Sprint'], [kn('jump'), 'Sauter'], [kn('reload'), 'Recharger'], [`${kn('weapon1')} / ${kn('weapon2')} / ${kn('weapon3')} / molette`, 'Changer d\'arme'], [kn('grenade'), 'Grenade'],
-  [kn('interact'), 'Acheter, ouvrir une porte, utiliser une machine ou la borne des motos, réanimer (maintenir), monter / descendre d\'une moto'],
-  [`ZQSD / ${kn('forward')}${kn('left')}${kn('back')}${kn('right')} (en moto)`, 'Accélérer, freiner / reculer, tourner'], [`${kn('jump')} (en moto)`, 'Frein à main'], [`${kn('vehicleView')} (en moto)`, 'Vue à la 3e personne / à la 1re personne'],
+  [kn('interact'), 'Acheter, ouvrir une porte, utiliser une machine ou la borne des motos, réanimer (maintenir), monter / descendre d\'une moto ou d\'un vélo'],
+  [`ZQSD / ${kn('forward')}${kn('left')}${kn('back')}${kn('right')} (en moto ou à vélo)`, 'Accélérer, freiner / reculer, tourner'], [`${kn('jump')} (en moto ou à vélo)`, 'Frein à main (frein à vélo)'], [`${kn('vehicleView')} (en moto ou à vélo)`, 'Vue à la 3e personne / à la 1re personne'],
   [`${kn('forward')}${kn('back')} / ${kn('jump')} (en tram, conducteur)`, 'Accélérer / frein de service puis marche arrière ; frein d\'urgence'], [`${kn('tramDoors')} / ${kn('tramGong')} (en tram)`, 'Ouvrir ou fermer les portes (conducteur, à l\'arrêt) ; gong qui attire les zombies'], [`${kn('tramSwitch')} (en tram, conducteur)`, 'Aiguillage : tout droit / dévié au nœud de l\'Homme de Fer'],
   [kn('torch'), 'Lampe torche'], [`${kn('jump')} (devant un obstacle bas)`, 'Enjamber'], [`${kn('unstick')} (maintenir 2 s, si coincé)`, 'Se débloquer'],
   [`${kn('knife')} (à pied)`, 'Coup de couteau (aussi : clic gauche quand le chargeur et la réserve sont vides)'], [kn('map'), 'Carte'],

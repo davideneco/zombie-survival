@@ -1818,6 +1818,10 @@ export async function buildRealWorld(scene, renderer) {
         probeOut.push = 0; collision.resolve(pr, BG.probeR, probeOut);
         if (probeOut.push > 1e-3) return [`${at(q)} un obstacle du décor`, L];
       }
+      // interactables (borne de munitions : invite à 3,2 m, atout 2,6 m, arme murale 2,8 m, borne des motos 2,4 m, sous-station 2,6 m) : leur invite passe avant
+      // « monter » ; à plus de itemGap des vélos (portée de montée 2,6 m comprise), on peut toujours monter
+      const things = [...stations, ...machines.map((m) => m.pos), ...wallWeapons.map((q) => q.pos), ...parkings.map((pk) => pk.pump), ...(tramInfo.substation ? [tramInfo.substation] : [])];
+      for (const q of L.bikes) for (const o of things) if (Math.hypot(o.x - q.x, o.z - q.z) < BG.itemGap) return [`${at(q)} à moins de ${BG.itemGap} m d'une borne, d'un atout ou d'une arme murale (${o.x.toFixed(1)} ; ${o.z.toFixed(1)})`, L];
       for (const q of L.points) {
         if (doorDist(q.x, q.z) < BG.doorGap) return [`${at(q)} à moins de ${BG.doorGap} m d'une porte`, L];
         for (const [ux, uz] of used) if (Math.hypot(ux - q.x, uz - q.z) < BG.usedGap) return [`${at(q)} à moins de ${BG.usedGap} m d'un objet posé (${ux.toFixed(1)} ; ${uz.toFixed(1)})`, L];
