@@ -73,6 +73,8 @@ Options (titre ou pause) : **Luminosité**, **Champ de vision**, **Sensibilité*
 | Rendu et étalonnage | direct | direct | cible multi-échantillonnée + table de couleurs (avec « Effets cinéma ») |
 | Particules / taches de sang au sol | 50 % / 16 | 100 % / 36 | 100 % / 64 |
 
+Depuis la v0.45.0, les façades ont du **relief** (encadrements de fenêtres saillants, appuis, balcons, corniches, descentes de gouttière, cheminées) et des salissures (coulures, fissures, taches), dessinés seulement à moins de 30 / 60 / 110 m selon la qualité (Rapide / Normale / Haute) ; les collisions et la navigation restent sur le contour des bâtiments.
+
 « Effets cinéma » ajoute une vignette et un grain léger (superposition CSS, coût nul) et, en Haute, l'étalonnage par table de couleurs. Les valeurs (intensité de la torche, exposition et reflets par zone, ciel, étalonnage) sont dans le bloc `graphics` de `src/config.js` ; la cathédrale garde sa pénombre (reflets d'ambiance réduits dans l'intérieur).
 
 ## Jouer sur son PC
@@ -129,7 +131,7 @@ Posez un fichier `theme.mp3` (ou `.ogg`, `.m4a`, `.wav`) dans `public/music/` : 
 
 | Dossier | Contenu |
 |---|---|
-| `src/` | Code du jeu (modules ES) ; l'équilibrage est dans `src/config.js` |
+| `src/` | Code du jeu (modules ES) ; l'équilibrage et les réglages graphiques (bloc `graphics`) sont dans `src/config.js` ; rendu : `graphics.js` (qualité, exposition par zone, reflets, étalonnage), `sky.js`, `contact.js`, `relief.js` (façades en relief), `envmap.js` |
 | `server/` | Relais multijoueur (`rooms.mjs`) et serveur de production (`prod.mjs`) |
 | `public/` | Données de la carte (`data/area.json`), textures, dossier de musique |
 | `tools/` | Outils : extraction OSM, génération des docs (`make-docs.mjs`), détection de blocages (`stuck-scan.mjs`), tests |

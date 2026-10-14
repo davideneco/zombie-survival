@@ -586,8 +586,8 @@ export const CONFIG = {
     ],
     // tone mapping : 'aces' | 'agx' | 'neutral' ; exposition de base (multipliée par Luminosité des Options et par la zone)
     tone: { type: 'aces', exposure: 1.3 },
-    // lampe torche (player.js) : intensité, ouverture, bord adouci (penumbra), décroissance, portée
-    torch: { intensity: 13, angle: 0.5, penumbra: 0.9, decay: 1.25, distance: 40 },
+    // lampe torche (player.js) : intensité (v0.43.0 : 55), ouverture, bord adouci (penumbra), décroissance, portée, teinte (chaude : les zombies ne blanchissent plus)
+    torch: { intensity: 9, angle: 0.5, penumbra: 0.9, decay: 1.1, distance: 40, color: 0xffe0b0 },
     // armes (viewmodels.js) : chanfrein des boîtes (m), segments d'arrondi, usure des arêtes (gain de clarté, seuil), intensité des reflets d'ambiance
     weapons: { bevel: 0.0035, bevelSegments: 1, wear: 3.2, wearFrom: 0.05, env: 1.6 },
     // pieds de murs assombris (architecture.js, couleurs de sommet) : [hauteur au-dessus de la base (m), facteur de luminosité]
