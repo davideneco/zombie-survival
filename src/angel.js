@@ -55,7 +55,17 @@ export class Angel extends Boss {
     add(new THREE.CylinderGeometry(0.2, 0.23, 0.55, 12), white, rig, 0, 1.38, 0);
     add(new THREE.CylinderGeometry(0.205, 0.205, 0.07, 12), gold, rig, 0, 1.12, 0);
     this.headG = new THREE.Group(); this.headG.position.set(0, 1.74, 0.01); rig.add(this.headG);
-    const skin = new THREE.MeshStandardMaterial({ color: 0xf2d2b0, roughness: 0.6, emissive: 0x3a2a1a }); skin.userData.em = 0x3a2a1a; this.angelMats.push(skin);
+    // visage serein (v0.47.0) : sourcils d'or, paupières, nez, lèvres peints sur la sphère (centre de l'avant : u = 0,25) ; les yeux bleus lumineux sont des maillages
+    const faceC = document.createElement('canvas'); faceC.width = 256; faceC.height = 128;
+    { const x = faceC.getContext('2d'); x.fillStyle = '#ffffff'; x.fillRect(0, 0, 256, 128); x.lineCap = 'round';
+      const g = x.createRadialGradient(64, 66, 4, 64, 66, 34); g.addColorStop(0, 'rgba(255,255,255,0)'); g.addColorStop(1, 'rgba(190,150,120,0.18)'); x.fillStyle = g; x.fillRect(20, 20, 90, 90);
+      for (const sx of [-1, 1]) { x.strokeStyle = '#c89a38'; x.lineWidth = 3.2; x.beginPath(); x.moveTo(64 + sx * 5, 51); x.quadraticCurveTo(64 + sx * 12, 46, 64 + sx * 21, 50); x.stroke();
+        x.strokeStyle = 'rgba(120,80,60,0.65)'; x.lineWidth = 1.6; x.beginPath(); x.arc(64 + sx * 12.5, 60, 6.5, Math.PI * 1.1, Math.PI * 1.9); x.stroke();
+        x.fillStyle = 'rgba(230,140,130,0.25)'; x.beginPath(); x.ellipse(64 + sx * 18, 74, 7, 5, 0, 0, 7); x.fill(); }
+      x.strokeStyle = 'rgba(140,100,80,0.6)'; x.lineWidth = 1.6; x.beginPath(); x.moveTo(64, 62); x.lineTo(62.5, 72); x.quadraticCurveTo(64, 74, 66, 72); x.stroke();
+      x.strokeStyle = '#b8605a'; x.lineWidth = 2.6; x.beginPath(); x.moveTo(57, 82); x.quadraticCurveTo(64, 85, 71, 82); x.stroke(); x.fillStyle = 'rgba(200,110,100,0.5)'; x.beginPath(); x.ellipse(64, 85, 5, 1.8, 0, 0, 7); x.fill(); }
+    const faceTex = new THREE.CanvasTexture(faceC); faceTex.colorSpace = THREE.SRGBColorSpace; faceTex.anisotropy = 4;
+    const skin = new THREE.MeshStandardMaterial({ color: 0xf2d2b0, roughness: 0.6, emissive: 0x3a2a1a, map: faceTex }); skin.userData.em = 0x3a2a1a; this.angelMats.push(skin);
     add(new THREE.SphereGeometry(0.15, 14, 10), skin, this.headG);
     const hair = add(new THREE.SphereGeometry(0.162, 14, 10, 0, Math.PI * 2, 0, Math.PI * 0.55), gold, this.headG, 0, 0.015, -0.01);
     hair.scale.set(1, 1.05, 1.05);

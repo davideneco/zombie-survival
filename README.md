@@ -63,7 +63,7 @@ Toutes les touches du clavier sont **modifiables dans Options > Touches** (acces
 
 ## Options graphiques (v0.44.0 à v0.47.0)
 
-Options (titre ou pause) : **Luminosité**, **Champ de vision**, **Sensibilité**, **Qualité** (Rapide / Normale / Haute), Volume, Musique, **Effets cinéma** (OUI / NON), **Halo lumineux** (OUI / NON, qualité Haute), Chat, Touches, Plein écran. Tout est **visuel et local** : aucun effet sur le jeu en réseau, l'équilibrage, les collisions ni les zones de tir.
+Options (titre ou pause) : **Luminosité**, **Champ de vision**, **Sensibilité**, **Qualité** (Rapide / Normale / Haute), Volume, Musique, **Effets cinéma** (OUI / NON), **Halo** (OUI / NON, qualité Haute), Chat, Touches, Plein écran. Tout est **visuel et local** : aucun effet sur le jeu en réseau, l'équilibrage, les collisions ni les zones de tir.
 
 | | Rapide | Normale | Haute |
 |---|---|---|---|

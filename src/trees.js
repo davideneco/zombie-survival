@@ -58,6 +58,21 @@ function foliageAtlas() {
   return t;
 }
 
+// texture de feuillage opaque (128 x 128, bords raccordés) pour les boules de la qualité Rapide : masse de feuilles sombres et claires, sans transparence
+function leafyTexture() {
+  const S = 128, c = document.createElement('canvas'); c.width = c.height = S;
+  const x = c.getContext('2d'), R = rng(5151);
+  x.fillStyle = '#1c2c14'; x.fillRect(0, 0, S, S);
+  for (let i = 0; i < 260; i++) {
+    const px = R() * S, py = R() * S, lit = 0.12 + 0.26 * R(), hue = 84 + R() * 26;
+    x.fillStyle = `hsl(${hue},${28 + R() * 18}%,${lit * 100}%)`;
+    for (const ox of [-S, 0, S]) for (const oy of [-S, 0, S]) { x.save(); x.translate(px + ox, py + oy); x.rotate(R() * 6.28); x.beginPath(); x.ellipse(0, 0, 7 + R() * 5, 3 + R() * 2, 0, 0, 7); x.fill(); x.restore(); R(); }
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  return t;
+}
+
 // matériau de feuillage : cartes à normale de couronne (attribut d'instance aLocalN), choix de la grappe dans l'atlas (aCell), ondulation légère au vent
 function foliageMaterial(atlas) {
   const T = CONFIG.graphics.trees;
@@ -106,6 +121,9 @@ function ballGeometry() {
     col[i * 3] = k; col[i * 3 + 1] = k; col[i * 3 + 2] = k;
   }
   g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  const uv = new Float32Array(p.count * 2); // projection plane (x + z / 2, y + z / 3) : la masse de feuilles tolère l'étirement
+  for (let i = 0; i < p.count; i++) { uv[i * 2] = (p.getX(i) + p.getZ(i) * 0.5) * 1.6; uv[i * 2 + 1] = (p.getY(i) + p.getZ(i) * 0.3) * 1.6; }
+  g.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
   g.computeVertexNormals();
   return g;
 }
@@ -134,9 +152,9 @@ export function createTrees(scene, list, barkMat) {
 
   const ensureBalls = () => {
     if (api.meshes.ball) return;
-    const per = 2, m = new THREE.InstancedMesh(ballGeometry(), new THREE.MeshStandardMaterial({ roughness: 0.95, vertexColors: true }), N * per);
+    const per = 2, m = new THREE.InstancedMesh(ballGeometry(), new THREE.MeshStandardMaterial({ roughness: 0.95, vertexColors: true, map: leafyTexture() }), N * per);
     list.forEach((t, i) => {
-      const hc = hash(t.x, t.z, 9), col = tints[Math.floor(hc * tints.length)].clone().multiplyScalar(0.55);
+      const hc = hash(t.x, t.z, 9), col = tints[Math.floor(hc * tints.length)].clone().multiplyScalar(0.95);
       for (let k = 0; k < per; k++) {
         const a = hash(t.x, t.z, 20 + k) * 6.28, off = k === 0 ? 0.2 : 1.0 + 0.5 * hash(t.x, t.z, 30);
         const r = (k === 0 ? 2.0 : 1.45) * (0.85 + 0.3 * hash(t.x, t.z, 40 + k));

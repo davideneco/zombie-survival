@@ -2060,7 +2060,7 @@ btnCinema.addEventListener('click', () => { settings.cinema = settings.cinema ==
 syncCinema();
 // « Halo lumineux » (qualité Haute) : fenêtres, lampadaires et flammes rayonnent ; désactivable
 const btnHalo = document.getElementById('btnHalo');
-const syncHalo = () => { btnHalo.textContent = `HALO LUMINEUX (HAUTE) : ${settings.halo !== false ? 'OUI' : 'NON'}`; };
+const syncHalo = () => { btnHalo.textContent = `HALO (HAUTE) : ${settings.halo !== false ? 'OUI' : 'NON'}`; };
 btnHalo.addEventListener('click', () => { settings.halo = settings.halo === false; syncHalo(); gfx.applyHalo(); game.saveSettings(); });
 syncHalo();
 
