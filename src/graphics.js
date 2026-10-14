@@ -176,6 +176,7 @@ export function createGraphics({ renderer, scene, camera, hemi, moon, settings }
     renderer.shadowMap.autoUpdate = false; // mise à jour pilotée par la boucle (shadowEvery)
     fx.setQuality(L.particles, L.decals);
     if (api.sky) api.sky.setCloud(L.clouds ? G().sky.cloudCover : 0);
+    api.world?.relief?.setRange(L.facade); // détail des façades : 30 / 60 / 110 m
     if (wantPost()) { killPost(); makePost(); } else killPost();
     contact.setEnabled(G().contact.enabled);
     if (changed) scene.traverse((o) => { if (o.material) for (const m of [].concat(o.material)) m.needsUpdate = true; }); // les shaders changent avec les ombres
@@ -198,6 +199,7 @@ export function createGraphics({ renderer, scene, camera, hemi, moon, settings }
   api.attach = (game, { world, sky }) => {
     api.game = game; api.world = world; api.player = game.player; api.sky = sky || world.sky;
     if (api.sky?.setCloud) api.sky.setCloud(api.level?.clouds ? G().sky.cloudCover : 0);
+    world.relief?.setRange(api.level?.facade ?? 60);
     const T = G().torch, f = game.player.flashlight;
     Object.assign(f, { angle: T.angle, penumbra: T.penumbra, decay: T.decay, distance: T.distance });
     contact.build(scene);

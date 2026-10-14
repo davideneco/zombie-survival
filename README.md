@@ -61,6 +61,20 @@ Toutes les touches du clavier sont **modifiables dans Options > Touches** (acces
 
 **Hôte uniquement** : `F9` ouvre un menu de debug (`1`-`4` choisir un joueur, `T` deux fois pour l'amener sur vous, `Y` pour le rejoindre, `N` pour le réanimer, `U` pour débloquer des zombies coincés, `P` pour les performances).
 
+## Options graphiques (v0.44.0)
+
+Options (titre ou pause) : **Luminosité**, **Champ de vision**, **Sensibilité**, **Qualité** (Rapide / Normale / Haute), Volume, Musique, **Effets cinéma** (OUI / NON), Chat, Touches, Plein écran. Tout est **visuel et local** : aucun effet sur le jeu en réseau, l'équilibrage, les collisions ni les zones de tir.
+
+| | Rapide | Normale | Haute |
+|---|---|---|---|
+| Netteté | x0,75 | x1 | jusqu'à x2 |
+| Ombres de la lune | aucune | douces, 1024 px (une image sur deux) | douces, 2048 px (chaque image) |
+| Reflets d'ambiance (ciel, lampadaires, lune), ombres de contact, ciel animé (lune, nuages), vignette | oui (nuages : non) | oui | oui |
+| Rendu et étalonnage | direct | direct | cible multi-échantillonnée + table de couleurs (avec « Effets cinéma ») |
+| Particules / taches de sang au sol | 50 % / 16 | 100 % / 36 | 100 % / 64 |
+
+« Effets cinéma » ajoute une vignette et un grain léger (superposition CSS, coût nul) et, en Haute, l'étalonnage par table de couleurs. Les valeurs (intensité de la torche, exposition et reflets par zone, ciel, étalonnage) sont dans le bloc `graphics` de `src/config.js` ; la cathédrale garde sa pénombre (reflets d'ambiance réduits dans l'intérieur).
+
 ## Jouer sur son PC
 
 ### 1. Prérequis

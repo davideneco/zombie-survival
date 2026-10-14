@@ -176,9 +176,9 @@ export async function buildRealWorld(scene, renderer) {
   const halfX = data.half, halfZ = data.halfZ || data.half;
   const Z = CONFIG.sector;
 
-  const [cobble, plaster, roofP, metalP, barkP, sandP, plasterImg] = await Promise.all([
+  const [cobble, plaster, roofP, metalP, barkP, sandP, plasterImg, plaster2Img] = await Promise.all([
     loadPBR('cobble', renderer), loadPBR('plaster', renderer), loadPBR('roof', renderer),
-    loadPBR('metal', renderer), loadPBR('bark', renderer), loadPBR('sandstone', renderer), loadImg('/textures/plaster/diff.jpg'),
+    loadPBR('metal', renderer), loadPBR('bark', renderer), loadPBR('sandstone', renderer), loadImg('/textures/plaster/diff.jpg'), loadImg('/textures/plaster2/diff.jpg'),
   ]);
 
   // Anneaux OSM découpés en plusieurs morceaux : on les recolle (sinon murs fantômes / façades à l'envers)
@@ -272,7 +272,7 @@ export async function buildRealWorld(scene, renderer) {
   }
 
   // ---------------------------------------------------------------- Bâtiments
-  const arch = createArchitecture({ renderer, plasterImg, roofP, rnd });
+  const arch = createArchitecture({ renderer, plasterImg, plaster2Img, roofP, rnd });
 
   const facadeSegs = []; // [ax,az,bx,bz,nx,nz,bays,len] : pour placer les fenêtres d'apparition
   const blds = [];
@@ -1984,6 +1984,7 @@ export async function buildRealWorld(scene, renderer) {
     scene.add(l);
     lightPool.push(l);
   }
+  let reliefTimer = 0;
   let lightTimer = 0, lampScale = 1; // lampScale : l'Aube éteint peu à peu les lampadaires (summit.js)
   const assignLights = (px, pz) => {
     const sorted = lightSources
@@ -2018,6 +2019,7 @@ export async function buildRealWorld(scene, renderer) {
     levels, hdf: hdfInfo, tram: tramInfo, mapFixes: { partWalls, fountains: fountainCircles.length }, // v0.35.2 : murs ajoutés aux façades des parties 3D (tests, outils)
    
     sky: skyApi, setLampScale: (k) => { lampScale = k; lightTimer = 0; },
+    relief: arch.relief, // façades en relief (v0.45.0) : relief.setRange(m) selon la qualité
     floorAt: (x, z, y, out) => levels.floorAt(x, z, y, out),
     collide: (pos, r, out, ignore) => collision.resolve(pos, r, out, ignore),
     rayHit: (ox, oy, oz, dx, dy, dz, maxT) => collision.rayHit(ox, oy, oz, dx, dy, dz, maxT),
@@ -2040,6 +2042,8 @@ export async function buildRealWorld(scene, renderer) {
       tramInfo?.update(dt); // feux des portes sur les voies (vert une fois la porte ouverte)
       lightTimer -= dt;
       if (lightTimer <= 0) { lightTimer = 0.4; assignLights(px, pz); }
+      reliefTimer -= dt;
+      if (reliefTimer <= 0) { reliefTimer = 0.25; arch.relief.update(px, pz); } // détail des façades coupé au-delà de la portée de la qualité
     },
     mapName: 'Grande Île, Strasbourg',
   };

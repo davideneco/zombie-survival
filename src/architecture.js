@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { CONFIG } from './config.js';
+import { createRelief, hash2 } from './relief.js';
 
 // =====================================================================
 //  Architecture strasbourgeoise : façades dessinées (crépi + grès, colombages, grès rose,
@@ -82,6 +83,50 @@ function glass(ctx, x, y, w, h, lit, rnd, panes = [2, 3], arch = false) {
 
 const SHUTTERS = ['#3f5a45', '#7a3b2e', '#54616b', '#2f4a6b', '#6b5a2f', '#5a3a4a'];
 
+// ------------------------------------------------------------------ Salissures (v0.45.0)
+// Coulures sous les appuis, fissures, taches d'humidité : dessinées sur la texture de façade avec un générateur LOCAL par cellule
+// (le tirage `rnd` du monde n'est jamais consommé : le décor, les machines et les armes restent exactement où ils étaient).
+function prng(seed) {
+  let a = seed >>> 0;
+  return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+}
+const STYLE_SEED = { plaster: 1, timber: 2, sandstone: 3 };
+// coulures d'une fenêtre : positions (px), longueurs, largeurs, opacité (déterministes : « départ » sous l'appui et « arrivée » dans la cellule du dessous se raccordent)
+function streakSet(style, variant, c, r, wx, ww) {
+  const R = prng(STYLE_SEED[style] * 1000 + variant * 37 + c * 11 + r * 5 + 7), n = 2 + Math.floor(R() * 3), out = [];
+  for (let i = 0; i < n; i++) out.push({ x: wx - 6 + R() * (ww + 12), len: (0.5 + R() * 1.3) * PX, w: (0.04 + R() * 0.07) * PX, a: 0.16 + R() * 0.18 });
+  return out;
+}
+function drawStreak(ctx, x, y0, y1, w, a) {
+  if (y1 - y0 < 2) return;
+  const g = ctx.map.createLinearGradient(0, y0, 0, y1);
+  g.addColorStop(0, `rgba(38,30,24,${a})`); g.addColorStop(0.7, `rgba(38,30,24,${a * 0.55})`); g.addColorStop(1, 'rgba(38,30,24,0)');
+  ctx.map.fillStyle = g; ctx.map.fillRect(x - w / 2, y0, w, y1 - y0);
+  ctx.bump.fillStyle = 'rgba(90,90,90,0.35)'; ctx.bump.fillRect(x - w / 2, y0, w, (y1 - y0) * 0.6);
+}
+// cellule (c, r) du motif (2 travées x 2 étages) : ox, oy son coin haut-gauche ; fenêtre (wx, wy, ww, wh) ; appui juste sous la fenêtre
+function grime(ctx, style, variant, c, r, ox, oy, wx, wy, ww, wh) {
+  const sillY = wy + wh + 11, bottom = oy + CH;
+  for (const k of streakSet(style, variant, c, r, wx, ww)) drawStreak(ctx, k.x, sillY, Math.min(sillY + k.len, bottom), k.w, k.a);
+  for (const k of streakSet(style, variant, c, 1 - r, wx, ww)) { // l'eau qui vient de la fenêtre de l'étage du dessus : le reste de la coulure
+    const rest = k.len - (bottom - sillY); if (rest > 2) drawStreak(ctx, k.x, oy, oy + rest, k.w, k.a * 0.8);
+  }
+  const R = prng(STYLE_SEED[style] * 7919 + variant * 101 + c * 17 + r * 29 + 3);
+  for (let i = 0; i < 3; i++) { // taches d'humidité et de patine : grands halos très doux
+    const x = ox + R() * CW, y = oy + R() * CH, rad = (0.5 + R() * 1.1) * PX, a = 0.05 + R() * 0.07;
+    const g = ctx.map.createRadialGradient(x, y, 0, x, y, rad); g.addColorStop(0, `rgba(${R() < 0.35 ? '46,58,38' : '48,36,26'},${a})`); g.addColorStop(1, 'rgba(40,30,20,0)');
+    ctx.map.fillStyle = g; ctx.map.fillRect(x - rad, y - rad, rad * 2, rad * 2);
+  }
+  if (R() < 0.55) { // fissure partant d'un angle de la fenêtre
+    let x = R() < 0.5 ? wx - 8 : wx + ww + 8, y = wy + wh * (R() < 0.5 ? 0 : 1), dir = (x < wx + ww / 2 ? -1 : 1);
+    ctx.map.strokeStyle = 'rgba(30,22,18,0.42)'; ctx.map.lineWidth = 1.6; ctx.bump.strokeStyle = '#4a4a4a'; ctx.bump.lineWidth = 2.2;
+    for (const cx2 of [ctx.map, ctx.bump]) { cx2.beginPath(); cx2.moveTo(x, y); }
+    const n = 4 + Math.floor(R() * 4);
+    for (let i = 0; i < n; i++) { x += dir * (4 + R() * 12); y += (R() - 0.35) * 16 + (y < wy + wh / 2 ? -5 : 6); ctx.map.lineTo(x, y); ctx.bump.lineTo(x, y); }
+    ctx.map.stroke(); ctx.bump.stroke();
+  }
+}
+
 // ------------------------------------------------------------------ Styles de façade (2 travées x 2 étages)
 function drawPlaster(ctx, plasterImg, rnd, variant) {
   const W = CW * 2, H = CH * 2;
@@ -100,6 +145,7 @@ function drawPlaster(ctx, plasterImg, rnd, variant) {
     const lit = rnd() < 0.2;
     glass(ctx, wx, wy, ww, wh, lit, rnd, [2, 3]);
     box(ctx, wx - 18, wy + wh + 10, ww + 36, 9, '#b8ad9b', '#e8e8e8'); // appui
+    grime(ctx, 'plaster', variant, c, r, ox, oy, wx, wy, ww, wh);
     const sh = variant >= 2 ? null : SHUTTERS[Math.floor(rnd() * SHUTTERS.length)];
     if (sh && rnd() < 0.85) {
       const closed = rnd() < 0.25;
@@ -143,6 +189,7 @@ function drawTimber(ctx, plasterImg, rnd, variant) {
       else { box(ctx, a, oy + CH * 0.5 - bw / 2, b - a, bw, beam, '#e0e0e0'); line(ctx, a, oy + CH - bw, b, oy + CH * 0.5, bw * 0.8, beam, '#e0e0e0'); }
     }
     glass(ctx, wx, wy, ww, wh, rnd() < 0.3, rnd, [2, 3]);
+    grime(ctx, 'timber', variant, c, r, ox, oy, wx, wy, ww, wh);
     if (rnd() < 0.45) { // jardinière
       box(ctx, wx - 6, wy + wh - 4, ww + 12, 16, '#5a3a22');
       for (let k = 0; k < 7; k++) { ctx.map.fillStyle = rnd() < 0.7 ? '#d0202a' : '#f07a2a'; ctx.map.beginPath(); ctx.map.arc(wx + (ww * (k + 0.5)) / 7, wy + wh - 8 - rnd() * 8, 6 + rnd() * 3, 0, 7); ctx.map.fill(); }
@@ -178,6 +225,7 @@ function drawSandstone(ctx, plasterImg, rnd, variant, gothic = false) {
       box(ctx, wx - 16, wy - 18, ww + 32, wh + 28, '#d6a48c', '#d8d8d8'); // encadrement mouluré clair
       box(ctx, wx - 26, wy - 30, ww + 52, 14, '#d6a48c', '#e8e8e8');    // corniche de fenêtre
       glass(ctx, wx, wy, ww, wh, rnd() < 0.3, rnd, [2, 3]);
+      grime(ctx, 'sandstone', variant, c, r, ox, oy, wx, wy, ww, wh);
       if (rnd() < 0.35) { // balcon en fer forgé
         box(ctx, wx - 22, wy + wh - 4, ww + 44, 8, '#2a2a2a', '#d0d0d0');
         for (let x = wx - 20; x < wx + ww + 22; x += 9) box(ctx, x, wy + wh - 40, 3, 38, '#262626', '#c0c0c0');
@@ -324,9 +372,27 @@ function polyArea(pts) {
 }
 
 // ------------------------------------------------------------------ Constructeur
-export function createArchitecture({ renderer, plasterImg, roofP, rnd }) {
+export function createArchitecture({ renderer, plasterImg, plaster2Img, roofP, rnd }) {
   // styles : [nom, nombre de variantes, fonction de dessin]
-  const STYLES = { plaster: [4, drawPlaster], timber: [3, drawTimber], sandstone: [3, drawSandstone], gothic: [1, (c, i, r, v) => drawSandstone(c, i, r, v, true)], modern: [1, drawModern] };
+  // plaster2 (« painted_plaster_wall » : crépi taché et coulé, CC0 Poly Haven) sert de fond à la moitié des crépis et à une variante de colombage
+  const p2 = plaster2Img || plasterImg;
+  const STYLES = { plaster: [4, (c, i, r, v) => drawPlaster(c, v >= 2 ? p2 : i, r, v)], timber: [3, (c, i, r, v) => drawTimber(c, v === 1 ? p2 : i, r, v)], sandstone: [3, drawSandstone], gothic: [1, (c, i, r, v) => drawSandstone(c, i, r, v, true)], modern: [1, drawModern] };
+  // texture de détail fine (mêmes pixels que plaster2, 256 px, niveaux de gris) : multipliée à la couleur des façades par un petit ajout au shader (un seul programme pour tous les murs)
+  const detailTex = (() => {
+    const cv = document.createElement('canvas'); cv.width = cv.height = 256;
+    const x = cv.getContext('2d'); x.filter = 'grayscale(1) contrast(1.7) brightness(1.1)'; x.drawImage(p2, 0, 0, 256, 256);
+    const t = new THREE.CanvasTexture(cv); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 4; t.userData.detail = true;
+    return t;
+  })();
+  const withDetail = (mat) => {
+    mat.onBeforeCompile = (sh) => {
+      sh.uniforms.tDetail = { value: detailTex };
+      sh.fragmentShader = sh.fragmentShader.replace('void main() {', 'uniform sampler2D tDetail;\nvoid main() {').replace('#include <map_fragment>', '#include <map_fragment>\n  diffuseColor.rgb *= 0.74 + 0.56 * texture2D(tDetail, vMapUv * vec2(5.0, 3.7)).r;');
+    };
+    mat.customProgramCacheKey = () => 'facadeDetail';
+    return mat;
+  };
+
   const mats = {}; // "style:variante" -> { mat, bucket }
   const bucket = () => ({ pos: [], nor: [], uv: [], col: [], idx: [] });
   // Rang fixe de chaque matériau (style + variante) : deux faces coplanaires de deux matériaux (bâtiments aux emprises qui se chevauchent dans
@@ -342,7 +408,7 @@ export function createArchitecture({ renderer, plasterImg, roofP, rnd }) {
       if (style === 'shop') set = texSet(CW * 2, GH, (ctx) => drawShop(ctx, plasterImg, rnd, variant));
       else if (style === 'dormer') set = texSet(256, 256, (ctx) => drawDormer(ctx, plasterImg, rnd));
       else set = texSet(CW * 2, CH * 2, (ctx) => STYLES[style][1](ctx, plasterImg, rnd, variant));
-      mats[key] = { mat: rankMat(material(renderer, set), style, variant), b: bucket() };
+      mats[key] = { mat: rankMat(withDetail(material(renderer, set)), style, variant), b: bucket(), style, variant };
     }
     return mats[key];
   };
@@ -351,12 +417,12 @@ export function createArchitecture({ renderer, plasterImg, roofP, rnd }) {
   const floodlit = () => {
     if (!floodMat) {
       const base = matFor('gothic', 0);
-      const mat = base.mat.clone();
+      const mat = withDetail(base.mat.clone());
       mat.emissiveMap = base.mat.map;
       mat.emissive = new THREE.Color(0xe8b48c);
       mat.emissiveIntensity = 0.24;
       rankMat(mat, 'flood', 0);
-      floodMat = { mat, b: bucket() };
+      floodMat = { mat, b: bucket(), style: 'gothic', variant: 0 };
       mats['gothic:flood'] = floodMat;
     }
     return floodMat;
@@ -366,6 +432,14 @@ export function createArchitecture({ renderer, plasterImg, roofP, rnd }) {
   const roofB = bucket();
   const tmp = new THREE.Color();
 
+  // ---------- relief des façades (relief.js) : fenêtres, balcons, corniches, tuyaux, cheminées ; AUCUN tirage `rnd`
+  const relief = createRelief();
+  const WIN = { // ouverture dessinée dans la texture (m) : largeur, hauteur, hauteur au-dessus du plancher ; encadrement
+    plaster: { w: 1.25, h: 1.85, b: 0.85, trim: (v) => (v % 2 ? '#c99a84' : '#e2d9c6'), cornice: '#d8cdb8' },
+    timber: { w: 1.1, h: 1.35, b: 1.15, trim: () => '#6a4a30', cornice: '#8a6a4a' },
+    sandstone: { w: 1.3, h: 2.05, b: 0.7, trim: () => '#d6a48c', cornice: '#cf9c84' },
+  };
+  const hexC = (h) => new THREE.Color(h);
   const quad = (b, p0, p1, p2, p3, uv, c0, c1) => {
     const base = b.pos.length / 3;
     b.pos.push(...p0, ...p1, ...p2, ...p3);
@@ -418,6 +492,33 @@ export function createArchitecture({ renderer, plasterImg, roofP, rnd }) {
     } else {
       piece(y0, y1, st.main, (y) => (y - gf) / (FLOOR_H * 2 * sc));
     }
+
+    // ---- relief : mêmes positions que les fenêtres dessinées (u = uoff - s / 8 m : une fenêtre au milieu de chaque travée de 4 m, par étage de 3,25 m)
+    const W = WIN[st.main.style];
+    if (W && sc === 1) {
+      const dx = bx - ax, dz = bz - az, nx = dz / len, nz = -dx / len, ux = dx / len, uz = dz / len; // sortant (voir facadeSegs de realworld.js)
+      const s0 = len * t0, s1 = len * t1, shopGF = !!st.shop && base === 0;
+      const s00 = 8 * (st.uoff - 0.25);
+      const lo = Math.ceil((s00 - (s1 - W.w / 2 - 0.35)) / 4), hi = Math.floor((s00 - (s0 + W.w / 2 + 0.35)) / 4);
+      const trimC = hexC(W.trim(st.main.variant));
+      for (let k = lo; k <= hi; k++) {
+        const sk = s00 - 4 * k;
+        for (let n = -1; n < 60; n++) {
+          const wy = gf + n * FLOOR_H + W.b;
+          if (wy + W.h > y1 - 0.2) break;
+          if (wy < y0 - 1e-3 || (shopGF ? wy < gf : wy < base + 0.3)) continue;
+          const px = ax + ux * sk, pz = az + uz * sk, h = hash2(px * 1.7, pz * 1.3 + wy);
+          const c = tmp.copy(trimC).multiplyScalar(dirt * ao(wy + W.h / 2 - base) * (0.92 + 0.16 * h)).clone().multiply(tint);
+          relief.window(px, wy, pz, nx, nz, W.w / 1.25, W.h / 1.85, c, n === 0 && h < 0.16 && st.main.style !== 'timber');
+        }
+      }
+      if (y1 - y0 > 2.5 && t1 > 0.001) { // corniche en haut du mur
+        relief.cornice(x0, z0, x1, z1, nx, nz, y1, hexC(W.cornice).multiplyScalar(dirt).multiply(tint));
+      }
+      if (t0 === 0 && y0 <= base + 0.01 && y1 - base > 5 && hash2(ax * 0.9, az * 1.1) < 0.45) { // descente de gouttière au coin de départ
+        relief.pipe(ax + ux * 0.2 + nx * 0.06, az + uz * 0.2 + nz * 0.06, base + 0.05, y1 - 0.3);
+      }
+    }
   }
 
   // ---------- toits
@@ -456,6 +557,14 @@ export function createArchitecture({ renderer, plasterImg, roofP, rnd }) {
           tri(roofB, v3[0], v3[1], v3[2], uv, roofCol);
         }
       } catch { /* polygone dégénéré */ }
+    }
+    // cheminée de brique sur le faîtage (relief.js), sur un peu plus d'un toit sur deux
+    if (rh > 2.5 && hl > 3.5) {
+      const hh = hash2(ob.cx * 0.37, ob.cz * 0.53);
+      if (hh < 0.6) {
+        const sOff = (hash2(ob.cx, ob.cz * 1.9) - 0.5) * hl * 1.1, cxp = ob.cx + ux * sOff, czp = ob.cz + uz * sOff;
+        if (pointIn(pts, cxp, czp)) relief.chimney(cxp, czp, top + rh - 1.2, top + rh + 0.9 + hh * 0.8, 0.42, Math.atan2(uz, ux), hexC('#9a5a48').multiplyScalar(dirt));
+      }
     }
     // pignons : on comble entre l'égout et le toit au-dessus de chaque façade
     for (let i = 0; i < pts.length; i++) {
@@ -579,7 +688,9 @@ export function createArchitecture({ renderer, plasterImg, roofP, rnd }) {
   function ghost(fn) {
     const all = () => [roofB, ...Object.values(mats).map((m) => m.b)];
     const before = new Map(all().map((b) => [b, [b.pos.length, b.nor.length, b.uv.length, b.col.length, b.idx.length]]));
+    const rm = relief.mark();
     const r = fn();
+    relief.rollback(rm);
     for (const b of all()) {
       const [p, n, u, c, i] = before.get(b) || [0, 0, 0, 0, 0];
       b.pos.length = p; b.nor.length = n; b.uv.length = u; b.col.length = c; b.idx.length = i;
@@ -668,6 +779,8 @@ export function createArchitecture({ renderer, plasterImg, roofP, rnd }) {
       roof(pts, wallTop, ob && ob.hl < 1.5 && shape === 'gabled' ? 'pyramidal' : shape, rh, ob, st, tint, 1, roofCol, tags, false);
     },
 
+    relief, // relief des façades (relief.js) : portée réglée par la qualité, mis à jour par le monde
+
     // Construit les maillages (un par matériau) et les ajoute à la scène
     finish(scene) {
       const toMesh = (b, mat) => {
@@ -698,6 +811,7 @@ export function createArchitecture({ renderer, plasterImg, roofP, rnd }) {
         let per = variants.get(mat); if (!per) variants.set(mat, per = {});
         if (!per[key]) {
           const m = mat.clone();
+          m.onBeforeCompile = mat.onBeforeCompile; m.customProgramCacheKey = mat.customProgramCacheKey; // Material.clone() ne copie pas le shader modifié
           m.polygonOffset = true;
           m.polygonOffsetFactor = mat.polygonOffsetFactor - 0.5 * rk;
           m.polygonOffsetUnits = mat.polygonOffsetUnits - rk;
@@ -728,6 +842,7 @@ export function createArchitecture({ renderer, plasterImg, roofP, rnd }) {
       };
       for (const [key, { mat, b }] of Object.entries(mats)) for (const t of split(b)) { const m = toMesh(t, tileMat(mat, t, 2)); if (m) m.name = 'arch:' + key; }
       for (const t of split(roofB)) { const r = toMesh(t, tileMat(roofMat, t, 4)); if (r) r.name = 'arch:roof'; }
+      relief.finish(scene);
     },
   };
 }
