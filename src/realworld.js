@@ -1,4 +1,6 @@
 import { makeSkyDome } from './sky.js';
+import { createTrees } from './trees.js';
+import { createGround } from './ground.js';
 import { contact } from './contact.js';
 import * as THREE from 'three';
 import { CONFIG } from './config.js';
@@ -641,35 +643,25 @@ export async function buildRealWorld(scene, renderer) {
   let tramInfo = null; // le réseau construit (rails, quais, poteaux, feux des portes)
 
   // ---------------------------------------------------------------- Arbres (instanciés)
-  const treeMatrices = { trunk: [], leaf: [], leafCol: [] };
+  const treeList = []; // arbres gardés : { x, z, th } (rendu : trees.js, selon la qualité)
   const trackTrees = []; // collisions des arbres supprimés sur les voies du tram
+  let treesApi = null;
   {
-    const leafCols = [0x3c5a2a, 0x4a6230, 0x566a2c].map((c) => new THREE.Color(c));
-    const dummy = new THREE.Object3D();
     for (const [x, z] of data.trees) {
       if (tramDist(x, z) < CONFIG.tram.treeGap) { // un arbre sur la voie : ni tronc ni feuillage dans la rame. Sa collision reste en place pendant le placement des objets
         // (la grille de navigation décide des emplacements : les tirages de toute l'île ne bougent pas), puis elle est désactivée (trackTrees : voir plus bas)
         if (onIsland(x, z)) trackTrees.push(collision.addCircle(x, z, 0.3));
         continue;
       }
-      const th = rand(3.2, 4.5);
-      dummy.position.set(x, th / 2, z); dummy.rotation.set(0, 0, 0); dummy.scale.set(1, th, 1); dummy.updateMatrix();
-      treeMatrices.trunk.push(dummy.matrix.clone());
-      const col = pick(leafCols);
-      for (let i = 0; i < 4; i++) {
-        const r = rand(1.2, 1.9);
-        dummy.position.set(x + rand(-1, 1), th + rand(-0.2, 1.4), z + rand(-1, 1));
-        dummy.scale.set(r, r * 0.8, r); dummy.updateMatrix();
-        treeMatrices.leaf.push(dummy.matrix.clone());
-        treeMatrices.leafCol.push(col);
-      }
+      treeList.push({ x, z, th: 3.2 + 1.3 * (Math.abs(Math.sin(x * 12.9898 + z * 78.233) * 43758.5453) % 1) }); // hauteur du tronc : hachage de la position (v0.46.0 : plus de Math.random)
       if (onIsland(x, z)) collision.addCircle(x, z, 0.3);
       contact.add(x, z, 3.4, 3.4, 0, CONFIG.graphics.contact.tree); // ombre de contact (aucun tirage `rnd`)
     }
-    const trunkGeo = new THREE.CylinderGeometry(0.2, 0.3, 1, 8);
-    scene.add(instanced(trunkGeo, tiled(barkP, 1, 2, { color: 0x8a8076 }), treeMatrices.trunk));
-    scene.add(instanced(new THREE.IcosahedronGeometry(1, 0), new THREE.MeshStandardMaterial({ roughness: 1, flatShading: true }), treeMatrices.leaf, treeMatrices.leafCol));
+    treesApi = createTrees(scene, treeList, tiled(barkP, 1, 2, { color: 0x8a8076 })); // le mode (boules / cartes / branches) est réglé par graphics.js
   }
+
+  // ---------------------------------------------------------------- Sol : trottoirs, variation, flaques, plaques d'égout (shader du sol, v0.46.0)
+  const groundApi = createGround(scene, { mesh: groundMesh, polys: blds.map((b) => b.pts), bounds: { x0: -GROUND_W / 2, z0: -GROUND_H / 2, w: GROUND_W, h: GROUND_H }, onIsland, tramDist });
 
   // ---------------------------------------------------------------- Intérieur de la cathédrale
   if (cath) cathInfo = buildCathedral({ scene, plan: cath, collision, lightSources, props, levels });
@@ -2020,6 +2012,8 @@ export async function buildRealWorld(scene, renderer) {
    
     sky: skyApi, setLampScale: (k) => { lampScale = k; lightTimer = 0; },
     relief: arch.relief, // façades en relief (v0.45.0) : relief.setRange(m) selon la qualité
+    ground: groundApi, // sol (v0.46.0) : champ de distance aux façades, plaques d'égout
+    trees: treesApi, // arbres (v0.46.0) : trees.setMode('ball' | 'cards' | 'cards+branches') selon la qualité
     floorAt: (x, z, y, out) => levels.floorAt(x, z, y, out),
     collide: (pos, r, out, ignore) => collision.resolve(pos, r, out, ignore),
     rayHit: (ox, oy, oz, dx, dy, dz, maxT) => collision.rayHit(ox, oy, oz, dx, dy, dz, maxT),

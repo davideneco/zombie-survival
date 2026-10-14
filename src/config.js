@@ -605,6 +605,13 @@ export const CONFIG = {
       top: ['#0a1222', '#3a3660', '#5a8ad0'], mid: ['#22304a', '#9a7080', '#9cc0e8'], horizon: ['#4a3a2c', '#e0a070', '#d8e4f0'], ground: ['#141210', '#3a3028', '#5a5a52'],
       lamps: 9, lampStrength: 0.6, moonStrength: 0.7,
     },
+    // arbres (trees.js) : cartes de feuillage par arbre [Normale, Haute], taille des cartes (m), rayon et hauteur de la couronne (m), atlas (px), branches par arbre (Haute), amplitude du vent (m)
+    trees: { cards: [14, 24], cardSize: [2.1, 3.1], crownRadius: 2.3, crownHeight: 1.0, atlas: 512, branches: 5, sway: 0.035 },
+    // sol (ground.js) : pixel du champ de distance aux façades (m), largeur du trottoir / de la bordure / du caniveau (m), hauteur d'une rangée de dalles (m),
+    // flaques (seuil du bruit de ... à ..., gain des reflets, assombrissement), plaques d'égout (maille en m, probabilité par maille)
+    ground: { cell: 1, apron: 0.95, kerb: 0.16, gutter: 0.4, slab: 0.45, puddle: { from: 0.66, to: 0.72, reflect: 3.5, darken: 0.4 }, manholeGrid: 34, manholeChance: 0.9 },
+    // vitraux (cathedral.js, cath/) : intensité des taches de lumière colorée au sol (couleur de matériau, additive : la cathédrale garde sa pénombre)
+    glass: { poolColor: 0x3c3c3c },
     // ombres de contact : tache sous chaque objet / arbre (fixe) et sous les zombies, coéquipiers, véhicules (mobiles, à moins de maxDist m)
     contact: { enabled: true, opacity: 0.8, dynamicMax: 160, maxDist: 45, zombie: 0.55, vehicle: 0.5, tree: 0.55 },
     // ciel : lune (élévation et azimut en rad, rayon angulaire), nuages
@@ -612,6 +619,9 @@ export const CONFIG = {
     // Haute : rendu dans une cible multi-échantillonnée (samples) + passe finale (tone mapping + table de couleurs) ; désactivable ici
     // (au-delà de maxPixels : rendu direct sans étalonnage, la cible multi-échantillonnée coûterait trop de mémoire ; au-delà de msaa2Pixels : 2 échantillons)
     post: { enabled: true, samples: 4, msaa2Pixels: 2400000, maxPixels: 4300000 },
+    // halo lumineux (Haute seulement, graphics.js) : seuil et adoucissement sur l'image tone-mappée (0..1), intensité, rayon du flou (texels à demi-résolution),
+    // atténuation à l'Aube (le ciel clair ne doit pas voiler l'écran). Désactivable dans Options (« Halo lumineux ») ; cibles RGBA8 à demi-résolution.
+    halo: { enabled: false, threshold: 0.86, knee: 0.1, intensity: 0.55, radius: 1.6, dawnFade: 0.85 },
     // étalonnage (table de couleurs 32^3, Haute + « Effets cinéma ») : contraste en S (0..1), saturation, teintes des ombres / hautes lumières
     grade: { contrast: 0.45, saturation: 0.92, shadows: [0, 0.012, 0.03], highlights: [0.03, 0.012, -0.02] },
   },

@@ -60,6 +60,9 @@ const POST_VERT = /* glsl */`
 const POST_FRAG = /* glsl */`
   precision highp float;
   uniform sampler2D tDiffuse; uniform sampler2D tLut; uniform float uGrade;
+  #ifdef HALO
+  uniform sampler2D tHalo; uniform float uHalo;
+  #endif
   #include <colorspace_pars_fragment>
   varying vec2 vUv;
   vec3 lutSample(vec3 c) {
@@ -72,8 +75,33 @@ const POST_FRAG = /* glsl */`
   }
   void main() {
     // l'image est DÉJÀ tone-mappée (voir makePost) : conversion sRGB, puis table de couleurs
-    gl_FragColor = sRGBTransferOETF(texture2D(tDiffuse, vUv));
+    vec4 base = texture2D(tDiffuse, vUv);
+    #ifdef HALO
+    base.rgb += texture2D(tHalo, vUv).rgb * uHalo;
+    #endif
+    gl_FragColor = sRGBTransferOETF(base);
     gl_FragColor.rgb = mix(gl_FragColor.rgb, lutSample(gl_FragColor.rgb), uGrade);
+  }`;
+
+// Halo lumineux (Haute) : passe de seuil à demi-résolution (l'image est déjà tone-mappée : valeurs 0..1), flou gaussien séparable, ajout à l'image finale.
+// Cibles en RGBA8 (pas de demi-flottants : aucun format exotique, pas de zone noire en rendu logiciel).
+const BRIGHT_FRAG = /* glsl */`
+  precision highp float;
+  uniform sampler2D tDiffuse; uniform vec2 uThr; varying vec2 vUv;
+  void main() {
+    vec3 c = texture2D(tDiffuse, vUv).rgb;
+    float l = max(c.r, max(c.g, c.b));
+    float k = smoothstep(uThr.x - uThr.y, uThr.x + uThr.y, l);
+    gl_FragColor = vec4(c * k * k, 1.0);
+  }`;
+const BLUR_FRAG = /* glsl */`
+  precision highp float;
+  uniform sampler2D tDiffuse; uniform vec2 uDir; varying vec2 vUv;
+  void main() {
+    vec3 s = texture2D(tDiffuse, vUv).rgb * 0.2270270270;
+    s += (texture2D(tDiffuse, vUv + uDir * 1.3846153846).rgb + texture2D(tDiffuse, vUv - uDir * 1.3846153846).rgb) * 0.3162162162;
+    s += (texture2D(tDiffuse, vUv + uDir * 3.2307692308).rgb + texture2D(tDiffuse, vUv - uDir * 3.2307692308).rgb) * 0.0702702703;
+    gl_FragColor = vec4(s, 1.0);
   }`;
 
 export function createGraphics({ renderer, scene, camera, hemi, moon, settings }) {
@@ -140,11 +168,24 @@ export function createGraphics({ renderer, scene, camera, hemi, moon, settings }
     const rt = new THREE.WebGLRenderTarget(size.x, size.y, { type: THREE.HalfFloatType, samples, depthBuffer: true, colorSpace: THREE.LinearSRGBColorSpace });
     rt.isXRRenderTarget = true;
     const lut = buildLut();
-    const mat = new THREE.RawShaderMaterial({ uniforms: { tDiffuse: { value: rt.texture }, tLut: { value: lut }, uGrade: { value: 1 } }, vertexShader: POST_VERT, fragmentShader: POST_FRAG, depthTest: false, depthWrite: false });
-    api.post = { rt, mat, lut, quad: new FullScreenQuad(mat), w: size.x, h: size.y };
+    const H = G().halo, halo = H.enabled && settings.halo !== false && (api.level?.halo ?? true);
+    const mat = new THREE.RawShaderMaterial({ uniforms: { tDiffuse: { value: rt.texture }, tLut: { value: lut }, uGrade: { value: 1 }, tHalo: { value: null }, uHalo: { value: H.intensity } }, defines: halo ? { HALO: 1 } : {}, vertexShader: POST_VERT, fragmentShader: POST_FRAG, depthTest: false, depthWrite: false });
+    api.post = { rt, mat, lut, quad: new FullScreenQuad(mat), w: size.x, h: size.y, halo: null };
+    if (halo) {
+      const hw = Math.max(2, Math.floor(size.x / 2)), hh = Math.max(2, Math.floor(size.y / 2));
+      const mk = () => new THREE.WebGLRenderTarget(hw, hh, { type: THREE.UnsignedByteType, depthBuffer: false, minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, colorSpace: THREE.LinearSRGBColorSpace });
+      const a = mk(), b = mk();
+      const raw = (frag, uniforms) => new THREE.RawShaderMaterial({ uniforms, vertexShader: POST_VERT, fragmentShader: frag, depthTest: false, depthWrite: false });
+      const bright = raw(BRIGHT_FRAG, { tDiffuse: { value: rt.texture }, uThr: { value: new THREE.Vector2(H.threshold, H.knee) } });
+      const blur = raw(BLUR_FRAG, { tDiffuse: { value: null }, uDir: { value: new THREE.Vector2() } });
+      api.post.halo = { a, b, bright, blur, qBright: new FullScreenQuad(bright), qBlur: new FullScreenQuad(blur), w: hw, h: hh };
+      mat.uniforms.tHalo.value = a.texture;
+    }
   };
   const killPost = () => {
     if (!api.post) return;
+    const h = api.post.halo;
+    if (h) { h.a.dispose(); h.b.dispose(); h.bright.dispose(); h.blur.dispose(); h.qBright.dispose(); h.qBlur.dispose(); }
     api.post.rt.dispose(); api.post.mat.dispose(); api.post.lut.dispose(); api.post.quad.dispose(); api.post = null;
   };
   const wantPost = () => { // la passe finale ne sert qu'à l'étalonnage (Effets cinéma) ; pas sur les très grands écrans (mémoire de la cible MSAA)
@@ -167,6 +208,7 @@ export function createGraphics({ renderer, scene, camera, hemi, moon, settings }
     fx.setQuality(L.particles, L.decals);
     if (api.sky) api.sky.setCloud(L.clouds ? G().sky.cloudCover : 0);
     api.world?.relief?.setRange(L.facade); // détail des façades : 30 / 60 / 110 m
+    api.world?.trees?.setMode(L.trees); // arbres : boules lissées / cartes de feuillage / cartes + branches
     if (wantPost()) { killPost(); makePost(); } else killPost();
     contact.setEnabled(G().contact.enabled);
     if (changed) scene.traverse((o) => { if (o.material) for (const m of [].concat(o.material)) m.needsUpdate = true; }); // les shaders changent avec les ombres
@@ -174,6 +216,7 @@ export function createGraphics({ renderer, scene, camera, hemi, moon, settings }
     api.applyExposure();
   };
 
+  api.applyHalo = () => { if (api.post) { killPost(); if (wantPost()) makePost(); } };
   api.applyCinema = () => {
     const on = settings.cinema !== false;
     document.body.classList.toggle('no-cinema', !on);
@@ -182,7 +225,7 @@ export function createGraphics({ renderer, scene, camera, hemi, moon, settings }
 
   api.resize = () => {
     renderer.setSize(window.innerWidth, window.innerHeight);
-    if (api.post) { const s = renderer.getDrawingBufferSize(new THREE.Vector2()); api.post.rt.setSize(s.x, s.y); api.post.w = s.x; api.post.h = s.y; }
+    if (api.post) { const s = renderer.getDrawingBufferSize(new THREE.Vector2()); api.post.rt.setSize(s.x, s.y); api.post.w = s.x; api.post.h = s.y; const h = api.post.halo; if (h) { h.w = Math.max(2, s.x >> 1); h.h = Math.max(2, s.y >> 1); h.a.setSize(h.w, h.h); h.b.setSize(h.w, h.h); } }
   };
 
   // ------------------------------------------------------------ monde (après sa construction)
@@ -190,6 +233,7 @@ export function createGraphics({ renderer, scene, camera, hemi, moon, settings }
     api.game = game; api.world = world; api.player = game.player; api.sky = sky || world.sky;
     if (api.sky?.setCloud) api.sky.setCloud(api.level?.clouds ? G().sky.cloudCover : 0);
     world.relief?.setRange(api.level?.facade ?? 60);
+    world.trees?.setMode(api.level?.trees ?? 'cards');
     const T = G().torch, f = game.player.flashlight;
     Object.assign(f, { angle: T.angle, penumbra: T.penumbra, decay: T.decay, distance: T.distance });
     world.relief?.update(world.startPos.x, world.startPos.z); // les tuiles proches du départ sont visibles : leurs shaders sont compilés au préchauffage
@@ -216,6 +260,7 @@ export function createGraphics({ renderer, scene, camera, hemi, moon, settings }
     if (p.torchOn) p.flashlight.intensity = G().torch.intensity * zk.torch;
     // ciel
     api.sky?.update?.(dt);
+    api.world?.trees?.update(performance.now() / 1000);
     // ombres de contact des mobiles : zombies, coéquipiers, véhicules (à moins de maxDist de la caméra)
     if (contact.enabled && contact.dyn) {
       const C = G().contact, cx = camera.position.x, cz = camera.position.z, R2 = C.maxDist * C.maxDist;
@@ -254,6 +299,20 @@ export function createGraphics({ renderer, scene, camera, hemi, moon, settings }
     const P = api.post;
     renderer.setRenderTarget(P.rt);
     renderer.render(scene, camera);
+    const H = P.halo;
+    if (H) { // halo : seuil -> flou horizontal -> flou vertical (demi-résolution), puis ajouté par la passe finale
+      const R = G().halo.radius, au = 1 - G().halo.dawnFade * Math.min(1, api.skyK * 1.6);
+      P.mat.uniforms.uHalo.value = G().halo.intensity * au;
+      renderer.setRenderTarget(H.a); H.qBright.render(renderer);
+      H.blur.uniforms.tDiffuse.value = H.a.texture; H.blur.uniforms.uDir.value.set(R / H.w, 0);
+      renderer.setRenderTarget(H.b); H.qBlur.render(renderer);
+      H.blur.uniforms.tDiffuse.value = H.b.texture; H.blur.uniforms.uDir.value.set(0, R / H.h);
+      renderer.setRenderTarget(H.a); H.qBlur.render(renderer);
+      H.blur.uniforms.tDiffuse.value = H.a.texture; H.blur.uniforms.uDir.value.set(R * 2 / H.w, 0);  // seconde passe plus large : halo doux
+      renderer.setRenderTarget(H.b); H.qBlur.render(renderer);
+      H.blur.uniforms.tDiffuse.value = H.b.texture; H.blur.uniforms.uDir.value.set(0, R * 2 / H.h);
+      renderer.setRenderTarget(H.a); H.qBlur.render(renderer);
+    }
     renderer.setRenderTarget(null);
     P.quad.render(renderer);
   };

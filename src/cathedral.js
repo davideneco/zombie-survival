@@ -123,17 +123,63 @@ export function canvasTex(w, h, draw, emissive = false) {
   return t;
 }
 export const GLASS = ['#1a3a9a', '#a01a1a', '#1a7a3a', '#c09a1a', '#6a1a8a', '#1a6aa0', '#c0501a'];
+// aléa reproductible : le canevas d'albedo et celui de l'émissif dessinent EXACTEMENT le même vitrail
+function seededRnd(seed) {
+  let s = (Math.floor(seed) * 2654435761) >>> 0;
+  return () => { s = (s + 0x6d2b79f5) >>> 0; let t = s; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+}
+// Verres : [teinte, saturation, clarté] (bleu et rouge dominants comme à Strasbourg, un peu de vert, d'or et de blanc)
+const PANES = [[222, 70, 34], [222, 70, 34], [216, 64, 40], [356, 72, 36], [356, 72, 36], [8, 70, 40], [132, 46, 30], [44, 80, 48], [280, 40, 30], [48, 20, 74]];
+// Vitrail en lancette (arc brisé) : bordure, treillis de losanges, médaillons et tête à rosace, le tout serti de plombs. Mêmes dessins en albedo
+// (verre sombre + plombs noirs) et en émissif (verre lumineux, plus clair au centre, plombs noirs : ils ne brillent pas).
 export function stainedGlass(x, px, py, w, h, emis) {
-  // vitrail en lancette : petites pièces colorées sertie de plomb
-  x.save(); x.beginPath(); x.moveTo(px, py + h); x.lineTo(px, py + w * 0.6);
-  for (let a = 0; a <= 16; a++) { const t = a / 16; x.lineTo(px + w * t, py + w * 0.6 - Math.sin(t * Math.PI) * w * 0.6); }
-  x.lineTo(px + w, py + h); x.closePath(); x.clip();
-  const cell = w / 4;
-  for (let yy = py; yy < py + h; yy += cell * 1.2) for (let xx = px; xx < px + w; xx += cell) {
-    x.fillStyle = GLASS[Math.floor(Math.random() * GLASS.length)];
-    x.globalAlpha = emis ? 0.75 : 1; x.fillRect(xx, yy, cell, cell * 1.2); x.globalAlpha = 1;
+  const R = seededRnd(px * 31 + py * 17 + w * 7), lead = Math.max(2, w / 38);
+  const springY = py + w * 0.87, cx = px + w / 2, bottom = py + h;
+  x.save();
+  x.beginPath(); x.moveTo(px, bottom); x.lineTo(px, springY);
+  x.arc(px + w, springY, w, Math.PI, Math.PI + Math.PI / 3); // arc brisé : deux arcs de rayon w qui se coupent à la clé
+  x.arc(px, springY, w, Math.PI * 2 - Math.PI / 3, Math.PI * 2);
+  x.lineTo(px + w, bottom); x.closePath(); x.clip();
+  const pane = () => PANES[Math.floor(R() * PANES.length)];
+  const fillPane = (path, col, k = 1) => { // une pièce de verre : dégradé (plus clair au milieu), grain
+    const [hh, ss, ll] = col;
+    path();
+    const b = path.bbox, g = x.createRadialGradient(b[0], b[1], 0, b[0], b[1], b[2]);
+    if (emis) { g.addColorStop(0, `hsl(${hh},${Math.min(100, ss + 10)}%,${Math.min(80, ll * 1.35 + 14) * k}%)`); g.addColorStop(1, `hsl(${hh},${ss}%,${Math.min(70, ll * 0.95 + 6) * k}%)`); }
+    else { g.addColorStop(0, `hsl(${hh},${ss}%,${ll * 0.7}%)`); g.addColorStop(1, `hsl(${hh},${ss}%,${ll * 0.5}%)`); }
+    x.fillStyle = g; x.fill();
+    x.strokeStyle = '#0b0b0b'; x.lineWidth = lead; x.lineJoin = 'round'; x.stroke();
+  };
+  const poly = (pts) => { const f = () => { x.beginPath(); pts.forEach(([a, b], i) => (i ? x.lineTo(a, b) : x.moveTo(a, b))); x.closePath(); }; f.bbox = [pts.reduce((s, p) => s + p[0], 0) / pts.length, pts.reduce((s, p) => s + p[1], 0) / pts.length, w * 0.25]; return f; };
+  const circ = (ox, oy, r) => { const f = () => { x.beginPath(); x.arc(ox, oy, r, 0, 7); }; f.bbox = [ox, oy, r * 1.1]; return f; };
+  // fond : verre bleu sombre (toute la lancette) puis treillis de losanges rouge / bleu
+  x.fillStyle = emis ? '#0a1030' : '#0d1230'; x.fillRect(px, py, w, h + 2);
+  const cw = w / 3.2, ch = cw * 1.5, y0 = py + w * 0.15;
+  for (let j = 0, yy = y0; yy < bottom + ch; j++, yy += ch / 2) for (let i = -1; i < 5; i++) {
+    const ox = px + i * cw + (j % 2 ? cw / 2 : 0), oy = yy;
+    const col = ((i + j) & 1) ? PANES[0] : PANES[3 + ((i + 2 * j) % 3 === 0 ? 3 : 0)];
+    fillPane(poly([[ox, oy - ch / 2], [ox + cw / 2, oy], [ox, oy + ch / 2], [ox - cw / 2, oy]]), R() < 0.18 ? pane() : col);
   }
-  if (!emis) { x.strokeStyle = '#111'; x.lineWidth = 3; for (let yy = py; yy < py + h; yy += cell * 1.2) { x.beginPath(); x.moveTo(px, yy); x.lineTo(px + w, yy); x.stroke(); } for (let xx = px; xx < px + w; xx += cell) { x.beginPath(); x.moveTo(xx, py); x.lineTo(xx, py + h); x.stroke(); } }
+  // médaillons : disque serti, couronne de verres, cœur doré ou blanc
+  const n = Math.max(1, Math.floor((h - w * 1.6) / (w * 1.15)));
+  for (let k = 0; k < n; k++) {
+    const oy = py + w * 1.35 + (k + 0.5) * ((h - w * 1.6) / n), r = w * 0.36;
+    fillPane(circ(cx, oy, r), PANES[9]);
+    for (let a = 0; a < 8; a++) {
+      const a0 = (a / 8) * Math.PI * 2, a1 = ((a + 1) / 8) * Math.PI * 2, r0 = r * 0.42;
+      { const f = () => { x.beginPath(); x.arc(cx, oy, r * 0.96, a0, a1); x.arc(cx, oy, r0, a1, a0, true); x.closePath(); }; f.bbox = [cx, oy, r]; fillPane(f, a % 2 ? PANES[3] : PANES[0]); }
+    }
+    fillPane(circ(cx, oy, r * 0.36), R() < 0.5 ? PANES[7] : PANES[9]);
+  }
+  // tête : rosace de six lobes dans l'arc, deux petits oculus
+  { const oy = py + w * 0.55, r = w * 0.27;
+    for (let a = 0; a < 6; a++) { const t = (a / 6) * Math.PI * 2; fillPane(circ(cx + Math.cos(t) * r * 0.72, oy + Math.sin(t) * r * 0.72, r * 0.46), PANES[(a % 2) ? 4 : 7]); }
+    fillPane(circ(cx, oy, r * 0.42), PANES[3]);
+    for (const sx of [-1, 1]) fillPane(circ(cx + sx * w * 0.3, py + w * 0.98, w * 0.09), PANES[6]); }
+  // meneau central fin et cadre de plomb
+  x.strokeStyle = '#0b0b0b'; x.lineWidth = lead * 2.2; x.beginPath(); x.moveTo(px, springY); x.lineTo(px, bottom); x.moveTo(px + w, springY); x.lineTo(px + w, bottom); x.stroke();
+  // bordure colorée le long des montants
+  for (let yy = springY; yy < bottom; yy += w * 0.16) for (const sx of [0, 1]) fillPane(poly([[px + sx * (w - w * 0.1), yy], [px + sx * (w - w * 0.1) + w * 0.1, yy], [px + sx * (w - w * 0.1) + w * 0.1, yy + w * 0.16], [px + sx * (w - w * 0.1), yy + w * 0.16]]), PANES[(Math.floor(yy / (w * 0.16)) + sx) % 2 ? 7 : 3]);
   x.restore();
 }
 function wallTextures() {
@@ -159,15 +205,65 @@ function wallTextures() {
   };
   return [canvasTex(W, H, draw, false), canvasTex(W, H, draw, true)];
 }
+// Tache de lumière colorée au sol (additive) : 2 x 2 variantes (bleu, rouge, or, mixte) d'une lancette étirée (pointe vers le mur : v = 0), bords flous, mosaïque floue, éteinte vers le large
+export function lightPoolTex() {
+  const rnd = seededRnd(777), cols = [['#2a4cff', '#6a8cff', '#1a2a9a'], ['#ff3030', '#ff7a40', '#9a1a1a'], ['#ffc040', '#ffe090', '#c08020'], ['#4a60ff', '#ff4040', '#40d080']];
+  return canvasTex(256, 256, (x, w, h) => {
+    const c = w / 2;
+    for (let k = 0; k < 4; k++) {
+      const ox = (k % 2) * c, oy = Math.floor(k / 2) * c;
+      x.save(); x.beginPath(); x.rect(ox, oy, c, c); x.clip(); x.filter = 'blur(5px)';
+      for (let i = 0; i < 26; i++) { const px = ox + 14 + rnd() * (c - 28), py = oy + 6 + rnd() * (c - 12), r = 10 + rnd() * 14; x.fillStyle = cols[k][Math.floor(rnd() * 3)]; x.beginPath(); x.moveTo(px, py - r); x.lineTo(px + r * 0.7, py); x.lineTo(px, py + r); x.lineTo(px - r * 0.7, py); x.closePath(); x.fill(); }
+      x.filter = 'none';
+      // masque : forme de lancette étirée, fondu aux bords et vers le large (v croissant)
+      x.globalCompositeOperation = 'destination-in';
+      const g = x.createLinearGradient(0, oy, 0, oy + c); g.addColorStop(0, 'rgba(0,0,0,1)'); g.addColorStop(0.6, 'rgba(0,0,0,0.7)'); g.addColorStop(1, 'rgba(0,0,0,0)');
+      x.fillStyle = g; x.fillRect(ox, oy, c, c);
+      x.globalCompositeOperation = 'destination-in';
+      const gx = x.createLinearGradient(ox, 0, ox + c, 0); gx.addColorStop(0, 'rgba(0,0,0,0)'); gx.addColorStop(0.16, 'rgba(0,0,0,1)'); gx.addColorStop(0.84, 'rgba(0,0,0,1)'); gx.addColorStop(1, 'rgba(0,0,0,0)');
+      x.fillStyle = gx; x.fillRect(ox, oy, c, c);
+      x.restore();
+    }
+  });
+}
 export function floorTex() {
-  return canvasTex(512, 512, (x, w, h) => {
+  // dallage de grès et de calcaire, 4 x 4 dalles de 1,2 m sur 1024 px : tons variés d'une dalle à l'autre, veines, taches, éclats, joints encrassés, usure des bords
+  const rnd = seededRnd(4242);
+  return canvasTex(1024, 1024, (x, w, h) => {
     const n = 4, c = w / n;
     for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) {
-      x.fillStyle = (i + j) % 2 ? '#8e7a70' : '#c9b8a8'; x.fillRect(i * c, j * c, c, c);
-      for (let k = 0; k < 60; k++) { x.fillStyle = `rgba(0,0,0,${Math.random() * 0.08})`; x.fillRect(i * c + Math.random() * c, j * c + Math.random() * c, 4, 4); }
+      const dark = (i + j) % 2, v = (rnd() - 0.5) * 0.16;
+      const base = dark ? [112, 92, 86] : [168, 152, 136];
+      const col = base.map((q) => Math.max(0, Math.min(255, Math.round(q * (1 + v)))));
+      const ox = i * c, oy = j * c;
+      x.save(); x.beginPath(); x.rect(ox, oy, c, c); x.clip();
+      x.fillStyle = `rgb(${col[0]},${col[1]},${col[2]})`; x.fillRect(ox, oy, c, c);
+      // nuages de tons (grandes taches douces)
+      for (let k = 0; k < 7; k++) { const px = ox + rnd() * c, py = oy + rnd() * c, r = 30 + rnd() * 90, g = x.createRadialGradient(px, py, 0, px, py, r); const t = rnd() < 0.5 ? '0,0,0' : '255,240,220'; g.addColorStop(0, `rgba(${t},${0.05 + rnd() * 0.07})`); g.addColorStop(1, `rgba(${t},0)`); x.fillStyle = g; x.fillRect(px - r, py - r, r * 2, r * 2); }
+      // veines
+      x.lineWidth = 1;
+      for (let k = 0; k < 4; k++) { x.strokeStyle = `rgba(${rnd() < 0.6 ? '60,40,30' : '240,230,215'},${0.06 + rnd() * 0.1})`; x.beginPath(); let px = ox + rnd() * c, py = oy; x.moveTo(px, py); for (let s2 = 0; s2 < 6; s2++) { px += (rnd() - 0.45) * 60; py += c / 6; x.lineTo(px, py); } x.stroke(); }
+      // grain
+      for (let k = 0; k < 500; k++) { x.fillStyle = `rgba(${rnd() < 0.5 ? '0,0,0' : '255,235,215'},${0.03 + rnd() * 0.07})`; x.fillRect(ox + rnd() * c, oy + rnd() * c, 1 + rnd() * 3, 1 + rnd() * 3); }
+      // fissure occasionnelle
+      if (rnd() < 0.3) { x.strokeStyle = 'rgba(25,15,10,0.55)'; x.lineWidth = 1.5; x.beginPath(); let px = ox + rnd() * c, py = oy + rnd() * c * 0.3; x.moveTo(px, py); for (let s2 = 0; s2 < 5; s2++) { px += (rnd() - 0.5) * 40; py += 24 + rnd() * 30; x.lineTo(px, py); } x.stroke(); }
+      // usure et saleté des bords (ombre intérieure)
+      for (const [x0, y0, x1, y1] of [[ox, oy, ox + c, oy], [ox, oy + c, ox + c, oy + c], [ox, oy, ox, oy + c], [ox + c, oy, ox + c, oy + c]]) {
+        const g = x.createLinearGradient(x0, y0, x0 + (x1 === x0 ? (x0 === ox ? 26 : -26) : 0), y0 + (y1 === y0 ? (y0 === oy ? 26 : -26) : 0));
+        g.addColorStop(0, 'rgba(30,20,15,0.38)'); g.addColorStop(1, 'rgba(30,20,15,0)');
+        x.fillStyle = g; x.fillRect(ox, oy, c, c);
+      }
+      x.restore();
     }
-    x.strokeStyle = 'rgba(40,30,25,0.6)'; x.lineWidth = 3;
-    for (let i = 0; i <= n; i++) { x.beginPath(); x.moveTo(i * c, 0); x.lineTo(i * c, h); x.stroke(); x.beginPath(); x.moveTo(0, i * c); x.lineTo(w, i * c); x.stroke(); }
+    // joints : creux sombre + filet clair (arête de la dalle voisine)
+    for (let i = 0; i <= n; i++) {
+      for (const [a0, b0, a1, b1] of [[i * c, 0, i * c, h], [0, i * c, w, i * c]]) {
+        x.strokeStyle = 'rgba(30,22,18,0.8)'; x.lineWidth = 5; x.beginPath(); x.moveTo(a0, b0); x.lineTo(a1, b1); x.stroke();
+        x.strokeStyle = 'rgba(255,235,210,0.12)'; x.lineWidth = 1.5; x.beginPath(); x.moveTo(a0 + (a0 === a1 ? 4 : 0), b0 + (b0 === b1 ? 4 : 0)); x.lineTo(a1 + (a0 === a1 ? 4 : 0), b1 + (b0 === b1 ? 4 : 0)); x.stroke();
+      }
+    }
+    // poussière dans les joints
+    for (let k = 0; k < 900; k++) { const i = Math.floor(rnd() * (n + 1)), t = rnd() * w; x.fillStyle = 'rgba(40,30,25,0.18)'; if (rnd() < 0.5) x.fillRect(i * c - 3 + rnd() * 6, t, 3, 5 + rnd() * 7); else x.fillRect(t, i * c - 3 + rnd() * 6, 5 + rnd() * 7, 3); }
   });
 }
 export function vaultTex() {

@@ -27,6 +27,12 @@ const plankTex = () => canvasTex(256, 256, (x, w, h) => {
     x.fillStyle = '#1c1c1c'; for (const nx of [12, w - 16]) { x.beginPath(); x.arc(nx, y + h / 8, 3, 0, 7); x.fill(); }
   }
 });
+const oakTex = () => canvasTex(256, 256, (x, w, h) => { // chêne sombre ciré : fibres longues, nœuds, patine
+  x.fillStyle = '#4e301c'; x.fillRect(0, 0, w, h);
+  for (let i = 0; i < 70; i++) { const y = Math.random() * h; x.strokeStyle = `rgba(${Math.random() < 0.5 ? '20,10,4' : '120,80,46'},${0.1 + Math.random() * 0.25})`; x.lineWidth = 0.6 + Math.random() * 1.6; x.beginPath(); x.moveTo(0, y); x.bezierCurveTo(w * 0.3, y + (Math.random() - 0.5) * 10, w * 0.65, y + (Math.random() - 0.5) * 10, w, y + (Math.random() - 0.5) * 6); x.stroke(); }
+  for (let i = 0; i < 3; i++) { const px = Math.random() * w, py = Math.random() * h, g = x.createRadialGradient(px, py, 1, px, py, 12); g.addColorStop(0, 'rgba(20,10,5,0.8)'); g.addColorStop(1, 'rgba(20,10,5,0)'); x.fillStyle = g; x.fillRect(px - 12, py - 12, 24, 24); }
+  const v = x.createLinearGradient(0, 0, 0, h); v.addColorStop(0, 'rgba(255,220,170,0.08)'); v.addColorStop(1, 'rgba(0,0,0,0.12)'); x.fillStyle = v; x.fillRect(0, 0, w, h);
+});
 const sandbagTex = () => canvasTex(128, 128, (x, w, h) => {
   x.fillStyle = '#8a7a58'; x.fillRect(0, 0, w, h);
   for (let i = 0; i < 400; i++) { x.fillStyle = `rgba(${Math.random() < 0.5 ? '40,30,10' : '220,200,160'},0.15)`; x.fillRect(Math.random() * w, Math.random() * h, 2, 2); }
@@ -86,6 +92,7 @@ export function createProps() {
     darkGreen: reflective(new THREE.MeshStandardMaterial({ color: 0x1f3a2c, roughness: 0.5, metalness: 0.5 }), 0.6),
     wood: new THREE.MeshStandardMaterial({ color: 0xffffff, map: plankTex(), roughness: 0.85 }),
     woodPlain: new THREE.MeshStandardMaterial({ color: 0x6e4a2c, roughness: 0.8 }),
+    pewWood: new THREE.MeshStandardMaterial({ color: 0xffffff, map: oakTex(), roughness: 0.55 }),
     carPaint: reflective(new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.35, metalness: 0.55 }), 1.0),
     glass: reflective(new THREE.MeshStandardMaterial({ color: 0x0b1118, roughness: 0.08, metalness: 0.9 }), 1.4),
     tyre: new THREE.MeshStandardMaterial({ color: 0x121212, roughness: 0.9 }),
@@ -176,9 +183,21 @@ export function createProps() {
     [merge([box(3.4, 0.08, 1.4, 0, 2.62, 0.48, 0.55), box(3.4, 0.08, 1.4, 0, 2.62, -0.48, -0.55)]), M.roofRed],
     [box(2.6, 0.9, 0.05, 0, 1.45, 1.01), M.warm], [box(2.8, 0.08, 0.5, 0, 0.98, 1.2), M.woodPlain]];
 
-  // Banc d'église (4,4 m) : assise, dossier, joues
-  P.pew = [[merge([box(4.4, 0.06, 0.45, 0, 0.46, 0), box(4.4, 0.5, 0.05, 0, 0.72, -0.22, -0.1), box(4.4, 0.04, 0.3, 0, 0.92, 0.35),
-    box(0.07, 0.95, 0.55, -2.2, 0.47, 0), box(0.07, 0.95, 0.55, 2.2, 0.47, 0), box(4.4, 0.3, 0.05, 0, 0.75, 0.48)]), M.woodPlain]];
+  // Banc d'église (4,4 m) : assise, dossier à lisse arrondie et lattes, pupitre, joues sculptées (profil à volute extrudé), chêne ciré
+  {
+    const wbox = (w, h, d, x, y, z, rx = 0) => { // boîte dont les UV suivent les dimensions (la veine ne s'étire pas sur 4,4 m)
+      const g = new THREE.BoxGeometry(w, h, d), uv = g.attributes.uv, dims = [[d, h], [d, h], [w, d], [w, d], [w, h], [w, h]];
+      for (let f = 0; f < 6; f++) for (let k = 0; k < 4; k++) { const i = f * 4 + k; uv.setXY(i, uv.getX(i) * dims[f][0] * 0.8, uv.getY(i) * dims[f][1] * 0.8); }
+      if (rx) g.rotateX(rx);
+      return g.translate(x, y, z);
+    };
+    const cheek = (sx) => extrude([[-0.27, 0], [0.27, 0], [0.27, 0.34], [0.22, 0.4], [0.2, 0.55], [0.16, 0.86], [0.08, 0.98], [-0.02, 1.02], [-0.12, 0.98], [-0.18, 0.86], [-0.2, 0.6], [-0.27, 0.42]], 0.07, 0.012).rotateY(Math.PI / 2).translate(sx, 0, 0);
+    const parts = [wbox(4.3, 0.05, 0.44, 0, 0.45, 0.02), wbox(4.3, 0.4, 0.035, 0, 0.7, -0.24, -0.1), wbox(4.3, 0.06, 0.07, 0, 0.93, -0.28),
+      wbox(4.3, 0.3, 0.035, 0, 0.74, 0.5), wbox(4.3, 0.035, 0.17, 0, 0.9, 0.43), wbox(4.3, 0.1, 0.1, 0, 0.09, 0.4), cheek(-2.17), cheek(2.17)];
+    const rail = new THREE.CylinderGeometry(0.032, 0.032, 4.3, 8).rotateZ(Math.PI / 2).translate(0, 1.0, -0.3);
+    parts.push(rail);
+    P.pew = [[merge(parts), M.pewWood]];
+  }
 
   // ---- instances
   const inst = {}; // type -> [{ m: Matrix4, c: Color|null }]

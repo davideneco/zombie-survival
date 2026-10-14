@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { CONFIG } from '../config.js';
 import { BLOCKS, PILLARS, NAVE, FLOOR_HOLES, CEIL_HOLES, computeEdges, interfaceDef, blockOf } from './plan2.js';
 
 // Rez-de-chaussée de la cathédrale : dallage, voûtes, murs à vitraux, arcades de la nef, murs de refend percés d'arcs,
@@ -101,6 +102,37 @@ export function buildGround(ctx) {
       continue;
     }
     wallWithOpenings(A, Bp, () => 0, B.H, B.tex, []);
+  }
+
+  // ------------------------------------------------------------------ taches de lumière colorée des vitraux, au sol (v0.46.0) : une image additive par lancette
+  {
+    const GL = CONFIG.graphics.glass, tk = (s, t) => W(s, t);
+    const hh = (a, b, k) => { const v = Math.sin(a * 12.9898 + b * 78.233 + k * 37.7) * 43758.5453; return v - Math.floor(v); };
+    const pool = (C, tang, inw, ww, len, skew, k) => { // C : pied de la fenêtre (monde), tang : le long du mur, inw : vers l'intérieur
+      const cell = Math.floor(hh(C[0], C[1], 9) * 4), u0 = (cell % 2) * 0.5, v0 = Math.floor(cell / 2) * 0.5;
+      const pt = (a, d, wd) => [C[0] + tang[0] * (a * wd * 0.5 + skew * d / len) + inw[0] * d, 0.05, C[1] + tang[1] * (a * wd * 0.5 + skew * d / len) + inw[1] * d];
+      void k;
+      mesher.quad(mats.lightPool, pt(-1, 0, ww), pt(1, 0, ww), pt(1, len, ww * 1.5), pt(-1, len, ww * 1.5), [u0, v0], [u0 + 0.5, v0], [u0 + 0.5, v0 + 0.5], [u0, v0 + 0.5]);
+    };
+    const eachWin = { aisle: [1.5, 4.5], transept: [1.5, 4.5], chapel: [3] };
+    for (const e of exterior) {
+      const B = blockOf(e.block), offs = eachWin[B.tex];
+      if (!offs) continue;
+      const [A, Bp] = lineOf(e.axis, e.pos, e.from, e.to);
+      const L = Math.hypot(Bp[0] - A[0], Bp[1] - A[1]), dx = (Bp[0] - A[0]) / L, dz = (Bp[1] - A[1]) / L;
+      const inwS = e.axis === 's' ? [-e.nrm, 0] : [0, -e.nrm], base = e.axis === 's' ? [e.pos, 0] : [0, e.pos];
+      const p0 = tk(base[0], base[1]), p1 = tk(base[0] + inwS[0], base[1] + inwS[1]), inw = [p1[0] - p0[0], p1[1] - p0[1]];
+      for (let u = 0; u + 6 <= L + 0.01; u += 6) for (const o of offs) {
+        const C = [A[0] + dx * (u + o) + inw[0] * 0.3, A[1] + dz * (u + o) + inw[1] * 0.3];
+        pool(C, [dx, dz], inw, B.tex === 'chapel' ? 1.5 : 1.7, B.tex === 'chapel' ? 4.5 : 6.5, (hh(C[0], C[1], 3) - 0.5) * 2.2, 0);
+      }
+    }
+    // nef : taches plus larges et plus fines venues des hautes fenêtres, sur le dallage entre les bancs
+    for (const side of [-1, 1]) for (let s = NAVE.s0 + 3; s < NAVE.s1 - 2; s += 6) for (const o of [4.5]) {
+      const C = W(s - 3 + o, side * (NAVE.hw - 1.5)), D = W(s - 3 + o, side * (NAVE.hw - 1.5) - side * 1), inw = [D[0] - C[0], D[1] - C[1]];
+      const E = W(s - 2.5 + o, 0), tang = [E[0] - W(s - 3 + o, 0)[0], E[1] - W(s - 3 + o, 0)[1]];
+      pool(C, [tang[0] * 2, tang[1] * 2], inw, 2.4, 9, (hh(C[0], C[1], 5) - 0.5) * 3, 1);
+    }
   }
 
   const pillarGeo = [];

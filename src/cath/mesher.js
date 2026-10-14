@@ -1,5 +1,6 @@
 import * as THREE from 'three';
-import { canvasTex, GLASS, stainedGlass, floorTex, vaultTex, roseTex } from '../cathedral.js';
+import { CONFIG } from '../config.js';
+import { canvasTex, GLASS, stainedGlass, floorTex, vaultTex, roseTex, lightPoolTex } from '../cathedral.js';
 
 // Accumulateur de géométrie : tous les polygones d'un même matériau finissent dans un seul maillage.
 export class Mesher {
@@ -144,6 +145,8 @@ export function makeMaterials() {
     deck: new THREE.MeshStandardMaterial({ color: 0x8a6e60, roughness: 0.9, side: THREE.DoubleSide }),
     vault: new THREE.MeshStandardMaterial({ map: vaultTex(), roughness: 0.9, side: THREE.DoubleSide }),
     plain: new THREE.MeshStandardMaterial({ color: 0xa88070, roughness: 0.9, side: THREE.DoubleSide }),
+    // taches de lumière des vitraux au sol (additives, aucune lumière : une simple image posée sur le dallage)
+    lightPool: new THREE.MeshBasicMaterial({ map: lightPoolTex(), color: CONFIG.graphics.glass.poolColor, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -6, polygonOffsetUnits: -6 }),
   };
   m.wall = {
     aisle: wallMaterial('aisle', 14.5),
