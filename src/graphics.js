@@ -60,7 +60,6 @@ const POST_VERT = /* glsl */`
 const POST_FRAG = /* glsl */`
   precision highp float;
   uniform sampler2D tDiffuse; uniform sampler2D tLut; uniform float uGrade;
-  #include <tonemapping_pars_fragment>
   #include <colorspace_pars_fragment>
   varying vec2 vUv;
   vec3 lutSample(vec3 c) {
@@ -72,18 +71,9 @@ const POST_FRAG = /* glsl */`
     return mix(a, d, f);
   }
   void main() {
-    gl_FragColor = texture2D(tDiffuse, vUv);
-    #ifdef LINEAR_TONE_MAPPING
-      gl_FragColor.rgb = LinearToneMapping(gl_FragColor.rgb);
-    #elif defined( ACES_FILMIC_TONE_MAPPING )
-      gl_FragColor.rgb = ACESFilmicToneMapping(gl_FragColor.rgb);
-    #elif defined( AGX_TONE_MAPPING )
-      gl_FragColor.rgb = AgXToneMapping(gl_FragColor.rgb);
-    #elif defined( NEUTRAL_TONE_MAPPING )
-      gl_FragColor.rgb = NeutralToneMapping(gl_FragColor.rgb);
-    #endif
-    gl_FragColor = sRGBTransferOETF(gl_FragColor);
-    if (uGrade > 0.0) gl_FragColor.rgb = mix(gl_FragColor.rgb, lutSample(gl_FragColor.rgb), uGrade);
+    // l'image est DÉJÀ tone-mappée (voir makePost) : conversion sRGB, puis table de couleurs
+    gl_FragColor = sRGBTransferOETF(texture2D(tDiffuse, vUv));
+    gl_FragColor.rgb = mix(gl_FragColor.rgb, lutSample(gl_FragColor.rgb), uGrade);
   }`;
 
 export function createGraphics({ renderer, scene, camera, hemi, moon, settings }) {
@@ -98,16 +88,7 @@ export function createGraphics({ renderer, scene, camera, hemi, moon, settings }
   api.setTone = (name = G().tone.type) => {
     api.tone = name;
     renderer.toneMapping = TONES[name] ?? THREE.ACESFilmicToneMapping;
-    if (api.post) { api.post.mat.defines = toneDefine(); api.post.mat.needsUpdate = true; }
     scene.traverse((o) => { if (o.material) for (const m of [].concat(o.material)) m.needsUpdate = true; });
-  };
-  const toneDefine = () => {
-    const t = renderer.toneMapping, d = {};
-    if (t === THREE.LinearToneMapping) d.LINEAR_TONE_MAPPING = '';
-    else if (t === THREE.ACESFilmicToneMapping) d.ACES_FILMIC_TONE_MAPPING = '';
-    else if (t === THREE.AgXToneMapping) d.AGX_TONE_MAPPING = '';
-    else if (t === THREE.NeutralToneMapping) d.NEUTRAL_TONE_MAPPING = '';
-    return d;
   };
   // exposition : valeur de base x Luminosité (Options) x zone ; hemi suit la Luminosité (inchangé)
   api.applyExposure = () => {
@@ -151,17 +132,26 @@ export function createGraphics({ renderer, scene, camera, hemi, moon, settings }
   // ------------------------------------------------------------ passe finale (Haute)
   const makePost = () => {
     const size = renderer.getDrawingBufferSize(new THREE.Vector2());
-    const samples = Math.min(G().post.samples, renderer.capabilities.maxSamples);
-    const rt = new THREE.WebGLRenderTarget(size.x, size.y, { type: THREE.HalfFloatType, samples, depthBuffer: true });
+    const samples = Math.min(size.x * size.y > G().post.msaa2Pixels ? 2 : G().post.samples, renderer.capabilities.maxSamples); // écrans très grands : 2 échantillons (mémoire)
+    // Cible multi-échantillonnée en demi-flottants (précision dans les noirs). Astuce : `isXRRenderTarget` fait appliquer à CHAQUE matériau le tone
+    // mapping avant l'écriture (comme pour l'écran) : la résolution MSAA moyenne des valeurs déjà ramenées dans [0, 1]. Une cible HDR ordinaire
+    // moyennerait des valeurs > 1 AVANT le tone mapping et laisserait des « lucioles » blanches le long des arêtes très contrastées (bords de toits
+    // sur le ciel). La conversion sRGB et la table de couleurs viennent ensuite (passe finale).
+    const rt = new THREE.WebGLRenderTarget(size.x, size.y, { type: THREE.HalfFloatType, samples, depthBuffer: true, colorSpace: THREE.LinearSRGBColorSpace });
+    rt.isXRRenderTarget = true;
     const lut = buildLut();
-    const mat = new THREE.RawShaderMaterial({ uniforms: { tDiffuse: { value: rt.texture }, tLut: { value: lut }, uGrade: { value: 1 }, toneMappingExposure: { value: 1 } }, vertexShader: POST_VERT, fragmentShader: POST_FRAG, defines: toneDefine(), depthTest: false, depthWrite: false });
+    const mat = new THREE.RawShaderMaterial({ uniforms: { tDiffuse: { value: rt.texture }, tLut: { value: lut }, uGrade: { value: 1 } }, vertexShader: POST_VERT, fragmentShader: POST_FRAG, depthTest: false, depthWrite: false });
     api.post = { rt, mat, lut, quad: new FullScreenQuad(mat), w: size.x, h: size.y };
   };
   const killPost = () => {
     if (!api.post) return;
     api.post.rt.dispose(); api.post.mat.dispose(); api.post.lut.dispose(); api.post.quad.dispose(); api.post = null;
   };
-  const wantPost = () => !!(api.level && api.level.post && G().post.enabled);
+  const wantPost = () => { // la passe finale ne sert qu'à l'étalonnage (Effets cinéma) ; pas sur les très grands écrans (mémoire de la cible MSAA)
+    if (!(api.level && api.level.post && G().post.enabled && settings.cinema !== false)) return false;
+    const d = renderer.getDrawingBufferSize(new THREE.Vector2());
+    return d.x * d.y <= G().post.maxPixels;
+  };
 
   // ------------------------------------------------------------ qualité
   api.applyQuality = (q) => {
@@ -187,7 +177,7 @@ export function createGraphics({ renderer, scene, camera, hemi, moon, settings }
   api.applyCinema = () => {
     const on = settings.cinema !== false;
     document.body.classList.toggle('no-cinema', !on);
-    if (api.post) api.post.mat.uniforms.uGrade.value = on ? 1 : 0;
+    if (wantPost() !== !!api.post) { killPost(); if (wantPost()) makePost(); }
   };
 
   api.resize = () => {
@@ -202,6 +192,7 @@ export function createGraphics({ renderer, scene, camera, hemi, moon, settings }
     world.relief?.setRange(api.level?.facade ?? 60);
     const T = G().torch, f = game.player.flashlight;
     Object.assign(f, { angle: T.angle, penumbra: T.penumbra, decay: T.decay, distance: T.distance });
+    world.relief?.update(world.startPos.x, world.startPos.z); // les tuiles proches du départ sont visibles : leurs shaders sont compilés au préchauffage
     contact.build(scene);
     contact.setEnabled(G().contact.enabled);
     scene.environmentIntensity = envIntensity();
@@ -249,13 +240,18 @@ export function createGraphics({ renderer, scene, camera, hemi, moon, settings }
     }
   };
 
+  // précompilation des shaders (main.js) : dans la cible de la passe finale quand elle est active (sinon chaque matériau serait compilé deux fois)
+  api.compile = () => {
+    if (api.post) { renderer.setRenderTarget(api.post.rt); renderer.compile(scene, camera); renderer.setRenderTarget(null); }
+    else renderer.compile(scene, camera);
+  };
+
   // ------------------------------------------------------------ rendu (remplace renderer.render(scene, camera))
   renderer.info.autoReset = false; // les statistiques (appels, triangles) couvrent la scène ET la passe finale
   api.render = () => {
     renderer.info.reset();
     if (!api.post) { renderer.render(scene, camera); return; }
     const P = api.post;
-    P.mat.uniforms.toneMappingExposure.value = renderer.toneMappingExposure;
     renderer.setRenderTarget(P.rt);
     renderer.render(scene, camera);
     renderer.setRenderTarget(null);

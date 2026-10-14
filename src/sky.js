@@ -13,7 +13,8 @@ const VERT = /* glsl */`
   varying vec3 vDir;
   void main() {
     vDir = position;
-    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    vec4 p = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    gl_Position = p.xyww; // profondeur maximale : le dôme est dessiné EN DERNIER et seulement là où rien d'autre n'a été dessiné (pas de bruit calculé sous les immeubles)
   }`;
 
 const FRAG = /* glsl */`
@@ -74,9 +75,10 @@ export function makeSkyDome(radius = 300) {
     uCloudNight: { value: new THREE.Color(C.cloudNight) }, uMoonDir: { value: new THREE.Vector3(Math.cos(el) * Math.cos(az), Math.sin(el), Math.cos(el) * Math.sin(az)).normalize() },
     uTime: { value: 0 }, uMoon: { value: 1 }, uCloud: { value: C.cloudCover }, uDay: { value: 0 }, uMoonSize: { value: C.moonSize },
   };
-  const mat = new THREE.ShaderMaterial({ uniforms, vertexShader: VERT, fragmentShader: FRAG, side: THREE.BackSide, depthWrite: false, fog: false });
+  const mat = new THREE.ShaderMaterial({ uniforms, vertexShader: VERT, fragmentShader: FRAG, side: THREE.BackSide, depthWrite: false, depthTest: true, fog: false });
   const mesh = new THREE.Mesh(new THREE.SphereGeometry(radius, 32, 20), mat);
-  mesh.renderOrder = -1;
+  mesh.renderOrder = 1000; // après tous les objets opaques (voir le vertex shader : z = w)
+  mesh.frustumCulled = false;
   let cloud = C.cloudCover;
   return {
     mesh,

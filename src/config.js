@@ -589,9 +589,9 @@ export const CONFIG = {
     // lampe torche (player.js) : intensité, ouverture, bord adouci (penumbra), décroissance, portée
     torch: { intensity: 13, angle: 0.5, penumbra: 0.9, decay: 1.25, distance: 40 },
     // armes (viewmodels.js) : chanfrein des boîtes (m), segments d'arrondi, usure des arêtes (gain de clarté, seuil), intensité des reflets d'ambiance
-    weapons: { bevel: 0.0035, bevelSegments: 2, wear: 3.2, wearFrom: 0.05, env: 1.6 },
+    weapons: { bevel: 0.0035, bevelSegments: 1, wear: 3.2, wearFrom: 0.05, env: 1.6 },
     // pieds de murs assombris (architecture.js, couleurs de sommet) : [hauteur au-dessus de la base (m), facteur de luminosité]
-    footAO: [[0, 0.5], [0.6, 0.66], [1.8, 0.9], [3.2, 1]],
+    footAO: [[0, 0.5], [2.4, 1]],
     // réglages par zone (nom de zone de sector.zones) : exposition, reflets d'ambiance, torche (multiplicateurs, lissés sur ~1/zoneBlend s)
     zoneBlend: 2.5,
     zones: {
@@ -610,7 +610,8 @@ export const CONFIG = {
     // ciel : lune (élévation et azimut en rad, rayon angulaire), nuages
     sky: { moonElevation: 0.72, moonAzimuth: 0.53, moonSize: 0.034, cloudCover: 1, cloudNight: '#26344e' },
     // Haute : rendu dans une cible multi-échantillonnée (samples) + passe finale (tone mapping + table de couleurs) ; désactivable ici
-    post: { enabled: true, samples: 4 },
+    // (au-delà de maxPixels : rendu direct sans étalonnage, la cible multi-échantillonnée coûterait trop de mémoire ; au-delà de msaa2Pixels : 2 échantillons)
+    post: { enabled: true, samples: 4, msaa2Pixels: 2400000, maxPixels: 4300000 },
     // étalonnage (table de couleurs 32^3, Haute + « Effets cinéma ») : contraste en S (0..1), saturation, teintes des ombres / hautes lumières
     grade: { contrast: 0.45, saturation: 0.92, shadows: [0, 0.012, 0.03], highlights: [0.03, 0.012, -0.02] },
   },

@@ -2091,10 +2091,10 @@ function precompileShaders() {
   // pas les lumières, pour compiler avec le vrai nombre de lumières
   const hidden = [], culled = [];
   scene.traverse((o) => {
-    if (!o.visible && !o.isLight) { hidden.push(o); o.visible = true; }
+    if (!o.visible && !o.isLight && !o.userData.lod) { hidden.push(o); o.visible = true; } // (le relief des façades lointain reste coupé : ses shaders sont compilés par les tuiles proches)
     if (o.frustumCulled) { culled.push(o); o.frustumCulled = false; }
   });
-  renderer.compile(scene, camera);
+  gfx.compile(); // (dans la cible de la qualité Haute si besoin : un seul jeu de variantes de shaders)
   for (const t of zombieTextures()) renderer.initTexture(t);
   // vrai rendu (avec les ombres), à l'écran derrière le menu : envoie textures et géométries à la carte
   // graphique et force le pilote à finir la compilation, sinon c'est le premier affichage en jeu qui saccade.

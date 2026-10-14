@@ -512,7 +512,7 @@ export function createArchitecture({ renderer, plasterImg, plaster2Img, roofP, r
           relief.window(px, wy, pz, nx, nz, W.w / 1.25, W.h / 1.85, c, n === 0 && h < 0.16 && st.main.style !== 'timber');
         }
       }
-      if (y1 - y0 > 2.5 && t1 > 0.001) { // corniche en haut du mur
+      if (y1 - y0 > 2.5 && (t1 - t0) * len >= 2.2) { // corniche en haut du mur (pas sur les petits morceaux)
         relief.cornice(x0, z0, x1, z1, nx, nz, y1, hexC(W.cornice).multiplyScalar(dirt).multiply(tint));
       }
       if (t0 === 0 && y0 <= base + 0.01 && y1 - base > 5 && hash2(ax * 0.9, az * 1.1) < 0.45) { // descente de gouttière au coin de départ
