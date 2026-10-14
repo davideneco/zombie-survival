@@ -33,6 +33,11 @@ const oakTex = () => canvasTex(256, 256, (x, w, h) => { // chêne sombre ciré :
   for (let i = 0; i < 3; i++) { const px = Math.random() * w, py = Math.random() * h, g = x.createRadialGradient(px, py, 1, px, py, 12); g.addColorStop(0, 'rgba(20,10,5,0.8)'); g.addColorStop(1, 'rgba(20,10,5,0)'); x.fillStyle = g; x.fillRect(px - 12, py - 12, 24, 24); }
   const v = x.createLinearGradient(0, 0, 0, h); v.addColorStop(0, 'rgba(255,220,170,0.08)'); v.addColorStop(1, 'rgba(0,0,0,0.12)'); x.fillStyle = v; x.fillRect(0, 0, w, h);
 });
+const awningTex = () => canvasTex(128, 64, (x, w, h) => { // auvent rayé rouge et blanc (chalets du marché de Noël)
+  for (let i = 0; i < 8; i++) { x.fillStyle = i % 2 ? '#e8e2d4' : '#a8222a'; x.fillRect(i * 16, 0, 16, h); }
+  const g = x.createLinearGradient(0, 0, 0, h); g.addColorStop(0, 'rgba(0,0,0,0.0)'); g.addColorStop(1, 'rgba(0,0,0,0.25)'); x.fillStyle = g; x.fillRect(0, 0, w, h);
+  x.fillStyle = 'rgba(0,0,0,0.12)'; for (let i = 0; i < 400; i++) x.fillRect(Math.random() * w, Math.random() * h, 1, 1);
+});
 const sandbagTex = () => canvasTex(128, 128, (x, w, h) => {
   x.fillStyle = '#8a7a58'; x.fillRect(0, 0, w, h);
   for (let i = 0; i < 400; i++) { x.fillStyle = `rgba(${Math.random() < 0.5 ? '40,30,10' : '220,200,160'},0.15)`; x.fillRect(Math.random() * w, Math.random() * h, 2, 2); }
@@ -109,6 +114,7 @@ export function createProps() {
     hazard: new THREE.MeshStandardMaterial({ color: 0xffffff, map: hazardTex(), roughness: 0.6 }),
     redWhite: reflective(new THREE.MeshStandardMaterial({ color: 0xc8c8c8, roughness: 0.4, metalness: 0.6 }), 0.8),
     roofRed: new THREE.MeshStandardMaterial({ color: 0x7a2a22, roughness: 0.8 }),
+    awning: new THREE.MeshStandardMaterial({ color: 0xffffff, map: awningTex(), roughness: 0.9, side: THREE.DoubleSide }),
     warm: new THREE.MeshStandardMaterial({ color: 0xffe0a0, emissive: 0xffb050, emissiveIntensity: 0.9 }),
   };
   M.wood.map.repeat.set(1, 1);
@@ -140,7 +146,10 @@ export function createProps() {
     P.bench.size = [1.9, 0.6];
   }
   // Poubelle (vert foncé), potelet, borne
-  P.bin = [[merge([lathe([[0.001, 0.05], [0.22, 0.05], [0.24, 0.85], [0.26, 0.9], [0.0, 0.9]], 14), cyl(0.04, 0.04, 0.4, 6, 0, 0.2)]), M.darkGreen]];
+  // corps nervuré, couvercle bombé à poignée, deux roulettes : 22 segments, profil arrondi (plus de facettes)
+  P.bin = [[merge([lathe([[0.001, 0.06], [0.2, 0.06], [0.225, 0.1], [0.232, 0.45], [0.226, 0.47], [0.236, 0.5], [0.24, 0.62], [0.234, 0.64], [0.244, 0.67], [0.256, 0.84], [0.272, 0.865], [0.262, 0.885], [0.001, 0.885]], 22),
+    lathe([[0.001, 0.885], [0.274, 0.885], [0.268, 0.915], [0.23, 0.95], [0.14, 0.99], [0.05, 1.0], [0.001, 1.0]], 22), cyl(0.012, 0.012, 0.16, 6, 0, 0.99, 0, 0, Math.PI / 2),
+    cyl(0.05, 0.05, 0.04, 10, -0.15, 0.06, -0.22, 0, Math.PI / 2), cyl(0.05, 0.05, 0.04, 10, 0.15, 0.06, -0.22, 0, Math.PI / 2)]), M.darkGreen]];
   P.bollard = [[lathe([[0.001, 0], [0.09, 0], [0.09, 0.75], [0.07, 0.86], [0.001, 0.92]], 10), M.iron]];
   // Vélo : deux roues (tores) + cadre
   {
@@ -179,9 +188,16 @@ export function createProps() {
     P.sandbags = [[merge(bags), M.sandbag]];
   }
   // Chalet du marché de Noël : base bois, comptoir éclairé, toit à deux pans
-  P.chalet = [[merge([box(3, 2.2, 2, 0, 1.1, 0)]), M.wood],
-    [merge([box(3.4, 0.08, 1.4, 0, 2.62, 0.48, 0.55), box(3.4, 0.08, 1.4, 0, 2.62, -0.48, -0.55)]), M.roofRed],
-    [box(2.6, 0.9, 0.05, 0, 1.45, 1.01), M.warm], [box(2.8, 0.08, 0.5, 0, 0.98, 1.2), M.woodPlain]];
+  {
+    const wb = (w, h, d, x, y, z) => new THREE.BoxGeometry(w, h, d).translate(x, y, z);
+    // gable : triangle plein sur le pignon (deux côtés)
+    const gable = (sx) => { const sh = new THREE.Shape([new THREE.Vector2(-1.1, 0), new THREE.Vector2(1.1, 0), new THREE.Vector2(0, 0.9)]); const g = new THREE.ShapeGeometry(sh); g.rotateY(Math.PI / 2); g.translate(sx * 1.74, 2.2, 0); return g; };
+    const lights = []; for (let i = 0; i < 12; i++) { const t = i / 11; lights.push(new THREE.SphereGeometry(0.035, 6, 5).translate(-1.55 + t * 3.1, 2.42 - Math.sin(t * Math.PI) * 0.12 * -1 - 0.1 * Math.abs(Math.sin(t * Math.PI * 3)), 1.38)); }
+    P.chalet = [[merge([wb(3, 2.2, 2, 0, 1.1, 0), wb(0.14, 2.7, 0.14, -1.5, 1.35, 1.0), wb(0.14, 2.7, 0.14, 1.5, 1.35, 1.0), wb(3.2, 0.12, 0.12, 0, 2.28, 1.0), wb(3.1, 0.08, 0.6, 0, 1.0, 1.25), wb(3.1, 0.5, 0.05, 0, 0.55, 1.05)]), M.wood],
+      [merge([box(3.5, 0.08, 1.45, 0, 2.62, 0.5, 0.55), box(3.5, 0.08, 1.45, 0, 2.62, -0.5, -0.55), wb(3.6, 0.1, 0.1, 0, 3.0, 0), gable(-1), gable(1)]), M.roofRed],
+      [merge([box(3.0, 0.03, 0.62, 0, 2.18, 1.3, 0.62)]), M.awning],
+      [merge([box(2.6, 0.7, 0.05, 0, 1.55, 1.01), ...lights]), M.warm], [box(2.8, 0.08, 0.5, 0, 0.98, 1.2), M.woodPlain]];
+  }
 
   // Banc d'église (4,4 m) : assise, dossier à lisse arrondie et lattes, pupitre, joues sculptées (profil à volute extrudé), chêne ciré
   {

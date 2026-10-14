@@ -2,6 +2,8 @@ import * as THREE from 'three';
 import { CONFIG } from './config.js';
 import { fx } from './fx.js';
 import { morionGeometry, cuirassGeometry, pauldronGeometry } from './ironArmor.js';
+import { reflective } from './envmap.js';
+import { skinAssets, skinTextures, zombieMaterial, setCell, zombieGeometries, CELLS, hashId } from './zombieSkin.js';
 
 // =====================================================================
 //  Zombie : modèle articulé (hanches, genoux, épaules, coudes, mâchoire),
@@ -17,125 +19,21 @@ const ASH = new THREE.Color(0xb9b5ab); // couleur des cendres (l'Aube)
 const pick = (a) => a[Math.floor(Math.random() * a.length)];
 const rnd = (a, b) => a + Math.random() * (b - a);
 
-// ------------------------------------------------------------ Textures
-function canvasTex(size, draw) {
-  const c = document.createElement('canvas');
-  c.width = c.height = size;
-  draw(c.getContext('2d'), size);
-  const t = new THREE.CanvasTexture(c);
-  t.colorSpace = THREE.SRGBColorSpace;
-  t.wrapS = t.wrapT = THREE.RepeatWrapping;
-  return t;
-}
-
-function blobs(x, s, n, colors, rMin, rMax, alpha) {
-  for (let i = 0; i < n; i++) {
-    const px = Math.random() * s, py = Math.random() * s, r = rnd(rMin, rMax);
-    const g = x.createRadialGradient(px, py, 0, px, py, r);
-    g.addColorStop(0, pick(colors).replace('A', alpha));
-    g.addColorStop(1, pick(colors).replace('A', 0));
-    x.fillStyle = g;
-    x.fillRect(px - r, py - r, r * 2, r * 2);
-  }
-}
-
-function skinTexture(base) {
-  return canvasTex(128, (x, s) => {
-    x.fillStyle = base; x.fillRect(0, 0, s, s);
-    blobs(x, s, 40, ['rgba(70,90,60,A)', 'rgba(120,140,110,A)', 'rgba(60,45,70,A)'], 6, 22, 0.35);
-    blobs(x, s, 6, ['rgba(70,10,15,A)'], 5, 14, 0.5);              // plaies
-    x.strokeStyle = 'rgba(40,60,90,0.45)'; x.lineWidth = 1;        // veines
-    for (let i = 0; i < 9; i++) {
-      x.beginPath(); let px = Math.random() * s, py = Math.random() * s; x.moveTo(px, py);
-      for (let k = 0; k < 5; k++) { px += rnd(-14, 14); py += rnd(-10, 14); x.lineTo(px, py); }
-      x.stroke();
-    }
-    x.fillStyle = 'rgba(100,8,8,0.7)';                              // traînées de sang
-    for (let i = 0; i < 7; i++) { const px = Math.random() * s; x.fillRect(px, Math.random() * s * 0.5, rnd(1, 3), rnd(10, 40)); }
-    for (let i = 0; i < 900; i++) { x.fillStyle = `rgba(0,0,0,${Math.random() * 0.08})`; x.fillRect(Math.random() * s, Math.random() * s, 1, 1); }
-  });
-}
-
-// Pierre grise fissurée et mousseuse (gargouilles de l'Acte V)
-function stoneTexture() {
-  return canvasTex(128, (x, s) => {
-    x.fillStyle = '#74746f'; x.fillRect(0, 0, s, s);
-    blobs(x, s, 46, ['rgba(60,60,58,A)', 'rgba(170,170,162,A)', 'rgba(110,112,106,A)'], 6, 24, 0.4);
-    blobs(x, s, 7, ['rgba(70,92,52,A)'], 5, 13, 0.45); // mousse
-    x.strokeStyle = 'rgba(30,30,30,0.6)'; x.lineWidth = 1.2; // fissures
-    for (let i = 0; i < 8; i++) {
-      x.beginPath(); let px = Math.random() * s, py = Math.random() * s; x.moveTo(px, py);
-      for (let k = 0; k < 6; k++) { px += rnd(-12, 12); py += rnd(-4, 14); x.lineTo(px, py); }
-      x.stroke();
-    }
-    for (let i = 0; i < 1200; i++) { x.fillStyle = `rgba(0,0,0,${Math.random() * 0.1})`; x.fillRect(Math.random() * s, Math.random() * s, 1, 1); }
-  });
-}
-
-function clothTexture(base, skin, tears, bloodAmount) {
-  return canvasTex(128, (x, s) => {
-    x.fillStyle = base; x.fillRect(0, 0, s, s);
-    x.fillStyle = 'rgba(0,0,0,0.07)';                               // trame du tissu
-    for (let i = 0; i < s; i += 2) { x.fillRect(i, 0, 1, s); x.fillRect(0, i, s, 1); }
-    blobs(x, s, 30, ['rgba(20,15,10,A)', 'rgba(90,80,60,A)'], 8, 26, 0.3); // saleté
-    for (let t = 0; t < tears; t++) {                                // déchirures
-      const cx = Math.random() * s, cy = Math.random() * s, w = rnd(10, 26), h = rnd(8, 22);
-      x.fillStyle = skin; x.beginPath(); x.moveTo(cx, cy);
-      for (let k = 0; k < 7; k++) { const a = (k / 7) * Math.PI * 2; const r = (k % 2 ? 0.5 : 1) * (k % 2 ? w : h) * rnd(0.6, 1); x.lineTo(cx + Math.cos(a) * r, cy + Math.sin(a) * r * 0.8); }
-      x.closePath(); x.fill();
-      x.strokeStyle = 'rgba(70,5,5,0.8)'; x.lineWidth = 2; x.stroke();
-    }
-    blobs(x, s, bloodAmount, ['rgba(110,8,8,A)', 'rgba(70,4,4,A)'], 8, 28, 0.75);
-    const g = x.createLinearGradient(0, s * 0.6, 0, s);
-    g.addColorStop(0, 'rgba(25,18,10,0)'); g.addColorStop(1, 'rgba(25,18,10,0.45)');
-    x.fillStyle = g; x.fillRect(0, 0, s, s);
-  });
-}
-
+// ------------------------------------------------------------ Ressources partagées
+// Textures (atlas de chair et de tissus, masque de sang) et géométries : zombieSkin.js (v0.47.0). Ici, seulement les matériaux simples partagés.
 let ASSETS = null;
 function assets() {
   if (ASSETS) return ASSETS;
-  const skins = [
-    ['#6a7d5c'], ['#778468'], ['#5f7058'], ['#7d7c6c'],
-  ].map(([c]) => skinTexture(c));
-  const skinHex = ['#6a7d5c', '#778468', '#5f7058', '#7d7c6c'];
-  const shirts = [
-    ['#4a2a2a', 3, 12], ['#2c3a4c', 2, 10], ['#4a4a38', 3, 14], ['#2a2a2e', 2, 8], ['#6a6258', 4, 10], ['#3e4a3a', 3, 12],
-  ].map(([c, t, b], i) => clothTexture(c, skinHex[i % 4], t, b));
-  const pants = [
-    ['#23262e', 2, 5], ['#2d2a22', 3, 6], ['#1e2a2a', 2, 5], ['#3a3830', 3, 7],
-  ].map(([c, t, b], i) => clothTexture(c, skinHex[i % 4], t, b));
-
   ASSETS = {
-    skins, shirts, pants,
-    geo: {
-      torso: new THREE.CapsuleGeometry(0.16, 0.3, 4, 10),
-      pelvis: new THREE.CapsuleGeometry(0.14, 0.08, 3, 8),
-      neck: new THREE.CylinderGeometry(0.045, 0.055, 0.1, 8),
-      head: new THREE.SphereGeometry(0.125, 14, 10),
-      jaw: new THREE.BoxGeometry(0.1, 0.04, 0.115),
-      eye: new THREE.SphereGeometry(0.02, 6, 6),
-      thigh: new THREE.CapsuleGeometry(0.08, 0.3, 3, 8),
-      shin: new THREE.CapsuleGeometry(0.065, 0.3, 3, 8),
-      foot: new THREE.BoxGeometry(0.11, 0.07, 0.26),
-      upperArm: new THREE.CapsuleGeometry(0.052, 0.2, 3, 8),
-      foreArm: new THREE.CapsuleGeometry(0.045, 0.2, 3, 8),
-      hand: new THREE.SphereGeometry(0.055, 8, 6),
-      hitHead: new THREE.SphereGeometry(0.3, 8, 6),
-      hitBody: new THREE.BoxGeometry(1.0, 1.65, 0.8),
-    },
+    geo: zombieGeometries(),
     eyeMat: new THREE.MeshBasicMaterial({ color: 0xffc01a }),
-    shoeMat: new THREE.MeshStandardMaterial({ color: 0x15130f, roughness: 0.9 }),
     hitMat: new THREE.MeshBasicMaterial({ visible: false }),
   };
   return ASSETS;
 }
 
 // Toutes les textures de zombies (pour les envoyer à la carte graphique pendant le chargement)
-export function zombieTextures() {
-  const A = assets();
-  return [...A.skins, ...A.shirts, ...A.pants];
-}
+export function zombieTextures() { return skinTextures(); }
 
 let nextZombieId = 1;
 
@@ -155,8 +53,8 @@ export class Zombie {
     this.speed = speed;
     this.dead = false;
     this.deathT = 0;
-    this.deathStyle = Math.floor(Math.random() * 3);
-    this.deathSide = Math.random() < 0.5 ? -1 : 1;
+    this.deathStyle = Math.floor(hashId(this.id, 11) * 3) % 3; // la chute est la même chez tous les joueurs
+    this.deathSide = hashId(this.id, 12) < 0.5 ? -1 : 1;
     this.attackCd = 0.5;
     this.attackWindup = -1;
     this.hitFlash = 0;
@@ -175,16 +73,20 @@ export class Zombie {
     this.region = 0;     // étage (0 = sol de la ville) ; link : escalier en cours d'emprunt
     this.link = null;
 
-    // Matériaux (clonés : le flash de dégâts est propre à chaque zombie)
-    const mk = (tex) => new THREE.MeshStandardMaterial({ map: tex, bumpMap: tex, bumpScale: 0.6, roughness: 0.85 });
-    this.skinMat = mk(pick(A.skins));
-    this.shirtMat = mk(pick(A.shirts));
-    this.pantsMat = mk(pick(A.pants));
-    const tint = new THREE.Color().setHSL(rnd(0.2, 0.3), rnd(0.05, 0.15), rnd(0.5, 0.65));
-    this.skinMat.color.copy(tint);
-    this.shirtMat.color.setScalar(0.75);
-    this.pantsMat.color.setScalar(0.75);
-    this.mats = [this.skinMat, this.shirtMat, this.pantsMat];
+    // Matériaux : un par zombie (le flash de dégâts, le sang et les cendres sont propres à chacun) mais tous sur les MÊMES atlas ; la cellule
+    // (visage, peau, haut, pantalon), la teinte et la taille viennent de `id` (hachage) : tous les joueurs voient le même zombie
+    const S = skinAssets(), hz = (k) => hashId(this.id, k);
+    this.blood = 0.04 + 0.2 * hz(9); // sang d'origine ; chaque touche l'augmente (voir _bleed)
+    const tone = Math.floor(hz(1) * 4) % 4; // le visage et la peau partagent la même teinte de base
+    this.faceMat = zombieMaterial(S.flesh, CELLS.face[tone], this.blood);
+    this.skinMat = zombieMaterial(S.flesh, CELLS.skin[tone], this.blood);
+    this.shirtMat = zombieMaterial(S.cloth, CELLS.shirt[Math.floor(hz(3) * 6) % 6], this.blood);
+    this.pantsMat = zombieMaterial(S.cloth, CELLS.pants[Math.floor(hz(4) * 4) % 4], this.blood * 0.6);
+    const tint = new THREE.Color().setHSL(0.2 + 0.12 * hz(5), 0.04 + 0.1 * hz(6), 0.8 + 0.18 * hz(7));
+    this.skinMat.color.copy(tint); this.faceMat.color.copy(tint);
+    this.shirtMat.color.setScalar(0.8);
+    this.pantsMat.color.setScalar(0.8);
+    this.mats = [this.skinMat, this.shirtMat, this.pantsMat, this.faceMat];
 
     this.meshes = []; // cibles du raycast (hitbox invisibles)
     const mesh = (geo, mat, parent, x, y, z, shadow = false) => {
@@ -197,57 +99,51 @@ export class Zombie {
 
     this.group = new THREE.Group();
     this.group.rotation.order = 'YXZ';
-    const sc = rnd(0.95, 1.08);
+    const sc = 0.95 + 0.13 * hz(8);
     this.group.scale.setScalar(sc);
 
+    const G = A.geo;
     // Bassin / hanches
     this.hips = new THREE.Group(); this.hips.position.y = 0.95; this.group.add(this.hips);
-    mesh(A.geo.pelvis, this.pantsMat, this.hips, 0, 0, 0, true).scale.set(1.15, 1, 0.75);
+    mesh(G.pelvis, this.pantsMat, this.hips, 0, 0, 0, true).scale.set(1.15, 1, 0.75);
 
     // Colonne : courbée vers l'avant
     this.spine = new THREE.Group(); this.spine.position.y = 0.04; this.hips.add(this.spine);
-    mesh(A.geo.torso, this.shirtMat, this.spine, 0, 0.3, 0, true).scale.set(1.05, 1, 0.66);
+    mesh(G.torso, this.shirtMat, this.spine, 0, 0.3, 0, true).scale.set(1.05, 1, 0.66);
 
-    // Cou + tête
-    mesh(A.geo.neck, this.skinMat, this.spine, 0, 0.68, 0.02);
+    // Tête sculptée (orbites, nez, dents, cou : un seul maillage) + mâchoire articulée + yeux dans les orbites
     this.headGroup = new THREE.Group(); this.headGroup.position.set(0, 0.8, 0.05); this.spine.add(this.headGroup);
-    const head = mesh(A.geo.head, this.skinMat, this.headGroup, 0, 0.04, 0, true);
-    head.scale.set(0.9, 1.12, 1);
-    this.jaw = new THREE.Group(); this.jaw.position.set(0, -0.06, 0.0); this.headGroup.add(this.jaw);
-    mesh(A.geo.jaw, this.skinMat, this.jaw, 0, -0.03, 0.06);
+    mesh(G.head, this.faceMat, this.headGroup, 0, -0.012, 0, true);
+    this.jaw = new THREE.Group(); this.jaw.position.set(0, -0.0391, 0.0); this.headGroup.add(this.jaw);
+    mesh(G.jaw, this.faceMat, this.jaw, 0, 0, 0);
     this.eyes = [];
-    for (const sx of [-1, 1]) {
-      const e = mesh(A.geo.eye, A.eyeMat, this.headGroup, sx * 0.05, 0.06, 0.105);
-      this.eyes.push(e);
-    }
-    const hitHead = mesh(A.geo.hitHead, A.hitMat, this.headGroup, 0, 0.04, 0.02);
+    for (const sx of [-1, 1]) this.eyes.push(mesh(G.eye, A.eyeMat, this.headGroup, sx * 0.043, 0.051, 0.088));
+    const hitHead = mesh(G.hitHead, A.hitMat, this.headGroup, 0, 0.04, 0.02);
     hitHead.userData = { zombie: this, head: true };
     this.meshes.push(hitHead);
 
-    // Bras : épaule -> coude -> main
+    // Bras : épaule -> coude -> main à griffes
     this.arms = [];
     for (const sx of [-1, 1]) {
       const shoulder = new THREE.Group(); shoulder.position.set(sx * 0.25, 0.52, 0); this.spine.add(shoulder);
-      mesh(A.geo.upperArm, this.shirtMat, shoulder, 0, -0.16, 0, true);
+      mesh(G.upperArm, this.shirtMat, shoulder, 0, -0.16, 0, true);
       const elbow = new THREE.Group(); elbow.position.y = -0.32; shoulder.add(elbow);
-      mesh(A.geo.foreArm, this.skinMat, elbow, 0, -0.16, 0);
-      mesh(A.geo.hand, this.skinMat, elbow, 0, -0.34, 0).scale.set(0.9, 1.2, 0.7);
+      mesh(G.foreHand, this.skinMat, elbow, 0, 0, 0);
       this.arms.push({ shoulder, elbow, side: sx });
     }
 
-    // Jambes : hanche -> genou -> pied
+    // Jambes : hanche -> genou -> (tibia + chaussure : un maillage)
     this.legs = [];
     for (const sx of [-1, 1]) {
       const hip = new THREE.Group(); hip.position.set(sx * 0.1, -0.02, 0); this.hips.add(hip);
-      mesh(A.geo.thigh, this.pantsMat, hip, 0, -0.22, 0, true);
+      mesh(G.thigh, this.pantsMat, hip, 0, -0.22, 0, true);
       const knee = new THREE.Group(); knee.position.y = -0.45; hip.add(knee);
-      mesh(A.geo.shin, this.pantsMat, knee, 0, -0.22, 0);
-      mesh(A.geo.foot, A.shoeMat, knee, 0, -0.46, 0.05);
+      mesh(G.shinFoot, this.pantsMat, knee, 0, 0, 0);
       this.legs.push({ hip, knee, side: sx });
     }
 
     // Hitbox du corps
-    const hitBody = mesh(A.geo.hitBody, A.hitMat, this.group, 0, 0.82, 0);
+    const hitBody = mesh(G.hitBody, A.hitMat, this.group, 0, 0.82, 0);
     hitBody.userData = { zombie: this, head: false };
     this.meshes.push(hitBody);
     this.hitBody = hitBody;
@@ -307,7 +203,7 @@ export class Zombie {
   makeKind(kind) {
     this.kind = kind;
     const A = assets();
-    const metal = A.metalMat || (A.metalMat = new THREE.MeshStandardMaterial({ color: 0x5a6068, roughness: 0.45, metalness: 0.85, emissive: 0x15181c })); // un peu d'émission : sans envmap un métal sombre serait noir pur
+    const metal = A.metalMat || (A.metalMat = reflective(new THREE.MeshStandardMaterial({ color: 0x5a6068, roughness: 0.4, metalness: 0.85, emissive: 0x0c0e10 }), 1.2)); // reflets d'ambiance (envmap.js)
     if (kind === 'armored') {
       this.armor = 0.5; this.speed *= 0.8; this.runner = false;
       this.group.scale.multiplyScalar(1.12);
@@ -322,17 +218,18 @@ export class Zombie {
     } else if (kind === 'gargoyle') {
       // gargouille de pierre (Acte V) : coureur gris fissuré, cornes et ailes de chauve-souris repliées ; elle surgit d'un parapet
       this.armor = 0.8; this.runner = true; this.limp = false;
-      const stone = A.stoneTex || (A.stoneTex = stoneTexture());
-      for (const m of this.mats) { m.map = stone; m.bumpMap = stone; m.color.setRGB(0.36, 0.38, 0.4); m.bumpScale = 1.3; m.roughness = 1; }
+      setCell(this.skinMat, CELLS.stoneSkin); setCell(this.faceMat, CELLS.stoneFace); setCell(this.shirtMat, CELLS.stoneCloth); setCell(this.pantsMat, CELLS.stoneCloth);
+      for (const m of this.mats) { m.color.setRGB(0.5, 0.52, 0.55); m.bumpScale = 1.3; m.roughness = 1; m.userData.uBlood.value = 0; }
       this.group.scale.multiplyScalar(1.1);
       const eye = A.gargEye || (A.gargEye = new THREE.MeshBasicMaterial({ color: 0xff7a24 }));
       for (const e of this.eyes) { e.material = eye; e.scale.setScalar(1.5); }
       const hornGeo = A.hornGeo || (A.hornGeo = new THREE.ConeGeometry(0.03, 0.17, 6));
-      for (const sx of [-1, 1]) { const h = new THREE.Mesh(hornGeo, this.skinMat); h.position.set(sx * 0.07, 0.17, 0.0); h.rotation.set(-0.35, 0, -sx * 0.45); this.headGroup.add(h); }
+      for (const sx of [-1, 1]) { const h = new THREE.Mesh(hornGeo, this.faceMat); h.position.set(sx * 0.07, 0.17, 0.0); h.rotation.set(-0.35, 0, -sx * 0.45); this.headGroup.add(h); }
       if (!A.wingGeo) { // aile de chauve-souris : contour festonné dans le plan, doublement visible
         const sh = new THREE.Shape(); sh.moveTo(0, 0); sh.lineTo(0.2, 0.55); sh.lineTo(0.55, 0.78); sh.lineTo(0.45, 0.42); sh.lineTo(0.78, 0.5); sh.lineTo(0.62, 0.2); sh.lineTo(0.84, 0.18); sh.lineTo(0.5, -0.1); sh.lineTo(0.1, -0.18); sh.closePath();
         A.wingGeo = new THREE.ShapeGeometry(sh);
-        A.wingMat = new THREE.MeshStandardMaterial({ color: 0x55575a, roughness: 1, side: THREE.DoubleSide, map: stone, bumpMap: stone });
+        const wu = A.wingGeo.attributes.uv, wp = A.wingGeo.attributes.position; for (let i = 0; i < wu.count; i++) wu.setXY(i, 0.1 + wp.getX(i) / 1.1, 0.1 + (wp.getY(i) + 0.2) / 1.1); // UV dans la cellule de pierre
+        A.wingMat = zombieMaterial(skinAssets().cloth, CELLS.stoneCloth); A.wingMat.color.setRGB(0.42, 0.44, 0.46); A.wingMat.roughness = 1; A.wingMat.side = THREE.DoubleSide;
       }
       this.wings = [];
       for (const sx of [-1, 1]) {
@@ -345,8 +242,9 @@ export class Zombie {
       this.explodes = true; this.speed *= 0.7; this.runner = false;
       const sc = this.group.scale.x;
       this.group.scale.set(sc * 1.35, sc, sc * 1.35);
-      this.skinMat.color.setRGB(0.55, 0.72, 0.28);
-      this.shirtMat.color.setRGB(0.55, 0.6, 0.35);
+      setCell(this.skinMat, CELLS.plagueSkin); setCell(this.faceMat, CELLS.plagueFace); setCell(this.shirtMat, CELLS.burlap);
+      this.skinMat.color.setRGB(0.78, 0.95, 0.5); this.faceMat.color.copy(this.skinMat.color);
+      this.shirtMat.color.setRGB(0.7, 0.75, 0.5);
       this.glow = 0x1a2800;
     }
   }
@@ -431,6 +329,7 @@ export class Zombie {
     if (this.dead) return false;
     this.health -= amount * (this.armor || 1);
     this.hitFlash = 0.1;
+    this._bleed(isHead);
     if (this.health <= 0) {
       this.dead = true;
       this.deathT = 0;
@@ -444,6 +343,13 @@ export class Zombie {
       return true;
     }
     return false;
+  }
+
+  // Le sang gagne du terrain à chaque touche (seuil du masque de sang des matériaux) : tête -> visage, corps -> haut et peau
+  _bleed(isHead) {
+    if (this.kind === 'gargoyle') return;
+    const add = (m, v) => { const u = m.userData.uBlood; u.value = Math.min(1, u.value + v); };
+    if (isHead) { add(this.faceMat, 0.16); add(this.skinMat, 0.03); } else { add(this.shirtMat, 0.09); add(this.skinMat, 0.05); add(this.pantsMat, 0.03); add(this.faceMat, 0.02); }
   }
 
   // ------------------------------------------------------------- Pose

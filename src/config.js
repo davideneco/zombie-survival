@@ -621,7 +621,7 @@ export const CONFIG = {
     post: { enabled: true, samples: 4, msaa2Pixels: 2400000, maxPixels: 4300000 },
     // halo lumineux (Haute seulement, graphics.js) : seuil et adoucissement sur l'image tone-mappée (0..1), intensité, rayon du flou (texels à demi-résolution),
     // atténuation à l'Aube (le ciel clair ne doit pas voiler l'écran). Désactivable dans Options (« Halo lumineux ») ; cibles RGBA8 à demi-résolution.
-    halo: { enabled: false, threshold: 0.86, knee: 0.1, intensity: 0.55, radius: 1.6, dawnFade: 0.85 },
+    halo: { enabled: true, threshold: 0.62, knee: 0.15, intensity: 0.85, radius: 1.8, dawnFade: 0.85 },
     // étalonnage (table de couleurs 32^3, Haute + « Effets cinéma ») : contraste en S (0..1), saturation, teintes des ombres / hautes lumières
     grade: { contrast: 0.45, saturation: 0.92, shadows: [0, 0.012, 0.03], highlights: [0.03, 0.012, -0.02] },
   },

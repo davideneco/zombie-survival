@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { cloneWeapon, pulseWeapon, weaponKit } from './weaponDisplay.js';
+import { flashMaterial } from './fx.js';
 
 // =====================================================================
 //  Les personnages jouables : quatre survivants au physique, aux vêtements et à l'équipement distincts.
@@ -49,6 +50,88 @@ function camoTexture() {
   return t;
 }
 let CAMO = null;
+
+// ------------------------------------------------------------------ visage (v0.47.0)
+// Tête sculptée d'une seule pièce (front, arcades, nez, lèvres, menton) dont la texture est peinte par personnage (peau, yeux, sourcils, bouche,
+// barbe de trois jours, lunettes…) : 256 x 256, créée au premier avatar de ce personnage, partagée ensuite. Avant = -z ; UV plane sur la face.
+const FACE_TEX = new Map();
+const FEMALE = new Set(['lea', 'chloe', 'klukai']);
+const hexCss = (h) => `#${new THREE.Color(h).getHexString()}`;
+function faceTexture(ch) {
+  let t = FACE_TEX.get(ch.id);
+  if (t) return t;
+  const S = 256, c = document.createElement('canvas'); c.width = c.height = S;
+  const x = c.getContext('2d'), U = (u) => u * S, V = (v) => (1 - v) * S;
+  const skin = new THREE.Color(ch.skin), hair = hexCss(ch.hair), female = FEMALE.has(ch.id);
+  const shade = (k) => `rgb(${Math.round(skin.r * 255 * k)},${Math.round(skin.g * 255 * k)},${Math.round(skin.b * 255 * k)})`;
+  x.fillStyle = shade(1); x.fillRect(0, 0, S, S);
+  let g = x.createRadialGradient(S / 2, S * 0.5, S * 0.25, S / 2, S * 0.5, S * 0.72); g.addColorStop(0, 'rgba(255,255,255,0.05)'); g.addColorStop(1, 'rgba(0,0,0,0.22)'); x.fillStyle = g; x.fillRect(0, 0, S, S);
+  const rng = (() => { let q = 12345 + ch.id.length * 77; return () => ((q = (q * 16807) % 2147483647) / 2147483647); })();
+  for (let i = 0; i < 900; i++) { x.fillStyle = `rgba(${rng() < 0.5 ? '0,0,0' : '255,255,255'},${rng() * 0.05})`; x.fillRect(rng() * S, rng() * S, 2, 2); } // grain de peau
+  // joues
+  for (const sx of [-1, 1]) { g = x.createRadialGradient(U(0.5 + sx * 0.28), V(0.4), 2, U(0.5 + sx * 0.28), V(0.4), 34); g.addColorStop(0, female ? 'rgba(226,100,100,0.22)' : 'rgba(180,80,70,0.1)'); g.addColorStop(1, 'rgba(180,80,70,0)'); x.fillStyle = g; x.fillRect(0, 0, S, S); }
+  // nez : ombres latérales, narines, reflet
+  x.fillStyle = shade(0.72); for (const sx of [-1, 1]) { x.beginPath(); x.ellipse(U(0.5 + sx * 0.05), V(0.385), 4.5, 3, sx * 0.4, 0, 7); x.fill(); }
+  g = x.createLinearGradient(U(0.4), 0, U(0.6), 0); g.addColorStop(0, 'rgba(0,0,0,0.12)'); g.addColorStop(0.5, 'rgba(255,255,255,0.06)'); g.addColorStop(1, 'rgba(0,0,0,0.12)'); x.fillStyle = g; x.fillRect(U(0.4), V(0.58), U(0.2), V(0.36) - V(0.58));
+  // yeux : blanc, iris, pupille, reflet, paupières, cils
+  const iris = hexCss(ch.eye || (ch.id === 'lea' ? 0x3a7a98 : ch.id === 'marc' ? 0x4a6a80 : 0x3a2a1c));
+  for (const sx of [-1, 1]) {
+    const cx = U(0.5 + sx * 0.215), cy = V(0.575);
+    x.fillStyle = shade(0.8); x.beginPath(); x.ellipse(cx, cy, 22, 12.5, 0, 0, 7); x.fill();           // orbite
+    x.fillStyle = '#f2efe8'; x.beginPath(); x.ellipse(cx, cy, 18, 9.5, 0, 0, 7); x.fill();
+    x.save(); x.beginPath(); x.ellipse(cx, cy, 18, 9.5, 0, 0, 7); x.clip();
+    x.fillStyle = iris; x.beginPath(); x.arc(cx, cy, 8.5, 0, 7); x.fill(); x.fillStyle = 'rgba(0,0,0,0.4)'; x.beginPath(); x.arc(cx, cy, 8.5, 0, 7); x.lineWidth = 1.5; x.strokeStyle = 'rgba(0,0,0,0.5)'; x.stroke();
+    x.fillStyle = '#0a0806'; x.beginPath(); x.arc(cx, cy, 4, 0, 7); x.fill(); x.fillStyle = 'rgba(255,255,255,0.9)'; x.beginPath(); x.arc(cx - 3, cy - 3, 1.8, 0, 7); x.fill();
+    x.fillStyle = 'rgba(0,0,0,0.25)'; x.fillRect(cx - 20, cy - 12, 40, 5); x.restore();             // ombre de la paupière
+    x.strokeStyle = shade(0.35); x.lineWidth = female ? 3 : 2.2; x.beginPath(); x.ellipse(cx, cy, 18, 9.5, 0, Math.PI * 1.05, Math.PI * 1.95); x.stroke(); // paupière haute
+    x.strokeStyle = shade(0.6); x.lineWidth = 1; x.beginPath(); x.ellipse(cx, cy, 18, 9.5, 0, 0.1, Math.PI - 0.1); x.stroke();
+    if (female) { x.strokeStyle = '#120c0a'; x.lineWidth = 1.6; for (let k = 0; k < 5; k++) { const a = Math.PI * (1.12 + k * 0.18); x.beginPath(); x.moveTo(cx + Math.cos(a) * 18, cy + Math.sin(a) * 9.5); x.lineTo(cx + Math.cos(a) * 22, cy + Math.sin(a) * 13); x.stroke(); } }
+    // sourcils
+    x.strokeStyle = hair; x.lineWidth = female ? 4 : 6.5; x.lineCap = 'round'; x.beginPath(); x.moveTo(cx - sx * 20, V(0.665) + 2); x.quadraticCurveTo(cx, V(0.7) - 3, cx + sx * 20, V(0.665) + 5); x.stroke();
+  }
+  // bouche
+  const lip = female ? '#b0505a' : shade(0.62);
+  x.fillStyle = shade(0.55); x.beginPath(); x.ellipse(U(0.5), V(0.268), 21, 2.2, 0, 0, 7); x.fill();
+  x.fillStyle = lip; x.beginPath(); x.moveTo(U(0.5) - 20, V(0.268)); x.quadraticCurveTo(U(0.5), V(0.268) - 12, U(0.5) + 20, V(0.268)); x.quadraticCurveTo(U(0.5), V(0.268) - 3, U(0.5) - 20, V(0.268)); x.fill(); // lèvre haute
+  x.fillStyle = female ? '#c4606a' : shade(0.7); x.beginPath(); x.moveTo(U(0.5) - 18, V(0.268) + 1); x.quadraticCurveTo(U(0.5), V(0.268) + 14, U(0.5) + 18, V(0.268) + 1); x.closePath(); x.fill();
+  x.fillStyle = 'rgba(255,255,255,0.18)'; x.beginPath(); x.ellipse(U(0.5), V(0.268) + 6, 7, 2, 0, 0, 7); x.fill();
+  // barbe de trois jours
+  if (ch.beard) { x.fillStyle = hair; for (let i = 0; i < 2600; i++) { const px = U(0.18 + rng() * 0.64), py = V(0.04 + rng() * 0.34); if (Math.abs(px - S / 2) < 15 && Math.abs(py - V(0.268)) < 6) continue; x.globalAlpha = 0.12 + rng() * 0.25; x.fillRect(px, py, 1.4, 2); } x.globalAlpha = 1; }
+  // signes particuliers
+  if (ch.id === 'harry') { x.strokeStyle = '#0a0a0c'; x.lineWidth = 3; for (const sx of [-1, 1]) { x.beginPath(); x.arc(U(0.5 + sx * 0.215), V(0.575), 24, 0, 7); x.stroke(); } x.beginPath(); x.moveTo(U(0.5) - 8, V(0.575) - 2); x.lineTo(U(0.5) + 8, V(0.575) - 2); x.stroke(); x.strokeStyle = '#b02a2a'; x.lineWidth = 2.5; x.beginPath(); x.moveTo(U(0.58), V(0.82)); x.lineTo(U(0.55), V(0.77)); x.lineTo(U(0.6), V(0.76)); x.lineTo(U(0.56), V(0.7)); x.stroke(); }
+  if (ch.id === 'lea') { x.fillStyle = 'rgba(150,80,50,0.4)'; for (let i = 0; i < 40; i++) { const px = U(0.5 + (rng() - 0.5) * 0.7), py = V(0.42 + rng() * 0.08); x.fillRect(px, py, 1.6, 1.6); } }
+  t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
+  FACE_TEX.set(ch.id, t);
+  return t;
+}
+// tête sculptée : ellipsoïde au menton effilé, front, arcades, orbites, nez, pommettes, lèvres ; UV plane (avant = -z), l'arrière glisse vers un coin uni
+const HEADC = { cy: 0.058, rx: 0.093, ry: 0.125, rz: 0.1 };
+function faceHeadGeometry() {
+  const s = new THREE.SphereGeometry(1, 28, 22), p = s.attributes.position, uv = s.attributes.uv, n = new THREE.Vector3();
+  const gs = (d2, k) => Math.exp(-d2 / (2 * k * k));
+  for (let i = 0; i < p.count; i++) {
+    n.fromBufferAttribute(p, i);
+    const { x, y } = n, z = -n.z; // z > 0 : avant (le modèle regarde vers -z)
+    const taper = THREE.MathUtils.smoothstep(-y, -0.05, 0.9);
+    const rx = HEADC.rx * (1 - 0.24 * taper), rz = HEADC.rz * (1 - 0.1 * taper);
+    let out = 0;
+    out += 0.006 * gs((y - 0.32) ** 2 + (Math.abs(x) - 0.35) ** 2 * 0.5, 0.22) * (z > 0.2 ? 1 : 0);              // arcades
+    for (const sx of [-1, 1]) {
+      out -= 0.006 * gs((x - sx * 0.43) ** 2 + (y - 0.2) ** 2 + (z - 0.88) ** 2, 0.17);                           // orbites
+      out += 0.006 * gs((x - sx * 0.55) ** 2 + (y + 0.12) ** 2 + (z - 0.8) ** 2, 0.2);                            // pommettes
+    }
+    out += 0.014 * gs(x ** 2 + (y + 0.02) ** 2 * 0.4 + (z - 1) ** 2, 0.16);                                       // nez
+    out += 0.008 * gs(x ** 2 + (y + 0.34) ** 2 * 1.5 + (z - 0.95) ** 2, 0.2);                                     // lèvres
+    out += 0.006 * gs(x ** 2 + (y + 0.84) ** 2 + (z - 0.6) ** 2, 0.3);                                            // menton
+    const X = x * (rx + out), Z = -z * (rz + out), Y = HEADC.cy + y * (HEADC.ry + out * 0.5);
+    p.setXYZ(i, X, Y, Z);
+    let u = 0.5 - 0.5 * (X / HEADC.rx), v = 0.5 + 0.5 * ((Y - HEADC.cy) / HEADC.ry);
+    if (z < 0) { const k = Math.min(1, -z / 0.35), sm = k * k * (3 - 2 * k); u += (0.04 - u) * sm; v += (0.04 - v) * sm; }
+    uv.setXY(i, u, v);
+  }
+  s.computeVertexNormals();
+  return s;
+}
 
 // ------------------------------------------------------------------ petites aides de construction
 const geoCache = new Map();
@@ -152,16 +235,9 @@ export class Avatar {
     const white = mat(0xf2f2f2, 0.4), dark = mat(0x16100c, 0.5);
     if (ch.duck) this.duckHead(skin);
     else {
-    put(this.headG, sphere(0.1), skin, 0, 0.07, 0, 0, 0, 0, 0.92, 1.1, 1.0);
-    put(this.headG, sphere(0.085), skin, 0, 0.0, -0.02, 0, 0, 0, 0.95, 0.9, 1.0); // mâchoire
-    for (const sx of [-1, 1]) {
-      put(this.headG, sphere(0.017), white, sx * 0.04, 0.085, -0.088, 0, 0, 0, 1.15, 0.8, 0.6);
-      put(this.headG, sphere(0.01), mat(ch.eye || 0x2a4a68, 0.3), sx * 0.04, 0.085, -0.096);
-      put(this.headG, box(0.045, 0.008, 0.012), hair, sx * 0.04, 0.115, -0.092, 0, 0, sx * -0.12);
-      put(this.headG, sphere(0.022), skin, sx * 0.093, 0.06, 0.0, 0, 0, 0, 0.5, 1.1, 0.8); // oreilles
-    }
-    put(this.headG, box(0.022, 0.04, 0.03), mat(ch.skin, 0.8), 0, 0.055, -0.096, 0.25);
-    put(this.headG, box(0.05, 0.009, 0.012), mat(0x7a3a34, 0.6), 0, 0.012, -0.088);
+    const faceMat = mat(0xffffff, 0.72, 0.03, faceTexture(ch));
+    put(this.headG, G('facehead', faceHeadGeometry), faceMat, 0, 0, 0);
+    for (const sx of [-1, 1]) put(this.headG, G('ear', () => new THREE.SphereGeometry(0.022, 8, 6)), skin, sx * 0.093, 0.06, 0.0, 0, 0, 0, 0.5, 1.1, 0.8); // oreilles
     }
     this.hairStyle(hair);
     this.gear();
@@ -384,7 +460,7 @@ export class Avatar {
     this.muzzleZ = (kit.muzzles[id] ?? -0.5) * this.scaleW;
     if (this.flash) this.weapon.add(this.flash);
     if (!this.flash) {
-      this.flash = new THREE.Mesh(new THREE.PlaneGeometry(0.34, 0.34), new THREE.MeshBasicMaterial({ color: 0xffcc66, transparent: true, opacity: 0.95, depthWrite: false, side: THREE.DoubleSide }));
+      this.flash = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 0.5), flashMaterial({ side: THREE.DoubleSide }));
       this.flash.visible = false;
       this.weapon.add(this.flash);
     }

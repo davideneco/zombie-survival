@@ -61,9 +61,9 @@ Toutes les touches du clavier sont **modifiables dans Options > Touches** (acces
 
 **Hôte uniquement** : `F9` ouvre un menu de debug (`1`-`4` choisir un joueur, `T` deux fois pour l'amener sur vous, `Y` pour le rejoindre, `N` pour le réanimer, `U` pour débloquer des zombies coincés, `P` pour les performances).
 
-## Options graphiques (v0.44.0)
+## Options graphiques (v0.44.0 à v0.47.0)
 
-Options (titre ou pause) : **Luminosité**, **Champ de vision**, **Sensibilité**, **Qualité** (Rapide / Normale / Haute), Volume, Musique, **Effets cinéma** (OUI / NON), Chat, Touches, Plein écran. Tout est **visuel et local** : aucun effet sur le jeu en réseau, l'équilibrage, les collisions ni les zones de tir.
+Options (titre ou pause) : **Luminosité**, **Champ de vision**, **Sensibilité**, **Qualité** (Rapide / Normale / Haute), Volume, Musique, **Effets cinéma** (OUI / NON), **Halo lumineux** (OUI / NON, qualité Haute), Chat, Touches, Plein écran. Tout est **visuel et local** : aucun effet sur le jeu en réseau, l'équilibrage, les collisions ni les zones de tir.
 
 | | Rapide | Normale | Haute |
 |---|---|---|---|
@@ -71,9 +71,13 @@ Options (titre ou pause) : **Luminosité**, **Champ de vision**, **Sensibilité*
 | Ombres de la lune | aucune | douces, 1024 px (une image sur deux) | douces, 2048 px (chaque image) |
 | Reflets d'ambiance (ciel, lampadaires, lune), ombres de contact, ciel animé (lune, nuages), vignette | oui (nuages : non) | oui | oui |
 | Rendu et étalonnage | direct | direct | cible multi-échantillonnée + table de couleurs (avec « Effets cinéma ») |
-| Particules / taches de sang au sol | 50 % / 16 | 100 % / 36 | 100 % / 64 |
+| Arbres | boules lissées | cartes de feuillage (14 par arbre) | cartes (24) + branches |
+| Halo lumineux (fenêtres, lampadaires, flammes ; demi-résolution, désactivable) | non | non | oui |
+| Particules (images : gouttes, fumée, éclats, étincelles) / taches de sang (sol et murs) | 50 % / 16 | 100 % / 36 | 100 % / 64 |
 
 Depuis la v0.45.0, les façades ont du **relief** (encadrements de fenêtres saillants, appuis, balcons, corniches, descentes de gouttière, cheminées) et des salissures (coulures, fissures, taches), dessinés seulement à moins de 30 / 60 / 110 m selon la qualité (Rapide / Normale / Haute) ; les collisions et la navigation restent sur le contour des bâtiments.
+
+Depuis la v0.46.0 : **arbres** en grappes de cartes de feuillage (atlas partagé, instanciées, ondulation légère au vent) avec des troncs évasés et, en Haute, des branches ; **sol** avec trottoirs (dalles, bordure, caniveau) le long des façades des rues de plus de 2,8 m, variation à grande échelle, mousse, taches, **flaques** qui reflètent le ciel d'ambiance et plaques d'égout (les rails, quais, parkings et stations de vélos ne changent pas) ; **cathédrale** : vitraux à plombs (mêmes dessins en albedo et en émissif), taches de lumière colorée au sol, dallage vieilli, bancs à joues sculptées (la pénombre est conservée, les collisions aussi). Depuis la v0.47.0 : **zombies** à tête sculptée (orbites, nez, dents, mâchoire articulée), visages / peaux / vêtements déchirés tirés de l'identifiant du zombie (même apparence chez tous les joueurs) sur deux atlas partagés, **sang qui s'ajoute à chaque touche** (sur l'hôte pour tous les impacts, chez un client pour ses propres tirs : aucun message réseau de plus), personnages avec **visage** peint, particules en vraies images et **taches de sang sur les murs**, éclair de tir étoilé.
 
 « Effets cinéma » ajoute une vignette et un grain léger (superposition CSS, coût nul) et, en Haute, l'étalonnage par table de couleurs. Les valeurs (intensité de la torche, exposition et reflets par zone, ciel, étalonnage) sont dans le bloc `graphics` de `src/config.js` ; la cathédrale garde sa pénombre (reflets d'ambiance réduits dans l'intérieur).
 
@@ -131,7 +135,7 @@ Posez un fichier `theme.mp3` (ou `.ogg`, `.m4a`, `.wav`) dans `public/music/` : 
 
 | Dossier | Contenu |
 |---|---|
-| `src/` | Code du jeu (modules ES) ; l'équilibrage et les réglages graphiques (bloc `graphics`) sont dans `src/config.js` ; rendu : `graphics.js` (qualité, exposition par zone, reflets, étalonnage), `sky.js`, `contact.js`, `relief.js` (façades en relief), `envmap.js` |
+| `src/` | Code du jeu (modules ES) ; l'équilibrage et les réglages graphiques (bloc `graphics`) sont dans `src/config.js` ; rendu : `graphics.js` (qualité, exposition par zone, reflets, étalonnage), `sky.js`, `contact.js`, `relief.js` (façades en relief), `envmap.js`, `trees.js` (arbres), `ground.js` (sol), `zombieSkin.js` (atlas, visages, sang des zombies), `fx.js` (particules, taches) |
 | `server/` | Relais multijoueur (`rooms.mjs`) et serveur de production (`prod.mjs`) |
 | `public/` | Données de la carte (`data/area.json`), textures, dossier de musique |
 | `tools/` | Outils : extraction OSM, génération des docs (`make-docs.mjs`), détection de blocages (`stuck-scan.mjs`), tests |

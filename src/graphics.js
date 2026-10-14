@@ -303,6 +303,7 @@ export function createGraphics({ renderer, scene, camera, hemi, moon, settings }
     if (H) { // halo : seuil -> flou horizontal -> flou vertical (demi-résolution), puis ajouté par la passe finale
       const R = G().halo.radius, au = 1 - G().halo.dawnFade * Math.min(1, api.skyK * 1.6);
       P.mat.uniforms.uHalo.value = G().halo.intensity * au;
+      H.bright.uniforms.uThr.value.set(G().halo.threshold, G().halo.knee);
       renderer.setRenderTarget(H.a); H.qBright.render(renderer);
       H.blur.uniforms.tDiffuse.value = H.a.texture; H.blur.uniforms.uDir.value.set(R / H.w, 0);
       renderer.setRenderTarget(H.b); H.qBlur.render(renderer);

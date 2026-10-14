@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { CONFIG, PAP_LEVELS, falloffMult, papPulse, papStats } from './config.js';
 import { buildWeaponModels, attachAccessories } from './viewmodels.js';
 import { RideCam } from './rideCam.js';
+import { flashMaterial } from './fx.js';
 
 const ADS_DELTA = 20; // réduction du FOV en visée
 const PAP_INTENSITY = 0.35; // intensité du reflet des armes améliorées (couleur : PAP_LEVELS[niveau].color)
@@ -321,10 +322,7 @@ export class Player {
     this.muzzle.position.set(0, 0.015, -0.6);
     this.vm.add(this.muzzle);
 
-    this.flash = new THREE.Mesh(
-      new THREE.PlaneGeometry(0.2, 0.2),
-      new THREE.MeshBasicMaterial({ color: 0xffcc66, transparent: true, opacity: 0.95, depthWrite: false })
-    );
+    this.flash = new THREE.Mesh(new THREE.PlaneGeometry(0.34, 0.34), flashMaterial()); // éclair étoilé (fx.js)
     this.flash.position.set(0, 0.015, -0.64);
     this.flash.visible = false;
     this.vm.add(this.flash);

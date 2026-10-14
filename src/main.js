@@ -69,7 +69,7 @@ scene.add(moon, moon.target);
 const MOON_OFFSET = new THREE.Vector3(25, 55, 15);
 
 // ------------------------------------------------------- Options (client)
-const DEFAULT_SETTINGS = { brightness: 1.4, fov: 80, sens: 1, volume: 1, music: 0.5, quality: 1, tpVehicle: true, chat: true, cinema: true }; // chat : afficher le chat écrit (Options) ; tpVehicle : vue à la troisième personne sur une moto (touche « changer de vue »)
+const DEFAULT_SETTINGS = { brightness: 1.4, fov: 80, sens: 1, volume: 1, music: 0.5, quality: 1, tpVehicle: true, chat: true, cinema: true, halo: true }; // chat : afficher le chat écrit (Options) ; tpVehicle : vue à la troisième personne sur une moto (touche « changer de vue »)
 const settings = { ...DEFAULT_SETTINGS };
 try { Object.assign(settings, JSON.parse(localStorage.getItem('zombie_settings') || '{}')); } catch {}
 
@@ -206,6 +206,8 @@ const game = {
     if (this.isClient) {
       // Le client envoie l'impact à l'hôte
       fx.blood(point.x, point.y, point.z, false);
+      this._bloodWall(point, false);
+      z._bleed?.(head); // le sang de ses propres tirs (l'hôte seul voit tous les impacts : aucun message réseau de plus)
       sfx.hit(head);
       hud.hitMarker(false);
       this.net?.send({
@@ -229,6 +231,7 @@ const game = {
     const killed = z.damage(mel ? damage / (z.armor || 1) : z.weakMult ? damage * (head ? z.weakMult : 1) : damage * (head ? headMult : 1), head, hit);
 
     fx.blood(point.x, point.y, point.z, killed && !head);
+    if (fromPid == null) this._bloodWall(point, killed);
     sfx.hit(head);
 
     if (fromPid == null) {
@@ -265,6 +268,16 @@ const game = {
       else if (Math.random() < CONFIG.powerups.dropChance) this.spawnPowerup(z.pos);
     }
     return killed; // (client : undefined, l'hôte tranche)
+  },
+
+  // Tache de sang sur le mur derrière la cible touchée (tir du joueur local seulement) : rayon horizontal dans le sens du tir, tache tournée vers le tireur
+  _bloodWall(point, big) {
+    if (Math.random() > (big ? 0.9 : 0.4) || !world.rayHit) return;
+    const dx = point.x - camera.position.x, dz = point.z - camera.position.z, h = Math.hypot(dx, dz);
+    if (h < 0.5) return;
+    const ux = dx / h, uz = dz / h, t = world.rayHit(point.x, point.y, point.z, ux, 0, uz, 4.5);
+    if (t >= 4.4) return;
+    fx.wallDecal(point.x + ux * t, point.y + (Math.random() - 0.5) * 0.5, point.z + uz * t, -ux, -uz, 0.55 + Math.random() * 0.8);
   },
 
   impact(point, color = 0xcccccc) {
@@ -2045,6 +2058,11 @@ const btnCinema = document.getElementById('btnCinema');
 const syncCinema = () => { btnCinema.textContent = `EFFETS CINÉMA : ${settings.cinema !== false ? 'OUI' : 'NON'}`; };
 btnCinema.addEventListener('click', () => { settings.cinema = settings.cinema === false; syncCinema(); gfx.applyCinema(); game.saveSettings(); });
 syncCinema();
+// « Halo lumineux » (qualité Haute) : fenêtres, lampadaires et flammes rayonnent ; désactivable
+const btnHalo = document.getElementById('btnHalo');
+const syncHalo = () => { btnHalo.textContent = `HALO LUMINEUX (HAUTE) : ${settings.halo !== false ? 'OUI' : 'NON'}`; };
+btnHalo.addEventListener('click', () => { settings.halo = settings.halo === false; syncHalo(); gfx.applyHalo(); game.saveSettings(); });
+syncHalo();
 
 const openOptions = (back) => game.ui.openOptions(back);
 
