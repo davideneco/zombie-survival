@@ -1,4 +1,6 @@
 import * as THREE from 'three';
+import { contact } from './contact.js';
+import { reflective } from './envmap.js';
 
 // =====================================================================
 //  Mobilier urbain et décors : modèles low-poly arrondis, affichés par instanciation
@@ -80,25 +82,25 @@ export function merge(list) {
 // ------------------------------------------------------------------ Bibliothèque
 export function createProps() {
   const M = {
-    iron: new THREE.MeshStandardMaterial({ color: 0x1f2326, roughness: 0.55, metalness: 0.7 }),
-    darkGreen: new THREE.MeshStandardMaterial({ color: 0x1f3a2c, roughness: 0.5, metalness: 0.5 }),
+    iron: reflective(new THREE.MeshStandardMaterial({ color: 0x1f2326, roughness: 0.55, metalness: 0.7 }), 0.7),
+    darkGreen: reflective(new THREE.MeshStandardMaterial({ color: 0x1f3a2c, roughness: 0.5, metalness: 0.5 }), 0.6),
     wood: new THREE.MeshStandardMaterial({ color: 0xffffff, map: plankTex(), roughness: 0.85 }),
     woodPlain: new THREE.MeshStandardMaterial({ color: 0x6e4a2c, roughness: 0.8 }),
-    carPaint: new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.35, metalness: 0.55 }),
-    glass: new THREE.MeshStandardMaterial({ color: 0x0b1118, roughness: 0.08, metalness: 0.9 }),
+    carPaint: reflective(new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.35, metalness: 0.55 }), 1.0),
+    glass: reflective(new THREE.MeshStandardMaterial({ color: 0x0b1118, roughness: 0.08, metalness: 0.9 }), 1.4),
     tyre: new THREE.MeshStandardMaterial({ color: 0x121212, roughness: 0.9 }),
-    chrome: new THREE.MeshStandardMaterial({ color: 0xb8bcc2, roughness: 0.25, metalness: 0.9 }),
+    chrome: reflective(new THREE.MeshStandardMaterial({ color: 0xb8bcc2, roughness: 0.25, metalness: 0.9 }), 1.5),
     lightsF: new THREE.MeshStandardMaterial({ color: 0xfff3d8, emissive: 0x6a5a40, roughness: 0.3 }),
     lightsR: new THREE.MeshStandardMaterial({ color: 0x8a0e0e, emissive: 0x2a0000, roughness: 0.3 }),
     concrete: new THREE.MeshStandardMaterial({ color: 0x9b9890, roughness: 0.95 }),
     sandstone: new THREE.MeshStandardMaterial({ color: 0xb98270, roughness: 0.9 }),
-    bronze: new THREE.MeshStandardMaterial({ color: 0x3e5a4a, roughness: 0.45, metalness: 0.75 }),
-    water: new THREE.MeshStandardMaterial({ color: 0x18324a, roughness: 0.05, metalness: 0.6 }),
+    bronze: reflective(new THREE.MeshStandardMaterial({ color: 0x3e5a4a, roughness: 0.45, metalness: 0.75 }), 1.0),
+    water: reflective(new THREE.MeshStandardMaterial({ color: 0x18324a, roughness: 0.05, metalness: 0.6 }), 1.2),
     leaf: new THREE.MeshStandardMaterial({ color: 0x3b5e2b, roughness: 1, flatShading: true }),
     flower: new THREE.MeshStandardMaterial({ color: 0xb8202a, roughness: 0.8 }),
     sandbag: new THREE.MeshStandardMaterial({ color: 0xffffff, map: sandbagTex(), roughness: 1 }),
     hazard: new THREE.MeshStandardMaterial({ color: 0xffffff, map: hazardTex(), roughness: 0.6 }),
-    redWhite: new THREE.MeshStandardMaterial({ color: 0xc8c8c8, roughness: 0.4, metalness: 0.6 }),
+    redWhite: reflective(new THREE.MeshStandardMaterial({ color: 0xc8c8c8, roughness: 0.4, metalness: 0.6 }), 0.8),
     roofRed: new THREE.MeshStandardMaterial({ color: 0x7a2a22, roughness: 0.8 }),
     warm: new THREE.MeshStandardMaterial({ color: 0xffe0a0, emissive: 0xffb050, emissiveIntensity: 0.9 }),
   };
@@ -182,6 +184,7 @@ export function createProps() {
   const inst = {}; // type -> [{ m: Matrix4, c: Color|null }]
   const tmpM = new THREE.Matrix4(), q = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0);
   function place(type, x, z, rotY = 0, scale = 1, color = null, y = 0, tilt = 0) {
+    contact.addProp(type, x, z, rotY, scale, y); // ombre de contact sous l'objet (contact.js)
     (inst[type] ||= []).push({ m: new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), q.setFromEuler(new THREE.Euler(tilt, rotY, 0, 'YXZ')).clone(), new THREE.Vector3(scale, scale, scale)), c: color });
   }
   function finish(scene) {

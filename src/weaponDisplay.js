@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { buildWeaponModels, attachAccessories } from './viewmodels.js';
 import { CONFIG, PAP_LEVELS, papPulse } from './config.js';
+import { reflective } from './envmap.js';
 
 // Modèles d'armes réutilisés hors de la vue à la première personne : boîte mystère, Pack-a-Punch,
 // armes tenues par les autres joueurs. Les prototypes sont construits une seule fois ; les copies partagent
@@ -57,6 +58,7 @@ export function papify(g, level = 1) {
     if (!m) {
       m = o.material.clone();
       copies.set(o.material, m);
+      if (m.userData.envK != null) reflective(m, m.userData.envK); // la copie garde ses reflets d'ambiance (et suit leur intensité)
       if (m.emissive) { m.emissive.setHex(L.color); m.emissiveIntensity = PAP_GLOW; mats.push(m); }
     }
     o.material = m;

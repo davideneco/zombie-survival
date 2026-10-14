@@ -29,6 +29,8 @@ import { installUnstick } from './unstick.js';
 import { installKeybinds } from './keybinds.js';
 import { installKeysMenu } from './keysMenu.js';
 import { installChat } from './chat.js';
+import { createGraphics } from './graphics.js';
+import { contact } from './contact.js';
 const r2 = (v) => Math.round(v * 100) / 100;
 
 document.getElementById('version').textContent = __GAME_VERSION__;
@@ -43,8 +45,7 @@ renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.3;
+renderer.toneMappingExposure = 1.3; // tone mapping et exposition : graphics.js (CONFIG.graphics.tone, par zone)
 document.body.prepend(renderer.domElement);
 
 const scene = new THREE.Scene();
@@ -68,33 +69,28 @@ scene.add(moon, moon.target);
 const MOON_OFFSET = new THREE.Vector3(25, 55, 15);
 
 // ------------------------------------------------------- Options (client)
-const DEFAULT_SETTINGS = { brightness: 1.4, fov: 80, sens: 1, volume: 1, music: 0.5, quality: 1, tpVehicle: true, chat: true }; // chat : afficher le chat écrit (Options) ; tpVehicle : vue à la troisième personne sur une moto (touche « changer de vue »)
+const DEFAULT_SETTINGS = { brightness: 1.4, fov: 80, sens: 1, volume: 1, music: 0.5, quality: 1, tpVehicle: true, chat: true, cinema: true }; // chat : afficher le chat écrit (Options) ; tpVehicle : vue à la troisième personne sur une moto (touche « changer de vue »)
 const settings = { ...DEFAULT_SETTINGS };
 try { Object.assign(settings, JSON.parse(localStorage.getItem('zombie_settings') || '{}')); } catch {}
 
-// Qualité : 0 = performances (résolution réduite, pas d'ombres), 1 = équilibrée, 2 = haute (pleine résolution des écrans HD)
+// Qualité : 0 = Rapide, 1 = Normale, 2 = Haute (CONFIG.graphics.levels, appliqué par graphics.js : résolution, ombres, ciel, particules, passe finale)
+const gfx = createGraphics({ renderer, scene, camera, hemi, moon, settings });
+gfx.setTone();
 let appliedQuality = null;
 function applyVisualSettings() {
-  renderer.toneMappingExposure = 1.3 * settings.brightness;
   hemi.intensity = 1.1 * settings.brightness;
+  gfx.applyExposure();
   const q = settings.quality ?? 1;
   if (q === appliedQuality) return;
   appliedQuality = q;
-  renderer.setPixelRatio(q === 0 ? 0.75 : q === 1 ? 1 : Math.min(window.devicePixelRatio, 2));
-  renderer.setSize(window.innerWidth, window.innerHeight);
-  const size = q === 2 ? 2048 : 1024;
-  if (moon.shadow.mapSize.x !== size) { moon.shadow.mapSize.set(size, size); moon.shadow.map?.dispose(); moon.shadow.map = null; }
-  renderer.shadowMap.enabled = q > 0;
-  renderer.shadowMap.type = q === 2 ? THREE.PCFSoftShadowMap : THREE.PCFShadowMap; // ombres douces seulement en qualité haute
-  renderer.shadowMap.autoUpdate = false; // mise à jour pilotée par la boucle (une image sur deux hors qualité haute)
-  scene.traverse((o) => { if (o.material) for (const m of [].concat(o.material)) m.needsUpdate = true; }); // les shaders changent avec les ombres
+  gfx.applyQuality(q);
 }
 applyVisualSettings();
 
 window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
-  renderer.setSize(window.innerWidth, window.innerHeight);
+  gfx.resize();
 });
 
 // ----------------------------------------------------------------- Jeu
@@ -1408,12 +1404,14 @@ const game = {
 
 sfx.setVolume(settings.volume);
 sfx.setMusicVolume(settings.music);
+game.gfx = gfx;
 game.player = new Player(camera, scene, world, game);
 hud.setWeapon(game.player.curCfg.name, game.player.curCfg.caliber);
 installKeybinds(game, { hud }); // game.binds : touches modifiables (Options > Touches)
 installMachineFx(game, { world, hud, sfx, fx });
 installSummit(game, { world, scene, hud, sfx, fx, hemi, moon, moonOffset: MOON_OFFSET, camera }); // Acte V : faisceau, Fanal, ciel de l'Aube, vue orbitale
 installFinale(game, { world, scene, hud, sfx, fx });
+gfx.attach(game, { world }); // ciel, torche, reflets d'ambiance, ombres de contact (graphics.js)
 installVehicles(game, { world, scene, hud, sfx });
 installTram(game, { world, scene, hud, sfx });
 installTramWalk(game, { world, hud, sfx }); // intérieur praticable de la rame (v0.40.0)
@@ -2042,6 +2040,12 @@ for (const [key, input] of Object.entries(optInputs)) {
   });
 }
 
+// « Effets cinéma » : vignette et grain (CSS) et, en qualité Haute, la table de couleurs
+const btnCinema = document.getElementById('btnCinema');
+const syncCinema = () => { btnCinema.textContent = `EFFETS CINÉMA : ${settings.cinema !== false ? 'OUI' : 'NON'}`; };
+btnCinema.addEventListener('click', () => { settings.cinema = settings.cinema === false; syncCinema(); gfx.applyCinema(); game.saveSettings(); });
+syncCinema();
+
 const openOptions = (back) => game.ui.openOptions(back);
 
 hud.el.titlePanel.addEventListener('click', (e) => e.stopPropagation());
@@ -2096,7 +2100,7 @@ function precompileShaders() {
   // graphique et force le pilote à finir la compilation, sinon c'est le premier affichage en jeu qui saccade.
   // (pas dans une cible hors écran : three.js y utilise d'autres variantes de shaders, sans tone mapping)
   renderer.shadowMap.needsUpdate = true;
-  renderer.render(scene, camera);
+  gfx.render();
   for (const o of hidden) o.visible = false;
   for (const o of culled) o.frustumCulled = true;
   // on retire les zombies témoins SANS libérer leurs matériaux : un shader dont plus aucun matériau ne se sert
@@ -2174,8 +2178,9 @@ function frame() {
   updateMusicMood();
   // ombres de la lune : recalculées une image sur deux (à chaque image en qualité haute) : ~20 % de rendu en moins
   shadowFrame++;
-  if (shadowFrame % ((settings.quality ?? 1) >= 2 ? 1 : 2) === 0) renderer.shadowMap.needsUpdate = true;
-  renderer.render(scene, camera);
+  if (shadowFrame % (gfx.level?.shadowEvery ?? 2) === 0) renderer.shadowMap.needsUpdate = true;
+  gfx.update(dt);
+  gfx.render();
 }
 let shadowFrame = 0;
 frame();

@@ -4,7 +4,7 @@ import * as THREE from 'three';
 // et taches de sang persistantes au sol. Un seul draw call pour toutes les particules.
 const N = 280;
 const NG = 220; // particules sans éclairage
-const DECALS = 36;
+const DECALS = 64; // taches de sang allouées ; le nombre utilisé dépend de la qualité (setQuality : 16 / 36 / 64)
 
 const _m = new THREE.Matrix4();
 const _q = new THREE.Quaternion();
@@ -38,6 +38,16 @@ function splatTexture() {
 }
 
 class Fx {
+  constructor() { this.partK = 1; this.decalMax = 36; }
+
+  // Qualité (CONFIG.graphics.levels) : part des particules émises (1 = toutes) et nombre de taches de sang gardées au sol
+  setQuality(particles = 1, decals = 36) {
+    this.partK = particles;
+    this.decalMax = Math.min(DECALS, decals);
+    if (this.decals) for (let i = this.decalMax; i < this.decals.length; i++) { this.decals[i].life = 0; this.decals[i].mesh.visible = false; }
+    if (this.decalCursor >= this.decalMax) this.decalCursor = 0;
+  }
+
   makePool(material, n) {
     const mesh = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), material, n);
     mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
@@ -103,7 +113,8 @@ class Fx {
     const { count = 8, color = 0xffffff, speed = 3, up = 2, size = 0.06, life = 0.8, nx = 0, nz = 0, push = 0, grav = 12, spread = 0.1, glow = false } = o;
     const colors = Array.isArray(color) ? color : [color];
     const pool = this.pools[glow ? 1 : 0];
-    for (let i = 0; i < count; i++) {
+    const n = this.partK >= 1 ? count : Math.max(1, Math.round(count * this.partK));
+    for (let i = 0; i < n; i++) {
       const p = pool.parts[pool.cursor];
       const idx = pool.cursor;
       pool.cursor = (pool.cursor + 1) % pool.n;
@@ -138,7 +149,7 @@ class Fx {
   decal(x, z, size = 1.6, color = 0x4a0707) {
     if (!this.scene) return;
     const d = this.decals[this.decalCursor];
-    this.decalCursor = (this.decalCursor + 1) % DECALS;
+    this.decalCursor = (this.decalCursor + 1) % this.decalMax;
     d.life = 30;
     d.mesh.visible = true;
     d.mesh.position.set(x, 0.02 + Math.random() * 0.004, z);

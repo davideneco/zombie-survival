@@ -1,5 +1,7 @@
 import * as THREE from 'three';
+import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { CONFIG } from './config.js';
+import { reflective } from './envmap.js';
 
 // =====================================================================
 //  Modèles 3D des armes (vue à la première personne). Chaque arme a sa silhouette :
@@ -20,17 +22,47 @@ const COLORS = {
 };
 const GLOW = new Set(['gold', 'glow', 'dot', 'cyan', 'orange', 'ether', 'beam']);
 
+// Métaux : reflets d'ambiance (envmap.js, intensité par matière) ; la peinture noire s'use aux arêtes (usure : couleur de sommet plus claire sur les chanfreins)
+const REFLECT = { black: 0.9, gun: 1, parker: 1, silver: 1.5, brass: 1.2, gold: 1, bakelite: 0.35, lwood: 0.25, wood: 0.25, lens: 1.6, smoke: 1 };
+const WORN = new Set(['black', 'gun', 'parker']);
+
 // Chaque arme a ses propres matériaux (pour le reflet du Pack-a-Punch)
 function mats() {
   const m = {};
   for (const [k, [color, roughness, metalness, em, emI]] of Object.entries(COLORS)) {
-    m[k] = new THREE.MeshStandardMaterial({ color, roughness, metalness });
+    m[k] = new THREE.MeshStandardMaterial({ color, roughness, metalness, vertexColors: true }); // couleurs de sommet : usure des arêtes (boxGeo) ; blanc ailleurs
     if (em != null) { m[k].emissive = new THREE.Color(em); m[k].emissiveIntensity = emI; }
+    if (REFLECT[k]) reflective(m[k], REFLECT[k] * CONFIG.graphics.weapons.env);
   }
   m.beam = new THREE.MeshBasicMaterial({ color: 0xff3030, transparent: true, opacity: 0.5, depthWrite: false }); // faisceau du laser (joueur local seulement)
   m.smoke.transparent = true; m.smoke.opacity = 0.7;
   m.lens.emissive = new THREE.Color(0x0a1830);
   return m;
+}
+
+// Boîte biseautée (arêtes arrondies, CONFIG.graphics.weapons) : géométries mises en cache par dimensions. worn : usure aux arêtes (métal nu)
+const BOX_CACHE = new Map();
+function boxGeo(w, h, d, worn) {
+  const key = `${w}|${h}|${d}|${worn ? 1 : 0}`;
+  let g = BOX_CACHE.get(key);
+  if (g) return g;
+  const W = CONFIG.graphics.weapons, r = Math.min(W.bevel, Math.min(w, h, d) * 0.4);
+  g = r >= 0.0005 ? new RoundedBoxGeometry(w, h, d, W.bevelSegments, r) : new THREE.BoxGeometry(w, h, d);
+  const n = g.attributes.normal, col = new Float32Array(n.count * 3);
+  for (let i = 0; i < n.count; i++) {
+    let k = 1;
+    if (worn && r >= 0.0005) { const e = 1 - Math.max(Math.abs(n.getX(i)), Math.abs(n.getY(i)), Math.abs(n.getZ(i))); k = 1 + W.wear * THREE.MathUtils.smoothstep(e, W.wearFrom, W.wearFrom + 0.2); }
+    col[i * 3] = col[i * 3 + 1] = col[i * 3 + 2] = k;
+  }
+  g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  BOX_CACHE.set(key, g);
+  return g;
+}
+// couleurs de sommet blanches (les matériaux de l'arme utilisent vertexColors)
+function whiteColors(g) {
+  const c = new Float32Array(g.attributes.position.count * 3).fill(1);
+  g.setAttribute('color', new THREE.BufferAttribute(c, 3));
+  return g;
 }
 
 // Pièces : B = boîte, C = cylindre le long de z, Y = cylindre vertical
@@ -40,19 +72,19 @@ function build(grp, M, parts) {
     let mesh;
     if (kind === 'B') {
       const [w, h, d, x, y, z, mat, rx = 0, ry = 0, rz = 0] = a;
-      mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), M[mat]);
+      mesh = new THREE.Mesh(boxGeo(w, h, d, WORN.has(mat)), M[mat]);
       mesh.position.set(x, y, z); mesh.rotation.set(rx, ry, rz);
     } else if (kind === 'C') {
       const [r, len, x, y, z, mat, seg = 10, r2 = r] = a;
-      mesh = new THREE.Mesh(new THREE.CylinderGeometry(r, r2, len, seg), M[mat]);
+      mesh = new THREE.Mesh(whiteColors(new THREE.CylinderGeometry(r, r2, len, seg)), M[mat]);
       mesh.rotation.x = Math.PI / 2; mesh.position.set(x, y, z);
     } else if (kind === 'Y') {
       const [r, len, x, y, z, mat, rz = 0, rx = 0, seg = 8] = a;
-      mesh = new THREE.Mesh(new THREE.CylinderGeometry(r, r, len, seg), M[mat]);
+      mesh = new THREE.Mesh(whiteColors(new THREE.CylinderGeometry(r, r, len, seg)), M[mat]);
       mesh.position.set(x, y, z); mesh.rotation.set(rx, 0, rz);
     } else if (kind === 'S') {
       const [r, x, y, z, mat] = a;
-      mesh = new THREE.Mesh(new THREE.SphereGeometry(r, 10, 8), M[mat]);
+      mesh = new THREE.Mesh(whiteColors(new THREE.SphereGeometry(r, 10, 8)), M[mat]);
       mesh.position.set(x, y, z);
     }
     if (p[0] && mesh) {

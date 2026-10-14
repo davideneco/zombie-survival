@@ -110,6 +110,7 @@ export function installSummit(game, { world, scene, hud, sfx, fx, hemi, moon, mo
     moonOffset.set(SKY.sunPos[i0][0] + (SKY.sunPos[i1][0] - SKY.sunPos[i0][0]) * u, SKY.sunPos[i0][1] + (SKY.sunPos[i1][1] - SKY.sunPos[i0][1]) * u, SKY.sunPos[i0][2] + (SKY.sunPos[i1][2] - SKY.sunPos[i0][2]) * u);
     world.sky?.setGradient(pickS(SKY.domeTop, k), pickS(SKY.domeMid, k), pickS(SKY.domeBot, k));
     if (world.sky?.stars) world.sky.stars.visible = k < 0.28;
+    game.gfx?.onSky(k); // dôme (lune, nuages) et reflets d'ambiance suivent l'Aube (graphics.js)
     world.setLampScale?.(1 - 0.92 * sm(Math.min(1, k * 1.3)));
     if (sun) { // monte à l'est (+x) de -4° à 38° d'élévation
       sun.visible = k > 0.02;

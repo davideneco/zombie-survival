@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { CONFIG } from './config.js';
 
 // =====================================================================
 //  Architecture strasbourgeoise : façades dessinées (crépi + grès, colombages, grès rose,
@@ -396,10 +397,19 @@ export function createArchitecture({ renderer, plasterImg, roofP, rnd }) {
     const sc = st.scale || 1; // monuments : motifs plus grands
     // vu de la rue, la droite du spectateur va de b vers a : u croît dans ce sens (sinon les enseignes sont en miroir)
     const u0 = st.uoff - (len * t0) / (BAY_W * 2 * sc), u1 = st.uoff - (len * t1) / (BAY_W * 2 * sc);
-    const col = (y) => tmp.copy(tint).multiplyScalar(dirt * (y - base < 3 ? 0.6 + 0.4 * ((y - base) / 3) : 1)).clone();
+    // pied de mur assombri (v0.44.0, CONFIG.graphics.footAO : [hauteur au-dessus de la base, facteur] par morceaux) : le mur « s'ancre » au sol
+    const AO = CONFIG.graphics.footAO;
+    const ao = (h) => { if (h <= AO[0][0]) return AO[0][1]; for (let i = 1; i < AO.length; i++) if (h <= AO[i][0]) return AO[i - 1][1] + (AO[i][1] - AO[i - 1][1]) * ((h - AO[i - 1][0]) / (AO[i][0] - AO[i - 1][0])); return AO[AO.length - 1][1]; };
+    const col = (y) => tmp.copy(tint).multiplyScalar(dirt * ao(y - base)).clone();
     const piece = (ya, yb, m, vmap) => {
       if (yb - ya < 0.02) return;
-      quad(m.b, [x0, ya, z0], [x1, ya, z1], [x1, yb, z1], [x0, yb, z0], [u0, vmap(ya), u1, vmap(ya), u1, vmap(yb), u0, vmap(yb)], col(ya), col(yb));
+      const ys = [ya];
+      for (const [h] of AO) { const y = base + h; if (y > ya + 0.05 && y < yb - 0.05) ys.push(y); }
+      ys.push(yb);
+      for (let i = 0; i + 1 < ys.length; i++) {
+        const a = ys[i], b = ys[i + 1];
+        quad(m.b, [x0, a, z0], [x1, a, z1], [x1, b, z1], [x0, b, z0], [u0, vmap(a), u1, vmap(a), u1, vmap(b), u0, vmap(b)], col(a), col(b));
+      }
     };
     const gf = base + GF_H;
     if (st.shop && y0 < gf && base === 0) {

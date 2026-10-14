@@ -574,6 +574,46 @@ export const CONFIG = {
     spawnBalance: { radius: 45 },
     drawRange: 170,
   },
+
+  // ------------------------------------------------------------------ Paquet graphique (v0.44.0, graphics.js) : VISUEL SEULEMENT
+  // (aucune incidence sur la simulation, les collisions, la navigation ni l'équilibrage ; aucune lumière de plus, sinon tous les shaders
+  // se recompilent). levels[settings.quality] : 0 Rapide, 1 Normale, 2 Haute.
+  graphics: {
+    levels: [
+      { name: 'Rapide', pixelRatio: 0.75, shadows: false, softShadows: false, shadowSize: 1024, shadowEvery: 2, clouds: false, post: false, facade: 30, trees: 'ball', particles: 0.5, decals: 16 },
+      { name: 'Normale', pixelRatio: 1, shadows: true, softShadows: true, shadowSize: 1024, shadowEvery: 2, clouds: true, post: false, facade: 60, trees: 'cards', particles: 1, decals: 36 },
+      { name: 'Haute', pixelRatio: 'device', shadows: true, softShadows: true, shadowSize: 2048, shadowEvery: 1, clouds: true, post: true, facade: 110, trees: 'cards+branches', particles: 1, decals: 64 },
+    ],
+    // tone mapping : 'aces' | 'agx' | 'neutral' ; exposition de base (multipliée par Luminosité des Options et par la zone)
+    tone: { type: 'aces', exposure: 1.3 },
+    // lampe torche (player.js) : intensité, ouverture, bord adouci (penumbra), décroissance, portée
+    torch: { intensity: 13, angle: 0.5, penumbra: 0.9, decay: 1.25, distance: 40 },
+    // armes (viewmodels.js) : chanfrein des boîtes (m), segments d'arrondi, usure des arêtes (gain de clarté, seuil), intensité des reflets d'ambiance
+    weapons: { bevel: 0.0035, bevelSegments: 2, wear: 3.2, wearFrom: 0.05, env: 1.6 },
+    // pieds de murs assombris (architecture.js, couleurs de sommet) : [hauteur au-dessus de la base (m), facteur de luminosité]
+    footAO: [[0, 0.5], [0.6, 0.66], [1.8, 0.9], [3.2, 1]],
+    // réglages par zone (nom de zone de sector.zones) : exposition, reflets d'ambiance, torche (multiplicateurs, lissés sur ~1/zoneBlend s)
+    zoneBlend: 2.5,
+    zones: {
+      default: { exposure: 1, env: 1, torch: 1 },
+      'Intérieur de la Cathédrale': { exposure: 0.92, env: 0.3, torch: 1 }, // elle garde sa pénombre : peu de reflets d'ambiance
+      'Cathédrale': { exposure: 1, env: 0.8, torch: 1 },
+    },
+    // reflets d'ambiance : ciel dessiné sur un canevas 256x128 (dégradés [nuit, aube, jour]) + lueurs sodium + lune, converti en PMREM
+    env: {
+      enabled: true, intensity: 0.16, phaseIntensity: [1, 1.1, 1.25],
+      top: ['#0a1222', '#3a3660', '#5a8ad0'], mid: ['#22304a', '#9a7080', '#9cc0e8'], horizon: ['#4a3a2c', '#e0a070', '#d8e4f0'], ground: ['#141210', '#3a3028', '#5a5a52'],
+      lamps: 9, lampStrength: 0.6, moonStrength: 0.7,
+    },
+    // ombres de contact : tache sous chaque objet / arbre (fixe) et sous les zombies, coéquipiers, véhicules (mobiles, à moins de maxDist m)
+    contact: { enabled: true, opacity: 0.8, dynamicMax: 160, maxDist: 45, zombie: 0.55, vehicle: 0.5, tree: 0.55 },
+    // ciel : lune (élévation et azimut en rad, rayon angulaire), nuages
+    sky: { moonElevation: 0.72, moonAzimuth: 0.53, moonSize: 0.034, cloudCover: 1, cloudNight: '#26344e' },
+    // Haute : rendu dans une cible multi-échantillonnée (samples) + passe finale (tone mapping + table de couleurs) ; désactivable ici
+    post: { enabled: true, samples: 4 },
+    // étalonnage (table de couleurs 32^3, Haute + « Effets cinéma ») : contraste en S (0..1), saturation, teintes des ombres / hautes lumières
+    grade: { contrast: 0.45, saturation: 0.92, shadows: [0, 0.012, 0.03], highlights: [0.03, 0.012, -0.02] },
+  },
 };
 
 // Touches par défaut (modifiables dans Options > Touches, voir keybinds.js). Une liaison s'écrit 'code:KeyW' (touche PHYSIQUE : ZQSD en

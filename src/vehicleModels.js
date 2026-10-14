@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { merge } from './props.js';
+import { reflective } from './envmap.js';
 
 // Modèles 3D des motos, construits à la main avec des formes simples. Repère local : l'origine est au sol, au milieu de
 // l'empattement ; l'avant de la moto est vers -z, la droite vers +x. Chaque constructeur renvoie
@@ -9,9 +10,9 @@ import { merge } from './props.js';
 const std = (color, rough = 0.6, metal = 0.2, extra = {}) => new THREE.MeshStandardMaterial({ color, roughness: rough, metalness: metal, ...extra });
 let MAT = null;
 const mats = () => MAT || (MAT = {
-  black: std(0x15161a, 0.55, 0.3),
-  steel: std(0x1d2025, 0.6, 0.4),
-  chrome: std(0xc4c9d1, 0.2, 0.85),
+  black: reflective(std(0x15161a, 0.55, 0.3), 0.8), // reflets d'ambiance (envmap.js)
+  steel: reflective(std(0x1d2025, 0.6, 0.4), 0.9),
+  chrome: reflective(std(0xc4c9d1, 0.2, 0.85), 1.4),
   rubber: std(0x0c0c0e, 0.92, 0),
   seat: std(0x20170f, 0.8, 0.05),
   lamp: std(0xfff1c9, 0.3, 0, { emissive: 0xffe2a0, emissiveIntensity: 2.2 }),
@@ -183,7 +184,7 @@ export function buildGrosseMoto() {
 // de même variante.
 export const VELO_COLORS = [0x2f6fb3, 0xb3392f, 0x2f9a6a, 0xe0a82e, 0x7b4fa8, 0xd9dbe0, 0xe0742e, 0x2a8fa8];
 let VELO_MAT = null;
-const veloMat = () => VELO_MAT || (VELO_MAT = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.5, metalness: 0.35 }));
+const veloMat = () => VELO_MAT || (VELO_MAT = reflective(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.5, metalness: 0.35 }), 0.9));
 const veloGeo = {};
 function colored(g, hex) { // couleur par sommet
   const c = new THREE.Color(hex), n = g.attributes.position.count, a = new Float32Array(n * 3);

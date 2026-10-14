@@ -1,3 +1,5 @@
+import { makeSkyDome } from './sky.js';
+import { contact } from './contact.js';
 import * as THREE from 'three';
 import { CONFIG } from './config.js';
 import { Collision } from './collision.js';
@@ -662,6 +664,7 @@ export async function buildRealWorld(scene, renderer) {
         treeMatrices.leafCol.push(col);
       }
       if (onIsland(x, z)) collision.addCircle(x, z, 0.3);
+      contact.add(x, z, 3.4, 3.4, 0, CONFIG.graphics.contact.tree); // ombre de contact (aucun tirage `rnd`)
     }
     const trunkGeo = new THREE.CylinderGeometry(0.2, 0.3, 1, 8);
     scene.add(instanced(trunkGeo, tiled(barkP, 1, 2, { color: 0x8a8076 }), treeMatrices.trunk));
@@ -1844,21 +1847,11 @@ export async function buildRealWorld(scene, renderer) {
 
   // ---------------------------------------------------------------- Ciel nocturne (suit le joueur)
   const sky = new THREE.Group();
-  let skyApi = null; // dégradé et étoiles, repeints par l'Acte V (summit.js : l'Aube) : même texture, aucun nouveau shader
+  let skyApi = null; // dôme (dégradé, nuages, lune : sky.js) et étoiles, repeints par l'Acte V (summit.js : l'Aube)
   {
-    const c = document.createElement('canvas'); c.width = 4; c.height = 256;
-    const x = c.getContext('2d');
-    const paint = (top, mid, bot) => {
-      const g = x.createLinearGradient(0, 0, 0, 256);
-      g.addColorStop(0, top); g.addColorStop(0.55, mid); g.addColorStop(1, bot);
-      x.fillStyle = g; x.fillRect(0, 0, 4, 256);
-    };
-    paint('#04070d', '#0c1522', '#1b2535');
-    const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace;
-    const dome = new THREE.Mesh(new THREE.SphereGeometry(300, 24, 16), new THREE.MeshBasicMaterial({ map: tex, side: THREE.BackSide, fog: false, depthWrite: false }));
-    dome.renderOrder = -1;
-    sky.add(dome);
-    skyApi = { group: sky, dome, setGradient: (top, mid, bot) => { paint(top, mid, bot); tex.needsUpdate = true; }, stars: null };
+    const dome = makeSkyDome(300); // un maillage, un shader : dégradé + nuages + lune (sky.js) ; repeint par l'Acte V (summit.js)
+    sky.add(dome.mesh);
+    skyApi = { group: sky, dome: dome.mesh, setGradient: dome.setGradient, setK: dome.setK, setCloud: dome.setCloud, update: dome.update, stars: null };
     const sp = [];
     for (let i = 0; i < 500; i++) {
       const th = rnd() * Math.PI * 2, ph = rnd() * 1.2;

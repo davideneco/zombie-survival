@@ -9,6 +9,17 @@
     html, body { margin: 0; height: 100%; overflow: hidden; background: #000; font-family: "Impact", "Arial Narrow", sans-serif; color: #eee; user-select: none; }
     canvas { display: block; }
 
+
+    /* Effets cinéma (v0.44.0, Options) : vignette et grain en superposition CSS (coût nul pour le rendu 3D), SOUS le HUD, le chat et les menus
+       (ils viennent après dans le DOM) ; pointer-events: none. Désactivés par body.no-cinema. */
+    #cinema { position: fixed; inset: 0; overflow: hidden; pointer-events: none; }
+    #cinema i { position: absolute; display: block; pointer-events: none; }
+    #cinema .vig { inset: 0; background: radial-gradient(ellipse 78% 72% at 50% 50%, rgba(0,0,0,0) 52%, rgba(0,0,0,0.30) 80%, rgba(0,0,0,0.66) 100%); }
+    #cinema .grain { inset: -64px; opacity: 0.085; mix-blend-mode: overlay; animation: grainMove 0.6s steps(4) infinite;
+      background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='220' height='220'><filter id='n' x='0' y='0' width='100%25' height='100%25'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix type='saturate' values='0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>"); }
+    @keyframes grainMove { 0% { transform: translate(0, 0); } 25% { transform: translate(-37px, 21px); } 50% { transform: translate(23px, -44px); } 75% { transform: translate(-12px, -29px); } 100% { transform: translate(40px, 33px); } }
+    body.no-cinema #cinema { display: none; }
+
     /* ---------- HUD ---------- */
     #hud { position: fixed; inset: 0; pointer-events: none; }
     #vignette { position: absolute; inset: 0; opacity: 0; background: radial-gradient(ellipse at center, rgba(0,0,0,0) 40%, rgba(160,0,0,.85) 100%); transition: opacity .15s; }
@@ -221,6 +232,7 @@
   </style>
 </head>
 <body>
+  <div id="cinema" aria-hidden="true"><i class="vig"></i><i class="grain"></i></div>
   <div id="version"></div>
   <div id="chat">
     <div id="chatLog"></div>
@@ -301,6 +313,7 @@
       <div class="opt-row"><label for="optVolume">Volume</label><input type="range" id="optVolume" min="0" max="1" step="0.05" /><output></output></div>
       <div class="opt-row"><label for="optMusic">Musique</label><input type="range" id="optMusic" min="0" max="1" step="0.05" /><output></output></div>
       <button class="btn btn-sub btn-wide" id="btnChatShow" style="font-size:18px">AFFICHER LE CHAT : OUI</button>
+      <button class="btn btn-sub btn-wide" id="btnCinema" style="font-size:18px">EFFETS CINÉMA : OUI</button>
       <button class="btn btn-sub btn-wide" id="btnKeys" style="font-size:18px">TOUCHES</button>
       <button class="btn btn-sub btn-wide" id="btnFullscreen" style="font-size:18px">PLEIN ÉCRAN : NON</button>
       <div style="font-size:12px;color:#999">Plein écran (Chrome / Edge) : Échap ouvre la pause sans libérer la souris.</div>
