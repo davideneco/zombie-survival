@@ -1,6 +1,6 @@
 extends Node
 ## Lanceur de tests headless :
-##   godot --headless --path godot res://tests/runner.tscn [-- --suite=j0]
+##   godot --headless --path godot res://tests/runner.tscn [-- --suite=j1]
 ## Passe par une scène pour que les autoloads (Config, Game) soient chargés. Code de sortie 0 si tout passe, 1 sinon.
 ## Chaque suite est un script tests/test_<nom>.gd avec une méthode run(t) ; t.check(ok, message), t.near(a, b, message, tol).
 
@@ -37,7 +37,7 @@ func same(a: Variant, b: Variant, message: String, tol := 1e-6) -> void:
 		check(a == b, "%s : %s != %s" % [message, a, b])
 
 func _ready() -> void:
-	var suites: Array[String] = ["j0"]
+	var suites: Array[String] = ["j0", "j1"]
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with("--suite="):
 			suites = [arg.substr(8)]

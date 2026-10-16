@@ -19,9 +19,19 @@ Décisions retenues : D1 (a) bureau d'abord, D2 (a) monde cuit depuis le JS, D3 
 | Jalon | État | Version du port |
 |---|---|---|
 | J0 | **Fait** (2476 contrôles headless, 0 échec) | v0.1.0 |
-| J1 à J12 | À faire | |
+| J1 | **Fait** (8 195 contrôles headless j1 + 2 476 j0, 0 échec ; captures et vidéo réelles) | v0.2.0 |
+| J2 à J12 | À faire | |
 
 J0 livré : `godot/project.godot` (Godot 4.7, Forward+, 60 ticks physiques, autoloads `Config` et `Game`), `godot/autoload/{config,game}.gd`, `godot/sim/pap.gd` (`papStats`, `papAmmoMult`, `papPulse`, `falloffMult`), `godot/tests/` (`runner.tscn`, `test_j0.gd`), `tools/export-config.mjs` (config.json ~49 Ko), `tools/export-golden.mjs` (`godot/data/golden/j0.json` : 69 `papStats`, 1430 `falloffMult`, 164 `papPulse`, 61 santés de zombie), `tools/godot-check.sh` (exports + import + tests). Vérification en une commande : `tools/godot-check.sh`.
+
+J1 livré (squelette solo dans l'arène) :
+- **Sim pure** (`godot/sim/`) : `collision.gd` (`Collision`, port intégral de `collision.js` : segments, cercles, boîtes, grille de 4 m, bandes de hauteur, obstacles dynamiques, `findVault`, `resolve`, `ray_hit`), `arena.gd` (plan lu dans `data/arena.json`), `player_sim.gd` (marche, sprint, saut, gravité, régénération, `hurt`), `weapon_sim.gd` (M1911 : chargeur, réserve, rechargement, cadence), `hitscan.gd` (rayon contre sphère de tête et boîte de corps orientées, mur par `ray_hit`, perforation), `zombie_sim.gd` (fonce tout droit, séparation, pas de côté quand il est coincé, attaque en deux temps), `round_director.gd` (`startRound`, cadence d'apparition, pauses), `bot.gd` (pilote de test et de démonstration), `rules.gd` (constantes de règles qui ne sont pas dans CONFIG, chacune avec sa source JS).
+- **Hôte** : l'autoload `Game` est maintenant la partie (`new_game`, `step(dt, input)`, `hit_zombie`, points 10 / 60 / 100, signaux de présentation). `step` ne dépend ni d'un nœud ni du temps réel.
+- **Scènes** : `scenes/main.tscn` (+ `main.gd` : entrées par touches physiques, souris `CAPTURED` hors du pas fixe, `Game.step` dans `_physics_process`, caméra interpolée), `scenes/world/arena.tscn`, `scenes/zombie_view.gd` (silhouette en primitives), `scenes/ui/hud.tscn` (vie, munitions, points, manche, annonce, voile rouge, écran de fin avec R). Options de lancement après `--` : `--bot`, `--demo`, `--seed=N`, `--shot=f.png --at=S`, `--quit-at=S`.
+- **Outils** : `tools/export-golden-j1.mjs` (écrit `data/arena.json`, extrait de `world.js`, et `data/golden/j1.json`), `tools/godot-check.sh` lance toutes les suites (ou une seule : `tools/godot-check.sh j1`).
+- **Vérifications** : 1 000 `resolve`, 1 000 `rayHit`, 200 `findVault` égaux au JS à 1 mm (en pratique 1e-6), 600 cas d'arène égaux à `resolveCollisions` de `world.js` ; scénarios : manche 1 (7 zombies, santé, vitesse), blocage par caisse et mur, saut (hauteur), vitesses de marche et de sprint, semi-automatique, rechargement, points 10 / 60 / 100, balle arrêtée par une caisse, bot immobile tué en 28,5 s, bot tireur qui tue les 7 zombies de la manche 1 (25,6 s), mort et `game_over`. Capture et vidéo de 11 s (`--write-movie`) faites sur l'écran réel (pas de `xvfb-run` sur ce poste).
+- **Écarts connus** : le bruit de dispersion utilise la même ouverture en largeur et en hauteur (le JS tire en coordonnées normalisées d'écran, donc plus large en 16:9) ; pas d'enjambement, d'étages, de couteau ni de grenades (jalons suivants) ; `Vector3` est en simple précision (positions à ~1e-5 près, bien sous le millimètre) ; l'arène n'a pas de champ de flux : un zombie derrière une caisse se débloque par ses pas de côté, comme dans le JS.
+- **À remonter dans `src/config.js`** (valeurs de `main.js` / `player.js` / `zombie.js` hors CONFIG, en attendant dans `sim/rules.gd`) : points par tir, nombre de zombies par manche (4 + 3 r), intervalles d'apparition et de pause, délais d'attaque, dimensions des zones de tir.
 
 Notes : le JSON ne porte pas de couleurs (entiers 0xRRGGBB, convertis par `Config.color()`) ; la formule de santé par manche (`zombieHealthAt`, dans `main.js`, non importable sans Three.js) est recopiée dans `tools/export-golden.mjs` et dans `Game.zombie_health_at` : si elle change dans `main.js`, mettre à jour les deux.
 
@@ -190,7 +200,7 @@ Un jalon n'est validé que si les tests headless des jalons précédents passent
 - **Vérification** : `godot --headless --path godot --import` sans erreur ; `godot --headless --path godot res://tests/runner.tscn` rend 0 ;
   tous les golden de J0 égaux (tolérance 1e-6).
 
-### J1. Squelette jouable solo dans l'arène (M)
+### J1. Squelette jouable solo dans l'arène (M) — fait, v0.2.0
 - `scenes/world/arena.tscn` (portage de `world.js`), `sim/collision.gd` porté, `player.gd` (marcher, sprinter, sauter, gravité, visée souris,
   `Input.mouse_mode = CAPTURED` à la place du pointer lock), **une** arme hitscan (M1911), un zombie simple qui fonce vers le joueur (sans champ de
   flux), manches minimales (`startRound`, `zombieHealthAt`), points (10 / 60 / 100), mort et écran de fin, HUD minimal (vie, munitions, points, manche).
