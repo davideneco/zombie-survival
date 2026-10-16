@@ -1,0 +1,2979 @@
+{
+ "CONFIG": {
+  "map": "strasbourg",
+  "startHint": {
+   "x": 4.3,
+   "z": -35.7
+  },
+  "cityHint": {
+   "x": -199,
+   "z": -145
+  },
+  "breaches": 3,
+  "sector": {
+   "maxDist": 95,
+   "basePrice": 750,
+   "priceStep": 250,
+   "outerDecor": {
+    "carArea": 6000,
+    "junkArea": 2500,
+    "bikeMax": 30,
+    "chaletRadius": 40
+   },
+   "zones": [
+    {
+     "name": "Marché-Neuf",
+     "start": true,
+     "items": [
+      "station",
+      "wall:m1911",
+      "wall:shotgun",
+      "wall:smg",
+      "perk:quickrevive",
+      "box"
+     ]
+    },
+    {
+     "name": "Temple-Neuf",
+     "seed": {
+      "x": -35,
+      "z": -95
+     },
+     "doorPrice": 750,
+     "items": [
+      "station",
+      "wall:arex",
+      "wall:mp5",
+      "perk:staminup",
+      "box"
+     ]
+    },
+    {
+     "name": "Rue des Orfèvres",
+     "seed": {
+      "x": 40,
+      "z": -70
+     },
+     "doorPrice": 750,
+     "items": [
+      "wall:famas",
+      "perk:speedcola",
+      "box"
+     ]
+    },
+    {
+     "name": "Rue du Dôme",
+     "seed": {
+      "x": 110,
+      "z": -111
+     },
+     "doorPrice": 1000,
+     "items": [
+      "station",
+      "wall:sniper",
+      "wall:svd",
+      "box"
+     ]
+    },
+    {
+     "name": "Grandes Arcades",
+     "seed": {
+      "x": -110,
+      "z": -45
+     },
+     "doorPrice": 1000,
+     "items": [
+      "station",
+      "wall:ak47",
+      "wall:p90",
+      "perk:mulekick",
+      "box"
+     ]
+    },
+    {
+     "name": "Place Kléber",
+     "seed": {
+      "x": -199,
+      "z": -145
+     },
+     "doorPrice": 1250,
+     "items": [
+      "station",
+      "perk:juggernog",
+      "wall:lmg",
+      "wall:m249",
+      "box"
+     ]
+    },
+    {
+     "name": "Place Gutenberg",
+     "seed": {
+      "x": -20,
+      "z": 90
+     },
+     "doorPrice": 1250,
+     "items": [
+      "station",
+      "perk:doubletap",
+      "wall:scar",
+      "wall:pkm",
+      "box"
+     ]
+    },
+    {
+     "name": "Cathédrale",
+     "seed": {
+      "x": 103,
+      "z": 33
+     },
+     "doorPrice": 1000,
+     "items": [
+      "station",
+      "wall:deagle",
+      "wall:rifle",
+      "box"
+     ]
+    },
+    {
+     "name": "Intérieur de la Cathédrale",
+     "seed": "cathedral",
+     "portal": true,
+     "doorPrice": 5000,
+     "items": [
+      "pap",
+      "clock",
+      "station",
+      "box"
+     ]
+    },
+    {
+     "name": "Homme de Fer",
+     "seed": {
+      "x": -290,
+      "z": -203
+     },
+     "isolatedRnd": true,
+     "doorPrice": 1500,
+     "items": [
+      "station",
+      "wall:crossbow",
+      "wall:m79",
+      "perk:phdflopper",
+      "box"
+     ]
+    },
+    {
+     "name": "Saint-Pierre-le-Jeune",
+     "outer": true,
+     "seed": {
+      "x": -140,
+      "z": -340
+     },
+     "doorPrice": 1500,
+     "items": [
+      "station",
+      "wall:magnum",
+      "box"
+     ]
+    },
+    {
+     "name": "Grand'Rue",
+     "outer": true,
+     "seed": {
+      "x": -400,
+      "z": 10
+     },
+     "doorPrice": 1500,
+     "items": [
+      "station",
+      "wall:mp5",
+      "box"
+     ]
+    },
+    {
+     "name": "Grand Séminaire",
+     "outer": true,
+     "seed": {
+      "x": 300,
+      "z": -60
+     },
+     "doorPrice": 1500,
+     "items": [
+      "station",
+      "wall:shotgun",
+      "box"
+     ]
+    },
+    {
+     "name": "Palais Rohan",
+     "outer": true,
+     "seed": {
+      "x": 260,
+      "z": 140
+     },
+     "doorPrice": 1500,
+     "items": [
+      "wall:ak47"
+     ]
+    },
+    {
+     "name": "Musée historique",
+     "outer": true,
+     "seed": {
+      "x": 200,
+      "z": 215
+     },
+     "doorPrice": 1500,
+     "items": [
+      "station",
+      "wall:arex",
+      "box"
+     ]
+    },
+    {
+     "name": "Place Broglie",
+     "outer": true,
+     "seed": {
+      "x": 150,
+      "z": -345
+     },
+     "doorPrice": 2000,
+     "chalets": 4,
+     "items": [
+      "station",
+      "wall:lmg",
+      "box"
+     ]
+    },
+    {
+     "name": "Quai Schoepflin",
+     "outer": true,
+     "seed": {
+      "x": -20,
+      "z": -470
+     },
+     "doorPrice": 2000,
+     "items": [
+      "wall:svd"
+     ]
+    },
+    {
+     "name": "Hôtel de Neuwiller",
+     "outer": true,
+     "seed": {
+      "x": -450,
+      "z": -250
+     },
+     "doorPrice": 2000,
+     "items": [
+      "wall:famas"
+     ]
+    },
+    {
+     "name": "Monument Stoeber",
+     "outer": true,
+     "seed": {
+      "x": -490,
+      "z": -150
+     },
+     "doorPrice": 2000,
+     "items": [
+      "station",
+      "wall:scar",
+      "box"
+     ]
+    },
+    {
+     "name": "Ancienne Douane",
+     "outer": true,
+     "seed": {
+      "x": 30,
+      "z": 330
+     },
+     "doorPrice": 2000,
+     "items": [
+      "station",
+      "wall:sniper"
+     ]
+    },
+    {
+     "name": "Saint-Thomas",
+     "outer": true,
+     "seed": {
+      "x": -230,
+      "z": 250
+     },
+     "doorPrice": 2000,
+     "items": [
+      "station",
+      "wall:saiga",
+      "box"
+     ]
+    },
+    {
+     "name": "Église Réformée",
+     "outer": true,
+     "seed": {
+      "x": -330,
+      "z": 170
+     },
+     "doorPrice": 2000,
+     "items": [
+      "wall:smg"
+     ]
+    },
+    {
+     "name": "Opéra",
+     "outer": true,
+     "seed": {
+      "x": 250,
+      "z": -450
+     },
+     "doorPrice": 2500,
+     "items": [
+      "station",
+      "wall:mg42"
+     ]
+    },
+    {
+     "name": "Préfecture",
+     "outer": true,
+     "seed": {
+      "x": 400,
+      "z": -340
+     },
+     "doorPrice": 2500,
+     "items": [
+      "station",
+      "wall:pkm",
+      "box"
+     ]
+    },
+    {
+     "name": "Saint-Étienne",
+     "outer": true,
+     "seed": {
+      "x": 540,
+      "z": -90
+     },
+     "doorPrice": 2500,
+     "items": [
+      "station",
+      "wall:m249",
+      "box"
+     ]
+    },
+    {
+     "name": "Saint-Pierre-le-Vieux",
+     "outer": true,
+     "seed": {
+      "x": -620,
+      "z": -60
+     },
+     "doorPrice": 2500,
+     "items": [
+      "wall:deagle"
+     ]
+    },
+    {
+     "name": "Petite France",
+     "outer": true,
+     "seed": {
+      "x": -660,
+      "z": 150
+     },
+     "doorPrice": 2500,
+     "items": [
+      "wall:barrett"
+     ]
+    }
+   ]
+  },
+  "arenaHalf": 30,
+  "player": {
+   "radius": 0.4,
+   "eye": 1.7,
+   "walkSpeed": 5,
+   "sprintSpeed": 8,
+   "jumpSpeed": 6.5,
+   "gravity": 20,
+   "maxHealth": 100,
+   "regenDelay": 5,
+   "regenRate": 25,
+   "startPoints": 500
+  },
+  "weapons": {
+   "m1911": {
+    "id": "m1911",
+    "cat": "pistol",
+    "name": "COLT M1911",
+    "cal": "45acp",
+    "type": "semi",
+    "magSize": 7,
+    "startReserve": 42,
+    "maxReserve": 84,
+    "fireRate": 5.5,
+    "reloadTime": 1.5,
+    "spread": 0.01,
+    "range": 50,
+    "price": 400,
+    "ammoPrice": 150,
+    "caliber": ".45 ACP",
+    "damage": 50,
+    "headMult": 2.6,
+    "falloffStart": 10,
+    "falloffEnd": 35,
+    "minMult": 0.5
+   },
+   "arex": {
+    "id": "arex",
+    "cat": "pistol",
+    "name": "AREX ZERO 1",
+    "cal": "9mm",
+    "mod": 1.1,
+    "type": "semi",
+    "magSize": 17,
+    "startReserve": 68,
+    "maxReserve": 136,
+    "fireRate": 7.5,
+    "reloadTime": 1.4,
+    "spread": 0.009,
+    "range": 55,
+    "price": 700,
+    "ammoPrice": 250,
+    "caliber": "9 mm",
+    "damage": 29,
+    "headMult": 2.2,
+    "falloffStart": 12,
+    "falloffEnd": 35,
+    "minMult": 0.5
+   },
+   "deagle": {
+    "id": "deagle",
+    "cat": "pistol",
+    "name": "DESERT EAGLE",
+    "cal": "50ae",
+    "type": "semi",
+    "magSize": 7,
+    "startReserve": 35,
+    "maxReserve": 56,
+    "fireRate": 2.4,
+    "reloadTime": 1.9,
+    "spread": 0.011,
+    "range": 70,
+    "price": 1500,
+    "ammoPrice": 600,
+    "caliber": ".50 AE",
+    "damage": 160,
+    "headMult": 3,
+    "pierce": 2,
+    "falloffStart": 18,
+    "falloffEnd": 55,
+    "minMult": 0.6
+   },
+   "magnum": {
+    "id": "magnum",
+    "cat": "pistol",
+    "name": "COLT PYTHON .357",
+    "cal": "357",
+    "mod": 1.1,
+    "type": "semi",
+    "magSize": 6,
+    "startReserve": 48,
+    "maxReserve": 72,
+    "fireRate": 3.2,
+    "reloadTime": 2.2,
+    "spread": 0.006,
+    "range": 80,
+    "price": 2000,
+    "ammoPrice": 500,
+    "caliber": ".357 Magnum",
+    "damage": 143,
+    "headMult": 3,
+    "pierce": 2,
+    "falloffStart": 15,
+    "falloffEnd": 50,
+    "minMult": 0.6
+   },
+   "rifle": {
+    "id": "rifle",
+    "cat": "ar",
+    "name": "M4A1",
+    "cal": "556",
+    "mod": 0.9,
+    "type": "auto",
+    "magSize": 30,
+    "startReserve": 120,
+    "maxReserve": 180,
+    "fireRate": 12.5,
+    "reloadTime": 1.8,
+    "spread": 0.012,
+    "range": 90,
+    "price": 1200,
+    "ammoPrice": 300,
+    "caliber": "5,56 mm",
+    "damage": 36,
+    "headMult": 2.4,
+    "falloffStart": 25,
+    "falloffEnd": 70,
+    "minMult": 0.7
+   },
+   "ak47": {
+    "id": "ak47",
+    "cat": "ar",
+    "name": "AK-47",
+    "cal": "762x39",
+    "type": "auto",
+    "magSize": 30,
+    "startReserve": 120,
+    "maxReserve": 210,
+    "fireRate": 10,
+    "reloadTime": 2.4,
+    "spread": 0.017,
+    "range": 90,
+    "price": 1600,
+    "ammoPrice": 600,
+    "caliber": "7,62×39 mm",
+    "damage": 54,
+    "headMult": 2.3,
+    "falloffStart": 22,
+    "falloffEnd": 65,
+    "minMult": 0.65
+   },
+   "famas": {
+    "id": "famas",
+    "cat": "ar",
+    "name": "FAMAS F1",
+    "cal": "556",
+    "type": "auto",
+    "magSize": 25,
+    "startReserve": 125,
+    "maxReserve": 225,
+    "fireRate": 15,
+    "reloadTime": 2.2,
+    "spread": 0.014,
+    "range": 85,
+    "price": 1300,
+    "ammoPrice": 500,
+    "caliber": "5,56 mm",
+    "damage": 40,
+    "headMult": 2.4,
+    "falloffStart": 25,
+    "falloffEnd": 70,
+    "minMult": 0.7
+   },
+   "scar": {
+    "id": "scar",
+    "cat": "ar",
+    "name": "SCAR-H",
+    "cal": "762x51",
+    "type": "auto",
+    "magSize": 20,
+    "startReserve": 100,
+    "maxReserve": 180,
+    "fireRate": 10,
+    "reloadTime": 2.3,
+    "spread": 0.018,
+    "range": 100,
+    "price": 2500,
+    "ammoPrice": 800,
+    "caliber": "7,62×51 mm",
+    "damage": 78,
+    "headMult": 2.5,
+    "pierce": 2,
+    "falloffStart": 35,
+    "falloffEnd": 90,
+    "minMult": 0.8
+   },
+   "smg": {
+    "id": "smg",
+    "cat": "smg",
+    "name": "MP40",
+    "cal": "9mm",
+    "mod": 1.15,
+    "type": "auto",
+    "magSize": 32,
+    "startReserve": 128,
+    "maxReserve": 224,
+    "fireRate": 8.3,
+    "reloadTime": 1.5,
+    "spread": 0.022,
+    "range": 65,
+    "price": 800,
+    "ammoPrice": 500,
+    "caliber": "9 mm",
+    "damage": 30,
+    "headMult": 2.2,
+    "falloffStart": 12,
+    "falloffEnd": 35,
+    "minMult": 0.5
+   },
+   "mp5": {
+    "id": "mp5",
+    "cat": "smg",
+    "name": "MP5",
+    "cal": "9mm",
+    "type": "auto",
+    "magSize": 30,
+    "startReserve": 150,
+    "maxReserve": 270,
+    "fireRate": 13,
+    "reloadTime": 1.8,
+    "spread": 0.017,
+    "range": 65,
+    "price": 1200,
+    "ammoPrice": 500,
+    "caliber": "9 mm",
+    "damage": 26,
+    "headMult": 2.2,
+    "falloffStart": 12,
+    "falloffEnd": 35,
+    "minMult": 0.5
+   },
+   "p90": {
+    "id": "p90",
+    "cat": "smg",
+    "name": "FN P90",
+    "cal": "57x28",
+    "type": "auto",
+    "magSize": 50,
+    "startReserve": 200,
+    "maxReserve": 350,
+    "fireRate": 15,
+    "reloadTime": 2.6,
+    "spread": 0.02,
+    "range": 70,
+    "price": 1800,
+    "ammoPrice": 700,
+    "caliber": "5,7×28 mm",
+    "damage": 22,
+    "headMult": 2,
+    "pierce": 2,
+    "falloffStart": 12,
+    "falloffEnd": 40,
+    "minMult": 0.55
+   },
+   "lmg": {
+    "id": "lmg",
+    "cat": "mg",
+    "name": "RPK",
+    "cal": "762x39",
+    "mod": 0.95,
+    "headMult": 2,
+    "type": "auto",
+    "magSize": 75,
+    "startReserve": 300,
+    "maxReserve": 450,
+    "fireRate": 10,
+    "reloadTime": 3.6,
+    "spread": 0.028,
+    "range": 90,
+    "price": 2500,
+    "ammoPrice": 1000,
+    "caliber": "7,62×39 mm",
+    "damage": 51,
+    "falloffStart": 22,
+    "falloffEnd": 65,
+    "minMult": 0.65
+   },
+   "m249": {
+    "id": "m249",
+    "cat": "mg",
+    "name": "M249 SAW",
+    "cal": "556",
+    "headMult": 2,
+    "type": "auto",
+    "magSize": 100,
+    "startReserve": 300,
+    "maxReserve": 500,
+    "fireRate": 12.5,
+    "reloadTime": 4.2,
+    "spread": 0.032,
+    "range": 90,
+    "price": 3000,
+    "ammoPrice": 1200,
+    "caliber": "5,56 mm",
+    "damage": 40,
+    "falloffStart": 25,
+    "falloffEnd": 70,
+    "minMult": 0.7
+   },
+   "mg42": {
+    "id": "mg42",
+    "cat": "mg",
+    "name": "MG42",
+    "cal": "792x57",
+    "mod": 0.8,
+    "headMult": 2,
+    "type": "auto",
+    "magSize": 50,
+    "startReserve": 250,
+    "maxReserve": 450,
+    "fireRate": 20,
+    "reloadTime": 5,
+    "spread": 0.04,
+    "range": 90,
+    "price": 4000,
+    "ammoPrice": 1200,
+    "caliber": "7,92×57 mm",
+    "damage": 64,
+    "pierce": 2,
+    "falloffStart": 30,
+    "falloffEnd": 90,
+    "minMult": 0.75
+   },
+   "pkm": {
+    "id": "pkm",
+    "cat": "mg",
+    "name": "PKM",
+    "cal": "762x54r",
+    "mod": 0.8,
+    "headMult": 2,
+    "type": "auto",
+    "magSize": 100,
+    "startReserve": 300,
+    "maxReserve": 500,
+    "fireRate": 10.5,
+    "reloadTime": 4.8,
+    "spread": 0.03,
+    "range": 100,
+    "price": 3200,
+    "ammoPrice": 1300,
+    "caliber": "7,62×54R",
+    "damage": 64,
+    "pierce": 2,
+    "falloffStart": 35,
+    "falloffEnd": 90,
+    "minMult": 0.8
+   },
+   "sniper": {
+    "id": "sniper",
+    "cat": "sniper",
+    "name": "L96A1",
+    "cal": "762match",
+    "type": "semi",
+    "magSize": 5,
+    "startReserve": 30,
+    "maxReserve": 45,
+    "fireRate": 1.1,
+    "reloadTime": 2.8,
+    "spread": 0.0015,
+    "range": 200,
+    "adsFov": 25,
+    "price": 1750,
+    "ammoPrice": 700,
+    "caliber": "7,62×51 mm Match",
+    "damage": 340,
+    "headMult": 3.5,
+    "pierce": 4,
+    "falloffStart": 80,
+    "falloffEnd": 200,
+    "minMult": 0.9
+   },
+   "svd": {
+    "id": "svd",
+    "cat": "sniper",
+    "name": "DRAGUNOV SVD",
+    "cal": "762x54r7n1",
+    "type": "semi",
+    "magSize": 10,
+    "startReserve": 40,
+    "maxReserve": 70,
+    "fireRate": 3,
+    "reloadTime": 2.6,
+    "spread": 0.004,
+    "range": 180,
+    "adsFov": 28,
+    "price": 2000,
+    "ammoPrice": 800,
+    "caliber": "7,62×54R 7N1",
+    "damage": 230,
+    "headMult": 3,
+    "pierce": 3,
+    "falloffStart": 80,
+    "falloffEnd": 200,
+    "minMult": 0.9
+   },
+   "barrett": {
+    "id": "barrett",
+    "cat": "sniper",
+    "name": "BARRETT M82",
+    "cal": "50bmg",
+    "type": "semi",
+    "magSize": 10,
+    "startReserve": 30,
+    "maxReserve": 50,
+    "fireRate": 1.2,
+    "reloadTime": 3.4,
+    "spread": 0.002,
+    "range": 220,
+    "adsFov": 20,
+    "price": 5000,
+    "ammoPrice": 1500,
+    "caliber": ".50 BMG",
+    "damage": 700,
+    "headMult": 3,
+    "pierce": 6,
+    "falloffStart": 100,
+    "falloffEnd": 220,
+    "minMult": 0.95
+   },
+   "shotgun": {
+    "id": "shotgun",
+    "cat": "shotgun",
+    "name": "REMINGTON 870",
+    "cal": "12ga",
+    "type": "shotgun",
+    "pellets": 8,
+    "magSize": 6,
+    "startReserve": 30,
+    "maxReserve": 48,
+    "fireRate": 1.3,
+    "reloadTime": 2.4,
+    "spread": 0.046,
+    "range": 35,
+    "price": 750,
+    "ammoPrice": 350,
+    "caliber": "12 ga",
+    "damage": 30,
+    "headMult": 1.8,
+    "falloffStart": 6,
+    "falloffEnd": 25,
+    "minMult": 0.25
+   },
+   "saiga": {
+    "id": "saiga",
+    "cat": "shotgun",
+    "name": "SAIGA-12",
+    "cal": "12ga",
+    "mod": 0.9,
+    "type": "semi",
+    "pellets": 8,
+    "magSize": 8,
+    "startReserve": 32,
+    "maxReserve": 64,
+    "fireRate": 3.5,
+    "reloadTime": 2.6,
+    "spread": 0.05,
+    "range": 35,
+    "price": 3000,
+    "ammoPrice": 700,
+    "caliber": "12 ga",
+    "damage": 27,
+    "headMult": 1.8,
+    "falloffStart": 6,
+    "falloffEnd": 25,
+    "minMult": 0.25
+   },
+   "crossbow": {
+    "id": "crossbow",
+    "cat": "special",
+    "name": "ARBALÈTE",
+    "cal": "bolt",
+    "type": "semi",
+    "magSize": 1,
+    "startReserve": 20,
+    "maxReserve": 40,
+    "fireRate": 1,
+    "reloadTime": 1.7,
+    "spread": 0.003,
+    "range": 80,
+    "tracer": 11569232,
+    "flash": false,
+    "autoReload": true,
+    "papSplash": {
+     "radius": 2.5,
+     "damage": 700,
+     "color": 16751162
+    },
+    "price": 2000,
+    "ammoPrice": 700,
+    "caliber": "carreau 20″",
+    "damage": 420,
+    "headMult": 3,
+    "pierce": 6,
+    "falloffStart": 30,
+    "falloffEnd": 70,
+    "minMult": 0.7
+   },
+   "m79": {
+    "id": "m79",
+    "cat": "special",
+    "name": "M79",
+    "cal": "40mm",
+    "type": "launcher",
+    "damage": 150,
+    "headMult": 1,
+    "magSize": 1,
+    "startReserve": 11,
+    "maxReserve": 24,
+    "fireRate": 1,
+    "reloadTime": 2.2,
+    "spread": 0.004,
+    "range": 150,
+    "autoReload": true,
+    "proj": {
+     "speed": 60,
+     "gravity": 6,
+     "arm": 4,
+     "fuse": 3
+    },
+    "blast": {
+     "radius": 5,
+     "damage": 1200,
+     "self": 75,
+     "color": 16747050
+    },
+    "price": 2500,
+    "ammoPrice": 1500,
+    "caliber": "40×46 mm"
+   },
+   "raygun": {
+    "id": "raygun",
+    "cat": "special",
+    "name": "PISTOLET À RAYONS",
+    "cal": "energy",
+    "type": "semi",
+    "damage": 1000,
+    "headMult": 1.5,
+    "magSize": 24,
+    "startReserve": 168,
+    "maxReserve": 240,
+    "fireRate": 4.2,
+    "reloadTime": 2.6,
+    "spread": 0.008,
+    "range": 100,
+    "splash": {
+     "radius": 3.5,
+     "damage": 900
+    },
+    "tracer": 3407701,
+    "boxOnly": true,
+    "ammoPrice": 1500,
+    "caliber": "énergie"
+   }
+  },
+  "calibers": {
+   "357": {
+    "name": ".357 Magnum",
+    "base": 130,
+    "head": 3,
+    "pierce": 2,
+    "falloffStart": 15,
+    "falloffEnd": 50,
+    "minMult": 0.6
+   },
+   "556": {
+    "name": "5,56 mm",
+    "base": 40,
+    "head": 2.4,
+    "pierce": 1,
+    "falloffStart": 25,
+    "falloffEnd": 70,
+    "minMult": 0.7
+   },
+   "57x28": {
+    "name": "5,7×28 mm",
+    "base": 22,
+    "head": 2,
+    "pierce": 2,
+    "falloffStart": 12,
+    "falloffEnd": 40,
+    "minMult": 0.55
+   },
+   "9mm": {
+    "name": "9 mm",
+    "base": 26,
+    "head": 2.2,
+    "pierce": 1,
+    "falloffStart": 12,
+    "falloffEnd": 35,
+    "minMult": 0.5
+   },
+   "45acp": {
+    "name": ".45 ACP",
+    "base": 50,
+    "head": 2.6,
+    "pierce": 1,
+    "falloffStart": 10,
+    "falloffEnd": 35,
+    "minMult": 0.5
+   },
+   "762x39": {
+    "name": "7,62×39 mm",
+    "base": 54,
+    "head": 2.3,
+    "pierce": 1,
+    "falloffStart": 22,
+    "falloffEnd": 65,
+    "minMult": 0.65
+   },
+   "762x51": {
+    "name": "7,62×51 mm",
+    "base": 78,
+    "head": 2.5,
+    "pierce": 2,
+    "falloffStart": 35,
+    "falloffEnd": 90,
+    "minMult": 0.8
+   },
+   "762x54r": {
+    "name": "7,62×54R",
+    "base": 80,
+    "head": 2.5,
+    "pierce": 2,
+    "falloffStart": 35,
+    "falloffEnd": 90,
+    "minMult": 0.8
+   },
+   "792x57": {
+    "name": "7,92×57 mm",
+    "base": 80,
+    "head": 2.2,
+    "pierce": 2,
+    "falloffStart": 30,
+    "falloffEnd": 90,
+    "minMult": 0.75
+   },
+   "50ae": {
+    "name": ".50 AE",
+    "base": 160,
+    "head": 3,
+    "pierce": 2,
+    "falloffStart": 18,
+    "falloffEnd": 55,
+    "minMult": 0.6
+   },
+   "12ga": {
+    "name": "12 ga",
+    "base": 30,
+    "head": 1.8,
+    "pierce": 1,
+    "falloffStart": 6,
+    "falloffEnd": 25,
+    "minMult": 0.25
+   },
+   "762match": {
+    "name": "7,62×51 mm Match",
+    "base": 340,
+    "head": 3.5,
+    "pierce": 4,
+    "falloffStart": 80,
+    "falloffEnd": 200,
+    "minMult": 0.9
+   },
+   "762x54r7n1": {
+    "name": "7,62×54R 7N1",
+    "base": 230,
+    "head": 3,
+    "pierce": 3,
+    "falloffStart": 80,
+    "falloffEnd": 200,
+    "minMult": 0.9
+   },
+   "50bmg": {
+    "name": ".50 BMG",
+    "base": 700,
+    "head": 3,
+    "pierce": 6,
+    "falloffStart": 100,
+    "falloffEnd": 220,
+    "minMult": 0.95
+   },
+   "bolt": {
+    "name": "carreau 20″",
+    "base": 420,
+    "head": 3,
+    "pierce": 6,
+    "falloffStart": 30,
+    "falloffEnd": 70,
+    "minMult": 0.7
+   },
+   "40mm": {
+    "name": "40×46 mm"
+   },
+   "energy": {
+    "name": "énergie"
+   }
+  },
+  "startWeapons": [
+   "rifle",
+   "m1911"
+  ],
+  "papNames": {
+   "m1911": "MUSTANG & SALLY",
+   "arex": "ZÉRO ABSOLU",
+   "deagle": "L'AIGLE NOIR",
+   "magnum": "LE VENGEUR",
+   "rifle": "M4 ÉCLIPSE",
+   "ak47": "AK-ENFER",
+   "famas": "LE CLAIRON MAUDIT",
+   "scar": "LE BALAFRÉ",
+   "smg": "PM INFERNAL",
+   "mp5": "MP-115",
+   "p90": "LE FRELON",
+   "lmg": "RPK DÉVASTATEUR",
+   "m249": "LA FAUCHEUSE",
+   "mg42": "LA SCIE D'HITLER… BRISÉE",
+   "pkm": "LE BULLDOZER",
+   "sniper": "ŒIL DU DÉMON",
+   "svd": "LA TSARINE",
+   "barrett": "LE MARTEAU DE THOR",
+   "shotgun": "LE BROYEUR",
+   "raygun": "PORTE-TONNERRE",
+   "saiga": "LE HACHOIR",
+   "crossbow": "LE CARREAU DE FER",
+   "m79": "LE BOUTEFEU"
+  },
+  "pap": {
+   "inTime": 0.9,
+   "workTime": 4.4,
+   "outTime": 0.9,
+   "offerTime": 15
+  },
+  "box": {
+   "price": 950,
+   "spin": 4.4,
+   "offerTime": 10,
+   "maxUses": 30,
+   "pool": {
+    "m1911": 2,
+    "arex": 3,
+    "deagle": 2,
+    "magnum": 2,
+    "rifle": 2,
+    "ak47": 3,
+    "famas": 3,
+    "scar": 2,
+    "smg": 2,
+    "mp5": 3,
+    "p90": 2,
+    "lmg": 2,
+    "m249": 2,
+    "mg42": 2,
+    "pkm": 2,
+    "sniper": 2,
+    "svd": 2,
+    "barrett": 1,
+    "shotgun": 3,
+    "raygun": 1,
+    "saiga": 3,
+    "crossbow": 2,
+    "m79": 1
+   }
+  },
+  "perks": {
+   "juggernog": {
+    "name": "MASTODONTE",
+    "desc": "Santé max 250",
+    "price": 2500,
+    "color": "#d0242c",
+    "letter": "M"
+   },
+   "speedcola": {
+    "name": "SPEED COLA",
+    "desc": "Rechargement 2x plus rapide",
+    "price": 3000,
+    "color": "#2db34a",
+    "letter": "S"
+   },
+   "doubletap": {
+    "name": "DOUBLE TAP",
+    "desc": "Cadence +33 %, dégâts +25 %",
+    "price": 2000,
+    "color": "#e0a21a",
+    "letter": "D"
+   },
+   "quickrevive": {
+    "name": "RÉANIMATION RAPIDE",
+    "desc": "Solo : se relève seul · Co-op : réanime 2x plus vite",
+    "price": 1500,
+    "soloPrice": 500,
+    "color": "#3aa6ff",
+    "letter": "R"
+   },
+   "mulekick": {
+    "name": "MULE KICK",
+    "desc": "Porter 3 armes",
+    "price": 4000,
+    "color": "#3f7d3a",
+    "letter": "K"
+   },
+   "staminup": {
+    "name": "STAMIN-UP",
+    "desc": "Course plus rapide",
+    "price": 2000,
+    "color": "#e8d24a",
+    "letter": "E"
+   },
+   "phdflopper": {
+    "name": "PHD FLOPPER",
+    "desc": "Immunisé aux explosions et aux chocs · saut en sprint : onde explosive",
+    "price": 2000,
+    "color": "#8d3fd1",
+    "letter": "P"
+   }
+  },
+  "phd": {
+   "radius": 4.5,
+   "base": 1500,
+   "perRound": 100,
+   "cooldown": 5,
+   "minAir": 0.35,
+   "fallHeight": 2.5,
+   "color": 11562239
+  },
+  "papPrice": 5000,
+  "papLevels": [
+   null,
+   {
+    "roman": "I",
+    "price": 5000,
+    "color": 6955704,
+    "tracer": 12611839,
+    "flash": 13798655,
+    "dmg": 2.5,
+    "ray": 1.6,
+    "head": 1.2,
+    "pierce": 2,
+    "mag": 1.5,
+    "magX": 1,
+    "reserve": 1.5,
+    "reload": 1,
+    "spread": 1,
+    "ammo": 3
+   },
+   {
+    "roman": "II",
+    "price": 10000,
+    "color": 1731839,
+    "tracer": 5939455,
+    "flash": 9224447,
+    "dmg": 3.5,
+    "ray": 2.2,
+    "head": 1.3,
+    "pierce": 3,
+    "mag": 1.5,
+    "magX": 1.33,
+    "reserve": 2,
+    "reload": 0.85,
+    "spread": 0.85,
+    "ammo": 4
+   },
+   {
+    "roman": "III",
+    "price": 20000,
+    "color": 16738832,
+    "tracer": 16747056,
+    "flash": 16756832,
+    "dmg": 5,
+    "ray": 3,
+    "head": 1.4,
+    "pierce": 4,
+    "mag": 1.5,
+    "magX": 1.33,
+    "reserve": 2.5,
+    "reload": 0.75,
+    "spread": 0.7,
+    "ammo": 5,
+    "pulseHz": 2
+   }
+  ],
+  "finale": {
+   "price": 0,
+   "minRound": 12,
+   "minZones": 18,
+   "maxAlive": 28,
+   "bossHealth": 350000,
+   "bossDamage": 45,
+   "chargeDamage": 55,
+   "slamDamage": 40,
+   "boss": {
+    "thresholds": [
+     0.7,
+     0.45,
+     0.2
+    ],
+    "names": [
+     "LE BOURREAU",
+     "LA SENTENCE",
+     "SUR LE TOIT",
+     "LE JUGEMENT"
+    ],
+    "speed": [
+     2.2,
+     2.4,
+     2.7,
+     3.3
+    ],
+    "sens": {
+     "front": 0.75,
+     "back": 2,
+     "backSentence": 2.5,
+     "zone": 0.25,
+     "ray": 0.35,
+     "stun": 1.5,
+     "backCos": -0.3
+    },
+    "cd": {
+     "charge": [
+      8,
+      7,
+      5,
+      4
+     ],
+     "slam": [
+      9,
+      8,
+      9,
+      7
+     ],
+     "chain": [
+      10,
+      10,
+      10,
+      10
+     ],
+     "sentence": [
+      0,
+      20,
+      0,
+      0
+     ],
+     "summon": [
+      0,
+      20,
+      0,
+      0
+     ],
+     "axe": [
+      0,
+      0,
+      9,
+      8
+     ],
+     "fire": [
+      0,
+      0,
+      0,
+      14
+     ],
+     "toll": [
+      0,
+      0,
+      0,
+      25
+     ]
+    },
+    "gap": 1.3,
+    "chain": {
+     "tel": 0.9,
+     "damage": 25,
+     "pull": 5,
+     "minDist": 8,
+     "maxDist": 24,
+     "width": 1.3
+    },
+    "glas": {
+     "invuln": 10,
+     "waves": 3,
+     "interval": 1.2,
+     "damage": 35,
+     "knights": 2,
+     "zombies": 4,
+     "perPlayer": 2,
+     "wavesLive": 3
+    },
+    "sentence": {
+     "tel": 0.9,
+     "duration": 8,
+     "mult": 1.5,
+     "speed": 3
+    },
+    "couperet": {
+     "tel": 1.2,
+     "damage": 50,
+     "length": 18,
+     "width": 1.5,
+     "flight": 0.45
+    },
+    "pyre": {
+     "circles": 3,
+     "perPlayer": 1,
+     "radius": 2.5,
+     "tel": 1.5,
+     "dps": 15,
+     "duration": 6,
+     "tick": 0.25
+    },
+    "rage": {
+     "roar": 2
+    },
+    "enrageAfter": 600,
+    "enrageMult": 1.5,
+    "reward": {
+     "points": 10000
+    }
+   },
+   "breather": 8,
+   "waves": [
+    {
+     "name": "La crypte s'ouvre",
+     "where": "crypt",
+     "count": 16,
+     "perPlayer": 4,
+     "kinds": {
+      "normal": 0.75,
+      "bloat": 0.15,
+      "crawler": 0.1
+     }
+    },
+    {
+     "name": "Les galeries",
+     "where": "galleries",
+     "count": 20,
+     "perPlayer": 5,
+     "kinds": {
+      "normal": 0.4,
+      "runner": 0.3,
+      "crawler": 0.1,
+      "armored": 0.2
+     }
+    },
+    {
+     "name": "Les portes de la ville",
+     "where": "portal",
+     "count": 24,
+     "perPlayer": 6,
+     "kinds": {
+      "normal": 0.3,
+      "runner": 0.25,
+      "armored": 0.25,
+      "bloat": 0.2
+     }
+    }
+   ],
+   "kindHealth": {
+    "normal": 1,
+    "runner": 0.8,
+    "crawler": 0.8,
+    "armored": 3,
+    "bloat": 1.6,
+    "gargoyle": 1.2
+   }
+  },
+  "summit": {
+   "beamFit": 150,
+   "gargoyles": {
+    "count": 24,
+    "perPlayer": 6,
+    "maxAlive": 10,
+    "interval": 1.1,
+    "speed": 1.5,
+    "appear": 0.7,
+    "minDist": 5
+   },
+   "angel": {
+    "health": 40000,
+    "perPlayer": 0.7,
+    "radius": 14,
+    "height": 106,
+    "omega": 10,
+    "bob": 0.4,
+    "scale": 2.6,
+    "weak": 2,
+    "gap": 2.2,
+    "first": 3,
+    "trumpet": {
+     "tel": 1,
+     "damage": 40,
+     "range": 10,
+     "angle": 20,
+     "cooldown": 7,
+     "dur": 0.6
+    },
+    "plumes": {
+     "tel": 0.7,
+     "count": 5,
+     "damage": 15,
+     "speed": 16,
+     "spread": 12,
+     "cooldown": 5,
+     "life": 2,
+     "radius": 0.75
+    },
+    "judgment": {
+     "tel": 3,
+     "damage": 70,
+     "cooldown": 16,
+     "fromHealth": 0.6
+    },
+    "reward": 5000
+   },
+   "ramp": {
+    "interval": 6,
+    "push": 2.5,
+    "duration": 1,
+    "outward": 0.6,
+    "gargoyles": {
+     "every": 7,
+     "count": 2,
+     "maxAlive": 6,
+     "behind": 24
+    }
+   },
+   "fanal": {
+    "hold": 6,
+    "range": 3.2,
+    "decay": 0.5
+   },
+   "dawn": {
+    "sky": 30,
+    "orbit": 12,
+    "ash": 1.6,
+    "orbitRadius": [
+     30,
+     22
+    ],
+    "orbitHeight": [
+     132,
+     146
+    ]
+   },
+   "eternal": {
+    "day": 60,
+    "dusk": 20,
+    "healthMult": 1.3
+   }
+  },
+  "vault": {
+   "reach": 0.9,
+   "maxAngle": 45,
+   "maxDepth": 1.3,
+   "clearance": 0.5,
+   "heightTol": 0.3,
+   "time": 0.5,
+   "camLift": 0.6,
+   "cooldown": 0.25
+  },
+  "unstick": {
+   "stuckAfter": 4,
+   "moveMin": 0.5,
+   "trapAfter": 3,
+   "pocketMaxArea": 150,
+   "holdTime": 2,
+   "maxDist": 40,
+   "cooldown": 30
+  },
+  "knife": {
+   "range": 1.8,
+   "cone": 35,
+   "cooldown": 0.6,
+   "hitDelay": 0.12,
+   "anim": 0.55,
+   "dip": 0.3,
+   "lunge": 0.8,
+   "lungeNear": 2.6,
+   "lungeTime": 0.12,
+   "minDamage": 150,
+   "healthFrac": 0.34,
+   "weakMult": 1.5,
+   "backCos": -0.3,
+   "boss": {
+    "dmg": 150
+   },
+   "axe": {
+    "dmgMult": 3,
+    "extra": 1,
+    "splash": 1.8
+   },
+   "points": {
+    "hit": 10,
+    "kill": 100
+   },
+   "stab": 0.35,
+   "hostRange": 4
+  },
+  "grenade": {
+   "start": 2,
+   "max": 4,
+   "perRound": 2,
+   "fuse": 2.2,
+   "radius": 6.5,
+   "damage": 900,
+   "selfDamage": 60
+  },
+  "tanner": {
+   "zones": [
+    "Petite France",
+    "Saint-Pierre-le-Vieux"
+   ],
+   "fromRound": 15,
+   "every": 5,
+   "healthMult": 30,
+   "perPlayer": 0.5,
+   "speed": 2,
+   "damage": 30,
+   "vomit": {
+    "tel": 0.8,
+    "range": 8,
+    "angle": 32,
+    "initial": 20,
+    "dps": 5,
+    "duration": 4,
+    "tick": 0.5,
+    "cooldown": 8
+   },
+   "summon": {
+    "count": 3,
+    "cooldown": 20,
+    "healthMult": 1.6
+   },
+   "explosion": {
+    "radius": 6,
+    "damage": 60
+   },
+   "reward": {
+    "points": 1500
+   }
+  },
+  "vehicles": {
+   "mountRange": 2.6,
+   "pumpRange": 2.4,
+   "pumpReach": 8,
+   "parkings": [
+    {
+     "zone": "Place Gutenberg",
+     "x": -22,
+     "z": 70,
+     "yaw": 0,
+     "bays": [
+      {
+       "type": "moto",
+       "dx": -1.2
+      },
+      {
+       "type": "grosseMoto",
+       "dx": 1.2
+      }
+     ],
+     "slots": [
+      -3.6,
+      -1.2,
+      1.2,
+      3.6
+     ],
+     "pump": {
+      "dx": -6.5,
+      "dz": 0
+     },
+     "sign": {
+      "dx": 0,
+      "dz": 5.5
+     },
+     "rect": {
+      "w": 10,
+      "d": 12
+     }
+    },
+    {
+     "zone": "Place Broglie",
+     "x": 169.5,
+     "z": -340.5,
+     "yaw": 0,
+     "bays": [
+      {
+       "type": "moto",
+       "dx": 0
+      }
+     ],
+     "slots": [
+      0
+     ],
+     "pump": {
+      "dx": -3.6,
+      "dz": 0.5
+     },
+     "sign": {
+      "dx": 3.6,
+      "dz": 3.5
+     },
+     "rect": {
+      "w": 10,
+      "d": 12
+     }
+    }
+   ],
+   "bikeStations": [
+    {
+     "zone": "Marché-Neuf",
+     "x": -3.3,
+     "z": -26.7,
+     "yaw": 0,
+     "bikes": 2
+    },
+    {
+     "zone": "Temple-Neuf",
+     "x": -41.3,
+     "z": -88.1,
+     "yaw": 4.974,
+     "bikes": 1
+    },
+    {
+     "zone": "Rue des Orfèvres",
+     "x": 26.6,
+     "z": -54.9,
+     "yaw": -4.189,
+     "bikes": 1
+    },
+    {
+     "zone": "Rue du Dôme",
+     "x": 102.1,
+     "z": -148.5,
+     "yaw": -1.571,
+     "bikes": 1
+    },
+    {
+     "zone": "Grandes Arcades",
+     "x": -127.9,
+     "z": -9.7,
+     "yaw": 1.571,
+     "bikes": 1
+    },
+    {
+     "zone": "Place Kléber",
+     "x": -245.6,
+     "z": -145.4,
+     "yaw": 0,
+     "bikes": 1
+    },
+    {
+     "zone": "Place Gutenberg",
+     "x": -27.1,
+     "z": 93.1,
+     "yaw": -2.094,
+     "bikes": 2
+    },
+    {
+     "zone": "Cathédrale",
+     "x": 117.1,
+     "z": 26.3,
+     "yaw": 2.094,
+     "bikes": 2
+    },
+    {
+     "zone": "Homme de Fer",
+     "x": -303.6,
+     "z": -208,
+     "yaw": 0,
+     "bikes": 1
+    },
+    {
+     "zone": "Saint-Pierre-le-Jeune",
+     "x": -144.4,
+     "z": -336.3,
+     "yaw": 2.356,
+     "bikes": 1
+    },
+    {
+     "zone": "Grand'Rue",
+     "x": -382.1,
+     "z": 15.9,
+     "yaw": 2.618,
+     "bikes": 1
+    },
+    {
+     "zone": "Grand Séminaire",
+     "x": 299.6,
+     "z": -57.2,
+     "yaw": 2.094,
+     "bikes": 1
+    },
+    {
+     "zone": "Musée historique",
+     "x": 181,
+     "z": 228.2,
+     "yaw": 2.356,
+     "bikes": 1
+    },
+    {
+     "zone": "Place Broglie",
+     "x": 152.4,
+     "z": -340.4,
+     "yaw": -3.142,
+     "bikes": 2
+    },
+    {
+     "zone": "Quai Schoepflin",
+     "x": -12.9,
+     "z": -469.2,
+     "yaw": -2.618,
+     "bikes": 1
+    },
+    {
+     "zone": "Ancienne Douane",
+     "x": 32.4,
+     "z": 330.1,
+     "yaw": 2.094,
+     "bikes": 1
+    },
+    {
+     "zone": "Saint-Thomas",
+     "x": -194.9,
+     "z": 226.9,
+     "yaw": -3.142,
+     "bikes": 1
+    },
+    {
+     "zone": "Opéra",
+     "x": 280.7,
+     "z": -463.8,
+     "yaw": -1.833,
+     "bikes": 1
+    },
+    {
+     "zone": "Préfecture",
+     "x": 419.3,
+     "z": -297.4,
+     "yaw": 5.76,
+     "bikes": 1
+    }
+   ],
+   "bikeStation": {
+    "spacing": 1,
+    "signOffset": 0.9,
+    "rect": {
+     "d": 2.6,
+     "step": 0.9
+    },
+    "doorGap": 8,
+    "tramGap": 5,
+    "usedGap": 1.8,
+    "itemGap": 6,
+    "stationGap": 12,
+    "probeR": 0.3,
+    "cullDist": 90
+   },
+   "spawns": [
+    {
+     "type": "moto",
+     "zone": "Marché-Neuf"
+    },
+    {
+     "type": "grosseMoto",
+     "zone": "Marché-Neuf"
+    }
+   ],
+   "roadkill": {
+    "cooldown": 0.5,
+    "rampSpeed": 6,
+    "stopSpeed": 1.5,
+    "contactStop": 0.55
+   },
+   "crash": {
+    "minSpeed": 10,
+    "damagePerMs": 3.5,
+    "maxDamage": 45
+   },
+   "damage": {
+    "crashFree": 6,
+    "crashPerMs": 5,
+    "wall": 0,
+    "motoHit": {
+     "free": 4,
+     "perMs": 4,
+     "bounce": 1.3,
+     "hitCooldown": 0.5,
+     "driven": 0.55
+    },
+    "zombieHit": 10,
+    "explosion": 0.1,
+    "roadkillKill": 5,
+    "roadkillHurt": 12,
+    "burnTime": 2,
+    "wreckTime": 20,
+    "respawnRounds": 2,
+    "respawnClear": 1.5,
+    "respawnRetry": 1,
+    "blast": {
+     "radius": 5,
+     "zombies": 1000,
+     "players": 50,
+     "color": 16747050
+    },
+    "smoke": {
+     "grey": {
+      "below": 0.5,
+      "rate": 4
+     },
+     "black": {
+      "below": 0.25,
+      "rate": 10
+     },
+     "flames": {
+      "below": 0.1,
+      "rate": 10
+     }
+    },
+    "repairPrice": 2
+   },
+   "fuel": {
+    "lowBelow": 0.15,
+    "lowBeep": 4,
+    "missBelow": 0.05,
+    "missEvery": 1.5,
+    "missLen": 0.15,
+    "pushSpeed": 3,
+    "pushAccel": 3,
+    "pricePerL": 50,
+    "jerrican": 2.5,
+    "dropChance": 0.03,
+    "dropBelow": 0.5,
+    "respawn": 0.4
+   },
+   "cam": {
+    "pivotUp": 0.35,
+    "pivotRight": 0.35,
+    "follow": 14,
+    "pitchMin": -0.7,
+    "pitchMax": 0.45,
+    "rayOffset": 0.25,
+    "margin": 0.3,
+    "minArm": 0.8,
+    "retreat": 4,
+    "ceilingMargin": 0.35,
+    "floorMargin": 0.5,
+    "mountTime": 0.35,
+    "leaveTime": 0.25,
+    "aimTime": 0.15,
+    "avatarMin": 0.8,
+    "viewmodelMax": 0.3,
+    "recenterAfter": 1.5,
+    "recenterRate": 2,
+    "recenterPitch": -0.15
+   },
+   "types": {
+    "moto": {
+     "name": "MOTO",
+     "seats": 1,
+     "camArm": 3.4,
+     "hp": 300,
+     "tank": 6,
+     "idle": 0.004,
+     "gas": 0.012,
+     "perSpeed": 0.017,
+     "maxSpeed": 21,
+     "accel": 11,
+     "brake": 28,
+     "reverseSpeed": 3.5,
+     "drag": 0.12,
+     "wheelbase": 1.35,
+     "maxSteer": 0.62,
+     "grip": 15,
+     "radius": 0.55,
+     "bikeRadius": 0.45,
+     "roadkill": {
+      "K": 16,
+      "vmin": 9,
+      "slowdown": 0.85
+     }
+    },
+    "grosseMoto": {
+     "name": "GROSSE MOTO",
+     "seats": 2,
+     "camArm": 4,
+     "hp": 500,
+     "tank": 10,
+     "idle": 0.005,
+     "gas": 0.016,
+     "perSpeed": 0.021,
+     "maxSpeed": 17,
+     "accel": 8,
+     "brake": 24,
+     "reverseSpeed": 3,
+     "drag": 0.12,
+     "wheelbase": 1.75,
+     "maxSteer": 0.5,
+     "grip": 11,
+     "radius": 0.7,
+     "bikeRadius": 0.55,
+     "roadkill": {
+      "K": 24,
+      "vmin": 7,
+      "slowdown": 0.9
+     }
+    },
+    "velo": {
+     "name": "VÉLO",
+     "hudName": "VÉLO",
+     "det": "le",
+     "seats": 1,
+     "camArm": 3,
+     "hp": 150,
+     "tank": 0,
+     "maxSpeed": 12,
+     "accel": 4.5,
+     "brake": 10,
+     "reverseSpeed": 1.2,
+     "drag": 0.1,
+     "wheelbase": 1.05,
+     "maxSteer": 0.72,
+     "grip": 13,
+     "radius": 0.4,
+     "bikeRadius": 0.3,
+     "roadkill": {
+      "K": 0,
+      "vmin": 99,
+      "slowdown": 1
+     },
+     "crash": {
+      "minSpeed": 6,
+      "damagePerMs": 4,
+      "maxDamage": 25
+     },
+     "blast": null,
+     "wreckTime": 10,
+     "respawnRounds": 1,
+     "fx": false,
+     "wreckLift": 0.36,
+     "cullDist": 90,
+     "leanK": 0.05
+    }
+   }
+  },
+  "tram": {
+   "minRadius": 25,
+   "step": 1,
+   "clearHalf": 3.25,
+   "decorGap": 5,
+   "furnitureGap": 4,
+   "itemGap": 4.6,
+   "lampGap": 3.9,
+   "treeGap": 4.1,
+   "rail": {
+    "gauge": 1.435,
+    "bed": 3,
+    "element": 4,
+    "curveElement": 2,
+    "curveBelow": 300
+   },
+   "platform": {
+    "width": 2.6,
+    "height": 0.07,
+    "edge": 0.4,
+    "minWidth": 0.9
+   },
+   "pole": {
+    "every": 12,
+    "offset": 2.9,
+    "height": 6,
+    "wire": 5.5
+   },
+   "gate": {
+    "signalDist": 15,
+    "stopGap": 2.5,
+    "lamp": 16722458
+   },
+   "hdf": {
+    "colPhase": 10,
+    "columnGap": 1.2,
+    "ad": 64,
+    "decor": [
+     {
+      "line": "AD",
+      "side": -1,
+      "modules": [
+       7,
+       3
+      ]
+     },
+     {
+      "line": "AD",
+      "side": 1,
+      "modules": [
+       7,
+       3
+      ]
+     }
+    ]
+   },
+   "car": {
+    "modules": 5,
+    "module": 4.7,
+    "width": 2.4,
+    "height": 3.4,
+    "floor": 0.32,
+    "doors": 4,
+    "doorWidth": 1.3,
+    "perSide": 7,
+    "camArm": 12,
+    "start": {
+     "line": "BCF",
+     "stop": "Homme de Fer"
+    }
+   },
+   "drive": {
+    "maxSpeed": 14,
+    "accel": 1.3,
+    "brake": 1.8,
+    "emergency": 3,
+    "reverse": 4,
+    "drag": 0.2,
+    "grip": 1,
+    "lookAhead": 70,
+    "autoBrake": 2.5,
+    "doorTime": 1.2,
+    "doorSpeed": 1.2,
+    "boardSpeed": 1.5
+   },
+   "walk": {
+    "radius": 0.3,
+    "wall": 1.15,
+    "thick": 0.15,
+    "endGap": 1.55,
+    "doorOpen": 0.6,
+    "boardW": 1.78,
+    "boardPush": 0.8,
+    "boardReach": 2.4,
+    "exitW": 1.45,
+    "seatReach": 1.35,
+    "stand": 0.4,
+    "doorSpot": 0.55,
+    "enterEase": 9
+   },
+   "hp": 3000,
+   "zombieHit": 2,
+   "hit": {
+    "playerSpeed": 5,
+    "playerDamage": 10,
+    "zombieSpeed": 3,
+    "zombieK": 40,
+    "zombieCooldown": 0.5,
+    "bufferFree": 4,
+    "bufferPerMs": 40,
+    "crashMin": 8,
+    "crashDamagePerMs": 3.5,
+    "crashMax": 45
+   },
+   "power": {
+    "price": 2000,
+    "range": 2.6,
+    "respawnRounds": 2
+   },
+   "gong": {
+    "range": 50,
+    "duration": 8,
+    "cooldown": 3
+   },
+   "junction": {
+    "name": "Homme de Fer",
+    "a": "AD",
+    "b": "BCF",
+    "lockGap": 3,
+    "signalDist": 14,
+    "arms": {
+     "AN": {
+      "line": "AD",
+      "end": 0,
+      "name": "Heurtoir nord (A / D)"
+     },
+     "AS": {
+      "line": "AD",
+      "end": 1,
+      "name": "Place Kléber (A / D)"
+     },
+     "BW": {
+      "line": "BCF",
+      "end": 0,
+      "name": "Alt Winmärik (B / C / F)"
+     },
+     "BE": {
+      "line": "BCF",
+      "end": 1,
+      "name": "Broglie (B / C / F)"
+     }
+    },
+    "turns": [
+     {
+      "from": "BW",
+      "to": "AS",
+      "r": 25
+     },
+     {
+      "from": "AN",
+      "to": "BE",
+      "r": 30
+     }
+    ]
+   },
+   "lines": [
+    {
+     "id": "AD",
+     "name": "A / D",
+     "color": "#d8452b",
+     "pts": [
+      [
+       -343,
+       -326
+      ],
+      [
+       -323.4,
+       -270.5,
+       60
+      ],
+      [
+       -290.56,
+       -203
+      ],
+      [
+       -270.84,
+       -162.56,
+       40
+      ],
+      [
+       -236,
+       -125,
+       40
+      ],
+      [
+       -124,
+       -125,
+       45
+      ],
+      [
+       -101,
+       -56,
+       40
+      ],
+      [
+       -58,
+       8,
+       40
+      ],
+      [
+       -22,
+       52
+      ]
+     ],
+     "stops": [
+      {
+       "name": "Place Kléber",
+       "at": [
+        -196,
+        -125
+       ],
+       "len": 34
+      },
+      {
+       "name": "Gutenberg",
+       "at": [
+        -34.7,
+        36.5
+       ],
+       "len": 30
+      }
+     ]
+    },
+    {
+     "id": "BCF",
+     "name": "B / C / F",
+     "color": "#2b6fd8",
+     "pts": [
+      [
+       -516,
+       -190
+      ],
+      [
+       -493,
+       -188,
+       30
+      ],
+      [
+       -366,
+       -231,
+       40
+      ],
+      [
+       -297,
+       -239.8,
+       40
+      ],
+      [
+       -262,
+       -240.6,
+       30
+      ],
+      [
+       -194,
+       -236,
+       40
+      ],
+      [
+       -97,
+       -233,
+       40
+      ],
+      [
+       -37,
+       -237,
+       30
+      ],
+      [
+       8,
+       -257.6,
+       30
+      ],
+      [
+       41.6,
+       -271.2,
+       40
+      ],
+      [
+       127.6,
+       -329.4,
+       40
+      ],
+      [
+       158,
+       -366,
+       30
+      ],
+      [
+       205,
+       -368,
+       30
+      ],
+      [
+       250,
+       -374,
+       40
+      ],
+      [
+       284,
+       -378,
+       40
+      ],
+      [
+       315,
+       -398,
+       40
+      ],
+      [
+       345,
+       -404,
+       40
+      ],
+      [
+       378,
+       -404,
+       40
+      ],
+      [
+       398,
+       -384,
+       40
+      ],
+      [
+       436,
+       -334,
+       40
+      ],
+      [
+       480,
+       -290
+      ]
+     ],
+     "stops": [
+      {
+       "name": "Alt Winmärik",
+       "at": [
+        -438,
+        -206.6
+       ],
+       "len": 34
+      },
+      {
+       "name": "Homme de Fer",
+       "at": [
+        -345.1,
+        -233.7
+       ],
+       "len": 22
+      },
+      {
+       "name": "Broglie",
+       "at": [
+        63.3,
+        -285.9
+       ],
+       "len": 34
+      },
+      {
+       "name": "République",
+       "at": [
+        228.8,
+        -371.2
+       ],
+       "len": 34
+      },
+      {
+       "name": "Préfecture",
+       "at": [
+        456,
+        -314
+       ],
+       "len": 30
+      }
+     ]
+    }
+   ]
+  },
+  "powerups": {
+   "dropChance": 0.05,
+   "duration": 25,
+   "buffDuration": 30,
+   "openingBonus": [
+    "max_ammo",
+    "double_points"
+   ]
+  },
+  "zombie": {
+   "health": {
+    "base": 70,
+    "perRound": 30,
+    "softRound": 10,
+    "hardBase": 340,
+    "hardGrowth": 1.1
+   },
+   "vault": {
+    "cost": 40,
+    "time": 0.8,
+    "arc": 0.7,
+    "reach": 1,
+    "maxAngle": 60,
+    "cooldown": 1.5
+   },
+   "radius": 0.4,
+   "attackRange": 1.3,
+   "damage": 20,
+   "attackCooldown": 1,
+   "maxAlive": 22,
+   "speedStart": 1.6,
+   "speedPerRound": 0.12,
+   "speedMax": 3.8,
+   "runnerRound": 4,
+   "runnerChance": 0.25,
+   "runnerMult": 1.35,
+   "crawlerChance": 0.12,
+   "crawlerRound": 4,
+   "legBlowChance": 0.5,
+   "ironKnight": {
+    "zone": "Homme de Fer",
+    "fromRound": 8,
+    "chance": 0.15,
+    "maxAlive": 3,
+    "healthMult": 1.5
+   },
+   "flow": {
+    "range": 160,
+    "interval": 0.2,
+    "budget": 25000
+   },
+   "pestilent": {
+    "zones": [
+     "Petite France",
+     "Saint-Pierre-le-Vieux"
+    ],
+    "fromRound": 10,
+    "chance": 0.12,
+    "maxAlive": 3,
+    "healthMult": 1.6
+   },
+   "spawnBalance": {
+    "radius": 45
+   },
+   "drawRange": 170
+  },
+  "graphics": {
+   "levels": [
+    {
+     "name": "Rapide",
+     "pixelRatio": 0.75,
+     "shadows": false,
+     "softShadows": false,
+     "shadowSize": 1024,
+     "shadowEvery": 2,
+     "clouds": false,
+     "post": false,
+     "facade": 30,
+     "trees": "ball",
+     "particles": 0.5,
+     "decals": 16
+    },
+    {
+     "name": "Normale",
+     "pixelRatio": 1,
+     "shadows": true,
+     "softShadows": true,
+     "shadowSize": 1024,
+     "shadowEvery": 2,
+     "clouds": true,
+     "post": false,
+     "facade": 60,
+     "trees": "cards",
+     "particles": 1,
+     "decals": 36
+    },
+    {
+     "name": "Haute",
+     "pixelRatio": "device",
+     "shadows": true,
+     "softShadows": true,
+     "shadowSize": 2048,
+     "shadowEvery": 1,
+     "clouds": true,
+     "post": true,
+     "facade": 110,
+     "trees": "cards+branches",
+     "particles": 1,
+     "decals": 64
+    }
+   ],
+   "tone": {
+    "type": "aces",
+    "exposure": 1.3
+   },
+   "torch": {
+    "intensity": 9,
+    "angle": 0.5,
+    "penumbra": 0.9,
+    "decay": 1.1,
+    "distance": 40,
+    "color": 16769200
+   },
+   "weapons": {
+    "bevel": 0.0035,
+    "bevelSegments": 1,
+    "wear": 3.2,
+    "wearFrom": 0.05,
+    "env": 1.6
+   },
+   "footAO": [
+    [
+     0,
+     0.5
+    ],
+    [
+     2.4,
+     1
+    ]
+   ],
+   "zoneBlend": 2.5,
+   "zones": {
+    "default": {
+     "exposure": 1,
+     "env": 1,
+     "torch": 1
+    },
+    "Intérieur de la Cathédrale": {
+     "exposure": 0.92,
+     "env": 0.3,
+     "torch": 1
+    },
+    "Cathédrale": {
+     "exposure": 1,
+     "env": 0.8,
+     "torch": 1
+    }
+   },
+   "env": {
+    "enabled": true,
+    "intensity": 0.16,
+    "phaseIntensity": [
+     1,
+     1.1,
+     1.25
+    ],
+    "top": [
+     "#0a1222",
+     "#3a3660",
+     "#5a8ad0"
+    ],
+    "mid": [
+     "#22304a",
+     "#9a7080",
+     "#9cc0e8"
+    ],
+    "horizon": [
+     "#4a3a2c",
+     "#e0a070",
+     "#d8e4f0"
+    ],
+    "ground": [
+     "#141210",
+     "#3a3028",
+     "#5a5a52"
+    ],
+    "lamps": 9,
+    "lampStrength": 0.6,
+    "moonStrength": 0.7
+   },
+   "trees": {
+    "cards": [
+     14,
+     24
+    ],
+    "cardSize": [
+     2.1,
+     3.1
+    ],
+    "crownRadius": 2.3,
+    "crownHeight": 1,
+    "atlas": 512,
+    "branches": 5,
+    "sway": 0.035
+   },
+   "ground": {
+    "cell": 1,
+    "apron": 0.95,
+    "kerb": 0.16,
+    "gutter": 0.4,
+    "slab": 0.45,
+    "puddle": {
+     "from": 0.66,
+     "to": 0.72,
+     "reflect": 3.5,
+     "darken": 0.4
+    },
+    "manholeGrid": 34,
+    "manholeChance": 0.9
+   },
+   "glass": {
+    "poolColor": 3947580
+   },
+   "contact": {
+    "enabled": true,
+    "opacity": 0.8,
+    "dynamicMax": 160,
+    "maxDist": 45,
+    "zombie": 0.55,
+    "vehicle": 0.5,
+    "tree": 0.55
+   },
+   "sky": {
+    "moonElevation": 0.72,
+    "moonAzimuth": 0.53,
+    "moonSize": 0.034,
+    "cloudCover": 1,
+    "cloudNight": "#26344e"
+   },
+   "post": {
+    "enabled": true,
+    "samples": 4,
+    "msaa2Pixels": 2400000,
+    "maxPixels": 4300000
+   },
+   "halo": {
+    "enabled": true,
+    "threshold": 0.62,
+    "knee": 0.15,
+    "intensity": 0.85,
+    "radius": 1.8,
+    "dawnFade": 0.85
+   },
+   "grade": {
+    "contrast": 0.45,
+    "saturation": 0.92,
+    "shadows": [
+     0,
+     0.012,
+     0.03
+    ],
+    "highlights": [
+     0.03,
+     0.012,
+     -0.02
+    ]
+   }
+  },
+  "keybinds": [
+   {
+    "id": "forward",
+    "group": "Déplacement",
+    "label": "Avancer",
+    "def": "code:KeyW",
+    "kind": "code",
+    "ctx": "all",
+    "alt": "ArrowUp"
+   },
+   {
+    "id": "left",
+    "group": "Déplacement",
+    "label": "Aller à gauche",
+    "def": "code:KeyA",
+    "kind": "code",
+    "ctx": "all",
+    "alt": "ArrowLeft"
+   },
+   {
+    "id": "back",
+    "group": "Déplacement",
+    "label": "Reculer",
+    "def": "code:KeyS",
+    "kind": "code",
+    "ctx": "all",
+    "alt": "ArrowDown"
+   },
+   {
+    "id": "right",
+    "group": "Déplacement",
+    "label": "Aller à droite",
+    "def": "code:KeyD",
+    "kind": "code",
+    "ctx": "all",
+    "alt": "ArrowRight"
+   },
+   {
+    "id": "sprint",
+    "group": "Déplacement",
+    "label": "Sprint",
+    "def": "code:ShiftLeft",
+    "kind": "code",
+    "ctx": "all"
+   },
+   {
+    "id": "jump",
+    "group": "Déplacement",
+    "label": "Sauter · enjamber · frein à main (moto) · frein (vélo) · frein d'urgence (tram)",
+    "def": "code:Space",
+    "kind": "code",
+    "ctx": "all"
+   },
+   {
+    "id": "reload",
+    "group": "Combat",
+    "label": "Recharger",
+    "def": "key:r",
+    "kind": "key",
+    "ctx": "all"
+   },
+   {
+    "id": "weapon1",
+    "group": "Combat",
+    "label": "Arme 1",
+    "def": "code:Digit1",
+    "kind": "code",
+    "ctx": "all"
+   },
+   {
+    "id": "weapon2",
+    "group": "Combat",
+    "label": "Arme 2",
+    "def": "code:Digit2",
+    "kind": "code",
+    "ctx": "all"
+   },
+   {
+    "id": "weapon3",
+    "group": "Combat",
+    "label": "Arme 3",
+    "def": "code:Digit3",
+    "kind": "code",
+    "ctx": "all"
+   },
+   {
+    "id": "grenade",
+    "group": "Combat",
+    "label": "Grenade",
+    "def": "key:g",
+    "kind": "key",
+    "ctx": "all"
+   },
+   {
+    "id": "knife",
+    "group": "Combat",
+    "label": "Coup de couteau (à pied)",
+    "def": "key:v",
+    "kind": "key",
+    "ctx": "foot"
+   },
+   {
+    "id": "torch",
+    "group": "Équipement",
+    "label": "Lampe torche",
+    "def": "key:f",
+    "kind": "key",
+    "ctx": "all"
+   },
+   {
+    "id": "interact",
+    "group": "Équipement",
+    "label": "Interagir (acheter, porte, machine, réanimer, moto, vélo)",
+    "def": "key:e",
+    "kind": "key",
+    "ctx": "all"
+   },
+   {
+    "id": "map",
+    "group": "Équipement",
+    "label": "Carte",
+    "def": "key:m",
+    "kind": "key",
+    "ctx": "all"
+   },
+   {
+    "id": "vehicleView",
+    "group": "Équipement",
+    "label": "Changer de vue (en moto, à vélo ou en tram)",
+    "def": "key:v",
+    "kind": "key",
+    "ctx": "moto"
+   },
+   {
+    "id": "tramGong",
+    "group": "Équipement",
+    "label": "Gong du tram (attire les zombies)",
+    "def": "key:h",
+    "kind": "key",
+    "ctx": "moto"
+   },
+   {
+    "id": "tramDoors",
+    "group": "Équipement",
+    "label": "Portes du tram (ouvrir / fermer)",
+    "def": "key:o",
+    "kind": "key",
+    "ctx": "moto"
+   },
+   {
+    "id": "tramSwitch",
+    "group": "Équipement",
+    "label": "Aiguillage du tram : tout droit / dévié (conducteur)",
+    "def": "key:b",
+    "kind": "key",
+    "ctx": "moto"
+   },
+   {
+    "id": "unstick",
+    "group": "Équipement",
+    "label": "Se débloquer (maintenir)",
+    "def": "key:k",
+    "kind": "key",
+    "ctx": "foot"
+   },
+   {
+    "id": "chat",
+    "group": "Équipement",
+    "label": "Chat écrit (multijoueur) : ouvrir la saisie",
+    "def": "code:Enter",
+    "kind": "key",
+    "ctx": "all"
+   }
+  ],
+  "chat": {
+   "maxLen": 200,
+   "rateCount": 5,
+   "rateWindow": 4,
+   "history": 50,
+   "visibleLines": 8,
+   "fadeAfter": 8,
+   "fadeTime": 1.2,
+   "maxNet": 1048576
+  },
+  "fixedKeys": [
+   [
+    "Souris",
+    "Viser"
+   ],
+   [
+    "Clic gauche",
+    "Tirer"
+   ],
+   [
+    "Clic droit",
+    "Viser à la mire"
+   ],
+   [
+    "Molette",
+    "Changer d'arme"
+   ],
+   [
+    "Clic molette",
+    "Lance-grenades (fusil d'assaut PaP III)"
+   ],
+   [
+    "Échap",
+    "Pause · fermer la carte ou un menu"
+   ],
+   [
+    "F9",
+    "Menu debug (hôte uniquement)"
+   ]
+  ],
+  "reservedKeys": {
+   "Escape": "Échap annule la capture",
+   "F9": "F9 ouvre le menu debug de l'hôte",
+   "F5": "F5 recharge la page",
+   "F11": "F11 gère le plein écran",
+   "F12": "F12 ouvre les outils du navigateur",
+   "MetaLeft": "cette touche appartient au système",
+   "MetaRight": "cette touche appartient au système",
+   "ContextMenu": "cette touche appartient au système"
+  }
+ },
+ "PAP_LEVELS": [
+  null,
+  {
+   "roman": "I",
+   "price": 5000,
+   "color": 6955704,
+   "tracer": 12611839,
+   "flash": 13798655,
+   "dmg": 2.5,
+   "ray": 1.6,
+   "head": 1.2,
+   "pierce": 2,
+   "mag": 1.5,
+   "magX": 1,
+   "reserve": 1.5,
+   "reload": 1,
+   "spread": 1,
+   "ammo": 3
+  },
+  {
+   "roman": "II",
+   "price": 10000,
+   "color": 1731839,
+   "tracer": 5939455,
+   "flash": 9224447,
+   "dmg": 3.5,
+   "ray": 2.2,
+   "head": 1.3,
+   "pierce": 3,
+   "mag": 1.5,
+   "magX": 1.33,
+   "reserve": 2,
+   "reload": 0.85,
+   "spread": 0.85,
+   "ammo": 4
+  },
+  {
+   "roman": "III",
+   "price": 20000,
+   "color": 16738832,
+   "tracer": 16747056,
+   "flash": 16756832,
+   "dmg": 5,
+   "ray": 3,
+   "head": 1.4,
+   "pierce": 4,
+   "mag": 1.5,
+   "magX": 1.33,
+   "reserve": 2.5,
+   "reload": 0.75,
+   "spread": 0.7,
+   "ammo": 5,
+   "pulseHz": 2
+  }
+ ]
+}

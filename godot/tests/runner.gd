@@ -1,0 +1,59 @@
+extends Node
+## Lanceur de tests headless :
+##   godot --headless --path godot res://tests/runner.tscn [-- --suite=j0]
+## Passe par une scène pour que les autoloads (Config, Game) soient chargés. Code de sortie 0 si tout passe, 1 sinon.
+## Chaque suite est un script tests/test_<nom>.gd avec une méthode run(t) ; t.check(ok, message), t.near(a, b, message, tol).
+
+var failures: Array[String] = []
+var checks := 0
+
+func check(ok: bool, message: String) -> void:
+	checks += 1
+	if not ok:
+		failures.append(message)
+
+func near(a: Variant, b: Variant, message: String, tol := 1e-6) -> void:
+	checks += 1
+	if typeof(a) not in [TYPE_INT, TYPE_FLOAT] or typeof(b) not in [TYPE_INT, TYPE_FLOAT] or absf(float(a) - float(b)) > tol * maxf(1.0, absf(float(b))):
+		failures.append("%s : %s != %s" % [message, a, b])
+
+## Compare récursivement deux valeurs JSON (dictionnaires de mêmes clés, nombres à tol près).
+func same(a: Variant, b: Variant, message: String, tol := 1e-6) -> void:
+	if typeof(b) == TYPE_DICTIONARY:
+		if typeof(a) != TYPE_DICTIONARY:
+			check(false, "%s : dictionnaire attendu" % message)
+			return
+		for k in b:
+			if not a.has(k):
+				check(false, "%s : clé « %s » absente" % [message, k])
+			else:
+				same(a[k], b[k], "%s.%s" % [message, k], tol)
+		for k in a:
+			if not b.has(k):
+				check(false, "%s : clé « %s » en trop" % [message, k])
+	elif typeof(b) in [TYPE_INT, TYPE_FLOAT]:
+		near(a, b, message, tol)
+	else:
+		check(a == b, "%s : %s != %s" % [message, a, b])
+
+func _ready() -> void:
+	var suites: Array[String] = ["j0"]
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("--suite="):
+			suites = [arg.substr(8)]
+	for s in suites:
+		var path := "res://tests/test_%s.gd" % s
+		var script: Variant = load(path)
+		if script == null:
+			failures.append("suite introuvable : %s" % path)
+			continue
+		var before := checks
+		var nfail := failures.size()
+		script.new().run(self)
+		print("suite %s : %d contrôles, %d échecs" % [s, checks - before, failures.size() - nfail])
+	for f in failures.slice(0, 30):
+		printerr("ECHEC ", f)
+	if failures.size() > 30:
+		printerr("... et %d autres" % (failures.size() - 30))
+	print("%d contrôles, %d échecs (Godot %s, port v%s)" % [checks, failures.size(), Engine.get_version_info()["string"], Game.version()])
+	get_tree().quit(1 if failures.size() > 0 else 0)
