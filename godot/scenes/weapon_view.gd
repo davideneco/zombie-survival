@@ -1,6 +1,7 @@
 extends Node3D
-## Présentation des armes (J4) : arme à la première personne (primitives, par catégorie et niveau du Pack-a-Punch : les viewmodels
-## `.glb` viennent plus tard), obus et grenades en vol, flash des explosions, coup de couteau. Ne fait que lire Game.arms.
+## Présentation des armes (J4) : arme à la première personne (modèles Quaternius de data/weapon_models.json, primitives pour les armes sans modèle), obus et grenades en vol, flash des explosions, coup de couteau. Ne fait que lire Game.arms.
+
+const WeaponModels := preload("res://scenes/weapon_models.gd")
 
 const EXPLOSION_TIME := 0.45
 const KICK_DECAY := 9.0
@@ -66,7 +67,7 @@ func _on_shot(_o: Vector3, _e: Vector3) -> void:
 	_flash_light.visible = true
 	_flash_t = 0.045
 
-func _build_flash(parent: Node3D, z: float) -> void:
+func _build_flash(parent: Node3D, muzzle: Vector3) -> void:
 	if _flash_tex == null:
 		_flash_tex = GradientTexture2D.new()
 		_flash_tex.fill = GradientTexture2D.FILL_RADIAL
@@ -91,7 +92,7 @@ func _build_flash(parent: Node3D, z: float) -> void:
 	m.billboard_keep_scale = true
 	m.no_depth_test = true
 	_flash.material_override = m
-	_flash.position = Vector3(0, 0.015, z - 0.04)
+	_flash.position = muzzle + Vector3(0, 0.0, -0.04)
 	_flash.visible = false
 	parent.add_child(_flash)
 	_flash_light = OmniLight3D.new()
@@ -99,7 +100,7 @@ func _build_flash(parent: Node3D, z: float) -> void:
 	_flash_light.omni_range = 8.0
 	_flash_light.omni_attenuation = 2.0
 	_flash_light.shadow_enabled = false
-	_flash_light.position = Vector3(0, 0.05, z - 0.1)
+	_flash_light.position = muzzle + Vector3(0, 0.04, -0.1)
 	_flash_light.visible = false
 	parent.add_child(_flash_light)
 
@@ -108,6 +109,14 @@ func _build_gun() -> void:
 		_gun.queue_free()
 	var w: WeaponState = Game.arms.current
 	var cat := String(w.cfg.get("cat", "pistol"))
+	var lvl: Variant = Pap.level(w.pap)
+	if WeaponModels.has_model(w.id):   # J13 : vrai modèle (table data/weapon_models.json)
+		_gun = WeaponModels.build(w.id, Config.color(int(lvl["color"])) if lvl != null else null)
+		_build_flash(_gun, WeaponModels.muzzle(w.id))
+		_cam.add_child(_gun)
+		_gun_id = w.id
+		_gun_pap = w.pap
+		return
 	var size: Vector3 = BODY.get(cat, BODY["pistol"])
 	_gun = Node3D.new()
 	var body := MeshInstance3D.new()
@@ -119,7 +128,6 @@ func _build_gun() -> void:
 	mat.albedo_color = Color("30343a")
 	mat.metallic = 0.6
 	mat.roughness = 0.45
-	var lvl: Variant = Pap.level(w.pap)
 	if lvl != null:   # reflet du Pack-a-Punch
 		mat.emission_enabled = true
 		mat.emission = Config.color(int(lvl["color"]))
@@ -133,7 +141,7 @@ func _build_gun() -> void:
 	grip.position = Vector3(0, -size.y * 0.9, -size.z * 0.15)
 	grip.material_override = mat
 	_gun.add_child(grip)
-	_build_flash(_gun, -size.z)
+	_build_flash(_gun, Vector3(0, 0.015, -size.z))
 	_cam.add_child(_gun)
 	_gun_id = w.id
 	_gun_pap = w.pap

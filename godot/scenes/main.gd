@@ -81,7 +81,7 @@ var _fx: Node3D                   # J9 : particules et taches de sang (fx_view.g
 var _finale_view: Node3D          # J10 : effets des boss, faisceau, Fanal (finale_view.gd)
 var _finale_arg := ""             # --finale=ETAT : saute dans la fin de partie (captures) : voir _debug_finale
 var _hud_last := {"banner": "", "bar": {}, "mark": "", "fanal": -2.0, "fanal_text": ""}
-var _do: PackedStringArray = []   # --do=a,b : actions de démonstration au lancement (perks, powerup:TYPE, box, pap, all-doors, money, down)
+var _do: PackedStringArray = []   # --do=a,b : actions de démonstration au lancement (perks, powerup:TYPE, weapon:ID[:PAP], box, pap, all-doors, money, down)
 var _ruin := ""                   # --ruin=smoke|burn|wreck : abîme les motos (fumée, incendie, épave) pour les captures
 
 func _ready() -> void:
@@ -311,6 +311,11 @@ func _debug_do() -> void:
 		match c[0]:
 			"money":
 				Game.points = 100000
+			"weapon":   # weapon:ID[:NIVEAU_PAP] : donne l'arme (captures des modèles d'armes)
+				Game.arms.give_weapon(c[1])
+				if c.size() > 2:
+					Game.arms.current.pap = int(c[2])
+					Game.arms.current.refresh(Game.arms.perks)
 			"perks":
 				for id: String in Config.at("perks"):
 					Game.add_perk(id)

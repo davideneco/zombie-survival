@@ -1,0 +1,261 @@
+{
+ "scale_note": "length = longueur du mod\u00e8le (m) ; muzzle_y = hauteur du canon dans le mod\u00e8le (unit\u00e9s du pack) ; offset = d\u00e9calage manuel (m) dans le rep\u00e8re de l'arme (x droite, y haut, z avant n\u00e9gatif) ; grip = distance (m) de l'arri\u00e8re du mod\u00e8le \u00e0 la poign\u00e9e, plac\u00e9e \u00e0 l'origine de l'arme",
+ "models": {
+  "m1911": {
+   "file": "Pistol_1.obj",
+   "length": 0.24,
+   "muzzle_y": 0.575,
+   "offset": [
+    0,
+    0,
+    0
+   ],
+   "accessories": [],
+   "grip": 0.048
+  },
+  "arex": {
+   "file": "Pistol_6.obj",
+   "length": 0.3,
+   "muzzle_y": 0.581,
+   "offset": [
+    0,
+    0,
+    0
+   ],
+   "accessories": [],
+   "grip": 0.06
+  },
+  "deagle": {
+   "file": "Pistol_4.obj",
+   "length": 0.28,
+   "muzzle_y": 0.899,
+   "offset": [
+    0,
+    0,
+    0
+   ],
+   "accessories": [],
+   "grip": 0.056
+  },
+  "magnum": {
+   "file": "Revolver_3.obj",
+   "length": 0.26,
+   "muzzle_y": 0.448,
+   "offset": [
+    0,
+    0,
+    0
+   ],
+   "accessories": [],
+   "grip": 0.052
+  },
+  "rifle": {
+   "file": "AssaultRifle2_1.obj",
+   "length": 0.561,
+   "muzzle_y": 0.638,
+   "offset": [
+    0,
+    0,
+    0
+   ],
+   "accessories": [],
+   "grip": 0.252
+  },
+  "ak47": {
+   "file": "AssaultRifle_2.obj",
+   "length": 0.595,
+   "muzzle_y": 0.578,
+   "offset": [
+    0,
+    0,
+    0
+   ],
+   "accessories": [],
+   "grip": 0.268
+  },
+  "famas": {
+   "file": "Bullpup_2.obj",
+   "length": 0.527,
+   "muzzle_y": 0.787,
+   "offset": [
+    0,
+    0,
+    0
+   ],
+   "accessories": [],
+   "grip": 0.237
+  },
+  "scar": {
+   "file": "AssaultRifle2_2.obj",
+   "length": 0.578,
+   "muzzle_y": 0.65,
+   "offset": [
+    0,
+    0,
+    0
+   ],
+   "accessories": [],
+   "grip": 0.26
+  },
+  "smg": {
+   "file": "SubmachineGun_3.obj",
+   "length": 0.357,
+   "muzzle_y": 0.473,
+   "offset": [
+    0,
+    0,
+    0
+   ],
+   "accessories": [],
+   "grip": 0.143
+  },
+  "mp5": {
+   "file": "SubmachineGun_2.obj",
+   "length": 0.374,
+   "muzzle_y": 0.567,
+   "offset": [
+    0,
+    0,
+    0
+   ],
+   "accessories": [],
+   "grip": 0.15
+  },
+  "p90": {
+   "file": "SubmachineGun_4.obj",
+   "length": 0.306,
+   "muzzle_y": 0.51,
+   "offset": [
+    0,
+    0,
+    0
+   ],
+   "accessories": [],
+   "grip": 0.122
+  },
+  "lmg": {
+   "file": "AssaultRifle_5.obj",
+   "length": 0.629,
+   "muzzle_y": 0.598,
+   "offset": [
+    0,
+    0,
+    0
+   ],
+   "accessories": [
+    {
+     "file": "Bipod.obj",
+     "x": 2.82,
+     "y": 0.0,
+     "scale": 0.7
+    }
+   ],
+   "grip": 0.283
+  },
+  "m249": {
+   "file": "Bullpup_1.obj",
+   "length": 0.697,
+   "muzzle_y": 0.814,
+   "offset": [
+    0,
+    0,
+    0
+   ],
+   "accessories": [
+    {
+     "file": "Bipod.obj",
+     "x": 1.72,
+     "y": 0.0,
+     "scale": 0.7
+    }
+   ],
+   "grip": 0.314
+  },
+  "mg42": {
+   "file": "AssaultRifle_4.obj",
+   "length": 0.68,
+   "muzzle_y": 0.583,
+   "offset": [
+    0,
+    0,
+    0
+   ],
+   "accessories": [
+    {
+     "file": "Tripod.obj",
+     "x": 2.53,
+     "y": 0.0,
+     "scale": 0.7
+    }
+   ],
+   "grip": 0.306
+  },
+  "pkm": {
+   "file": "AssaultRifle_3.obj",
+   "length": 0.663,
+   "muzzle_y": 0.591,
+   "offset": [
+    0,
+    0,
+    0
+   ],
+   "accessories": [
+    {
+     "file": "Bipod.obj",
+     "x": 2.25,
+     "y": 0.0,
+     "scale": 0.7
+    }
+   ],
+   "grip": 0.298
+  },
+  "sniper": {
+   "file": "SniperRifle_3.obj",
+   "length": 0.807,
+   "muzzle_y": 0.403,
+   "offset": [
+    0,
+    0,
+    0
+   ],
+   "accessories": [],
+   "grip": 0.363
+  },
+  "svd": {
+   "file": "SniperRifle_4.obj",
+   "length": 0.782,
+   "muzzle_y": 0.206,
+   "offset": [
+    0,
+    0,
+    0
+   ],
+   "accessories": [],
+   "grip": 0.352
+  },
+  "shotgun": {
+   "file": "Shotgun_2.obj",
+   "length": 0.722,
+   "muzzle_y": 0.217,
+   "offset": [
+    0,
+    0,
+    0
+   ],
+   "accessories": [],
+   "grip": 0.325
+  },
+  "saiga": {
+   "file": "Shotgun_4.obj",
+   "length": 0.68,
+   "muzzle_y": 0.17,
+   "offset": [
+    0,
+    0,
+    0
+   ],
+   "accessories": [],
+   "grip": 0.306
+  }
+ }
+}
