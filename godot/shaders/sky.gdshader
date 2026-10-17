@@ -12,6 +12,8 @@ uniform vec3 moon_dir = vec3(0.6, 0.66, 0.36);
 uniform float moon_size = 0.034;
 uniform float moon_k = 1.0;       // 1 la nuit, s'efface avec l'aube
 uniform float day_k = 0.0;
+uniform vec3 sun_dir = vec3(0.9, 0.0, 0.3);
+uniform float sun_k = 0.0;       // J10 : le soleil de l'Aube (summit.js buildSun : disque + halo additifs), 0 la nuit
 uniform float cloud_cover = 1.0;  // 0 en qualité Rapide
 uniform float stars_k = 1.0;      // visibles tant que k < 0,28
 uniform float cloud_time = 0.0;   // temps du ciel (secondes)
@@ -82,6 +84,10 @@ vec3 night_sky(vec3 d, float md) {
 			float s = 1.0 - smoothstep(0.0007, 0.0016, ang);
 			col += vec3(0.87, 0.9, 1.0) * s * stars_k * (0.55 + 0.9 * h2);
 		}
+	}
+	if (sun_k > 0.0) {
+		float sd = max(dot(d, normalize(sun_dir)), 0.0);
+		col += sun_k * (vec3(1.0, 0.93, 0.7) * pow(sd, 1400.0) * 6.0 + vec3(1.0, 0.8, 0.45) * (pow(sd, 90.0) * 0.55 + pow(sd, 10.0) * 0.16));
 	}
 	return col;
 }

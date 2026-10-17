@@ -31,6 +31,10 @@ signal points_gained(amount: int, cls: String)               ## J7 : points gagn
 signal impact(pos: Vector3, flesh: bool, big: bool)             ## J9 : un tir touche une cible (flesh : zombie) ou un mur ; big : coup mortel au corps (sang abondant)
 signal hit_confirmed(kill: bool)                             ## J7 : un tir du joueur touche un zombie (marqueur de touche)
 signal weapon_event(name: String, data: Dictionary)           ## J8 : "reload" {id, cat, time}, "knife_swing", "knife_hit" {metal}, "empty" (clic à vide) : sons
+signal boss_event(name: String, data: Dictionary)           ## J10 : évènement visible de la fin de partie (secousse, trait de charge, chaînes, couronne, trompette, aube…)
+signal finale_sfx(name: String, vol: float)                  ## J10 : son de la fin de partie (cloche, grondement, bonus…)
+signal victory_screen(title: String, text: String)           ## J10 : le Bourreau est tombé
+signal liberated_screen(title: String, text: String)         ## J10 : « STRASBOURG LIBÉRÉE » (fin de la vue orbitale de l'Aube)
 signal ride_event(name: String, data: Dictionary)            ## J5 : "mount", "dismount", "crash", "burn", "break", "respawn", "gong", "chime", "service", "knock", "cough", "beep", "dry"
 
 var round_number: int:
@@ -68,6 +72,14 @@ var flow_threaded := false ## champ de flux de la carte calculé sur un fil de t
 var flow_us := 0           ## microsecondes passées dans le champ de flux au dernier pas (banc d'essai)
 var rng := RandomNumberGenerator.new()
 var _next_id := 1
+var finale: FinaleSim      ## J10 : fin de partie, Acte V, Maître Tanneur (null dans l'arène)
+var finale_done := false   ## le Bourreau a été vaincu
+var eternal := false       ## Nuit éternelle (après l'Aube) : +30 % de vie aux zombies dès la manche suivante
+var blessed := false       ## Bénédiction de l'Aube : atouts gardés à terre
+var free_doors := false    ## portes gratuites (Bénédiction)
+var trophy := 0
+var trophy_path := FinaleRules.TROPHY_PATH
+var fanal_input := false   ## touche d'interaction maintenue (le Fanal)
 var settings: Settings     ## J7 : réglages du joueur et touches (user://settings.cfg, ou --settings=chemin)
 
 func _init() -> void:
@@ -76,6 +88,9 @@ func _init() -> void:
 		if a.begins_with("--settings="):
 			path = a.substr(11)
 	settings = Settings.new(path)
+	for a in OS.get_cmdline_user_args():
+		if a.begins_with("--trophy="):
+			trophy_path = a.substr(9)
 	for a in OS.get_cmdline_user_args():   # J9 : surcharges de captures et de mesures, jamais sauvegardées
 		if a.begins_with("--quality="):
 			settings.autosave = false
@@ -135,6 +150,12 @@ func new_game(seed_value: int = -1, map: String = "", weapons: Array = []) -> vo
 	env.levels = world.levels if world != null and not world.levels.links.is_empty() else null
 	env.rng = rng
 	env.rides = rides
+	finale = FinaleSim.new(self) if world != null else null
+	finale_done = false
+	eternal = false
+	blessed = false
+	free_doors = false
+	fanal_input = false
 	flow_cool = 0.0
 	region_field_t = 0.0
 	relocate_t = 0.0
@@ -179,13 +200,19 @@ func step(dt: float, input: Dictionary) -> void:
 				arms_input["aim"] = false
 				arms_input["grenade"] = false
 				arms_input["gl"] = false
+	if finale != null:
+		finale.step(dt)
+		if finale.cam_lock:   # vue orbitale de l'Aube : le joueur est immobile
+			input = {}
+		fanal_input = bool(input.get("interact", false))
 	player.step(dt, time, input, collision, world.levels if world != null else null)
 	arms.step(self, dt, arms_input)
 	powerups.step(self, dt)
 	if machines != null:
 		machines.step(dt)
 	# manches
-	match director.step(dt, alive_count()):
+	var round_ev := director.step(dt, alive_count()) if (finale == null or not finale.active()) else RoundDirector.NONE
+	match round_ev:
 		RoundDirector.SPAWN:
 			_spawn_zombie()
 		RoundDirector.ROUND_START:
@@ -193,6 +220,8 @@ func step(dt: float, input: Dictionary) -> void:
 			if rides != null:
 				rides.on_round_start()
 			round_started.emit(director.round_number)
+			if finale != null:
+				finale.maybe_spawn_tanner()
 		RoundDirector.ROUND_END:
 			round_ended.emit()
 	# champ de flux, puis zombies
@@ -223,12 +252,13 @@ func step(dt: float, input: Dictionary) -> void:
 func _player_events() -> void:
 	if player.down_event:
 		player.down_event = false
-		arms.clear_perks()
-		player.quick_revive = false
-		player.stamin = false
-		player.phd = false
-		player.max_health = float(Config.at("player.maxHealth"))
-		player.health = minf(player.health, player.max_health)
+		if not blessed:   # à terre : on perd tous ses atouts (sauf sous la Bénédiction de l'Aube)
+			arms.clear_perks()
+			player.quick_revive = false
+			player.stamin = false
+			player.phd = false
+			player.max_health = float(Config.at("player.maxHealth"))
+			player.health = minf(player.health, player.max_health)
 		announce("À TERRE !", "Réanimation rapide : vous vous relevez…")
 		player_downed.emit()
 	if player.revive_event:
@@ -268,6 +298,8 @@ func is_boss(z: ZombieSim) -> bool:
 
 ## Un zombie vient de mourir sous un coup ou une explosion (bonus, essence).
 func on_zombie_killed(z: ZombieSim) -> void:
+	if finale != null:
+		finale.on_kill(z)
 	powerups.on_kill(self, z)
 
 func _end_game() -> void:
@@ -278,12 +310,23 @@ func _end_game() -> void:
 
 ## Dégâts sur un zombie + points (équivalent de game.hitZombie côté hôte).
 ## mel : coup de couteau (pas de bonus de tête, armure ignorée, points de CONFIG.knife.points).
-func hit_zombie(z: ZombieSim, head: bool, dmg: float, head_mult: float, mel: bool = false) -> bool:
+func hit_zombie(z: ZombieSim, head: bool, dmg: float, head_mult: float, mel: bool = false, extra: Dictionary = {}) -> bool:
 	var armor: Variant = z.get("armor")
 	if powerups.insta_kill > 0.0 and not is_boss(z):
 		dmg = 999999.0   # Mort instantanée
 	var amount: float = dmg / (float(armor) if armor != null and float(armor) > 0.0 else 1.0) if mel else dmg * (head_mult if head else 1.0)
-	var killed := z.damage(amount, head)
+	if z.weak_mult > 0.0 and not mel:   # trompette de l'Ange : dégâts x weak quelle que soit l'arme (pas le bonus de tête de l'arme)
+		amount = dmg * (z.weak_mult if head else 1.0)
+	# Bourreau : face / dos / zone selon le coup (BossSim.damage) ; le Maître Tanneur et l'Ange prennent les dégâts d'un zombie
+	var hit := {}
+	if z.is_boss and not z.mini:
+		hit = {"x": float(extra.get("ax", player.pos.x)), "z": float(extra.get("az", player.pos.z)), "ray": bool(extra.get("ray", false)), "mel": mel, "pid": -1}
+		if extra.has("back"):
+			hit["back"] = extra["back"]
+		if extra.has("px"):
+			hit["x"] = extra["px"]
+			hit["z"] = extra["pz"]
+	var killed := z.damage(amount, head, hit)
 	var K: Dictionary = Config.at("knife.points")
 	var mult := powerups.points_mult()   # Points doubles
 	last_hit_head = head
@@ -313,6 +356,39 @@ func hurt_player(amount: float, src: String = "") -> void:
 	if player.hurt(amount, time):
 		_end_game()
 	_player_events()
+
+func next_zombie_id() -> int:
+	var i := _next_id
+	_next_id += 1
+	return i
+
+func add_zombie(z: ZombieSim) -> void:
+	zombies.append(z)
+	zombie_spawned.emit(z)
+
+## Points pour tous les joueurs (récompenses de boss) : popup « bonus ».
+func add_bonus_points(n: int) -> void:
+	points += n
+	points_gained.emit(n, "bonus")
+
+func to_spawn_zero() -> void:
+	director.to_spawn = 0
+
+## Dégâts d'un boss, d'une explosion ou d'un projectile : src "blast" (le PHD Flopper l'ignore, projection), "chain" (attire de (kx, kz)),
+## "fire", "toxic", "holy", "axe" (pas de projection), "" (coup du Bourreau : projection) — finale.js hurtPlayer.
+func hurt_player_by(p: PlayerSim, dmg: float, kx: float, kz: float, src: String) -> void:
+	if p != player:
+		return
+	var protected: bool = src == "blast" and bool(arms.perks.get("phdflopper", false))
+	hurt_player(dmg, src)
+	if over or player.dead or player.downed:
+		return
+	if src == "chain":
+		player.pull_by(kx, kz)
+	elif src != "fire" and src != "toxic" and src != "holy" and src != "axe" and not protected:
+		player.vel.x += kx
+		player.vel.z += kz
+		player.vy = maxf(player.vy, 3.2)
 
 ## Touche d'interaction : borne ou arme murale d'abord (main.js : interact, 2 et 4), puis porte payante.
 func interact() -> void:
@@ -442,9 +518,7 @@ func _bloat_burst(z: ZombieSim) -> void:
 		return
 	var d := Vector2(player.pos.x - z.pos.x, player.pos.z - z.pos.z).length()
 	if d < Rules.BLOAT_BLAST_RADIUS and absf(player.pos.y - z.pos.y) < Rules.BLOAT_BLAST_HEIGHT:
-		player_hurt.emit(Rules.BLOAT_BLAST_DAMAGE * (1.0 - d / Rules.BLOAT_BLAST_FALLOFF))
-		if player.hurt(Rules.BLOAT_BLAST_DAMAGE * (1.0 - d / Rules.BLOAT_BLAST_FALLOFF), time):
-			_end_game()
+		hurt_player(Rules.BLOAT_BLAST_DAMAGE * (1.0 - d / Rules.BLOAT_BLAST_FALLOFF), "blast")   # le PHD Flopper protège
 
 # ---------------------------------------------------------------- apparitions
 ## Joueur autour duquel apparaît le prochain zombie : poids 1 / (1 + n), n = zombies vivants à moins de spawnBalance.radius m de lui
@@ -606,7 +680,7 @@ func use_door() -> int:
 	var id := world.near_door(player.pos)
 	if id < 0:
 		return -1
-	var price := int(world.doors[id]["price"])
+	var price := 0 if free_doors else int(world.doors[id]["price"])
 	if points < price:
 		door_denied.emit(id)
 		return -1

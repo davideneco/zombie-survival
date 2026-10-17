@@ -176,7 +176,7 @@ func area_damage(g: Node, pos: Vector3, radius: float, damage: float) -> void:
 		var dmg := damage * pow(1.0 - d / radius, BLAST_FALLOFF_POW)
 		if g.powerups.insta_kill > 0.0 and not g.is_boss(z):
 			dmg = 999999.0   # Mort instantanée
-		var killed := z.damage(dmg, false)
+		var killed := z.damage(dmg, false, {"zone": true} if (z.is_boss and not z.mini) else {})
 		if killed:
 			kills += 1
 			pts += Rules.POINTS_KILL * mult

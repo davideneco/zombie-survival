@@ -31,6 +31,7 @@ for (let i = 0; i < 200; i++) { await sleep(1000); const r = await call('Runtime
 await sleep(1500);
 if (script) {
   const r = await call('Runtime.evaluate', { expression: script, returnByValue: true, awaitPromise: true });
+  if (process.env.EVALOUT) fs.writeFileSync(process.env.EVALOUT, typeof r.result?.value === 'string' ? r.result.value : JSON.stringify(r.result?.value ?? r));   // EVALOUT=fichier : valeur complète
   console.log('[eval]', JSON.stringify(r.result?.value ?? r).slice(0, 30000));
 }
 if (process.env.SAVEPNGS) {

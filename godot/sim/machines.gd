@@ -44,6 +44,8 @@ func prompt() -> String:
 			return pap.prompt(g)
 		"box":
 			return box.prompt(g, m)
+		"clock":   # horloge astronomique de la cathédrale : lance l'Heure du Jugement
+			return g.finale.prompt() if g.finale != null else ""
 	return ""
 
 ## Touche d'interaction sur une machine. Renvoie true si l'appui est consommé.
@@ -75,6 +77,10 @@ func interact() -> bool:
 				box.take(g)
 			else:
 				box.buy(g)
+			return true
+		"clock":
+			if g.finale != null:
+				g.finale.use_clock()
 			return true
 	return false
 

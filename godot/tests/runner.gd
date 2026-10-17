@@ -43,7 +43,7 @@ func same(a: Variant, b: Variant, message: String, tol := 1e-6) -> void:
 		check(a == b, "%s : %s != %s" % [message, a, b])
 
 func _ready() -> void:
-	var suites: Array[String] = ["j0", "j1", "j2", "j3", "j4", "j5", "j6", "j7", "j8", "j9"]
+	var suites: Array[String] = ["j0", "j1", "j2", "j3", "j4", "j5", "j6", "j7", "j8", "j9", "j10"]
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with("--suite="):
 			suites = [arg.substr(8)]
@@ -57,9 +57,13 @@ func _ready() -> void:
 		var nfail := failures.size()
 		script.new().run(self)
 		print("suite %s : %d contrôles, %d échecs" % [s, checks - before, failures.size() - nfail])
-	for f in failures.slice(0, 30):
+	var shown := 30   # --failures=N : en afficher davantage
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("--failures="):
+			shown = int(arg.substr(11))
+	for f in failures.slice(0, shown):
 		printerr("ECHEC ", f)
-	if failures.size() > 30:
-		printerr("... et %d autres" % (failures.size() - 30))
+	if failures.size() > shown:
+		printerr("... et %d autres" % (failures.size() - shown))
 	print("%d contrôles, %d échecs (Godot %s, port v%s)" % [checks, failures.size(), Engine.get_version_info()["string"], Game.version()])
 	get_tree().quit(1 if failures.size() > 0 else 0)

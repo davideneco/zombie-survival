@@ -105,6 +105,18 @@ func setup(z: ZombieSim) -> void:
 			skin_m.set_shader_parameter("tint", Color(0.78, 0.95, 0.5))
 			face_m.set_shader_parameter("tint", Color(0.78, 0.95, 0.5))
 			shirt_m.set_shader_parameter("tint", Color(0.7, 0.75, 0.5))
+		if z.kind == "gargoyle":   # gargouille de pierre : coureur gris fissuré (cellules de pierre de l'atlas)
+			ZombieSkin.set_cell(face_m, ZombieSkin.STONE_FACE)
+			ZombieSkin.set_cell(skin_m, ZombieSkin.STONE_SKIN)
+			ZombieSkin.set_cell(shirt_m, ZombieSkin.STONE_CLOTH)
+			ZombieSkin.set_cell(pants_m, ZombieSkin.STONE_CLOTH)
+			for m: ShaderMaterial in [face_m, skin_m, shirt_m, pants_m]:
+				m.set_shader_parameter("tint", Color(0.5, 0.52, 0.55))
+				m.set_shader_parameter("blood", 0.0)
+		elif z is BossSim:   # le Bourreau / le Tanneur : peau assombrie (makeBoss : x0,55 ; Tanneur : vert x0,8)
+			var k := 0.55 if not (z as BossSim).mini else 0.8
+			for m: ShaderMaterial in [face_m, skin_m, shirt_m, pants_m]:
+				m.set_shader_parameter("tint", (m.get_shader_parameter("tint") as Color) * k)
 		_skin_mats = [face_m, skin_m, shirt_m, pants_m]
 	else:
 		var skin: Color = BLOAT_SKIN if z.kind == "bloat" else SKINS[tone]
@@ -120,6 +132,10 @@ func setup(z: ZombieSim) -> void:
 		pants_m = _mat(pants, 0.95)
 		_skin_mats = [skin_m, shirt_m, pants_m]
 	var eye_m := _mat(EYE, 0.4)
+	if z is BossSim:
+		eye_m = _mat(Color("b8ff30") if (z as BossSim).mini else Color("ff2010"), 0.4)
+	elif z.kind == "gargoyle":
+		eye_m = _mat(Color("ff7a24"), 0.4)
 	eye_m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	var metal_m := _mat(METAL, 0.4)
 	metal_m.metallic = 0.85
@@ -229,6 +245,10 @@ func setup(z: ZombieSim) -> void:
 	if z.crawler:
 		for l in _legs:
 			l.visible = false
+	if z is BossSim:
+		_boss_extras(z as BossSim, metal_m)
+	elif z.kind == "gargoyle":
+		_gargoyle_extras()
 	if z.spawn_type == "ground":
 		_mound = MeshInstance3D.new()
 		var mm := SphereMesh.new()
@@ -241,6 +261,110 @@ func setup(z: ZombieSim) -> void:
 		add_child(_mound)
 		_mound.global_position = Vector3(z.spawn_pos.x, 0.0, z.spawn_pos.z)
 		_mound.scale = Vector3(0.2, 0.05, 0.2)
+
+var _axe: Node3D
+var _lantern_glow: MeshInstance3D
+
+## Le Bourreau (cagoule, tablier, ceinture, lanterne-cœur dans le dos, hache géante) et le Maître Tanneur (ventre de gaz, tablier de cuir, masque à tubes) :
+## primitives posées sur les articulations du zombie (boss.js / tanner.js _buildBody).
+func _boss_extras(b: BossSim, iron: StandardMaterial3D) -> void:
+	var black := _mat(Color("0e0e10"), 1.0)
+	var leather := _mat(Color("2a1a14") if not b.mini else Color("5a3a22"), 0.9)
+	if b.mini:
+		var gas := _mat(Color("7aa830"), 0.6)
+		gas.emission_enabled = true
+		gas.emission = Color("233a08")
+		var sp := SphereMesh.new()
+		sp.radius = 0.27
+		sp.height = 0.54
+		_part(_spine, sp, Vector3(0, 0.12, 0.13), gas, Vector3(1.15, 1.05, 0.95))
+		var ap := BoxMesh.new()
+		ap.size = Vector3(0.46, 0.7, 0.05)
+		_part(_spine, ap, Vector3(0, 0.15, 0.37), leather)
+		var mk := SphereMesh.new()
+		mk.radius = 0.13
+		mk.height = 0.26
+		_part(_head, mk, Vector3(0, 0.05, 0.03), black, Vector3(1, 1.05, 1.05))
+		var sn := CylinderMesh.new()
+		sn.top_radius = 0.035
+		sn.bottom_radius = 0.05
+		sn.height = 0.12
+		var snm := _part(_head, sn, Vector3(0, -0.02, 0.15), iron)
+		snm.rotation.x = PI / 2.0
+		return
+	var hood := SphereMesh.new()
+	hood.radius = 0.15
+	hood.height = 0.3
+	_part(_head, hood, Vector3(0, 0.04, -0.005), black, Vector3(0.95, 1.18, 1.02))
+	var peak := CylinderMesh.new()
+	peak.top_radius = 0.0
+	peak.bottom_radius = 0.13
+	peak.height = 0.3
+	_part(_head, peak, Vector3(0, 0.28, -0.02), black)
+	var apron := BoxMesh.new()
+	apron.size = Vector3(0.4, 0.62, 0.06)
+	_part(_spine, apron, Vector3(0, 0.2, 0.17), leather)
+	var belt := BoxMesh.new()
+	belt.size = Vector3(0.46, 0.07, 0.3)
+	_part(_spine, belt, Vector3(0, -0.05, 0.02), iron)
+	for i in 2:
+		var pad := SphereMesh.new()
+		pad.radius = 0.1
+		pad.height = 0.2
+		_part(_shoulder_j[i], pad, Vector3(0, 0.03, 0), iron)
+	# lanterne-cœur dans le dos : son point faible (dégâts x2 de dos)
+	var lm := _mat(Color("ffa030"), 0.5)
+	lm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	var ls := SphereMesh.new()
+	ls.radius = 0.075
+	ls.height = 0.15
+	_part(_spine, ls, Vector3(0, 0.3, -0.2), lm)
+	var gm := _mat(Color(1.0, 0.48, 0.09, 0.35), 0.5)
+	gm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	gm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	gm.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	var gs := SphereMesh.new()
+	gs.radius = 0.16
+	gs.height = 0.32
+	_lantern_glow = _part(_spine, gs, Vector3(0, 0.3, -0.2), gm)
+	# hache géante dans la main droite
+	_axe = Node3D.new()
+	_axe.position = Vector3(0, -0.34, 0.02)
+	_axe.rotation.x = -0.9
+	_elbow_j[1].add_child(_axe)
+	var wood := _mat(Color("4a3220"), 0.85)
+	var hm := CylinderMesh.new()
+	hm.top_radius = 0.028
+	hm.bottom_radius = 0.034
+	hm.height = 1.7
+	_part(_axe, hm, Vector3(0, 0.5, 0), wood)
+	var bl := BoxMesh.new()
+	bl.size = Vector3(0.62, 0.46, 0.05)
+	_part(_axe, bl, Vector3(0.31, 1.15, 0), iron)
+	var edge := BoxMesh.new()
+	edge.size = Vector3(0.05, 0.5, 0.07)
+	_part(_axe, edge, Vector3(0.62, 1.15, 0), _mat(Color("c8ccd4"), 0.25))
+
+## Gargouille : cornes et ailes de chauve-souris repliées (zombie.js makeKind('gargoyle')).
+func _gargoyle_extras() -> void:
+	var stone := _mat(Color("6f7378"), 1.0)
+	for sx in [-1.0, 1.0]:
+		var horn := CylinderMesh.new()
+		horn.top_radius = 0.0
+		horn.bottom_radius = 0.03
+		horn.height = 0.17
+		var h := _part(_head, horn, Vector3(sx * 0.07, 0.17, 0.0), stone)
+		h.rotation = Vector3(-0.35, 0, -sx * 0.45)
+		var wing := QuadMesh.new()
+		wing.size = Vector2(0.8, 0.8)
+		var wm := _mat(Color("6b7075"), 1.0)
+		wm.cull_mode = BaseMaterial3D.CULL_DISABLED
+		var pivot := Node3D.new()
+		pivot.position = Vector3(sx * 0.08, 0.5, -0.14)
+		pivot.rotation = Vector3(0.1, sx * 0.9, 0)
+		_spine.add_child(pivot)
+		var w := _part(pivot, wing, Vector3(sx * 0.4, 0.3, 0), wm)
+		w.rotation.z = sx * 0.2
 
 ## zombie.js _bleed : seuil de sang ajouté par matériau (face, peau, haut, pantalon).
 func _bleed(head: bool) -> void:
@@ -297,7 +421,16 @@ func _process(dt: float) -> void:
 	var hidden := false
 	if z.spawn_t > 0.0:
 		hidden = z.spawn_elapsed < (Rules.WIN_WARN if z.spawn_type == "window" else Rules.GND_DELAY)
+	if z is BossSim and (z as BossSim).hidden_flag:
+		hidden = true
 	_group.visible = not hidden
+	if z.appear_total > 0.0:   # gargouille : elle gonfle sur son parapet avant de bondir
+		var kk := clampf(1.0 - z.appear / z.appear_total, 0.0, 1.0) if z.appear > 0.0 else 1.0
+		_group.scale = z.body_scale() * (0.15 + 0.85 * kk * kk * (3.0 - 2.0 * kk))
+	if _axe != null:
+		_axe.visible = not ((z as BossSim).axe_hide_t > 0.0)
+	if _lantern_glow != null:
+		(_lantern_glow.material_override as StandardMaterial3D).albedo_color.a = 0.3 + 0.15 * sin((z as BossSim).state_t * 6.0)
 	_blob.visible = not hidden and z.pos.y > -0.4 and not (z.dead and z.death_t > 2.2)
 	_blob.position.y = 0.015 - position.y
 	if _mound != null:
@@ -345,8 +478,26 @@ func _apply() -> void:
 	_hips.position.y = p.hips_y
 	_head.rotation = Vector3(p.head_x, p.head_y, p.head_z)
 	_jaw.rotation.x = p.jaw_x
+	if sim is BossSim:   # poses propres aux attaques (boss.js _pose)
+		var o: Dictionary = (sim as BossSim).pose_overrides()
+		if not o.is_empty():
+			_spine.rotation = Vector3(o.get("spine_x", _spine.rotation.x), 0.0, o.get("spine_z", _spine.rotation.z))
+			_head.rotation = Vector3(o.get("head_x", _head.rotation.x), o.get("head_y", _head.rotation.y), o.get("head_z", _head.rotation.z))
+			for i in 2:
+				_shoulder_j[i].rotation.x = o.get("sh%d_x" % i, _shoulder_j[i].rotation.x)
+				_shoulder_j[i].rotation.z = o.get("sh%d_z" % i, _shoulder_j[i].rotation.z)
+				_elbow_j[i].rotation.x = o.get("el%d_x" % i, _elbow_j[i].rotation.x)
 
 func _death(z: ZombieSim) -> void:
+	if z.ash_t >= 0.0:   # l'Aube : il pâlit, s'affaisse et s'envole en cendres (zombie.js _ashStep)
+		var k := minf(1.0, z.ash_t / float(Config.at("summit.dawn.ash")))
+		var sc := z.body_scale()
+		_group.scale = Vector3(sc.x, sc.y * (1.0 - 0.94 * k * k), sc.z)
+		_group.visible = z.ash_t < float(Config.at("summit.dawn.ash")) + 0.1
+		for m in _skin_mats:
+			if m is ShaderMaterial:
+				m.set_shader_parameter("tint", (m.get_shader_parameter("tint") as Color).lerp(Color(0.8, 0.78, 0.74), minf(1.0, k * 1.6) * 0.1))
+		return
 	var pr := minf(1.0, z.death_t / DEATH_FALL_TIME)
 	var e := 1.0 - (1.0 - pr) * (1.0 - pr)
 	var r := _group.rotation

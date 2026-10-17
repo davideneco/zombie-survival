@@ -13,6 +13,8 @@ static func text(g: Node, binds: Keybinds = null) -> String:
 	if g.player.downed or g.player.dead:
 		return ""
 	var arms: WeaponArms = g.arms
+	if g.finale != null and g.finale.fanal_prompt() != "":   # le Fanal d'Erwin (Acte V)
+		return _keys(g.finale.fanal_prompt(), binds)
 	if WeaponShop.near_station(g):
 		var w: WeaponState = arms.current
 		if w.reserve >= int(w.cfg["maxReserve"]):
@@ -41,7 +43,7 @@ static func text(g: Node, binds: Keybinds = null) -> String:
 			var d: Dictionary = g.world.doors[id]
 			var here: int = g.world.zone_of(g.player.pos.x, g.player.pos.z)
 			var to: int = int(d["b"]) if here == int(d["a"]) else (int(d["a"]) if here == int(d["b"]) else int(d["toZone"]))
-			return "%s Ouvrir la porte vers %s (%d pts)" % [k, g.world.zone_names[to], int(d["price"])]
+			return "%s Ouvrir la porte vers %s (%s)" % [k, g.world.zone_names[to], "gratuit" if g.free_doors else "%d pts" % int(d["price"])]
 	return ""
 
 ## Les invites de Rides et de Machines s'écrivent « E Descendre · V vue » : les lettres de touche suivent les liaisons.

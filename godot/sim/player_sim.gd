@@ -36,6 +36,8 @@ var flop_cd := 0.0
 var air_t := 0.0
 var peak_y := 0.0
 var jump_sprint := false
+var gust_q: Dictionary = {}    ## J10 : rafale de la rampe de la flèche : vitesse imposée { x, z, t }
+var pull_q: Dictionary = {}    ## J10 : attiré par les Chaînes du Bourreau : déplacement imposé { x, z, t, T }
 
 func _init() -> void:
 	max_health = float(Config.at("player.maxHealth"))
@@ -70,6 +72,16 @@ func reset(start: Vector3) -> void:
 	air_t = 0.0
 	peak_y = 0.0
 	jump_sprint = false
+	gust_q = {}
+	pull_q = {}
+
+func gust_by(vx: float, vz: float, dur: float) -> void:
+	gust_q = {"x": vx, "z": vz, "t": dur}
+
+func pull_by(dx: float, dz: float) -> void:
+	pull_q = {"x": dx, "z": dz, "t": 0.3, "T": 0.3}
+	vel.x *= 0.3
+	vel.z *= 0.3
 
 func eye() -> Vector3:
 	if eye_override != Vector3.INF:
@@ -112,6 +124,19 @@ func step(dt: float, time: float, input: Dictionary, col: Collision, levels: Lev
 	vel.z += (wz - vel.z) * k
 	pos.x += vel.x * dt
 	pos.z += vel.z * dt
+	if not gust_q.is_empty():   # rafale : vitesse imposée pendant gust_q.t s (la collision, donc les garde-corps, la borne)
+		pos.x += float(gust_q["x"]) * minf(dt, float(gust_q["t"]))
+		pos.z += float(gust_q["z"]) * minf(dt, float(gust_q["t"]))
+		gust_q["t"] = float(gust_q["t"]) - dt
+		if float(gust_q["t"]) <= 0.0:
+			gust_q = {}
+	if not pull_q.is_empty():   # Chaînes : déplacement imposé sur pull_q.T s
+		var kk := minf(dt, float(pull_q["t"])) / float(pull_q["T"])
+		pos.x += float(pull_q["x"]) * kk
+		pos.z += float(pull_q["z"]) * kk
+		pull_q["t"] = float(pull_q["t"]) - dt
+		if float(pull_q["t"]) <= 0.0:
+			pull_q = {}
 	# saut et gravité : le sol est celui de la ville (y = 0) ou un étage sous les pieds (player.js : floorAt)
 	var ground := 0.0
 	if levels != null:

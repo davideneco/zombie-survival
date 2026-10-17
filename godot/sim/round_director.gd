@@ -26,7 +26,7 @@ func start_round() -> void:
 	round_number += 1
 	var r := round_number
 	to_spawn = Pap.js_round((Rules.ROUND_BASE + r * Rules.ROUND_PER) * 1.0)
-	zombie_health = float(Game.zombie_health_at(r))
+	zombie_health = float(Game.zombie_health_at(r)) * (float(Config.at("summit.eternal.healthMult")) if Game.eternal else 1.0)   # Nuit éternelle : +30 %
 	var Z: Dictionary = Config.at("zombie")
 	zombie_speed = minf(float(Z["speedStart"]) + r * float(Z["speedPerRound"]), float(Z["speedMax"]))
 	spawn_timer = Rules.SPAWN_FIRST_DELAY

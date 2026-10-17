@@ -234,7 +234,8 @@ func shoot(g: Node, now: float) -> void:
 		for h: Dictionary in hits:
 			# chute des dégâts selon la distance, propre à chaque zombie touché
 			var dmg := float(cfg["damage"]) * Pap.falloff_mult(cfg, float(h["t"]))
-			var killed: bool = g.hit_zombie(h["z"], bool(h["head"]), dmg, float(cfg["headMult"]))
+			var at0: Vector3 = origin + dir * float(h["t"])
+			var killed: bool = g.hit_zombie(h["z"], bool(h["head"]), dmg, float(cfg["headMult"]), false, {"ray": String(cfg.get("id", "")) == "raygun", "px": at0.x, "pz": at0.z})
 			var at: Vector3 = origin + dir * float(h["t"])
 			if g.has_signal("impact"):
 				g.impact.emit(at, true, killed and not bool(h["head"]))
@@ -347,7 +348,10 @@ func _melee_strike(g: Node) -> void:
 		return   # dans le vide : seul le souffle
 	var z: ZombieSim = tgt["z"]
 	var back := WeaponMelee.is_back(p, z)
-	g.hit_zombie(z, bool(tgt["head"]), WeaponMelee.damage(g.round_number, bool(tgt["head"]), back, has_axe), 1.0, true)
+	var mdmg := WeaponMelee.damage(g.round_number, bool(tgt["head"]), back, has_axe)
+	if z.is_boss and not z.mini:   # Bourreau : dégâts fixes (face / dos : BossSim.damage)
+		mdmg = float(K["boss"]["dmg"]) * (float(K["axe"]["dmgMult"]) if has_axe else 1.0)
+	g.hit_zombie(z, bool(tgt["head"]), mdmg, 1.0, true, {"back": back, "ax": p.pos.x, "az": p.pos.z})
 	var zarmor: Variant = z.get("armor")
 	g.weapon_event.emit("knife_hit", {"metal": (zarmor != null and not is_equal_approx(float(zarmor), 1.0)) or g.is_boss(z)})
 	if has_axe:   # Hache du Bourreau : touche aussi le zombie le plus proche de la cible

@@ -46,6 +46,8 @@ static func ray_zombie(o: Vector3, d: Vector3, max_t: float, z: ZombieSim) -> Di
 	var lo := Vector3(po.x * cy - po.z * sy, po.y, po.x * sy + po.z * cy)
 	var ld := Vector3(d.x * cy - d.z * sy, d.y, d.x * sy + d.z * cy)
 	var sc := z.body_scale()
+	if z is AngelSim:   # trompette (point faible, « tête »), ailes et corps (jamais « tête ») : angel.js _buildBody
+		return _ray_angel(lo, ld, max_t, z as AngelSim, sc)
 	var body_c := Rules.CRAWLER_BODY_CENTER if z.crawler else Vector3(0, Rules.ZOMBIE_BODY_CENTER_Y, 0)
 	var body_h := Rules.CRAWLER_BODY_HALF if z.crawler else Rules.ZOMBIE_BODY_HALF
 	var head_c := Rules.CRAWLER_HEAD if z.crawler else Rules.ZOMBIE_HEAD_CENTER
@@ -60,6 +62,27 @@ static func ray_zombie(o: Vector3, d: Vector3, max_t: float, z: ZombieSim) -> Di
 	if t > max_t:
 		return {}
 	return {"t": t, "head": head}
+
+## L'Ange : boîte du corps et sphère de la tête de zombie (non « tête »), boîte des ailes, sphère de la trompette (« tête »).
+static func _ray_angel(lo: Vector3, ld: Vector3, max_t: float, a: AngelSim, sc: Vector3) -> Dictionary:
+	var best := INF
+	var head := false
+	var tb := ray_box(lo, ld, Vector3(0, Rules.ZOMBIE_BODY_CENTER_Y, 0) * sc, Rules.ZOMBIE_BODY_HALF * sc)
+	if tb >= 0.0:
+		best = tb
+	var th := ray_sphere(lo, ld, Rules.ZOMBIE_HEAD_CENTER * sc, Rules.ZOMBIE_HEAD_RADIUS * sc.y)
+	if th >= 0.0 and th < best:
+		best = th
+	var tw := ray_box(lo, ld, Vector3(0.0, 1.45, -0.28) * sc, Vector3(1.65, 0.75, 0.175) * sc)
+	if tw >= 0.0 and tw < best:
+		best = tw
+	var tt := ray_sphere(lo, ld, a._trumpet_local() * sc, 0.3 * sc.y)
+	if tt >= 0.0 and tt <= best:
+		best = tt
+		head = true
+	if best == INF or best > max_t:
+		return {}
+	return {"t": best, "head": head}
 
 ## Tire un rayon : renvoie { hits: [{z, t, head}], wall_t } trié par distance ; hits coupé à `pierce` zombies et au mur.
 static func cast(o: Vector3, d: Vector3, max_t: float, zombies: Array, col: Collision, pierce: int = 1) -> Dictionary:

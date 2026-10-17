@@ -15,13 +15,20 @@ var speed := 2.0
 var runner := false
 var crawler := false    ## jambes arrachées : se traîne, plus lent
 var limp := false       ## boite : jambe gauche à 45 %, vitesse x 0,8
-var kind := ""          ## "", "armored" (chevalier de fer), "bloat" (pestiféré)
+var kind := ""          ## "", "armored" (chevalier de fer), "bloat" (pestiféré), "gargoyle" (Acte V : coureur de pierre)
 var armor := 1.0        ## dégâts reçus x armor
 var hit_count := 0      ## J9 : touches reçues (la vue y ajoute du sang)
 var last_hit_head := false
 var explodes := false
 var is_boss := false           ## J6 : Bourreau, Maître Tanneur (J10) : insensible à la Mort instantanée et à la Bombe
 var is_angel := false          ## J6 : Ange du Jugement (J10) : ne lâche pas de bonus
+var mini := false              ## J10 : mini-boss (Maître Tanneur, Ange) : barre de vie sans seuils de phase, dégâts ordinaires
+var weak_mult := 0.0           ## J10 : > 0 : un tir à la tête (la trompette de l'Ange) vaut weak_mult au lieu du bonus de tête de l'arme
+var scale_override := 0.0      ## J10 : > 0 : taille uniforme du modèle (Bourreau 2,25, Maître Tanneur 2, Ange 2,6) au lieu de la taille tirée de l'identifiant
+var attack_damage := 0.0       ## J10 : > 0 : dégâts du coup à la place de CONFIG.zombie.damage (zombie.js makeBoss : attackDamage)
+var appear := 0.0              ## J10 : gargouille : secondes avant qu'elle ne bondisse de son parapet (elle gonfle sur place)
+var appear_total := 0.0
+var ash_t := -1.0              ## J10 : >= 0 : l'Aube l'a changé en cendres (secondes écoulées)
 var dead := false
 var death_t := 0.0
 var headless := false
@@ -81,9 +88,13 @@ static func hash_id(zid: int, k := 0) -> float:
 
 ## Échelle du modèle (zombie.js : sc = 0,95 + 0,13 x hash(8) ; chevalier x 1,12 ; pestiféré plus large) ; sert aussi aux boîtes de touche.
 func body_scale() -> Vector3:
+	if scale_override > 0.0:
+		return Vector3(scale_override, scale_override, scale_override)
 	var sc := 0.95 + 0.13 * hash_id(id, 8)
 	if kind == "armored":
 		sc *= Rules.ARMORED_SCALE
+	elif kind == "gargoyle":
+		sc *= Rules.GARGOYLE_SCALE
 	return Vector3(sc * (Rules.BLOAT_WIDTH if kind == "bloat" else 1.0), sc, sc * (Rules.BLOAT_WIDTH if kind == "bloat" else 1.0))
 
 ## Zombie ordinaire à partir de la vitesse de manche déjà tirée ; les variantes se posent ensuite (make_crawler, make_kind).
@@ -110,6 +121,12 @@ func make_kind(k: String) -> void:
 		explodes = true
 		speed *= Rules.BLOAT_SPEED
 		runner = false
+	elif k == "gargoyle":   # zombie.js makeKind : coureur de pierre, elle se dresse sur son parapet avant de bondir
+		armor = Rules.GARGOYLE_ARMOR
+		runner = true
+		limp = false
+		appear_total = float(Config.at("summit.gargoyles.appear"))
+		appear = appear_total
 
 ## Apparition par une fenêtre : le zombie cogne puis enjambe de `inside` à `outside`.
 func start_window_spawn(inside: Vector3, outside: Vector3, center: Vector3, normal: Vector2, win_yaw: float, index := -1) -> void:
@@ -162,8 +179,13 @@ func targetable() -> bool:
 		return spawn_elapsed > Rules.WIN_WARN + Rules.WIN_CLIMB * Rules.WIN_HIT_AT
 	return spawn_elapsed > Rules.GND_DELAY + Rules.GND_RISE * Rules.GND_HIT_AT
 
-## Applique des dégâts ; renvoie true si le zombie meurt de ce coup.
-func damage(amount: float, head: bool) -> bool:
+## Applique des dégâts ; renvoie true si le zombie meurt de ce coup. hit : détails du coup pour les cibles qui en tiennent compte (le Bourreau :
+## voir BossSim.damage) ; ignoré ici.
+func damage(amount: float, head: bool, _hit: Dictionary = {}) -> bool:
+	return _zdamage(amount, head)
+
+## Les dégâts d'un zombie ordinaire (Zombie.prototype.damage) : les sous-classes qui ne veulent pas des leurs y reviennent.
+func _zdamage(amount: float, head: bool) -> bool:
 	if dead:
 		return false
 	hit_count += 1   # présentation (J9) : le sang gagne du terrain à chaque touche (zombie.js _bleed)
@@ -175,6 +197,13 @@ func damage(amount: float, head: bool) -> bool:
 		headless = head
 		return true
 	return false
+
+## L'Aube : le zombie tombe en cendres (compte comme mort, sans tache de sang), zombie.js becomeAsh.
+func become_ash() -> void:
+	if dead:
+		return
+	_zdamage(1.0e9, false)
+	ash_t = 0.0
 
 func _pose(amp: float, reach: float, lean: float, nod: float) -> void:
 	pose_amp = amp
@@ -191,7 +220,17 @@ func step(dt: float, env: ZombieEnv) -> void:
 	strike_damage = 0.0
 	if dead:
 		death_t += dt
+		if ash_t >= 0.0:
+			ash_t += dt
 		return
+	if appear > 0.0:   # gargouille : elle se dresse sur son parapet avant de bondir
+		appear -= dt
+		if appear > 0.0:
+			attacking = false
+			moving = false
+			walk_t += dt * 1.2
+			_pose(0.15, 1.2, 0.5, 0.2)
+			return
 	if spawn_t > 0.0:
 		_spawn_update(dt)
 		return
@@ -342,7 +381,7 @@ func step(dt: float, env: ZombieEnv) -> void:
 			var tdz := target.pos.z - pos.z
 			if sqrt(tdx * tdx + tdz * tdz) < float(Z["attackRange"]) + 0.5 and absf(target.pos.y - pos.y) < 2.6:
 				strike_target = target
-				strike_damage = float(Z["damage"])
+				strike_damage = attack_damage if attack_damage > 0.0 else float(Z["damage"])
 			attack_cd = float(Z["attackCooldown"])
 			attack_windup = -1.0
 	elif in_range and attack_cd <= 0.0:
@@ -431,7 +470,7 @@ func _on_link(dt: float, Z: Dictionary, env: ZombieEnv) -> void:
 		if attack_windup < 0.0:
 			if d3 < float(Z["attackRange"]) + 0.7:
 				strike_target = target
-				strike_damage = float(Z["damage"])
+				strike_damage = attack_damage if attack_damage > 0.0 else float(Z["damage"])
 			attack_cd = float(Z["attackCooldown"])
 			attack_windup = -1.0
 	elif in_range and attack_cd <= 0.0:

@@ -18,6 +18,8 @@ const RidesView := preload("res://scenes/world/rides_view.gd")
 const MachinesView := preload("res://scenes/world/machines_view.gd")
 const GraphicsView := preload("res://scenes/graphics_view.gd")
 const FxView := preload("res://scenes/fx_view.gd")
+const FinaleView := preload("res://scenes/finale_view.gd")   # J10
+const AngelView := preload("res://scenes/angel_view.gd")
 const TRACER_COLOR := Color("ffd27a")
 const TRACER_TIME := 0.06
 const TRACER_WIDTH := 0.012
@@ -71,6 +73,9 @@ var _first_person := false        # --first-person : vue à la première personn
 var _machines_view: Node3D
 var _graphics: Node               # J9 : environnement, ciel, ombres, qualité (graphics_view.gd)
 var _fx: Node3D                   # J9 : particules et taches de sang (fx_view.gd)
+var _finale_view: Node3D          # J10 : effets des boss, faisceau, Fanal (finale_view.gd)
+var _finale_arg := ""             # --finale=ETAT : saute dans la fin de partie (captures) : voir _debug_finale
+var _hud_last := {"banner": "", "bar": {}, "mark": "", "fanal": -2.0, "fanal_text": ""}
 var _do: PackedStringArray = []   # --do=a,b : actions de démonstration au lancement (perks, powerup:TYPE, box, pap, all-doors, money, down)
 var _ruin := ""                   # --ruin=smoke|burn|wreck : abîme les motos (fumée, incendie, épave) pour les captures
 
@@ -126,6 +131,8 @@ func _ready() -> void:
 			_tram_in = true
 		elif a == "--first-person":
 			_first_person = true
+		elif a.begins_with("--finale="):
+			_finale_arg = a.substr(9)
 		elif a.begins_with("--seed="):
 			_seed = int(a.substr(7))
 		elif a.begins_with("--shot="):
@@ -145,6 +152,9 @@ func _ready() -> void:
 	_fx = FxView.new()
 	add_child(_fx)
 	_fx.setup(_camera)
+	_finale_view = FinaleView.new()
+	add_child(_finale_view)
+	_finale_view.setup(_camera, _fx)
 	_hud = HUD.instantiate()
 	add_child(_hud)
 	_menus = Menus.new()
@@ -174,6 +184,8 @@ func _ready() -> void:
 	Game.door_denied.connect(func(id): _hud.announce("%d POINTS REQUIS" % int(Game.world.doors[id]["price"])))
 	Game.game_over.connect(_on_game_over)
 	Game.announced.connect(func(title: String, sub: String): _hud.announce(title, sub))
+	Game.victory_screen.connect(func(title: String, text: String) -> void: _menus.show_victory(title, text))   # J10 : le Bourreau est tombé
+	Game.liberated_screen.connect(func(title: String, text: String) -> void: _menus.show_victory(title, text))   # J10 : STRASBOURG LIBÉRÉE
 	_restart()
 	_apply_audio()
 	if "--no-music" not in user_args:
@@ -205,6 +217,11 @@ func _restart() -> void:
 	if _arena_node != null:
 		_arena_node.queue_free()
 	Game.new_game(_seed, _map, Config.at("startWeapons", []))
+	if _finale_view != null:
+		_finale_view.clear()
+	_hud_last = {"banner": "", "bar": {}, "mark": "", "fanal": -2.0, "fanal_text": ""}
+	if _graphics != null:
+		_graphics.set_sky_k(0.0)
 	Sfx.reset()
 	if _fx != null:
 		_fx.clear()
@@ -237,6 +254,7 @@ func _restart() -> void:
 		add_child(_machines_view)
 		_machines_view.setup()
 	_debug_do()
+	_debug_finale()
 	_prev_player = Game.player.pos
 	_apply_brightness()
 	_map_prepare()
@@ -392,6 +410,7 @@ func _physics_process(dt: float) -> void:
 			"mz": Input.get_axis("move_back", "move_forward"),
 			"sprint": Input.is_action_pressed("sprint"),
 			"jump": Input.is_action_pressed("jump"),
+			"interact": Input.is_action_pressed("use"),   # J10 : le Fanal d'Erwin se tient
 			"fire": Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT) and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED,
 			"reload": Input.is_action_just_pressed("reload"),
 			"aim": Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT) and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED,
@@ -422,9 +441,23 @@ func _process(dt: float) -> void:
 	if Game.shake > 0.0:
 		_camera.position += Vector3(randf() - 0.5, randf() - 0.5, randf() - 0.5) * Game.shake * 0.25
 	_camera.rotation = Vector3(p.pitch, p.yaw, roll)   # ordre YXZ : lacet puis tangage
+	if _finale_arg == "angel":   # mise au point des captures : la visée suit l'Ange
+		for z in Game.zombies:
+			if z is AngelSim:
+				var d: Vector3 = (z as AngelSim).trumpet_world() - p.eye()
+				p.yaw = atan2(-d.x, -d.z)
+				p.pitch = atan2(d.y, Vector2(d.x, d.z).length())
+	var orbiting: bool = Game.finale != null and Game.finale.orbit_on
+	if orbiting:   # vue orbitale de l'Aube (summit.js cameraStep) : prend la caméra après le joueur
+		var op: Dictionary = Game.finale.orbit_pose()
+		_camera.position = op["pos"]
+		_camera.look_at(op["look"], Vector3.UP)
 	if Game.rides != null:   # arme de la vue cachée en conduisant et en vue externe
 		_weapon_view.hide_gun = Game.rides.driving() or Game.rides.cam.external()
-	_camera.fov = Game.arms.fov(float(Game.settings.get_value("fov")))
+	_camera.fov = 68.0 if orbiting else Game.arms.fov(float(Game.settings.get_value("fov")))
+	_weapon_view.hide_gun = _weapon_view.hide_gun or orbiting
+	_hud.set_cinema(orbiting)
+	_hud_finale()
 	# zombies retirés par la simulation
 	for id: int in _views.keys():
 		if not _views[id].sim in Game.zombies:
@@ -434,7 +467,7 @@ func _process(dt: float) -> void:
 	_fps_step(dt)
 	# musique : intensité selon la manche (0,3 + 0,05 x manche), étouffée dans les menus et en pause (main.js updateMusicMood)
 	var in_game: bool = _menus.in_game and not Game.over
-	Sfx.set_mood(AudioRules.mood_intensity(in_game, false, Game.round_number), not in_game or not Game.playing)
+	Sfx.set_mood(AudioRules.mood_intensity(in_game, Game.finale != null and Game.finale.active(), Game.round_number), not in_game or not Game.playing)
 	for i in range(_tracers.size() - 1, -1, -1):
 		_tracers[i][1] -= dt
 		if _tracers[i][1] <= 0.0:
@@ -487,7 +520,7 @@ func _quit_check() -> void:
 
 func _on_zombie_spawned(z: ZombieSim) -> void:
 	var v := Node3D.new()
-	v.set_script(ZombieView)
+	v.set_script(AngelView if z is AngelSim else ZombieView)
 	add_child(v)
 	v.setup(z)
 	_views[z.id] = v
@@ -534,6 +567,108 @@ func _on_setting(key: String) -> void:
 			_apply_audio()
 		"fov":
 			_camera.fov = float(Game.settings.get_value("fov"))
+
+## J10 : bandeau, barre de boss, marque et jauge du Fanal du HUD (mis à jour seulement quand ils changent).
+func _hud_finale() -> void:
+	var F: FinaleSim = Game.finale
+	if F == null:
+		return
+	var banner: String = String(F.f.get("banner", "")) if F.active() else ""
+	if banner != _hud_last["banner"]:
+		_hud_last["banner"] = banner
+		_hud.set_banner(banner)
+	var bar: Dictionary = F.boss_bar() if F.active() else {}
+	if bar.is_empty():
+		bar = F.mini_bar
+	if bar != _hud_last["bar"]:
+		_hud_last["bar"] = bar
+		_hud.set_boss_bar(bar)
+	var mark := F.mark_label()
+	if mark != _hud_last["mark"]:
+		_hud_last["mark"] = mark
+		_hud.set_mark(mark)
+	var fan := F.fanal_frac()
+	var ft := F.fanal_label()
+	if not is_equal_approx(fan, float(_hud_last["fanal"])) or ft != _hud_last["fanal_text"]:
+		_hud_last["fanal"] = fan
+		_hud_last["fanal_text"] = ft
+		_hud.set_fanal(fan, ft)
+
+## --finale=ETAT : prépare une partie dans la fin de partie pour les captures : manche 12, quartiers ouverts, tous les atouts, puis
+## clock (devant l'horloge), boss1 (le Bourreau), boss2 (sur la plateforme), tanner, summit (sur la terrasse), angel, ramp, fanal, dawn.
+func _debug_finale() -> void:
+	if _finale_arg == "" or Game.finale == null:
+		return
+	var F: FinaleSim = Game.finale
+	Game.world.open_all_doors()
+	Game.director.round_number = 12
+	Game.director.intermission = 1.0e9
+	Game.points = 100000
+	for id: String in Config.at("perks"):
+		Game.add_perk(id)
+	var lv: Levels = Game.world.levels
+	match _finale_arg:
+		"clock":
+			var c := Cathedral.clock_pos()
+			var m := Cathedral.P(0.0, 0.0)
+			var away := Vector2(m.x - c.x, m.y - c.y).normalized() * 3.0
+			Game.player.pos = Vector3(c.x + away.x, 0.0, c.y + away.y)
+			Game.player.yaw = atan2(-(c.x - Game.player.pos.x), -(c.y - Game.player.pos.z))
+		"boss1", "boss2":
+			var at := Cathedral.P(37.0, 0.0)
+			F.start()
+			F.start_boss1()
+			F.f["t"] = 2.5
+			Game.player.pos = Vector3(at.x - 14.0, 0.0, at.y)
+			Game.player.yaw = atan2(-(at.x - Game.player.pos.x), -(at.y - Game.player.pos.z))
+			if _finale_arg == "boss2":
+				var pt := Cathedral.P(-30.0, 0.0)
+				Game.player.pos = Vector3(pt.x, float(lv.regions[F.R["PL"]]["y"]), pt.y)
+				F.f["state"] = "ascent"
+				F.f["plT"] = 3.1
+				(F.f["boss"] as BossSim).phase = 3
+				(F.f["boss"] as BossSim)._enter_phase(3)
+		"tanner":
+			Game.director.round_number = 15
+			F.maybe_spawn_tanner()
+			for z in Game.zombies:
+				if z is TannerSim:
+					Game.player.pos = Vector3(z.pos.x + 7.0, 0.0, z.pos.z)
+					Game.player.yaw = atan2(-(z.pos.x - Game.player.pos.x), -(z.pos.z - Game.player.pos.z))
+		"summit", "angel", "ramp", "fanal", "dawn":
+			F.f = {"state": "summit_beam", "t": 0.0, "np": 1, "banner": "", "boss": null, "fan": 0.0, "fh": 0, "fs": 0, "upT": 0.0, "said": true}
+			Game.finale_done = true
+			Game.arms.has_axe = true
+			var tp := Cathedral.tower_pt(8.0, 235.0 if _finale_arg == "angel" else 100.0)
+			var ax := Cathedral.tower_axis()
+			var outw := Vector2(tp.x - ax.x, tp.y - ax.y).normalized()
+			Game.player.pos = Vector3(tp.x, 104.0, tp.y)
+			Game.player.yaw = atan2(-outw.x, -outw.y)   # face au large (la flèche dans le dos)
+			Game.player.pitch = 0.25
+			_finale_view.show_summit()
+			if _finale_arg == "angel":
+				F.f["state"] = "summit_angel"
+				F.spawn_angel()
+				Game.player.pitch = 0.5
+			elif _finale_arg in ["ramp", "fanal"]:
+				var rr: Dictionary = lv.regions[F.R["RAMP"]]
+				var rl: Dictionary = lv.links[int(rr["link"])]
+				var rp := {}
+				lv.point_on(rl, 60.0 if _finale_arg == "ramp" else float(rl["length"]) - 2.0, rp)
+				Game.player.pos = Vector3(rp["x"], rp["y"], rp["z"])
+				F.f["state"] = "summit_ramp" if _finale_arg == "ramp" else "summit_fanal"
+				F.f["gustT"] = 1.0
+				if _finale_arg == "fanal":
+					var fp := F.fanal_pos()
+					var fo := Vector2(fp.x - ax.x, fp.z - ax.y).normalized()
+					Game.player.pos = Vector3(fp.x + fo.x * 1.4, fp.y, fp.z + fo.y * 1.4)
+					Game.player.yaw = atan2(fo.x, fo.y)   # face au Fanal
+					Game.player.pitch = -0.05
+					F.f["fan"] = 0.5
+			elif _finale_arg == "dawn":
+				F.dawn_begin(0.0)
+				F.sky_t = 10.0
+				F.sky_k = 10.0 / 30.0
 
 ## Luminosité (Options) : exposition et ambiance, réglées par GraphicsView (graphics_view.gd).
 func _apply_brightness() -> void:

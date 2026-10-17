@@ -422,7 +422,25 @@ func _on_powerup(type: String) -> void:
 		"double_points":
 			popup("POINTS DOUBLES", "bonus")
 
-# ---------------------------------------------------------------- setters du finale (J10 les appellera ; --hud-demo les montre)
+## Vue de cinéma (vue orbitale de l'Aube) : ni arme ni interface, sauf l'annonce (summit.js startOrbit : hud.el.hud masqué, l'annonce visible).
+var _cine_on := false
+var _cine_hidden: Array[Control] = []
+
+func set_cinema(on: bool) -> void:
+	if on == _cine_on:
+		return
+	_cine_on = on
+	if on:
+		_cine_hidden.clear()
+		for c in root.get_children():
+			if c is Control and c.visible and c != _announce and c != _announce_sub:
+				_cine_hidden.append(c)
+				c.visible = false
+	else:
+		for c in _cine_hidden:
+			c.visible = true
+		_cine_hidden.clear()
+
 func set_banner(text: String) -> void:
 	_banner.visible = text != ""
 	_banner_l.text = text

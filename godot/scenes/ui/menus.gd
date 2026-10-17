@@ -409,6 +409,9 @@ func _back() -> void:
 # ---------------------------------------------------------------- Échap
 ## Renvoie l'action exécutée (voir UiStack.escape).
 func escape() -> String:
+	if Game.finale != null and Game.finale.orbit_on and not stack.blocks_game():   # vue orbitale de l'Aube : Échap la passe (l'écran « STRASBOURG LIBÉRÉE » suit)
+		Game.finale.end_orbit()
+		return "orbit"
 	var action := stack.escape(in_game and not Game.over)
 	match action:
 		"cancel_capture":

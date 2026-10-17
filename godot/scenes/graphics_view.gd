@@ -262,7 +262,65 @@ func apply_exposure() -> void:
 	if not is_equal_approx(b, _last_brightness) or dbg_noamb != _last_noamb:   # (chaque changement relance le calcul du rayonnement du ciel : pas à chaque image)
 		_last_brightness = b
 		_last_noamb = dbg_noamb
-		sky_mat.set_shader_parameter("ambient_scale", 0.0 if dbg_noamb else HEMI_INTENSITY * b * THREE_TO_GODOT)   # l'énergie ambiante d'Environment est sans effet sur un ambiant venu du ciel
+		sky_mat.set_shader_parameter("ambient_scale", 0.0 if dbg_noamb else _hemi_k * b * THREE_TO_GODOT)   # l'énergie ambiante d'Environment est sans effet sur un ambiant venu du ciel
+
+# ---------------------------------------------------------------- ciel de l'Aube (summit.js : SKY, applySky)
+## Réglages du ciel à trois instants : nuit (k = 0), aube dorée (k = 0,5), plein jour (k = 1).
+const SKY_FOG := ["0b121c", "c88a68", "bcd4e8"]
+const SKY_DENSITY := [0.019, 0.016, 0.011]
+const SKY_HEMI_SKY := ["6677aa", "d4a888", "cfe2ff"]
+const SKY_HEMI_GROUND := ["222018", "5a4a3a", "6a6458"]
+const SKY_HEMI := [1.1, 1.5, 1.9]
+const SKY_SUN := ["9fb4ff", "ffb070", "fff0d8"]
+const SKY_SUN_I := [1.4, 1.8, 2.6]
+const SKY_SUN_POS := [Vector3(25, 55, 15), Vector3(70, 22, 10), Vector3(35, 60, 15)]
+const SKY_TOP := ["04070d", "2a2f5a", "3f78c8"]
+const SKY_MID := ["0c1522", "b8706a", "7fb2e8"]
+const SKY_BOT := ["1b2535", "f3b074", "c9e0f4"]
+var _hemi_k := HEMI_INTENSITY
+
+static func _sm(x: float) -> float:
+	return x * x * (3.0 - 2.0 * x)
+
+## Paramètres (i0, i1, u) du tronçon de k : nuit -> aube pour k < 0,5, aube -> jour ensuite (lissé).
+static func _seg(k: float) -> Array:
+	return [0, 1, _sm(k * 2.0)] if k < 0.5 else [1, 2, _sm((k - 0.5) * 2.0)]
+
+## Mélange dans l'espace linéaire (Three.js mélange des couleurs linéaires), renvoyé en sRGB pour les uniformes `source_color`.
+static func _pick_c(arr: Array, k: float) -> Color:
+	var sg := _seg(k)
+	var a := Color.html(String(arr[sg[0]])).srgb_to_linear()
+	var b := Color.html(String(arr[sg[1]])).srgb_to_linear()
+	return a.lerp(b, float(sg[2])).linear_to_srgb()
+
+static func _pick_n(arr: Array, k: float) -> float:
+	var sg := _seg(k)
+	return lerpf(float(arr[sg[0]]), float(arr[sg[1]]), float(sg[2]))
+
+## L'Aube : le ciel passe de la nuit au jour (k de 0 à 1) : dôme, brouillard, ambiance, lune qui devient le soleil, étoiles, halo (summit.js applySky).
+func set_sky_k(k: float) -> void:
+	sky_k = k
+	var sg := _seg(k)
+	sky_mat.set_shader_parameter("top", _pick_c(SKY_TOP, k))
+	sky_mat.set_shader_parameter("mid", _pick_c(SKY_MID, k))
+	sky_mat.set_shader_parameter("bot", _pick_c(SKY_BOT, k))
+	sky_mat.set_shader_parameter("moon_k", 1.0 - _sm(minf(1.0, k / 0.35)))
+	sky_mat.set_shader_parameter("day_k", _sm(clampf((k - 0.25) / 0.6, 0.0, 1.0)))
+	var el := deg_to_rad(-4.0 + 42.0 * _sm(k))   # le soleil monte à l'est de -4° à 38° d'élévation
+	sky_mat.set_shader_parameter("sun_dir", Vector3(cos(el) * cos(deg_to_rad(20.0)), sin(el), cos(el) * sin(deg_to_rad(20.0))))
+	sky_mat.set_shader_parameter("sun_k", (minf(1.0, k * 5.0) * (1.0 - 0.35 * _sm(maxf(0.0, k - 0.6) / 0.4))) if k > 0.02 else 0.0)
+	sky_mat.set_shader_parameter("hemi_sky", _pick_c(SKY_HEMI_SKY, k))
+	sky_mat.set_shader_parameter("hemi_ground", _pick_c(SKY_HEMI_GROUND, k))
+	_hemi_k = _pick_n(SKY_HEMI, k)
+	_last_brightness = -1.0   # relance le calcul de l'ambiance avec la nouvelle intensité
+	env.fog_light_color = _pick_c(SKY_FOG, k)
+	_set_fog(_pick_n(SKY_DENSITY, k) * (1.15 if arena else 1.0))
+	moon.light_color = _pick_c(SKY_SUN, k)
+	moon.light_energy = _pick_n(SKY_SUN_I, k) * THREE_TO_GODOT
+	var off: Vector3 = SKY_SUN_POS[sg[0]].lerp(SKY_SUN_POS[sg[1]], float(sg[2]))
+	moon.global_transform = Transform3D(Basis.looking_at(-off.normalized(), Vector3.UP), Vector3.ZERO)
+	_apply_glow(env.glow_enabled)
+	_update_torch()
 
 # ---------------------------------------------------------------- chaque image
 func _process(dt: float) -> void:
@@ -277,6 +335,8 @@ func _process(dt: float) -> void:
 	var k := GraphicsRules.zone_blend(dt)
 	for key: String in ["exposure", "env", "torch"]:
 		zone_k[key] += (float(Z[key]) - float(zone_k[key])) * k
+	if Game.finale != null and not is_equal_approx(Game.finale.sky_k, sky_k):
+		set_sky_k(Game.finale.sky_k)
 	apply_exposure()
 	_update_torch()
 	# l'ombre de la lune suit le joueur (lumière à (25, 55, 15) de la cible) : l'orientation est fixe, seul le volume d'ombre suit la caméra
