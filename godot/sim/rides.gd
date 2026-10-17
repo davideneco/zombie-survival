@@ -16,6 +16,7 @@ var vehicles: Array[VehicleSim] = []
 var trams: Array[TramSim] = []
 var parkings: Array = []        ## [{ name, x, z, pump: {x, z, yaw}, sign: {x, z} }]
 var bike_stations: Array = []   ## [{ x, z, yaw, size, zone, name }]
+var signals: Array = []         ## têtes de signal de l'aiguillage ({ arm, side, x, z, tx, tz }, cuites par tools/bake-vehicles.mjs) : le port redessine leurs feux
 var net: Dictionary = {}        ## { tracks, by_id (lignes et itinéraires), junction }
 var gates_by: Dictionary = {}   ## voie -> [{ line, s, door (indice de porte de zone), decor }]
 var substation: Dictionary = {}
@@ -110,6 +111,7 @@ func _build_tram() -> void:
 						gates_by[trk.id] = []
 					gates_by[trk.id].append({"line": trk.id, "s": sv, "door": -1, "decor": true})
 	substation = td["substation"] if td["substation"] != null else {}
+	signals = td.get("signals", [])
 
 # ------------------------------------------------------------------ accès
 func all_rides() -> Array:

@@ -130,6 +130,12 @@ func fov(base: float) -> float:
 	var target := float(cfg.get("adsFov", cfg.get("zoom", 0.0)))
 	return base - ((base - target) if target > 0.0 else ADS_DELTA) * aim
 
+## Facteur de sensibilité de la souris en visée (player.js : mousemove) : 0,3 avec lunette, 0,45 avec zoom, 0,6 sinon, 1 hors visée (aim <= 0,5).
+func sens_zoom() -> float:
+	if aim <= 0.5:
+		return 1.0
+	return 0.3 if current.cfg.has("adsFov") else (0.45 if current.cfg.has("zoom") else 0.6)
+
 # ---------------------------------------------------------------- pas de simulation
 ## input : { fire (maintenu), reload (appui), aim (maintenu), knife, grenade, gl (appuis), weapon (indice), wheel (+1 / -1), mz (avant) }
 func step(g: Node, dt: float, input_in: Dictionary) -> void:
@@ -203,16 +209,25 @@ func _aim_mult(cfg: Dictionary, on: bool) -> float:
 		return 1.0
 	return ADS_SCOPE_SPREAD if cfg.has("adsFov") else ADS_SPREAD
 
-## Direction d'un tir avec dispersion (sx, sy en NDC comme le setFromCamera du JS ; ouverture de J1 : voir docs).
+## Direction d'un tir avec dispersion. Le JS tire en coordonnées normalisées d'écran (`setFromCamera({ x, y })`, x et y dans [-spread, spread]) : la
+## dispersion horizontale vaut donc tan(fov / 2) x aspect, la verticale tan(fov / 2), avec le FOV COURANT de la caméra (réglage du joueur,
+## resserré par la visée) et le rapport largeur / hauteur de la fenêtre (`Game.view_aspect`).
 func _spread_dir(g: Node, spread: float) -> Vector3:
 	var p: PlayerSim = g.player
-	var tan_half := tan(deg_to_rad(Rules.FOV_DEG) / 2.0)
-	var sx: float = (g.rng.randf() - 0.5) * 2.0 * spread * tan_half
+	var base := float(g.settings.get_value("fov")) if g.settings != null else Rules.FOV_DEG
+	var tan_half := tan(deg_to_rad(fov(base)) / 2.0)
+	var sx: float = (g.rng.randf() - 0.5) * 2.0 * spread * tan_half * float(g.view_aspect)
 	var sy: float = (g.rng.randf() - 0.5) * 2.0 * spread * tan_half
 	var fwd := p.forward()
 	var right := Vector3(cos(p.yaw), 0, -sin(p.yaw))
 	var up := right.cross(fwd)
 	return (fwd + right * sx + up * sy).normalized()
+
+## Vue externe d'un véhicule : distance caméra - pilote dont le tir est avancé (player.js : ride.dist) ; 0 en vue à la première personne.
+func _external_dist(g: Node) -> float:
+	if g.rides != null and g.rides.cam.external():
+		return g.rides.cam.dist
+	return 0.0
 
 func shoot(g: Node, now: float) -> void:
 	var w := current
@@ -223,11 +238,13 @@ func shoot(g: Node, now: float) -> void:
 	if String(cfg["type"]) == "launcher":
 		fire_launcher(g, cfg, mul)
 		return
-	var origin := p.eye()
+	var eye := p.eye()
+	var ext := _external_dist(g)
 	var pellets := int(cfg.get("pellets", 1))
 	var budget := maxi(1, int(cfg.get("pierce", 1)))
 	for _p in pellets:
 		var dir := _spread_dir(g, float(cfg["spread"]) * mul)
+		var origin := eye + dir * ext   # vue externe : le rayon part du pilote (caméra avancée de sa distance au pivot), pas de la caméra
 		var res := Hitscan.cast(origin, dir, float(cfg["range"]), g.zombies, g.collision, budget)
 		var end: Vector3 = origin + dir * float(res["wall_t"])
 		var hits: Array = res["hits"]
@@ -257,8 +274,8 @@ func shoot(g: Node, now: float) -> void:
 ## si le canon est plaqué contre un mur, il part de l'œil.
 func fire_launcher(g: Node, cfg: Dictionary, mul: float) -> void:
 	var p: PlayerSim = g.player
-	var ro := p.eye()
 	var rd := _spread_dir(g, float(cfg["spread"]) * mul)
+	var ro := p.eye() + rd * _external_dist(g)
 	var fwd := p.forward()
 	var right := Vector3(cos(p.yaw), 0, -sin(p.yaw))
 	var up := right.cross(fwd)

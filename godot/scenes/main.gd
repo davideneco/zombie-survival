@@ -34,7 +34,12 @@ var _hud_demo := false
 var _real_t := 0.0
 var _views: Dictionary = {}     # id de ZombieSim -> ZombieView
 var _prev_player := Vector3.ZERO
+var _hold_fire := false           # --hold-fire : détente maintenue (capture de l'éclair de bouche)
+var _hold_unstick := false        # --hold-unstick : touche « se débloquer » maintenue (capture)
+var _hold_jump := false           # --hold-jump : Espace maintenu (capture de l'enjambement)
 var _bot := false
+var _soak: SoakBot = null         # --soak=N : partie d'un pilote qui se promène jusqu'à la manche N (J11)
+var _soak_rounds := 0
 var _shot_path := ""
 var _shot_at := 0.0
 var _seed := -1
@@ -91,6 +96,9 @@ func _ready() -> void:
 			_hud_demo = true
 		elif a == "--bot":
 			_bot = true
+		elif a.begins_with("--soak="):
+			_soak_rounds = int(a.substr(7))
+			_bot = true
 		elif a == "--demo":
 			_demo = true
 		elif a.begins_with("--map="):
@@ -117,6 +125,12 @@ func _ready() -> void:
 			_sync_flow = true
 		elif a.begins_with("--mount="):
 			_mount = a.substr(8)
+		elif a == "--hold-fire":
+			_hold_fire = true
+		elif a == "--hold-unstick":
+			_hold_unstick = true
+		elif a == "--hold-jump":
+			_hold_jump = true
 		elif a == "--auto-fwd":
 			_auto_fwd = true
 		elif a == "--power":
@@ -159,6 +173,7 @@ func _ready() -> void:
 	add_child(_hud)
 	_menus = Menus.new()
 	add_child(_menus)
+	add_child(DebugOverlay.new())
 	_menus.start_requested.connect(_start_game)
 	_menus.resume_requested.connect(_apply_layers)
 	_menus.restart_requested.connect(func() -> void:
@@ -210,6 +225,13 @@ func _ready() -> void:
 		Game.zombies.append(z)
 		Game.zombie_spawned.emit(z)
 
+func _soak_end() -> void:
+	var r := _soak.rows
+	print("SOAK fin : manche %d, %.0f s de jeu, %d tués, partie %s ; pas moyen %.2f ms, pire %.1f ms ; mémoire %.1f -> %.1f Mo, objets %d -> %d, noeuds %d -> %d" % [
+		Game.round_number, Game.time, Game.kills, "terminée" if Game.over else "en cours", _soak.step_us / float(maxi(1, _soak.steps)) / 1000.0, _soak.step_us_max / 1000.0,
+		r[0]["mem_mb"], r[-1]["mem_mb"], r[0]["objects"], r[-1]["objects"], r[0]["nodes"], r[-1]["nodes"]])
+	get_tree().quit()
+
 func _restart() -> void:
 	for v in _views.values():
 		v.queue_free()
@@ -255,6 +277,10 @@ func _restart() -> void:
 		_machines_view.setup()
 	_debug_do()
 	_debug_finale()
+	if _soak_rounds > 0 and Game.world != null:
+		_soak = SoakBot.new(_seed if _seed >= 0 else 1)
+		_soak.verbose = "--soak-verbose" in OS.get_cmdline_user_args()
+		_soak.setup(Game)
 	_prev_player = Game.player.pos
 	_apply_brightness()
 	_map_prepare()
@@ -308,6 +334,8 @@ func _debug_do() -> void:
 				Game.machines.box.limit = Game.machines.box.uses + 1
 			"open-doors":
 				Game.world.open_all_doors()
+			"switch":   # aiguillage de la rame réglé « dévié » (capture des signaux)
+				Game.rides.trams[0].set_switch(1)
 			"down":
 				Game.add_perk("quickrevive")
 				Game.player.hurt(1000.0, Game.time)
@@ -351,11 +379,17 @@ func _start_mounted() -> void:
 			Game.player.yaw = v.yaw
 			return
 
+## Perte de focus de la fenêtre en pleine partie : pause (le JS passe en pause quand le navigateur libère le pointeur ; la souris capturée de Godot est
+## relâchée de la même façon). Ni pendant un menu, ni pour un pilote automatique.
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_APPLICATION_FOCUS_OUT and not _bot and _menus != null:
+		_menus.focus_lost()
+
 func _unhandled_input(event: InputEvent) -> void:
 	var live: bool = Game.playing and not Game.over and _menus.in_game
 	if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED and live:
 		var m := event as InputEventMouseMotion
-		var sens := Rules.MOUSE_SENS * float(Game.settings.get_value("sens"))
+		var sens := Rules.MOUSE_SENS * float(Game.settings.get_value("sens")) * Game.arms.sens_zoom()   # visée : souris plus lente (player.js : zoom)
 		Game.player.last_mouse = Game.time
 		Game.player.yaw -= m.relative.x * sens
 		Game.player.pitch = clampf(Game.player.pitch - m.relative.y * sens, -Rules.PITCH_LIMIT, Rules.PITCH_LIMIT)
@@ -402,7 +436,9 @@ func _physics_process(dt: float) -> void:
 	if _rides_view != null:
 		_rides_view.remember()
 	var input: Dictionary
-	if _bot:
+	if _soak != null:
+		input = _soak.think(Game)
+	elif _bot:
 		input = Bot.think(Game)
 	else:
 		input = {
@@ -410,6 +446,7 @@ func _physics_process(dt: float) -> void:
 			"mz": Input.get_axis("move_back", "move_forward"),
 			"sprint": Input.is_action_pressed("sprint"),
 			"jump": Input.is_action_pressed("jump"),
+			"unstick": Input.is_action_pressed("unstick"),   # J11 : se débloquer (maintenu)
 			"interact": Input.is_action_pressed("use"),   # J10 : le Fanal d'Erwin se tient
 			"fire": Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT) and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED,
 			"reload": Input.is_action_just_pressed("reload"),
@@ -417,9 +454,20 @@ func _physics_process(dt: float) -> void:
 		}
 		if _auto_fwd:
 			input["mz"] = 1.0
+		if _hold_jump:
+			input["jump"] = true
+		if _hold_unstick:
+			input["unstick"] = true
+		if _hold_fire:
+			input["fire"] = true
 		input.merge(_pending, true)
 	_pending.clear()
+	var t0 := Time.get_ticks_usec()
 	Game.step(dt, input)
+	if _soak != null:
+		_soak.after_step(Game, Time.get_ticks_usec() - t0)
+		if Game.round_number > _soak_rounds or Game.over:
+			_soak_end()
 
 ## Position de l'œil au pas courant : œil du joueur, ou celui qu'impose le véhicule (caméra externe ou œil de la selle).
 func _eye_now() -> Vector3:
@@ -434,7 +482,7 @@ func _process(dt: float) -> void:
 	if p.eye_override != Vector3.INF or _prev_eye != Vector3.ZERO and Game.rides != null and Game.rides.cam.placed:
 		_camera.position = _prev_eye.lerp(_eye_now(), f)
 	else:
-		_camera.position = _prev_player.lerp(p.pos, f) + Vector3(0, float(Config.at("player.eye")), 0)
+		_camera.position = _prev_player.lerp(p.pos, f) + Vector3(0, p.eye_height() + p.bob(), 0)
 	var roll := 0.0
 	if Game.rides != null and Game.rides.ride != null and not Game.rides.cam.placed and not Game.rides.ride["v"].is_tram():
 		roll = Game.rides.ride["v"].lean * 0.5   # la vue penche avec la moto
@@ -454,6 +502,7 @@ func _process(dt: float) -> void:
 		_camera.look_at(op["look"], Vector3.UP)
 	if Game.rides != null:   # arme de la vue cachée en conduisant et en vue externe
 		_weapon_view.hide_gun = Game.rides.driving() or Game.rides.cam.external()
+	Game.view_aspect = get_viewport().get_visible_rect().size.aspect()
 	_camera.fov = 68.0 if orbiting else Game.arms.fov(float(Game.settings.get_value("fov")))
 	_weapon_view.hide_gun = _weapon_view.hide_gun or orbiting
 	_hud.set_cinema(orbiting)

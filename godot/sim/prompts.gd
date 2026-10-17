@@ -13,6 +13,10 @@ static func text(g: Node, binds: Keybinds = null) -> String:
 	if g.player.downed or g.player.dead:
 		return ""
 	var arms: WeaponArms = g.arms
+	if g.unstick != null:   # coincé : l'invite de déblocage passe avant les autres (main.js : unstickPrompt)
+		var up: String = g.unstick.prompt(binds.tag("unstick") if binds != null else "[K]")
+		if up != "":
+			return up
 	if g.finale != null and g.finale.fanal_prompt() != "":   # le Fanal d'Erwin (Acte V)
 		return _keys(g.finale.fanal_prompt(), binds)
 	if WeaponShop.near_station(g):
@@ -44,12 +48,22 @@ static func text(g: Node, binds: Keybinds = null) -> String:
 			var here: int = g.world.zone_of(g.player.pos.x, g.player.pos.z)
 			var to: int = int(d["b"]) if here == int(d["a"]) else (int(d["a"]) if here == int(d["b"]) else int(d["toZone"]))
 			return "%s Ouvrir la porte vers %s (%s)" % [k, g.world.zone_names[to], "gratuit" if g.free_doors else "%d pts" % int(d["price"])]
+	if g.player.vault_ready and g.player.vault.is_empty():   # devant un obstacle bas
+		return "%s Enjamber" % (binds.tag("jump") if binds != null else "[Espace]")
 	return ""
 
-## Les invites de Rides et de Machines s'écrivent « E Descendre · V vue » : les lettres de touche suivent les liaisons.
+## Les invites de Rides et de Machines s'écrivent « E Descendre · V vue · O portes · H gong » : les lettres de touche suivent les liaisons du joueur
+## (le JS les compose avec `binds.tag`, « [E] »).
 static func _keys(s: String, binds: Keybinds) -> String:
 	if binds == null:
 		return s
 	if s.begins_with("E "):
 		s = "%s %s" % [binds.tag("interact"), s.substr(2)]
-	return s.replace("V vue", "%s vue" % binds.tag("vehicleView"))
+	s = s.replace("V vue", "%s vue" % binds.tag("vehicleView"))
+	s = s.replace("O portes", "%s portes" % binds.tag("tramDoors"))
+	s = s.replace("O : portes", "%s portes" % binds.tag("tramDoors"))
+	s = s.replace("H gong", "%s gong" % binds.tag("tramGong"))
+	s = s.replace("B aiguillage", "%s aiguillage" % binds.tag("tramSwitch"))
+	s = s.replace("Espace frein d'urgence", "%s frein d'urgence" % binds.tag("jump"))
+	s = s.replace("Z/Q/S/D : marcher", "%s : marcher" % binds.move_label())
+	return s

@@ -35,6 +35,8 @@ signal boss_event(name: String, data: Dictionary)           ## J10 : évènement
 signal finale_sfx(name: String, vol: float)                  ## J10 : son de la fin de partie (cloche, grondement, bonus…)
 signal victory_screen(title: String, text: String)           ## J10 : le Bourreau est tombé
 signal liberated_screen(title: String, text: String)         ## J10 : « STRASBOURG LIBÉRÉE » (fin de la vue orbitale de l'Aube)
+signal vaulted                                               ## J11 : le joueur enjambe un obstacle (son)
+signal unstuck(from: Vector2, to: Vector2, distance: float, center: bool)   ## J11 : le joueur s'est débloqué
 signal ride_event(name: String, data: Dictionary)            ## J5 : "mount", "dismount", "crash", "burn", "break", "respawn", "gong", "chime", "service", "knock", "cough", "beep", "dry"
 
 var round_number: int:
@@ -80,6 +82,9 @@ var free_doors := false    ## portes gratuites (Bénédiction)
 var trophy := 0
 var trophy_path := FinaleRules.TROPHY_PATH
 var fanal_input := false   ## touche d'interaction maintenue (le Fanal)
+var debug_open := false   ## J11 : le menu debug (F9) est ouvert (Échap le ferme avant d'ouvrir la pause)
+var unstick: Unstick       ## J11 : « Se débloquer » (null dans l'arène)
+var view_aspect := 16.0 / 9.0   ## J11 : rapport largeur / hauteur de la fenêtre (étalement des tirs en coordonnées d'écran), posé par main.gd
 var settings: Settings     ## J7 : réglages du joueur et touches (user://settings.cfg, ou --settings=chemin)
 
 func _init() -> void:
@@ -142,6 +147,11 @@ func new_game(seed_value: int = -1, map: String = "", weapons: Array = []) -> vo
 	zombies.clear()
 	shake = 0.0
 	rides = Rides.new(self) if world != null else null
+	unstick = Unstick.new() if world != null else null
+	if unstick != null:
+		unstick.done.connect(func(a: Vector2, b: Vector2, d: float, c: bool) -> void:
+			announce("DÉBLOQUÉ", "Replacé dans l'allée de la rame" if rides != null and rides.on_tram != null else "Déplacé de %d m" % roundi(d))
+			unstuck.emit(a, b, d, c))
 	env = ZombieEnv.new()
 	env.players = [player]
 	env.zombies = zombies
@@ -205,8 +215,18 @@ func step(dt: float, input: Dictionary) -> void:
 		if finale.cam_lock:   # vue orbitale de l'Aube : le joueur est immobile
 			input = {}
 		fanal_input = bool(input.get("interact", false))
-	player.step(dt, time, input, collision, world.levels if world != null else null)
+	player.locked = arms.locked
+	player.step(dt, time, input, collision, world.levels if world != null else null, world)
+	if player.vault_event:
+		player.vault_event = false
+		vaulted.emit()
+	if not player.vault.is_empty():   # enjambement : ni tir, ni couteau, ni lance-grenades, plus de visée (player.js : startVault)
+		arms_input = arms_input.duplicate()
+		for k in ["fire", "knife", "gl", "aim"]:
+			arms_input[k] = false
 	arms.step(self, dt, arms_input)
+	if unstick != null:
+		unstick.step(self, dt, input)
 	powerups.step(self, dt)
 	if machines != null:
 		machines.step(dt)

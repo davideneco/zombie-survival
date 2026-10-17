@@ -5,6 +5,7 @@ extends RefCounted
 ## hors de la grille = fond ; tout ce qui est hors du secteur jouable est assombri (masque grossier de 4 m, élargi puis resserré comme
 ## dans realworld.js). Pas d'eau ni de passages dorés (écarts connus). Image du seul rectangle `mapCrop`, à `mapView.scale` pixels par mètre.
 
+const BAKED := "res://assets/graphics/map.png"   ## le plan du JS (eau, passages dorés compris), cuit par tools/bake-portraits.mjs ; absent : plan de la grille de navigation
 const STREET := Color8(52, 56, 62)
 const BUILT := Color8(122, 106, 85)
 const VOID := Color8(22, 24, 28)
@@ -21,6 +22,16 @@ static func build(world: World) -> Image:
 	var z0 := float(crop["z0"])
 	var w := int(round((float(crop["x1"]) - x0) * scale))
 	var h := int(round((float(crop["z1"]) - z0) * scale))
+	if FileAccess.file_exists(BAKED):   # le vrai plan du JS : on en découpe le rectangle `mapCrop`
+		var full := Image.load_from_file(BAKED)
+		if full != null and not full.is_empty():
+			var px0 := int(round((x0 + world.half_x) * scale))
+			var pz0 := int(round((z0 + world.half_z) * scale))
+			var rect := Rect2i(px0, pz0, w, h).intersection(Rect2i(0, 0, full.get_width(), full.get_height()))
+			if rect.size == Vector2i(w, h):
+				var cut := full.get_region(rect)
+				cut.convert(Image.FORMAT_RGB8)
+				return cut
 	var nav: NavGrid = world.nav
 	# masque grossier du secteur
 	var gw := int(ceil((float(crop["x1"]) - x0) / MASK_CELL)) + 1

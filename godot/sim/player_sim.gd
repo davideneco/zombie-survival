@@ -38,6 +38,17 @@ var peak_y := 0.0
 var jump_sprint := false
 var gust_q: Dictionary = {}    ## J10 : rafale de la rampe de la flèche : vitesse imposée { x, z, t }
 var pull_q: Dictionary = {}    ## J10 : attiré par les Chaînes du Bourreau : déplacement imposé { x, z, t, T }
+# --- J11 : visée, enjambement, balancement de la vue (player.js : aiming, vault, bobT)
+var aiming := false           ## visée maintenue (copie de input.aim) : marche x0,6 et pas de sprint
+var locked := false           ## arme confisquée par le Pack-a-Punch (pas d'enjambement)
+var vault: Dictionary = {}    ## enjambement en cours : { t, dur, x0, z0, x1, z1, y }
+var vault_cd := 0.0
+var vault_ready := false      ## un obstacle enjambable est devant (invite « Enjamber »)
+var vault_event := false      ## posé au départ d'un enjambement (son), lu et effacé par Game
+var bob_t := 0.0
+var _vh: Dictionary = {}
+var _vq := Vector3.ZERO
+var _vfl := {"y": 0.0, "region": 0}
 
 func _init() -> void:
 	max_health = float(Config.at("player.maxHealth"))
@@ -74,6 +85,13 @@ func reset(start: Vector3) -> void:
 	jump_sprint = false
 	gust_q = {}
 	pull_q = {}
+	aiming = false
+	locked = false
+	vault = {}
+	vault_cd = 0.0
+	vault_ready = false
+	vault_event = false
+	bob_t = 0.0
 
 func gust_by(vx: float, vz: float, dur: float) -> void:
 	gust_q = {"x": vx, "z": vz, "t": dur}
@@ -86,14 +104,29 @@ func pull_by(dx: float, dz: float) -> void:
 func eye() -> Vector3:
 	if eye_override != Vector3.INF:
 		return eye_override
-	return pos + Vector3(0, float(Config.at("player.eye")), 0)
+	return pos + Vector3(0, eye_height(), 0)
+
+## Hauteur de l'œil au-dessus des pieds : 0,55 m à terre, élevée pendant l'enjambement (player.js : eyeH), sans le balancement de la marche.
+func eye_height() -> float:
+	var h := Rules.DOWN_EYE if downed else float(Config.at("player.eye"))
+	if not vault.is_empty():
+		h += float(Config.at("vault.camLift")) * sin(PI * minf(1.0, float(vault["t"]) / float(vault["dur"])))
+	return h
+
+## Avancement de l'enjambement 0..1 (0 : aucun), pour l'arme baissée de la vue.
+func vault_u() -> float:
+	return 0.0 if vault.is_empty() else minf(1.0, float(vault["t"]) / float(vault["dur"]))
+
+## Balancement de la vue à la marche (player.js : bob), à ajouter à la hauteur de l'œil de la caméra.
+func bob() -> float:
+	return sin(bob_t) * (0.06 if sprinting else 0.035) if moving and on_ground and not attached else 0.0
 
 ## Direction de visée (unitaire) pour yaw et pitch courants.
 func forward() -> Vector3:
 	return Vector3(-sin(yaw) * cos(pitch), sin(pitch), -cos(yaw) * cos(pitch))
 
 ## input : { mx: -1..1 (droite +), mz: -1..1 (avant +), sprint: bool, jump: bool }
-func step(dt: float, time: float, input: Dictionary, col: Collision, levels: Levels = null) -> void:
+func step(dt: float, time: float, input: Dictionary, col: Collision, levels: Levels = null, world: World = null) -> void:
 	if dead:
 		return
 	flop_cd = maxf(0.0, flop_cd - dt)
@@ -106,11 +139,17 @@ func step(dt: float, time: float, input: Dictionary, col: Collision, levels: Lev
 		return
 	var mx: float = input.get("mx", 0.0)
 	var mz: float = input.get("mz", 0.0)
+	if not vault.is_empty():
+		mx = 0.0   # enjambement en cours : le chemin est imposé
+		mz = 0.0
+	aiming = bool(input.get("aim", false)) and not downed
 	moving = mx != 0.0 or mz != 0.0
-	sprinting = bool(input.get("sprint", false)) and mz > 0.0 and not downed
+	sprinting = bool(input.get("sprint", false)) and mz > 0.0 and not downed and not aiming
 	var speed: float = float(Config.at("player.sprintSpeed")) * (Rules.PERK_STAMIN_SPRINT if stamin else 1.0) if sprinting else float(Config.at("player.walkSpeed")) * (Rules.PERK_STAMIN_WALK if stamin else 1.0)
 	if downed:
 		speed = Rules.DOWN_SPEED
+	elif aiming:
+		speed *= Rules.AIM_SPEED_MULT
 	if moving:
 		var l := sqrt(mx * mx + mz * mz)
 		mx /= l
@@ -144,9 +183,14 @@ func step(dt: float, time: float, input: Dictionary, col: Collision, levels: Lev
 		ground = _floor["y"]
 		region = _floor["region"]
 	on_ground = pos.y <= ground + Rules.SPAWN_ON_GROUND_EPS and vy <= 0.5
-	if bool(input.get("jump", false)) and on_ground and not downed:
-		vy = float(Config.at("player.jumpSpeed"))
-		jump_sprint = sprinting
+	vault_cd = maxf(0.0, vault_cd - dt)
+	vault_ready = on_ground and vault.is_empty() and not downed and not dead and not locked and vault_cd <= 0.0 and not _check_vault(col, world, levels).is_empty()
+	if bool(input.get("jump", false)) and on_ground and not downed and vault.is_empty():
+		if vault_ready and _start_vault(col, world, levels):
+			pass   # enjambement : pas de saut
+		else:
+			vy = float(Config.at("player.jumpSpeed"))
+			jump_sprint = sprinting
 	vy -= float(Config.at("player.gravity")) * dt
 	pos.y += vy * dt
 	if pos.y <= ground:
@@ -166,8 +210,79 @@ func step(dt: float, time: float, input: Dictionary, col: Collision, levels: Lev
 		air_t = 0.0
 		peak_y = ground
 		jump_sprint = false
-	pos = col.resolve(pos, float(Config.at("player.radius")))
+	if not vault.is_empty():
+		_step_vault(dt, col)   # chemin imposé : pas de collision (on passe par-dessus l'obstacle)
+	else:
+		pos = col.resolve(pos, float(Config.at("player.radius")))
+	bob_t += dt * (12.0 if sprinting else 8.0) * (1.0 if moving and on_ground else 0.0)
 	_regen(dt, time)
+
+# ---------------------------------------------------------------- enjambement (player.js checkVault / startVault / stepVault)
+## Obstacle enjambable devant : { lx, lz, h } ou {} (voir player.js : à moins de reach m, de face, profondeur <= maxDepth, case d'arrivée libre
+## à la même hauteur dans une zone OUVERTE).
+func _check_vault(col: Collision, world: World, levels: Levels) -> Dictionary:
+	if col.vaults.is_empty():
+		return {}
+	var reach := float(Config.at("vault.reach"))
+	var clearance := float(Config.at("vault.clearance"))
+	var ux := -sin(yaw)
+	var uz := -cos(yaw)
+	var h := col.find_vault(pos.x, pos.z, ux, uz, reach)
+	if h.is_empty():
+		return {}
+	if -(ux * float(h["nx"]) + uz * float(h["nz"])) < cos(deg_to_rad(float(Config.at("vault.maxAngle")))):
+		return {}
+	var t_in := float(h["tIn"])
+	var t_out := float(h["tOut"])
+	if t_out - t_in > float(Config.at("vault.maxDepth")):
+		return {}
+	var oy := pos.y + 0.5
+	if col.ray_hit(pos.x, oy, pos.z, ux, 0.0, uz, t_in - 0.03) < t_in - 0.12:
+		return {}   # autre chose avant l'obstacle
+	var lx := pos.x + ux * (t_out + clearance)
+	var lz := pos.z + uz * (t_out + clearance)
+	if col.ray_hit(pos.x + ux * (t_out + 0.03), oy, pos.z + uz * (t_out + 0.03), ux, 0.0, uz, clearance + 0.02) < clearance - 0.02:
+		return {}   # mur juste derrière
+	var q := col.resolve(Vector3(lx, pos.y, lz), float(Config.at("player.radius")))
+	if Vector2(q.x - lx, q.z - lz).length() > 0.05:
+		return {}   # la case d'arrivée est encombrée
+	if levels != null:
+		levels.floor_at(lx, lz, pos.y + 0.1, _vfl)
+		if int(_vfl["region"]) != region or absf(float(_vfl["y"]) - pos.y) > float(Config.at("vault.heightTol")):
+			return {}
+	if world != null:
+		var zi := world.zone_of(lx, lz)
+		if zi < 0 or not world.is_zone_open(zi):
+			return {}   # zone fermée ou hors de l'île : refusé
+	return {"lx": lx, "lz": lz, "h": h}
+
+func _start_vault(col: Collision, world: World, levels: Levels) -> bool:
+	var t := _check_vault(col, world, levels)
+	if t.is_empty():
+		return false
+	vault = {"t": 0.0, "dur": float(Config.at("vault.time")), "x0": pos.x, "z0": pos.z, "x1": t["lx"], "z1": t["lz"], "y": pos.y}
+	vel = Vector3.ZERO
+	vy = 0.0
+	jump_sprint = false
+	aiming = false
+	vault_event = true
+	return true
+
+func _step_vault(dt: float, col: Collision) -> void:
+	vault["t"] = float(vault["t"]) + dt
+	var u := minf(1.0, float(vault["t"]) / float(vault["dur"]))
+	var e := u * u * (3.0 - 2.0 * u)
+	pos.x = float(vault["x0"]) + (float(vault["x1"]) - float(vault["x0"])) * e
+	pos.z = float(vault["z0"]) + (float(vault["z1"]) - float(vault["z0"])) * e
+	pos.y = float(vault["y"])
+	vel = Vector3.ZERO
+	vy = 0.0
+	air_t = 0.0
+	_was_grounded = true
+	if u >= 1.0:
+		vault = {}
+		vault_cd = float(Config.at("vault.cooldown"))
+		pos = col.resolve(pos, float(Config.at("player.radius")))
 
 func _regen(dt: float, time: float) -> void:
 	if not downed and health < max_health and time - last_hurt > float(Config.at("player.regenDelay")):

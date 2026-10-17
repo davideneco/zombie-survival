@@ -9,6 +9,7 @@ var _tram_view: Node3D
 var _rider: Node3D
 var _cull_t := 0.0
 var _cam: Camera3D
+var _signal_lamps: Array = []   ## [{ straight, diverge, sw }] feux blancs des têtes de signal de l'aiguillage
 var _gate_lamps: Array = []     ## [{ gate, red, green, state }] feux des portes de zone sur les voies
 var _sub_lamp: MeshInstance3D   ## voyant de la sous-station
 var _lamp_mats: Dictionary = {}
@@ -35,6 +36,7 @@ func setup(cam: Camera3D) -> void:
 		_make_parking(r.parkings[i], i)
 	_make_stations(r)
 	_make_gate_lamps(r)
+	_make_signal_lamps(r)
 	_make_rider()
 
 func remember() -> void:
@@ -148,6 +150,36 @@ func _make_gate_lamps(r: Rides) -> void:
 		_sub_on = false
 	_update_lamps(r, true)
 
+## Têtes de signal de l'aiguillage (tramNet.js) : le monde cuit les montre « tout droit » ; deux cubes un peu plus grands recouvrent leurs feux blancs
+## et suivent le réglage (feu « tout droit » en haut au centre, feu « dévié » en haut du côté du virage).
+func _make_signal_lamps(r: Rides) -> void:
+	for sg: Dictionary in r.signals:
+		var rx := -float(sg["tz"])
+		var rz := float(sg["tx"])
+		var rec := {}
+		for k in ["straight", "diverge"]:
+			var right := 0.0 if k == "straight" else 0.34 * float(sg["side"])
+			var mi := MeshInstance3D.new()
+			var b := BoxMesh.new()
+			b.size = Vector3(0.31, 0.31, 0.31)
+			mi.mesh = b
+			mi.position = Vector3(float(sg["x"]) - float(sg["tx"]) * 0.22 + rx * right, 3.42, float(sg["z"]) - float(sg["tz"]) * 0.22 + rz * right)
+			add_child(mi)
+			rec[k] = mi
+		rec["sw"] = -1
+		_signal_lamps.append(rec)
+
+func _update_signals(r: Rides) -> void:
+	if _signal_lamps.is_empty() or r.trams.is_empty():
+		return
+	var sw: int = r.trams[0].sw
+	for rec: Dictionary in _signal_lamps:
+		if int(rec["sw"]) == sw:
+			continue
+		rec["sw"] = sw
+		(rec["straight"] as MeshInstance3D).material_override = _lamp_mat(0x15181c if sw != 0 else 0xf4f4e8)
+		(rec["diverge"] as MeshInstance3D).material_override = _lamp_mat(0xf4f4e8 if sw != 0 else 0x15181c)
+
 func _update_lamps(r: Rides, force := false) -> void:
 	for e: Dictionary in _gate_lamps:
 		var open := r.gate_open(e["gate"])
@@ -219,6 +251,7 @@ func _process(dt: float) -> void:
 	if _lamp_t <= 0.0:
 		_lamp_t = 0.25
 		_update_lamps(r)
+		_update_signals(r)
 	# machines garées loin : non dessinées (CONFIG.vehicles.*.cullDist) ; une machine conduite reste visible
 	_cull_t -= dt
 	if _cull_t <= 0.0 and _cam != null:

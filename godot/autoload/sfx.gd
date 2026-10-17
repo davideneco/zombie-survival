@@ -290,6 +290,8 @@ func _connect_signals() -> void:
 	Game.round_ended.connect(_on_round_ended)
 	Game.weapon_acquired.connect(func(_id: String) -> void: play("buy"))
 	Game.perk_acquired.connect(func(_id: String) -> void: play("buy"))
+	Game.vaulted.connect(func() -> void: play("vault"))
+	Game.unstuck.connect(func(_a: Vector2, _b: Vector2, _d: float, _c: bool) -> void: play("vault"))
 	Game.door_opened.connect(func(_id: int) -> void: play("buy"))
 	Game.door_denied.connect(func(_id: int) -> void: play("deny"))
 	Game.purchase_denied.connect(func(_price: int) -> void: play("deny"))

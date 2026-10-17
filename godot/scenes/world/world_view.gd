@@ -339,13 +339,16 @@ func _assign_lamps(p: Vector3) -> void:
 	near.sort_custom(func(a, b): return a[0] < b[0])
 	if "--dbg-lights" in OS.get_cmdline_user_args():
 		print("lampes : %d proches de %s ; plus proche %s" % [near.size(), p, near[0] if near.size() > 0 else null])
+	# l'Aube éteint peu à peu les lampadaires (summit.js : setLampScale(1 - 0,92 x lissage(min(1, k x 1,3))))
+	var lk := minf(1.0, (Game.finale.sky_k if Game.finale != null else 0.0) * 1.3)
+	var lamp_scale := 1.0 - 0.92 * (lk * lk * (3.0 - 2.0 * lk))
 	for i in _lamp_lights.size():
 		var l := _lamp_lights[i]
 		if i < near.size():
 			var lp: Array = near[i][1]
 			l.position = Vector3(float(lp[0]), float(lp[1]), float(lp[2]))
 			l.light_color = Config.color(int(lp[3]))
-			l.light_energy = float(lp[4]) * LAMP_ENERGY_K
+			l.light_energy = float(lp[4]) * LAMP_ENERGY_K * lamp_scale
 			l.omni_range = float(lp[5])
 			l.visible = true
 		else:

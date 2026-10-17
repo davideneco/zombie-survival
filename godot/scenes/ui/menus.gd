@@ -151,15 +151,24 @@ func _build_menu(col: Control) -> void:
 	grid.alignment = FlowContainer.ALIGNMENT_CENTER
 	grid.add_theme_constant_override("h_separation", 10)
 	grid.add_theme_constant_override("v_separation", 10)
-	grid.custom_minimum_size = Vector2(900, 0)
+	grid.custom_minimum_size = Vector2(920, 0)
 	p.add_child(grid)
 	for i in CharacterDefs.LIST.size():
 		var c: Dictionary = CharacterDefs.LIST[i]
 		var card := Button.new()
-		card.custom_minimum_size = Vector2(100, 96)
+		card.custom_minimum_size = Vector2(104, 96)
 		card.toggle_mode = false
+		var portrait := "res://assets/portraits/%s.png" % c["id"]   # cuit par tools/bake-portraits.mjs (renderPortraits du JS)
+		if ResourceLoader.exists(portrait):
+			card.icon = load(portrait)
+			card.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			card.vertical_icon_alignment = VERTICAL_ALIGNMENT_TOP
+			card.expand_icon = true
+			card.add_theme_constant_override("icon_max_width", 96)
+			card.custom_minimum_size = Vector2(104, 196)
 		card.text = "%s\n%s" % [c["name"], c["role"]]
-		card.add_theme_font_size_override("font_size", 14)
+		card.add_theme_font_size_override("font_size", 13)
+		card.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART   # « Le Purificateur » passe à la ligne : toutes les cartes font 104 px (une seule rangée de 8)
 		card.add_theme_color_override("font_color", Color(String(c["accent"])))
 		card.add_theme_color_override("font_hover_color", Color(String(c["accent"])).lightened(0.3))
 		card.pressed.connect(func() -> void: settings.set_value("char", i))
@@ -406,9 +415,19 @@ func _do_resume() -> void:
 func _back() -> void:
 	escape()
 
+## La fenêtre perd le focus : en pleine partie (aucune couche ouverte), pause. Renvoie true si la pause vient d'être ouverte.
+func focus_lost() -> bool:
+	if in_game and Game.playing and not Game.over and stack.layers.is_empty():
+		escape()
+		return true
+	return false
+
 # ---------------------------------------------------------------- Échap
 ## Renvoie l'action exécutée (voir UiStack.escape).
 func escape() -> String:
+	if Game.debug_open:   # le menu debug se ferme d'abord (debugMenu.js : Échap)
+		Game.debug_open = false
+		return "debug"
 	if Game.finale != null and Game.finale.orbit_on and not stack.blocks_game():   # vue orbitale de l'Aube : Échap la passe (l'écran « STRASBOURG LIBÉRÉE » suit)
 		Game.finale.end_orbit()
 		return "orbit"

@@ -339,22 +339,23 @@
   let instTotal = 0;
   const mm = new THREE.Matrix4();
   for (const o of inst) {
-    const geo = o.geometry, P = geo.attributes.position, Nn = geo.attributes.normal, UV = geo.attributes.uv;
+    const geo = o.geometry, P = geo.attributes.position, Nn = geo.attributes.normal, UV = geo.attributes.uv, CA = geo.attributes.color;
     const mats = Array.isArray(o.material) ? o.material : [o.material];
     const groups = Array.isArray(o.material) ? geo.groups : [{ start: 0, count: geo.index ? geo.index.count : P.count, materialIndex: 0 }];
     const surf = [];
     for (const grp of groups) {
       const m = mats[grp.materialIndex ?? 0]; if (!m) continue;
-      const remap = new Map(), pos = [], nor = [], uv = [], idx = [];
+      const remap = new Map(), pos = [], nor = [], uv = [], col = [], idx = [];
       const index = geo.index ? geo.index.array : null;
+      const useCol = !!(m.vertexColors && CA); // couleurs de sommet (rails du tram : lit, rails, traverse) : sans elles les rails sont blancs
       const n = Math.min(grp.count, (index ? index.length : P.count) - grp.start);
       for (let t = 0; t < n; t++) {
         const v = index ? index[grp.start + t] : grp.start + t;
         let k = remap.get(v);
-        if (k === undefined) { k = remap.size; remap.set(v, k); pos.push(P.getX(v), P.getY(v), P.getZ(v)); nor.push(Nn ? Nn.getX(v) : 0, Nn ? Nn.getY(v) : 1, Nn ? Nn.getZ(v) : 0); uv.push(UV ? UV.getX(v) : 0, UV ? 1 - UV.getY(v) : 0); }
+        if (k === undefined) { k = remap.size; remap.set(v, k); pos.push(P.getX(v), P.getY(v), P.getZ(v)); nor.push(Nn ? Nn.getX(v) : 0, Nn ? Nn.getY(v) : 1, Nn ? Nn.getZ(v) : 0); uv.push(UV ? UV.getX(v) : 0, UV ? 1 - UV.getY(v) : 0); if (useCol) col.push(CA.getX(v), CA.getY(v), CA.getZ(v), 1); }
         idx.push(k);
       }
-      surf.push({ mat: await matId(m), nv: remap.size, ni: idx.length, pos: addBlob(pos, Float32Array), nor: addBlob(nor, Float32Array), uv: addBlob(uv, Float32Array), idx: addBlob(idx, Uint32Array) });
+      surf.push({ mat: await matId(m), nv: remap.size, ni: idx.length, pos: addBlob(pos, Float32Array), nor: addBlob(nor, Float32Array), uv: addBlob(uv, Float32Array), idx: addBlob(idx, Uint32Array), ...(useCol ? { col: addBlob(col, Float32Array) } : {}) });
     }
     // transformations monde : 12 flottants par instance, lignes de la matrice 3x4 (format du tampon d'un MultiMesh 3D de Godot)
     const xf = new Float32Array(o.count * 12);

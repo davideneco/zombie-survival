@@ -51,6 +51,7 @@ const PAGE = `(async () => {
       stops: info.tracks.map((t) => ({ line: t.id, L: t.L, stops: t.stops.map((s) => ({ name: s.name, s: s.s, len: s.len })) })),
       gates: info.gates.map((q) => ({ line: q.line, s: q.s, door: q.door.id })),
       routeGates: Object.fromEntries(Object.entries(info.routeGates || {}).map(([k, a]) => [k, a.map((q) => ({ line: q.line, s: q.s, door: q.door.id }))])),
+      signals: (info.signals || []).map((q) => ({ arm: q.arm, side: q.side, x: r4(q.x), z: r4(q.z), tx: r4(q.tx), tz: r4(q.tz) })), // têtes de signal de l'aiguillage (feux « tout droit » / « dévié » : le port les redessine selon le réglage)
       substation: info.substation ? { x: info.substation.x, z: info.substation.z } : null,
       decor: (w.hdf?.trams || []).map((d) => ({ line: d.line, lo: d.lo, hi: d.hi, L: d.L, modules: d.modules, x: d.x, z: d.z })),
       junction: info.net.junction ? { name: info.net.junction.name, x: info.net.junction.x, z: info.net.junction.z, sNode: info.net.junction.sNode, routes: info.net.junction.routes.map((r) => ({ id: r.id, L: r.track.L, meta: r.meta })) } : null,
