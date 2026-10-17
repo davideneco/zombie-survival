@@ -189,3 +189,4 @@ func area_damage(g: Node, pos: Vector3, radius: float, damage: float) -> void:
 	if pts > 0:
 		g.kills += kills
 		g.points += pts
+		g.points_gained.emit(pts, "")

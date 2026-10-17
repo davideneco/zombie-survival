@@ -1,288 +1,618 @@
 extends CanvasLayer
-## HUD minimal de J1 : santé, munitions, points, manche, annonce, réticule, voile rouge des dégâts, écran de fin (rejouer avec R ou clic).
+## HUD complet de J7 (index.html + src/hud.js) : radar, boussole et zone, manche / points / atouts, arme, inventaire, munitions, santé,
+## grenades, bonus actifs, tableau de bord du véhicule, invite, annonce, popups de points, marqueur de touche, voile des dégâts, éclair de la
+## Bombe, barre de boss, bandeau, marque de la Sentence, Fanal, vue « à terre », message discret, effets cinéma. Ne fait que lire `Game` :
+## les calculs sont dans HudCalc et Prompts. Les cartes des coéquipiers et le badge du salon arrivent avec le réseau (J12).
 
-signal restart_requested
+const Radar := preload("res://scenes/ui/radar.gd")
+const Compass := preload("res://scenes/ui/compass.gd")
+const HURT_FADE := 1.5
+const POPUP_TIME := 0.9
+const ANNOUNCE_FADE := 0.6
 
-const HEALTH_COLOR := Color("c0392b")
-const TEXT_COLOR := Color("e8e8e0")
-const HURT_FADE := 2.5
-const ANNOUNCE_TIME := 2.5
+## Barre horizontale (fond sombre, bordure grise, remplissage, repère facultatif).
+class Bar extends Control:
+	var frac := 1.0
+	var color := Color("c22")
+	var tick := -1.0
+	var border := Color("555555")
+	func _draw() -> void:
+		draw_rect(Rect2(Vector2.ZERO, size), Color(0, 0, 0, 0.6))
+		draw_rect(Rect2(1, 1, maxf(0.0, (size.x - 2) * clampf(frac, 0.0, 1.0)), size.y - 2), color)
+		draw_rect(Rect2(0.5, 0.5, size.x - 1, size.y - 1), border, false, 1.0)
+		if tick >= 0.0:
+			draw_rect(Rect2(size.x * tick - 1, -3, 2, size.y + 6), Color.WHITE)
+	func set_bar(f: float, c: Color) -> void:
+		frac = f
+		color = c
+		queue_redraw()
 
-var _health_bar: ProgressBar
-var _ammo: Label
+## Marqueur de touche : deux traits en croix de 45 degrés, rouge quand le zombie meurt.
+class Hitmarker extends Control:
+	var kill := false
+	var a := 0.0
+	func _draw() -> void:
+		var c := Color(1, 0.2, 0.2, a) if kill else Color(1, 1, 1, a)
+		var s := 10.0 * (0.9 + 0.5 * a)
+		draw_line(Vector2(-s, -s), Vector2(s, s), c, 2.0)
+		draw_line(Vector2(-s, s), Vector2(s, -s), c, 2.0)
+
+## Réticule : quatre traits blancs autour du centre.
+class Crosshair extends Control:
+	func _draw() -> void:
+		for r: Rect2 in [Rect2(-1, -14, 2, 8), Rect2(-1, 6, 2, 8), Rect2(-14, -1, 8, 2), Rect2(6, -1, 8, 2)]:
+			draw_rect(Rect2(r.position + Vector2(1, 1), r.size), Color(0, 0, 0, 0.7))
+			draw_rect(r, Color.WHITE)
+
+var binds: Keybinds
+var root: Control
+var radar: Control
+var compass: Control
+var _vignette: ColorRect
+var _flash: ColorRect
+var _cinema: ColorRect
+var _crosshair: Control
+var _hit: Hitmarker
+var _round_num: Label
 var _points: Label
-var _round: Label
+var _perks_row: HBoxContainer
+var _weapon: Label
+var _caliber: Label
+var _inv: Label
+var _ammo: Label
+var _health: Bar
+var _nades: Label
+var _zone: Label
+var _map_hint: Label
+var _prompt: PanelContainer
+var _prompt_l: Label
 var _announce: Label
 var _announce_sub: Label
-var _prompt: Label
-var _gauge: Label
-var _fuel_bar: ProgressBar
-var _hp_bar: ProgressBar
-var _vignette: ColorRect
-var _end_panel: PanelContainer
-var _end_stats: Label
+var _buffs: HBoxContainer
+var _buff_labels: Dictionary = {}
+var _veh: VBoxContainer
+var _v_switch: PanelContainer
+var _v_switch_l: Label
+var _v_speedo: Label
+var _v_speed: Bar
+var _v_hp_row: HBoxContainer
+var _v_hp: Bar
+var _v_hp_txt: Label
+var _v_hp_name: Label
+var _v_fuel_row: HBoxContainer
+var _v_fuel: Bar
+var _v_fuel_txt: Label
+var _v_fuel_name: Label
+var _banner: PanelContainer
+var _banner_l: Label
+var _boss: VBoxContainer
+var _boss_name: Label
+var _boss_bar: Bar
+var _boss_inv: Label
+var _mark: PanelContainer
+var _mark_l: Label
+var _fanal: VBoxContainer
+var _fanal_l: Label
+var _fanal_bar: Bar
+var _down: VBoxContainer
+var _down_sec: Label
+var _down_sub: Label
+var _down_extra: Label
+var _toast: PanelContainer
+var _toast_l: Label
 var _announce_t := 0.0
+var _announce_len := 3.0
 var _hurt := 0.0
-var _perks_row: HBoxContainer      ## J6 : atouts achetés (pastilles colorées)
-var _perk_shown := ""
-var _buffs: Label                  ## J6 : Mort instantanée, Points doubles (secondes restantes)
-var _down: Label                   ## J6 : à terre
-var _flash: ColorRect              ## J6 : éclair blanc de la Bombe
-var _flash_a := 0.0
+var _nuke := 0.0
+var _toast_t := 0.0
+var _perk_key := "?"
+var _inv_key := "?"
+var _boss_ticks: Array = []
+var _low := 0.0
 
 func _ready() -> void:
 	layer = 10
-	var root := Control.new()
-	root.set_anchors_preset(Control.PRESET_FULL_RECT)
+	binds = Game.settings.binds
+	root = Control.new()
+	UiTheme.fill_rect(root)
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.theme = UiTheme.make_theme()
 	add_child(root)
-	_vignette = ColorRect.new()
-	_vignette.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_vignette.color = Color(0.7, 0, 0, 0)
-	_vignette.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	root.add_child(_vignette)
-	# réticule
-	var cross := Label.new()
-	cross.text = "+"
-	cross.add_theme_font_size_override("font_size", 28)
-	cross.set_anchors_preset(Control.PRESET_CENTER)
-	cross.grow_horizontal = Control.GROW_DIRECTION_BOTH
-	cross.grow_vertical = Control.GROW_DIRECTION_BOTH
-	cross.modulate = Color(1, 1, 1, 0.8)
-	root.add_child(cross)
-	# bas gauche : santé
-	_health_bar = ProgressBar.new()
-	_health_bar.custom_minimum_size = Vector2(260, 22)
-	_health_bar.show_percentage = false
-	_health_bar.position = Vector2(24, 0)
-	_health_bar.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
-	_health_bar.offset_left = 24
-	_health_bar.offset_top = -50
-	_health_bar.offset_right = 284
-	_health_bar.offset_bottom = -28
-	var fill := StyleBoxFlat.new()
-	fill.bg_color = HEALTH_COLOR
-	_health_bar.add_theme_stylebox_override("fill", fill)
-	root.add_child(_health_bar)
-	# bas droite : munitions
-	_ammo = _label(root, Control.PRESET_BOTTOM_RIGHT, 34, HORIZONTAL_ALIGNMENT_RIGHT)
-	_ammo.offset_left = -480
-	_ammo.offset_top = -130
-	_ammo.offset_right = -24
-	_ammo.offset_bottom = -20
-	# haut gauche : manche ; haut droite : points
-	_round = _label(root, Control.PRESET_TOP_LEFT, 40, HORIZONTAL_ALIGNMENT_LEFT)
-	_round.offset_left = 24
-	_round.offset_top = 14
-	_round.offset_right = 300
-	_round.offset_bottom = 70
-	_points = _label(root, Control.PRESET_TOP_RIGHT, 32, HORIZONTAL_ALIGNMENT_RIGHT)
-	_points.offset_left = -330
-	_points.offset_top = 18
-	_points.offset_right = -24
-	_points.offset_bottom = 70
-	# annonce
-	_announce = _label(root, Control.PRESET_CENTER_TOP, 52, HORIZONTAL_ALIGNMENT_CENTER)
-	_announce.offset_left = -400
-	_announce.offset_right = 400
-	_announce.offset_top = 90
-	_announce.offset_bottom = 170
-	_announce_sub = _label(root, Control.PRESET_CENTER_TOP, 24, HORIZONTAL_ALIGNMENT_CENTER)
-	_announce_sub.offset_left = -500
-	_announce_sub.offset_right = 500
-	_announce_sub.offset_top = 150
-	_announce_sub.offset_bottom = 190
-	# J5 : invite d'interaction (bas du centre) et tableau de bord du véhicule
-	_prompt = _label(root, Control.PRESET_CENTER_BOTTOM, 24, HORIZONTAL_ALIGNMENT_CENTER)
-	_prompt.offset_left = -520
-	_prompt.offset_right = 520
-	_prompt.offset_top = -190
-	_prompt.offset_bottom = -150
-	_gauge = _label(root, Control.PRESET_CENTER_BOTTOM, 30, HORIZONTAL_ALIGNMENT_CENTER)
-	_gauge.offset_left = -260
-	_gauge.offset_right = 260
-	_gauge.offset_top = -140
-	_gauge.offset_bottom = -90
-	_fuel_bar = _bar(root, Color("e0a82e"), -260, -84)
-	_hp_bar = _bar(root, Color("c0392b"), -260, -62)
-	# J6 : atouts (bas gauche, au-dessus de la santé), bonus actifs (gauche), à terre, éclair de la Bombe
-	_perks_row = HBoxContainer.new()
-	_perks_row.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
-	_perks_row.offset_left = 24
-	_perks_row.offset_top = -92
-	_perks_row.offset_right = 420
-	_perks_row.offset_bottom = -56
-	_perks_row.add_theme_constant_override("separation", 6)
-	_perks_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	root.add_child(_perks_row)
-	_buffs = _label(root, Control.PRESET_CENTER_LEFT, 26, HORIZONTAL_ALIGNMENT_LEFT)
-	_buffs.offset_left = 24
-	_buffs.offset_top = -40
-	_buffs.offset_right = 520
-	_buffs.offset_bottom = 60
-	_down = _label(root, Control.PRESET_CENTER, 44, HORIZONTAL_ALIGNMENT_CENTER)
-	_down.offset_left = -400
-	_down.offset_right = 400
-	_down.offset_top = 60
-	_down.offset_bottom = 140
-	_down.add_theme_color_override("font_color", Color("ff6a5a"))
-	_flash = ColorRect.new()
-	_flash.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_flash.color = Color(1, 1, 1, 0)
-	_flash.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	root.add_child(_flash)
-	Game.powerup_collected.connect(func(t: String) -> void:
-		if t == "nuke":
-			_flash_a = 1.0)
-	# écran de fin
-	_end_panel = PanelContainer.new()
-	_end_panel.set_anchors_preset(Control.PRESET_CENTER)
-	_end_panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
-	_end_panel.grow_vertical = Control.GROW_DIRECTION_BOTH
-	_end_panel.visible = false
-	_end_panel.mouse_filter = Control.MOUSE_FILTER_PASS
-	var box := VBoxContainer.new()
-	box.add_theme_constant_override("separation", 14)
-	_end_panel.add_child(box)
-	var title := Label.new()
-	title.text = "VOUS ÊTES MORT"
-	title.add_theme_font_size_override("font_size", 48)
-	title.add_theme_color_override("font_color", HEALTH_COLOR)
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	box.add_child(title)
-	_end_stats = Label.new()
-	_end_stats.add_theme_font_size_override("font_size", 26)
-	_end_stats.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	box.add_child(_end_stats)
-	var btn := Button.new()
-	btn.text = "REJOUER (R)"
-	btn.add_theme_font_size_override("font_size", 26)
-	btn.pressed.connect(func(): restart_requested.emit())
-	box.add_child(btn)
-	root.add_child(_end_panel)
+	_build_cinema()
+	_build_overlays()
+	_build_top()
+	_build_left()
+	_build_right()
+	_build_center()
+	_build_vehicle()
+	_build_finale()
+	Game.points_gained.connect(_on_points)
+	Game.hit_confirmed.connect(show_hit)
+	Game.powerup_collected.connect(_on_powerup)
+	Game.player_hurt.connect(func(_a: float) -> void: hurt_flash())
+	Game.settings.changed.connect(func(k: String) -> void:
+		if k == "cinema":
+			_cinema.visible = bool(Game.settings.get_value("cinema")))
+	binds.changed.connect(refresh_keys)
+	_cinema.visible = bool(Game.settings.get_value("cinema"))
+	refresh_keys()
 
-func _label(parent: Control, preset: int, size: int, align: int) -> Label:
-	var l := Label.new()
-	l.add_theme_font_size_override("font_size", size)
-	l.add_theme_color_override("font_color", TEXT_COLOR)
-	l.add_theme_color_override("font_outline_color", Color.BLACK)
-	l.add_theme_constant_override("outline_size", 6)
+func _lbl(parent: Node, text: String, size: int, color: Color, align := HORIZONTAL_ALIGNMENT_LEFT, heading := true) -> Label:
+	var l := UiTheme.label(text, size, color, UiTheme.heading() if heading else UiTheme.body(), 5)
 	l.horizontal_alignment = align as HorizontalAlignment
-	l.set_anchors_preset(preset)
-	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	parent.add_child(l)
 	return l
 
-func _bar(parent: Control, color: Color, left: float, top: float) -> ProgressBar:
-	var b := ProgressBar.new()
-	b.show_percentage = false
-	b.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
-	b.offset_left = left
-	b.offset_right = left + 520
-	b.offset_top = top
-	b.offset_bottom = top + 14
-	b.max_value = 1.0
-	var fill := StyleBoxFlat.new()
-	fill.bg_color = color
-	b.add_theme_stylebox_override("fill", fill)
-	b.visible = false
-	b.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	parent.add_child(b)
-	return b
+# ---------------------------------------------------------------- construction
+func _build_cinema() -> void:
+	_cinema = ColorRect.new()
+	UiTheme.fill_rect(_cinema)
+	_cinema.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var sh := Shader.new()
+	sh.code = UiTheme.CINEMA_SHADER
+	var m := ShaderMaterial.new()
+	m.shader = sh
+	_cinema.material = m
+	root.add_child(_cinema)
 
-func announce(text: String, sub := "") -> void:
-	_announce.text = text
+func _build_overlays() -> void:
+	_vignette = ColorRect.new()
+	UiTheme.fill_rect(_vignette)
+	_vignette.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var sh := Shader.new()
+	sh.code = UiTheme.VIGNETTE_SHADER
+	var m := ShaderMaterial.new()
+	m.shader = sh
+	_vignette.material = m
+	root.add_child(_vignette)
+	_flash = ColorRect.new()
+	UiTheme.fill_rect(_flash)
+	_flash.color = Color(1, 1, 1, 0)
+	_flash.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(_flash)
+
+func _build_top() -> void:
+	radar = Radar.new()
+	UiTheme.place(radar, 0, 0, 24, 24, 120, 120)
+	root.add_child(radar)
+	compass = Compass.new()
+	UiTheme.place(compass, 0.5, 0, -210, 10, 420, 30)
+	root.add_child(compass)
+	_zone = _lbl(root, "", 16, UiTheme.GOLD, HORIZONTAL_ALIGNMENT_CENTER)
+	UiTheme.place(_zone, 0.5, 0, -250, 43, 500, 22)
+	_map_hint = _lbl(root, "", 11, Color("999999"), HORIZONTAL_ALIGNMENT_CENTER, false)
+	UiTheme.place(_map_hint, 0.5, 0, -250, 66, 500, 16)
+
+func _build_left() -> void:
+	var small := _lbl(root, "MANCHE", 16, Color("cccccc"))
+	UiTheme.place(small, 0, 1, 27, -118, 200, 22)
+	_round_num = _lbl(root, "1", 80, Color("a31616"))
+	UiTheme.place(_round_num, 0, 1, 24, -112, 240, 100)
+	_points = _lbl(root, "0", 34, UiTheme.GOLD)
+	UiTheme.place(_points, 0, 1, 24, -166, 300, 44)
+	_perks_row = HBoxContainer.new()
+	_perks_row.add_theme_constant_override("separation", 6)
+	_perks_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	UiTheme.place(_perks_row, 0, 1, 24, -212, 420, 34)
+	root.add_child(_perks_row)
+
+func _build_right() -> void:
+	var box := VBoxContainer.new()
+	box.alignment = BoxContainer.ALIGNMENT_END
+	box.add_theme_constant_override("separation", 0)
+	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	UiTheme.place(box, 1, 1, -328, -196, 300, 176)
+	root.add_child(box)
+	_weapon = _lbl(box, "", 18, Color("bbbbbb"), HORIZONTAL_ALIGNMENT_RIGHT)
+	_caliber = _lbl(box, "", 12, Color("888888"), HORIZONTAL_ALIGNMENT_RIGHT, false)
+	_inv = _lbl(box, "", 13, Color("888888"), HORIZONTAL_ALIGNMENT_RIGHT, false)
+	_inv.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_ammo = _lbl(box, "", 56, Color.WHITE, HORIZONTAL_ALIGNMENT_RIGHT)
+	_health = Bar.new()
+	_health.custom_minimum_size = Vector2(260, 12)
+	_health.size_flags_horizontal = Control.SIZE_SHRINK_END
+	box.add_child(_health)
+	_nades = _lbl(box, "", 16, Color("9fd27a"), HORIZONTAL_ALIGNMENT_RIGHT, false)
+
+func _build_center() -> void:
+	_crosshair = Crosshair.new()
+	UiTheme.place(_crosshair, 0.5, 0.5, 0, 0, 0, 0)
+	root.add_child(_crosshair)
+	_hit = Hitmarker.new()
+	UiTheme.place(_hit, 0.5, 0.5, 0, 0, 0, 0)
+	root.add_child(_hit)
+	_prompt = PanelContainer.new()
+	_prompt.add_theme_stylebox_override("panel", UiTheme.box(Color(0, 0, 0, 0.5), Color(0, 0, 0, 0), 0, 4, 4))
+	_prompt.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_prompt.anchor_left = 0.5
+	_prompt.anchor_right = 0.5
+	_prompt.anchor_top = 0.62
+	_prompt.anchor_bottom = 0.62
+	_prompt.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_prompt_l = _lbl(_prompt, "", 22, Color.WHITE, HORIZONTAL_ALIGNMENT_CENTER)
+	_prompt.visible = false
+	root.add_child(_prompt)
+	_announce = _lbl(root, "", 64, Color("b01818"), HORIZONTAL_ALIGNMENT_CENTER)
+	UiTheme.place(_announce, 0.5, 0, -560, 196, 1120, 78)
+	_announce_sub = _lbl(root, "", 22, Color("dddddd"), HORIZONTAL_ALIGNMENT_CENTER)
+	UiTheme.place(_announce_sub, 0.5, 0, -560, 274, 1120, 30)
+	_buffs = HBoxContainer.new()
+	_buffs.alignment = BoxContainer.ALIGNMENT_CENTER
+	_buffs.add_theme_constant_override("separation", 16)
+	_buffs.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	UiTheme.place(_buffs, 0.5, 1, -300, -128, 600, 40)
+	root.add_child(_buffs)
+	_toast = PanelContainer.new()
+	_toast.add_theme_stylebox_override("panel", UiTheme.box(Color(5 / 255.0, 12 / 255.0, 18 / 255.0, 0.78), Color(1, 1, 1, 0.25), 1, 4, 3))
+	_toast.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_toast.anchor_left = 0.5
+	_toast.anchor_right = 0.5
+	_toast.offset_top = 96
+	_toast.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_toast_l = _lbl(_toast, "", 14, Color("cfe3ff"), HORIZONTAL_ALIGNMENT_CENTER, false)
+	_toast.visible = false
+	root.add_child(_toast)
+
+func _build_vehicle() -> void:
+	_veh = VBoxContainer.new()
+	_veh.alignment = BoxContainer.ALIGNMENT_END
+	_veh.add_theme_constant_override("separation", 3)
+	_veh.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	UiTheme.place(_veh, 0.5, 1, -140, -190, 280, 170)
+	_veh.visible = false
+	root.add_child(_veh)
+	_v_switch = PanelContainer.new()
+	_v_switch.add_theme_stylebox_override("panel", UiTheme.box(Color(10 / 255.0, 12 / 255.0, 16 / 255.0, 0.72), Color("5a6068"), 1, 4, 3))
+	_v_switch.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	_v_switch_l = _lbl(_v_switch, "", 13, Color("f4f4e8"), HORIZONTAL_ALIGNMENT_CENTER, false)
+	_v_switch.visible = false
+	_veh.add_child(_v_switch)
+	_v_speedo = _lbl(_veh, "", 44, Color("9aa0a6"), HORIZONTAL_ALIGNMENT_CENTER)
+	_v_speed = Bar.new()
+	_v_speed.custom_minimum_size = Vector2(280, 8)
+	_v_speed.color = Color("9aa0a6")
+	_veh.add_child(_v_speed)
+	var r1 := _veh_row("PV MOTO")
+	_v_hp_row = r1[0]
+	_v_hp_name = r1[1]
+	_v_hp = r1[2]
+	_v_hp_txt = r1[3]
+	var r2 := _veh_row("ESSENCE")
+	_v_fuel_row = r2[0]
+	_v_fuel_name = r2[1]
+	_v_fuel = r2[2]
+	_v_fuel_txt = r2[3]
+
+func _veh_row(name: String) -> Array:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 6)
+	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_veh.add_child(row)
+	var n := _lbl(row, name, 11, Color("cccccc"), HORIZONTAL_ALIGNMENT_RIGHT, false)
+	n.custom_minimum_size = Vector2(62, 0)
+	var bar := Bar.new()
+	bar.custom_minimum_size = Vector2(0, 9)
+	bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	bar.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	row.add_child(bar)
+	var t := _lbl(row, "", 11, Color("cccccc"), HORIZONTAL_ALIGNMENT_LEFT, false)
+	t.custom_minimum_size = Vector2(38, 0)
+	return [row, n, bar, t]
+
+func _build_finale() -> void:
+	_banner = PanelContainer.new()
+	_banner.add_theme_stylebox_override("panel", UiTheme.box(Color(90 / 255.0, 0, 0, 0.75), Color("ff5040"), 1, 4, 5))
+	_banner.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_banner.anchor_left = 0.5
+	_banner.anchor_right = 0.5
+	_banner.offset_top = 86
+	_banner.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_banner_l = _lbl(_banner, "", 22, Color("ffd8c8"), HORIZONTAL_ALIGNMENT_CENTER)
+	_banner.visible = false
+	root.add_child(_banner)
+	_boss = VBoxContainer.new()
+	_boss.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	UiTheme.place(_boss, 0.5, 0, -260, 128, 520, 50)
+	_boss.visible = false
+	root.add_child(_boss)
+	_boss_name = _lbl(_boss, "", 20, Color("ffb0a0"), HORIZONTAL_ALIGNMENT_CENTER)
+	_boss_bar = Bar.new()
+	_boss_bar.custom_minimum_size = Vector2(520, 14)
+	_boss_bar.border = Color("aa3333")
+	_boss.add_child(_boss_bar)
+	_boss_inv = _lbl(_boss_bar, "INVULNÉRABLE", 11, Color("e8eef8"), HORIZONTAL_ALIGNMENT_CENTER, false)
+	UiTheme.place(_boss_inv, 0, 0, 0, -1, 520, 16)
+	_boss_inv.visible = false
+	_mark = PanelContainer.new()
+	_mark.add_theme_stylebox_override("panel", UiTheme.box(Color(120 / 255.0, 0, 0, 0.78), Color("ff3a28"), 2, 4, 5))
+	_mark.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_mark.anchor_left = 0.5
+	_mark.anchor_right = 0.5
+	_mark.anchor_top = 1
+	_mark.anchor_bottom = 1
+	_mark.offset_top = -200
+	_mark.offset_bottom = -200
+	_mark.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_mark_l = _lbl(_mark, "", 24, Color("ffd8d0"), HORIZONTAL_ALIGNMENT_CENTER)
+	_mark.visible = false
+	root.add_child(_mark)
+	_fanal = VBoxContainer.new()
+	_fanal.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	UiTheme.place(_fanal, 0.5, 1, -190, -158, 380, 40)
+	_fanal.visible = false
+	root.add_child(_fanal)
+	_fanal_l = _lbl(_fanal, "", 18, Color("ffe9b0"), HORIZONTAL_ALIGNMENT_CENTER)
+	_fanal_bar = Bar.new()
+	_fanal_bar.custom_minimum_size = Vector2(380, 12)
+	_fanal_bar.border = Color("d9a441")
+	_fanal_bar.color = Color("ffb040")
+	_fanal.add_child(_fanal_bar)
+	_down = VBoxContainer.new()
+	_down.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	UiTheme.place(_down, 0.5, 0.34, -300, 0, 600, 150)
+	_down.visible = false
+	root.add_child(_down)
+	_down_sec = _lbl(_down, "", 64, Color("ff4a3a"), HORIZONTAL_ALIGNMENT_CENTER)
+	_down_sub = _lbl(_down, "VOUS ÊTES À TERRE", 16, Color("ffb0a0"), HORIZONTAL_ALIGNMENT_CENTER, false)
+	_down_extra = _lbl(_down, "", 20, Color.WHITE, HORIZONTAL_ALIGNMENT_CENTER, false)
+
+# ---------------------------------------------------------------- touches
+## Une touche a changé (Options > Touches) : les textes qui la citent sont refaits.
+func refresh_keys() -> void:
+	_inv_key = "?"
+	_perk_key = "?"
+	_map_hint.text = "%s carte" % binds.tag("map")
+
+# ---------------------------------------------------------------- évènements
+func announce(title: String, sub := "", duration := 3.0) -> void:
+	_announce.text = title
 	_announce_sub.text = sub
-	_announce_t = ANNOUNCE_TIME
+	_announce_t = duration
+	_announce_len = duration
 
 func hurt_flash() -> void:
 	_hurt = 1.0
 
-func show_end(stats: String) -> void:
-	_end_stats.text = stats
-	_end_panel.visible = true
+func flash_nuke() -> void:
+	_nuke = 1.0
 
-func hide_end() -> void:
-	_end_panel.visible = false
+func show_hit(kill: bool) -> void:
+	_hit.kill = kill
+	_hit.a = 1.0
+	_hit.queue_redraw()
 
+## Texte qui monte et s'estompe à côté du réticule (popup du JS) ; cls : "", "head" (rouge, gras), "bonus" (vert).
+func popup(text: String, cls := "") -> void:
+	var col := Color("ffd24a")
+	var size := 22
+	if cls == "head":
+		col = Color("ff5a3a")
+		size = 26
+	elif cls == "bonus":
+		col = Color("55ff77")
+		size = 26
+	var l := _lbl(root, text, size, col, HORIZONTAL_ALIGNMENT_LEFT)
+	var jitter := randf_range(-15.0, 15.0)
+	UiTheme.place(l, 0.5, 0.5, 40, -10 + jitter - size * 0.6, 360, size + 10)
+	var tw := create_tween()
+	tw.set_parallel(true)
+	tw.tween_property(l, "position:y", l.position.y - 50.0, POPUP_TIME).set_ease(Tween.EASE_OUT)
+	tw.tween_property(l, "modulate:a", 0.0, POPUP_TIME).set_ease(Tween.EASE_IN)
+	tw.chain().tween_callback(l.queue_free)
+
+func toast(text: String, seconds := 4.0) -> void:
+	_toast_l.text = text
+	_toast.visible = true
+	_toast_t = seconds
+
+func _on_points(amount: int, cls: String) -> void:
+	popup("+%d" % amount, cls)
+
+func _on_powerup(type: String) -> void:
+	match type:
+		"fuel":
+			popup("+2,5 L ESSENCE", "bonus")
+		"max_ammo":
+			popup("MUNITIONS MAX", "bonus")
+		"insta_kill":
+			popup("MORT INSTANTANÉE", "bonus")
+		"nuke":
+			popup("+400 BOMBE", "bonus")
+			flash_nuke()
+		"double_points":
+			popup("POINTS DOUBLES", "bonus")
+
+# ---------------------------------------------------------------- setters du finale (J10 les appellera ; --hud-demo les montre)
+func set_banner(text: String) -> void:
+	_banner.visible = text != ""
+	_banner_l.text = text
+
+## Barre de boss : { hp, max, phase, name, inv, thresholds } ou {} pour la retirer. Le Bourreau : barre coupée aux seuils de phase et
+## « I · LE BOURREAU »… ; le mini-boss (Maître Tanneur) : une seule barre sans coupure.
+func set_boss_bar(b: Dictionary) -> void:
+	_boss.visible = not b.is_empty()
+	if b.is_empty():
+		return
+	var th: Array = b.get("thresholds", [])
+	var inv := bool(b.get("inv", false))
+	var phase := int(b.get("phase", 1))
+	var roman := ["I", "II", "III", "IV"]
+	_boss_name.text = ("%s · %s" % [roman[clampi(phase - 1, 0, 3)], b["name"]]) if not th.is_empty() else String(b["name"])
+	_boss_name.add_theme_color_override("font_color", Color("c4ccd8") if inv else Color("ffb0a0"))
+	_boss_bar.set_bar(float(b["hp"]) / float(b["max"]), Color("8a909a") if inv else (Color("e8561c") if phase >= 4 else Color("dd2222")))
+	_boss_inv.visible = inv
+	for t in _boss_ticks:
+		t.queue_free()
+	_boss_ticks.clear()
+	for f: float in th:
+		var t := ColorRect.new()
+		t.color = Color(0.95, 0.82, 0.78, 0.85)
+		t.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		UiTheme.place(t, f, 0, -1, -3, 2, 20)
+		_boss_bar.add_child(t)
+		_boss_ticks.append(t)
+
+func set_mark(text: String) -> void:
+	_mark.visible = text != ""
+	_mark_l.text = text
+
+## Jauge du Fanal d'Erwin (Acte V) ; frac < 0 la retire.
+func set_fanal(frac: float, text := "") -> void:
+	_fanal.visible = frac >= 0.0
+	if frac >= 0.0:
+		_fanal_l.text = text
+		_fanal_bar.set_bar(frac, Color("ffb040"))
+
+# ---------------------------------------------------------------- mise à jour
 func _process(dt: float) -> void:
-	if Game.player == null:
+	var p: PlayerSim = Game.player
+	if p == null:
 		return
-	_health_bar.max_value = Game.player.max_health
-	_health_bar.value = Game.player.health
-	var w := Game.weapon
-	_ammo.text = ("RECHARGE…  " if w.reloading else "") + "%d / %d\n%s    G x%d" % [w.ammo, w.reserve, String(w.cfg.get("name", "")), Game.arms.grenades]
-	_points.text = "%d" % Game.points
-	_round.text = "MANCHE %d" % Game.round_number if Game.round_number > 0 else "PRÉPAREZ-VOUS"
+	_update_basic(dt, p)
+	_update_vehicle()
+	_update_perks_buffs(dt)
+	_update_downed(p)
+	_update_overlays(dt)
+
+func _update_basic(dt: float, p: PlayerSim) -> void:
+	var w: WeaponState = Game.arms.current
+	_health.set_bar(p.health / p.max_health, Color("cc2222"))
+	_low = 1.0 - p.health / p.max_health
+	_points.text = HudCalc.points_text(Game.points)
+	_round_num.text = str(maxi(1, Game.round_number))
+	var wname := String(w.cfg.get("name", ""))
+	_weapon.text = wname
+	_caliber.text = String(w.cfg.get("caliber", ""))
+	_caliber.visible = _caliber.text != ""
+	var ammo := HudCalc.ammo_text(w.ammo, w.reserve, w.reloading)
+	if w.cfg.has("gl"):
+		ammo += "  [40 mm x%d]" % w.gl
+	_ammo.text = ammo
+	_ammo.add_theme_font_size_override("font_size", 40 if w.reloading else 56)
+	var inv_key := ""
+	var parts: Array = []
+	var inv: Array = []
+	for ws in Game.arms.inventory:
+		inv.append({"id": ws.id, "pap": ws.pap})
+	var labels := PackedStringArray([binds.label("weapon1"), binds.label("weapon2"), binds.label("weapon3")])
+	parts = HudCalc.inventory_parts(inv, labels)
+	for i in parts.size():
+		inv_key += ("*" if i == Game.arms.idx else "") + parts[i] + "|"
+	if inv_key != _inv_key:
+		_inv_key = inv_key
+		_inv.text = "  ·  ".join(PackedStringArray(parts))
+	_nades.text = "GRENADES %s %s" % [binds.tag("grenade"), ("● ".repeat(Game.arms.grenades) if Game.arms.grenades > 0 else "—")]
+	var zone := ""
+	if Game.world != null:
+		var zi: int = Game.world.zone_of(p.pos.x, p.pos.z)
+		zone = String(Game.world.zone_names[zi]) if zi >= 0 else ""
+	_zone.text = zone.to_upper() if zone != "" else ""
+	(compass as Control).call("set_yaw", p.yaw)
+	var pr := "" if Game.over else Prompts.text(Game, binds)
+	_prompt.visible = pr != ""
+	_prompt_l.text = pr
 	_announce_t = maxf(0.0, _announce_t - dt)
-	_announce.modulate.a = clampf(_announce_t, 0.0, 1.0)
-	_announce_sub.modulate.a = clampf(_announce_t, 0.0, 1.0)
-	_update_rides()
-	_update_j6(dt)
-	_hurt = maxf(0.0, _hurt - dt * HURT_FADE)
-	var low := 1.0 - Game.player.health / Game.player.max_health
-	_vignette.color.a = clampf(_hurt * 0.45 + low * low * 0.25, 0.0, 0.7)
+	var fade := clampf(_announce_t / ANNOUNCE_FADE, 0.0, 1.0)
+	_announce.modulate.a = fade
+	_announce_sub.modulate.a = fade
+	if _toast.visible:
+		_toast_t -= dt
+		if _toast_t <= 0.0:
+			_toast.visible = false
 
-## J5 : invite d'interaction et tableau de bord (vitesse, essence ou énergie, PV) du véhicule occupé.
-func _update_rides() -> void:
+func _update_vehicle() -> void:
 	var r: Rides = Game.rides
-	if r == null or Game.over:
-		_prompt.text = ""
-		_gauge.text = ""
-		_fuel_bar.visible = false
-		_hp_bar.visible = false
-		return
-	var mp := Game.machines.prompt() if Game.machines != null else ""
-	_prompt.text = mp if mp != "" else r.prompt()
-	var gg := r.gauge()
+	var gg := r.gauge() if r != null and not Game.over else {}
+	_veh.visible = not gg.is_empty()
 	if gg.is_empty():
-		_gauge.text = ""
-		_fuel_bar.visible = false
-		_hp_bar.visible = false
 		return
-	var kmh := roundi(absf(float(gg["speed"])) * 3.6)
-	var extra := ""
-	if gg.get("tram", false) and not (gg["sw"] as Dictionary).is_empty():
-		var sw: Dictionary = gg["sw"]
-		extra = "   AIGUILLAGE %s%s dans %d m" % [("DÉVIÉ " if sw["diverge"] else "DROIT "), "(verrouillé)" if sw["locked"] else "", int(sw["dist"])]
-	_gauge.text = "%s   %d km/h%s" % [gg["name"], kmh, extra]
-	_fuel_bar.visible = bool(gg.get("has_tank", true))
-	_fuel_bar.value = float(gg["fuel"])
-	_hp_bar.visible = true
-	_hp_bar.value = float(gg["hp"]) / float(gg["hp_max"])
+	var spd := absf(float(gg["speed"]))
+	var vmax := float(gg["vmax"])
+	var vmin := float(gg["vmin"])
+	var hot := spd >= vmin
+	_v_speedo.text = "%d km/h" % roundi(spd * 3.6)
+	_v_speedo.add_theme_color_override("font_color", Color("ff4a3a") if hot else Color("9aa0a6"))
+	_v_speed.tick = minf(1.0, vmin / vmax) if vmin < vmax else -1.0
+	_v_speed.set_bar(spd / vmax, Color("ff4a3a") if hot else Color("9aa0a6"))
+	var f := maxf(0.0, float(gg["hp"]) / float(gg["hp_max"])) if float(gg["hp_max"]) > 0.0 else 0.0
+	_v_hp_name.text = "PV %s" % gg["name"]
+	_v_hp.set_bar(f, HudCalc.hp_color(f))
+	_v_hp_txt.text = "%d %%" % roundi(f * 100.0)
+	var has_tank := bool(gg.get("has_tank", true))
+	_v_fuel_row.visible = has_tank
+	if has_tank:
+		var ff := maxf(0.0, float(gg["fuel"]))
+		_v_fuel_name.text = String(gg.get("fuel_label", "ESSENCE"))
+		_v_fuel.set_bar(ff, HudCalc.fuel_color(ff))
+		_v_fuel_txt.text = "%d %%" % roundi(ff * 100.0)
+		_v_fuel_row.modulate.a = 0.6 + 0.4 * absf(sin(Time.get_ticks_msec() / 250.0)) if ff < 0.15 else 1.0
+	var sw: Dictionary = gg.get("sw", {})
+	_v_switch.visible = not sw.is_empty()
+	if not sw.is_empty():
+		var locked := bool(sw["locked"])
+		var div := bool(sw["diverge"])
+		_v_switch_l.text = "AIGUILLAGE ▸ %s : %s\n%s · dans %d m" % ["DÉVIÉ" if div else "TOUT DROIT", sw["name"],
+			"verrouillé" if locked else ("%s pour changer" % binds.tag("tramSwitch")), int(sw["dist"])]
+		_v_switch_l.add_theme_color_override("font_color", Color("ffe08a") if div else Color("f4f4e8"))
 
-## J6 : pastilles d'atouts, bonus actifs, état à terre, éclair de la Bombe.
-func _update_j6(dt: float) -> void:
+func _update_perks_buffs(dt: float) -> void:
 	var arms: WeaponArms = Game.arms
 	var key := ",".join(arms.perks.keys())
-	if key != _perk_shown:
-		_perk_shown = key
+	if key != _perk_key:
+		_perk_key = key
 		for c in _perks_row.get_children():
 			c.queue_free()
 		for id: String in arms.perks:
-			var P: Dictionary = Config.at("perks.%s" % id)
+			var pd: Dictionary = Config.at("perks.%s" % id)
 			var pc := PanelContainer.new()
-			var sb := StyleBoxFlat.new()
-			sb.bg_color = Color(String(P["color"])).darkened(0.25)
-			sb.set_corner_radius_all(6)
-			sb.content_margin_left = 9
-			sb.content_margin_right = 9
-			pc.add_theme_stylebox_override("panel", sb)
-			var l := Label.new()
-			l.text = String(P["letter"])
-			l.add_theme_font_size_override("font_size", 24)
-			pc.add_child(l)
+			pc.custom_minimum_size = Vector2(30, 30)
+			pc.tooltip_text = String(pd["name"])
+			pc.add_theme_stylebox_override("panel", UiTheme.box(Color(String(pd["color"])), Color(1, 1, 1, 0.8), 2, 15, 0))
+			pc.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			var l := _lbl(pc, String(pd["letter"]), 17, Color.WHITE, HORIZONTAL_ALIGNMENT_CENTER)
+			l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			l.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 			_perks_row.add_child(pc)
-	var lines: PackedStringArray = []
 	var pu: Powerups = Game.powerups
+	var want := {}
 	if pu != null:
 		if pu.insta_kill > 0.0:
-			lines.append("MORT INSTANTANÉE  %d s" % ceili(pu.insta_kill))
+			want["insta"] = "MORT INSTANTANÉE (%ds)" % ceili(pu.insta_kill)
 		if pu.double_points > 0.0:
-			lines.append("POINTS DOUBLES  %d s" % ceili(pu.double_points))
-	_buffs.text = "\n".join(lines)
-	_down.text = ""
-	if Game.player.downed and not Game.player.dead:
-		_down.text = "À TERRE  (%d s)" % ceili(Game.player.self_revive if Game.player.self_revive > 0.0 else Game.player.bleedout)
-	_flash_a = maxf(0.0, _flash_a - dt * 1.6)
-	_flash.color.a = _flash_a * 0.8
+			want["double"] = "POINTS DOUBLES (%ds)" % ceili(pu.double_points)
+	for k: String in want:
+		if not _buff_labels.has(k):
+			var pc := PanelContainer.new()
+			var bg := Color(180 / 255.0, 20 / 255.0, 20 / 255.0, 0.65) if k == "insta" else Color(180 / 255.0, 140 / 255.0, 20 / 255.0, 0.65)
+			var bd := Color("ff3333") if k == "insta" else Color("ffd24a")
+			pc.add_theme_stylebox_override("panel", UiTheme.box(bg, bd, 1, 4, 3))
+			pc.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			var l := _lbl(pc, "", 20, Color("ff7777") if k == "insta" else Color("ffe666"), HORIZONTAL_ALIGNMENT_CENTER)
+			pc.set_meta("label", l)
+			_buffs.add_child(pc)
+			_buff_labels[k] = pc
+		(_buff_labels[k].get_meta("label") as Label).text = want[k]
+		_buff_labels[k].modulate.a = 0.85 + 0.15 * sin(Time.get_ticks_msec() / 320.0)
+	for k: String in _buff_labels.keys():
+		if not want.has(k):
+			_buff_labels[k].queue_free()
+			_buff_labels.erase(k)
+
+func _update_downed(p: PlayerSim) -> void:
+	_down.visible = p.downed and not p.dead
+	if not _down.visible:
+		return
+	var self_rev := p.self_revive > 0.0
+	_down_sec.text = "%d s" % ceili(p.self_revive if self_rev else p.bleedout)
+	_down_extra.text = "Réanimation rapide : vous vous relevez…" if self_rev else "Aucun coéquipier debout"
+	_down_extra.add_theme_color_override("font_color", Color("8cff9a") if self_rev else Color("bbbbbb"))
+
+func _update_overlays(dt: float) -> void:
+	_hurt = maxf(0.0, _hurt - dt * HURT_FADE)
+	var low := maxf(0.0, _low - 0.3) * 1.2
+	((_vignette.material) as ShaderMaterial).set_shader_parameter("amount", minf(1.0, _hurt * 0.9 + low))
+	_nuke = maxf(0.0, _nuke - dt * 1.6)
+	_flash.color.a = _nuke
+	if _hit.a > 0.0:
+		_hit.a = maxf(0.0, _hit.a - dt / 0.18)
+		_hit.queue_redraw()

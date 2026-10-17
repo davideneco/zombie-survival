@@ -4,11 +4,15 @@ extends Node3D
 ##
 ## Arguments (après --) : --bot (pilote automatique), --demo (un zombie lent devant le joueur), --seed=N, --shot=chemin.png --at=S (capture à S secondes de jeu, puis quitte),
 ## --quit-at=S (quitte à S secondes de jeu : pour --write-movie), --horde=N (N zombies variés autour du joueur, sans manches), --sync-flow (champ de flux par tranches, sans fil de travail).
+## J7 : sans aucun argument, le jeu s'ouvre sur l'écran titre ; avec un argument, la partie démarre tout de suite (outils, captures). --menu force le titre,
+## --ui=title|menu|options|keys|capture|conflict|pause|map|over|victory ouvre un écran (captures), --hud-demo montre les éléments de la finale (barre de boss, bandeau, Fanal),
+## --settings=chemin utilise un autre fichier de réglages (Game.settings).
 
 const ZombieView := preload("res://scenes/zombie_view.gd")
 const ARENA := preload("res://scenes/world/arena.tscn")
 const WORLD := preload("res://scenes/world/world.tscn")
 const HUD := preload("res://scenes/ui/hud.tscn")
+const Menus := preload("res://scenes/ui/menus.gd")
 const WeaponView := preload("res://scenes/weapon_view.gd")
 const RidesView := preload("res://scenes/world/rides_view.gd")
 const MachinesView := preload("res://scenes/world/machines_view.gd")
@@ -19,6 +23,11 @@ const TRACER_WIDTH := 0.012
 var _arena_node: Node3D
 var _camera: Camera3D
 var _hud: CanvasLayer
+var _menus: CanvasLayer
+var _menu := false                ## s'ouvre sur l'écran titre (aucun argument, ou --menu)
+var _ui := ""                     ## --ui= : écran à ouvrir au lancement
+var _hud_demo := false
+var _real_t := 0.0
 var _views: Dictionary = {}     # id de ZombieSim -> ZombieView
 var _prev_player := Vector3.ZERO
 var _bot := false
@@ -50,8 +59,16 @@ var _do: PackedStringArray = []   # --do=a,b : actions de démonstration au lanc
 var _ruin := ""                   # --ruin=smoke|burn|wreck : abîme les motos (fumée, incendie, épave) pour les captures
 
 func _ready() -> void:
-	for a in OS.get_cmdline_user_args():
-		if a == "--bot":
+	var user_args := OS.get_cmdline_user_args()
+	_menu = user_args.is_empty() or "--menu" in user_args
+	for a in user_args:
+		if a == "--ui=":
+			continue
+		if a.begins_with("--ui="):
+			_ui = a.substr(5)
+		elif a == "--hud-demo":
+			_hud_demo = true
+		elif a == "--bot":
 			_bot = true
 		elif a == "--demo":
 			_demo = true
@@ -91,15 +108,26 @@ func _ready() -> void:
 			_quit_at = float(a.substr(10))
 		elif a.begins_with("--at="):
 			_shot_at = float(a.substr(5))
-	_setup_inputs()
 	_camera = Camera3D.new()
-	_camera.fov = Rules.FOV_DEG
+	_camera.fov = float(Game.settings.get_value("fov"))
 	_camera.near = 0.05
 	_camera.far = 600.0
 	add_child(_camera)
 	_hud = HUD.instantiate()
 	add_child(_hud)
-	_hud.restart_requested.connect(_restart)
+	_menus = Menus.new()
+	add_child(_menus)
+	_menus.start_requested.connect(_start_game)
+	_menus.resume_requested.connect(_apply_layers)
+	_menus.restart_requested.connect(func() -> void:
+		_restart()
+		_menus.begin_game())
+	_menus.title_requested.connect(func() -> void:
+		_restart()
+		_menus.open_title())
+	_menus.quit_requested.connect(func() -> void: get_tree().quit())
+	_menus.layers_changed.connect(_apply_layers)
+	Game.settings.changed.connect(_on_setting)
 	_weapon_view = Node3D.new()
 	_weapon_view.set_script(WeaponView)
 	add_child(_weapon_view)
@@ -109,13 +137,20 @@ func _ready() -> void:
 	Game.round_started.connect(func(n): _hud.announce("MANCHE %d" % n))
 	Game.round_ended.connect(func(): _hud.announce("MANCHE TERMINÉE"))
 	Game.zombie_spawned.connect(_on_zombie_spawned)
-	Game.player_hurt.connect(func(_a): _hud.hurt_flash())
 	Game.shot_fired.connect(_on_shot)
 	Game.door_opened.connect(func(id): _hud.announce("PORTE OUVERTE : %s" % Game.world.doors[id]["name"]))
 	Game.door_denied.connect(func(id): _hud.announce("%d POINTS REQUIS" % int(Game.world.doors[id]["price"])))
 	Game.game_over.connect(_on_game_over)
 	Game.announced.connect(func(title: String, sub: String): _hud.announce(title, sub))
 	_restart()
+	_apply_audio()
+	if _menu:
+		_menus.open_title()
+	else:
+		_menus.begin_game()
+	_open_ui(_ui)
+	if _hud_demo:
+		_demo_hud()
 	if _demo:   # un zombie à 5 m devant le joueur, pour les captures
 		var z := ZombieSim.new()
 		z.id = 999
@@ -161,10 +196,10 @@ func _restart() -> void:
 		add_child(_machines_view)
 		_machines_view.setup()
 	_debug_do()
-	_hud.hide_end()
 	_prev_player = Game.player.pos
-	if not _bot and DisplayServer.get_name() != "headless":
-		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+	_apply_brightness()
+	_map_prepare()
+	_pending.clear()
 
 ## N zombies variés (marcheurs, coureurs, rampants, chevaliers, pestiférés) autour du joueur, et plus de manches : pour les captures.
 func _spawn_horde(n: int) -> void:
@@ -223,8 +258,7 @@ func _start_mounted() -> void:
 	var r: Rides = Game.rides
 	if _power or _mount == "tram":
 		r.set_power(true, true)
-	if _first_person:
-		r.cam.third_person = false
+	r.cam.third_person = bool(Game.settings.get_value("tp_vehicle")) and not _first_person
 	if _ruin != "":
 		for v in r.vehicles:
 			if v.type == "moto" or v.type == "grosseMoto":
@@ -258,35 +292,18 @@ func _start_mounted() -> void:
 			Game.player.yaw = v.yaw
 			return
 
-func _setup_inputs() -> void:
-	var map := {
-		"move_forward": [KEY_W, KEY_UP], "move_back": [KEY_S, KEY_DOWN], "move_left": [KEY_A, KEY_LEFT], "move_right": [KEY_D, KEY_RIGHT],
-		"sprint": [KEY_SHIFT], "jump": [KEY_SPACE], "reload": [KEY_R], "use": [KEY_E],
-		"knife": [KEY_V], "grenade": [KEY_G], "tram_gong": [KEY_H], "tram_doors": [KEY_O], "tram_switch": [KEY_B], "weapon_1": [KEY_1], "weapon_2": [KEY_2], "weapon_3": [KEY_3],
-	}
-	for action: String in map:
-		if not InputMap.has_action(action):
-			InputMap.add_action(action)
-		for k: int in map[action]:
-			var ev := InputEventKey.new()
-			ev.physical_keycode = k as Key   # touche PHYSIQUE : ZQSD en AZERTY = WASD en QWERTY
-			InputMap.action_add_event(action, ev)
-
 func _unhandled_input(event: InputEvent) -> void:
-	if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED and Game.playing and not Game.over:
+	var live: bool = Game.playing and not Game.over and _menus.in_game
+	if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED and live:
 		var m := event as InputEventMouseMotion
+		var sens := Rules.MOUSE_SENS * float(Game.settings.get_value("sens"))
 		Game.player.last_mouse = Game.time
-		Game.player.yaw -= m.relative.x * Rules.MOUSE_SENS
-		Game.player.pitch = clampf(Game.player.pitch - m.relative.y * Rules.MOUSE_SENS, -Rules.PITCH_LIMIT, Rules.PITCH_LIMIT)
-	elif event is InputEventKey and event.pressed and not event.echo:
-		if event.physical_keycode == KEY_ESCAPE:
-			Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
-		elif event.physical_keycode == KEY_E and Game.playing and not Game.over:
-			Game.interact()
-		elif event.physical_keycode == KEY_R and Game.over:
-			_restart()
-	elif event is InputEventMouseButton and event.pressed and Input.mouse_mode != Input.MOUSE_MODE_CAPTURED and not Game.over:
+		Game.player.yaw -= m.relative.x * sens
+		Game.player.pitch = clampf(Game.player.pitch - m.relative.y * sens, -Rules.PITCH_LIMIT, Rules.PITCH_LIMIT)
+	elif event is InputEventMouseButton and event.pressed and live and Input.mouse_mode != Input.MOUSE_MODE_CAPTURED and not _bot:
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+	if not live:
+		return
 	if event is InputEventMouseButton and event.pressed:   # J4 : molette = changer d'arme, clic molette = obus sous canon
 		var mb := event as InputEventMouseButton
 		if mb.button_index == MOUSE_BUTTON_WHEEL_DOWN:
@@ -296,21 +313,27 @@ func _unhandled_input(event: InputEvent) -> void:
 		elif mb.button_index == MOUSE_BUTTON_MIDDLE:
 			_pending["gl"] = true
 	elif event is InputEventKey and event.pressed and not event.echo:
-		if event.physical_keycode == KEY_V:
-			if Game.rides != null and Game.rides.ride != null:
-				Game.rides.toggle_view()   # assis : V change de vue
-			else:
-				_pending["knife"] = true
-		elif Game.rides != null and event.physical_keycode == KEY_H:
+		# les touches viennent de l'InputMap (Options > Touches) : lettre tapée ou touche physique selon la liaison
+		var riding: bool = Game.rides != null and Game.rides.ride != null
+		if event.is_action_pressed("use"):
+			Game.interact()
+		elif event.is_action_pressed("vehicle_view") and riding:
+			Game.rides.toggle_view()   # assis : la touche de vue change de vue
+			Game.settings.set_value("tp_vehicle", Game.rides.cam.third_person)
+		elif event.is_action_pressed("knife") and not riding:
+			_pending["knife"] = true
+		elif Game.rides != null and event.is_action_pressed("tram_gong"):
 			Game.rides.tram_gong()
-		elif Game.rides != null and event.physical_keycode == KEY_O:
+		elif Game.rides != null and event.is_action_pressed("tram_doors"):
 			Game.rides.tram_doors()
-		elif Game.rides != null and event.physical_keycode == KEY_B:
+		elif Game.rides != null and event.is_action_pressed("tram_switch"):
 			Game.rides.tram_switch()
-		elif event.physical_keycode == KEY_G:
+		elif event.is_action_pressed("grenade"):
 			_pending["grenade"] = true
-		elif event.physical_keycode in [KEY_1, KEY_2, KEY_3]:
-			_pending["weapon"] = int(event.physical_keycode) - int(KEY_1)
+		else:
+			for i in 3:
+				if event.is_action_pressed("weapon_%d" % (i + 1)):
+					_pending["weapon"] = i
 
 func _physics_process(dt: float) -> void:
 	_prev_player = Game.player.pos
@@ -360,7 +383,7 @@ func _process(dt: float) -> void:
 	_camera.rotation = Vector3(p.pitch, p.yaw, roll)   # ordre YXZ : lacet puis tangage
 	if Game.rides != null:   # arme de la vue cachée en conduisant et en vue externe
 		_weapon_view.hide_gun = Game.rides.driving() or Game.rides.cam.external()
-	_camera.fov = Game.arms.fov(Rules.FOV_DEG)
+	_camera.fov = Game.arms.fov(float(Game.settings.get_value("fov")))
 	# zombies retirés par la simulation
 	for id: int in _views.keys():
 		if not _views[id].sim in Game.zombies:
@@ -372,7 +395,9 @@ func _process(dt: float) -> void:
 		if _tracers[i][1] <= 0.0:
 			_tracers[i][0].queue_free()
 			_tracers.remove_at(i)
-	if _shot_path != "" and Game.time >= _shot_at and not _shot_done:
+	_real_t += dt
+	var shot_ready: bool = Game.time >= _shot_at if Game.playing else _real_t >= 3.0 + _shot_at   # un écran de menu n'avance pas le temps de jeu
+	if _shot_path != "" and shot_ready and not _shot_done:
 		_shot_done = true
 		await RenderingServer.frame_post_draw
 		get_viewport().get_texture().get_image().save_png(_shot_path)
@@ -409,5 +434,87 @@ func _on_shot(origin: Vector3, end: Vector3) -> void:
 	_tracers.append([m, TRACER_TIME])
 
 func _on_game_over() -> void:
-	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
-	_hud.show_end("Manche %d  ·  %d zombies tués  ·  %d points" % [Game.round_number, Game.kills, Game.points])
+	_menus.show_over("Vous avez survécu jusqu'à la [color=#ffffff][b]manche %d[/b][/color]\n%d zombies tués  ·  %d points" % [Game.round_number, Game.kills, Game.points])
+
+# ---------------------------------------------------------------- J7 : menus, réglages, démonstrations
+func _start_game() -> void:
+	_menus.begin_game()
+
+## Les couches d'interface ouvertes décident si le jeu tourne et si la souris est capturée.
+func _apply_layers() -> void:
+	var blocked: bool = _menus.stack.blocks_game()
+	Game.playing = _menus.in_game and not blocked
+	_pending.clear()
+	if DisplayServer.get_name() == "headless" or _bot:
+		return
+	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED if (Game.playing and not Game.over) else Input.MOUSE_MODE_VISIBLE
+
+func _on_setting(key: String) -> void:
+	match key:
+		"brightness":
+			_apply_brightness()
+		"volume", "music":
+			_apply_audio()
+		"fov":
+			_camera.fov = float(Game.settings.get_value("fov"))
+
+## Luminosité (Options) : le défaut du JS (1,4) garde l'exposition de l'environnement à 1.
+func _apply_brightness() -> void:
+	if _arena_node == null:
+		return
+	for n in _arena_node.get_children():
+		if n is WorldEnvironment and n.environment != null:
+			n.environment.tonemap_exposure = float(Game.settings.get_value("brightness")) / float(Settings.DEFAULTS["brightness"])
+
+## Volume général (bus Maître). Le bus de la musique et les sons arrivent en J8 ; le réglage est déjà gardé.
+func _apply_audio() -> void:
+	var v := float(Game.settings.get_value("volume"))
+	AudioServer.set_bus_volume_db(0, linear_to_db(maxf(v, 0.0001)))
+
+func _map_prepare() -> void:
+	if _menus != null and _menus.map_view != null:
+		_menus.map_view.player_color = CharacterDefs.accent(int(Game.settings.get_value("char")))
+		_menus.map_view.prepare()
+	if _hud != null:
+		_hud.radar.player_color = CharacterDefs.accent(int(Game.settings.get_value("char")))
+
+## --ui= : ouvre un écran pour les captures.
+func _open_ui(name: String) -> void:
+	match name:
+		"title":
+			_menus.open_title()
+		"menu":
+			_menus.open_title()
+			_menus.open_menu()
+		"options":
+			_menus.open_title()
+			_menus.open_options(UiStack.TITLE)
+		"keys", "capture", "conflict":
+			_menus.open_title()
+			_menus.open_options(UiStack.TITLE)
+			_menus.open_keys()
+			if name != "keys":
+				_menus._start_capture("reload")
+			if name == "conflict":
+				_menus._apply_binding("reload", "key:g", {}, false)
+		"pause":
+			_menus.escape()
+		"map":
+			_menus.toggle_map()
+		"over":
+			Game.player.hurt(10000.0, Game.time)
+			Game._end_game()
+		"victory":
+			_menus.show_victory("VICTOIRE !", "Le Bourreau est vaincu : vous avez sauvé la cathédrale.\nManche 12  ·  240 zombies tués")
+
+## --hud-demo : les éléments du HUD que la finale pilotera (J10) : bandeau, barre de boss, marque, Fanal, popups.
+func _demo_hud() -> void:
+	_hud.set_banner("L'HEURE DU JUGEMENT · 3 MINUTES")
+	_hud.set_boss_bar({"hp": 640.0, "max": 1000.0, "phase": 2, "name": "LE BOURREAU", "inv": false, "thresholds": [0.7, 0.45, 0.2]})
+	_hud.set_mark("CONDAMNÉ · 5 s")
+	_hud.set_fanal(0.4, "LE FANAL D'ERWIN · 1/1 joueur")
+	_hud.toast("Vous avez rejoint la partie")
+	_hud.popup("+60")
+	_hud.popup("+100", "head")
+	_hud.popup("MUNITIONS MAX", "bonus")
+	_hud.show_hit(true)

@@ -27,6 +27,8 @@ signal box_event(name: String, data: Dictionary)             ## J6 : boîte myst
 signal pap_event(name: String, data: Dictionary)             ## J6 : Pack-a-Punch : "start", "taken"
 signal player_downed                                         ## J6 : à terre (Réanimation rapide)
 signal player_revived
+signal points_gained(amount: int, cls: String)               ## J7 : points gagnés (popup « +60 ») ; cls : "", "head", "bonus"
+signal hit_confirmed(kill: bool)                             ## J7 : un tir du joueur touche un zombie (marqueur de touche)
 signal ride_event(name: String, data: Dictionary)            ## J5 : "mount", "dismount", "crash", "burn", "break", "respawn", "gong", "chime", "service", "knock", "cough", "beep", "dry"
 
 var round_number: int:
@@ -63,6 +65,14 @@ var flow_threaded := false ## champ de flux de la carte calculé sur un fil de t
 var flow_us := 0           ## microsecondes passées dans le champ de flux au dernier pas (banc d'essai)
 var rng := RandomNumberGenerator.new()
 var _next_id := 1
+var settings: Settings     ## J7 : réglages du joueur et touches (user://settings.cfg, ou --settings=chemin)
+
+func _init() -> void:
+	var path := Settings.DEFAULT_PATH
+	for a in OS.get_cmdline_user_args():
+		if a.begins_with("--settings="):
+			path = a.substr(11)
+	settings = Settings.new(path)
 
 func version() -> String:
 	return str(ProjectSettings.get_setting("application/config/version", "0.0.0"))
@@ -263,15 +273,20 @@ func hit_zombie(z: ZombieSim, head: bool, dmg: float, head_mult: float, mel: boo
 	var killed := z.damage(amount, head)
 	var K: Dictionary = Config.at("knife.points")
 	var mult := powerups.points_mult()   # Points doubles
+	hit_confirmed.emit(killed)
 	if killed:
 		kills += 1
-		points += (int(K["kill"]) if mel else (Rules.POINTS_HEADSHOT if head else Rules.POINTS_KILL)) * mult
+		var award := (int(K["kill"]) if mel else (Rules.POINTS_HEADSHOT if head else Rules.POINTS_KILL)) * mult
+		points += award
+		points_gained.emit(award, "head" if head else "")
 		zombie_killed.emit(z, head)
 		if z.explodes:
 			_bloat_burst(z)
 		on_zombie_killed(z)
 	else:
-		points += (int(K["hit"]) if mel else Rules.POINTS_HIT) * mult
+		var award_hit := (int(K["hit"]) if mel else Rules.POINTS_HIT) * mult
+		points += award_hit
+		points_gained.emit(award_hit, "")
 	return killed
 
 ## Dégâts reçus par le joueur hors coup de zombie (explosions). PHD Flopper : immunité aux explosions.

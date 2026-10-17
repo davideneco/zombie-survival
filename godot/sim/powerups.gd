@@ -102,6 +102,7 @@ func collect(g: Node, pu: Dictionary) -> void:
 		"nuke":
 			g.announce("BOMBE !", "+%d points" % Rules.NUKE_POINTS)
 			g.points += Rules.NUKE_POINTS
+			g.points_gained.emit(Rules.NUKE_POINTS, "bonus")
 			for z: ZombieSim in g.zombies:
 				if z.dead or g.is_boss(z):
 					continue
