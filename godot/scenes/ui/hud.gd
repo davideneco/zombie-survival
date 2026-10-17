@@ -23,6 +23,12 @@ var _end_panel: PanelContainer
 var _end_stats: Label
 var _announce_t := 0.0
 var _hurt := 0.0
+var _perks_row: HBoxContainer      ## J6 : atouts achetés (pastilles colorées)
+var _perk_shown := ""
+var _buffs: Label                  ## J6 : Mort instantanée, Points doubles (secondes restantes)
+var _down: Label                   ## J6 : à terre
+var _flash: ColorRect              ## J6 : éclair blanc de la Bombe
+var _flash_a := 0.0
 
 func _ready() -> void:
 	layer = 10
@@ -99,6 +105,35 @@ func _ready() -> void:
 	_gauge.offset_bottom = -90
 	_fuel_bar = _bar(root, Color("e0a82e"), -260, -84)
 	_hp_bar = _bar(root, Color("c0392b"), -260, -62)
+	# J6 : atouts (bas gauche, au-dessus de la santé), bonus actifs (gauche), à terre, éclair de la Bombe
+	_perks_row = HBoxContainer.new()
+	_perks_row.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
+	_perks_row.offset_left = 24
+	_perks_row.offset_top = -92
+	_perks_row.offset_right = 420
+	_perks_row.offset_bottom = -56
+	_perks_row.add_theme_constant_override("separation", 6)
+	_perks_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(_perks_row)
+	_buffs = _label(root, Control.PRESET_CENTER_LEFT, 26, HORIZONTAL_ALIGNMENT_LEFT)
+	_buffs.offset_left = 24
+	_buffs.offset_top = -40
+	_buffs.offset_right = 520
+	_buffs.offset_bottom = 60
+	_down = _label(root, Control.PRESET_CENTER, 44, HORIZONTAL_ALIGNMENT_CENTER)
+	_down.offset_left = -400
+	_down.offset_right = 400
+	_down.offset_top = 60
+	_down.offset_bottom = 140
+	_down.add_theme_color_override("font_color", Color("ff6a5a"))
+	_flash = ColorRect.new()
+	_flash.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_flash.color = Color(1, 1, 1, 0)
+	_flash.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(_flash)
+	Game.powerup_collected.connect(func(t: String) -> void:
+		if t == "nuke":
+			_flash_a = 1.0)
 	# écran de fin
 	_end_panel = PanelContainer.new()
 	_end_panel.set_anchors_preset(Control.PRESET_CENTER)
@@ -183,6 +218,7 @@ func _process(dt: float) -> void:
 	_announce.modulate.a = clampf(_announce_t, 0.0, 1.0)
 	_announce_sub.modulate.a = clampf(_announce_t, 0.0, 1.0)
 	_update_rides()
+	_update_j6(dt)
 	_hurt = maxf(0.0, _hurt - dt * HURT_FADE)
 	var low := 1.0 - Game.player.health / Game.player.max_health
 	_vignette.color.a = clampf(_hurt * 0.45 + low * low * 0.25, 0.0, 0.7)
@@ -196,7 +232,8 @@ func _update_rides() -> void:
 		_fuel_bar.visible = false
 		_hp_bar.visible = false
 		return
-	_prompt.text = r.prompt()
+	var mp := Game.machines.prompt() if Game.machines != null else ""
+	_prompt.text = mp if mp != "" else r.prompt()
 	var gg := r.gauge()
 	if gg.is_empty():
 		_gauge.text = ""
@@ -213,3 +250,39 @@ func _update_rides() -> void:
 	_fuel_bar.value = float(gg["fuel"])
 	_hp_bar.visible = true
 	_hp_bar.value = float(gg["hp"]) / float(gg["hp_max"])
+
+## J6 : pastilles d'atouts, bonus actifs, état à terre, éclair de la Bombe.
+func _update_j6(dt: float) -> void:
+	var arms: WeaponArms = Game.arms
+	var key := ",".join(arms.perks.keys())
+	if key != _perk_shown:
+		_perk_shown = key
+		for c in _perks_row.get_children():
+			c.queue_free()
+		for id: String in arms.perks:
+			var P: Dictionary = Config.at("perks.%s" % id)
+			var pc := PanelContainer.new()
+			var sb := StyleBoxFlat.new()
+			sb.bg_color = Color(String(P["color"])).darkened(0.25)
+			sb.set_corner_radius_all(6)
+			sb.content_margin_left = 9
+			sb.content_margin_right = 9
+			pc.add_theme_stylebox_override("panel", sb)
+			var l := Label.new()
+			l.text = String(P["letter"])
+			l.add_theme_font_size_override("font_size", 24)
+			pc.add_child(l)
+			_perks_row.add_child(pc)
+	var lines: PackedStringArray = []
+	var pu: Powerups = Game.powerups
+	if pu != null:
+		if pu.insta_kill > 0.0:
+			lines.append("MORT INSTANTANÉE  %d s" % ceili(pu.insta_kill))
+		if pu.double_points > 0.0:
+			lines.append("POINTS DOUBLES  %d s" % ceili(pu.double_points))
+	_buffs.text = "\n".join(lines)
+	_down.text = ""
+	if Game.player.downed and not Game.player.dead:
+		_down.text = "À TERRE  (%d s)" % ceili(Game.player.self_revive if Game.player.self_revive > 0.0 else Game.player.bleedout)
+	_flash_a = maxf(0.0, _flash_a - dt * 1.6)
+	_flash.color.a = _flash_a * 0.8

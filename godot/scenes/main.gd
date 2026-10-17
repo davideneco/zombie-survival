@@ -11,6 +11,7 @@ const WORLD := preload("res://scenes/world/world.tscn")
 const HUD := preload("res://scenes/ui/hud.tscn")
 const WeaponView := preload("res://scenes/weapon_view.gd")
 const RidesView := preload("res://scenes/world/rides_view.gd")
+const MachinesView := preload("res://scenes/world/machines_view.gd")
 const TRACER_COLOR := Color("ffd27a")
 const TRACER_TIME := 0.06
 const TRACER_WIDTH := 0.012
@@ -44,6 +45,8 @@ var _power := false               # --power : sous-station remise (tram aliment�
 var _tram_door := false           # --tram-doors : portes de la rame ouvertes au départ
 var _tram_in := false             # --tram-in : joueur debout dans la rame
 var _first_person := false        # --first-person : vue à la première personne sur les véhicules
+var _machines_view: Node3D
+var _do: PackedStringArray = []   # --do=a,b : actions de démonstration au lancement (perks, powerup:TYPE, box, pap, all-doors, money, down)
 var _ruin := ""                   # --ruin=smoke|burn|wreck : abîme les motos (fumée, incendie, épave) pour les captures
 
 func _ready() -> void:
@@ -72,6 +75,8 @@ func _ready() -> void:
 			_power = true
 		elif a == "--tram-doors":
 			_tram_door = true
+		elif a.begins_with("--do="):
+			_do = a.substr(5).split(",")
 		elif a.begins_with("--ruin="):
 			_ruin = a.substr(7)
 		elif a == "--tram-in":
@@ -147,6 +152,15 @@ func _restart() -> void:
 		add_child(_rides_view)
 		_rides_view.setup(_camera)
 		_start_mounted()
+	if _machines_view != null:
+		_machines_view.queue_free()
+		_machines_view = null
+	if Game.machines != null:
+		_machines_view = Node3D.new()
+		_machines_view.set_script(MachinesView)
+		add_child(_machines_view)
+		_machines_view.setup()
+	_debug_do()
 	_hud.hide_end()
 	_prev_player = Game.player.pos
 	if not _bot and DisplayServer.get_name() != "headless":
@@ -168,6 +182,41 @@ func _spawn_horde(n: int) -> void:
 		if k == "run":
 			spd *= 1.5
 		Game.debug_spawn(p, spd, k == "crawl", k if k in ["armored", "bloat"] else "")
+
+## --do= : actions de démonstration (captures, vidéos). perks : tous les atouts ; powerup:TYPE : un bonus devant le joueur ; money ; box / pap : achète
+## à la machine la plus proche de la position ; to-box / to-pap / to-perk:ID : se place devant la machine ; down : à terre.
+func _debug_do() -> void:
+	for cmd in _do:
+		var c := cmd.split(":")
+		match c[0]:
+			"money":
+				Game.points = 100000
+			"perks":
+				for id: String in Config.at("perks"):
+					Game.add_perk(id)
+			"powerup":
+				var f := Vector3(-sin(Game.player.yaw), 0, -cos(Game.player.yaw)) * 2.5
+				Game.powerups.spawn(Game, Game.player.pos + f, c[1] if c.size() > 1 else "")
+			"collect":   # ramasse tout de suite un bonus (HUD des bonus actifs, Bombe)
+				Game.powerups.collect(Game, {"type": c[1]})
+			"to-box", "to-pap", "to-perk":
+				var type := "box" if c[0] == "to-box" else ("pap" if c[0] == "to-pap" else "perk")
+				for m: Dictionary in Game.machines.list:
+					if m["type"] == type and (c.size() < 2 or m["id"] == c[1]) and (type != "box" or m == Game.machines.box.active_box()):
+						var yaw := float(m["yaw"])
+						Game.player.pos = Vector3(float(m["pos"]["x"]) + sin(yaw) * 2.2, 0, float(m["pos"]["z"]) + cos(yaw) * 2.2)
+						Game.player.yaw = yaw   # face à la machine (le regard part vers -sin, -cos)
+						break
+			"box", "pap":
+				Game.points = maxi(Game.points, 100000)
+				Game.interact()
+			"teddy":   # le prochain tirage de la boîte est le nounours
+				Game.machines.box.limit = Game.machines.box.uses + 1
+			"open-doors":
+				Game.world.open_all_doors()
+			"down":
+				Game.add_perk("quickrevive")
+				Game.player.hurt(1000.0, Game.time)
 
 ## --mount= : place le joueur près de la machine demandée et monte dessus (pour les captures et les vidéos). tram : près du nez, courant remis.
 func _start_mounted() -> void:

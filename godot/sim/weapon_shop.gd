@@ -38,6 +38,8 @@ static func interact(g: Node) -> bool:
 			g.points -= price
 			w.refill()
 		return true
+	if g.machines != null and g.machines.interact():   # main.js interact, 3 : atouts, Pack-a-Punch, boîte mystère
+		return true
 	var ww := near_wall_weapon(g)
 	if ww.is_empty():
 		return false

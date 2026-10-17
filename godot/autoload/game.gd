@@ -19,6 +19,14 @@ signal explosion(pos: Vector3, radius: float, color: int)   ## J4 : effet d'une 
 signal weapon_acquired(id: String)                           ## J4 : arme achetée au mur
 signal purchase_denied(price: int)                           ## J4 : pas assez de points
 signal announced(title: String, sub: String)                 ## J5 : annonce à l'écran (véhicules, tram)
+signal powerup_spawned(pu: Dictionary)                       ## J6 : un bonus apparaît au sol (présentation)
+signal powerup_removed(pu: Dictionary)                       ## J6 : ramassé ou expiré
+signal powerup_collected(type: String)                       ## J6 : "max_ammo", "insta_kill", "nuke", "double_points", "fuel"
+signal perk_acquired(id: String)                             ## J6 : atout acheté
+signal box_event(name: String, data: Dictionary)             ## J6 : boîte mystère : "roll", "teddy", "offer", "taken", "leaving", "arrived"
+signal pap_event(name: String, data: Dictionary)             ## J6 : Pack-a-Punch : "start", "taken"
+signal player_downed                                         ## J6 : à terre (Réanimation rapide)
+signal player_revived
 signal ride_event(name: String, data: Dictionary)            ## J5 : "mount", "dismount", "crash", "burn", "break", "respawn", "gong", "chime", "service", "knock", "cough", "beep", "dry"
 
 var round_number: int:
@@ -38,6 +46,9 @@ var arms: WeaponArms       ## J4 : inventaire, tir, couteau, grenades (voir sim/
 var weapon: WeaponSim:     ## arme en main (compatibilité J1)
 	get: return arms.current
 var director: RoundDirector
+var powerups: Powerups     ## J6 : bonus au sol et bonus actifs (Mort instantanée, Points doubles)
+var machines: Machines     ## J6 : atouts, boîte mystère, Pack-a-Punch (null dans l'arène)
+var rng_loot := RandomNumberGenerator.new()   ## J6 : tirages des bonus et de la boîte (séparé de `rng` : les apparitions restent reproductibles)
 var rides: Rides           ## J5 : motos, vélos, tram (null dans l'arène)
 var shake := 0.0           ## J5 : secousse de la caméra (chocs, explosions), décroît d'elle-même
 var vehicles: Array[VehicleSim]:   ## les motos et vélos (pour les chocs entre machines)
@@ -70,8 +81,10 @@ func new_game(seed_value: int = -1, map: String = "", weapons: Array = []) -> vo
 	_stop_flow_thread()
 	if seed_value >= 0:
 		rng.seed = seed_value
+		rng_loot.seed = seed_value + Rules.LOOT_SEED_OFFSET
 	else:
 		rng.randomize()
+		rng_loot.randomize()
 	map_name = map if map != "" else String(Config.at("map", "strasbourg"))
 	if map_name == "arena":
 		arena = Arena.load_arena()
@@ -84,6 +97,8 @@ func new_game(seed_value: int = -1, map: String = "", weapons: Array = []) -> vo
 	player = PlayerSim.new()
 	player.reset(arena.start_pos if arena != null else world.start_pos)
 	arms = WeaponArms.new(weapons if not weapons.is_empty() else [Rules.J1_WEAPON])
+	powerups = Powerups.new()
+	machines = Machines.new(self, world.objects["machines"]) if world != null else null
 	director = RoundDirector.new()
 	director.reset()
 	zombies.clear()
@@ -143,6 +158,9 @@ func step(dt: float, input: Dictionary) -> void:
 				arms_input["gl"] = false
 	player.step(dt, time, input, collision, world.levels if world != null else null)
 	arms.step(self, dt, arms_input)
+	powerups.step(self, dt)
+	if machines != null:
+		machines.step(dt)
 	# manches
 	match director.step(dt, alive_count()):
 		RoundDirector.SPAWN:
@@ -176,6 +194,58 @@ func step(dt: float, input: Dictionary) -> void:
 		if z.dead and z.death_t > Rules.CORPSE_TIME:
 			zombies.remove_at(i)
 	_relocate(dt)
+	_player_events()
+
+## Évènements du joueur posés par PlayerSim : à terre (les atouts sont perdus), relevé, onde du PHD Flopper, mort à terre.
+func _player_events() -> void:
+	if player.down_event:
+		player.down_event = false
+		arms.clear_perks()
+		player.quick_revive = false
+		player.stamin = false
+		player.phd = false
+		player.max_health = float(Config.at("player.maxHealth"))
+		player.health = minf(player.health, player.max_health)
+		announce("À TERRE !", "Réanimation rapide : vous vous relevez…")
+		player_downed.emit()
+	if player.revive_event:
+		player.revive_event = false
+		announce("RÉANIMÉ !", "Reprenez le combat !")
+		player_revived.emit()
+	if player.flop_request:
+		player.flop_request = false
+		flop(player.pos)
+	if player.dead and not over:
+		_end_game()
+
+## Achat d'un atout : effet sur les armes (WeaponArms.perks) et sur le joueur (PlayerSim).
+func add_perk(id: String) -> void:
+	arms.add_perk(id)
+	match id:
+		"juggernog":
+			player.max_health = Rules.PERK_JUGGERNOG_HEALTH
+			player.health = player.max_health
+		"quickrevive":
+			player.quick_revive = true
+		"staminup":
+			player.stamin = true
+		"phdflopper":
+			player.phd = true
+	perk_acquired.emit(id)
+
+## PHD Flopper : onde explosive aux pieds du joueur à l'atterrissage (main.js flop) ; dégâts aux zombies seulement.
+func flop(pos: Vector3) -> void:
+	var F: Dictionary = Config.at("phd")
+	arms.blast.splash(self, pos, float(F["radius"]), float(F["base"]) + float(F["perRound"]) * maxi(1, round_number), int(F["color"]))
+	shake = maxf(shake, Rules.FLOP_SHAKE)
+
+## Cible de type Bourreau / Ange (J10) : insensible à la Mort instantanée et à la Bombe.
+func is_boss(z: ZombieSim) -> bool:
+	return z.is_boss
+
+## Un zombie vient de mourir sous un coup ou une explosion (bonus, essence).
+func on_zombie_killed(z: ZombieSim) -> void:
+	powerups.on_kill(self, z)
 
 func _end_game() -> void:
 	over = true
@@ -187,32 +257,37 @@ func _end_game() -> void:
 ## mel : coup de couteau (pas de bonus de tête, armure ignorée, points de CONFIG.knife.points).
 func hit_zombie(z: ZombieSim, head: bool, dmg: float, head_mult: float, mel: bool = false) -> bool:
 	var armor: Variant = z.get("armor")
+	if powerups.insta_kill > 0.0 and not is_boss(z):
+		dmg = 999999.0   # Mort instantanée
 	var amount: float = dmg / (float(armor) if armor != null and float(armor) > 0.0 else 1.0) if mel else dmg * (head_mult if head else 1.0)
 	var killed := z.damage(amount, head)
 	var K: Dictionary = Config.at("knife.points")
+	var mult := powerups.points_mult()   # Points doubles
 	if killed:
 		kills += 1
-		points += int(K["kill"]) if mel else (Rules.POINTS_HEADSHOT if head else Rules.POINTS_KILL)
+		points += (int(K["kill"]) if mel else (Rules.POINTS_HEADSHOT if head else Rules.POINTS_KILL)) * mult
 		zombie_killed.emit(z, head)
 		if z.explodes:
 			_bloat_burst(z)
+		on_zombie_killed(z)
 	else:
-		points += int(K["hit"]) if mel else Rules.POINTS_HIT
+		points += (int(K["hit"]) if mel else Rules.POINTS_HIT) * mult
 	return killed
 
 ## Dégâts reçus par le joueur hors coup de zombie (explosions). PHD Flopper : immunité aux explosions.
 func hurt_player(amount: float, src: String = "") -> void:
-	if over or player.dead:
+	if over or player.dead or player.downed:
 		return
 	if (src == "blast" or src == "crash") and arms.perks.get("phdflopper", false):
 		return
 	player_hurt.emit(amount)
 	if player.hurt(amount, time):
 		_end_game()
+	_player_events()
 
 ## Touche d'interaction : borne ou arme murale d'abord (main.js : interact, 2 et 4), puis porte payante.
 func interact() -> void:
-	if over or not playing:
+	if over or not playing or player.downed:
 		return
 	if rides != null and rides.interact_leave():   # assis : E descend (main.js interact, 0)
 		return
@@ -509,4 +584,5 @@ func use_door() -> int:
 	points -= price
 	world.open_door(id)
 	door_opened.emit(id)
+	powerups.opening_bonus(self, world.doors[id])
 	return id

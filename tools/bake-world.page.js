@@ -140,6 +140,7 @@
   g.zombies?.forEach((z) => markTree(z.group || z.mesh));
   for (const t of g.trams || []) for (const v of Object.values(t)) if (v && v.isObject3D) markTree(v);
   for (const b of w.bikeStations) markTree(b.group);       // vélos : J5
+  for (const m of w.machines) if (m.type === 'box') markTree(m.group);   // boîte mystère : dessinée par le jeu (elle se déplace : J6)
   for (const p of w.parkings) { markTree(p.pump); markTree(p.sign); }
   for (const v of g.vehicles || []) markTree(v.group);
   const skipName = (o) => { for (let p = o; p && p !== scene; p = p.parent) if (/^(relief:|contact:)/.test(p.name)) return true; return false; };

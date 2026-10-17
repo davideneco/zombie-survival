@@ -30,6 +30,7 @@ var next_melee := 0.0
 var lunge_left := 0.0
 var lunge_dir := Vector2.ZERO
 var next_gl := 0.0
+var locked := false              ## J6 : arme confisquée par le Pack-a-Punch (ni tir, ni changement d'arme)
 var _trigger := false            ## clic maintenu / verrou « un tir par clic » des armes semi-automatiques
 var _fire_prev := false
 
@@ -101,6 +102,12 @@ func upgrade_current() -> bool:
 	switch_weapon(idx)
 	return true
 
+## Munitions max (bonus) : toutes les armes portées font le plein de réserve (et d'obus), et les grenades remontent au maximum.
+func max_ammo() -> void:
+	for w in inventory:
+		w.refill()
+	grenades = int(Config.at("grenade.max"))
+
 func switch_weapon(i: int) -> void:
 	if i < 0 or i >= inventory.size():
 		return
@@ -125,8 +132,15 @@ func fov(base: float) -> float:
 
 # ---------------------------------------------------------------- pas de simulation
 ## input : { fire (maintenu), reload (appui), aim (maintenu), knife, grenade, gl (appuis), weapon (indice), wheel (+1 / -1), mz (avant) }
-func step(g: Node, dt: float, input: Dictionary) -> void:
+func step(g: Node, dt: float, input_in: Dictionary) -> void:
 	var now: float = g.time
+	var input := input_in
+	if locked or g.player.downed:   # à terre ou arme dans la machine : aucune action d'arme
+		input = input_in.duplicate()
+		for k in ["fire", "reload", "knife", "grenade", "gl", "aim"]:
+			input[k] = false
+		input.erase("weapon")
+		input.erase("wheel")
 	aiming = bool(input.get("aim", false)) and not g.player.dead
 	aim += ((1.0 if aiming else 0.0) - aim) * minf(1.0, dt * ADS_RATE)
 	if input.has("weapon"):

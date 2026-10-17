@@ -101,3 +101,30 @@ const CRAWLER_BODY_HALF := Vector3(0.5, 0.3465, 0.6)
 
 # --- port : performance de GDScript (R2 du plan). Pas dans CONFIG : ce n'est pas de l'équilibrage, c'est une limite de la machine virtuelle.
 const FLOW_BUDGET_MAX := 2000     ## cases développées par pas pour le champ de flux de la carte hors fil de travail (CONFIG.zombie.flow.budget = 25 000 est réglé pour V8) : ~1,8 ms
+
+# --- J6 : bonus, atouts, machines (src/main.js, src/player.js, src/machineFx.js ; hors CONFIG)
+const POWERUP_PICKUP_RANGE := 1.7     ## main.js : ramassage d'un bonus à moins de 1,7 m (à plat)
+const POWERUP_PICKUP_DY := 3.0        ## ... et |y du joueur + 0,9 - hauteur du bonus| < 3 (même étage)
+const POWERUP_HOVER := 0.9            ## hauteur de base d'un bonus au-dessus du sol
+const POWERUP_BOB := 0.12             ## amplitude du flottement (sin(temps x 3))
+const POWERUP_BLINK_LIFE := 6.0       ## le bonus clignote pendant ses 6 dernières secondes
+const NUKE_POINTS := 400              ## bombe : +400 points (non doublés)
+const OPENING_BONUS_R0 := 3.0         ## ouverture de zone : rayons essayés de 3 à 9 m par pas de 1,5 m
+const OPENING_BONUS_R1 := 9.0
+const OPENING_BONUS_RSTEP := 1.5
+const OPENING_BONUS_ANGLES := 16
+const MACHINE_RANGE := 2.6            ## main.js nearMachine
+const PERK_JUGGERNOG_HEALTH := 250.0  ## player.js maxHealth
+const PERK_STAMIN_SPRINT := 1.3       ## player.js : sprint x1,3
+const PERK_STAMIN_WALK := 1.1         ## player.js : marche x1,1
+const DOWN_BLEEDOUT := 45.0           ## player.js down : saigne 45 s
+const DOWN_SELF_REVIVE := 4.0         ## solo avec Réanimation rapide : se relève après 4 s
+const DOWN_REVIVE_HEALTH := 50.0      ## player.js revive : min(50, santé max)
+const DOWN_SPEED := 1.2               ## player.js : vitesse à terre
+const BOX_TEDDY_TIME := 2.2           ## machineFx.js : durée du nounours avant le départ de la boîte
+const BOX_MOVE_TIME := 3.4            ## main.js updateBoxMove : durée totale du départ et de la réapparition
+const BOX_SINK_TIME := 0.6            ## machineFx.js : l'arme non prise retombe dans la boîte
+const BOX_OFFER_WARN := 3.0           ## clignote quand il reste moins de 3 s
+const PAP_REGRAB_GRACE := 2.0         ## machineFx.js : filet de sécurité si le propriétaire est parti
+const FLOP_SHAKE := 0.45               ## main.js flop : secousse de la caméra
+const LOOT_SEED_OFFSET := 7919        ## port : graine du générateur des bonus et de la boîte (Game.rng_loot) = graine de la partie + 7919

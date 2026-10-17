@@ -18,6 +18,8 @@ var limp := false       ## boite : jambe gauche à 45 %, vitesse x 0,8
 var kind := ""          ## "", "armored" (chevalier de fer), "bloat" (pestiféré)
 var armor := 1.0        ## dégâts reçus x armor
 var explodes := false
+var is_boss := false           ## J6 : Bourreau, Maître Tanneur (J10) : insensible à la Mort instantanée et à la Bombe
+var is_angel := false          ## J6 : Ange du Jugement (J10) : ne lâche pas de bonus
 var dead := false
 var death_t := 0.0
 var headless := false
@@ -201,7 +203,7 @@ func step(dt: float, env: ZombieEnv) -> void:
 	target = null
 	var best_cost := INF
 	for pl in env.players:
-		if pl == null or pl.dead:
+		if pl == null or pl.dead or pl.get("downed") == true:
 			continue
 		var cost := Vector2(pl.pos.x - pos.x, pl.pos.z - pos.z).length()
 		if has_lv:

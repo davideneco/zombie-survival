@@ -164,6 +164,7 @@ func area_damage(g: Node, pos: Vector3, radius: float, damage: float) -> void:
 	var kills := 0
 	var pts := 0
 	var leg: float = float(Config.at("zombie.legBlowChance", 0.0))
+	var mult: int = g.powerups.points_mult()
 	for z: ZombieSim in g.zombies:
 		if z.dead:
 			continue
@@ -173,13 +174,16 @@ func area_damage(g: Node, pos: Vector3, radius: float, damage: float) -> void:
 		if absf(z.pos.y + 1.0 - pos.y) > BLAST_VERTICAL:
 			continue
 		var dmg := damage * pow(1.0 - d / radius, BLAST_FALLOFF_POW)
+		if g.powerups.insta_kill > 0.0 and not g.is_boss(z):
+			dmg = 999999.0   # Mort instantanée
 		var killed := z.damage(dmg, false)
 		if killed:
 			kills += 1
-			pts += Rules.POINTS_KILL
+			pts += Rules.POINTS_KILL * mult
 			g.zombie_killed.emit(z, false)
+			g.on_zombie_killed(z)
 		else:
-			pts += Rules.POINTS_HIT
+			pts += Rules.POINTS_HIT * mult
 			if z.has_method("make_crawler") and g.rng.randf() < leg:
 				z.make_crawler()
 	if pts > 0:
