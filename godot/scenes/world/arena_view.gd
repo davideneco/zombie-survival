@@ -12,12 +12,9 @@ const BULB_COLOR := Color("ffe9b0")
 const LAMP_LIGHT_COLOR := Color("ffd9a0")
 const LAMP_RANGE := 28.0
 const LAMP_ENERGY := 4.0
-const SKY_COLOR := Color("0b1018")
-const AMBIENT_COLOR := Color("39435a")
 
 func _ready() -> void:
 	var a: Arena = Game.arena
-	_environment()
 	var half := a.half
 	# sol : dalles de 4 m avec un joint sombre (texture générée)
 	var floor_mesh := MeshInstance3D.new()
@@ -76,26 +73,6 @@ func _ready() -> void:
 		l.shadow_enabled = true
 		l.position = Vector3(p.x, 4.9, p.z)
 		add_child(l)
-
-func _environment() -> void:
-	var env := Environment.new()
-	env.background_mode = Environment.BG_COLOR
-	env.background_color = SKY_COLOR
-	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	env.ambient_light_color = AMBIENT_COLOR
-	env.ambient_light_energy = 1.0
-	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
-	env.fog_enabled = true
-	env.fog_light_color = SKY_COLOR
-	env.fog_density = 0.008
-	var we := WorldEnvironment.new()
-	we.environment = env
-	add_child(we)
-	var moon := DirectionalLight3D.new()
-	moon.light_color = Color("8fa4d0")
-	moon.light_energy = 0.35
-	moon.rotation_degrees = Vector3(-55, 30, 0)
-	add_child(moon)
 
 func _box(center: Vector3, size: Vector3, mat: Material) -> void:
 	var m := MeshInstance3D.new()

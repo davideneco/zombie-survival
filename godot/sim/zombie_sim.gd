@@ -17,6 +17,8 @@ var crawler := false    ## jambes arrachées : se traîne, plus lent
 var limp := false       ## boite : jambe gauche à 45 %, vitesse x 0,8
 var kind := ""          ## "", "armored" (chevalier de fer), "bloat" (pestiféré)
 var armor := 1.0        ## dégâts reçus x armor
+var hit_count := 0      ## J9 : touches reçues (la vue y ajoute du sang)
+var last_hit_head := false
 var explodes := false
 var is_boss := false           ## J6 : Bourreau, Maître Tanneur (J10) : insensible à la Mort instantanée et à la Bombe
 var is_angel := false          ## J6 : Ange du Jugement (J10) : ne lâche pas de bonus
@@ -164,6 +166,8 @@ func targetable() -> bool:
 func damage(amount: float, head: bool) -> bool:
 	if dead:
 		return false
+	hit_count += 1   # présentation (J9) : le sang gagne du terrain à chaque touche (zombie.js _bleed)
+	last_hit_head = head
 	health -= amount * armor
 	if health <= 0.0:
 		dead = true

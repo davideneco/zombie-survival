@@ -234,12 +234,16 @@ func shoot(g: Node, now: float) -> void:
 		for h: Dictionary in hits:
 			# chute des dégâts selon la distance, propre à chaque zombie touché
 			var dmg := float(cfg["damage"]) * Pap.falloff_mult(cfg, float(h["t"]))
-			g.hit_zombie(h["z"], bool(h["head"]), dmg, float(cfg["headMult"]))
+			var killed: bool = g.hit_zombie(h["z"], bool(h["head"]), dmg, float(cfg["headMult"]))
 			var at: Vector3 = origin + dir * float(h["t"])
+			if g.has_signal("impact"):
+				g.impact.emit(at, true, killed and not bool(h["head"]))
 			if cfg.has("ether") and g.rng.randf() < float(cfg["ether"]["chance"]):   # Éther (niveau III)
 				blast.splash(g, at, float(cfg["ether"]["radius"]), dmg * float(cfg["ether"]["frac"]), int(cfg["ether"]["color"]))
 		if hits.size() >= budget:
 			end = origin + dir * float(hits[hits.size() - 1]["t"])
+		elif g.has_signal("impact"):
+			g.impact.emit(end, false, false)   # la balle finit dans un mur (ou à bout de portée) : poussière
 		if cfg.has("splash"):
 			var sp: Dictionary = cfg["splash"]
 			blast.splash(g, end, float(sp["radius"]), float(sp["damage"]), int(sp.get("color", 0x44ff66)))

@@ -28,6 +28,7 @@ signal pap_event(name: String, data: Dictionary)             ## J6 : Pack-a-Punc
 signal player_downed                                         ## J6 : à terre (Réanimation rapide)
 signal player_revived
 signal points_gained(amount: int, cls: String)               ## J7 : points gagnés (popup « +60 ») ; cls : "", "head", "bonus"
+signal impact(pos: Vector3, flesh: bool, big: bool)             ## J9 : un tir touche une cible (flesh : zombie) ou un mur ; big : coup mortel au corps (sang abondant)
 signal hit_confirmed(kill: bool)                             ## J7 : un tir du joueur touche un zombie (marqueur de touche)
 signal weapon_event(name: String, data: Dictionary)           ## J8 : "reload" {id, cat, time}, "knife_swing", "knife_hit" {metal}, "empty" (clic à vide) : sons
 signal ride_event(name: String, data: Dictionary)            ## J5 : "mount", "dismount", "crash", "burn", "break", "respawn", "gong", "chime", "service", "knock", "cough", "beep", "dry"
@@ -75,6 +76,16 @@ func _init() -> void:
 		if a.begins_with("--settings="):
 			path = a.substr(11)
 	settings = Settings.new(path)
+	for a in OS.get_cmdline_user_args():   # J9 : surcharges de captures et de mesures, jamais sauvegardées
+		if a.begins_with("--quality="):
+			settings.autosave = false
+			settings.values["quality"] = clampi(int(a.substr(10)), 0, 2)
+		elif a == "--no-cinema":
+			settings.autosave = false
+			settings.values["cinema"] = false
+		elif a == "--no-halo":
+			settings.autosave = false
+			settings.values["halo"] = false
 
 func version() -> String:
 	return str(ProjectSettings.get_setting("application/config/version", "0.0.0"))

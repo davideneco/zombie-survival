@@ -16,6 +16,8 @@ const Menus := preload("res://scenes/ui/menus.gd")
 const WeaponView := preload("res://scenes/weapon_view.gd")
 const RidesView := preload("res://scenes/world/rides_view.gd")
 const MachinesView := preload("res://scenes/world/machines_view.gd")
+const GraphicsView := preload("res://scenes/graphics_view.gd")
+const FxView := preload("res://scenes/fx_view.gd")
 const TRACER_COLOR := Color("ffd27a")
 const TRACER_TIME := 0.06
 const TRACER_WIDTH := 0.012
@@ -40,8 +42,20 @@ var _demo := false
 var _map := ""
 var _at_pos := Vector3.INF      ## --pos=x,z[,yaw_deg] : téléporte le joueur (captures de lieux repères)
 var _at_yaw := 0.0
+var _at_pitch := 0.0            ## --pitch=deg : inclinaison de la caméra au départ (captures)
+var _fps_secs := 0.0            ## --fps=S : mesure les images par seconde pendant S secondes (après 3 s d'échauffement), imprime un résumé puis quitte ; --spin : la caméra tourne
+var _spin := false
+var _fps_t := 0.0
+var _fps_frames: PackedFloat32Array = []
+var _fps_gpu := 0.0
+var _fps_calls := 0.0
+var _fps_calls_max := 0
+var _fps_prims := 0.0
+var _fps_n := 0
+var _no_hud := false            ## --no-hud : sans HUD ni menus (comparaisons de rendu avec le JS)
 var _open_all := false
 var _horde := 0
+var _horde_near := false          ## --horde-near : les zombies de --horde sont à 3-5 m (gros plans)
 var _sync_flow := false
 var _tracers: Array = []         # [mesh, temps restant]
 var _pending: Dictionary = {}    # J4 : appuis (couteau, grenade, obus sous canon, arme, molette) lus au prochain pas de simulation
@@ -55,6 +69,8 @@ var _tram_door := false           # --tram-doors : portes de la rame ouvertes au
 var _tram_in := false             # --tram-in : joueur debout dans la rame
 var _first_person := false        # --first-person : vue à la première personne sur les véhicules
 var _machines_view: Node3D
+var _graphics: Node               # J9 : environnement, ciel, ombres, qualité (graphics_view.gd)
+var _fx: Node3D                   # J9 : particules et taches de sang (fx_view.gd)
 var _do: PackedStringArray = []   # --do=a,b : actions de démonstration au lancement (perks, powerup:TYPE, box, pap, all-doors, money, down)
 var _ruin := ""                   # --ruin=smoke|burn|wreck : abîme les motos (fumée, incendie, épave) pour les captures
 
@@ -80,8 +96,18 @@ func _ready() -> void:
 			var f := a.substr(6).split(",")
 			_at_pos = Vector3(float(f[0]), 0.0, float(f[1]))
 			_at_yaw = deg_to_rad(float(f[2])) if f.size() > 2 else 0.0
+		elif a.begins_with("--pitch="):
+			_at_pitch = deg_to_rad(float(a.substr(8)))
+		elif a.begins_with("--fps="):
+			_fps_secs = float(a.substr(6))
+		elif a == "--spin":
+			_spin = true
+		elif a == "--no-hud":
+			_no_hud = true
 		elif a.begins_with("--horde="):
 			_horde = int(a.substr(8))
+		elif a == "--horde-near":
+			_horde_near = true
 		elif a == "--sync-flow":
 			_sync_flow = true
 		elif a.begins_with("--mount="):
@@ -111,8 +137,14 @@ func _ready() -> void:
 	_camera = Camera3D.new()
 	_camera.fov = float(Game.settings.get_value("fov"))
 	_camera.near = 0.05
-	_camera.far = 600.0
+	_camera.far = 180.0               # le JS s'arrête à 170 m : au-delà le brouillard cache tout
 	add_child(_camera)
+	_graphics = GraphicsView.new()
+	add_child(_graphics)
+	_graphics.setup(_camera, _map == "arena")
+	_fx = FxView.new()
+	add_child(_fx)
+	_fx.setup(_camera)
 	_hud = HUD.instantiate()
 	add_child(_hud)
 	_menus = Menus.new()
@@ -151,6 +183,9 @@ func _ready() -> void:
 	else:
 		_menus.begin_game()
 	_open_ui(_ui)
+	if _no_hud:
+		_hud.visible = false
+		_menus.visible = false
 	if _hud_demo:
 		_demo_hud()
 	if _demo:   # un zombie à 5 m devant le joueur, pour les captures
@@ -171,9 +206,12 @@ func _restart() -> void:
 		_arena_node.queue_free()
 	Game.new_game(_seed, _map, Config.at("startWeapons", []))
 	Sfx.reset()
+	if _fx != null:
+		_fx.clear()
 	if _at_pos != Vector3.INF:
 		Game.player.pos = _at_pos
 		Game.player.yaw = _at_yaw
+		Game.player.pitch = _at_pitch
 	if _open_all and Game.world != null:
 		Game.world.open_all_doors()
 	Game.flow_threaded = not _sync_flow and Game.world != null
@@ -211,10 +249,10 @@ func _spawn_horde(n: int) -> void:
 	for i in n:
 		var p := Vector3.INF
 		if Game.world != null:
-			p = Game.world.pick_ground(Game.player.pos.x, Game.player.pos.z, 7.0, 22.0, Game.rng)
+			p = Game.world.pick_ground(Game.player.pos.x, Game.player.pos.z, 3.0 if _horde_near else 7.0, 5.0 if _horde_near else 22.0, Game.rng)
 		if p == Vector3.INF:
 			var a := TAU * i / n
-			p = Game.player.pos + Vector3(cos(a), 0, sin(a)) * 8.0
+			p = Game.player.pos + Vector3(cos(a), 0, sin(a)) * (4.0 if _horde_near else 8.0)
 		var k: String = kinds[i % kinds.size()]
 		var spd := 1.8 + 0.15 * (i % 5)
 		if k == "run":
@@ -393,6 +431,7 @@ func _process(dt: float) -> void:
 			_views[id].queue_free()
 			_views.erase(id)
 	_quit_check()
+	_fps_step(dt)
 	# musique : intensité selon la manche (0,3 + 0,05 x manche), étouffée dans les menus et en pause (main.js updateMusicMood)
 	var in_game: bool = _menus.in_game and not Game.over
 	Sfx.set_mood(AudioRules.mood_intensity(in_game, false, Game.round_number), not in_game or not Game.playing)
@@ -408,6 +447,37 @@ func _process(dt: float) -> void:
 		await RenderingServer.frame_post_draw
 		get_viewport().get_texture().get_image().save_png(_shot_path)
 		print("capture : %s (manche %d, %d tués, %d points, %d PV)" % [_shot_path, Game.round_number, Game.kills, Game.points, Game.player.health])
+		get_tree().quit()
+
+## --fps : durée de chaque image (temps réel), appels de rendu, primitives, temps GPU mesuré par le moteur. Imprime le résumé sur une ligne « FPS ... » puis quitte.
+func _fps_step(dt: float) -> void:
+	if _fps_secs <= 0.0:
+		return
+	_fps_t += dt
+	var vp := get_viewport().get_viewport_rid()
+	if _fps_t < 3.0:
+		RenderingServer.viewport_set_measure_render_time(vp, true)
+		return
+	if _spin:
+		Game.player.yaw += deg_to_rad(30.0) * dt
+	_fps_frames.append(dt)
+	_fps_gpu += RenderingServer.viewport_get_measured_render_time_gpu(vp)
+	var calls := int(Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME))
+	_fps_calls += calls
+	_fps_calls_max = maxi(_fps_calls_max, calls)
+	_fps_prims += Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME)
+	_fps_n += 1
+	if _fps_t >= 3.0 + _fps_secs:
+		var sorted := _fps_frames.duplicate()
+		sorted.sort()
+		var total := 0.0
+		for f in sorted:
+			total += f
+		var p99 := sorted[mini(sorted.size() - 1, int(sorted.size() * 0.99))]
+		print("FPS q=%d %dx%d : moyenne %.1f, 1%% bas %.1f, pire %.1f ; image moyenne %.2f ms, GPU moyen %.2f ms ; appels %.0f (max %d), triangles %.0f k ; %d images" % [
+			int(Game.settings.get_value("quality")), get_viewport().get_visible_rect().size.x, get_viewport().get_visible_rect().size.y,
+			1.0 / (total / sorted.size()), 1.0 / p99, 1.0 / sorted[sorted.size() - 1], total / sorted.size() * 1000.0, _fps_gpu / _fps_n,
+			_fps_calls / _fps_n, _fps_calls_max, _fps_prims / _fps_n / 1000.0, _fps_n])
 		get_tree().quit()
 
 func _quit_check() -> void:
@@ -465,13 +535,9 @@ func _on_setting(key: String) -> void:
 		"fov":
 			_camera.fov = float(Game.settings.get_value("fov"))
 
-## Luminosité (Options) : le défaut du JS (1,4) garde l'exposition de l'environnement à 1.
+## Luminosité (Options) : exposition et ambiance, réglées par GraphicsView (graphics_view.gd).
 func _apply_brightness() -> void:
-	if _arena_node == null:
-		return
-	for n in _arena_node.get_children():
-		if n is WorldEnvironment and n.environment != null:
-			n.environment.tonemap_exposure = float(Game.settings.get_value("brightness")) / float(Settings.DEFAULTS["brightness"])
+	pass
 
 ## Volume général (bus Master) et volume de la musique (bus Music) : voir l'autoload Sfx.
 func _apply_audio() -> void:

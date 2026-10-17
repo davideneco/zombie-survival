@@ -5,14 +5,15 @@ extends Node3D
 ## Les sommets cuits sont en sens trigonométrique (Three.js) : les index sont inversés au chargement (Godot : face avant = sens horaire).
 
 const DIR := "res://data/world/"
-const TILE_VIS_RANGE := 420.0     ## m : au-delà, la tuile n'est plus dessinée (le brouillard la cache déjà)
-const SKY_COLOR := Color("0b1018")
-const AMBIENT_COLOR := Color("4a5578")
-const LAMP_COLOR := Color("ffd9a0")
-const LAMP_RANGE := 24.0
-const LAMP_ENERGY := 3.0
-const LAMP_LIGHTS_MAX := 24       ## lampadaires éclairants : les plus proches du joueur (les autres restent des ampoules)
-const FOG_DENSITY := 0.004
+const Surfaces := preload("res://scenes/world/surfaces.gd")
+const INSTANCE_CELL := 160.0      ## m : maille de rangement des instances (MultiMesh)
+const TILE_VIS_RANGE := 190.0     ## m : au-delà, la tuile n'est plus dessinée (le brouillard la cache déjà ; la caméra du JS s'arrête à 170 m)
+const TREE_CARD_RANGE := [60.0, 190.0, 190.0]   ## portée des cartes de feuillage selon la qualité (Rapide : arbres plus proches seulement)
+## Lampadaires (realworld.js : lightSources { color 0xffc77a, intensity 60, dist 20, y 4,2 }) : le JS redistribue 8 PointLight sur les sources les plus proches (LIGHTS = 8,
+## décroissance 2) ; Three.js divise la diffusion par pi, pas Godot : énergie = intensité / pi, atténuation en 1 / d^2 comme Three.js.
+const LAMP_ENERGY_K := 1.0 / PI   ## intensité Three.js -> énergie Godot
+const LAMP_Y := 4.2
+const LAMP_LIGHTS_MAX := 8        ## lampadaires éclairants : les plus proches du joueur (les autres restent des ampoules)
 
 var load_ms := 0
 var tile_count := 0
@@ -21,15 +22,17 @@ var _materials: Array = []
 var _textures: Array = []         ## Texture2D ou null, par indice de textures.json
 var _door_nodes: Dictionary = {}  ## id -> Node3D
 var _lamp_lights: Array[OmniLight3D] = []
-var _lamp_pos: Array = []
+var _lamp_pos: Array = []         ## [x, y, z, couleur, intensité, portée]
+var _lamp_door: Array[int] = []   ## porte dont dépend la source (-1 : aucune)
 var _lamp_timer := 0.0
+var _kinds: Dictionary = {}       ## "ground" / "water" / "facade" / "foliage" -> Array de ShaderMaterial (réglés par set_quality)
+var _tree_cards: Array[MultiMeshInstance3D] = []
 
 static func _json(path: String) -> Variant:
 	return JSON.parse_string(FileAccess.get_file_as_string(path))
 
 func _ready() -> void:
 	var t0 := Time.get_ticks_msec()
-	_environment()
 	_load_textures()
 	_load_materials()
 	var tiles: Dictionary = _json(DIR + "tiles.json")
@@ -44,6 +47,10 @@ func _ready() -> void:
 	_load_instances()
 	_lamps()
 	Game.door_opened.connect(_on_door_opened)
+	Game.settings.changed.connect(func(key: String) -> void:
+		if key == "quality":
+			set_quality(int(Game.settings.get_value("quality"))))
+	set_quality(int(Game.settings.get_value("quality")))
 	load_ms = Time.get_ticks_msec() - t0
 	print("monde affiché : %d tuiles, %d triangles, %d matériaux, %d ms" % [tile_count, triangle_count, _materials.size(), load_ms])
 
@@ -53,26 +60,21 @@ func _process(dt: float) -> void:
 		_lamp_timer = 0.5
 		_assign_lamps(Game.player.pos)
 
-# ---------------------------------------------------------------- environnement
-func _environment() -> void:
-	var env := Environment.new()
-	env.background_mode = Environment.BG_COLOR
-	env.background_color = SKY_COLOR
-	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	env.ambient_light_color = AMBIENT_COLOR
-	env.ambient_light_energy = 0.5
-	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
-	env.fog_enabled = true
-	env.fog_light_color = SKY_COLOR
-	env.fog_density = FOG_DENSITY
-	var we := WorldEnvironment.new()
-	we.environment = env
-	add_child(we)
-	var moon := DirectionalLight3D.new()
-	moon.light_color = Color("8fa4d0")
-	moon.light_energy = 0.35
-	moon.rotation_degrees = Vector3(-55, 30, 0)
-	add_child(moon)
+# ---------------------------------------------------------------- qualité (J9)
+## Niveau de qualité (CONFIG.graphics.levels) : détail des façades, flaques et mousse du sol, couches de l'eau, vent et portée des arbres, ombres de la lune.
+func set_quality(q: int) -> void:
+	var L := GraphicsRules.level(q)
+	# (le sol, ses flaques et le détail des façades sont dans le shader à tous les niveaux : le JS ne les retire pas en Rapide)
+	for m: ShaderMaterial in _kinds.get("water", []):
+		m.set_shader_parameter("layers", 1.0 if q == 0 else 2.0)
+	for m: ShaderMaterial in _kinds.get("foliage", []):
+		m.set_shader_parameter("wind_on", 0.0 if q == 0 else 1.0)
+	for mm in _tree_cards:
+		mm.visibility_range_end = float(TREE_CARD_RANGE[clampi(q, 0, 2)]) + (INSTANCE_CELL * 0.5 if q > 0 else 0.0)
+	var shadows: bool = bool(L["shadows"])
+	for c in get_children():
+		if c is MeshInstance3D and c.has_meta("tile"):
+			c.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON if shadows else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 
 # ---------------------------------------------------------------- textures et matériaux
 func _load_textures() -> void:
@@ -92,7 +94,18 @@ func _tex(i: int) -> Texture2D:
 	return null if i < 0 or i >= _textures.size() else _textures[i]
 
 func _load_materials() -> void:
+	var files: Array = []
+	for t: Dictionary in _json(DIR + "textures.json"):
+		files.append(String(t["file"]))
 	for m: Dictionary in _json(DIR + "materials.json"):
+		var k := Surfaces.kind(m, files)
+		if k != "":
+			var shm := Surfaces.make(k, m, _tex)
+			if not _kinds.has(k):
+				_kinds[k] = []
+			_kinds[k].append(shm)
+			_materials.append(shm)
+			continue
 		var sm := StandardMaterial3D.new()
 		sm.albedo_color = Config.color(int(m["c"]))
 		sm.roughness = float(m["r"])
@@ -205,6 +218,7 @@ func _mesh_from_pack(path: String) -> MeshInstance3D:
 	var mi := MeshInstance3D.new()
 	mi.mesh = mesh
 	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	mi.set_meta("tile", true)   # set_quality règle les ombres portées (la lune)
 	return mi
 
 func _load_doors() -> void:
@@ -237,56 +251,102 @@ func _load_instances() -> void:
 		var has_col := m["colors"] != null
 		if has_col:
 			cols = bytes.slice(base + int(m["colors"]), base + int(m["colors"]) + n * 12).to_float32_array()
+		# les instances sont rangées par mailles de 160 m (comme les tuiles) : le culling par image et la portée de visibilité (distance au nœud, donc à la maille et
+		# non à l'origine du monde) ne valent que par maille ; un seul MultiMesh pour toute la carte serait toujours « à l'écran » et caché à plus de 190 m de l'origine
+		var buckets: Dictionary = {}
+		for i in n:
+			var key := Vector2i(floori(xf[i * 12 + 3] / INSTANCE_CELL), floori(xf[i * 12 + 11] / INSTANCE_CELL))
+			var ids_k: PackedInt32Array = buckets.get(key, PackedInt32Array())
+			ids_k.append(i)
+			buckets[key] = ids_k   # (un tableau compact est copié à la lecture : il faut le réécrire)
 		for s: Dictionary in m["surfaces"]:
 			var mesh := ArrayMesh.new()
 			mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, _surface_arrays(s, bytes, base, true))
 			var mat: Material = _materials[int(s["mat"])]
-			if has_col:
+			if has_col and mat is StandardMaterial3D:
 				mat = mat.duplicate()
 				(mat as StandardMaterial3D).vertex_color_use_as_albedo = true
 			mesh.surface_set_material(0, mat)
-			var mm := MultiMesh.new()
-			mm.transform_format = MultiMesh.TRANSFORM_3D
-			mm.use_colors = has_col
-			mm.mesh = mesh
-			mm.instance_count = n
-			for i in n:
-				var o := i * 12
-				mm.set_instance_transform(i, Transform3D(
-					Basis(Vector3(xf[o], xf[o + 4], xf[o + 8]), Vector3(xf[o + 1], xf[o + 5], xf[o + 9]), Vector3(xf[o + 2], xf[o + 6], xf[o + 10])),
-					Vector3(xf[o + 3], xf[o + 7], xf[o + 11])))
-				if has_col:
-					mm.set_instance_color(i, Color(cols[i * 3], cols[i * 3 + 1], cols[i * 3 + 2]))
-			var mmi := MultiMeshInstance3D.new()
-			mmi.multimesh = mm
-			mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-			mmi.visibility_range_end = TILE_VIS_RANGE
-			add_child(mmi)
+			var foliage: bool = mat is ShaderMaterial and (mat as ShaderMaterial).shader == Surfaces.FOLIAGE
+			for key: Vector2i in buckets:
+				var ids: PackedInt32Array = buckets[key]
+				var mm := MultiMesh.new()
+				mm.transform_format = MultiMesh.TRANSFORM_3D
+				mm.use_colors = has_col
+				mm.mesh = mesh
+				mm.instance_count = ids.size()
+				var cx := (float(key.x) + 0.5) * INSTANCE_CELL
+				var cz := (float(key.y) + 0.5) * INSTANCE_CELL
+				for j in ids.size():
+					var o := ids[j] * 12
+					mm.set_instance_transform(j, Transform3D(
+						Basis(Vector3(xf[o], xf[o + 4], xf[o + 8]), Vector3(xf[o + 1], xf[o + 5], xf[o + 9]), Vector3(xf[o + 2], xf[o + 6], xf[o + 10])),
+						Vector3(xf[o + 3] - cx, xf[o + 7], xf[o + 11] - cz)))   # relatif au centre de la maille : le nœud y est posé
+					if has_col:
+						var c := ids[j] * 3
+						mm.set_instance_color(j, Color(cols[c], cols[c + 1], cols[c + 2]))
+				var mmi := MultiMeshInstance3D.new()
+				mmi.multimesh = mm
+				mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+				mmi.visibility_range_end = TILE_VIS_RANGE + INSTANCE_CELL * 0.5   # + la moitié de la maille de la maille : la distance se mesure à son centre
+				mmi.position = Vector3(cx, 0.0, cz)   # la portée de visibilité se mesure à l'origine du nœud, pas aux instances
+				if foliage:
+					_tree_cards.append(mmi)
+				add_child(mmi)
 
-# ---------------------------------------------------------------- lampadaires
+# ---------------------------------------------------------------- sources de lumière
+## Le JS redistribue 8 PointLight (décroissance 2) sur les sources les plus proches du joueur toutes les 0,4 s (realworld.js assignLights) : lampadaires (60, portée 20), panneaux
+## de porte (9, 8), machines (7, 8), passages, parkings, rames, cathédrale… Les sources sont celles de data/graphics/lights.json (cuites par tools/bake-graphics.mjs). Three.js divise
+## la diffusion par pi, pas Godot : énergie = intensité / pi. Les sources d'une porte s'éteignent quand elle s'ouvre.
 func _lamps() -> void:
-	_lamp_pos = _json(DIR + "lamps.json")
+	var path := "res://data/graphics/lights.json"
+	if FileAccess.file_exists(path):
+		for l: Array in _json(path)["lights"]:
+			_lamp_pos.append(l)
+	else:   # sans le fichier de lumières : seulement les lampadaires (lamps.json)
+		for lp: Array in _json(DIR + "lamps.json"):
+			_lamp_pos.append([lp[0], LAMP_Y, lp[2], 0xffc77a, 60.0, 20.0])
+	# une source de panneau de porte (couleur 0xff8844) appartient à la porte la plus proche
+	_lamp_door.resize(_lamp_pos.size())
+	_lamp_door.fill(-1)
+	for i in _lamp_pos.size():
+		if int(_lamp_pos[i][3]) != 0xff8844:
+			continue
+		var best := 1.0e18
+		for d: Dictionary in Game.world.doors:
+			for p: Array in d["points"]:
+				var dd := Vector2(float(p[0]) - float(_lamp_pos[i][0]), float(p[1]) - float(_lamp_pos[i][2])).length_squared()
+				if dd < best:
+					best = dd
+					_lamp_door[i] = int(d["id"])
 	for _i in LAMP_LIGHTS_MAX:
 		var l := OmniLight3D.new()
-		l.light_color = LAMP_COLOR
-		l.omni_range = LAMP_RANGE
-		l.light_energy = LAMP_ENERGY
+		l.omni_attenuation = 2.0
+		l.shadow_enabled = false
 		l.visible = false
 		add_child(l)
 		_lamp_lights.append(l)
 
 func _assign_lamps(p: Vector3) -> void:
+	if "--dbg-nolamps" in OS.get_cmdline_user_args():   # mise au point : sans lampadaires ni lumières de machines
+		return
 	var near: Array = []
-	for lp: Array in _lamp_pos:
+	for i in _lamp_pos.size():
+		var lp: Array = _lamp_pos[i]
 		var d := Vector2(float(lp[0]) - p.x, float(lp[2]) - p.z).length_squared()
-		if d < 90.0 * 90.0:
+		if d < 60.0 * 60.0 and not (_lamp_door[i] >= 0 and bool(Game.world.doors[_lamp_door[i]]["open"])):
 			near.append([d, lp])
 	near.sort_custom(func(a, b): return a[0] < b[0])
+	if "--dbg-lights" in OS.get_cmdline_user_args():
+		print("lampes : %d proches de %s ; plus proche %s" % [near.size(), p, near[0] if near.size() > 0 else null])
 	for i in _lamp_lights.size():
 		var l := _lamp_lights[i]
 		if i < near.size():
 			var lp: Array = near[i][1]
 			l.position = Vector3(float(lp[0]), float(lp[1]), float(lp[2]))
+			l.light_color = Config.color(int(lp[3]))
+			l.light_energy = float(lp[4]) * LAMP_ENERGY_K
+			l.omni_range = float(lp[5])
 			l.visible = true
 		else:
 			l.visible = false

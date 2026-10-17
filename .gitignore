@@ -16,3 +16,6 @@ godot/data/world/doors/
 godot/data/world/instances.bin
 godot/assets/baked/
 godot/assets/textures/
+
+# J9 : atlas, géométries des zombies, champ de distance du sol (node tools/bake-graphics.mjs, jeu JS + Chrome)
+godot/assets/graphics/
