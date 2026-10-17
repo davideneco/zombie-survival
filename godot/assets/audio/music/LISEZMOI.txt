@@ -1,0 +1,13 @@
+Musique de fond personnalisée (port Godot)
+==========================================
+
+Dépose ici (ou dans user://music/, c'est-à-dire ~/.local/share/godot/app_userdata/Zombie Survival/music/) un fichier nommé
+theme.mp3, theme.ogg ou theme.wav : le jeu le joue en boucle à la place des boucles de rock cuites (music_0..3.ogg).
+Le format .m4a du jeu web n'est pas lu par Godot.
+
+- Le curseur « Musique » des options règle son volume ; la musique est étouffée dans les menus et en pause.
+- Contrairement au jeu web, le niveau n'est PAS ajusté automatiquement (Godot ne donne pas les échantillons d'un MP3 / Ogg) : normalise le fichier.
+- Le morceau entre en fondu (2 s).
+
+Droits d'auteur
+- theme.* est dans le .gitignore : le fichier reste sur ton ordinateur et n'est jamais commité.

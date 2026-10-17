@@ -1,0 +1,1321 @@
+{
+ "rate": 44100,
+ "sounds": {
+  "gun_m1911": {
+   "files": [
+    "gun_m1911_0.wav",
+    "gun_m1911_1.wav",
+    "gun_m1911_2.wav"
+   ],
+   "send": [
+    "gun_m1911_0_send.wav",
+    "gun_m1911_1_send.wav",
+    "gun_m1911_2_send.wav"
+   ],
+   "dur": [
+    0.4249,
+    0.4039,
+    0.4375
+   ],
+   "gain_db": 4.739
+  },
+  "gun_arex": {
+   "files": [
+    "gun_arex_0.wav",
+    "gun_arex_1.wav",
+    "gun_arex_2.wav"
+   ],
+   "send": [
+    "gun_arex_0_send.wav",
+    "gun_arex_1_send.wav",
+    "gun_arex_2_send.wav"
+   ],
+   "dur": [
+    0.3838,
+    0.4044,
+    0.4002
+   ],
+   "gain_db": 2.434
+  },
+  "gun_deagle": {
+   "files": [
+    "gun_deagle_0.wav",
+    "gun_deagle_1.wav",
+    "gun_deagle_2.wav"
+   ],
+   "send": [
+    "gun_deagle_0_send.wav",
+    "gun_deagle_1_send.wav",
+    "gun_deagle_2_send.wav"
+   ],
+   "dur": [
+    0.48,
+    0.4675,
+    0.4735
+   ],
+   "gain_db": 7.72
+  },
+  "gun_magnum": {
+   "files": [
+    "gun_magnum_0.wav",
+    "gun_magnum_1.wav",
+    "gun_magnum_2.wav"
+   ],
+   "send": [
+    "gun_magnum_0_send.wav",
+    "gun_magnum_1_send.wav",
+    "gun_magnum_2_send.wav"
+   ],
+   "dur": [
+    0.5016,
+    0.4968,
+    0.4932
+   ],
+   "gain_db": 9.283
+  },
+  "gun_rifle": {
+   "files": [
+    "gun_rifle_0.wav",
+    "gun_rifle_1.wav",
+    "gun_rifle_2.wav"
+   ],
+   "send": [
+    "gun_rifle_0_send.wav",
+    "gun_rifle_1_send.wav",
+    "gun_rifle_2_send.wav"
+   ],
+   "dur": [
+    0.4648,
+    0.4405,
+    0.4441
+   ],
+   "gain_db": 5.329
+  },
+  "gun_ak47": {
+   "files": [
+    "gun_ak47_0.wav",
+    "gun_ak47_1.wav",
+    "gun_ak47_2.wav"
+   ],
+   "send": [
+    "gun_ak47_0_send.wav",
+    "gun_ak47_1_send.wav",
+    "gun_ak47_2_send.wav"
+   ],
+   "dur": [
+    0.436,
+    0.465,
+    0.4669
+   ],
+   "gain_db": 6.111
+  },
+  "gun_famas": {
+   "files": [
+    "gun_famas_0.wav",
+    "gun_famas_1.wav",
+    "gun_famas_2.wav"
+   ],
+   "send": [
+    "gun_famas_0_send.wav",
+    "gun_famas_1_send.wav",
+    "gun_famas_2_send.wav"
+   ],
+   "dur": [
+    0.4239,
+    0.4245,
+    0.4266
+   ],
+   "gain_db": 3.441
+  },
+  "gun_scar": {
+   "files": [
+    "gun_scar_0.wav",
+    "gun_scar_1.wav",
+    "gun_scar_2.wav"
+   ],
+   "send": [
+    "gun_scar_0_send.wav",
+    "gun_scar_1_send.wav",
+    "gun_scar_2_send.wav"
+   ],
+   "dur": [
+    0.4664,
+    0.4724,
+    0.4696
+   ],
+   "gain_db": 7.663
+  },
+  "gun_smg": {
+   "files": [
+    "gun_smg_0.wav",
+    "gun_smg_1.wav",
+    "gun_smg_2.wav"
+   ],
+   "send": [
+    "gun_smg_0_send.wav",
+    "gun_smg_1_send.wav",
+    "gun_smg_2_send.wav"
+   ],
+   "dur": [
+    0.37,
+    0.3824,
+    0.3617
+   ],
+   "gain_db": 1.773
+  },
+  "gun_mp5": {
+   "files": [
+    "gun_mp5_0.wav",
+    "gun_mp5_1.wav",
+    "gun_mp5_2.wav"
+   ],
+   "send": [
+    "gun_mp5_0_send.wav",
+    "gun_mp5_1_send.wav",
+    "gun_mp5_2_send.wav"
+   ],
+   "dur": [
+    0.372,
+    0.3716,
+    0.3503
+   ],
+   "gain_db": 0.42
+  },
+  "gun_p90": {
+   "files": [
+    "gun_p90_0.wav",
+    "gun_p90_1.wav",
+    "gun_p90_2.wav"
+   ],
+   "send": [
+    "gun_p90_0_send.wav",
+    "gun_p90_1_send.wav",
+    "gun_p90_2_send.wav"
+   ],
+   "dur": [
+    0.342,
+    0.3333,
+    0.3471
+   ],
+   "gain_db": 0
+  },
+  "gun_lmg": {
+   "files": [
+    "gun_lmg_0.wav",
+    "gun_lmg_1.wav",
+    "gun_lmg_2.wav"
+   ],
+   "send": [
+    "gun_lmg_0_send.wav",
+    "gun_lmg_1_send.wav",
+    "gun_lmg_2_send.wav"
+   ],
+   "dur": [
+    0.4934,
+    0.4705,
+    0.459
+   ],
+   "gain_db": 7.719
+  },
+  "gun_m249": {
+   "files": [
+    "gun_m249_0.wav",
+    "gun_m249_1.wav",
+    "gun_m249_2.wav"
+   ],
+   "send": [
+    "gun_m249_0_send.wav",
+    "gun_m249_1_send.wav",
+    "gun_m249_2_send.wav"
+   ],
+   "dur": [
+    0.444,
+    0.4358,
+    0.4303
+   ],
+   "gain_db": 4.478
+  },
+  "gun_mg42": {
+   "files": [
+    "gun_mg42_0.wav",
+    "gun_mg42_1.wav",
+    "gun_mg42_2.wav"
+   ],
+   "send": [
+    "gun_mg42_0_send.wav",
+    "gun_mg42_1_send.wav",
+    "gun_mg42_2_send.wav"
+   ],
+   "dur": [
+    0.3905,
+    0.3929,
+    0.4015
+   ],
+   "gain_db": 3.378
+  },
+  "gun_pkm": {
+   "files": [
+    "gun_pkm_0.wav",
+    "gun_pkm_1.wav",
+    "gun_pkm_2.wav"
+   ],
+   "send": [
+    "gun_pkm_0_send.wav",
+    "gun_pkm_1_send.wav",
+    "gun_pkm_2_send.wav"
+   ],
+   "dur": [
+    0.4629,
+    0.459,
+    0.4699
+   ],
+   "gain_db": 7.587
+  },
+  "gun_sniper": {
+   "files": [
+    "gun_sniper_0.wav",
+    "gun_sniper_1.wav",
+    "gun_sniper_2.wav"
+   ],
+   "send": [
+    "gun_sniper_0_send.wav",
+    "gun_sniper_1_send.wav",
+    "gun_sniper_2_send.wav"
+   ],
+   "dur": [
+    0.5549,
+    0.5406,
+    0.5433
+   ],
+   "gain_db": 10.048
+  },
+  "gun_svd": {
+   "files": [
+    "gun_svd_0.wav",
+    "gun_svd_1.wav",
+    "gun_svd_2.wav"
+   ],
+   "send": [
+    "gun_svd_0_send.wav",
+    "gun_svd_1_send.wav",
+    "gun_svd_2_send.wav"
+   ],
+   "dur": [
+    0.5203,
+    0.5101,
+    0.5231
+   ],
+   "gain_db": 9.494
+  },
+  "gun_barrett": {
+   "files": [
+    "gun_barrett_0.wav",
+    "gun_barrett_1.wav",
+    "gun_barrett_2.wav"
+   ],
+   "send": [
+    "gun_barrett_0_send.wav",
+    "gun_barrett_1_send.wav",
+    "gun_barrett_2_send.wav"
+   ],
+   "dur": [
+    0.5776,
+    0.5946,
+    0.5846
+   ],
+   "gain_db": 8.706
+  },
+  "gun_shotgun": {
+   "files": [
+    "gun_shotgun_0.wav",
+    "gun_shotgun_1.wav",
+    "gun_shotgun_2.wav"
+   ],
+   "send": [
+    "gun_shotgun_0_send.wav",
+    "gun_shotgun_1_send.wav",
+    "gun_shotgun_2_send.wav"
+   ],
+   "dur": [
+    0.6485,
+    0.6497,
+    0.6383
+   ],
+   "gain_db": 9.288
+  },
+  "gun_saiga": {
+   "files": [
+    "gun_saiga_0.wav",
+    "gun_saiga_1.wav",
+    "gun_saiga_2.wav"
+   ],
+   "send": [
+    "gun_saiga_0_send.wav",
+    "gun_saiga_1_send.wav",
+    "gun_saiga_2_send.wav"
+   ],
+   "dur": [
+    0.4858,
+    0.4639,
+    0.4786
+   ],
+   "gain_db": 8.015
+  },
+  "gun_crossbow": {
+   "files": [
+    "gun_crossbow_0.wav",
+    "gun_crossbow_1.wav",
+    "gun_crossbow_2.wav"
+   ],
+   "send": [
+    "gun_crossbow_0_send.wav",
+    null,
+    null
+   ],
+   "dur": [
+    0.1101,
+    0.1138,
+    0.1149
+   ],
+   "gain_db": 0
+  },
+  "gun_m79": {
+   "files": [
+    "gun_m79_0.wav",
+    "gun_m79_1.wav",
+    "gun_m79_2.wav"
+   ],
+   "send": [
+    "gun_m79_0_send.wav",
+    "gun_m79_1_send.wav",
+    "gun_m79_2_send.wav"
+   ],
+   "dur": [
+    0.4157,
+    0.4136,
+    0.4276
+   ],
+   "gain_db": 2.827
+  },
+  "gun_raygun": {
+   "files": [
+    "gun_raygun_0.wav",
+    "gun_raygun_1.wav",
+    "gun_raygun_2.wav"
+   ],
+   "send": [
+    "gun_raygun_0_send.wav",
+    "gun_raygun_1_send.wav",
+    "gun_raygun_2_send.wav"
+   ],
+   "dur": [
+    0.35,
+    0.35,
+    0.35
+   ],
+   "gain_db": 3.022
+  },
+  "reload_pistol_1p5": {
+   "files": [
+    "reload_pistol_1p5_0.wav"
+   ],
+   "send": [
+    null
+   ],
+   "dur": [
+    1.4252
+   ],
+   "gain_db": 0
+  },
+  "reload_pistol_1p4": {
+   "files": [
+    "reload_pistol_1p4_0.wav"
+   ],
+   "send": [
+    null
+   ],
+   "dur": [
+    1.3382
+   ],
+   "gain_db": 0
+  },
+  "reload_pistol_1p9": {
+   "files": [
+    "reload_pistol_1p9_0.wav"
+   ],
+   "send": [
+    null
+   ],
+   "dur": [
+    1.7775
+   ],
+   "gain_db": 0
+  },
+  "reload_pistol_2p2": {
+   "files": [
+    "reload_pistol_2p2_0.wav"
+   ],
+   "send": [
+    null
+   ],
+   "dur": [
+    2.0422
+   ],
+   "gain_db": 0
+  },
+  "reload_ar_1p8": {
+   "files": [
+    "reload_ar_1p8_0.wav"
+   ],
+   "send": [
+    null
+   ],
+   "dur": [
+    1.6893
+   ],
+   "gain_db": 0
+  },
+  "reload_ar_2p4": {
+   "files": [
+    "reload_ar_2p4_0.wav"
+   ],
+   "send": [
+    null
+   ],
+   "dur": [
+    2.2177
+   ],
+   "gain_db": 0
+  },
+  "reload_ar_2p2": {
+   "files": [
+    "reload_ar_2p2_0.wav"
+   ],
+   "send": [
+    null
+   ],
+   "dur": [
+    2.0422
+   ],
+   "gain_db": 0
+  },
+  "reload_ar_2p3": {
+   "files": [
+    "reload_ar_2p3_0.wav"
+   ],
+   "send": [
+    null
+   ],
+   "dur": [
+    2.1295
+   ],
+   "gain_db": 0
+  },
+  "reload_smg_1p5": {
+   "files": [
+    "reload_smg_1p5_0.wav"
+   ],
+   "send": [
+    null
+   ],
+   "dur": [
+    1.4261
+   ],
+   "gain_db": 0
+  },
+  "reload_smg_1p8": {
+   "files": [
+    "reload_smg_1p8_0.wav"
+   ],
+   "send": [
+    null
+   ],
+   "dur": [
+    1.6895
+   ],
+   "gain_db": 0
+  },
+  "reload_smg_2p6": {
+   "files": [
+    "reload_smg_2p6_0.wav"
+   ],
+   "send": [
+    null
+   ],
+   "dur": [
+    2.394
+   ],
+   "gain_db": 0
+  },
+  "reload_mg_3p6": {
+   "files": [
+    "reload_mg_3p6_0.wav"
+   ],
+   "send": [
+    null
+   ],
+   "dur": [
+    3.1576
+   ],
+   "gain_db": 0
+  },
+  "reload_mg_4p2": {
+   "files": [
+    "reload_mg_4p2_0.wav"
+   ],
+   "send": [
+    null
+   ],
+   "dur": [
+    3.6644
+   ],
+   "gain_db": 0
+  },
+  "reload_mg_5": {
+   "files": [
+    "reload_mg_5_0.wav"
+   ],
+   "send": [
+    null
+   ],
+   "dur": [
+    4.3476
+   ],
+   "gain_db": 0
+  },
+  "reload_mg_4p8": {
+   "files": [
+    "reload_mg_4p8_0.wav"
+   ],
+   "send": [
+    null
+   ],
+   "dur": [
+    4.1772
+   ],
+   "gain_db": 0
+  },
+  "reload_sniper_2p8": {
+   "files": [
+    "reload_sniper_2p8_0.wav"
+   ],
+   "send": [
+    null
+   ],
+   "dur": [
+    2.3315
+   ],
+   "gain_db": 0
+  },
+  "reload_sniper_2p6": {
+   "files": [
+    "reload_sniper_2p6_0.wav"
+   ],
+   "send": [
+    null
+   ],
+   "dur": [
+    2.1678
+   ],
+   "gain_db": 0
+  },
+  "reload_sniper_3p4": {
+   "files": [
+    "reload_sniper_3p4_0.wav"
+   ],
+   "send": [
+    null
+   ],
+   "dur": [
+    2.8236
+   ],
+   "gain_db": 0
+  },
+  "reload_shotgun_2p4": {
+   "files": [
+    "reload_shotgun_2p4_0.wav"
+   ],
+   "send": [
+    null
+   ],
+   "dur": [
+    2.1254
+   ],
+   "gain_db": 0
+  },
+  "reload_shotgun_2p6": {
+   "files": [
+    "reload_shotgun_2p6_0.wav"
+   ],
+   "send": [
+    null
+   ],
+   "dur": [
+    2.2861
+   ],
+   "gain_db": 0
+  },
+  "reload_special_1p7": {
+   "files": [
+    "reload_special_1p7_0.wav"
+   ],
+   "send": [
+    null
+   ],
+   "dur": [
+    1.6014
+   ],
+   "gain_db": 0
+  },
+  "reload_special_2p2": {
+   "files": [
+    "reload_special_2p2_0.wav"
+   ],
+   "send": [
+    null
+   ],
+   "dur": [
+    2.0414
+   ],
+   "gain_db": 0
+  },
+  "reload_special_2p6": {
+   "files": [
+    "reload_special_2p6_0.wav"
+   ],
+   "send": [
+    null
+   ],
+   "dur": [
+    2.3937
+   ],
+   "gain_db": 0
+  },
+  "empty": {
+   "files": [
+    "empty_0.wav"
+   ],
+   "send": [
+    null
+   ],
+   "dur": [
+    0.0484
+   ],
+   "gain_db": 0
+  },
+  "vault": {
+   "files": [
+    "vault_0.wav"
+   ],
+   "send": [
+    null
+   ],
+   "dur": [
+    0.5152
+   ],
+   "gain_db": 0
+  },
+  "knife_swing": {
+   "files": [
+    "knife_swing_0.wav"
+   ],
+   "send": [
+    null
+   ],
+   "dur": [
+    0.1409
+   ],
+   "gain_db": 0
+  },
+  "knife_flesh": {
+   "files": [
+    "knife_flesh_0.wav"
+   ],
+   "send": [
+    null
+   ],
+   "dur": [
+    0.1128
+   ],
+   "gain_db": 0
+  },
+  "knife_metal": {
+   "files": [
+    "knife_metal_0.wav"
+   ],
+   "send": [
+    "knife_metal_0_send.wav"
+   ],
+   "dur": [
+    0.1646
+   ],
+   "gain_db": 0
+  },
+  "hit_head": {
+   "files": [
+    "hit_head_0.wav",
+    "hit_head_1.wav",
+    "hit_head_2.wav"
+   ],
+   "send": [
+    "hit_head_0_send.wav",
+    "hit_head_1_send.wav",
+    "hit_head_2_send.wav"
+   ],
+   "dur": [
+    0.1136,
+    0.1136,
+    0.1136
+   ],
+   "gain_db": 0
+  },
+  "hit_flesh": {
+   "files": [
+    "hit_flesh_0.wav",
+    "hit_flesh_1.wav",
+    "hit_flesh_2.wav"
+   ],
+   "send": [
+    null,
+    null,
+    null
+   ],
+   "dur": [
+    0.0975,
+    0.0973,
+    0.0971
+   ],
+   "gain_db": 0
+  },
+  "kill": {
+   "files": [
+    "kill_0.wav",
+    "kill_1.wav",
+    "kill_2.wav"
+   ],
+   "send": [
+    "kill_0_send.wav",
+    "kill_1_send.wav",
+    "kill_2_send.wav"
+   ],
+   "dur": [
+    0.2723,
+    0.2727,
+    0.2729
+   ],
+   "gain_db": 0
+  },
+  "hurt": {
+   "files": [
+    "hurt_0.wav",
+    "hurt_1.wav",
+    "hurt_2.wav"
+   ],
+   "send": [
+    null,
+    null,
+    null
+   ],
+   "dur": [
+    0.2785,
+    0.269,
+    0.2694
+   ],
+   "gain_db": 2.415
+  },
+  "mount_moto": {
+   "files": [
+    "mount_moto_0.wav"
+   ],
+   "send": [
+    null
+   ],
+   "dur": [
+    1.379
+   ],
+   "gain_db": 0
+  },
+  "mount_grosseMoto": {
+   "files": [
+    "mount_grosseMoto_0.wav"
+   ],
+   "send": [
+    null
+   ],
+   "dur": [
+    1.38
+   ],
+   "gain_db": 0
+  },
+  "mount_velo": {
+   "files": [
+    "mount_velo_0.wav"
+   ],
+   "send": [
+    null
+   ],
+   "dur": [
+    0.365
+   ],
+   "gain_db": 0
+  },
+  "beep": {
+   "files": [
+    "beep_0.wav"
+   ],
+   "send": [
+    null
+   ],
+   "dur": [
+    0.2
+   ],
+   "gain_db": 0
+  },
+  "cough": {
+   "files": [
+    "cough_0.wav"
+   ],
+   "send": [
+    null
+   ],
+   "dur": [
+    0.2269
+   ],
+   "gain_db": 0
+  },
+  "alarm": {
+   "files": [
+    "alarm_0.wav"
+   ],
+   "send": [
+    null
+   ],
+   "dur": [
+    0.2915
+   ],
+   "gain_db": 0
+  },
+  "down": {
+   "files": [
+    "down_0.wav"
+   ],
+   "send": [
+    null
+   ],
+   "dur": [
+    0.7075
+   ],
+   "gain_db": 0
+  },
+  "crash": {
+   "files": [
+    "crash_0.wav",
+    "crash_1.wav"
+   ],
+   "send": [
+    "crash_0_send.wav",
+    "crash_1_send.wav"
+   ],
+   "dur": [
+    0.2718,
+    0.2812
+   ],
+   "gain_db": 0
+  },
+  "tram_gong": {
+   "files": [
+    "tram_gong_0.wav"
+   ],
+   "send": [
+    "tram_gong_0_send.wav"
+   ],
+   "dur": [
+    2.4719
+   ],
+   "gain_db": 1.243
+  },
+  "tram_chime_open": {
+   "files": [
+    "tram_chime_open_0.wav"
+   ],
+   "send": [
+    null
+   ],
+   "dur": [
+    0.5249
+   ],
+   "gain_db": 0
+  },
+  "tram_chime_close": {
+   "files": [
+    "tram_chime_close_0.wav"
+   ],
+   "send": [
+    null
+   ],
+   "dur": [
+    0.5178
+   ],
+   "gain_db": 0
+  },
+  "tram_switch": {
+   "files": [
+    "tram_switch_0.wav"
+   ],
+   "send": [
+    null
+   ],
+   "dur": [
+    0.2103
+   ],
+   "gain_db": 0
+  },
+  "tram_brake": {
+   "files": [
+    "tram_brake_0.wav",
+    "tram_brake_1.wav"
+   ],
+   "send": [
+    null,
+    null
+   ],
+   "dur": [
+    0.1412,
+    0.1451
+   ],
+   "gain_db": 0
+  },
+  "buy": {
+   "files": [
+    "buy_0.wav"
+   ],
+   "send": [
+    null
+   ],
+   "dur": [
+    0.2535
+   ],
+   "gain_db": 0
+  },
+  "chat": {
+   "files": [
+    "chat_0.wav"
+   ],
+   "send": [
+    null
+   ],
+   "dur": [
+    0.1805
+   ],
+   "gain_db": 0
+  },
+  "deny": {
+   "files": [
+    "deny_0.wav"
+   ],
+   "send": [
+    null
+   ],
+   "dur": [
+    0.1782
+   ],
+   "gain_db": 0
+  },
+  "round_start": {
+   "files": [
+    "round_start_0.wav"
+   ],
+   "send": [
+    "round_start_0_send.wav"
+   ],
+   "dur": [
+    1.6422
+   ],
+   "gain_db": 0
+  },
+  "round_end": {
+   "files": [
+    "round_end_0.wav"
+   ],
+   "send": [
+    "round_end_0_send.wav"
+   ],
+   "dur": [
+    1.2793
+   ],
+   "gain_db": 0
+  },
+  "powerup": {
+   "files": [
+    "powerup_0.wav"
+   ],
+   "send": [
+    "powerup_0_send.wav"
+   ],
+   "dur": [
+    0.5613
+   ],
+   "gain_db": 0
+  },
+  "nuke": {
+   "files": [
+    "nuke_0.wav"
+   ],
+   "send": [
+    "nuke_0_send.wav"
+   ],
+   "dur": [
+    1.2662
+   ],
+   "gain_db": 4.012
+  },
+  "tick": {
+   "files": [
+    "tick_0.wav"
+   ],
+   "send": [
+    null
+   ],
+   "dur": [
+    0.0523
+   ],
+   "gain_db": 0
+  },
+  "pap_work": {
+   "files": [
+    "pap_work_0.wav"
+   ],
+   "send": [
+    null
+   ],
+   "dur": [
+    3.7415
+   ],
+   "gain_db": 0
+  },
+  "bell": {
+   "files": [
+    "bell_0.wav"
+   ],
+   "send": [
+    "bell_0_send.wav"
+   ],
+   "dur": [
+    2.5248
+   ],
+   "gain_db": 0
+  },
+  "explosion": {
+   "files": [
+    "explosion_0.wav",
+    "explosion_1.wav",
+    "explosion_2.wav"
+   ],
+   "send": [
+    "explosion_0_send.wav",
+    "explosion_1_send.wav",
+    "explosion_2_send.wav"
+   ],
+   "dur": [
+    0.9803,
+    0.9904,
+    0.9727
+   ],
+   "gain_db": 5.679
+  },
+  "pap": {
+   "files": [
+    "pap_0.wav"
+   ],
+   "send": [
+    "pap_0_send.wav"
+   ],
+   "dur": [
+    0.8132
+   ],
+   "gain_db": 0
+  },
+  "jingle": {
+   "files": [
+    "jingle_0.wav"
+   ],
+   "send": [
+    null
+   ],
+   "dur": [
+    0.7254
+   ],
+   "gain_db": 0
+  },
+  "knock": {
+   "files": [
+    "knock_0.wav"
+   ],
+   "send": [
+    null
+   ],
+   "dur": [
+    0.1127
+   ],
+   "gain_db": 0
+  },
+  "glass": {
+   "files": [
+    "glass_0.wav",
+    "glass_1.wav"
+   ],
+   "send": [
+    "glass_0_send.wav",
+    "glass_1_send.wav"
+   ],
+   "dur": [
+    0.4544,
+    0.4547
+   ],
+   "gain_db": 2.635
+  },
+  "rumble": {
+   "files": [
+    "rumble_0.wav",
+    "rumble_1.wav"
+   ],
+   "send": [
+    null,
+    null
+   ],
+   "dur": [
+    0.9003,
+    0.9023
+   ],
+   "gain_db": 0
+  },
+  "dirt": {
+   "files": [
+    "dirt_0.wav",
+    "dirt_1.wav"
+   ],
+   "send": [
+    null,
+    null
+   ],
+   "dur": [
+    0.3542,
+    0.3418
+   ],
+   "gain_db": 0
+  },
+  "groan": {
+   "files": [
+    "groan_0.wav",
+    "groan_1.wav",
+    "groan_2.wav",
+    "groan_3.wav"
+   ],
+   "send": [
+    null,
+    null,
+    null,
+    null
+   ],
+   "dur": [
+    0.9978,
+    0.8146,
+    0.9085,
+    1.1641
+   ],
+   "gain_db": 0
+  }
+ },
+ "engines": {
+  "engine_moto": {
+   "file": "engine_moto.wav",
+   "kind": "moto",
+   "rpm": 0.5,
+   "ratio": 0.3,
+   "throttle": 0.5,
+   "gain_db": 0,
+   "dur": 2.7
+  },
+  "engine_grosseMoto": {
+   "file": "engine_grosseMoto.wav",
+   "kind": "grosseMoto",
+   "rpm": 0.5,
+   "ratio": 0.3,
+   "throttle": 0.5,
+   "gain_db": 0,
+   "dur": 2.7
+  },
+  "engine_tram": {
+   "file": "engine_tram.wav",
+   "kind": "tram",
+   "rpm": null,
+   "ratio": 0.5,
+   "throttle": 0.5,
+   "gain_db": 0,
+   "dur": 2.7
+  }
+ },
+ "music": {
+  "0": {
+   "file": "music_0.ogg",
+   "bpm": 102,
+   "level": 0,
+   "bars": 16,
+   "loop": 37.6471,
+   "gain_db": 0,
+   "bytes": 431121
+  },
+  "1": {
+   "file": "music_1.ogg",
+   "bpm": 112.2,
+   "level": 1,
+   "bars": 16,
+   "loop": 34.2246,
+   "gain_db": 0,
+   "bytes": 497863
+  },
+  "2": {
+   "file": "music_2.ogg",
+   "bpm": 122.4,
+   "level": 2,
+   "bars": 16,
+   "loop": 31.3725,
+   "gain_db": 0,
+   "bytes": 472408
+  },
+  "3": {
+   "file": "music_3.ogg",
+   "bpm": 136,
+   "level": 3,
+   "bars": 16,
+   "loop": 28.2353,
+   "gain_db": 0,
+   "bytes": 468927
+  }
+ },
+ "weaponReload": {
+  "m1911": "reload_pistol_1p5",
+  "arex": "reload_pistol_1p4",
+  "deagle": "reload_pistol_1p9",
+  "magnum": "reload_pistol_2p2",
+  "rifle": "reload_ar_1p8",
+  "ak47": "reload_ar_2p4",
+  "famas": "reload_ar_2p2",
+  "scar": "reload_ar_2p3",
+  "smg": "reload_smg_1p5",
+  "mp5": "reload_smg_1p8",
+  "p90": "reload_smg_2p6",
+  "lmg": "reload_mg_3p6",
+  "m249": "reload_mg_4p2",
+  "mg42": "reload_mg_5",
+  "pkm": "reload_mg_4p8",
+  "sniper": "reload_sniper_2p8",
+  "svd": "reload_sniper_2p6",
+  "barrett": "reload_sniper_3p4",
+  "shotgun": "reload_shotgun_2p4",
+  "saiga": "reload_shotgun_2p6",
+  "crossbow": "reload_special_1p7",
+  "m79": "reload_special_2p2",
+  "raygun": "reload_special_2p6"
+ }
+}

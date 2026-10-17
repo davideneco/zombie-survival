@@ -29,12 +29,14 @@ signal player_downed                                         ## J6 : à terre (R
 signal player_revived
 signal points_gained(amount: int, cls: String)               ## J7 : points gagnés (popup « +60 ») ; cls : "", "head", "bonus"
 signal hit_confirmed(kill: bool)                             ## J7 : un tir du joueur touche un zombie (marqueur de touche)
+signal weapon_event(name: String, data: Dictionary)           ## J8 : "reload" {id, cat, time}, "knife_swing", "knife_hit" {metal}, "empty" (clic à vide) : sons
 signal ride_event(name: String, data: Dictionary)            ## J5 : "mount", "dismount", "crash", "burn", "break", "respawn", "gong", "chime", "service", "knock", "cough", "beep", "dry"
 
 var round_number: int:
 	get: return director.round_number if director != null else 0
 var points := 0
 var kills := 0
+var last_hit_head := false  ## J8 : le dernier coup porté par hit_zombie visait la tête (lu par les sons à réception de hit_confirmed)
 var time := 0.0
 var playing := false
 var over := false
@@ -273,6 +275,7 @@ func hit_zombie(z: ZombieSim, head: bool, dmg: float, head_mult: float, mel: boo
 	var killed := z.damage(amount, head)
 	var K: Dictionary = Config.at("knife.points")
 	var mult := powerups.points_mult()   # Points doubles
+	last_hit_head = head
 	hit_confirmed.emit(killed)
 	if killed:
 		kills += 1

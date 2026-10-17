@@ -144,6 +144,8 @@ func _ready() -> void:
 	Game.announced.connect(func(title: String, sub: String): _hud.announce(title, sub))
 	_restart()
 	_apply_audio()
+	if "--no-music" not in user_args:
+		Sfx.start_music()
 	if _menu:
 		_menus.open_title()
 	else:
@@ -168,6 +170,7 @@ func _restart() -> void:
 	if _arena_node != null:
 		_arena_node.queue_free()
 	Game.new_game(_seed, _map, Config.at("startWeapons", []))
+	Sfx.reset()
 	if _at_pos != Vector3.INF:
 		Game.player.pos = _at_pos
 		Game.player.yaw = _at_yaw
@@ -390,6 +393,9 @@ func _process(dt: float) -> void:
 			_views[id].queue_free()
 			_views.erase(id)
 	_quit_check()
+	# musique : intensité selon la manche (0,3 + 0,05 x manche), étouffée dans les menus et en pause (main.js updateMusicMood)
+	var in_game: bool = _menus.in_game and not Game.over
+	Sfx.set_mood(AudioRules.mood_intensity(in_game, false, Game.round_number), not in_game or not Game.playing)
 	for i in range(_tracers.size() - 1, -1, -1):
 		_tracers[i][1] -= dt
 		if _tracers[i][1] <= 0.0:
@@ -406,6 +412,7 @@ func _process(dt: float) -> void:
 
 func _quit_check() -> void:
 	if _quit_at > 0.0 and Game.time >= _quit_at:
+		print("audio : %d sons lus, %d ignorés, %d voix reprises, %d voix créées ; musique niveau %d ; lus : %s" % [Sfx.stats["played"], Sfx.stats["skipped"], Sfx.stats["stolen"], Sfx.voice_count(), Sfx.music_level, Sfx.counts])
 		get_tree().quit()
 
 func _on_zombie_spawned(z: ZombieSim) -> void:
@@ -466,10 +473,9 @@ func _apply_brightness() -> void:
 		if n is WorldEnvironment and n.environment != null:
 			n.environment.tonemap_exposure = float(Game.settings.get_value("brightness")) / float(Settings.DEFAULTS["brightness"])
 
-## Volume général (bus Maître). Le bus de la musique et les sons arrivent en J8 ; le réglage est déjà gardé.
+## Volume général (bus Master) et volume de la musique (bus Music) : voir l'autoload Sfx.
 func _apply_audio() -> void:
-	var v := float(Game.settings.get_value("volume"))
-	AudioServer.set_bus_volume_db(0, linear_to_db(maxf(v, 0.0001)))
+	Sfx.apply_settings()
 
 func _map_prepare() -> void:
 	if _menus != null and _menus.map_view != null:

@@ -157,6 +157,7 @@ func step(g: Node, dt: float, input_in: Dictionary) -> void:
 	if bool(input.get("knife", false)):
 		melee(g, now, float(input.get("mz", 0.0)) > 0.0)
 	var w := current
+	var was_reloading := w.reloading
 	var held := bool(input.get("fire", false))
 	if held and not _fire_prev:
 		_trigger = true
@@ -182,10 +183,13 @@ func step(g: Node, dt: float, input_in: Dictionary) -> void:
 				w.next_shot = now + MELEE_RETRY   # chargeur et réserve vides : coup de couteau à la place du clic à vide
 				if melee_t < 0.0 and now >= next_melee and not melee(g, now, false):
 					w.next_shot = now + EMPTY_CLICK_RETRY
+					g.weapon_event.emit("empty", {})
 				break
 			if String(w.cfg["type"]) == "semi":
 				_trigger = false   # une balle par clic
 				break
+	if current == w and w.reloading and not was_reloading:
+		g.weapon_event.emit("reload", {"id": w.id, "cat": String(w.cfg["cat"]), "time": float(w.cfg["reloadTime"])})
 	_update_melee(g, dt)
 	blast.update_shells(g, dt)
 	blast.update_nades(g, dt)
@@ -301,6 +305,7 @@ func melee(g: Node, now: float, forward: bool) -> bool:
 	melee_t = 0.0
 	melee_hit = false
 	lunge_left = 0.0
+	g.weapon_event.emit("knife_swing", {})
 	if forward:   # fente : on avance de lunge m vers un zombie proche, si on avance
 		var d := WeaponMelee.lunge_target(g.player, g.zombies)
 		if d >= 0.0:
@@ -339,6 +344,8 @@ func _melee_strike(g: Node) -> void:
 	var z: ZombieSim = tgt["z"]
 	var back := WeaponMelee.is_back(p, z)
 	g.hit_zombie(z, bool(tgt["head"]), WeaponMelee.damage(g.round_number, bool(tgt["head"]), back, has_axe), 1.0, true)
+	var zarmor: Variant = z.get("armor")
+	g.weapon_event.emit("knife_hit", {"metal": (zarmor != null and not is_equal_approx(float(zarmor), 1.0)) or g.is_boss(z)})
 	if has_axe:   # Hache du Bourreau : touche aussi le zombie le plus proche de la cible
 		var A: Dictionary = K["axe"]
 		var extra := 0
