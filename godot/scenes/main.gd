@@ -7,6 +7,7 @@ extends Node3D
 
 const ZombieView := preload("res://scenes/zombie_view.gd")
 const ARENA := preload("res://scenes/world/arena.tscn")
+const WORLD := preload("res://scenes/world/world.tscn")
 const HUD := preload("res://scenes/ui/hud.tscn")
 const TRACER_COLOR := Color("ffd27a")
 const TRACER_TIME := 0.06
@@ -24,6 +25,10 @@ var _seed := -1
 var _quit_at := 0.0
 var _shot_done := false
 var _demo := false
+var _map := ""
+var _at_pos := Vector3.INF      ## --pos=x,z[,yaw_deg] : téléporte le joueur (captures de lieux repères)
+var _at_yaw := 0.0
+var _open_all := false
 var _tracers: Array = []         # [mesh, temps restant]
 
 func _ready() -> void:
@@ -32,6 +37,14 @@ func _ready() -> void:
 			_bot = true
 		elif a == "--demo":
 			_demo = true
+		elif a.begins_with("--map="):
+			_map = a.substr(6)
+		elif a == "--open-all":
+			_open_all = true
+		elif a.begins_with("--pos="):
+			var f := a.substr(6).split(",")
+			_at_pos = Vector3(float(f[0]), 0.0, float(f[1]))
+			_at_yaw = deg_to_rad(float(f[2])) if f.size() > 2 else 0.0
 		elif a.begins_with("--seed="):
 			_seed = int(a.substr(7))
 		elif a.begins_with("--shot="):
@@ -44,7 +57,7 @@ func _ready() -> void:
 	_camera = Camera3D.new()
 	_camera.fov = Rules.FOV_DEG
 	_camera.near = 0.05
-	_camera.far = 300.0
+	_camera.far = 600.0
 	add_child(_camera)
 	_hud = HUD.instantiate()
 	add_child(_hud)
@@ -54,6 +67,8 @@ func _ready() -> void:
 	Game.zombie_spawned.connect(_on_zombie_spawned)
 	Game.player_hurt.connect(func(_a): _hud.hurt_flash())
 	Game.shot_fired.connect(_on_shot)
+	Game.door_opened.connect(func(id): _hud.announce("PORTE OUVERTE : %s" % Game.world.doors[id]["name"]))
+	Game.door_denied.connect(func(id): _hud.announce("%d POINTS REQUIS" % int(Game.world.doors[id]["price"])))
 	Game.game_over.connect(_on_game_over)
 	_restart()
 	if _demo:   # un zombie à 5 m devant le joueur, pour les captures
@@ -72,8 +87,13 @@ func _restart() -> void:
 	_views.clear()
 	if _arena_node != null:
 		_arena_node.queue_free()
-	Game.new_game(_seed)
-	_arena_node = ARENA.instantiate()
+	Game.new_game(_seed, _map)
+	if _at_pos != Vector3.INF:
+		Game.player.pos = _at_pos
+		Game.player.yaw = _at_yaw
+	if _open_all and Game.world != null:
+		Game.world.open_all_doors()
+	_arena_node = (WORLD if Game.world != null else ARENA).instantiate()
 	add_child(_arena_node)
 	_hud.hide_end()
 	_prev_player = Game.player.pos
@@ -83,7 +103,7 @@ func _restart() -> void:
 func _setup_inputs() -> void:
 	var map := {
 		"move_forward": [KEY_W, KEY_UP], "move_back": [KEY_S, KEY_DOWN], "move_left": [KEY_A, KEY_LEFT], "move_right": [KEY_D, KEY_RIGHT],
-		"sprint": [KEY_SHIFT], "jump": [KEY_SPACE], "reload": [KEY_R],
+		"sprint": [KEY_SHIFT], "jump": [KEY_SPACE], "reload": [KEY_R], "use": [KEY_E],
 	}
 	for action: String in map:
 		if not InputMap.has_action(action):
@@ -101,6 +121,8 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif event is InputEventKey and event.pressed and not event.echo:
 		if event.physical_keycode == KEY_ESCAPE:
 			Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+		elif event.physical_keycode == KEY_E and Game.playing and not Game.over:
+			Game.use_door()
 		elif event.physical_keycode == KEY_R and Game.over:
 			_restart()
 	elif event is InputEventMouseButton and event.pressed and Input.mouse_mode != Input.MOUSE_MODE_CAPTURED and not Game.over:

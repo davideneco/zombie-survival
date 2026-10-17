@@ -96,7 +96,7 @@ func _aim_at(p: PlayerSim, target: Vector3) -> void:
 
 func _sim(t: Node) -> void:
 	# --- règles de base : manches, santé, points
-	Game.new_game(1)
+	Game.new_game(1, "arena")
 	t.check(Game.points == int(Config.at("player.startPoints")), "points de départ")
 	t.check(Game.round_number == 0, "manche 0 avant le départ")
 	t.near(Game.player.health, 100.0, "santé de départ")
@@ -117,7 +117,7 @@ func _sim(t: Node) -> void:
 		t.check(absf(z.pos.x) <= Game.arena.half and absf(z.pos.z) <= Game.arena.half, "le zombie apparaît dans l'arène")
 
 	# --- collision : le joueur ne traverse ni l'obstacle central ni le mur
-	Game.new_game(2)
+	Game.new_game(2, "arena")
 	Game.player.pos = Vector3(0, 0, 4)
 	Game.player.yaw = 0.0   # regarde vers -Z, l'obstacle central (0,0) 2,5 m de côté
 	for _i in 240:
@@ -129,7 +129,7 @@ func _sim(t: Node) -> void:
 		Game.step(DT, {"mz": 1.0})
 	t.check(Game.player.pos.z <= Game.arena.half - float(Config.at("player.radius")) + 1e-6, "le joueur est arrêté par le mur")
 	# saut : vitesse et retour au sol
-	Game.new_game(3)
+	Game.new_game(3, "arena")
 	Game.step(DT, {"jump": true})
 	t.check(Game.player.pos.y > 0.0, "le saut décolle")
 	var peak := 0.0
@@ -139,20 +139,20 @@ func _sim(t: Node) -> void:
 	t.near(peak, pow(float(Config.at("player.jumpSpeed")), 2) / (2.0 * float(Config.at("player.gravity"))), "hauteur de saut v²/2g (pas discret)", 0.06)
 	t.near(Game.player.pos.y, 0.0, "retour au sol")
 	# sprint vs marche
-	Game.new_game(4)
+	Game.new_game(4, "arena")
 	Game.player.pos = Vector3(0, 0, 25)
 	for _i in 60:
 		Game.step(DT, {"mz": 1.0})
 	var v_walk := Vector2(Game.player.vel.x, Game.player.vel.z).length()
 	t.near(v_walk, float(Config.at("player.walkSpeed")), "vitesse de marche", 0.01)
-	Game.new_game(4)
+	Game.new_game(4, "arena")
 	Game.player.pos = Vector3(0, 0, 25)
 	for _i in 60:
 		Game.step(DT, {"mz": 1.0, "sprint": true})
 	t.near(Vector2(Game.player.vel.x, Game.player.vel.z).length(), float(Config.at("player.sprintSpeed")), "vitesse de sprint", 0.01)
 
 	# --- tir : une balle par clic, recharge, points
-	Game.new_game(5)
+	Game.new_game(5, "arena")
 	var w := Game.weapon
 	t.check(w.ammo == 7 and w.reserve == 42, "M1911 : 7 + 42")
 	Game.step(DT, {"fire": true})
@@ -183,7 +183,7 @@ func _sim(t: Node) -> void:
 	t.check(sh["health"] > 0.0, "bot tireur : survivant")
 	print("bot tireur (manche 1) : %d tués en %.1f s, %d points, %d PV, %d tirs" % [sh["kills"], sh["time"], sh["points"], sh["health"], sh["shots"]])
 	# tir à la tête = 100 points, au corps = 60
-	Game.new_game(7)
+	Game.new_game(7, "arena")
 	var z := ZombieSim.new()
 	z.pos = Vector3(-3, 0, -8)
 	z.health = 10.0
@@ -217,7 +217,7 @@ func _sim(t: Node) -> void:
 	Game.step(DT, {"fire": true})
 	t.check(not z3.dead and Game.points == p0 + Rules.POINTS_HIT and z3.health < 1000.0, "10 points pour un tir qui ne tue pas")
 	# un mur arrête la balle : zombie derrière la caisse centrale (0,0) h=3,5
-	Game.new_game(8)
+	Game.new_game(8, "arena")
 	Game.weapon.cfg = Game.weapon.cfg.duplicate()
 	Game.weapon.cfg["spread"] = 0.0
 	Game.player.pos = Vector3(0, 0, 6)
@@ -229,7 +229,7 @@ func _sim(t: Node) -> void:
 	Game.step(DT, {"fire": true})
 	t.check(zb.health == 1000.0, "la caisse arrête la balle")
 	# --- mort du joueur et écran de fin
-	Game.new_game(9)
+	Game.new_game(9, "arena")
 	var over_seen := [false]
 	var cb := func(): over_seen[0] = true
 	Game.game_over.connect(cb)
@@ -252,7 +252,7 @@ func _sim(t: Node) -> void:
 
 ## Joue un bot jusqu'à la fin de la manche 1 (ou la mort / 120 s). aim : le bot vise et tire sur le zombie le plus proche.
 func _run_bot(seed_value: int, aim: bool) -> Dictionary:
-	Game.new_game(seed_value)
+	Game.new_game(seed_value, "arena")
 	var shots := [0]
 	var cb := func(_o, _e): shots[0] += 1
 	Game.shot_fired.connect(cb)

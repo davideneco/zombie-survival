@@ -40,7 +40,16 @@ const FOV_DEG := 80.0             ## settings.fov par défaut (main.js DEFAULT_S
 const MOUSE_SENS := 0.0022        ## radians par pixel x settings.sens (1 par défaut)
 const MOVING_SPREAD_MULT := 1.8   ## dispersion x1.8 en mouvement
 const SPAWN_ON_GROUND_EPS := 0.02
+const STICK_TO_SLOPE := 0.45     ## player.js : on colle à la pente en descendant si l'écart au sol est < 0,45 m
 const PITCH_LIMIT := PI / 2 - 0.05
 
 # --- port : périmètre de J1 (le jeu démarre avec startWeapons = fusil + M1911 ; J1 n'a qu'une arme, le M1911 de CONFIG.weapons)
 const J1_WEAPON := "m1911"
+
+# --- main.js pickSpawn : carte de Strasbourg (J2). L'apparition au sol (pickGround, champ de flux) et l'équilibrage entre joueurs arrivent en J3
+const WORLD_SPAWN_MIN := 11.0     ## fenêtre d'apparition à 11-60 m du joueur ; repli 6-80 m ; dernier repli : 15 m à l'est
+const WORLD_SPAWN_MAX := 60.0
+const WORLD_SPAWN_MIN2 := 6.0
+const WORLD_SPAWN_MAX2 := 80.0
+const WORLD_SPAWN_FALLBACK := 15.0
+const WINDOW_BUSY := 4.0          ## fenêtre occupée après une apparition (s)

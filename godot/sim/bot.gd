@@ -17,7 +17,7 @@ static func think(g: Node) -> Dictionary:
 		var to := z.pos + Vector3(0, AIM_HEIGHT, 0) - eye
 		var l := to.length()
 		var d := to / l
-		if g.arena.collision.ray_hit(eye.x, eye.y, eye.z, d.x, d.y, d.z, l) < l - 0.01:
+		if g.collision.ray_hit(eye.x, eye.y, eye.z, d.x, d.y, d.z, l) < l - 0.01:
 			continue   # un obstacle masque le zombie
 		if l < best_d:
 			best_d = l

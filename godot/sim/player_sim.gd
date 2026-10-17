@@ -15,6 +15,9 @@ var on_ground := true
 var dead := false
 var sprinting := false
 var moving := false
+var region := 0              ## région d'étage sous les pieds (0 = sol de la ville), voir Levels
+var _floor := {"y": 0.0, "region": 0}
+var _was_grounded := true
 
 func _init() -> void:
 	max_health = float(Config.at("player.maxHealth"))
@@ -29,6 +32,8 @@ func reset(start: Vector3) -> void:
 	health = max_health
 	last_hurt = -1000.0
 	dead = false
+	region = 0
+	_was_grounded = true
 
 func eye() -> Vector3:
 	return pos + Vector3(0, float(Config.at("player.eye")), 0)
@@ -38,7 +43,7 @@ func forward() -> Vector3:
 	return Vector3(-sin(yaw) * cos(pitch), sin(pitch), -cos(yaw) * cos(pitch))
 
 ## input : { mx: -1..1 (droite +), mz: -1..1 (avant +), sprint: bool, jump: bool }
-func step(dt: float, time: float, input: Dictionary, col: Collision) -> void:
+func step(dt: float, time: float, input: Dictionary, col: Collision, levels: Levels = null) -> void:
 	if dead:
 		return
 	var mx: float = input.get("mx", 0.0)
@@ -59,15 +64,24 @@ func step(dt: float, time: float, input: Dictionary, col: Collision) -> void:
 	vel.z += (wz - vel.z) * k
 	pos.x += vel.x * dt
 	pos.z += vel.z * dt
-	# saut et gravité (sol à y = 0)
-	on_ground = pos.y <= Rules.SPAWN_ON_GROUND_EPS and vy <= 0.5
+	# saut et gravité : le sol est celui de la ville (y = 0) ou un étage sous les pieds (player.js : floorAt)
+	var ground := 0.0
+	if levels != null:
+		levels.floor_at(pos.x, pos.z, pos.y, _floor)
+		ground = _floor["y"]
+		region = _floor["region"]
+	on_ground = pos.y <= ground + Rules.SPAWN_ON_GROUND_EPS and vy <= 0.5
 	if bool(input.get("jump", false)) and on_ground:
 		vy = float(Config.at("player.jumpSpeed"))
 	vy -= float(Config.at("player.gravity")) * dt
 	pos.y += vy * dt
-	if pos.y <= 0.0:
-		pos.y = 0.0
+	if pos.y <= ground:
+		pos.y = ground
 		vy = 0.0
+	elif _was_grounded and vy <= 0.0 and pos.y - ground < Rules.STICK_TO_SLOPE:
+		pos.y = ground   # on colle à la pente en descendant
+		vy = 0.0
+	_was_grounded = pos.y <= ground + Rules.SPAWN_ON_GROUND_EPS
 	pos = col.resolve(pos, float(Config.at("player.radius")))
 	# régénération
 	if health < max_health and time - last_hurt > float(Config.at("player.regenDelay")):

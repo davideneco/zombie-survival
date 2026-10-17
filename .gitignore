@@ -10,3 +10,9 @@ public/music/theme.*
 godot/.godot/
 godot/build/
 godot/assets/audio/music/theme.*
+# monde cuit (docs/GODOT_PORT.md § J2) : la géométrie et les textures se régénèrent par  node tools/bake-world.mjs  (jeu JS + Chrome) ; les données de jeu restent versionnées
+godot/data/world/tiles/
+godot/data/world/doors/
+godot/data/world/instances.bin
+godot/assets/baked/
+godot/assets/textures/

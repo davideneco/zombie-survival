@@ -20,7 +20,8 @@ Décisions retenues : D1 (a) bureau d'abord, D2 (a) monde cuit depuis le JS, D3 
 |---|---|---|
 | J0 | **Fait** (2476 contrôles headless, 0 échec) | v0.1.0 |
 | J1 | **Fait** (8 195 contrôles headless j1 + 2 476 j0, 0 échec ; captures et vidéo réelles) | v0.2.0 |
-| J2 à J12 | À faire | |
+| J2 | **Fait** (21 469 contrôles headless j0+j1+j2, 0 échec ; captures réelles de 4 lieux) | v0.3.0 |
+| J3 à J12 | À faire | |
 
 J0 livré : `godot/project.godot` (Godot 4.7, Forward+, 60 ticks physiques, autoloads `Config` et `Game`), `godot/autoload/{config,game}.gd`, `godot/sim/pap.gd` (`papStats`, `papAmmoMult`, `papPulse`, `falloffMult`), `godot/tests/` (`runner.tscn`, `test_j0.gd`), `tools/export-config.mjs` (config.json ~49 Ko), `tools/export-golden.mjs` (`godot/data/golden/j0.json` : 69 `papStats`, 1430 `falloffMult`, 164 `papPulse`, 61 santés de zombie), `tools/godot-check.sh` (exports + import + tests). Vérification en une commande : `tools/godot-check.sh`.
 
@@ -32,6 +33,13 @@ J1 livré (squelette solo dans l'arène) :
 - **Vérifications** : 1 000 `resolve`, 1 000 `rayHit`, 200 `findVault` égaux au JS à 1 mm (en pratique 1e-6), 600 cas d'arène égaux à `resolveCollisions` de `world.js` ; scénarios : manche 1 (7 zombies, santé, vitesse), blocage par caisse et mur, saut (hauteur), vitesses de marche et de sprint, semi-automatique, rechargement, points 10 / 60 / 100, balle arrêtée par une caisse, bot immobile tué en 28,5 s, bot tireur qui tue les 7 zombies de la manche 1 (25,6 s), mort et `game_over`. Capture et vidéo de 11 s (`--write-movie`) faites sur l'écran réel (pas de `xvfb-run` sur ce poste).
 - **Écarts connus** : le bruit de dispersion utilise la même ouverture en largeur et en hauteur (le JS tire en coordonnées normalisées d'écran, donc plus large en 16:9) ; pas d'enjambement, d'étages, de couteau ni de grenades (jalons suivants) ; `Vector3` est en simple précision (positions à ~1e-5 près, bien sous le millimètre) ; l'arène n'a pas de champ de flux : un zombie derrière une caisse se débloque par ses pas de côté, comme dans le JS.
 - **À remonter dans `src/config.js`** (valeurs de `main.js` / `player.js` / `zombie.js` hors CONFIG, en attendant dans `sim/rules.gd`) : points par tir, nombre de zombies par manche (4 + 3 r), intervalles d'apparition et de pause, délais d'attaque, dimensions des zones de tir.
+
+J2 livré (carte de Strasbourg) :
+- **Cuisson** : `tools/bake-world.mjs` + `tools/bake-world.page.js` (jeu JS lancé dans Chrome via `npm run dev`, puis `node tools/bake-world.mjs`) écrivent `godot/data/world/` (versionné : collision `segs.f64`/`circles.f64`/étages, `levels.json`, navigation `nav/`, `objects.json` zones/portes/machines, `windows.f64`, `lamps.json`, `materials.json`, `textures.json`, `tiles.json`, `manifest.json`, `golden_j2.json`) ; la géométrie (`tiles/`, `doors/`, `instances.bin`) et les textures (`assets/baked`, `assets/textures`) sont régénérables et ignorées par git. `golden_j2.json` est calculé par le JS.
+- **Sim** : `sim/world.gd` (chargement ~230 ms, zones, portes payantes `near_door`/`open_door`, fenêtres d'apparition), `sim/levels.gd` (étages, `floor_at`), `sim/nav_grid.gd` (grille de blocage, BFS de test), `Game.new_game(seed, map)` (carte `strasbourg` par défaut, `arena` conservée), `Game.use_door()`, `player_sim` sensible aux étages ; apparition au hasard sur une fenêtre libre (en attendant le champ de flux de J3).
+- **Rendu** : `scenes/world/world_view.gd` (70 tuiles en ArrayMesh, ~498 k triangles, 223 matériaux PBR, décor en MultiMesh, portes masquées à l'ouverture, 24 lampadaires éclairants les plus proches, chargement ~1 s), `main.gd` (touche E pour acheter une porte, `--map=`, `--pos=x,z[,yaw]`, `--open-all`).
+- **Vérifications** : comptes du manifeste (336 fichiers), golden `floorAt` (2 000), `rayHit` (2 000), `zoneOf` (1 200), rayons de portes (56) portes fermées puis ouvertes ; bot qui traverse de Marché-Neuf à la place Kléber (355 m, 67 s, jamais arrêté) ; captures sur l'écran réel (Marché-Neuf, place Kléber, rue de la cathédrale, parvis avec la porte à 5 000 pts).
+- **Écarts connus** : pas de ciel ni d'étoiles, pas de brouillard exponentiel identique (densité Godot réglée à l'œil), pas de ShaderMaterial (eau, sol) ni d'ombres (J9) ; intérieur de la cathédrale non contrôlé visuellement ; zombies encore en ligne droite (J3) ; pas de comparaison pixel à pixel avec le JS ; temps de rendu (FPS) non mesuré.
 
 Notes : le JSON ne porte pas de couleurs (entiers 0xRRGGBB, convertis par `Config.color()`) ; la formule de santé par manche (`zombieHealthAt`, dans `main.js`, non importable sans Three.js) est recopiée dans `tools/export-golden.mjs` et dans `Game.zombie_health_at` : si elle change dans `main.js`, mettre à jour les deux.
 

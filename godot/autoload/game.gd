@@ -11,6 +11,8 @@ signal zombie_killed(z: ZombieSim, head: bool)
 signal shot_fired(origin: Vector3, end: Vector3)
 signal player_hurt(amount: float)
 signal game_over
+signal door_opened(id: int)
+signal door_denied(id: int)
 
 var round_number: int:
 	get: return director.round_number if director != null else 0
@@ -20,7 +22,10 @@ var time := 0.0
 var playing := false
 var over := false
 
-var arena: Arena
+var arena: Arena           ## arène de test (map "arena") ; null sur la carte de Strasbourg
+var world: World           ## carte de Strasbourg (map "strasbourg") ; null dans l'arène
+var collision: Collision   ## collision de la carte courante
+var map_name := ""
 var player: PlayerSim
 var weapon: WeaponSim
 var director: RoundDirector
@@ -40,15 +45,24 @@ func zombie_health_at(r: int) -> int:
 		return int(h["base"] + r * h["perRound"])
 	return int(floor(h["hardBase"] * pow(h["hardGrowth"], r - h["softRound"] + 1) + 0.5))
 
-## Nouvelle partie dans l'arène (graine fixe pour les tests reproductibles ; -1 : aléatoire).
-func new_game(seed_value: int = -1) -> void:
+## Nouvelle partie (graine fixe pour les tests reproductibles ; -1 : aléatoire). map : "strasbourg" (monde cuit), "arena" (arène de test de J1) ;
+## "" prend CONFIG.map. Le monde cuit est relu à chaque partie (il porte l'état des portes) : compter ~1 s.
+func new_game(seed_value: int = -1, map: String = "") -> void:
 	if seed_value >= 0:
 		rng.seed = seed_value
 	else:
 		rng.randomize()
-	arena = Arena.load_arena()
+	map_name = map if map != "" else String(Config.at("map", "strasbourg"))
+	if map_name == "arena":
+		arena = Arena.load_arena()
+		world = null
+		collision = arena.collision
+	else:
+		world = World.load_world()
+		arena = null
+		collision = world.collision
 	player = PlayerSim.new()
-	player.reset(arena.start_pos)
+	player.reset(arena.start_pos if arena != null else world.start_pos)
 	weapon = WeaponSim.new(Rules.J1_WEAPON)
 	director = RoundDirector.new()
 	director.reset()
@@ -75,7 +89,7 @@ func step(dt: float, input: Dictionary) -> void:
 	if not playing or over:
 		return
 	time += dt
-	player.step(dt, time, input, arena.collision)
+	player.step(dt, time, input, collision, world.levels if world != null else null)
 	_update_weapon(dt, input)
 	# manches
 	match director.step(dt, alive_count()):
@@ -88,7 +102,7 @@ func step(dt: float, input: Dictionary) -> void:
 	# zombies
 	for i in range(zombies.size() - 1, -1, -1):
 		var z := zombies[i]
-		var dealt := z.step(dt, player.pos, zombies, arena.collision)
+		var dealt := z.step(dt, player.pos, zombies, collision)
 		if dealt > 0.0:
 			player_hurt.emit(dealt)
 			if player.hurt(dealt, time):
@@ -134,7 +148,7 @@ func _shoot() -> void:
 	var up := right.cross(fwd)
 	var dir := (fwd + right * sx + up * sy).normalized()
 	var origin := player.eye()
-	var res := Hitscan.cast(origin, dir, float(cfg["range"]), zombies, arena.collision, int(cfg.get("pierce", 1)))
+	var res := Hitscan.cast(origin, dir, float(cfg["range"]), zombies, collision, int(cfg.get("pierce", 1)))
 	var end: Vector3 = origin + dir * float(res["wall_t"])
 	for h: Dictionary in res["hits"]:
 		var dmg := float(cfg["damage"]) * Pap.falloff_mult(cfg, float(h["t"]))
@@ -153,7 +167,15 @@ func hit_zombie(z: ZombieSim, head: bool, dmg: float, head_mult: float) -> void:
 		points += Rules.POINTS_HIT
 
 # ---------------------------------------------------------------- apparitions
-func _spawn_zombie() -> void:
+func _spawn_point() -> Vector3:
+	if world != null:
+		# fenêtre libre d'une zone ouverte (J3 apportera l'apparition au sol et le champ de flux)
+		for r: Array in [[Rules.WORLD_SPAWN_MIN, Rules.WORLD_SPAWN_MAX], [Rules.WORLD_SPAWN_MIN2, Rules.WORLD_SPAWN_MAX2]]:
+			var wi := world.pick_window(player.pos.x, player.pos.z, r[0], r[1], time, rng)
+			if wi >= 0:
+				world.window_busy[wi] = time + Rules.WINDOW_BUSY
+				return world.window_outside(wi)
+		return player.pos + Vector3(Rules.WORLD_SPAWN_FALLBACK, 0, 0)
 	var best: Vector3 = arena.spawn_points[0]
 	var best_d := -1.0
 	for _i in 3:
@@ -162,6 +184,10 @@ func _spawn_zombie() -> void:
 		if d > best_d:
 			best_d = d
 			best = sp
+	return best
+
+func _spawn_zombie() -> void:
+	var best := _spawn_point()
 	var Z: Dictionary = Config.at("zombie")
 	var z := ZombieSim.new()
 	z.id = _next_id
@@ -178,3 +204,20 @@ func _spawn_zombie() -> void:
 	z.yaw = atan2(player.pos.x - z.pos.x, player.pos.z - z.pos.z)
 	zombies.append(z)
 	zombie_spawned.emit(z)
+
+# ---------------------------------------------------------------- portes payantes (carte de Strasbourg)
+## Touche d'interaction : achète la porte à portée si les points suffisent (main.js : interact, 6) ; renvoie l'indice ouvert, -1 sinon.
+func use_door() -> int:
+	if world == null or over:
+		return -1
+	var id := world.near_door(player.pos)
+	if id < 0:
+		return -1
+	var price := int(world.doors[id]["price"])
+	if points < price:
+		door_denied.emit(id)
+		return -1
+	points -= price
+	world.open_door(id)
+	door_opened.emit(id)
+	return id
