@@ -15,6 +15,7 @@ var on_ground := true
 var dead := false
 var sprinting := false
 var moving := false
+var tregion := 0             ## étage « utile » pour les zombies (un joueur sur un escalier compte pour l'extrémité la plus proche)
 var region := 0              ## région d'étage sous les pieds (0 = sol de la ville), voir Levels
 var _floor := {"y": 0.0, "region": 0}
 var _was_grounded := true
@@ -33,6 +34,7 @@ func reset(start: Vector3) -> void:
 	last_hurt = -1000.0
 	dead = false
 	region = 0
+	tregion = 0
 	_was_grounded = true
 
 func eye() -> Vector3:

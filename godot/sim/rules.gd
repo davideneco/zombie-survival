@@ -22,6 +22,7 @@ const CORPSE_TIME := 4.0          ## durée d'un cadavre avant retrait (zombie.d
 
 # --- zombie.js
 const ZOMBIE_ATTACK_WINDUP := 0.35
+const ZOMBIE_AUTO_STUCK_RATIO := 0.25   ## avance de moins de 25 % du pas : secondes comptées dans no_progress (relocalisation)
 const ZOMBIE_FIRST_ATTACK_CD := 0.5
 const ZOMBIE_SEPARATION := 0.8    ## distance en dessous de laquelle deux zombies se repoussent
 const ZOMBIE_TURN_RATE := 8.0
@@ -53,3 +54,50 @@ const WORLD_SPAWN_MIN2 := 6.0
 const WORLD_SPAWN_MAX2 := 80.0
 const WORLD_SPAWN_FALLBACK := 15.0
 const WINDOW_BUSY := 4.0          ## fenêtre occupée après une apparition (s)
+
+# --- J3 : apparition, IA, variantes (src/zombie.js, src/main.js)
+const WIN_WARN := 0.9             ## zombie.js : délai de « ça cogne contre la fenêtre » (s)
+const WIN_CLIMB := 1.5            ## durée de l'enjambement de la fenêtre
+const GND_DELAY := 1.1            ## délai : la terre tremble
+const GND_RISE := 2.2             ## durée de la remontée
+const WIN_HIT_AT := 0.85          ## targetable : fenêtre, à WIN_WARN + WIN_CLIMB x 0.85
+const GND_HIT_AT := 0.7           ## sol, à GND_DELAY + GND_RISE x 0.7
+const LIMP_CHANCE := 0.3          ## part de boiteux (jambe gauche à 45 %), vitesse x LIMP_SPEED
+const LIMP_SPEED := 0.8
+const CRAWLER_SPEED := 0.45       ## makeCrawler : vitesse x 0,45, ni coureur ni boiteux
+const ARMORED_ARMOR := 0.5        ## makeKind('armored') : dégâts reçus x 0,5, vitesse x 0,8
+const ARMORED_SPEED := 0.8
+const ARMORED_SCALE := 1.12
+const BLOAT_SPEED := 0.7          ## makeKind('bloat') : vitesse x 0,7, largeur x 1,35
+const BLOAT_WIDTH := 1.35
+const BLOAT_BLAST_RADIUS := 4.2   ## finale.js onFinaleKill : dégâts 38 x (1 - d / 5) à moins de 4,2 m (et 2,5 m de hauteur)
+const BLOAT_BLAST_DAMAGE := 38.0
+const BLOAT_BLAST_FALLOFF := 5.0
+const BLOAT_BLAST_HEIGHT := 2.5
+const SEE_DIST := 1.5             ## sous cette distance l'objectif est « visible » sans test de ligne de vue
+const LINK_ENTER := 1.3           ## distance au pied de l'escalier à partir de laquelle le zombie s'y engage
+const LINK_SPEED := 0.9           ## vitesse sur un escalier : x 0,9
+const LINK_MELEE := 1.3           ## escalier : portée de frappe = attackRange + 0,2 ; arrêt à 1,3 m du joueur le long du lien
+const HOP_PENALTY := 12.0         ## choix de la cible : coût d'un changement d'étage = distance d'escalier + 12 m
+const VAULT_MAX_PASS := 1.3       ## _tryVault : longueur maximale de l'obstacle (m)
+const VAULT_GAIN := 0.3           ## _tryVault : il faut gagner 0,3 m de marche
+const VAULT_LAND := 0.5           ## _tryVault : atterrit 0,5 m après l'obstacle
+const RELOCATE_INTERVAL := 1.0    ## main.js relocateZombies : une passe par seconde
+const RELOCATE_FAR := 90.0        ## trop loin : farT +1 par passe ; relocalisé à 4
+const RELOCATE_FAR_COUNT := 4
+const RELOCATE_STUCK := 5.0       ## no_progress au-delà de 5 s et à plus de 12 m
+const RELOCATE_STUCK_NEAR := 12.0
+const RELOCATE_MIN := 22.0        ## nouvelle position : pickGround(22, 45)
+const RELOCATE_MAX := 45.0
+const GROUND_MIN := 18.0          ## pickSpawn : apparition au sol à 18-50 m
+const GROUND_MAX := 50.0
+const GROUND_TRIES := 80          ## realworld.js pickGround : essais
+const GROUND_CLEARANCE := 1       ## 3 x 3 cases libres autour du point
+const WINDOW_CHANCE := 0.65       ## pickSpawn : fenêtre d'abord avec cette probabilité
+const REGION_FIELD_PERIOD := 0.3  ## updateRegionFields : champ des étages recalculé toutes les 0,3 s
+const CRAWLER_HEAD := Vector3(0, 0.38, 0.82)      ## rampant : tête tenue à ~0,8 m devant les hanches (pose _poseCrawl : colonne à 1,42 rad), approximation
+const CRAWLER_BODY_CENTER := Vector3(0, 0.3, 0.35)   ## hitBody du rampant : position (0, 0.3, 0.35), échelle (1, 0.42, 1.5)
+const CRAWLER_BODY_HALF := Vector3(0.5, 0.3465, 0.6)
+
+# --- port : performance de GDScript (R2 du plan). Pas dans CONFIG : ce n'est pas de l'équilibrage, c'est une limite de la machine virtuelle.
+const FLOW_BUDGET_MAX := 2000     ## cases développées par pas pour le champ de flux de la carte hors fil de travail (CONFIG.zombie.flow.budget = 25 000 est réglé pour V8) : ~1,8 ms

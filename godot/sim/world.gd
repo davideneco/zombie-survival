@@ -73,6 +73,7 @@ func _load() -> void:
 	levels.load_json(_json(DIR + "levels.json"))
 	nav = NavGrid.new()
 	nav.load_dir(DIR, _json(DIR + "nav/meta.json"))
+	levels.nav_collision = collision   # champ de flux des étages (cathédrale) : grilles locales construites à la demande, comme levels.buildNavs du JS
 	objects = _json(DIR + "objects.json")
 	start_pos = Vector3(objects["start"]["x"], objects["start"]["y"], objects["start"]["z"])
 	start_zone = int(objects["startZone"])
@@ -141,8 +142,40 @@ func pick_window(px: float, pz: float, min_d: float, max_d: float, now: float, r
 func window_outside(i: int) -> Vector3:
 	return Vector3(windows[i * WIN_STRIDE], 0.0, windows[i * WIN_STRIDE + 1])
 
+func window_inside(i: int) -> Vector3:
+	return Vector3(windows[i * WIN_STRIDE + 2], 0.0, windows[i * WIN_STRIDE + 3])
+
+func window_center(i: int) -> Vector3:
+	return Vector3(windows[i * WIN_STRIDE + 4], 1.5, windows[i * WIN_STRIDE + 5])
+
 func window_normal(i: int) -> Vector2:
 	return Vector2(windows[i * WIN_STRIDE + 6], windows[i * WIN_STRIDE + 7])
+
+## Point d'apparition au sol : case accessible, dans une zone ouverte, avec 3 x 3 cases libres autour (realworld.js pickGround).
+## Renvoie Vector3.INF si rien n'est trouvé en GROUND_TRIES essais. (« accessible » = case de zone : seules les cases atteignables depuis le départ en ont une.)
+func pick_ground(px: float, pz: float, min_d: float, max_d: float, rng: RandomNumberGenerator) -> Vector3:
+	for _t in Rules.GROUND_TRIES:
+		var a := rng.randf() * TAU
+		var d := min_d + rng.randf() * (max_d - min_d)
+		var x := px + cos(a) * d
+		var z := pz + sin(a) * d
+		var ix := nav.cx(x)
+		var iz := nav.cz(z)
+		if not nav.inside(ix, iz) or not is_zone_open(nav.zone_of(x, z)):
+			continue
+		if not clearance(ix, iz, Rules.GROUND_CLEARANCE):
+			continue
+		return Vector3(x, 0.0, z)
+	return Vector3.INF
+
+func clearance(ix: int, iz: int, r: int) -> bool:
+	for dz in range(-r, r + 1):
+		for dx in range(-r, r + 1):
+			var jx := ix + dx
+			var jz := iz + dz
+			if not nav.inside(jx, jz) or nav.blocked[jz * nav.nx + jx] != 0:
+				return false
+	return true
 
 # ------------------------------------------------------------------ portes
 ## Porte payante à portée (n'importe quel point de la barrière) : indice, -1 si aucune (main.js nearDoor).
@@ -178,6 +211,7 @@ func open_door(id: int) -> bool:
 		seg_list[int(k)]["off"] = true
 	for c in d["cells"]:
 		nav.blocked[c] = 0
+	nav.invalidate()
 	zone_open[int(d["a"])] = 1
 	zone_open[int(d["b"])] = 1
 	return true

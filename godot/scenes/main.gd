@@ -3,7 +3,7 @@ extends Node3D
 ## _physics_process (60 Hz, indépendant du rendu), et ne fait que du rendu dans _process. La souris tourne hors du pas fixe.
 ##
 ## Arguments (après --) : --bot (pilote automatique), --demo (un zombie lent devant le joueur), --seed=N, --shot=chemin.png --at=S (capture à S secondes de jeu, puis quitte),
-## --quit-at=S (quitte à S secondes de jeu : pour --write-movie).
+## --quit-at=S (quitte à S secondes de jeu : pour --write-movie), --horde=N (N zombies variés autour du joueur, sans manches), --sync-flow (champ de flux par tranches, sans fil de travail).
 
 const ZombieView := preload("res://scenes/zombie_view.gd")
 const ARENA := preload("res://scenes/world/arena.tscn")
@@ -29,6 +29,8 @@ var _map := ""
 var _at_pos := Vector3.INF      ## --pos=x,z[,yaw_deg] : téléporte le joueur (captures de lieux repères)
 var _at_yaw := 0.0
 var _open_all := false
+var _horde := 0
+var _sync_flow := false
 var _tracers: Array = []         # [mesh, temps restant]
 
 func _ready() -> void:
@@ -45,6 +47,10 @@ func _ready() -> void:
 			var f := a.substr(6).split(",")
 			_at_pos = Vector3(float(f[0]), 0.0, float(f[1]))
 			_at_yaw = deg_to_rad(float(f[2])) if f.size() > 2 else 0.0
+		elif a.begins_with("--horde="):
+			_horde = int(a.substr(8))
+		elif a == "--sync-flow":
+			_sync_flow = true
 		elif a.begins_with("--seed="):
 			_seed = int(a.substr(7))
 		elif a.begins_with("--shot="):
@@ -93,12 +99,32 @@ func _restart() -> void:
 		Game.player.yaw = _at_yaw
 	if _open_all and Game.world != null:
 		Game.world.open_all_doors()
+	Game.flow_threaded = not _sync_flow and Game.world != null
+	if _horde > 0:
+		_spawn_horde(_horde)
 	_arena_node = (WORLD if Game.world != null else ARENA).instantiate()
 	add_child(_arena_node)
 	_hud.hide_end()
 	_prev_player = Game.player.pos
 	if not _bot and DisplayServer.get_name() != "headless":
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+
+## N zombies variés (marcheurs, coureurs, rampants, chevaliers, pestiférés) autour du joueur, et plus de manches : pour les captures.
+func _spawn_horde(n: int) -> void:
+	Game.director.intermission = 1.0e9
+	var kinds := ["", "", "", "armored", "bloat", "", "crawl", "run"]
+	for i in n:
+		var p := Vector3.INF
+		if Game.world != null:
+			p = Game.world.pick_ground(Game.player.pos.x, Game.player.pos.z, 7.0, 22.0, Game.rng)
+		if p == Vector3.INF:
+			var a := TAU * i / n
+			p = Game.player.pos + Vector3(cos(a), 0, sin(a)) * 8.0
+		var k: String = kinds[i % kinds.size()]
+		var spd := 1.8 + 0.15 * (i % 5)
+		if k == "run":
+			spd *= 1.5
+		Game.debug_spawn(p, spd, k == "crawl", k if k in ["armored", "bloat"] else "")
 
 func _setup_inputs() -> void:
 	var map := {

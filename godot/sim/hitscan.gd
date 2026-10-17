@@ -45,10 +45,14 @@ static func ray_zombie(o: Vector3, d: Vector3, max_t: float, z: ZombieSim) -> Di
 	var po := o - z.pos
 	var lo := Vector3(po.x * cy - po.z * sy, po.y, po.x * sy + po.z * cy)
 	var ld := Vector3(d.x * cy - d.z * sy, d.y, d.x * sy + d.z * cy)
-	var tb := ray_box(lo, ld, Vector3(0, Rules.ZOMBIE_BODY_CENTER_Y, 0), Rules.ZOMBIE_BODY_HALF)
+	var sc := z.body_scale()
+	var body_c := Rules.CRAWLER_BODY_CENTER if z.crawler else Vector3(0, Rules.ZOMBIE_BODY_CENTER_Y, 0)
+	var body_h := Rules.CRAWLER_BODY_HALF if z.crawler else Rules.ZOMBIE_BODY_HALF
+	var head_c := Rules.CRAWLER_HEAD if z.crawler else Rules.ZOMBIE_HEAD_CENTER
+	var tb := ray_box(lo, ld, body_c * sc, body_h * sc)
 	var th := -1.0
 	if not z.headless:
-		th = ray_sphere(lo, ld, Rules.ZOMBIE_HEAD_CENTER, Rules.ZOMBIE_HEAD_RADIUS)
+		th = ray_sphere(lo, ld, head_c * sc, Rules.ZOMBIE_HEAD_RADIUS * sc.y)
 	if tb < 0.0 and th < 0.0:
 		return {}
 	var head := th >= 0.0 and (tb < 0.0 or th <= tb)
@@ -62,7 +66,7 @@ static func cast(o: Vector3, d: Vector3, max_t: float, zombies: Array, col: Coll
 	var wall_t := col.ray_hit(o.x, o.y, o.z, d.x, d.y, d.z, max_t)
 	var hits: Array = []
 	for z: ZombieSim in zombies:
-		if z.dead:
+		if not z.targetable():
 			continue
 		var h := ray_zombie(o, d, wall_t, z)
 		if not h.is_empty():

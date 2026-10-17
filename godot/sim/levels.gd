@@ -14,6 +14,11 @@ var regions: Array[Dictionary] = []
 var links: Array[Dictionary] = []
 var grid: Dictionary = {}
 var built := false
+var navs: Dictionary = {}           ## région -> NavGrid (étages plats), voir nav_of / build_navs
+var nav_collision: Collision        ## collision utilisée pour construire ces grilles
+var _hop: Dictionary = {}           ## from * 1024 + to -> { link, dir, next } (BFS depuis chaque région)
+var _hop_dist: Dictionary = {}      ## from * 1024 + to -> longueur du chemin d'escaliers
+var _hops_built := false
 
 static func _key(ix: int, iz: int) -> int:
 	return ix * 8192 + iz
@@ -33,7 +38,10 @@ func load_json(d: Dictionary) -> void:
 		for i in range(1, path.size()):
 			var a: Array = path[i - 1]
 			var b: Array = path[i]
-			len.append(len[i - 1] + Vector3(b[0] - a[0], b[1] - a[1], b[2] - a[2]).length())
+			var ex: float = b[0] - a[0]
+			var ey: float = b[1] - a[1]
+			var ez: float = b[2] - a[2]
+			len.append(len[i - 1] + _hypot3(ex, ey, ez))   # en doubles (Vector3 est en simple précision)
 		l["len"] = len
 		l["length"] = len[len.size() - 1]
 		links.append(l)
@@ -42,6 +50,21 @@ func load_json(d: Dictionary) -> void:
 	for poly: Array in hole_polys:
 		_add_hole(poly)
 	build()
+
+## Math.hypot de V8 (mise à l'échelle par le plus grand terme, somme compensée) : les liens de même longueur se départagent comme dans le JS.
+static func _hypot3(x: float, y: float, z: float) -> float:
+	var m := maxf(absf(x), maxf(absf(y), absf(z)))
+	if m == 0.0:
+		return 0.0
+	var sum := 0.0
+	var comp := 0.0
+	for v in [x, y, z]:
+		var n: float = absf(v) / m
+		var summand := n * n - comp
+		var prelim := sum + summand
+		comp = (prelim - sum) - summand
+		sum = prelim
+	return sqrt(sum) * m
 
 ## (en flottants et non en Vector3 : Vector3 est en simple précision, ce qui décalerait les hauteurs de ~1e-6)
 func _add_tri(region: int, ax: float, ay: float, az: float, bx: float, by: float, bz: float, cx: float, cy: float, cz: float) -> void:
@@ -132,3 +155,129 @@ func in_region(region_id: int, x: float, z: float) -> bool:
 		if l0 >= -1e-6 and l1 >= -1e-6 and 1.0 - l0 - l1 >= -1e-6:
 			return true
 	return false
+
+## Grille de navigation d'un étage plat, construite à la demande (levels.js : buildNavs, cases de 50 cm, marge 40 cm) ; null si la région n'en a pas.
+func nav_of(region: int) -> NavGrid:
+	if navs.has(region):
+		return navs[region]
+	if nav_collision == null or region <= 0 or region >= regions.size():
+		return null
+	var r: Dictionary = regions[region]
+	if r["kind"] != "floor" or not _region_has_tris(region):
+		return null
+	navs[region] = NavGrid.build_region(self, region, nav_collision)
+	return navs[region]
+
+## Grille de navigation de chaque étage plat, d'un coup (outils et tests).
+func build_navs(col: Collision, cell := 0.5, margin := 0.4) -> void:
+	navs.clear()
+	for r: Dictionary in regions:
+		if r["kind"] != "floor" or not _region_has_tris(int(r["id"])):
+			continue
+		navs[int(r["id"])] = NavGrid.build_region(self, int(r["id"]), col, cell, margin)
+
+func _region_has_tris(id: int) -> bool:
+	for t in tris:
+		if t["region"] == id:
+			return true
+	return false
+
+# ------------------------------------------------------------------ liens (escaliers)
+## Position (x, y, z) et cap à l'abscisse s le long du lien : { x, y, z, yaw }.
+func point_on(link: Dictionary, s: float, out: Dictionary) -> Dictionary:
+	var path: Array = link["path"]
+	var len: Array = link["len"]
+	s = maxf(0.0, minf(float(link["length"]), s))
+	var i := 1
+	while i < len.size() - 1 and len[i] < s:
+		i += 1
+	var seg: float = len[i] - len[i - 1]
+	if seg == 0.0:
+		seg = 1.0
+	var f: float = (s - len[i - 1]) / seg
+	var a: Array = path[i - 1]
+	var b: Array = path[i]
+	out["x"] = a[0] + (b[0] - a[0]) * f
+	out["y"] = a[1] + (b[1] - a[1]) * f
+	out["z"] = a[2] + (b[2] - a[2]) * f
+	out["yaw"] = atan2(b[0] - a[0], b[2] - a[2])
+	return out
+
+## Abscisse du point du lien le plus proche de (x, y, z).
+func project(link: Dictionary, x: float, z: float, y: float) -> float:
+	var best := INF
+	var bs := 0.0
+	var path: Array = link["path"]
+	var len: Array = link["len"]
+	for i in range(1, path.size()):
+		var a: Array = path[i - 1]
+		var b: Array = path[i]
+		var abx: float = b[0] - a[0]
+		var abz: float = b[2] - a[2]
+		var l2 := abx * abx + abz * abz
+		var t: float = ((x - a[0]) * abx + (z - a[2]) * abz) / l2 if l2 > 0.0 else 0.0
+		t = maxf(0.0, minf(1.0, t))
+		var py: float = a[1] + (b[1] - a[1]) * t
+		var dx: float = x - a[0] - abx * t
+		var dz: float = z - a[2] - abz * t
+		var d := sqrt(dx * dx + dz * dz) + absf(y - py) * 1.5
+		if d < best:
+			best = d
+			bs = len[i - 1] + (len[i] - len[i - 1]) * t
+	return bs
+
+## Région « utile » d'un point sur un escalier : l'extrémité la plus proche (pour savoir où est le joueur).
+func end_region(region_id: int, x: float, z: float, y: float) -> int:
+	var R: Dictionary = regions[region_id]
+	if R.get("link") == null:
+		return region_id
+	var L: Dictionary = links[int(R["link"])]
+	var s := project(L, x, z, y)
+	return int(L["a"]) if s < float(L["length"]) / 2.0 else int(L["b"])
+
+## Prochain lien à emprunter depuis la région `from` pour rejoindre `to` : { link, dir (+1 : de a vers b), next }, {} si aucun.
+func next_hop(from: int, to: int) -> Dictionary:
+	if from == to:
+		return {}
+	if not _hops_built:
+		_build_hops()
+	return _hop.get(from * 1024 + to, {})
+
+func _build_hops() -> void:
+	var n := regions.size()
+	var adj: Array = []
+	for _i in n:
+		adj.append([])
+	for l in links:
+		adj[int(l["a"])].append({"to": int(l["b"]), "link": l, "dir": 1})
+		adj[int(l["b"])].append({"to": int(l["a"]), "link": l, "dir": -1})
+	_hop.clear()
+	_hop_dist.clear()
+	for target in n:
+		var dist: Array = []
+		dist.resize(n)
+		dist.fill(INF)
+		dist[target] = 0.0
+		var q: Array = [target]
+		var h := 0
+		while h < q.size():
+			var u: int = q[h]
+			h += 1
+			for e: Dictionary in adj[u]:
+				var to: int = e["to"]
+				var nd: float = dist[u] + float(e["link"]["length"])
+				if dist[to] > nd:
+					dist[to] = nd
+					_hop[to * 1024 + target] = {"link": e["link"], "dir": -int(e["dir"]), "next": u}
+					q.append(to)
+		for i in n:
+			_hop_dist[i * 1024 + target] = dist[i]
+	_hops_built = true
+
+## Longueur du chemin d'escaliers entre deux régions (INF si non reliées).
+func hop_distance(from: int, to: int) -> float:
+	if from == to:
+		return 0.0
+	if not _hops_built:
+		_build_hops()
+	return _hop_dist.get(from * 1024 + to, INF)
