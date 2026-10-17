@@ -10,3 +10,4 @@ var nav: NavGrid            ## champ de flux de la carte (null : ligne droite, c
 var levels: Levels          ## étages (null si aucun lien d'escalier)
 var rng: RandomNumberGenerator
 var time := 0.0
+var rides: Rides         ## J5 : véhicules et rame (gong du tram, rame comme cible) ; null dans l'arène

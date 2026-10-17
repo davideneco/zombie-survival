@@ -151,6 +151,8 @@ func explode(g: Node, pos: Vector3, radius: float, damage: float, color: int, se
 	if self_damage > 0.0 and d < radius and not p.dead:
 		g.hurt_player(self_damage * (1.0 - d / radius), "blast")
 	area_damage(g, pos, radius, damage)
+	if g.rides != null:   # main.js explode : les motos subissent 10 % des dégâts infligés aux zombies (pas le splash des armes)
+		g.rides.damage_in_radius(pos, radius, damage)
 
 ## Impact explosif d'une arme (pistolet à rayons, carreau explosif, balles explosives, Éther) : pas de dégâts au tireur.
 func splash(g: Node, point: Vector3, radius: float, damage: float, color: int = 0x44ff66) -> void:

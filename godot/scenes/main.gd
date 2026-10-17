@@ -10,6 +10,7 @@ const ARENA := preload("res://scenes/world/arena.tscn")
 const WORLD := preload("res://scenes/world/world.tscn")
 const HUD := preload("res://scenes/ui/hud.tscn")
 const WeaponView := preload("res://scenes/weapon_view.gd")
+const RidesView := preload("res://scenes/world/rides_view.gd")
 const TRACER_COLOR := Color("ffd27a")
 const TRACER_TIME := 0.06
 const TRACER_WIDTH := 0.012
@@ -35,6 +36,15 @@ var _sync_flow := false
 var _tracers: Array = []         # [mesh, temps restant]
 var _pending: Dictionary = {}    # J4 : appuis (couteau, grenade, obus sous canon, arme, molette) lus au prochain pas de simulation
 var _weapon_view: Node3D
+var _rides_view: Node3D
+var _prev_eye := Vector3.ZERO    # J5 : œil (caméra) au pas précédent, pour l'interpolation sur un véhicule
+var _mount := ""                  # --mount=moto|grosseMoto|velo|tram : monte sur la machine la plus proche de l'arrivée
+var _auto_fwd := false            # --auto-fwd : accélérateur maintenu (captures et vidéos)
+var _power := false               # --power : sous-station remise (tram alimenté)
+var _tram_door := false           # --tram-doors : portes de la rame ouvertes au départ
+var _tram_in := false             # --tram-in : joueur debout dans la rame
+var _first_person := false        # --first-person : vue à la première personne sur les véhicules
+var _ruin := ""                   # --ruin=smoke|burn|wreck : abîme les motos (fumée, incendie, épave) pour les captures
 
 func _ready() -> void:
 	for a in OS.get_cmdline_user_args():
@@ -54,6 +64,20 @@ func _ready() -> void:
 			_horde = int(a.substr(8))
 		elif a == "--sync-flow":
 			_sync_flow = true
+		elif a.begins_with("--mount="):
+			_mount = a.substr(8)
+		elif a == "--auto-fwd":
+			_auto_fwd = true
+		elif a == "--power":
+			_power = true
+		elif a == "--tram-doors":
+			_tram_door = true
+		elif a.begins_with("--ruin="):
+			_ruin = a.substr(7)
+		elif a == "--tram-in":
+			_tram_in = true
+		elif a == "--first-person":
+			_first_person = true
 		elif a.begins_with("--seed="):
 			_seed = int(a.substr(7))
 		elif a.begins_with("--shot="):
@@ -85,6 +109,7 @@ func _ready() -> void:
 	Game.door_opened.connect(func(id): _hud.announce("PORTE OUVERTE : %s" % Game.world.doors[id]["name"]))
 	Game.door_denied.connect(func(id): _hud.announce("%d POINTS REQUIS" % int(Game.world.doors[id]["price"])))
 	Game.game_over.connect(_on_game_over)
+	Game.announced.connect(func(title: String, sub: String): _hud.announce(title, sub))
 	_restart()
 	if _demo:   # un zombie à 5 m devant le joueur, pour les captures
 		var z := ZombieSim.new()
@@ -113,6 +138,15 @@ func _restart() -> void:
 		_spawn_horde(_horde)
 	_arena_node = (WORLD if Game.world != null else ARENA).instantiate()
 	add_child(_arena_node)
+	if _rides_view != null:
+		_rides_view.queue_free()
+		_rides_view = null
+	if Game.rides != null:
+		_rides_view = Node3D.new()
+		_rides_view.set_script(RidesView)
+		add_child(_rides_view)
+		_rides_view.setup(_camera)
+		_start_mounted()
 	_hud.hide_end()
 	_prev_player = Game.player.pos
 	if not _bot and DisplayServer.get_name() != "headless":
@@ -135,11 +169,51 @@ func _spawn_horde(n: int) -> void:
 			spd *= 1.5
 		Game.debug_spawn(p, spd, k == "crawl", k if k in ["armored", "bloat"] else "")
 
+## --mount= : place le joueur près de la machine demandée et monte dessus (pour les captures et les vidéos). tram : près du nez, courant remis.
+func _start_mounted() -> void:
+	var r: Rides = Game.rides
+	if _power or _mount == "tram":
+		r.set_power(true, true)
+	if _first_person:
+		r.cam.third_person = false
+	if _ruin != "":
+		for v in r.vehicles:
+			if v.type == "moto" or v.type == "grosseMoto":
+				match _ruin:
+					"smoke":
+						v.hp = v.max_hp() * (0.4 if v.type == "moto" else 0.2)
+					"burn":
+						r.damage_vehicle(v, 1.0e9)
+						v.burn_t = 1.0e9
+					"wreck":
+						r.damage_vehicle(v, 1.0e9)
+						v.state = "wreck"
+						v.wreck_t = 1.0e9
+	if _tram_door and not r.trams.is_empty():
+		r.trams[0].door_open = true
+		r.trams[0].door_f = 1.0
+	if _tram_in and not r.trams.is_empty():
+		r.place_in_tram(r.trams[0], 0.0, 0.0)
+	if _mount == "":
+		return
+	if _mount == "tram":
+		var tr: TramSim = r.trams[0]
+		var nose: Dictionary = tr.mods[tr.n - 1]
+		Game.player.pos = Vector3(nose["x"] + nose["tx"] * (tr.M / 2.0 + 1.0), 0.0, nose["z"] + nose["tz"] * (tr.M / 2.0 + 1.0))
+		r.try_mount(tr, 0)
+		return
+	for v in r.vehicles:
+		if v.type == _mount:
+			Game.player.pos = Vector3(v.x + 1.0, 0.0, v.z + 0.5)
+			r.try_mount(v, 0)
+			Game.player.yaw = v.yaw
+			return
+
 func _setup_inputs() -> void:
 	var map := {
 		"move_forward": [KEY_W, KEY_UP], "move_back": [KEY_S, KEY_DOWN], "move_left": [KEY_A, KEY_LEFT], "move_right": [KEY_D, KEY_RIGHT],
 		"sprint": [KEY_SHIFT], "jump": [KEY_SPACE], "reload": [KEY_R], "use": [KEY_E],
-		"knife": [KEY_V], "grenade": [KEY_G], "weapon_1": [KEY_1], "weapon_2": [KEY_2], "weapon_3": [KEY_3],
+		"knife": [KEY_V], "grenade": [KEY_G], "tram_gong": [KEY_H], "tram_doors": [KEY_O], "tram_switch": [KEY_B], "weapon_1": [KEY_1], "weapon_2": [KEY_2], "weapon_3": [KEY_3],
 	}
 	for action: String in map:
 		if not InputMap.has_action(action):
@@ -152,6 +226,7 @@ func _setup_inputs() -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED and Game.playing and not Game.over:
 		var m := event as InputEventMouseMotion
+		Game.player.last_mouse = Game.time
 		Game.player.yaw -= m.relative.x * Rules.MOUSE_SENS
 		Game.player.pitch = clampf(Game.player.pitch - m.relative.y * Rules.MOUSE_SENS, -Rules.PITCH_LIMIT, Rules.PITCH_LIMIT)
 	elif event is InputEventKey and event.pressed and not event.echo:
@@ -173,7 +248,16 @@ func _unhandled_input(event: InputEvent) -> void:
 			_pending["gl"] = true
 	elif event is InputEventKey and event.pressed and not event.echo:
 		if event.physical_keycode == KEY_V:
-			_pending["knife"] = true
+			if Game.rides != null and Game.rides.ride != null:
+				Game.rides.toggle_view()   # assis : V change de vue
+			else:
+				_pending["knife"] = true
+		elif Game.rides != null and event.physical_keycode == KEY_H:
+			Game.rides.tram_gong()
+		elif Game.rides != null and event.physical_keycode == KEY_O:
+			Game.rides.tram_doors()
+		elif Game.rides != null and event.physical_keycode == KEY_B:
+			Game.rides.tram_switch()
 		elif event.physical_keycode == KEY_G:
 			_pending["grenade"] = true
 		elif event.physical_keycode in [KEY_1, KEY_2, KEY_3]:
@@ -181,8 +265,11 @@ func _unhandled_input(event: InputEvent) -> void:
 
 func _physics_process(dt: float) -> void:
 	_prev_player = Game.player.pos
+	_prev_eye = _eye_now()
 	for v in _views.values():
 		v.remember()
+	if _rides_view != null:
+		_rides_view.remember()
 	var input: Dictionary
 	if _bot:
 		input = Bot.think(Game)
@@ -196,15 +283,34 @@ func _physics_process(dt: float) -> void:
 			"reload": Input.is_action_just_pressed("reload"),
 			"aim": Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT) and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED,
 		}
+		if _auto_fwd:
+			input["mz"] = 1.0
 		input.merge(_pending, true)
 	_pending.clear()
 	Game.step(dt, input)
 
+## Position de l'œil au pas courant : œil du joueur, ou celui qu'impose le véhicule (caméra externe ou œil de la selle).
+func _eye_now() -> Vector3:
+	var p := Game.player
+	if p.eye_override != Vector3.INF:
+		return p.eye_override
+	return p.pos + Vector3(0, float(Config.at("player.eye")), 0)
+
 func _process(dt: float) -> void:
 	var f := Engine.get_physics_interpolation_fraction()
 	var p := Game.player
-	_camera.position = _prev_player.lerp(p.pos, f) + Vector3(0, float(Config.at("player.eye")), 0)
-	_camera.rotation = Vector3(p.pitch, p.yaw, 0)   # ordre YXZ : lacet puis tangage
+	if p.eye_override != Vector3.INF or _prev_eye != Vector3.ZERO and Game.rides != null and Game.rides.cam.placed:
+		_camera.position = _prev_eye.lerp(_eye_now(), f)
+	else:
+		_camera.position = _prev_player.lerp(p.pos, f) + Vector3(0, float(Config.at("player.eye")), 0)
+	var roll := 0.0
+	if Game.rides != null and Game.rides.ride != null and not Game.rides.cam.placed and not Game.rides.ride["v"].is_tram():
+		roll = Game.rides.ride["v"].lean * 0.5   # la vue penche avec la moto
+	if Game.shake > 0.0:
+		_camera.position += Vector3(randf() - 0.5, randf() - 0.5, randf() - 0.5) * Game.shake * 0.25
+	_camera.rotation = Vector3(p.pitch, p.yaw, roll)   # ordre YXZ : lacet puis tangage
+	if Game.rides != null:   # arme de la vue cachée en conduisant et en vue externe
+		_weapon_view.hide_gun = Game.rides.driving() or Game.rides.cam.external()
 	_camera.fov = Game.arms.fov(Rules.FOV_DEG)
 	# zombies retirés par la simulation
 	for id: int in _views.keys():

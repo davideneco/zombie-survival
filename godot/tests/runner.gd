@@ -31,13 +31,19 @@ func same(a: Variant, b: Variant, message: String, tol := 1e-6) -> void:
 		for k in a:
 			if not b.has(k):
 				check(false, "%s : clé « %s » en trop" % [message, k])
+	elif typeof(b) == TYPE_ARRAY:
+		if typeof(a) != TYPE_ARRAY or a.size() != b.size():
+			check(false, "%s : tableau de %d éléments attendu" % [message, b.size()])
+			return
+		for i in b.size():
+			same(a[i], b[i], "%s[%d]" % [message, i], tol)
 	elif typeof(b) in [TYPE_INT, TYPE_FLOAT]:
 		near(a, b, message, tol)
 	else:
 		check(a == b, "%s : %s != %s" % [message, a, b])
 
 func _ready() -> void:
-	var suites: Array[String] = ["j0", "j1", "j2", "j3", "j4"]
+	var suites: Array[String] = ["j0", "j1", "j2", "j3", "j4", "j5"]
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with("--suite="):
 			suites = [arg.substr(8)]

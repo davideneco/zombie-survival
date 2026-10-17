@@ -40,6 +40,7 @@ var strike_target: PlayerSim   ## joueur touché par le coup de ce pas (null si 
 var strike_damage := 0.0
 var events: PackedStringArray = PackedStringArray()   ## "knock", "glass", "rumble", "emerge" (sons et effets, vidés par Game)
 var target: PlayerSim          ## cible poursuivie ce pas (null : personne)
+var run_over_until := 0.0      ## J5 : moto ou rame : pas d'autre coup avant ce temps de jeu (écrasement)
 
 # apparition
 var spawn_type := ""            ## "window", "ground" ou "" (déjà sorti)
@@ -247,6 +248,21 @@ func step(dt: float, env: ZombieEnv) -> void:
 		if Vector2(gx - pos.x, gz - pos.z).length() < Rules.LINK_ENTER:
 			link = {"link": L, "dir": int(hop["dir"]), "s": 0.0 if int(hop["dir"]) > 0 else float(L["length"])}
 			return
+	# gong du tram (J5) : à moins de `range` m du gong, un zombie qui n'est pas déjà sur un joueur va vers le tram (sa cible du champ de flux)
+	if env.rides != null:
+		var lure: Dictionary = env.rides.lure
+		if not lure.is_empty() and float(lure["t"]) > 0.0 and region == 0 and link.is_empty() \
+				and Vector2(lure["x"] - pos.x, lure["z"] - pos.z).length() < float(lure.get("range", 50.0)) and Vector2(gx - pos.x, gz - pos.z).length() > 5.0:
+			gx = lure["x"]
+			gz = lure["z"]
+			chase = false
+		# cible dans une rame aux portes ouvertes : le zombie va d'abord devant la porte ouverte la plus proche (il ne peut ni entrer ni traverser la caisse)
+		if chase and region == 0 and link.is_empty():
+			var tg: Dictionary = env.rides.tram_goal(self)
+			if not tg.is_empty():
+				gx = tg["x"]
+				gz = tg["z"]
+				chase = false
 	var dx := gx - pos.x
 	var dz := gz - pos.z
 	var dist := sqrt(dx * dx + dz * dz)

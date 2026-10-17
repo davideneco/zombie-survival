@@ -17,6 +17,9 @@ var sprinting := false
 var moving := false
 var tregion := 0             ## étage « utile » pour les zombies (un joueur sur un escalier compte pour l'extrémité la plus proche)
 var region := 0              ## région d'étage sous les pieds (0 = sol de la ville), voir Levels
+var attached := false         ## J5 : assis sur un véhicule ou debout dans la rame (Rides pose pos et yaw)
+var eye_override := Vector3.INF   ## J5 : œil imposé (caméra externe d'un véhicule) ; INF : œil du joueur
+var last_mouse := 0.0         ## temps de jeu du dernier mouvement de souris (recentrage de la vue du conducteur)
 var _floor := {"y": 0.0, "region": 0}
 var _was_grounded := true
 
@@ -36,8 +39,12 @@ func reset(start: Vector3) -> void:
 	region = 0
 	tregion = 0
 	_was_grounded = true
+	attached = false
+	eye_override = Vector3.INF
 
 func eye() -> Vector3:
+	if eye_override != Vector3.INF:
+		return eye_override
 	return pos + Vector3(0, float(Config.at("player.eye")), 0)
 
 ## Direction de visée (unitaire) pour yaw et pitch courants.
@@ -47,6 +54,9 @@ func forward() -> Vector3:
 ## input : { mx: -1..1 (droite +), mz: -1..1 (avant +), sprint: bool, jump: bool }
 func step(dt: float, time: float, input: Dictionary, col: Collision, levels: Levels = null) -> void:
 	if dead:
+		return
+	if attached:   # sur un véhicule ou dans la rame : Rides déplace le joueur ; la santé se régénère quand même
+		_regen(dt, time)
 		return
 	var mx: float = input.get("mx", 0.0)
 	var mz: float = input.get("mz", 0.0)
@@ -85,7 +95,9 @@ func step(dt: float, time: float, input: Dictionary, col: Collision, levels: Lev
 		vy = 0.0
 	_was_grounded = pos.y <= ground + Rules.SPAWN_ON_GROUND_EPS
 	pos = col.resolve(pos, float(Config.at("player.radius")))
-	# régénération
+	_regen(dt, time)
+
+func _regen(dt: float, time: float) -> void:
 	if health < max_health and time - last_hurt > float(Config.at("player.regenDelay")):
 		health = minf(max_health, health + float(Config.at("player.regenRate")) * dt)
 

@@ -8,5 +8,6 @@ node tools/export-golden.mjs
 node tools/export-golden-j1.mjs
 node tools/export-golden-j3.mjs
 node tools/export-golden-j4.mjs
+node tools/export-golden-j5.mjs
 godot --headless --path godot --import >/dev/null 2>&1
 godot --headless --path godot res://tests/runner.tscn -- ${1:+--suite="$1"}

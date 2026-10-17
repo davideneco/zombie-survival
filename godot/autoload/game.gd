@@ -18,6 +18,8 @@ signal bloat_burst(pos: Vector3)
 signal explosion(pos: Vector3, radius: float, color: int)   ## J4 : effet d'une explosion (présentation)
 signal weapon_acquired(id: String)                           ## J4 : arme achetée au mur
 signal purchase_denied(price: int)                           ## J4 : pas assez de points
+signal announced(title: String, sub: String)                 ## J5 : annonce à l'écran (véhicules, tram)
+signal ride_event(name: String, data: Dictionary)            ## J5 : "mount", "dismount", "crash", "burn", "break", "respawn", "gong", "chime", "service", "knock", "cough", "beep", "dry"
 
 var round_number: int:
 	get: return director.round_number if director != null else 0
@@ -36,6 +38,10 @@ var arms: WeaponArms       ## J4 : inventaire, tir, couteau, grenades (voir sim/
 var weapon: WeaponSim:     ## arme en main (compatibilité J1)
 	get: return arms.current
 var director: RoundDirector
+var rides: Rides           ## J5 : motos, vélos, tram (null dans l'arène)
+var shake := 0.0           ## J5 : secousse de la caméra (chocs, explosions), décroît d'elle-même
+var vehicles: Array[VehicleSim]:   ## les motos et vélos (pour les chocs entre machines)
+	get: return rides.vehicles if rides != null else []
 var zombies: Array[ZombieSim] = []
 var env: ZombieEnv         ## ce que voient les zombies (joueurs, collision, champ de flux, étages)
 var flow_cool := 0.0       ## délai avant de relancer le champ de flux de la carte
@@ -81,6 +87,8 @@ func new_game(seed_value: int = -1, map: String = "", weapons: Array = []) -> vo
 	director = RoundDirector.new()
 	director.reset()
 	zombies.clear()
+	shake = 0.0
+	rides = Rides.new(self) if world != null else null
 	env = ZombieEnv.new()
 	env.players = [player]
 	env.zombies = zombies
@@ -88,6 +96,7 @@ func new_game(seed_value: int = -1, map: String = "", weapons: Array = []) -> vo
 	env.nav = world.nav if world != null else null
 	env.levels = world.levels if world != null and not world.levels.links.is_empty() else null
 	env.rng = rng
+	env.rides = rides
 	flow_cool = 0.0
 	region_field_t = 0.0
 	relocate_t = 0.0
@@ -119,14 +128,29 @@ func step(dt: float, input: Dictionary) -> void:
 	if not playing or over:
 		return
 	time += dt
+	shake = maxf(0.0, shake - shake * dt * 3.0)
+	var arms_input := input
+	if rides != null:
+		rides.step(dt, input)   # motos et rame d'abord, puis le joueur (il suit la selle, ou marche dans la rame)
+		if rides.attached():
+			arms_input = input.duplicate()
+			arms_input["knife"] = false   # pas de couteau assis ou dans la rame ; le conducteur ne tire ni ne recharge
+			if rides.driving():
+				arms_input["fire"] = false
+				arms_input["reload"] = false
+				arms_input["aim"] = false
+				arms_input["grenade"] = false
+				arms_input["gl"] = false
 	player.step(dt, time, input, collision, world.levels if world != null else null)
-	arms.step(self, dt, input)
+	arms.step(self, dt, arms_input)
 	# manches
 	match director.step(dt, alive_count()):
 		RoundDirector.SPAWN:
 			_spawn_zombie()
 		RoundDirector.ROUND_START:
 			arms.on_round_start()
+			if rides != null:
+				rides.on_round_start()
 			round_started.emit(director.round_number)
 		RoundDirector.ROUND_END:
 			round_ended.emit()
@@ -142,9 +166,13 @@ func step(dt: float, input: Dictionary) -> void:
 				zombie_event.emit(z, e)
 			z.events.clear()
 		if z.strike_damage > 0.0:
-			player_hurt.emit(z.strike_damage)
-			if z.strike_target.hurt(z.strike_damage, time):
-				_end_game()
+			var shielded := rides != null and rides.tram_shield(z)   # une rame : la caisse encaisse (sauf devant une porte ouverte)
+			if not shielded:
+				player_hurt.emit(z.strike_damage)
+				if z.strike_target.hurt(z.strike_damage, time):
+					_end_game()
+			if rides != null:
+				rides.on_zombie_strike()   # le véhicule de la victime perd des PV
 		if z.dead and z.death_t > Rules.CORPSE_TIME:
 			zombies.remove_at(i)
 	_relocate(dt)
@@ -157,7 +185,7 @@ func _end_game() -> void:
 
 ## Dégâts sur un zombie + points (équivalent de game.hitZombie côté hôte).
 ## mel : coup de couteau (pas de bonus de tête, armure ignorée, points de CONFIG.knife.points).
-func hit_zombie(z: ZombieSim, head: bool, dmg: float, head_mult: float, mel: bool = false) -> void:
+func hit_zombie(z: ZombieSim, head: bool, dmg: float, head_mult: float, mel: bool = false) -> bool:
 	var armor: Variant = z.get("armor")
 	var amount: float = dmg / (float(armor) if armor != null and float(armor) > 0.0 else 1.0) if mel else dmg * (head_mult if head else 1.0)
 	var killed := z.damage(amount, head)
@@ -170,6 +198,7 @@ func hit_zombie(z: ZombieSim, head: bool, dmg: float, head_mult: float, mel: boo
 			_bloat_burst(z)
 	else:
 		points += int(K["hit"]) if mel else Rules.POINTS_HIT
+	return killed
 
 ## Dégâts reçus par le joueur hors coup de zombie (explosions). PHD Flopper : immunité aux explosions.
 func hurt_player(amount: float, src: String = "") -> void:
@@ -185,9 +214,25 @@ func hurt_player(amount: float, src: String = "") -> void:
 func interact() -> void:
 	if over or not playing:
 		return
+	if rides != null and rides.interact_leave():   # assis : E descend (main.js interact, 0)
+		return
 	if WeaponShop.interact(self):
 		return
+	if rides != null and rides.interact_use():   # borne du parking, sous-station, monter (4b, 4c, 5)
+		return
 	use_door()
+
+## Annonce à l'écran (HUD).
+func announce(title: String, sub := "") -> void:
+	announced.emit(title, sub)
+
+func damage_vehicle(v: Object, amt: float, src := "") -> void:
+	if rides != null:
+		rides.damage_vehicle(v, amt, src)
+
+func hurt_occupants(v: Object, dmg: float) -> void:
+	if rides != null:
+		rides.hurt_occupants(v, dmg)
 
 # ---------------------------------------------------------------- champ de flux et étages
 ## Étage « utile » du joueur (main.js updateLevels).
@@ -214,6 +259,13 @@ func field_targets(region: int) -> Array:
 		out.append(Vector3(e[0], 0.0, e[2]))
 	return out
 
+## Sources du champ de la carte : les joueurs, plus le gong du tram s'il sonne (main.js : world.lure).
+func _targets_with_lure() -> Array:
+	var t := field_targets(0)
+	if rides != null and not rides.lure.is_empty():
+		t.append(Vector3(rides.lure["x"], 0.0, rides.lure["z"]))
+	return t
+
 ## Champ de la carte (incrémental, borné autour des joueurs : CONFIG.zombie.flow) et champs des étages où se trouvent des zombies.
 func _update_fields(dt: float) -> void:
 	if env.nav == null or player.dead:
@@ -225,9 +277,9 @@ func _update_fields(dt: float) -> void:
 	if nv.job_active or flow_cool <= 0.0:
 		var max_cost := roundi(float(F["range"]) / nv.cell * 10.0)
 		if flow_threaded:
-			nv.update_field_threaded(field_targets(0), max_cost)
+			nv.update_field_threaded(_targets_with_lure(), max_cost)
 		else:
-			nv.update_field(field_targets(0), mini(int(F["budget"]), Rules.FLOW_BUDGET_MAX), max_cost)
+			nv.update_field(_targets_with_lure(), mini(int(F["budget"]), Rules.FLOW_BUDGET_MAX), max_cost)
 		if not nv.job_active:
 			flow_cool = float(F["interval"])
 	if env.levels != null:

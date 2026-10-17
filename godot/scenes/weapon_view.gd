@@ -12,6 +12,7 @@ const BODY := {
 	"sniper": Vector3(0.06, 0.1, 0.95), "shotgun": Vector3(0.06, 0.09, 0.8), "special": Vector3(0.07, 0.11, 0.55),
 }
 
+var hide_gun := false           ## J5 : arme de la vue cachée (on conduit, ou la caméra regarde de l'extérieur d'un véhicule)
 var _cam: Camera3D
 var _gun: Node3D
 var _gun_id := ""
@@ -96,7 +97,7 @@ func _process(dt: float) -> void:
 	pos.y -= reload_dip * 0.18 + melee_dip
 	_gun.position = pos
 	_gun.rotation = Vector3(_kick * 0.06 + reload_dip * 0.5, 0, 0)
-	_gun.visible = not (w.cfg.has("adsFov") and arms.aim > 0.8)
+	_gun.visible = not hide_gun and not (w.cfg.has("adsFov") and arms.aim > 0.8)
 	_update_knife(arms)
 	_sync_projectiles(arms.blast.shells, _shells, 0.04, _shell_mat)
 	_sync_projectiles(arms.blast.nades, _nades, 0.06, _nade_mat)

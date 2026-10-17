@@ -13,6 +13,11 @@ var _ammo: Label
 var _points: Label
 var _round: Label
 var _announce: Label
+var _announce_sub: Label
+var _prompt: Label
+var _gauge: Label
+var _fuel_bar: ProgressBar
+var _hp_bar: ProgressBar
 var _vignette: ColorRect
 var _end_panel: PanelContainer
 var _end_stats: Label
@@ -76,6 +81,24 @@ func _ready() -> void:
 	_announce.offset_right = 400
 	_announce.offset_top = 90
 	_announce.offset_bottom = 170
+	_announce_sub = _label(root, Control.PRESET_CENTER_TOP, 24, HORIZONTAL_ALIGNMENT_CENTER)
+	_announce_sub.offset_left = -500
+	_announce_sub.offset_right = 500
+	_announce_sub.offset_top = 150
+	_announce_sub.offset_bottom = 190
+	# J5 : invite d'interaction (bas du centre) et tableau de bord du véhicule
+	_prompt = _label(root, Control.PRESET_CENTER_BOTTOM, 24, HORIZONTAL_ALIGNMENT_CENTER)
+	_prompt.offset_left = -520
+	_prompt.offset_right = 520
+	_prompt.offset_top = -190
+	_prompt.offset_bottom = -150
+	_gauge = _label(root, Control.PRESET_CENTER_BOTTOM, 30, HORIZONTAL_ALIGNMENT_CENTER)
+	_gauge.offset_left = -260
+	_gauge.offset_right = 260
+	_gauge.offset_top = -140
+	_gauge.offset_bottom = -90
+	_fuel_bar = _bar(root, Color("e0a82e"), -260, -84)
+	_hp_bar = _bar(root, Color("c0392b"), -260, -62)
 	# écran de fin
 	_end_panel = PanelContainer.new()
 	_end_panel.set_anchors_preset(Control.PRESET_CENTER)
@@ -115,8 +138,26 @@ func _label(parent: Control, preset: int, size: int, align: int) -> Label:
 	parent.add_child(l)
 	return l
 
-func announce(text: String) -> void:
+func _bar(parent: Control, color: Color, left: float, top: float) -> ProgressBar:
+	var b := ProgressBar.new()
+	b.show_percentage = false
+	b.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+	b.offset_left = left
+	b.offset_right = left + 520
+	b.offset_top = top
+	b.offset_bottom = top + 14
+	b.max_value = 1.0
+	var fill := StyleBoxFlat.new()
+	fill.bg_color = color
+	b.add_theme_stylebox_override("fill", fill)
+	b.visible = false
+	b.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	parent.add_child(b)
+	return b
+
+func announce(text: String, sub := "") -> void:
 	_announce.text = text
+	_announce_sub.text = sub
 	_announce_t = ANNOUNCE_TIME
 
 func hurt_flash() -> void:
@@ -140,6 +181,35 @@ func _process(dt: float) -> void:
 	_round.text = "MANCHE %d" % Game.round_number if Game.round_number > 0 else "PRÉPAREZ-VOUS"
 	_announce_t = maxf(0.0, _announce_t - dt)
 	_announce.modulate.a = clampf(_announce_t, 0.0, 1.0)
+	_announce_sub.modulate.a = clampf(_announce_t, 0.0, 1.0)
+	_update_rides()
 	_hurt = maxf(0.0, _hurt - dt * HURT_FADE)
 	var low := 1.0 - Game.player.health / Game.player.max_health
 	_vignette.color.a = clampf(_hurt * 0.45 + low * low * 0.25, 0.0, 0.7)
+
+## J5 : invite d'interaction et tableau de bord (vitesse, essence ou énergie, PV) du véhicule occupé.
+func _update_rides() -> void:
+	var r: Rides = Game.rides
+	if r == null or Game.over:
+		_prompt.text = ""
+		_gauge.text = ""
+		_fuel_bar.visible = false
+		_hp_bar.visible = false
+		return
+	_prompt.text = r.prompt()
+	var gg := r.gauge()
+	if gg.is_empty():
+		_gauge.text = ""
+		_fuel_bar.visible = false
+		_hp_bar.visible = false
+		return
+	var kmh := roundi(absf(float(gg["speed"])) * 3.6)
+	var extra := ""
+	if gg.get("tram", false) and not (gg["sw"] as Dictionary).is_empty():
+		var sw: Dictionary = gg["sw"]
+		extra = "   AIGUILLAGE %s%s dans %d m" % [("DÉVIÉ " if sw["diverge"] else "DROIT "), "(verrouillé)" if sw["locked"] else "", int(sw["dist"])]
+	_gauge.text = "%s   %d km/h%s" % [gg["name"], kmh, extra]
+	_fuel_bar.visible = bool(gg.get("has_tank", true))
+	_fuel_bar.value = float(gg["fuel"])
+	_hp_bar.visible = true
+	_hp_bar.value = float(gg["hp"]) / float(gg["hp_max"])
