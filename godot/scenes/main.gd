@@ -9,6 +9,7 @@ const ZombieView := preload("res://scenes/zombie_view.gd")
 const ARENA := preload("res://scenes/world/arena.tscn")
 const WORLD := preload("res://scenes/world/world.tscn")
 const HUD := preload("res://scenes/ui/hud.tscn")
+const WeaponView := preload("res://scenes/weapon_view.gd")
 const TRACER_COLOR := Color("ffd27a")
 const TRACER_TIME := 0.06
 const TRACER_WIDTH := 0.012
@@ -32,6 +33,8 @@ var _open_all := false
 var _horde := 0
 var _sync_flow := false
 var _tracers: Array = []         # [mesh, temps restant]
+var _pending: Dictionary = {}    # J4 : appuis (couteau, grenade, obus sous canon, arme, molette) lus au prochain pas de simulation
+var _weapon_view: Node3D
 
 func _ready() -> void:
 	for a in OS.get_cmdline_user_args():
@@ -68,6 +71,12 @@ func _ready() -> void:
 	_hud = HUD.instantiate()
 	add_child(_hud)
 	_hud.restart_requested.connect(_restart)
+	_weapon_view = Node3D.new()
+	_weapon_view.set_script(WeaponView)
+	add_child(_weapon_view)
+	_weapon_view.setup(_camera)
+	Game.weapon_acquired.connect(func(id): _hud.announce("%s : ARME ACQUISE" % String(Config.weapon(id)["name"])))
+	Game.purchase_denied.connect(func(price): _hud.announce("%d POINTS REQUIS" % price))
 	Game.round_started.connect(func(n): _hud.announce("MANCHE %d" % n))
 	Game.round_ended.connect(func(): _hud.announce("MANCHE TERMINÉE"))
 	Game.zombie_spawned.connect(_on_zombie_spawned)
@@ -93,7 +102,7 @@ func _restart() -> void:
 	_views.clear()
 	if _arena_node != null:
 		_arena_node.queue_free()
-	Game.new_game(_seed, _map)
+	Game.new_game(_seed, _map, Config.at("startWeapons", []))
 	if _at_pos != Vector3.INF:
 		Game.player.pos = _at_pos
 		Game.player.yaw = _at_yaw
@@ -130,6 +139,7 @@ func _setup_inputs() -> void:
 	var map := {
 		"move_forward": [KEY_W, KEY_UP], "move_back": [KEY_S, KEY_DOWN], "move_left": [KEY_A, KEY_LEFT], "move_right": [KEY_D, KEY_RIGHT],
 		"sprint": [KEY_SHIFT], "jump": [KEY_SPACE], "reload": [KEY_R], "use": [KEY_E],
+		"knife": [KEY_V], "grenade": [KEY_G], "weapon_1": [KEY_1], "weapon_2": [KEY_2], "weapon_3": [KEY_3],
 	}
 	for action: String in map:
 		if not InputMap.has_action(action):
@@ -148,11 +158,26 @@ func _unhandled_input(event: InputEvent) -> void:
 		if event.physical_keycode == KEY_ESCAPE:
 			Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 		elif event.physical_keycode == KEY_E and Game.playing and not Game.over:
-			Game.use_door()
+			Game.interact()
 		elif event.physical_keycode == KEY_R and Game.over:
 			_restart()
 	elif event is InputEventMouseButton and event.pressed and Input.mouse_mode != Input.MOUSE_MODE_CAPTURED and not Game.over:
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+	if event is InputEventMouseButton and event.pressed:   # J4 : molette = changer d'arme, clic molette = obus sous canon
+		var mb := event as InputEventMouseButton
+		if mb.button_index == MOUSE_BUTTON_WHEEL_DOWN:
+			_pending["wheel"] = 1
+		elif mb.button_index == MOUSE_BUTTON_WHEEL_UP:
+			_pending["wheel"] = -1
+		elif mb.button_index == MOUSE_BUTTON_MIDDLE:
+			_pending["gl"] = true
+	elif event is InputEventKey and event.pressed and not event.echo:
+		if event.physical_keycode == KEY_V:
+			_pending["knife"] = true
+		elif event.physical_keycode == KEY_G:
+			_pending["grenade"] = true
+		elif event.physical_keycode in [KEY_1, KEY_2, KEY_3]:
+			_pending["weapon"] = int(event.physical_keycode) - int(KEY_1)
 
 func _physics_process(dt: float) -> void:
 	_prev_player = Game.player.pos
@@ -169,7 +194,10 @@ func _physics_process(dt: float) -> void:
 			"jump": Input.is_action_pressed("jump"),
 			"fire": Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT) and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED,
 			"reload": Input.is_action_just_pressed("reload"),
+			"aim": Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT) and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED,
 		}
+		input.merge(_pending, true)
+	_pending.clear()
 	Game.step(dt, input)
 
 func _process(dt: float) -> void:
@@ -177,6 +205,7 @@ func _process(dt: float) -> void:
 	var p := Game.player
 	_camera.position = _prev_player.lerp(p.pos, f) + Vector3(0, float(Config.at("player.eye")), 0)
 	_camera.rotation = Vector3(p.pitch, p.yaw, 0)   # ordre YXZ : lacet puis tangage
+	_camera.fov = Game.arms.fov(Rules.FOV_DEG)
 	# zombies retirés par la simulation
 	for id: int in _views.keys():
 		if not _views[id].sim in Game.zombies:

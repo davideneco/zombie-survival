@@ -55,8 +55,8 @@ func _ready() -> void:
 	root.add_child(_health_bar)
 	# bas droite : munitions
 	_ammo = _label(root, Control.PRESET_BOTTOM_RIGHT, 34, HORIZONTAL_ALIGNMENT_RIGHT)
-	_ammo.offset_left = -330
-	_ammo.offset_top = -80
+	_ammo.offset_left = -480
+	_ammo.offset_top = -130
 	_ammo.offset_right = -24
 	_ammo.offset_bottom = -20
 	# haut gauche : manche ; haut droite : points
@@ -135,7 +135,7 @@ func _process(dt: float) -> void:
 	_health_bar.max_value = Game.player.max_health
 	_health_bar.value = Game.player.health
 	var w := Game.weapon
-	_ammo.text = ("RECHARGE…  " if w.reloading else "") + "%d / %d" % [w.ammo, w.reserve]
+	_ammo.text = ("RECHARGE…  " if w.reloading else "") + "%d / %d\n%s    G x%d" % [w.ammo, w.reserve, String(w.cfg.get("name", "")), Game.arms.grenades]
 	_points.text = "%d" % Game.points
 	_round.text = "MANCHE %d" % Game.round_number if Game.round_number > 0 else "PRÉPAREZ-VOUS"
 	_announce_t = maxf(0.0, _announce_t - dt)
