@@ -13,6 +13,9 @@ signal player_hurt(amount: float)
 signal game_over
 signal door_opened(id: int)
 signal door_denied(id: int)
+signal explosion(pos: Vector3, radius: float, color: int)   ## J4 : effet d'une explosion (présentation)
+signal weapon_acquired(id: String)                           ## J4 : arme achetée au mur
+signal purchase_denied(price: int)                           ## J4 : pas assez de points
 
 var round_number: int:
 	get: return director.round_number if director != null else 0
@@ -27,13 +30,13 @@ var world: World           ## carte de Strasbourg (map "strasbourg") ; null dans
 var collision: Collision   ## collision de la carte courante
 var map_name := ""
 var player: PlayerSim
-var weapon: WeaponSim
+var arms: WeaponArms       ## J4 : inventaire, tir, couteau, grenades (voir sim/weapon_arms.gd)
+var weapon: WeaponSim:     ## arme en main (compatibilité J1)
+	get: return arms.current
 var director: RoundDirector
 var zombies: Array[ZombieSim] = []
 var rng := RandomNumberGenerator.new()
 var _next_id := 1
-var _trigger := false      ## clic maintenu / verrou « un tir par clic » des armes semi-automatiques
-var _fire_prev := false
 
 func version() -> String:
 	return str(ProjectSettings.get_setting("application/config/version", "0.0.0"))
@@ -47,7 +50,8 @@ func zombie_health_at(r: int) -> int:
 
 ## Nouvelle partie (graine fixe pour les tests reproductibles ; -1 : aléatoire). map : "strasbourg" (monde cuit), "arena" (arène de test de J1) ;
 ## "" prend CONFIG.map. Le monde cuit est relu à chaque partie (il porte l'état des portes) : compter ~1 s.
-func new_game(seed_value: int = -1, map: String = "") -> void:
+## weapons : armes de départ (vide : le M1911 de J1 ; la scène principale passe CONFIG.startWeapons).
+func new_game(seed_value: int = -1, map: String = "", weapons: Array = []) -> void:
 	if seed_value >= 0:
 		rng.seed = seed_value
 	else:
@@ -63,7 +67,7 @@ func new_game(seed_value: int = -1, map: String = "") -> void:
 		collision = world.collision
 	player = PlayerSim.new()
 	player.reset(arena.start_pos if arena != null else world.start_pos)
-	weapon = WeaponSim.new(Rules.J1_WEAPON)
+	arms = WeaponArms.new(weapons if not weapons.is_empty() else [Rules.J1_WEAPON])
 	director = RoundDirector.new()
 	director.reset()
 	zombies.clear()
@@ -73,8 +77,6 @@ func new_game(seed_value: int = -1, map: String = "") -> void:
 	over = false
 	playing = true
 	_next_id = 1
-	_trigger = false
-	_fire_prev = false
 
 func alive_count() -> int:
 	var n := 0
@@ -90,12 +92,13 @@ func step(dt: float, input: Dictionary) -> void:
 		return
 	time += dt
 	player.step(dt, time, input, collision, world.levels if world != null else null)
-	_update_weapon(dt, input)
+	arms.step(self, dt, input)
 	# manches
 	match director.step(dt, alive_count()):
 		RoundDirector.SPAWN:
 			_spawn_zombie()
 		RoundDirector.ROUND_START:
+			arms.on_round_start()
 			round_started.emit(director.round_number)
 		RoundDirector.ROUND_END:
 			round_ended.emit()
@@ -114,57 +117,39 @@ func _end_game() -> void:
 	over = true
 	game_over.emit()
 
-# ---------------------------------------------------------------- tir
-func _update_weapon(dt: float, input: Dictionary) -> void:
-	weapon.update(dt)
-	var held := bool(input.get("fire", false))
-	if held and not _fire_prev:
-		_trigger = true
-	if not held:
-		_trigger = false
-	_fire_prev = held
-	if bool(input.get("reload", false)):
-		weapon.start_reload()
-	if not _trigger or weapon.reloading:
-		return
-	if weapon.ammo <= 0:
-		weapon.start_reload()   # chargeur vide : recharge si la réserve le permet
-		return
-	if weapon.can_fire(time):
-		_shoot()
-		if String(weapon.cfg["type"]) == "semi":
-			_trigger = false      # une balle par clic
-
-func _shoot() -> void:
-	var cfg := weapon.cfg
-	weapon.consume(time)
-	var mul := Rules.MOVING_SPREAD_MULT if player.moving else 1.0
-	var spread := float(cfg["spread"]) * mul
-	var tan_half := tan(deg_to_rad(Rules.FOV_DEG) / 2.0)
-	var sx := (rng.randf() - 0.5) * 2.0 * spread * tan_half
-	var sy := (rng.randf() - 0.5) * 2.0 * spread * tan_half
-	var fwd := player.forward()
-	var right := Vector3(cos(player.yaw), 0, -sin(player.yaw))
-	var up := right.cross(fwd)
-	var dir := (fwd + right * sx + up * sy).normalized()
-	var origin := player.eye()
-	var res := Hitscan.cast(origin, dir, float(cfg["range"]), zombies, collision, int(cfg.get("pierce", 1)))
-	var end: Vector3 = origin + dir * float(res["wall_t"])
-	for h: Dictionary in res["hits"]:
-		var dmg := float(cfg["damage"]) * Pap.falloff_mult(cfg, float(h["t"]))
-		hit_zombie(h["z"], bool(h["head"]), dmg, float(cfg["headMult"]))
-		end = origin + dir * float(h["t"])
-	shot_fired.emit(origin, end)
+# ---------------------------------------------------------------- tir : voir sim/weapon_arms.gd
 
 ## Dégâts sur un zombie + points (équivalent de game.hitZombie côté hôte).
-func hit_zombie(z: ZombieSim, head: bool, dmg: float, head_mult: float) -> void:
-	var killed := z.damage(dmg * (head_mult if head else 1.0), head)
+## mel : coup de couteau (pas de bonus de tête, armure ignorée, points de CONFIG.knife.points).
+func hit_zombie(z: ZombieSim, head: bool, dmg: float, head_mult: float, mel: bool = false) -> void:
+	var armor: Variant = z.get("armor")
+	var amount: float = dmg / (float(armor) if armor != null and float(armor) > 0.0 else 1.0) if mel else dmg * (head_mult if head else 1.0)
+	var killed := z.damage(amount, head)
+	var K: Dictionary = Config.at("knife.points")
 	if killed:
 		kills += 1
-		points += Rules.POINTS_HEADSHOT if head else Rules.POINTS_KILL
+		points += int(K["kill"]) if mel else (Rules.POINTS_HEADSHOT if head else Rules.POINTS_KILL)
 		zombie_killed.emit(z, head)
 	else:
-		points += Rules.POINTS_HIT
+		points += int(K["hit"]) if mel else Rules.POINTS_HIT
+
+## Dégâts reçus par le joueur hors coup de zombie (explosions). PHD Flopper : immunité aux explosions.
+func hurt_player(amount: float, src: String = "") -> void:
+	if over or player.dead:
+		return
+	if (src == "blast" or src == "crash") and arms.perks.get("phdflopper", false):
+		return
+	player_hurt.emit(amount)
+	if player.hurt(amount, time):
+		_end_game()
+
+## Touche d'interaction : borne ou arme murale d'abord (main.js : interact, 2 et 4), puis porte payante.
+func interact() -> void:
+	if over or not playing:
+		return
+	if WeaponShop.interact(self):
+		return
+	use_door()
 
 # ---------------------------------------------------------------- apparitions
 func _spawn_point() -> Vector3:
