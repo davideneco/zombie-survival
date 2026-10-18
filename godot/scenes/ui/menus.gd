@@ -367,6 +367,10 @@ https://opengameart.org/node/3609
 « Blaster Kit » de Kenney (www.kenney.nl), licence CC0 : pistolet à rayons.
 Barrett M82, M79 et arbalète : modèles construits pour le jeu (tools/build-weapons.py).
 
+[b]Zombies[/b]
+« Zombie Apocalypse Kit » par Quaternius : modèles et animations de zombies (normal, trapu, brute), CC0 d'après la page du pack au 18/10/2026 (assombris et salis pour le jeu).
+https://quaternius.com/packs/zombieapocalypsekit.html
+
 [b]Textures[/b]
 Textures PBR de Poly Haven, licence CC0 : https://polyhaven.com/license
 

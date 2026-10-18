@@ -14,6 +14,7 @@ extends Node3D
 ## (imprime l'état de la mémoire au titre puis quitte : tests).
 
 const ZombieView := preload("res://scenes/zombie_view.gd")
+const ZombieModelView := preload("res://scenes/zombie_model_view.gd")
 const ARENA := preload("res://scenes/world/arena.tscn")
 const WORLD := preload("res://scenes/world/world.tscn")
 const HUD := preload("res://scenes/ui/hud.tscn")
@@ -77,10 +78,19 @@ var _fps_gpu := 0.0
 var _fps_calls := 0.0
 var _fps_calls_max := 0
 var _fps_prims := 0.0
+var _fps_proc := 0.0             ## --fps : somme du temps de _process par image (moniteur TIME_PROCESS : toutes les vues, dont les zombies)
+var _fps_phys := 0.0
+var _fps_step_us := 0
+var _fps_steps := 0
 var _fps_n := 0
 var _no_hud := false            ## --no-hud : sans HUD ni menus (comparaisons de rendu avec le JS)
 var _open_all := false
 var _horde := 0
+var _zoo := 0.0                  ## --zoo=D : une rangée de chaque type de zombie (normal, coureur, boiteux, rampant, chevalier, pestiféré) à D m devant le joueur (captures)
+var _zoo_state := ""             ## --zoo-state=death|headless|hit|window|ground : état imposé aux zombies du zoo (à --zoo-at=S secondes de jeu pour death / headless / hit ; dès le départ pour window / ground)
+var _zoo_at := 0.5
+var _zoo_done := false
+var _horde_only := ""            ## --horde-only=normal|run|limp|crawl|armored|bloat : tous les zombies de --horde sont de ce type (captures)
 var _horde_near := false          ## --horde-near : les zombies de --horde sont à 3-5 m (gros plans)
 var _sync_flow := false
 var _tracers: Array = []         # [mesh, temps restant]
@@ -140,6 +150,18 @@ func _ready() -> void:
 			_horde = int(a.substr(8))
 		elif a == "--horde-near":
 			_horde_near = true
+		elif a.begins_with("--horde-only="):
+			_horde_only = a.substr(13)
+		elif a.begins_with("--zoo="):
+			_zoo = float(a.substr(6))
+		elif a.begins_with("--zoo-state="):
+			_zoo_state = a.substr(12)
+		elif a.begins_with("--zoo-at="):
+			_zoo_at = float(a.substr(9))
+		elif a == "--show-boxes":
+			ZombieModels.show_boxes = true
+		elif a == "--old-zombies":
+			ZombieModels.use_old = true
 		elif a == "--sync-flow":
 			_sync_flow = true
 		elif a.begins_with("--mount="):
@@ -299,6 +321,7 @@ func _unload_session() -> void:
 	for v in _views.values():
 		_drop(v)
 	_views.clear()
+	ZombieModels.clear_pool()
 	for t in _tracers:
 		_drop(t[0])
 	_tracers.clear()
@@ -364,6 +387,8 @@ func _new_game_state(data: Object, map: String) -> void:
 	Game.flow_threaded = not _sync_flow and Game.world != null
 	if _horde > 0:
 		_spawn_horde(_horde)
+	if _zoo > 0.0:
+		_spawn_zoo(_zoo)
 
 ## Caméra, ciel, effets, HUD, arme et nœud de la carte (la ville se construit ensuite : `build()`).
 func _build_scene_nodes(map: String) -> void:
@@ -387,6 +412,8 @@ func _build_scene_nodes(map: String) -> void:
 	_weapon_view.set_script(WeaponView)
 	add_child(_weapon_view)
 	_weapon_view.setup(_camera)
+	if not ZombieModels.use_old:
+		ZombieModels.warm()   # J16 : instances de zombies prêtes à l'avance (pas d'à-coup à la première apparition)
 	_hud_last = {"banner": "", "bar": {}, "mark": "", "fanal": -2.0, "fanal_text": ""}
 	_arena_node = (WORLD if Game.world != null else ARENA).instantiate()
 	add_child(_arena_node)
@@ -439,11 +466,95 @@ func _spawn_horde(n: int) -> void:
 		if p == Vector3.INF:
 			var a := TAU * i / n
 			p = Game.player.pos + Vector3(cos(a), 0, sin(a)) * (4.0 if _horde_near else 8.0)
-		var k: String = kinds[i % kinds.size()]
+		var k: String = kinds[i % kinds.size()] if _horde_only == "" else _horde_only
 		var spd := 1.8 + 0.15 * (i % 5)
 		if k == "run":
 			spd *= 1.5
-		Game.debug_spawn(p, spd, k == "crawl", k if k in ["armored", "bloat"] else "")
+		var zz := Game.debug_spawn(p, spd, k == "crawl", k if k in ["armored", "bloat"] else "")
+		if k == "limp":
+			zz.limp = true
+		elif k in ["normal", "run"]:
+			zz.limp = false
+			zz.runner = k == "run"
+
+## --zoo=D : les six types de zombies en arc à D m devant le joueur (identifiants fixes : mêmes zombies à chaque capture).
+func _spawn_zoo(d: float) -> void:
+	if _zoo_state == "window" and Game.world != null:
+		_zoo_windows(d)
+		return
+	print("zoo : joueur en ", Game.player.pos, " cap ", Game.player.yaw)
+	Game.director.intermission = 1.0e9
+	var kinds := ["normal", "run", "limp", "crawl", "armored", "bloat"]
+	var fwd := Vector3(-sin(Game.player.yaw), 0, -cos(Game.player.yaw))
+	var right := Vector3(cos(Game.player.yaw), 0, -sin(Game.player.yaw))
+	for i in kinds.size():
+		var p := Game.player.pos + fwd * d + right * (float(i) - 2.5) * d * 0.33
+		var k: String = kinds[i]
+		var zz := Game.debug_spawn(p, 3.4 if k == "run" else 1.5, k == "crawl", k if k in ["armored", "bloat"] else "")
+		zz.limp = k == "limp"
+		zz.runner = k == "run"
+		zz.walk_t = 0.0
+		if _zoo_state == "ground":
+			zz.start_ground_spawn(p, zz.yaw)
+		elif _zoo_state == "window" and Game.world != null:
+			var best := -1
+			var bd := INF
+			for wi in Game.world.window_count():
+				var used := false
+				for q in Game.zombies:
+					if q.spawn_window == wi:
+						used = true
+				var dd := Game.world.window_outside(wi).distance_to(Game.player.pos)
+				var wd := Game.world.window_outside(wi) - Game.player.pos
+				wd.y = 0.0
+				if not used and dd < bd and dd > 4.0 and wd.normalized().dot(fwd) > 0.8:
+					bd = dd
+					best = wi
+			if best >= 0:
+				var n := Game.world.window_normal(best)
+				zz.start_window_spawn(Game.world.window_inside(best), Game.world.window_outside(best), Game.world.window_center(best), n, atan2(n.x, n.y), best)
+
+## --zoo-state=window : le joueur se place à d m de la fenêtre la plus proche (face à elle) ; trois zombies (normal, coureur, armuré) sortent par la fenêtre et ses voisines.
+func _zoo_windows(d: float) -> void:
+	var near: Array = []
+	for wi in Game.world.window_count():
+		near.append([Game.world.window_outside(wi).distance_to(Game.player.pos), wi])
+	near.sort()
+	var first: int = near[0][1]
+	var o := Game.world.window_outside(first)
+	var n := Game.world.window_normal(first)
+	Game.player.pos = Vector3(o.x + n.x * d, 0.0, o.z + n.y * d)
+	Game.player.yaw = atan2(n.x, n.y)
+	Game.director.intermission = 1.0e9
+	var kinds := ["normal", "run", "armored"]
+	var k_i := 0
+	var cands: Array = []
+	for wi in Game.world.window_count():
+		cands.append([Game.world.window_outside(wi).distance_to(o), wi])
+	cands.sort()
+	for c in cands.slice(0, 3):
+		var wi: int = c[1]
+		var k: String = kinds[k_i]
+		k_i += 1
+		var zz := Game.debug_spawn(Game.world.window_inside(wi), 3.4 if k == "run" else 1.5, false, k if k == "armored" else "")
+		zz.runner = k == "run"
+		zz.limp = false
+		var wn := Game.world.window_normal(wi)
+		zz.start_window_spawn(Game.world.window_inside(wi), Game.world.window_outside(wi), Game.world.window_center(wi), wn, atan2(wn.x, wn.y), wi)
+
+## --zoo-state : death, headless, hit appliqués une fois, à --zoo-at secondes de jeu.
+func _zoo_apply() -> void:
+	if _zoo_state == "" or _zoo_done or Game.time < _zoo_at or _zoo_state in ["ground", "window"]:
+		return
+	_zoo_done = true
+	for z in Game.zombies:
+		match _zoo_state:
+			"death":
+				z.damage(1.0e9, false)
+			"headless":
+				z.damage(1.0e9, true)
+			"hit":
+				z.damage(1.0, false)
 
 ## --do= : actions de démonstration (captures, vidéos). perks : tous les atouts ; powerup:TYPE : un bonus devant le joueur ; money ; box / pap : achète
 ## à la machine la plus proche de la position ; to-box / to-pap / to-perk:ID : se place devant la machine ; down : à terre.
@@ -527,6 +638,9 @@ func _start_mounted() -> void:
 			r.try_mount(v, 0)
 			Game.player.yaw = v.yaw
 			return
+
+func _exit_tree() -> void:
+	ZombieModels.clear_pool()   # J16 : les instances de zombies du pool ne sont dans aucun arbre
 
 ## Perte de focus de la fenêtre en pleine partie : pause (le JS passe en pause quand le navigateur libère le pointeur ; la souris capturée de Godot est
 ## relâchée de la même façon). Ni pendant un menu, ni pour un pilote automatique.
@@ -621,6 +735,8 @@ func _physics_process(dt: float) -> void:
 	_pending.clear()
 	var t0 := Time.get_ticks_usec()
 	Game.step(dt, input)
+	_fps_step_us += Time.get_ticks_usec() - t0
+	_fps_steps += 1
 	if _soak != null:
 		_soak.after_step(Game, Time.get_ticks_usec() - t0)
 		if Game.round_number > _soak_rounds or Game.over:
@@ -734,6 +850,7 @@ func _session_process(dt: float) -> void:
 		if not _views[id].sim in Game.zombies:
 			_views[id].queue_free()
 			_views.erase(id)
+	_zoo_apply()
 	_quit_check()
 	_fps_step(dt)
 	# musique : intensité selon la manche (0,3 + 0,05 x manche), étouffée dans les menus et en pause (main.js updateMusicMood)
@@ -775,6 +892,10 @@ func _fps_step(dt: float) -> void:
 	_fps_calls += calls
 	_fps_calls_max = maxi(_fps_calls_max, calls)
 	_fps_prims += Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME)
+	if _fps_n == 0:
+		ZombieModels.view_us = 0   # remis à zéro au début de la mesure
+	_fps_proc += Performance.get_monitor(Performance.TIME_PROCESS)
+	_fps_phys += Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS)
 	_fps_n += 1
 	if _fps_t >= 3.0 + _fps_secs:
 		var sorted := _fps_frames.duplicate()
@@ -787,6 +908,8 @@ func _fps_step(dt: float) -> void:
 			int(Game.settings.get_value("quality")), get_viewport().get_visible_rect().size.x, get_viewport().get_visible_rect().size.y,
 			1.0 / (total / sorted.size()), 1.0 / p99, 1.0 / sorted[sorted.size() - 1], total / sorted.size() * 1000.0, _fps_gpu / _fps_n,
 			_fps_calls / _fps_n, _fps_calls_max, _fps_prims / _fps_n / 1000.0, _fps_n])
+		print("FPS+ : Game.step %.2f ms par pas (%d pas) ; TIME_PROCESS %.2f ms par image ; TIME_PHYSICS_PROCESS %.2f ms par image ; vues de zombies (_process) %.3f ms par image ; %d zombies" % [
+			_fps_step_us / float(maxi(1, _fps_steps)) / 1000.0, _fps_steps, _fps_proc / _fps_n * 1000.0, _fps_phys / _fps_n * 1000.0, ZombieModels.view_us / float(_fps_n) / 1000.0, Game.zombies.size()])
 		get_tree().quit()
 
 func _quit_check() -> void:
@@ -794,9 +917,13 @@ func _quit_check() -> void:
 		print("audio : %d sons lus, %d ignorés, %d voix reprises, %d voix créées ; musique niveau %d ; lus : %s" % [Sfx.stats["played"], Sfx.stats["skipped"], Sfx.stats["stolen"], Sfx.voice_count(), Sfx.music_level, Sfx.counts])
 		get_tree().quit()
 
+## J16 : les zombies ordinaires ont le modèle animé (Quaternius) ; boss, gargouilles et Ange gardent l'ancienne vue en primitives, ainsi que tous les zombies avec --old-zombies.
+func _uses_model_view(z: ZombieSim) -> bool:
+	return not ZombieModels.use_old and not (z is BossSim) and z.kind != "gargoyle"
+
 func _on_zombie_spawned(z: ZombieSim) -> void:
 	var v := Node3D.new()
-	v.set_script(AngelView if z is AngelSim else ZombieView)
+	v.set_script(AngelView if z is AngelSim else (ZombieModelView if _uses_model_view(z) else ZombieView))
 	add_child(v)
 	v.setup(z)
 	_views[z.id] = v
