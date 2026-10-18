@@ -20,7 +20,6 @@ var unstuck_count := 0
 
 ## Étiquette de la case de (x, z) : composante de la case libre la plus proche (à moins de 1 m), 0 = aucune.
 func label_at(nav: NavGrid, x: float, z: float) -> int:
-	var labels: PackedInt32Array = nav.components()["labels"]
 	var ix := nav.cx(x)
 	var iz := nav.cz(z)
 	var r := ceili(1.0 / nav.cell)
@@ -32,7 +31,7 @@ func label_at(nav: NavGrid, x: float, z: float) -> int:
 			var jz := iz + dz
 			if not nav.inside(jx, jz):
 				continue
-			var l := labels[nav.idx(jx, jz)]
+			var l := nav.label_of(nav.idx(jx, jz))
 			if l == 0:
 				continue
 			var d := float(dx * dx + dz * dz)
@@ -44,17 +43,8 @@ func label_at(nav: NavGrid, x: float, z: float) -> int:
 ## Composante principale : celle de la case de départ (sinon la plus grande).
 func main_label(world: World) -> int:
 	var nav := world.nav
-	var comp := nav.components()
-	var labels: PackedInt32Array = comp["labels"]
-	var sizes: Array = comp["sizes"]
-	var l := labels[nav.idx(nav.cx(world.start_pos.x), nav.cz(world.start_pos.z))]
-	if l != 0:
-		return l
-	var best := 1
-	for i in range(2, sizes.size()):
-		if int(sizes[i]) > int(sizes[best]):
-			best = i
-	return best
+	var l := nav.label_of(nav.idx(nav.cx(world.start_pos.x), nav.cz(world.start_pos.z)))
+	return l if l != 0 else nav.comp_largest()
 
 ## Case d'arrivée : libre, de la composante principale, zone ouverte, sans poussée de collision, la plus proche à moins de maxDist m.
 ## Renvoie { x, z, d, center? } ou {}.
@@ -62,7 +52,6 @@ func find_spot(world: World, x: float, z: float) -> Dictionary:
 	var nav := world.nav
 	var max_dist := float(Config.at("unstick.maxDist"))
 	var radius := float(Config.at("player.radius"))
-	var labels: PackedInt32Array = nav.components()["labels"]
 	var main := main_label(world)
 	var ix0 := nav.cx(x)
 	var iz0 := nav.cz(z)
@@ -76,7 +65,7 @@ func find_spot(world: World, x: float, z: float) -> Dictionary:
 					continue
 				var jx := ix0 + dx
 				var jz := iz0 + dz
-				if not nav.inside(jx, jz) or labels[nav.idx(jx, jz)] != main:
+				if not nav.inside(jx, jz) or nav.label_of(nav.idx(jx, jz)) != main:
 					continue
 				var wx := nav.world_x(jx)
 				var wz := nav.world_z(jz)
@@ -169,8 +158,7 @@ func step(g: Node, dt: float, input: Dictionary) -> void:
 		var main := main_label(g.world)
 		var l := main if g.rides != null and g.rides.on_tram != null else label_at(nav, p.pos.x, p.pos.z)
 		# seules les petites poches comptent : l'intérieur de la cathédrale, par exemple, forme de grandes composantes séparées de la ville
-		var sizes: Array = nav.components()["sizes"]
-		var small := l != main and (l == 0 or float(sizes[l]) * nav.cell * nav.cell < float(Config.at("unstick.pocketMaxArea")))
+		var small := l != main and (l == 0 or float(nav.comp_size(l)) * nav.cell * nav.cell < float(Config.at("unstick.pocketMaxArea")))
 		trap_t = trap_t + 0.5 if small else 0.0
 	stuck = t >= float(Config.at("unstick.stuckAfter")) or trap_t >= float(Config.at("unstick.trapAfter"))
 	if stuck and bool(input.get("unstick", false)):

@@ -111,6 +111,10 @@ var _finale_view: Node3D          # J10 : effets des boss, faisceau, Fanal (fina
 var _finale_arg := ""             # --finale=ETAT : saute dans la fin de partie (captures) : voir _debug_finale
 var _hud_last := {"banner": "", "bar": {}, "mark": "", "fanal": -2.0, "fanal_text": ""}
 var _do: PackedStringArray = []   # --do=a,b : actions de démonstration au lancement (perks, powerup:TYPE, weapon:ID[:PAP], box, pap, all-doors, money, down)
+var _door_probe := false          # --door-probe : achète une porte à 2 s et imprime les temps d'image qui suivent (v0.17.2)
+var _probe_log: Array[float] = []
+var _probe_state := 0
+var _probe_last := 0
 var _ruin := ""                   # --ruin=smoke|burn|wreck : abîme les motos (fumée, incendie, épave) pour les captures
 
 func _ready() -> void:
@@ -184,6 +188,8 @@ func _ready() -> void:
 			_do = a.substr(5).split(",")
 		elif a.begins_with("--ruin="):
 			_ruin = a.substr(7)
+		elif a == "--door-probe":
+			_door_probe = true
 		elif a == "--tram-in":
 			_tram_in = true
 		elif a == "--first-person":
@@ -815,6 +821,8 @@ func _find_button(n: Node, text: String) -> BaseButton:
 	return null
 
 func _session_process(dt: float) -> void:
+	if _door_probe:
+		_door_probe_tick(dt)
 	var f := Engine.get_physics_interpolation_fraction()
 	var p := Game.player
 	if p.eye_override != Vector3.INF or _prev_eye != Vector3.ZERO and Game.rides != null and Game.rides.cam.placed:
@@ -1144,3 +1152,35 @@ func _demo_hud() -> void:
 	_hud.popup("+100", "head")
 	_hud.popup("MUNITIONS MAX", "bonus")
 	_hud.show_hit(true)
+
+## --door-probe : à 2 s de jeu, se place devant la porte la plus proche du départ, achète (Game.use_door) et imprime les temps des images suivantes.
+func _door_probe_tick(dt: float) -> void:
+	if _probe_state == 0 and _real_t > 2.0:
+		var best := -1
+		var bd := INF
+		for d: Dictionary in Game.world.doors:
+			var pt: Array = d["points"][0]
+			var dist := Vector2(pt[0] - Game.world.start_pos.x, pt[1] - Game.world.start_pos.z).length()
+			if dist < bd:
+				bd = dist
+				best = int(d["id"])
+		var pt2: Array = Game.world.doors[best]["points"][0]
+		Game.player.pos = Vector3(pt2[0], 0.0, pt2[1])
+		Game.points = 100000
+		var t0 := Time.get_ticks_usec()
+		var got := Game.use_door()
+		print("PORTE %d : use_door %.2f ms (resultat %d)" % [best, (Time.get_ticks_usec() - t0) / 1000.0, got])
+		_probe_state = 1
+		_probe_last = Time.get_ticks_usec()
+		_probe_log.clear()
+	elif _probe_state == 1:
+		_probe_log.append((Time.get_ticks_usec() - _probe_last) / 1000.0)
+		_probe_last = Time.get_ticks_usec()
+		if _probe_log.size() >= 240:
+			var mx := 0.0
+			var sum := 0.0
+			for v in _probe_log:
+				mx = maxf(mx, v)
+				sum += v
+			print("PORTE : %d images apres l'achat, moyenne %.2f ms, pire %.2f ms, 5 premieres %s" % [_probe_log.size(), sum / _probe_log.size(), mx, _probe_log.slice(0, 5)])
+			get_tree().quit()

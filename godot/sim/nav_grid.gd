@@ -34,7 +34,11 @@ var _task := -1                       ## tâche du fil de travail (update_field_
 var _jd := 0
 var _jbi := 0
 var _pending := 0
-var _comp := {}
+var _labels := PackedInt32Array()       ## composantes : étiquette par case (0 = bloquée), vide tant que non calculées
+var _sizes: Array = []
+var _parent := PackedInt32Array()       ## union-find des composantes : étiquette -> étiquette parente (identité tant qu'aucune porte n'a fusionné)
+var _merged := false                    ## des composantes ont été fusionnées par free_cells() : `labels` brut n'est plus à jour (voir label_of)
+var _warm_task := -1
 var _vc_ortho := 40
 var _vc_diag := 56
 
@@ -120,7 +124,11 @@ func zone1_of(x: float, z: float) -> int:
 func invalidate() -> void:
 	last_key = ""
 	version += 1
-	_comp = {}
+	_wait_warm()
+	_labels = PackedInt32Array()
+	_sizes = []
+	_parent = PackedInt32Array()
+	_merged = false
 
 # ------------------------------------------------------------------ grille d'un étage (NavGrid.build du JS, sans polygones)
 ## Étage plat : cases praticables = plancher de la région, obstacles = ceux de cette hauteur (nav.walkable / nav.segFilter de levels.buildNavs).
@@ -218,11 +226,18 @@ func _mark(ax: float, az: float, bx: float, bz: float, r: float) -> void:
 ## Composantes connexes des cases libres (8 voisins, sans coin coupé) : { labels: PackedInt32Array (0 = case bloquée), sizes: [0, n1, n2…] }.
 ## Les cases enjambables (2) comptent comme bloquées, comme dans le JS. Mémorisées jusqu'au prochain invalidate().
 func components() -> Dictionary:
-	if not _comp.is_empty():
-		return _comp
+	_wait_warm()
+	if _merged:   # des portes ont fusionné des composantes : tableau brut périmé, on refait (outils et tests ; le jeu passe par label_of)
+		_labels = PackedInt32Array()
+		_merged = false
+	if _labels.is_empty():
+		_compute_components()
+	return {"labels": _labels, "sizes": _sizes}
+
+func _compute_components() -> void:
 	var labels := PackedInt32Array()
 	labels.resize(nx * nz)
-	var sizes: Array[int] = [0]
+	var sizes: Array = [0]
 	var stack := PackedInt32Array()
 	stack.resize(nx * nz)
 	var n_all := nx * nz
@@ -276,8 +291,111 @@ func components() -> Dictionary:
 				stack[sp] = j
 				sp += 1
 		sizes.append(n)
-	_comp = {"labels": labels, "sizes": sizes}
-	return _comp
+	_labels = labels
+	_sizes = sizes
+	_parent = PackedInt32Array()
+	_parent.resize(sizes.size())
+	for i in sizes.size():
+		_parent[i] = i
+
+## Calcule les composantes sur un fil de travail (au chargement de la partie) : le premier appel de components() / label_of() attend la fin.
+func warm_components() -> void:
+	if _warm_task < 0 and _labels.is_empty():
+		_warm_task = WorkerThreadPool.add_task(_compute_components)
+
+func _wait_warm() -> void:
+	if _warm_task >= 0:
+		var t := _warm_task
+		_warm_task = -1
+		WorkerThreadPool.wait_for_task_completion(t)
+
+func _find(l: int) -> int:
+	var r := l
+	while _parent[r] != r:
+		r = _parent[r]
+	while _parent[l] != r:
+		var up := _parent[l]
+		_parent[l] = r
+		l = up
+	return r
+
+## Composante de la case i (0 = bloquée) : racine de l'union-find, à jour après les portes. Remplace components()["labels"][i] dans le jeu.
+func label_of(i: int) -> int:
+	_wait_warm()
+	if _labels.is_empty():
+		_compute_components()
+	var l := _labels[i]
+	return _find(l) if _merged and l != 0 else l
+
+## Taille (en cases) de la composante `l` (étiquette rendue par label_of).
+func comp_size(l: int) -> int:
+	label_of(0)
+	return int(_sizes[_find(l) if _merged else l])
+
+## Plus grande composante (étiquette racine).
+func comp_largest() -> int:
+	label_of(0)
+	var best := 1
+	for i in range(1, _sizes.size()):
+		if (not _merged or _parent[i] == i) and int(_sizes[i]) > int(_sizes[best]):
+			best = i
+	return best
+
+func _joined(u: int, v: int, dx: int, dz: int) -> bool:
+	if blocked[u] != 0 or blocked[v] != 0:
+		return false
+	return dx == 0 or dz == 0 or (blocked[u + dx] == 0 and blocked[u + dz * nx] == 0)
+
+## Libère des cases (porte ouverte) et met les composantes à jour LOCALEMENT, sans tout recalculer (le calcul complet coûtait ~1,5 s) :
+## chaque case libérée reçoit une étiquette neuve, puis on fusionne (union-find) avec ses voisines tant que l'arête est permise, y compris
+## les diagonales dont une case orthogonale vient d'être libérée. Résultat équivalent à un recalcul complet (aux numéros d'étiquette près).
+func free_cells(cells: Array) -> void:
+	_wait_warm()
+	var freed: Array[int] = []
+	for c: int in cells:
+		if blocked[c] != 0:
+			blocked[c] = 0
+			freed.append(c)
+	last_key = ""
+	version += 1
+	if _labels.is_empty() or freed.is_empty():
+		return
+	for c in freed:
+		_labels[c] = _sizes.size()
+		_parent.append(_sizes.size())
+		_sizes.append(1)
+	var seen := {}
+	for f in freed:
+		var fx := f % nx
+		var fz := f / nx
+		for uz in range(maxi(fz - 1, 1), mini(fz + 2, nz - 1)):
+			for ux in range(maxi(fx - 1, 1), mini(fx + 2, nx - 1)):
+				var u := uz * nx + ux
+				if blocked[u] != 0 or seen.has(u):
+					continue
+				seen[u] = true
+				for dz in range(-1, 2):
+					for dx in range(-1, 2):
+						if dx == 0 and dz == 0:
+							continue
+						var v := u + dz * nx + dx
+						if not _joined(u, v, dx, dz):
+							continue
+						var lu := _labels[u]
+						var lv := _labels[v]
+						if lu == lv:
+							continue
+						var ra := _find(lu)
+						var rb := _find(lv)
+						if ra == rb:
+							continue
+						if int(_sizes[ra]) < int(_sizes[rb]):
+							var tmp := ra
+							ra = rb
+							rb = tmp
+						_parent[rb] = ra
+						_sizes[ra] = int(_sizes[ra]) + int(_sizes[rb])
+	_merged = true
 
 # ------------------------------------------------------------------ cases
 ## Case libre la plus proche (spirale, comme nav.js) : indice de case, -1 si aucune.

@@ -164,6 +164,8 @@ func new_game(seed_value: int = -1, map: String = "", weapons: Array = [], prelo
 	env.zombies = zombies
 	env.collision = collision
 	env.nav = world.nav if world != null else null
+	if world != null:
+		world.nav.warm_components()   # composantes connexes (« se débloquer ») calculées en arrière-plan, pas au premier contrôle de poche
 	env.levels = world.levels if world != null and not world.levels.links.is_empty() else null
 	env.rng = rng
 	env.rides = rides

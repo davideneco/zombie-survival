@@ -209,9 +209,7 @@ func open_door(id: int) -> bool:
 	d["name"] = zone_names[int(d["opens"])]
 	for k: float in d["segs"]:
 		seg_list[int(k)]["off"] = true
-	for c in d["cells"]:
-		nav.blocked[c] = 0
-	nav.invalidate()
+	nav.free_cells(d["cells"])   # libère les cases et met les composantes à jour localement (pas de recalcul complet)
 	zone_open[int(d["a"])] = 1
 	zone_open[int(d["b"])] = 1
 	return true

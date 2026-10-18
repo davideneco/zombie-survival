@@ -295,8 +295,8 @@ func _stuck_scan(t: Node) -> void:
 	_new()
 	var w := Game.world
 	var nav := w.nav
+	var comp := nav.components()   # avant main_label : après des portes, components() refait la numérotation
 	var main := Game.unstick.main_label(w)
-	var comp := nav.components()
 	var labels: PackedInt32Array = comp["labels"]
 	var sizes: Array = comp["sizes"]
 	t.check(main > 0 and int(sizes[main]) > 500000, "stuck-scan : composante principale de %d cases" % int(sizes[main]))
