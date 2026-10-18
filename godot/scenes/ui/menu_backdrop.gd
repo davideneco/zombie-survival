@@ -87,7 +87,7 @@ func _rebuild() -> void:
 	for i in 150:
 		_star_pts.append(Vector2(rng.randf() * _w, rng.randf() * _h * 0.62))
 		_star_ph.append(rng.randf() * TAU)
-	_stars.draw.connect(_draw_stars)
+	_stars.draw.connect(_draw_stars.bind(_stars))
 	_stars.queue_redraw()
 	# lune : halo (dégradé radial) + disque + quelques cratères
 	_moon = Node2D.new()
@@ -122,7 +122,7 @@ func _rebuild() -> void:
 	# fenêtres allumées sur le plan du milieu
 	_windows = Node2D.new()
 	_layers[1].add_child(_windows)
-	_windows.draw.connect(_draw_windows)
+	_windows.draw.connect(_draw_windows.bind(_windows))
 	_windows.queue_redraw()
 	_fogs.append(_fog(horizon + _h * 0.12, 0.34))
 	# braises
@@ -226,16 +226,17 @@ func _skyline(rng: RandomNumberGenerator, li: int, base_y: float) -> PackedVecto
 	pts.append(Vector2(x, _h + 40.0))
 	return pts
 
-func _draw_stars() -> void:
+# `canvas` : le nœud qui émet « draw » (après un _rebuild, l'ancien nœud peut encore émettre : il ne faut pas dessiner sur le nouveau)
+func _draw_stars(canvas: CanvasItem) -> void:
 	for i in _star_pts.size():
 		var s := 1.0 + float(i % 7 == 0)
-		_stars.draw_rect(Rect2(_star_pts[i], Vector2(s, s)), Color(0.85, 0.9, 1.0, 0.35 + 0.45 * fmod(_star_ph[i], 1.0)))
+		canvas.draw_rect(Rect2(_star_pts[i], Vector2(s, s)), Color(0.85, 0.9, 1.0, 0.35 + 0.45 * fmod(_star_ph[i], 1.0)))
 
-func _draw_windows() -> void:
+func _draw_windows(canvas: CanvasItem) -> void:
 	for w: Array in _win_pts:
 		if float(w[2]) < 0.55:
 			continue
-		_windows.draw_rect(Rect2(float(w[0]) - 3.0, float(w[1]), 5.0, 7.0), Color(1.0, 0.72, 0.3, 0.55 + 0.35 * float(w[2])))
+		canvas.draw_rect(Rect2(float(w[0]) - 3.0, float(w[1]), 5.0, 7.0), Color(1.0, 0.72, 0.3, 0.55 + 0.35 * float(w[2])))
 
 func _process(dt: float) -> void:
 	if not is_equal_approx(size.x, _w) or not is_equal_approx(size.y, _h):
