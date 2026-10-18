@@ -505,7 +505,7 @@ Prix d'une porte : le plus cher des deux prix de zone (colonne « Prix de la por
 | Portes de zone | feu rouge | une porte fermée qui coupe une voie est un heurtoir signalé par un feu (vert une fois ouverte) | la rame freine d'elle-même à 15 m ; l'ouvrir libère le tronçon |
 | Rendu | rails : 1 appel (InstancedMesh) | quais + heurtoirs + mâts : 1 appel ; poteaux : 1 appel ; fils + feux : 1 appel | 12 m entre deux poteaux, côtés alternés |
 
-## Tram : la rame conduisible (une seule, garée au quai « Homme de Fer » de la ligne B / C / F ; les rames de décor ne roulent pas)
+## Tram : la rame conduisible (une seule, garée au quai « Homme de Fer » de la ligne B / C / F)
 
 | Réglage | Valeur | Remarque |
 |---|---|---|
@@ -550,7 +550,7 @@ Prix d'une porte : le plus cher des deux prix de zone (colonne « Prix de la por
 | Sorties de chaque bras | tout droit, ou le raccord de ce bras | les deux autres virages (plus de 100°) sont impossibles : quai de l'Homme de Fer, rotonde |
 | Choix | B (conducteur assis) : tout droit / dévié | réglage unique pour toute l'équipe, effectif tant que le nez est à plus de 3 m du point de divergence (verrouillé ensuite) ; une rame entièrement sur un bras prend la voie choisie, sans saut |
 | Indications | à l'écran : « AIGUILLAGE > TOUT DROIT / DÉVIÉ : direction », verrou et distance ; sur la voie : un signal à trois feux par bras | feu ambre fixe, feu blanc en haut au centre (tout droit) ou du côté du virage (dévié) ; raccords gris sur la carte |
-| Itinéraires | chaque virage est une voie complète (ligne d'arrivée, arc, ligne de départ) qui suit exactement les lignes hors de l'arc | la rame change de voie par reprojection de son centre (même géométrie) ; portes de zone et rames de décor sont des butées sur chaque voie |
+| Itinéraires | chaque virage est une voie complète (ligne d'arrivée, arc, ligne de départ) qui suit exactement les lignes hors de l'arc | la rame change de voie par reprojection de son centre (même géométrie) ; portes de zone sont des butées sur chaque voie |
 | Réseau | t_state : k (voie) et sw (réglage) ; instantané des arrivants : idem | chaque machine suit la voie du conducteur sans saut visuel |
 | Quai de l'Homme de Fer | déplacé de 13 m vers l'ouest et raccourci (22 m) pour laisser la place au raccord | la rame y est garée, le nez à 8 m du point de divergence |
 

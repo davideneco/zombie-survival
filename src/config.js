@@ -472,7 +472,7 @@ export const CONFIG = {
     // début de la ligne, 1 vers la fin), modules } cherchées à moins de maxReach m du point de la ligne le plus proche de la rotonde
     hdf: {
       colPhase: 10, columnGap: 1.2, ad: 64,
-      decor: [{ line: 'AD', side: -1, modules: [7, 3] }, { line: 'AD', side: 1, modules: [7, 3] }],
+      decor: [],   // v0.47.2 : plus de rame de décor (elle bloquait la voie) ; la seule rame est la rame conduisible
     },
     // ---- rame conduisible (v0.39.0) : une seule, garée au quai « Homme de Fer » de la ligne B / C / F ; les rames de décor ne roulent pas
     // car : 5 modules de `module` m (23,5 m en tout), cabine à chaque bout, `doors` portes de `doorWidth` m par côté, sièges : 2 de conducteur (un par
