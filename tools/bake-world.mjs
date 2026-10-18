@@ -13,6 +13,7 @@ import path from 'path';
 import zlib from 'zlib';
 import { fileURLToPath } from 'url';
 import WebSocket from 'ws';
+import { installNoDecor, CHECK_NO_DECOR } from './bake-nodecor.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const URL = process.argv[2] || 'http://localhost:5173/?debug';
@@ -36,11 +37,14 @@ const evaluate = async (expr) => { const r = await call('Runtime.evaluate', { ex
 const done = (code) => { try { chrome.kill(); } catch {} process.exit(code); };
 try {
   await call('Runtime.enable');
+  // v0.17.0 : sans les rames de décor (une seule rame : la conduisible) ; NODECOR=0 pour refaire la cuisson d'origine
+  const patched = process.env.NODECOR === '0' ? null : await installNoDecor(ws, call);
   await call('Page.navigate', { url: URL });
   let ready = false;
   for (let i = 0; i < 200 && !ready; i++) { await sleep(1000); ready = (await evaluate('typeof window.game')) === 'object'; }
   if (!ready) throw new Error(`Le jeu ne s'est pas chargé sur ${URL} (npm run dev lancé ?)`);
   await sleep(1500);
+  if (patched) { const c = await evaluate(CHECK_NO_DECOR); if (patched() < 1 || c.decor !== 0 || c.trams !== 0) throw new Error('rames de décor encore présentes : ' + JSON.stringify(c)); console.log('rames de décor neutralisées :', JSON.stringify(c)); }
   console.log('jeu chargé, cuisson dans la page…');
   const t0 = Date.now();
   const summary = await evaluate(fs.readFileSync(path.join(ROOT, 'tools/bake-world.page.js'), 'utf8'));

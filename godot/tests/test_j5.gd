@@ -31,6 +31,7 @@ func run(t: Node) -> void:
 	_game_damage(t)
 	_game_pump(t)
 	_game_tram(t)
+	_single_tram(t)
 
 static func _num(v: Variant, d: float) -> float:
 	return d if v == null else float(v)
@@ -664,3 +665,47 @@ func _game_tram(t: Node) -> void:
 	r.tram_walk_off()
 	_steps(5, IDLE)
 	t.check(tr.state == "ok" and tr.hp == tr.max_hp() and absf(tr.s - tr.start_s) < 1e-9, "retour au dépôt : PV pleins, abscisse de départ")
+
+# ------------------------------------------------------------------ une seule rame (v0.17.0)
+## Les rames de décor de la place de l'Homme de Fer (JS : CONFIG.tram.hdf.decor) ne sont plus cuites : la rame conduisible est la seule, et aucun obstacle
+## fixe ne reste sur ses voies (ni dans la collision, ni comme butée de `ahead`).
+func _single_tram(t: Node) -> void:
+	var vj: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("res://data/world/vehicles.json"))
+	t.check((vj["tram"]["decor"] as Array).is_empty(), "vehicles.json : aucune rame de décor cuite")
+	t.check((vj["tram"]["signals"] as Array).size() == 4, "vehicles.json : les 4 têtes de signaux d'aiguillage sont là")
+	var r := _new_game(23)
+	t.check(r.trams.size() == 1, "une seule rame dans la partie (%d)" % r.trams.size())
+	var gates := 0
+	for tid: String in r.gates_by:
+		for gt: Dictionary in r.gates_by[tid]:
+			gates += 1
+			t.check(not bool(gt.get("decor", false)), "voie %s : aucune butée de rame de décor (s %.1f)" % [tid, float(gt["s"])])
+	t.check(gates > 0, "les portes de zone sur les voies sont toujours là (%d)" % gates)
+	# l'ancienne rame de décor (ligne AD, 14,1 m centrée en (-281,3 ; -184,1)) : plus de caisse dans la collision (3 boîtes de 4,4 x 2,4 m avant)
+	var col: Collision = Game.world.collision
+	var cx := -281.3157
+	var cz := -184.0752
+	var hit := col.ray_hit(cx, 1.0, cz + 9.0, 0.0, 0.0, -1.0, 18.0)
+	t.check(hit >= 18.0 - 1e-6, "ancien emplacement de la rame de décor : rayon libre sur 18 m (%.2f)" % hit)
+	# rouler sur la ligne, toutes les portes de zone ouvertes : aucun obstacle fixe devant la rame, jusqu'au heurtoir
+	for i in Game.world.doors.size():
+		Game.world.open_door(i)
+	var tr: TramSim = r.trams[0]
+	r.tram_powered = true
+	var nose: Dictionary = tr.mods[tr.n - 1]
+	Game.player.pos = Vector3(nose["x"] + nose["tx"] * (tr.M / 2.0 + 1.0), 0.0, nose["z"] + nose["tz"] * (tr.M / 2.0 + 1.0))
+	Game.interact()
+	t.check(r.driving(), "(une seule rame) conducteur de la rame")
+	var s0 := tr.s
+	var vmax := 0.0
+	var obstacles := 0
+	var kinds := {}
+	for _i in 60 * 70:
+		Game.step(DT, FWD)
+		var a := tr.ahead(1.0, Game)
+		kinds[a["kind"]] = true
+		if a["kind"] == "obstacle":
+			obstacles += 1
+		vmax = maxf(vmax, tr.v)
+	t.check(obstacles == 0 and not kinds.has("gate"), "aucun obstacle ni porte fermée devant la rame sur tout le trajet (%s)" % str(kinds.keys()))
+	t.check(tr.s > s0 + 120.0 and vmax > 5.0, "la rame roule sans se heurter à rien (s %.1f -> %.1f, vmax %.1f m/s)" % [s0, tr.s, vmax])
