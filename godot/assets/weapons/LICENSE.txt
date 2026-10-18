@@ -1,4 +1,13 @@
 Ultimate Gun Pack (July 2019) by Quaternius
 License: CC0 1.0 Universal (public domain dedication) - https://creativecommons.org/publicdomain/zero/1.0/
 Source: https://opengameart.org/content/low-poly-guns-pack  (also https://quaternius.com)
-Only the OBJ/MTL files used by the game are copied here (see godot/data/weapon_models.json).
+Only the OBJ/MTL files used by the game are copied here (see godot/data/weapon_models.json). Quaternius models: 15 weapons + Bipod + Tripod.
+
+Various Small Arms by Tabasco - https://opengameart.org/node/3609
+License: CC-BY 3.0 - https://creativecommons.org/licenses/by/3.0/ (attribution required: "Tabasco")
+Used: ak47, m4, dragunov, m1911 (Tabasco_*.obj/.mtl): re-oriented, flat-shaded and re-coloured with tools/build-weapons.py (changes made).
+
+Blaster Kit 2.1 by Kenney (www.kenney.nl) - https://kenney-assets.itch.io/blaster-kit
+License: CC0 1.0 Universal. Used: blaster-r (Kenney_Raygun.obj/.mtl), palette baked into plain materials.
+
+Barrett.obj, M79.obj, Crossbow.obj: built for this project by tools/build-weapons.py (Blender script, primitives). No external source.

@@ -1,17 +1,11 @@
 extends Node3D
-## Présentation des armes (J4) : arme à la première personne (modèles Quaternius de data/weapon_models.json, primitives pour les armes sans modèle), obus et grenades en vol, flash des explosions, coup de couteau. Ne fait que lire Game.arms.
+## Présentation des armes (J4) : arme à la première personne (modèles de data/weapon_models.json, avec la position à la hanche et en visée de chacun), obus et grenades en vol, flash des explosions, coup de couteau. Ne fait que lire Game.arms.
 
 const WeaponModels := preload("res://scenes/weapon_models.gd")
 
+const VIEW_LIGHT := 1.0
 const EXPLOSION_TIME := 0.45
 const KICK_DECAY := 9.0
-const HIP_POS := Vector3(0.22, -0.2, -0.45)
-const ADS_POS := Vector3(0.0, -0.12, -0.35)
-## longueur (m) et épaisseur du corps de l'arme par catégorie
-const BODY := {
-	"pistol": Vector3(0.05, 0.09, 0.28), "ar": Vector3(0.06, 0.1, 0.62), "smg": Vector3(0.055, 0.1, 0.42), "mg": Vector3(0.08, 0.12, 0.78),
-	"sniper": Vector3(0.06, 0.1, 0.95), "shotgun": Vector3(0.06, 0.09, 0.8), "special": Vector3(0.07, 0.11, 0.55),
-}
 
 var hide_gun := false           ## J5 : arme de la vue cachée (on conduit, ou la caméra regarde de l'extérieur d'un véhicule)
 var _cam: Camera3D
@@ -108,43 +102,24 @@ func _build_gun() -> void:
 	if _gun != null:
 		_gun.queue_free()
 	var w: WeaponState = Game.arms.current
-	var cat := String(w.cfg.get("cat", "pistol"))
 	var lvl: Variant = Pap.level(w.pap)
-	if WeaponModels.has_model(w.id):   # J13 : vrai modèle (table data/weapon_models.json)
-		_gun = WeaponModels.build(w.id, Config.color(int(lvl["color"])) if lvl != null else null)
-		_build_flash(_gun, WeaponModels.muzzle(w.id))
-		_cam.add_child(_gun)
-		_gun_id = w.id
-		_gun_pap = w.pap
-		return
-	var size: Vector3 = BODY.get(cat, BODY["pistol"])
-	_gun = Node3D.new()
-	var body := MeshInstance3D.new()
-	var bm := BoxMesh.new()
-	bm.size = size
-	body.mesh = bm
-	body.position = Vector3(0, 0, -size.z / 2.0)
-	var mat := StandardMaterial3D.new()
-	mat.albedo_color = Color("30343a")
-	mat.metallic = 0.6
-	mat.roughness = 0.45
-	if lvl != null:   # reflet du Pack-a-Punch
-		mat.emission_enabled = true
-		mat.emission = Config.color(int(lvl["color"]))
-		mat.emission_energy_multiplier = 0.35
-	body.material_override = mat
-	_gun.add_child(body)
-	var grip := MeshInstance3D.new()
-	var gm := BoxMesh.new()
-	gm.size = Vector3(size.x * 0.9, size.y * 1.4, size.x * 1.4)
-	grip.mesh = gm
-	grip.position = Vector3(0, -size.y * 0.9, -size.z * 0.15)
-	grip.material_override = mat
-	_gun.add_child(grip)
-	_build_flash(_gun, Vector3(0, 0.015, -size.z))
+	_gun = WeaponModels.build(w.id, Config.color(int(lvl["color"])) if lvl != null else null)   # table data/weapon_models.json
+	_build_flash(_gun, WeaponModels.muzzle(w.id))
+	_build_view_light(_gun)
 	_cam.add_child(_gun)
 	_gun_id = w.id
 	_gun_pap = w.pap
+
+## J15 : lumière de vue (couche des armes seulement : elle n'éclaire ni le monde ni les zombies) pour que le modèle reste lisible la nuit.
+## Directionnelle (éclairage égal à toute distance, pas de tache près de la caméra), douce et chaude, sans reflet appuyé.
+func _build_view_light(parent: Node3D) -> void:
+	var l := DirectionalLight3D.new()
+	l.light_cull_mask = WeaponModels.VIEW_LAYER
+	l.light_color = Color(1.0, 0.95, 0.88)
+	l.light_energy = VIEW_LIGHT
+	l.shadow_enabled = false
+	l.rotation = Vector3(deg_to_rad(-55.0), deg_to_rad(25.0), 0.0)
+	parent.add_child(l)
 
 func _process(dt: float) -> void:
 	if Game.arms == null or _cam == null:
@@ -159,7 +134,7 @@ func _process(dt: float) -> void:
 		if _flash_t <= 0.0 and _flash != null:
 			_flash.visible = false
 			_flash_light.visible = false
-	var pos := HIP_POS.lerp(ADS_POS, arms.aim)
+	var pos := WeaponModels.hip(w.id).lerp(WeaponModels.ads(w.id), arms.aim)
 	pos.z += _kick * 0.04
 	var reload_dip := 0.0
 	if w.reloading:

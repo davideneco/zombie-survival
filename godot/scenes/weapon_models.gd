@@ -1,10 +1,12 @@
 extends RefCounted
-## J13 : modèles d'armes du « Ultimate Gun Pack » de Quaternius (CC0), table dans data/weapon_models.json. Les armes absentes de la table
-## (Barrett, M79, arbalète, pistolet à rayons) gardent les primitives de weapon_view.gd.
+## J13 / J15 : modèles d'armes (Quaternius CC0, Tabasco CC-BY 3.0, Kenney CC0, ou construits par tools/build-weapons.py), table dans
+## data/weapon_models.json : une entrée par arme de la config (plus aucune primitive). Chaque entrée donne aussi la position de la vue
+## à la hanche (hip) et en visée (ads : mire sur le réticule, au centre de l'écran) et la hauteur de mire (sight).
 ## Repère des modèles : canon vers +X, haut +Y. Repère de l'arme dans la vue : origine à la poignée, canon vers -Z, ligne de canon à y = 0.
 
 const TABLE_PATH := "res://data/weapon_models.json"
 const DIR := "res://assets/weapons/"
+const VIEW_LAYER := 1 << 19
 const TURN := Basis(Vector3.UP, PI / 2.0)   ## +X (canon du modèle) -> -Z (devant la caméra)
 
 static var _table: Dictionary = {}
@@ -28,6 +30,14 @@ static func mesh_of(file: String) -> Mesh:
 static func scale_of(id: String) -> float:
 	var e: Dictionary = table()[id]
 	return float(e["length"]) / mesh_of(String(e["file"])).get_aabb().size.x
+
+static func hip(id: String) -> Vector3:
+	var a: Array = table()[id]["hip"]
+	return Vector3(float(a[0]), float(a[1]), float(a[2]))
+
+static func ads(id: String) -> Vector3:
+	var a: Array = table()[id]["ads"]
+	return Vector3(float(a[0]), float(a[1]), float(a[2]))
 
 ## Bouche dans le repère de l'arme (là où part l'éclair de bouche).
 static func muzzle(id: String) -> Vector3:
@@ -58,17 +68,21 @@ static func _instance(mesh: Mesh, pos: Vector3, s: float, tint: Variant) -> Mesh
 	mi.mesh = mesh
 	mi.basis = TURN.scaled(Vector3(s, s, s))
 	mi.position = pos
+	mi.layers = VIEW_LAYER   # couche propre à la vue d'arme : seules la lumière de vue (weapon_view.gd) et l'éclair de bouche l'éclairent (ni torche ni lampes du monde : taches blanches de près)
 	for i in mesh.get_surface_count():
 		var src := mesh.surface_get_material(i) as StandardMaterial3D
 		var m := StandardMaterial3D.new()
+		var base := Color.WHITE
 		if src != null:
-			m.albedo_color = src.albedo_color.linear_to_srgb()   # les couleurs du .mtl sont linéaires (Blender)
-		m.roughness = 0.6
-		m.metallic = 0.15
-		m.emission_enabled = true   # la nuit, le monde éclaire peu la vue : un peu d'émission garde la couleur lisible
+			base = src.albedo_color.linear_to_srgb()   # les couleurs du .mtl sont linéaires (Blender)
+		# un peu plus clair que le .mtl (les modèles sont très sombres), mat et peu métallique : pas d'effet de plastique
+		m.albedo_color = Color(base.r * 0.88 + 0.09, base.g * 0.88 + 0.09, base.b * 0.88 + 0.09)
+		m.roughness = 0.7
+		m.metallic = 0.1
+		m.emission_enabled = true   # la nuit, le monde éclaire peu la vue : une émission douce garde la couleur lisible
 		if tint != null:
 			m.emission = tint
-			m.emission_energy_multiplier = 0.04
+			m.emission_energy_multiplier = 0.05
 		else:
 			m.emission = m.albedo_color
 			m.emission_energy_multiplier = 0.3

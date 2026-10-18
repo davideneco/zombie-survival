@@ -52,6 +52,7 @@ var _hud_demo := false
 var _real_t := 0.0
 var _views: Dictionary = {}     # id de ZombieSim -> ZombieView
 var _prev_player := Vector3.ZERO
+var _hold_aim := false            # --hold-aim : visée maintenue (captures des armes en ADS)
 var _hold_fire := false           # --hold-fire : détente maintenue (capture de l'éclair de bouche)
 var _hold_unstick := false        # --hold-unstick : touche « se débloquer » maintenue (capture)
 var _hold_jump := false           # --hold-jump : Espace maintenu (capture de l'enjambement)
@@ -143,6 +144,8 @@ func _ready() -> void:
 			_sync_flow = true
 		elif a.begins_with("--mount="):
 			_mount = a.substr(8)
+		elif a == "--hold-aim":
+			_hold_aim = true
 		elif a == "--hold-fire":
 			_hold_fire = true
 		elif a == "--hold-unstick":
@@ -455,6 +458,8 @@ func _debug_do() -> void:
 				if c.size() > 2:
 					Game.arms.current.pap = int(c[2])
 					Game.arms.current.refresh(Game.arms.perks)
+			"reload":   # un rechargement au lancement (captures)
+				_pending["reload"] = true
 			"perks":
 				for id: String in Config.at("perks"):
 					Game.add_perk(id)
@@ -608,6 +613,8 @@ func _physics_process(dt: float) -> void:
 			input["jump"] = true
 		if _hold_unstick:
 			input["unstick"] = true
+		if _hold_aim:
+			input["aim"] = true
 		if _hold_fire:
 			input["fire"] = true
 		input.merge(_pending, true)

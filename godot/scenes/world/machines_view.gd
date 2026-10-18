@@ -3,7 +3,7 @@ extends Node3D
 ## cuit n'en contient plus), Pack-a-Punch (l'arme qui entre, les étincelles et l'arme proposée : la machine, elle, est dans le monde cuit) et bonus au sol
 ## (dodécaèdre lumineux, bidon d'essence). Les distributeurs d'atouts sont entièrement dans le monde cuit. Ne fait que lire Game.machines et Game.powerups.
 
-const WeaponView := preload("res://scenes/weapon_view.gd")
+const WeaponModels := preload("res://scenes/weapon_models.gd")
 const POWERUP_COLORS := {"max_ammo": 0x22ff66, "insta_kill": 0xff2222, "nuke": 0xffdd22, "double_points": 0xffaa00, "fuel": 0xb81208}
 const PAP_ANCHOR := Vector3(0, 1.0, 1.325)
 const PAP_SLOT := Vector3(0, 0.68, 0.55)       ## machineFx.js : l'arme entre en (z 0,55, y slotY + 0,1)
@@ -174,25 +174,24 @@ func _make_teddy() -> Node3D:
 	t.scale = Vector3.ONE * 1.6
 	return t
 
-## Silhouette d'arme (primitives par catégorie, comme la vue à la première personne), de couleur selon le niveau du Pack-a-Punch.
+## Arme affichée au-dessus de la boîte : le vrai modèle (WeaponModels), centré sur sa longueur, teinté selon le niveau du Pack-a-Punch.
 func _fill_gun(gun: Node3D, id: String, pap_lv: int) -> void:
 	for c in gun.get_children():
 		c.queue_free()
 	if id == "":
 		return
-	var cfg := Config.weapon(id)
-	var size: Vector3 = WeaponView.BODY.get(String(cfg.get("cat", "pistol")), WeaponView.BODY["pistol"])
-	var col := Color("30343a")
-	var em := 0.0
-	if pap_lv > 0:
-		col = Config.color(int(Config.pap_levels[pap_lv]["color"]))
-		em = 0.9
-	var m := _mat(col, em, 0.6, 0.45)
+	var tint: Variant = Config.color(int(Config.pap_levels[pap_lv]["color"])) if pap_lv > 0 else null
+	var model := WeaponModels.build(id, tint)
+	var e: Dictionary = WeaponModels.table()[id]
 	var k := 1.8
-	var body := _box(gun, size * k, m, Vector3(0, 0, 0))
-	body.rotation.y = PI / 2.0
-	var grip := _box(gun, Vector3(size.x, size.y * 1.4, size.x * 1.4) * k, m, Vector3(-size.z * k * 0.1, -size.y * k * 0.9, 0))
-	grip.rotation.y = PI / 2.0
+	model.scale = Vector3.ONE * k
+	model.rotation.y = PI / 2.0
+	model.position = Vector3(0, 0, 0)
+	var center := Node3D.new()
+	center.position = Vector3(0, 0, 0)
+	gun.add_child(center)
+	center.add_child(model)
+	model.position = Basis(Vector3.UP, PI / 2.0) * Vector3(0, 0, (float(e["length"]) / 2.0 - float(e["grip"])) * k)   # milieu du modèle à l'origine
 
 func _update_box(i: int, active: bool, dt: float) -> void:
 	var P: Dictionary = _box_parts[i]

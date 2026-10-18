@@ -29,6 +29,7 @@ const TONE_K := 1.0
 var camera: Camera3D
 var env: Environment
 var world_env: WorldEnvironment
+const WORLD_LIGHT_MASK := 0xFFFFF & ~(1 << 19)   ## toutes les couches sauf celle de la vue d'arme (WeaponModels.VIEW_LAYER)
 var moon: DirectionalLight3D
 var sky_mat: ShaderMaterial
 var arena := false
@@ -152,6 +153,7 @@ func _build_moon() -> void:
 	moon.directional_shadow_max_distance = 90.0
 	moon.shadow_bias = 0.04
 	moon.shadow_normal_bias = 1.2
+	moon.light_cull_mask = WORLD_LIGHT_MASK   # J15 : la vue d'arme a sa propre lumière (weapon_view.gd)
 	moon.shadow_blur = 1.2
 	add_child(moon)
 	moon.global_transform = Transform3D(Basis.looking_at(-MOON_OFFSET.normalized(), Vector3.UP), Vector3.ZERO)
@@ -168,6 +170,7 @@ func _build_torch() -> void:
 	torch.spot_angle_attenuation = 1.0 - 0.5 * float(T["penumbra"])
 	torch.light_energy = float(T["intensity"]) * THREE_TO_GODOT
 	torch.shadow_enabled = false
+	torch.light_cull_mask = WORLD_LIGHT_MASK
 	camera.add_child(torch)
 
 func set_torch(on: bool) -> void:

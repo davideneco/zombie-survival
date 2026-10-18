@@ -360,9 +360,12 @@ Godot Engine, licence MIT : https://godotengine.org
 Copyright (c) 2014-present Godot Engine contributors ; (c) 2007-2014 Juan Linietsky, Ariel Manzur.
 
 [b]Modèles d'armes[/b]
-« Ultimate Gun Pack » (juillet 2019) par Quaternius, licence CC0 1.0 (domaine public).
+« Ultimate Gun Pack » (juillet 2019) par Quaternius, licence CC0 1.0 (domaine public) : 15 armes.
 https://opengameart.org/content/low-poly-guns-pack  ·  https://quaternius.com
-Utilisé pour 19 des 23 armes ; les autres sont des modèles du jeu.
+« Various Small Arms » par Tabasco, licence CC-BY 3.0 (https://creativecommons.org/licenses/by/3.0/) : AK-47, M4A1, Dragunov SVD, Colt M1911 (couleurs retouchées).
+https://opengameart.org/node/3609
+« Blaster Kit » de Kenney (www.kenney.nl), licence CC0 : pistolet à rayons.
+Barrett M82, M79 et arbalète : modèles construits pour le jeu (tools/build-weapons.py).
 
 [b]Textures[/b]
 Textures PBR de Poly Haven, licence CC0 : https://polyhaven.com/license

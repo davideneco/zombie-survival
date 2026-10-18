@@ -1,144 +1,265 @@
 {
- "scale_note": "length = longueur du mod\u00e8le (m) ; muzzle_y = hauteur du canon dans le mod\u00e8le (unit\u00e9s du pack) ; offset = d\u00e9calage manuel (m) dans le rep\u00e8re de l'arme (x droite, y haut, z avant n\u00e9gatif) ; grip = distance (m) de l'arri\u00e8re du mod\u00e8le \u00e0 la poign\u00e9e, plac\u00e9e \u00e0 l'origine de l'arme",
+ "scale_note": "length = longueur du modèle (m) ; muzzle_y = hauteur du canon dans le modèle (unités du pack) ; offset = décalage manuel (m) dans le repère de l'arme (x droite, y haut, z avant négatif) ; grip = distance (m) de l'arrière du modèle à la poignée, placée à l'origine de l'arme",
  "models": {
   "m1911": {
-   "file": "Pistol_1.obj",
+   "file": "Tabasco_M1911.obj",
    "length": 0.24,
-   "muzzle_y": 0.575,
+   "muzzle_y": 1.898,
    "offset": [
-    0,
+    -0.0,
     0,
     0
    ],
    "accessories": [],
-   "grip": 0.048
+   "grip": 0.048,
+   "sight": 0.0244,
+   "hip": [
+    0.22,
+    -0.2,
+    -0.45
+   ],
+   "ads": [
+    0.0,
+    -0.0244,
+    -0.248
+   ]
   },
   "arex": {
    "file": "Pistol_6.obj",
    "length": 0.3,
    "muzzle_y": 0.581,
    "offset": [
-    0,
+    -0.0,
     0,
     0
    ],
    "accessories": [],
-   "grip": 0.06
+   "grip": 0.06,
+   "sight": 0.0212,
+   "hip": [
+    0.22,
+    -0.2,
+    -0.45
+   ],
+   "ads": [
+    0.0,
+    -0.0212,
+    -0.26
+   ]
   },
   "deagle": {
    "file": "Pistol_4.obj",
    "length": 0.28,
    "muzzle_y": 0.899,
    "offset": [
-    0,
+    -0.0,
     0,
     0
    ],
    "accessories": [],
-   "grip": 0.056
+   "grip": 0.056,
+   "sight": 0.0303,
+   "hip": [
+    0.22,
+    -0.2,
+    -0.45
+   ],
+   "ads": [
+    0.0,
+    -0.0303,
+    -0.256
+   ]
   },
   "magnum": {
    "file": "Revolver_3.obj",
    "length": 0.26,
    "muzzle_y": 0.448,
    "offset": [
-    0,
+    0.0,
     0,
     0
    ],
    "accessories": [],
-   "grip": 0.052
+   "grip": 0.052,
+   "sight": 0.0261,
+   "hip": [
+    0.22,
+    -0.2,
+    -0.45
+   ],
+   "ads": [
+    0.0,
+    -0.0261,
+    -0.252
+   ]
   },
   "rifle": {
-   "file": "AssaultRifle2_1.obj",
+   "file": "Tabasco_M4.obj",
    "length": 0.561,
-   "muzzle_y": 0.638,
+   "muzzle_y": 0.523,
    "offset": [
-    0,
+    -0.0,
     0,
     0
    ],
    "accessories": [],
-   "grip": 0.252
+   "grip": 0.252,
+   "sight": 0.0487,
+   "hip": [
+    0.22,
+    -0.2,
+    -0.45
+   ],
+   "ads": [
+    0.0,
+    -0.0487,
+    -0.452
+   ]
   },
   "ak47": {
-   "file": "AssaultRifle_2.obj",
+   "file": "Tabasco_AK47.obj",
    "length": 0.595,
-   "muzzle_y": 0.578,
+   "muzzle_y": 2.425,
    "offset": [
-    0,
+    -0.0,
     0,
     0
    ],
    "accessories": [],
-   "grip": 0.268
+   "grip": 0.268,
+   "sight": 0.0261,
+   "hip": [
+    0.22,
+    -0.2,
+    -0.45
+   ],
+   "ads": [
+    0.0,
+    -0.0261,
+    -0.468
+   ]
   },
   "famas": {
    "file": "Bullpup_2.obj",
    "length": 0.527,
    "muzzle_y": 0.787,
    "offset": [
-    0,
+    -0.0,
     0,
     0
    ],
    "accessories": [],
-   "grip": 0.237
+   "grip": 0.237,
+   "sight": 0.0429,
+   "hip": [
+    0.22,
+    -0.2,
+    -0.45
+   ],
+   "ads": [
+    0.0,
+    -0.0429,
+    -0.437
+   ]
   },
   "scar": {
    "file": "AssaultRifle2_2.obj",
    "length": 0.578,
    "muzzle_y": 0.65,
    "offset": [
-    0,
+    0.0001,
     0,
     0
    ],
    "accessories": [],
-   "grip": 0.26
+   "grip": 0.26,
+   "sight": 0.052,
+   "hip": [
+    0.22,
+    -0.2,
+    -0.45
+   ],
+   "ads": [
+    0.0,
+    -0.052,
+    -0.46
+   ]
   },
   "smg": {
    "file": "SubmachineGun_3.obj",
    "length": 0.357,
    "muzzle_y": 0.473,
    "offset": [
-    0,
+    -0.0,
     0,
     0
    ],
    "accessories": [],
-   "grip": 0.143
+   "grip": 0.143,
+   "sight": 0.0267,
+   "hip": [
+    0.22,
+    -0.2,
+    -0.45
+   ],
+   "ads": [
+    0.0,
+    -0.0267,
+    -0.343
+   ]
   },
   "mp5": {
    "file": "SubmachineGun_2.obj",
    "length": 0.374,
    "muzzle_y": 0.567,
    "offset": [
-    0,
+    -0.0,
     0,
     0
    ],
    "accessories": [],
-   "grip": 0.15
+   "grip": 0.15,
+   "sight": 0.0388,
+   "hip": [
+    0.22,
+    -0.2,
+    -0.45
+   ],
+   "ads": [
+    0.0,
+    -0.0388,
+    -0.35
+   ]
   },
   "p90": {
    "file": "SubmachineGun_4.obj",
    "length": 0.306,
    "muzzle_y": 0.51,
    "offset": [
-    0,
+    -0.0,
     0,
     0
    ],
    "accessories": [],
-   "grip": 0.122
+   "grip": 0.122,
+   "sight": 0.0401,
+   "hip": [
+    0.22,
+    -0.2,
+    -0.45
+   ],
+   "ads": [
+    0.0,
+    -0.0401,
+    -0.322
+   ]
   },
   "lmg": {
    "file": "AssaultRifle_5.obj",
    "length": 0.629,
    "muzzle_y": 0.598,
    "offset": [
-    0,
+    -0.0,
     0,
     0
    ],
@@ -150,14 +271,25 @@
      "scale": 0.7
     }
    ],
-   "grip": 0.283
+   "grip": 0.283,
+   "sight": 0.0327,
+   "hip": [
+    0.22,
+    -0.2,
+    -0.45
+   ],
+   "ads": [
+    0.0,
+    -0.0327,
+    -0.483
+   ]
   },
   "m249": {
    "file": "Bullpup_1.obj",
    "length": 0.697,
    "muzzle_y": 0.814,
    "offset": [
-    0,
+    -0.0,
     0,
     0
    ],
@@ -169,14 +301,25 @@
      "scale": 0.7
     }
    ],
-   "grip": 0.314
+   "grip": 0.314,
+   "sight": 0.0406,
+   "hip": [
+    0.22,
+    -0.2,
+    -0.45
+   ],
+   "ads": [
+    0.0,
+    -0.0406,
+    -0.514
+   ]
   },
   "mg42": {
    "file": "AssaultRifle_4.obj",
    "length": 0.68,
    "muzzle_y": 0.583,
    "offset": [
-    0,
+    -0.0,
     0,
     0
    ],
@@ -188,14 +331,25 @@
      "scale": 0.7
     }
    ],
-   "grip": 0.306
+   "grip": 0.306,
+   "sight": 0.0349,
+   "hip": [
+    0.22,
+    -0.2,
+    -0.45
+   ],
+   "ads": [
+    0.0,
+    -0.0349,
+    -0.506
+   ]
   },
   "pkm": {
    "file": "AssaultRifle_3.obj",
    "length": 0.663,
    "muzzle_y": 0.591,
    "offset": [
-    0,
+    -0.0,
     0,
     0
    ],
@@ -207,55 +361,202 @@
      "scale": 0.7
     }
    ],
-   "grip": 0.298
+   "grip": 0.298,
+   "sight": 0.0545,
+   "hip": [
+    0.22,
+    -0.2,
+    -0.45
+   ],
+   "ads": [
+    0.0,
+    -0.0545,
+    -0.498
+   ]
   },
   "sniper": {
    "file": "SniperRifle_3.obj",
    "length": 0.807,
    "muzzle_y": 0.403,
    "offset": [
-    0,
+    -0.0091,
     0,
     0
    ],
    "accessories": [],
-   "grip": 0.363
+   "grip": 0.363,
+   "sight": 0.0461,
+   "hip": [
+    0.22,
+    -0.2,
+    -0.45
+   ],
+   "ads": [
+    0.0,
+    -0.0461,
+    -0.563
+   ]
   },
   "svd": {
-   "file": "SniperRifle_4.obj",
+   "file": "Tabasco_Dragunov.obj",
    "length": 0.782,
-   "muzzle_y": 0.206,
+   "muzzle_y": 0.093,
    "offset": [
-    0,
+    -0.0,
     0,
     0
    ],
    "accessories": [],
-   "grip": 0.352
+   "grip": 0.352,
+   "sight": 0.0593,
+   "hip": [
+    0.22,
+    -0.2,
+    -0.45
+   ],
+   "ads": [
+    0.0,
+    -0.0593,
+    -0.552
+   ]
   },
   "shotgun": {
    "file": "Shotgun_2.obj",
    "length": 0.722,
    "muzzle_y": 0.217,
    "offset": [
-    0,
+    0.0,
     0,
     0
    ],
    "accessories": [],
-   "grip": 0.325
+   "grip": 0.325,
+   "sight": 0.0205,
+   "hip": [
+    0.22,
+    -0.2,
+    -0.45
+   ],
+   "ads": [
+    0.0,
+    -0.0205,
+    -0.525
+   ]
   },
   "saiga": {
    "file": "Shotgun_4.obj",
    "length": 0.68,
    "muzzle_y": 0.17,
    "offset": [
-    0,
+    -0.0,
     0,
     0
    ],
    "accessories": [],
-   "grip": 0.306
+   "grip": 0.306,
+   "sight": 0.0224,
+   "hip": [
+    0.22,
+    -0.2,
+    -0.45
+   ],
+   "ads": [
+    0.0,
+    -0.0224,
+    -0.506
+   ]
+  },
+  "raygun": {
+   "file": "Kenney_Raygun.obj",
+   "length": 0.3,
+   "muzzle_y": 0.09,
+   "offset": [
+    -0.0,
+    0,
+    0
+   ],
+   "accessories": [],
+   "grip": 0.07,
+   "sight": 0.0651,
+   "hip": [
+    0.22,
+    -0.2,
+    -0.45
+   ],
+   "ads": [
+    0.0,
+    -0.0651,
+    -0.27
+   ]
+  },
+  "barrett": {
+   "file": "Barrett.obj",
+   "length": 1.0,
+   "muzzle_y": -0.0,
+   "offset": [
+    -0.0,
+    0,
+    0
+   ],
+   "accessories": [],
+   "grip": 0.25,
+   "sight": 0.0961,
+   "hip": [
+    0.22,
+    -0.2,
+    -0.45
+   ],
+   "ads": [
+    0.0,
+    -0.0961,
+    -0.45
+   ]
+  },
+  "m79": {
+   "file": "M79.obj",
+   "length": 0.56,
+   "muzzle_y": -0.0,
+   "offset": [
+    -0.0,
+    0,
+    0
+   ],
+   "accessories": [],
+   "grip": 0.36,
+   "sight": 0.0485,
+   "hip": [
+    0.22,
+    -0.2,
+    -0.45
+   ],
+   "ads": [
+    0.0,
+    -0.0485,
+    -0.56
+   ]
+  },
+  "crossbow": {
+   "file": "Crossbow.obj",
+   "length": 0.56,
+   "muzzle_y": 0.05,
+   "offset": [
+    -0.0,
+    0,
+    0
+   ],
+   "accessories": [],
+   "grip": 0.22,
+   "sight": 0.0227,
+   "hip": [
+    0.22,
+    -0.2,
+    -0.45
+   ],
+   "ads": [
+    0.0,
+    -0.0227,
+    -0.42
+   ]
   }
  }
 }
