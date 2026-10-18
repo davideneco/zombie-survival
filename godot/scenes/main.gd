@@ -54,6 +54,7 @@ var _real_t := 0.0
 var _views: Dictionary = {}     # id de ZombieSim -> ZombieView
 var _prev_player := Vector3.ZERO
 var _hold_aim := false            # --hold-aim : visée maintenue (captures des armes en ADS)
+var _hold_fx := false             # --hold-fx : éclair de bouche et dernier traçant restent affichés (captures)
 var _hold_fire := false           # --hold-fire : détente maintenue (capture de l'éclair de bouche)
 var _hold_unstick := false        # --hold-unstick : touche « se débloquer » maintenue (capture)
 var _hold_jump := false           # --hold-jump : Espace maintenu (capture de l'enjambement)
@@ -94,6 +95,7 @@ var _horde_only := ""            ## --horde-only=normal|run|limp|crawl|armored|b
 var _horde_near := false          ## --horde-near : les zombies de --horde sont à 3-5 m (gros plans)
 var _sync_flow := false
 var _tracers: Array = []         # [mesh, temps restant]
+var _shot_queue: Array = []       # tirs de l'image, [origine, fin] : traçants créés après la mise à jour de la caméra
 var _pending: Dictionary = {}    # J4 : appuis (couteau, grenade, obus sous canon, arme, molette) lus au prochain pas de simulation
 var _weapon_view: Node3D
 var _rides_view: Node3D
@@ -174,6 +176,8 @@ func _ready() -> void:
 			_mount = a.substr(8)
 		elif a == "--hold-aim":
 			_hold_aim = true
+		elif a == "--hold-fx":
+			_hold_fx = true
 		elif a == "--hold-fire":
 			_hold_fire = true
 		elif a == "--hold-unstick":
@@ -339,6 +343,7 @@ func _unload_session() -> void:
 	for t in _tracers:
 		_drop(t[0])
 	_tracers.clear()
+	_shot_queue.clear()
 	for n in [_arena_node, _rides_view, _machines_view, _weapon_view, _finale_view, _fx, _graphics, _hud, _camera]:
 		_drop(n)
 	_arena_node = null
@@ -426,6 +431,8 @@ func _build_scene_nodes(map: String) -> void:
 	_weapon_view.set_script(WeaponView)
 	add_child(_weapon_view)
 	_weapon_view.setup(_camera)
+	_weapon_view.hold_fx = _hold_fx
+	_weapon_view.posed.connect(_flush_shots)
 	if not ZombieModels.use_old:
 		ZombieModels.warm()   # J16 : instances de zombies prêtes à l'avance (pas d'à-coup à la première apparition)
 	_hud_last = {"banner": "", "bar": {}, "mark": "", "fanal": -2.0, "fanal_text": ""}
@@ -952,23 +959,42 @@ func _on_zombie_spawned(z: ZombieSim) -> void:
 	v.setup(z)
 	_views[z.id] = v
 
+## Un tir : le traçant est créé après la mise à jour de la caméra et de l'arme de l'image (_flush_shots), pour partir de la VRAIE bouche du modèle.
 func _on_shot(origin: Vector3, end: Vector3) -> void:
+	_shot_queue.append([origin, end])
+
+func _flush_shots() -> void:
+	for sh: Array in _shot_queue:
+		_spawn_tracer(sh[0], sh[1])
+	_shot_queue.clear()
+
+## Traçant : de la bouche du modèle (même transformation que lui : pose de visée, recul, interpolation de la caméra) jusqu'au point touché ; l'éclair de bouche
+## est enfant du même modèle. Arme cachée (vue externe d'un véhicule) : point avancé de la caméra, comme avant.
+func _spawn_tracer(origin: Vector3, end: Vector3) -> void:
 	var len := origin.distance_to(end)
 	if len < 0.5:
 		return
+	var start := origin + (end - origin).normalized() * 0.8 + Vector3(0.12, -0.12, 0).rotated(Vector3.UP, Game.player.yaw)
+	if _weapon_view != null:
+		start = _weapon_view.tracer_start(start)
+	if start.distance_to(end) < 0.3:
+		return
 	var m := MeshInstance3D.new()
 	var b := BoxMesh.new()
-	b.size = Vector3(TRACER_WIDTH, TRACER_WIDTH, len)
+	b.size = Vector3(TRACER_WIDTH, TRACER_WIDTH, start.distance_to(end))
 	m.mesh = b
 	var mat := StandardMaterial3D.new()
 	mat.albedo_color = TRACER_COLOR
 	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	m.material_override = mat
 	add_child(m)
-	var start := origin + (end - origin).normalized() * 0.8 + Vector3(0.12, -0.12, 0).rotated(Vector3.UP, Game.player.yaw)   # part de la bouche de l'arme
 	m.global_position = (start + end) / 2.0
 	m.look_at(end, Vector3.UP)
-	_tracers.append([m, TRACER_TIME])
+	if _hold_fx:
+		for old in _tracers:
+			old[0].queue_free()
+		_tracers.clear()
+	_tracers.append([m, 1.0e9 if _hold_fx else TRACER_TIME])
 
 func _on_game_over() -> void:
 	_record_stats()

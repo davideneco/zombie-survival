@@ -14,7 +14,8 @@ const MELEE_RETRY := 0.1         ## chargeur et réserve vides : le clic mainten
 const GL_AIM_SPREAD := 0.4
 const SHELL_AIM_MAX := 40.0      ## player.js fireLauncher : on vise le point visé par la caméra (au plus 40 m devant)
 const SHELL_AIM_MIN := 2.0
-const MUZZLE := Vector3(0.12, -0.12, -0.8)   ## bouche de l'arme dans le repère de la caméra (le JS lit viewmodels.js : valeur unique ici)
+const MUZZLE := Vector3(0.12, -0.12, -0.8)   ## bouche de repli (arme sans modèle) dans le repère de la caméra ; voir muzzle_cam()
+const WeaponModels := preload("res://scenes/weapon_models.gd")
 
 var inventory: Array[WeaponState] = []
 var idx := 0
@@ -270,6 +271,14 @@ func shoot(g: Node, now: float) -> void:
 			blast.splash(g, end, float(bm["radius"]), float(cfg["damage"]) * float(bm["frac"]), int(bm["color"]))
 		g.shot_fired.emit(origin, end)
 
+## Bouche de l'arme tenue, dans le repère de la caméra (x droite, y haut, -z devant) : pose de la vue (hanche -> visée selon `aim`, comme weapon_view.gd)
+## plus la bouche du modèle (data/weapon_models.json). Le JS lit la bouche du vrai viewmodel (shotOrigin) : en visée l'arme est au centre, la bouche aussi.
+func muzzle_cam() -> Vector3:
+	var id := current.id
+	if not WeaponModels.has_model(id):
+		return MUZZLE
+	return WeaponModels.hip(id).lerp(WeaponModels.ads(id), aim) + WeaponModels.muzzle(id)
+
 ## Lance-grenades : un vrai projectile, qui part de la bouche et vise le point visé par la caméra (au plus 40 m devant) ;
 ## si le canon est plaqué contre un mur, il part de l'œil.
 func fire_launcher(g: Node, cfg: Dictionary, mul: float) -> void:
@@ -279,7 +288,8 @@ func fire_launcher(g: Node, cfg: Dictionary, mul: float) -> void:
 	var fwd := p.forward()
 	var right := Vector3(cos(p.yaw), 0, -sin(p.yaw))
 	var up := right.cross(fwd)
-	var origin := ro + right * MUZZLE.x + up * MUZZLE.y + fwd * -MUZZLE.z
+	var mz := muzzle_cam()
+	var origin := ro + right * mz.x + up * mz.y + fwd * -mz.z
 	var to_m := origin - ro
 	var len_m := to_m.length()
 	if len_m > 1e-4:

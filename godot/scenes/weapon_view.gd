@@ -7,6 +7,8 @@ const VIEW_LIGHT := 1.0
 const EXPLOSION_TIME := 0.45
 const KICK_DECAY := 9.0
 
+signal posed                    ## fin de _process : l'arme est à sa pose de l'image (la caméra est déjà à jour : main passe avant)
+var hold_fx := false            ## --hold-fx : l'éclair de bouche reste affiché (captures)
 var hide_gun := false           ## J5 : arme de la vue cachée (on conduit, ou la caméra regarde de l'extérieur d'un véhicule)
 var _cam: Camera3D
 var _gun: Node3D
@@ -60,6 +62,19 @@ func _on_shot(_o: Vector3, _e: Vector3) -> void:
 	_flash_light.light_energy = (40.0 if heavy else 25.0) / PI * 0.45   # Three.js : candelas / pi ; atténuée : la vue est déjà éclairée par le monde
 	_flash_light.visible = true
 	_flash_t = 0.045
+
+## Bouche de l'arme dans le monde (même transformation que le modèle : pose de visée, recul, caméra interpolée) ; Vector3.INF sans arme.
+func muzzle_world() -> Vector3:
+	if _gun == null or not is_instance_valid(_gun) or not _gun.is_inside_tree() or _gun_id == "":
+		return Vector3.INF
+	return _gun.to_global(WeaponModels.muzzle(_gun_id))
+
+## Départ du traçant : la bouche du modèle ; `fallback` si l'arme n'est pas montrée (vue externe d'un véhicule, Aube).
+func tracer_start(fallback: Vector3) -> Vector3:
+	if hide_gun:
+		return fallback
+	var m := muzzle_world()
+	return fallback if m == Vector3.INF else m
 
 func _build_flash(parent: Node3D, muzzle: Vector3) -> void:
 	if _flash_tex == null:
@@ -129,7 +144,7 @@ func _process(dt: float) -> void:
 	if w.id != _gun_id or w.pap != _gun_pap or _gun == null or not is_instance_valid(_gun):
 		_build_gun()
 	_kick = maxf(0.0, _kick - dt * KICK_DECAY)
-	if _flash_t > 0.0:
+	if _flash_t > 0.0 and not hold_fx:
 		_flash_t -= dt
 		if _flash_t <= 0.0 and _flash != null:
 			_flash.visible = false
@@ -149,6 +164,7 @@ func _process(dt: float) -> void:
 	_gun.rotation = Vector3(_kick * 0.06 + reload_dip * 0.5 + 0.5 * lo, 0, 0)
 	_gun.visible = not hide_gun and not (w.cfg.has("adsFov") and arms.aim > 0.8)
 	_update_knife(arms)
+	posed.emit()
 	_sync_projectiles(arms.blast.shells, _shells, 0.04, _shell_mat)
 	_sync_projectiles(arms.blast.nades, _nades, 0.06, _nade_mat)
 	for i in range(_booms.size() - 1, -1, -1):
