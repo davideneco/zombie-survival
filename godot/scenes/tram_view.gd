@@ -1,168 +1,224 @@
 extends Node3D
-## Rame de tram (primitives) : 5 modules articulés qui suivent la voie, caisse creuse (plancher, parois à baies vitrées, toit), huit vantaux de portes
-## qui coulissent, sièges de l'intérieur, pupitres de cabine, nez demi-ellipsoïdes aux deux bouts. Piloté par un TramSim : chaque module a sa pose
-## (x, z, cap) ; l'avant du modèle est vers -Z, la droite vers +X (comme les motos). La livrée détaillée (atlas, sang) et le matériau des vitres
-## du JS sont du jalon 9.
+## Rame de tram conduisible : les VRAIES géométries du jeu JS (src/hommedefer.js carGeometries / atlas('car')), cuites par tools/bake-tram.mjs dans
+## assets/tram/ (car.bin, car.json, car_map.png, car_emissive.png). Un nœud par module articulé : caisse livrée (nez, flancs, atlas de livrée),
+## pièces sombres (soufflets, bogies, pantographes, intérieur praticable : plancher, plafond, parois, montants, mains courantes, sièges, pupitres de
+## cabine), vantaux de portes qui coulissent (pièces séparées), vitres (verre transparent dans les baies, vu de l'intérieur), éclairage intérieur.
+## Repère d'un module comme dans le JS : le maillage est cuit avec x le long de la rame (nez avant en +x), y vers le haut, z de côté ; le nœud « inner »
+## tourne de PI/2 autour de y (avant du modèle vers -Z, droite vers +X, comme les motos). Pose de chaque module : celle du TramSim.
+## La caisse n'a qu'UNE face (comme dans le JS) : vue de l'intérieur elle disparaît et l'on voit dehors par les baies, le pare-brise et les parois ;
+## de l'extérieur les baies sont peintes en sombre sur la livrée.
+## Repli : si les fichiers cuits manquent, une caisse en boîtes (rien d'autre) pour que le jeu reste jouable.
 
-const BODY := Color("e7eaee")
-const STRIPE := Color("2b6fd8")
-const SKIRT := Color("3a3f46")
-const ROOF := Color("9aa1a9")
-const FLOOR := Color("52483c")
-const SEAT := Color("2c4a7a")
-const GLASS := Color(0.45, 0.62, 0.72, 0.32)
-const DOOR := Color("c9ced4")
-const FLOOR_Y := 0.32
-const LOW_TOP := 1.15      ## haut du soubassement plein
-const GLASS_TOP := 2.95    ## haut des baies vitrées
-const ROOF_Y := 3.35
-const HALF_W := 1.2
+const DIR := "res://assets/tram/"
+const DOOR_SLIDE := 0.62        ## course d'un vantail (m) à porte ouverte (tram.js)
 
 var sim: TramSim
+var _meta: Dictionary = {}
 var _mods: Array[Node3D] = []
-var _leaves: Array = []     ## [{ node, base: Vector3, dir }] vantaux coulissants
+var _leaves: Array = []         ## [{ node, dir }] vantaux coulissants (repère du maillage : x le long de la rame)
+var _lights: Array[OmniLight3D] = []
+var _heads: Array = []          ## [{ light, seat }] phare de la cabine de chaque bout (allumé quand la rame est alimentée et qu'on la conduit de ce côté)
+var _screens: Array[MeshInstance3D] = []
+var _screen_mat: StandardMaterial3D
 var _prev: Array = []
 var _cur: Array = []
+var _powered := -1
+var _body_mat: StandardMaterial3D
+var _dark_mat: StandardMaterial3D
 var _glass_mat: StandardMaterial3D
-var _lamp_mat: StandardMaterial3D
+var _bin: PackedByteArray
+var _base := 0
 
-static func _m(color: Color, rough := 0.6, metal := 0.15, emissive := 0.0) -> StandardMaterial3D:
-	return VehicleView.mat(color, rough, metal, emissive)
+static func available() -> bool:
+	return FileAccess.file_exists(DIR + "car.bin") and FileAccess.file_exists(DIR + "car.json")
 
 func setup(s: TramSim) -> void:
 	sim = s
-	_glass_mat = StandardMaterial3D.new()
-	_glass_mat.albedo_color = GLASS
-	_glass_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	_glass_mat.roughness = 0.1
-	_glass_mat.metallic = 0.2
-	var line_color := STRIPE
-	for ln: Dictionary in Config.at("tram.lines"):
-		if ln["id"] == s.line0.id:
-			line_color = Color(String(ln["color"]))
-	for i in s.n:
+	if not available():
+		push_warning("tram_view : assets/tram absent (node tools/bake-tram.mjs) : rame de repli")
+		_fallback()
+		return
+	_meta = JSON.parse_string(FileAccess.get_file_as_string(DIR + "car.json"))
+	_bin = FileAccess.get_file_as_bytes(DIR + "car.bin")
+	_base = 8 + _bin.decode_u32(4)
+	_make_materials()
+	var mods: Array = _meta["modules"]
+	for i in mods.size():
 		var g := Node3D.new()
 		add_child(g)
 		_mods.append(g)
-		_build_module(g, i, line_color)
+		_build_module(g, i, mods[i])
 	for i in s.n:
 		var m: Dictionary = s.mods[i]
 		_cur.append(Vector3(m["x"], m["z"], m["yaw"]))
 		_prev.append(Vector3(m["x"], m["z"], m["yaw"]))
 	apply(1.0)
 
-func _box(parent: Node3D, size: Vector3, m: Material, pos := Vector3.ZERO, rot := Vector3.ZERO) -> MeshInstance3D:
+func _tex(name: String) -> Texture2D:
+	var img := Image.load_from_file(ProjectSettings.globalize_path(DIR + name))
+	if img == null or img.is_empty():
+		return null
+	img.generate_mipmaps()
+	return ImageTexture.create_from_image(img)
+
+func _make_materials() -> void:
+	var mb: Dictionary = _meta["mat"]["body"]
+	_body_mat = StandardMaterial3D.new()
+	_body_mat.albedo_texture = _tex("car_map.png")
+	_body_mat.roughness = float(mb["roughness"])
+	_body_mat.metallic = float(mb["metalness"])
+	_body_mat.emission_enabled = true
+	_body_mat.emission = Color.BLACK   # Godot : émission = (couleur + texture) x énergie : la couleur doit rester noire
+	_body_mat.emission_texture = _tex("car_emissive.png")
+	_body_mat.emission_energy_multiplier = float(mb["emissiveIntensity"])
+	_body_mat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
+	_dark_mat = StandardMaterial3D.new()
+	_dark_mat.vertex_color_use_as_albedo = true
+	_dark_mat.roughness = float(_meta["mat"]["dark"]["roughness"])
+	_dark_mat.metallic = float(_meta["mat"]["dark"]["metalness"])
+	_dark_mat.emission_enabled = true   # un peu d'émission : l'intérieur n'a aucune lumière propre (JS : emissive 0x16191d)
+	_dark_mat.emission = Color.html("16191d")
+	_screen_mat = StandardMaterial3D.new()
+	_screen_mat.albedo_color = Color(0.03, 0.12, 0.1)
+	_screen_mat.emission_enabled = true
+	_screen_mat.emission = Color(0.25, 0.95, 0.75)
+	_screen_mat.emission_energy_multiplier = 0.0
+	_glass_mat = StandardMaterial3D.new()
+	_glass_mat.albedo_color = Color(0.6, 0.78, 0.88, 0.07)
+	_glass_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	_glass_mat.roughness = 0.05
+	_glass_mat.metallic = 0.0
+	_glass_mat.specular_mode = BaseMaterial3D.SPECULAR_SCHLICK_GGX
+	_glass_mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	_glass_mat.shading_mode = BaseMaterial3D.SHADING_MODE_PER_PIXEL
+
+func _floats(off: int, count: int) -> PackedFloat32Array:
+	return _bin.slice(_base + off, _base + off + count * 4).to_float32_array()
+
+## Sommets [from, from + n) d'un bloc cuit (position, normale, uv ou couleur) -> ArrayMesh à une surface.
+func _mesh(blk: Dictionary, from: int, n: int, colored: bool) -> ArrayMesh:
+	var pos := _floats(int(blk["pos"]) + from * 12, n * 3)
+	var nor := _floats(int(blk["nor"]) + from * 12, n * 3)
+	var pv := PackedVector3Array()
+	var nv := PackedVector3Array()
+	pv.resize(n)
+	nv.resize(n)
+	for i in n:
+		pv[i] = Vector3(pos[i * 3], pos[i * 3 + 1], pos[i * 3 + 2])
+		nv[i] = Vector3(nor[i * 3], nor[i * 3 + 1], nor[i * 3 + 2])
+	var arrays := []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = pv
+	arrays[Mesh.ARRAY_NORMAL] = nv
+	if colored:
+		var col := _floats(int(blk["col"]) + from * 12, n * 3)
+		var cv := PackedColorArray()
+		cv.resize(n)
+		for i in n:
+			cv[i] = Color(col[i * 3], col[i * 3 + 1], col[i * 3 + 2], 1.0)
+		arrays[Mesh.ARRAY_COLOR] = cv
+	else:
+		var uv := _floats(int(blk["uv"]) + from * 8, n * 2)
+		var uvs := PackedVector2Array()
+		uvs.resize(n)
+		for i in n:
+			uvs[i] = Vector2(uv[i * 2], uv[i * 2 + 1])
+		arrays[Mesh.ARRAY_TEX_UV] = uvs
+	var mesh := ArrayMesh.new()
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	return mesh
+
+func _inst(parent: Node3D, mesh: Mesh, mat: Material) -> MeshInstance3D:
 	var mi := MeshInstance3D.new()
-	var b := BoxMesh.new()
-	b.size = size
-	mi.mesh = b
-	mi.material_override = m
-	mi.position = pos
-	mi.rotation = rot
+	mi.mesh = mesh
+	mi.material_override = mat
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	parent.add_child(mi)
 	return mi
 
-func _build_module(g: Node3D, i: int, line_color: Color) -> void:
-	var L := sim.body_len
-	var W := sim.width
-	var uc := sim.module_u(i)
-	var body_m := _m(BODY, 0.45, 0.2)
-	var skirt_m := _m(SKIRT, 0.7, 0.3)
-	var stripe_m := _m(line_color, 0.4, 0.2)
-	var roof_m := _m(ROOF, 0.6, 0.3)
-	# plancher, toit, soubassement continu entre les portes
-	_box(g, Vector3(W - 0.1, 0.1, L), _m(FLOOR, 0.9, 0.0), Vector3(0, FLOOR_Y - 0.05, 0))
-	_box(g, Vector3(W - 0.1, 0.12, L), roof_m, Vector3(0, ROOF_Y - 0.06, 0))
-	_box(g, Vector3(W * 0.6, 0.18, L * 0.55), roof_m, Vector3(0, ROOF_Y + 0.07, 0))   # le bloc de climatisation
-	_box(g, Vector3(W - 0.2, 0.05, L), _m(Color("d8d8c8"), 0.8, 0.0, 0.9), Vector3(0, ROOF_Y - 0.14, 0))   # plafonnier
-	# parois côté gauche (-X) et droit (+X), interrompues devant les portes
-	var spans: Array = []
-	for sp: Array in sim.interior["spans"]:
-		var z0: float = -(float(sp[1]) - uc)
-		var z1: float = -(float(sp[0]) - uc)
-		if z1 > -L / 2.0 and z0 < L / 2.0:
-			spans.append([maxf(z0, -L / 2.0), minf(z1, L / 2.0)])
-	spans.sort_custom(func(a, b): return a[0] < b[0])
-	for side in [-1.0, 1.0]:
-		var cursor := -L / 2.0
-		var segs: Array = []
-		for sp: Array in spans:
-			if sp[0] > cursor:
-				segs.append([cursor, sp[0]])
-			cursor = sp[1]
-		if cursor < L / 2.0:
-			segs.append([cursor, L / 2.0])
-		for sg: Array in segs:
-			_wall(g, side, sg[0], sg[1], body_m, skirt_m, stripe_m)
-		# portes : deux vantaux par ouverture
-		for sp: Array in spans:
-			_door(g, side, sp[0], sp[1])
-	# bouts : nez demi-ellipsoïde aux deux extrémités de la rame, soufflet noir entre modules
-	var is_front := i == sim.n - 1
-	var is_rear := i == 0
-	for end in [-1.0, 1.0]:   # -1 : avant (-Z), +1 : arrière (+Z)
-		var nose: bool = (end < 0.0 and is_front) or (end > 0.0 and is_rear)
-		if nose:
-			var sp := MeshInstance3D.new()
-			var sm := SphereMesh.new()
-			sm.radius = 1.0
-			sm.height = 2.0
-			sm.radial_segments = 20
-			sm.rings = 10
-			sp.mesh = sm
-			sp.material_override = body_m
-			sp.scale = Vector3(W / 2.0, (ROOF_Y - FLOOR_Y) / 2.0, 1.7)
-			sp.position = Vector3(0, (ROOF_Y + FLOOR_Y) / 2.0, end * (L / 2.0 - 0.1))
-			g.add_child(sp)
-			_box(g, Vector3(W * 0.78, 1.0, 0.05), _glass_mat, Vector3(0, 2.1, end * (L / 2.0 + 0.95)), Vector3(end * 0.5, 0, 0))   # pare-brise
-			_box(g, Vector3(0.3, 0.12, 0.04), _m(Color("fff3cf"), 0.3, 0.0, 2.0), Vector3(-0.8, 0.85, end * (L / 2.0 + 1.55)))
-			_box(g, Vector3(0.3, 0.12, 0.04), _m(Color("fff3cf"), 0.3, 0.0, 2.0), Vector3(0.8, 0.85, end * (L / 2.0 + 1.55)))
-			# pupitre du conducteur
-			_box(g, Vector3(1.9, 0.5, 0.5), _m(Color("2a2d33"), 0.6, 0.3), Vector3(0, 1.05, end * (L / 2.0 - 1.95 + 0.0)))
-		else:
-			_box(g, Vector3(W - 0.2, ROOF_Y - FLOOR_Y, 0.18), _m(Color("15171a"), 0.9, 0.0), Vector3(0, (ROOF_Y + FLOOR_Y) / 2.0, end * (L / 2.0 + 0.1)))   # soufflet
-	# sièges (assis : coussin et dossier côté paroi) et sièges des conducteurs
-	var seat_m := _m(SEAT, 0.8, 0.0)
-	var spots: Array = sim.interior["seat_spots"]
-	for si in spots.size():
-		var sp: Dictionary = spots[si]
-		if int(sim.model_seats[si]["module"]) != i:
+func _build_module(g: Node3D, i: int, md: Dictionary) -> void:
+	var inner := Node3D.new()
+	inner.rotation.y = PI / 2.0
+	g.add_child(inner)
+	_inst(inner, _mesh(md["body"], 0, int(md["body"]["n"]), false), _body_mat)
+	# pièces sombres : tout sauf les vantaux (pièces séparées, qui coulissent)
+	var dn := int(md["dark"]["n"])
+	var leaves: Array = md["leaves"]
+	var cuts: Array = []
+	for lf: Dictionary in leaves:
+		cuts.append([int(lf["v0"]), int(lf["n"]), float(lf["dir"])])
+	cuts.sort_custom(func(a, b): return a[0] < b[0])
+	var at := 0
+	for c: Array in cuts:
+		if c[0] > at:
+			_inst(inner, _mesh(md["dark"], at, c[0] - at, true), _dark_mat)
+		var holder := Node3D.new()
+		inner.add_child(holder)
+		_inst(holder, _mesh(md["dark"], c[0], c[1], true), _dark_mat)
+		_leaves.append({"node": holder, "dir": c[2]})
+		at = c[0] + c[1]
+	if at < dn:
+		_inst(inner, _mesh(md["dark"], at, dn - at, true), _dark_mat)
+	# vitres : une vitre transparente dans chaque baie (livrée : fenêtres entre les portes), vue de l'intérieur
+	var L: float = float(_meta["L"])
+	var cx: float = float(md["c"])
+	var half := float(_meta["car"]["module"]) / 2.0
+	for w: float in _meta["windows"]:
+		var x: float = w + 0.525 - L / 2.0 - cx
+		if absf(x) > half:
 			continue
-		var z: float = -(float(sp["u"]) - uc)
-		if bool(sp["driver"]):
-			_box(g, Vector3(0.48, 0.1, 0.48), seat_m, Vector3(0, 0.77, z))
-			_box(g, Vector3(0.48, 0.55, 0.08), seat_m, Vector3(0, 1.05, z + signf(-float(sp["u"])) * 0.26))
-		else:
-			var sx: float = float(sp["side"])
-			_box(g, Vector3(0.44, 0.1, 0.56), seat_m, Vector3(float(sp["w"]), 0.72, z))
-			_box(g, Vector3(0.08, 0.5, 0.56), seat_m, Vector3(float(sp["w"]) + sx * 0.2, 1.0, z))
+		for side in [-1.0, 1.0]:
+			var box := BoxMesh.new()
+			box.size = Vector3(1.05, 1.32, 0.02)
+			var mi := _inst(inner, box, _glass_mat)
+			mi.position = Vector3(x, 1.72, side * 1.17)
+	# cabines (module 0 : arrière, module n - 1 : avant) : écrans lumineux du pupitre (posés à plat, lisibles depuis l'œil du conducteur) et phare
+	if i == 0 or i == int(_meta["modules"].size()) - 1:
+		var dir := -1.0 if i == 0 else 1.0
+		var xd := dir * (L / 2.0 - 1.95) - cx           # pupitre (carGeometries : Xd)
+		for k in 3:
+			var scr := BoxMesh.new()
+			scr.size = Vector3(0.24, 0.006, 0.34 if k != 1 else 0.5)
+			var mi := _inst(inner, scr, _screen_mat)
+			mi.position = Vector3(xd - dir * 0.1, 1.288, (k - 1) * 0.56)
+			_screens.append(mi)
+		var head := SpotLight3D.new()
+		head.light_color = Color(1.0, 0.95, 0.82)
+		head.spot_range = 55.0
+		head.spot_angle = 24.0
+		head.spot_attenuation = 0.8
+		head.light_energy = 0.0
+		head.shadow_enabled = false
+		g.add_child(head)
+		head.position = Vector3(0, 0.95, -dir * 2.3)     # repère « groupe » : l'avant est -Z
+		head.rotation = Vector3(deg_to_rad(-2.0), 0.0 if dir > 0.0 else PI, 0.0)
+		_heads.append({"light": head, "seat": 0 if dir > 0.0 else 1})
+	# éclairage intérieur : une lumière chaude au plafond de chaque module
+	var lamp := OmniLight3D.new()
+	lamp.light_color = Color(1.0, 0.92, 0.78)
+	lamp.omni_range = 5.5
+	lamp.omni_attenuation = 1.2
+	lamp.shadow_enabled = false
+	lamp.light_energy = 0.0
+	g.add_child(lamp)
+	lamp.position = Vector3(0, 2.7, 0)
+	_lights.append(lamp)
 
-func _wall(g: Node3D, side: float, z0: float, z1: float, body_m: Material, skirt_m: Material, stripe_m: Material) -> void:
-	var len := z1 - z0
-	var zc := (z0 + z1) / 2.0
-	var x := side * (HALF_W - 0.03)
-	_box(g, Vector3(0.1, LOW_TOP - FLOOR_Y, len), skirt_m, Vector3(x, (LOW_TOP + FLOOR_Y) / 2.0, zc))
-	_box(g, Vector3(0.11, 0.1, len), stripe_m, Vector3(x + side * 0.005, LOW_TOP + 0.02, zc))
-	_box(g, Vector3(0.1, ROOF_Y - GLASS_TOP, len), body_m, Vector3(x, (ROOF_Y + GLASS_TOP) / 2.0, zc))
-	_box(g, Vector3(0.04, GLASS_TOP - LOW_TOP - 0.1, len), _glass_mat, Vector3(x, (GLASS_TOP + LOW_TOP) / 2.0, zc))
-	# montants entre les baies (tous les 1,4 m)
-	var n := maxi(0, int(floor(len / 1.4)))
-	for k in range(1, n + 1):
-		_box(g, Vector3(0.1, GLASS_TOP - LOW_TOP, 0.07), body_m, Vector3(x, (GLASS_TOP + LOW_TOP) / 2.0, z0 + len * k / float(n + 1)))
-
-func _door(g: Node3D, side: float, z0: float, z1: float) -> void:
-	var w := (z1 - z0) / 2.0 - 0.02
-	var x := side * (HALF_W - 0.0)
-	var m := _m(DOOR, 0.5, 0.3)
-	for k in 2:
-		var dir := -1.0 if k == 0 else 1.0       # vers l'avant (-Z) ou l'arrière
-		var zc := (z0 + z1) / 2.0 + dir * ((z1 - z0) / 4.0)
-		var leaf := Node3D.new()
-		leaf.position = Vector3(x, 0.0, zc)
-		g.add_child(leaf)
-		_box(leaf, Vector3(0.05, LOW_TOP + 0.9 - FLOOR_Y, w), m, Vector3(0, (LOW_TOP + 0.9 + FLOOR_Y) / 2.0, 0))
-		_box(leaf, Vector3(0.03, 1.15, w - 0.2), _glass_mat, Vector3(side * 0.02, 1.75, 0))
-		_leaves.append({"node": leaf, "base": leaf.position, "dir": dir})
+# ------------------------------------------------------------------ repli (fichiers cuits absents)
+func _fallback() -> void:
+	for i in sim.n:
+		var g := Node3D.new()
+		add_child(g)
+		_mods.append(g)
+		var mi := MeshInstance3D.new()
+		var b := BoxMesh.new()
+		b.size = Vector3(sim.width, 3.0, sim.body_len)
+		mi.mesh = b
+		mi.position = Vector3(0, 1.8, 0)
+		g.add_child(mi)
+		_cur.append(Vector3(sim.mods[i]["x"], sim.mods[i]["z"], sim.mods[i]["yaw"]))
+		_prev.append(_cur[i])
+	apply(1.0)
 
 # ------------------------------------------------------------------ pose
 func remember() -> void:
@@ -182,8 +238,16 @@ func apply(f: float) -> void:
 		var b: Vector3 = _cur[i]
 		_mods[i].position = Vector3(lerpf(a.x, b.x, f), 0.0, lerpf(a.y, b.y, f))
 		_mods[i].rotation = Vector3(0, a.z + VehicleSim.ang_diff(b.z, a.z) * f, 0)
-	# vantaux : coulissent le long de la caisse (vers le milieu de l'ouverture quand elle s'ouvre : l'un vers l'avant, l'autre vers l'arrière)
-	var d := sim.door_f * 0.62
+	# vantaux : coulissent le long de la caisse (mètres du maillage : x le long de la rame)
+	var d := sim.door_f * DOOR_SLIDE
 	for L: Dictionary in _leaves:
-		var n: Node3D = L["node"]
-		n.position = Vector3(L["base"].x, 0.0, L["base"].z + float(L["dir"]) * d)
+		(L["node"] as Node3D).position = Vector3(float(L["dir"]) * d, 0.0, 0.0)
+	# lumières intérieures : allumées quand la rame est alimentée
+	var on: int = 1 if (Game.rides != null and Game.rides.tram_powered) else 0
+	if on != _powered:
+		_powered = on
+		for l in _lights:
+			l.light_energy = 0.55 if on == 1 else 0.1
+		_screen_mat.emission_energy_multiplier = 1.4 if on == 1 else 0.0
+	for h: Dictionary in _heads:
+		(h["light"] as SpotLight3D).light_energy = 6.0 if on == 1 and sim.seats.size() > int(h["seat"]) and sim.seats[int(h["seat"])] != null else 0.0

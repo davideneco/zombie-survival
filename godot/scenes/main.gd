@@ -102,6 +102,8 @@ var _mount := ""                  # --mount=moto|grosseMoto|velo|tram : monte su
 var _auto_fwd := false            # --auto-fwd : accélérateur maintenu (captures et vidéos)
 var _power := false               # --power : sous-station remise (tram alimenté)
 var _tram_door := false           # --tram-doors : portes de la rame ouvertes au départ
+var _tram_at := PackedFloat32Array()  # --tram-at=u,w,cap : debout dans la rame à (u le long, w à droite), regard cap degrés à partir de l'avant (captures)
+var _seat := -1                   # --seat=N : monte la place N de la rame (2 à 15 : passagers assis)
 var _tram_in := false             # --tram-in : joueur debout dans la rame
 var _first_person := false        # --first-person : vue à la première personne sur les véhicules
 var _machines_view: Node3D
@@ -190,6 +192,12 @@ func _ready() -> void:
 			_ruin = a.substr(7)
 		elif a == "--door-probe":
 			_door_probe = true
+		elif a.begins_with("--tram-at="):
+			_tram_at = PackedFloat32Array(Array(a.substr(10).split(",")).map(func(x): return float(x)))
+			_tram_in = true
+		elif a.begins_with("--seat="):
+			_seat = int(a.substr(7))
+			_mount = "tram"
 		elif a == "--tram-in":
 			_tram_in = true
 		elif a == "--first-person":
@@ -629,14 +637,22 @@ func _start_mounted() -> void:
 		r.trams[0].door_open = true
 		r.trams[0].door_f = 1.0
 	if _tram_in and not r.trams.is_empty():
-		r.place_in_tram(r.trams[0], 0.0, 0.0)
+		if _tram_at.size() >= 2:
+			r.place_in_tram(r.trams[0], _tram_at[0], _tram_at[1])
+			if _tram_at.size() >= 3:
+				Game.player.yaw = r.on_tram["fy"] + deg_to_rad(_tram_at[2])
+		else:
+			r.place_in_tram(r.trams[0], 0.0, 0.0)
 	if _mount == "":
 		return
 	if _mount == "tram":
 		var tr: TramSim = r.trams[0]
 		var nose: Dictionary = tr.mods[tr.n - 1]
 		Game.player.pos = Vector3(nose["x"] + nose["tx"] * (tr.M / 2.0 + 1.0), 0.0, nose["z"] + nose["tz"] * (tr.M / 2.0 + 1.0))
-		r.try_mount(tr, 0)
+		if _seat > 1:
+			r.try_mount(tr, _seat)
+		else:
+			r.try_mount(tr, 0)
 		return
 	for v in r.vehicles:
 		if v.type == _mount:
