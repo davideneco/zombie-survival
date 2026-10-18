@@ -17,6 +17,13 @@ const PAUSE := "pause"
 const OVER := "over"
 const VICTORY := "victory"
 const MAP := "map"
+## v0.14.0 : écrans du menu principal. TITLE est le menu principal ; MENU le choix du survivant et du pseudo ; MAPDIFF « Carte et difficulté » ;
+## STATS les meilleurs scores ; CONFIRM la confirmation de remise à zéro (au-dessus de STATS) ; CREDITS ; LOADING le chargement après NOUVELLE PARTIE.
+const MAPDIFF := "mapdiff"
+const STATS := "stats"
+const CONFIRM := "confirm"
+const CREDITS := "credits"
+const LOADING := "loading"
 
 var layers: Array[String] = []
 
@@ -64,9 +71,11 @@ func escape(in_game: bool) -> String:
 		CAPTURE, CONFLICT:
 			pop()
 			return "cancel_capture"
-		KEYS, OPTIONS, MENU:
+		KEYS, OPTIONS, MENU, MAPDIFF, STATS, CREDITS, CONFIRM:
 			pop()
 			return "back"
+		LOADING:
+			return ""
 		MAP:
 			pop()
 			return "close_map"

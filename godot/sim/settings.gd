@@ -10,11 +10,13 @@ const DEFAULT_PATH := "user://settings.cfg"
 const DEFAULTS := {
 	"brightness": 1.4, "fov": 80.0, "sens": 1.0, "volume": 1.0, "music": 0.5, "quality": 1, "tp_vehicle": true, "chat": true,
 	"cinema": true, "halo": true, "char": 0, "name": "Joueur",
+	"difficulty": "normal", "map": "strasbourg",   ## menu « Carte et difficulté » (v0.14.0) : voir Difficulty ; carte : "strasbourg" ou "arena"
 }
 ## bornes des curseurs (index.html : optBrightness…)
 const RANGES := {
 	"brightness": [0.6, 3.0, 0.05], "fov": [60.0, 110.0, 1.0], "sens": [0.3, 3.0, 0.05], "quality": [0, 2, 1], "volume": [0.0, 1.0, 0.05], "music": [0.0, 1.0, 0.05],
 }
+const MAPS := ["strasbourg", "arena"]
 const QUALITY_NAMES := ["Rapide", "Normale", "Haute"]
 
 var path := DEFAULT_PATH
@@ -60,6 +62,9 @@ func load_file() -> void:
 		for k: String in RANGES:
 			var r: Array = RANGES[k]
 			values[k] = clampf(float(values[k]), float(r[0]), float(r[1]))
+		values["difficulty"] = Difficulty.valid(String(values["difficulty"]))
+		if values["map"] not in MAPS:
+			values["map"] = "strasbourg"
 		binds.load_from(cf)
 	else:
 		binds.reset_all(false)

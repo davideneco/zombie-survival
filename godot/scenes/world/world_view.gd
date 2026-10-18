@@ -31,21 +31,46 @@ var _tree_cards: Array[MultiMeshInstance3D] = []
 static func _json(path: String) -> Variant:
 	return JSON.parse_string(FileAccess.get_file_as_string(path))
 
-func _ready() -> void:
+signal progress(frac: float)   ## v0.14.0 : avancement de build() (0..1), pour la barre de l'écran de chargement
+
+var built := false
+var _slice_t := 0
+
+## Cède la main au moteur (une image) quand ~10 ms de travail se sont écoulées : l'écran de chargement reste vivant et sa barre avance.
+func _slice() -> void:
+	if Time.get_ticks_usec() - _slice_t > 10000:
+		await get_tree().process_frame
+		_slice_t = Time.get_ticks_usec()
+
+## Construit la carte (v0.14.0 : ce n'est plus fait dans _ready, pour pouvoir le répartir sur plusieurs images). À attendre : `await view.build()`.
+func build() -> void:
 	var t0 := Time.get_ticks_msec()
-	_load_textures()
+	_slice_t = Time.get_ticks_usec()
+	await _load_textures()
+	progress.emit(0.25)
 	_load_materials()
+	await _slice()
 	var tiles: Dictionary = _json(DIR + "tiles.json")
+	var n_tiles := (tiles["tiles"] as Array).size()
+	var ti := 0
 	for t: Dictionary in tiles["tiles"]:
+		ti += 1
+		progress.emit(0.25 + 0.6 * ti / maxf(1.0, n_tiles))
+		await _slice()
 		var mi := _mesh_from_pack(DIR + "tiles/t%s.bin" % t["key"])
 		if mi != null:
 			mi.visibility_range_end = TILE_VIS_RANGE
 			add_child(mi)
 			tile_count += 1
 			triangle_count += int(t["tri"])
+	await _slice()
 	_load_doors()
+	await _slice()
 	_load_instances()
+	await _slice()
 	_lamps()
+	progress.emit(1.0)
+	built = true
 	Game.door_opened.connect(_on_door_opened)
 	Game.settings.changed.connect(func(key: String) -> void:
 		if key == "quality":
@@ -55,6 +80,8 @@ func _ready() -> void:
 	print("monde affiché : %d tuiles, %d triangles, %d matériaux, %d ms" % [tile_count, triangle_count, _materials.size(), load_ms])
 
 func _process(dt: float) -> void:
+	if not built:
+		return
 	_lamp_timer -= dt
 	if _lamp_timer <= 0.0 and Game.player != null:
 		_lamp_timer = 0.5
@@ -78,7 +105,12 @@ func set_quality(q: int) -> void:
 
 # ---------------------------------------------------------------- textures et matériaux
 func _load_textures() -> void:
-	for t: Dictionary in _json(DIR + "textures.json"):
+	var list: Array = _json(DIR + "textures.json")
+	var n_tex := 0
+	for t: Dictionary in list:
+		n_tex += 1
+		progress.emit(0.25 * n_tex / maxf(1.0, list.size()))
+		await _slice()
 		var path := ProjectSettings.globalize_path(String(t["file"]))
 		var img := Image.load_from_file(path)
 		if img == null or img.is_empty():

@@ -29,6 +29,12 @@ func start_round() -> void:
 	zombie_health = float(Game.zombie_health_at(r)) * (float(Config.at("summit.eternal.healthMult")) if Game.eternal else 1.0)   # Nuit éternelle : +30 %
 	var Z: Dictionary = Config.at("zombie")
 	zombie_speed = minf(float(Z["speedStart"]) + r * float(Z["speedPerRound"]), float(Z["speedMax"]))
+	var hm := Difficulty.health_mult(Game.difficulty)   # menu « Carte et difficulté » : NORMALE = x1, rien n'est touché
+	var sm := Difficulty.speed_mult(Game.difficulty)
+	if hm != 1.0:
+		zombie_health *= hm
+	if sm != 1.0:
+		zombie_speed *= sm
 	spawn_timer = Rules.SPAWN_FIRST_DELAY
 
 ## Un pas de dt s avec `alive` zombies vivants. Renvoie un des évènements (un seul par pas).

@@ -29,6 +29,15 @@ func prepare() -> void:
 	var w := _world
 	_thread.start(func() -> Image: return MapImage.build(w))
 
+## Retour au menu : oublie le monde et le plan (attend la fin du fil de travail s'il tourne encore).
+func release() -> void:
+	if _thread != null:
+		_thread.wait_to_finish()
+		_thread = null
+	_building = false
+	_tex = null
+	_world = null
+
 func ready_image() -> bool:
 	return _tex != null
 

@@ -1,5 +1,6 @@
 extends CanvasLayer
-## Menus (index.html #overlay + src/ui.js + src/keysMenu.js) : titre, choix du personnage (Solo), pause, options, Options > Touches, équipe
+## Menus (index.html #overlay + src/ui.js + src/keysMenu.js) : menu principal (v0.14.0 : NOUVELLE PARTIE, SURVIVANT, CARTE ET DIFFICULTÉ, MEILLEURS SCORES,
+## OPTIONS, TOUCHES, CRÉDITS, QUITTER, salons grisés), écran de chargement, choix du personnage, pause, options, Options > Touches, équipe
 ## éliminée, victoire, et la carte plein écran. La pile des couches est un UiStack ; Échap ferme la couche du dessus. Cette scène ne touche pas à
 ## la partie : elle émet des signaux (start_requested, resume_requested, restart_requested, title_requested, layers_changed) que main.gd exécute.
 
@@ -11,6 +12,8 @@ signal layers_changed
 signal quit_requested
 
 const MapView := preload("res://scenes/ui/map_view.gd")
+const Backdrop := preload("res://scenes/ui/menu_backdrop.gd")
+const MAP_NAMES := {"strasbourg": "STRASBOURG", "arena": "ARÈNE DE TEST"}
 
 var stack := UiStack.new()
 var settings: Settings
@@ -24,6 +27,15 @@ var _title: Label
 var _text: RichTextLabel
 var _version: Label
 var _panels: Dictionary = {}      ## nom de couche -> panneau
+var backdrop: Control
+var _summary: Label
+var _loading_bar: ProgressBar
+var _loading_text: Label
+var _stats_grid: GridContainer
+var _stats_note: Label
+var _stats_reset: Button
+var _map_cards: Dictionary = {}
+var _diff_cards: Dictionary = {}
 var _opt_sliders: Dictionary = {}
 var _opt_values: Dictionary = {}
 var _btn_toggles: Dictionary = {}
@@ -56,6 +68,8 @@ func _ready() -> void:
 	add_child(_root)
 	map_view = MapView.new()
 	_root.add_child(map_view)
+	backdrop = Backdrop.new()
+	_root.add_child(backdrop)
 	_dim = ColorRect.new()
 	UiTheme.fill_rect(_dim)
 	_dim.color = Color(0, 0, 0, 0.76)
@@ -94,6 +108,10 @@ func _ready() -> void:
 	_build_keys(col)
 	_build_over(col)
 	_build_victory(col)
+	_build_mapdiff(col)
+	_build_stats(col)
+	_build_credits(col)
+	_build_loading(col)
 	settings.changed.connect(_on_setting)
 	binds.changed.connect(func() -> void:
 		if stack.has(UiStack.KEYS):
@@ -128,11 +146,33 @@ func _hint(parent: Node, text: String) -> Label:
 	return l
 
 func _build_title(col: Control) -> void:
-	var p := _panel(UiStack.TITLE, col)
-	_btn(p, "JOUER", func() -> void: open_menu())
-	_btn(p, "OPTIONS", func() -> void: open_options(UiStack.TITLE), "SubButton")
-	_btn(p, "QUITTER LE JEU", func() -> void: quit_requested.emit(), "SubButton")
-	_hint(p, "Touches modifiables dans Options")
+	var p := _panel(UiStack.TITLE, col, 10)
+	_btn(p, "NOUVELLE PARTIE", func() -> void: start_requested.emit(), "GoButton", 420).add_theme_font_size_override("font_size", 30)
+	_summary = UiTheme.label("", 14, UiTheme.GOLD, UiTheme.body())
+	_summary.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	p.add_child(_summary)
+	var grid := GridContainer.new()
+	grid.columns = 2
+	grid.add_theme_constant_override("h_separation", 10)
+	grid.add_theme_constant_override("v_separation", 8)
+	grid.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	p.add_child(grid)
+	for e in [["SURVIVANT", func() -> void: open_menu()], ["CARTE ET DIFFICULTÉ", func() -> void: open_mapdiff()],
+			["MEILLEURS SCORES", func() -> void: open_stats()], ["OPTIONS", func() -> void: open_options(UiStack.TITLE)],
+			["TOUCHES", func() -> void: open_keys()], ["CRÉDITS", func() -> void: open_credits()]]:
+		var b := _btn(grid, e[0], e[1], "SubButton", 205)
+		b.add_theme_font_size_override("font_size", 19)
+	var host := _btn(grid, "CRÉER SALON", func() -> void: pass, "SubButton", 205)
+	host.disabled = true
+	host.tooltip_text = "Le multijoueur arrive au jalon J12 du port."
+	host.add_theme_font_size_override("font_size", 19)
+	var join := _btn(grid, "REJOINDRE", func() -> void: pass, "SubButton", 205)
+	join.disabled = true
+	join.tooltip_text = "Le multijoueur arrive au jalon J12 du port."
+	join.add_theme_font_size_override("font_size", 19)
+	var q := _btn(p, "QUITTER LE JEU", func() -> void: quit_requested.emit(), "SubButton", 420)
+	q.add_theme_font_size_override("font_size", 19)
+	_hint(p, "Multijoueur : jalon J12 du port (salons non portés) · Échap : retour · Tab / flèches : naviguer")
 
 func _build_menu(col: Control) -> void:
 	var p := _panel(UiStack.MENU, col, 12)
@@ -174,38 +214,214 @@ func _build_menu(col: Control) -> void:
 		card.pressed.connect(func() -> void: settings.set_value("char", i))
 		grid.add_child(card)
 		_cards.append(card)
-	var btns := HBoxContainer.new()
-	btns.alignment = BoxContainer.ALIGNMENT_CENTER
-	btns.add_theme_constant_override("separation", 14)
-	p.add_child(btns)
-	_btn(btns, "SOLO", func() -> void: start_requested.emit(), "", 220)
-	var host := _btn(btns, "CRÉER SALON CO-OP", func() -> void: pass, "SubButton", 280)
-	host.disabled = true
-	host.tooltip_text = "Le multijoueur arrive au jalon J12 du port."
-	var join := HBoxContainer.new()
-	join.alignment = BoxContainer.ALIGNMENT_CENTER
-	join.add_theme_constant_override("separation", 8)
-	p.add_child(join)
-	var code := LineEdit.new()
-	code.placeholder_text = "CODE (ABCD)"
-	code.max_length = 4
-	code.editable = false
-	code.custom_minimum_size = Vector2(170, 0)
-	join.add_child(code)
-	var jb := Button.new()
-	jb.text = "REJOINDRE"
-	jb.theme_type_variation = "SubButton"
-	jb.disabled = true
-	join.add_child(jb)
-	_hint(p, "Multijoueur : jalon J12 du port (les salons ne sont pas encore portés)")
-	_btn(p, "RETOUR", func() -> void: _back(), "SubButton", 200)
+	_hint(p, "Le survivant et le pseudo sont gardés pour les prochaines parties.")
+	_btn(p, "VALIDER", func() -> void: _back(), "GoButton", 240)
 
 func _build_pause(col: Control) -> void:
 	var p := _panel(UiStack.PAUSE, col)
 	_btn(p, "REPRENDRE", func() -> void: _do_resume())
 	_btn(p, "OPTIONS", func() -> void: open_options(UiStack.PAUSE), "SubButton")
-	_btn(p, "QUITTER", func() -> void: title_requested.emit(), "SubButton")
+	_btn(p, "TOUCHES", func() -> void: open_keys(), "SubButton")
+	_btn(p, "MENU PRINCIPAL", func() -> void: title_requested.emit(), "SubButton")
 	_hint(p, "Touches modifiables dans Options > Touches")
+
+# ---------------------------------------------------------------- v0.14.0 : carte et difficulté, statistiques, crédits, chargement
+func _heading(parent: Node, text: String, size := 36, color := UiTheme.GOLD) -> Label:
+	var l := UiTheme.label(text, size, color, UiTheme.heading(), 5)
+	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	parent.add_child(l)
+	return l
+
+func _card(parent: Node, text: String, w: float, h: float, cb: Callable) -> Button:
+	var c := Button.new()
+	c.text = text
+	c.custom_minimum_size = Vector2(w, h)
+	c.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	c.add_theme_font_size_override("font_size", 16)
+	c.pressed.connect(cb)
+	parent.add_child(c)
+	return c
+
+func _style_card(b: Button, on: bool, accent: Color) -> void:
+	for st in ["normal", "hover", "pressed", "focus"]:
+		var sb := UiTheme.box(Color(0.12, 0.12, 0.12, 0.8) if st == "hover" else Color(0, 0, 0, 0.55), accent if on else Color("444444"), 3 if on else 2, 6, 8)
+		if st == "focus":
+			sb.border_color = UiTheme.GOLD
+			sb.set_border_width_all(3)
+		b.add_theme_stylebox_override(st, sb)
+	b.add_theme_color_override("font_color", accent if on else Color("cccccc"))
+	b.add_theme_color_override("font_hover_color", accent.lightened(0.3) if on else Color.WHITE)
+	b.add_theme_color_override("font_focus_color", accent if on else Color.WHITE)
+
+func _build_mapdiff(col: Control) -> void:
+	var p := _panel(UiStack.MAPDIFF, col, 12)
+	_heading(p, "CARTE ET DIFFICULTÉ")
+	_hint(p, "CARTE")
+	var mrow := HBoxContainer.new()
+	mrow.alignment = BoxContainer.ALIGNMENT_CENTER
+	mrow.add_theme_constant_override("separation", 12)
+	p.add_child(mrow)
+	var descs := {"strasbourg": "La Grande Île au complet : portes, machines, véhicules, tram, cathédrale et fin de partie.", "arena": "Petite arène plate pour essayer les armes : pas de ville, de machines ni de véhicules."}
+	for m: String in Settings.MAPS:
+		_map_cards[m] = _card(mrow, "%s\n%s" % [MAP_NAMES[m], descs[m]], 340, 100, func() -> void: settings.set_value("map", m))
+	_hint(p, "DIFFICULTÉ (vie et vitesse des zombies)")
+	var drow := HBoxContainer.new()
+	drow.alignment = BoxContainer.ALIGNMENT_CENTER
+	drow.add_theme_constant_override("separation", 12)
+	p.add_child(drow)
+	for d: Dictionary in Difficulty.LIST:
+		var id: String = d["id"]
+		_diff_cards[id] = _card(drow, "%s\n%s" % [d["name"], d["desc"]], 224, 110, func() -> void: settings.set_value("difficulty", id))
+	_hint(p, "Les statistiques sont comptées par difficulté (Strasbourg seulement).")
+	_btn(p, "RETOUR", func() -> void: _back(), "GoButton", 240)
+
+func _refresh_mapdiff() -> void:
+	for m: String in _map_cards:
+		_style_card(_map_cards[m], settings.get_value("map") == m, UiTheme.GOLD)
+	for id: String in _diff_cards:
+		_style_card(_diff_cards[id], settings.get_value("difficulty") == id, {"easy": Color("7cb342"), "normal": UiTheme.GOLD, "hard": Color("ff5544")}[id])
+
+func _build_stats(col: Control) -> void:
+	var p := _panel(UiStack.STATS, col, 10)
+	_heading(p, "MEILLEURS SCORES ET STATISTIQUES")
+	var box := PanelContainer.new()
+	box.add_theme_stylebox_override("panel", UiTheme.box(Color(0, 0, 0, 0.6), Color("444444"), 1, 6, 12))
+	p.add_child(box)
+	_stats_grid = GridContainer.new()
+	_stats_grid.columns = 5
+	_stats_grid.add_theme_constant_override("h_separation", 26)
+	_stats_grid.add_theme_constant_override("v_separation", 6)
+	box.add_child(_stats_grid)
+	_stats_note = UiTheme.label("", 13, Color("888888"), UiTheme.body())
+	_stats_note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	p.add_child(_stats_note)
+	var row := HBoxContainer.new()
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	row.add_theme_constant_override("separation", 14)
+	p.add_child(row)
+	_btn(row, "RETOUR", func() -> void: _back(), "GoButton", 220)
+	_stats_reset = _btn(row, "REMETTRE À ZÉRO", func() -> void:
+		stack.push(UiStack.CONFIRM)
+		_sync(), "SubButton", 280)
+	# confirmation (couche au-dessus de STATS)
+	var c := _panel(UiStack.CONFIRM, col, 14)
+	_heading(c, "TOUT EFFACER ?", 44, UiTheme.RED)
+	var t := UiTheme.label("Toutes les statistiques (parties, victoires, records) seront effacées.\nCette action est définitive.", 18, Color("cccccc"), UiTheme.body())
+	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	c.add_child(t)
+	_btn(c, "NON, GARDER", func() -> void: _back(), "GoButton", 320)
+	_btn(c, "OUI, EFFACER", func() -> void:
+		Game.stats.reset()
+		stack.close(UiStack.CONFIRM)
+		_render_stats()
+		_sync(), "", 320)
+
+func _render_stats() -> void:
+	for c in _stats_grid.get_children():
+		c.queue_free()
+	var st: GameStats = Game.stats
+	var tot := st.overall()
+	var heads := ["", "FACILE", "NORMALE", "DIFFICILE", "TOTAL"]
+	for h in heads:
+		var l := UiTheme.label(h, 16, UiTheme.RED, UiTheme.heading())
+		l.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT if h != "" else HORIZONTAL_ALIGNMENT_LEFT
+		l.custom_minimum_size = Vector2(150 if h == "" else 110, 0)
+		_stats_grid.add_child(l)
+	var rows := [
+		["Parties jouées", "games", ""], ["Victoires", "wins", ""], ["Meilleure manche", "best_round", ""], ["Plus de zombies tués", "best_kills", ""],
+		["Meilleur score (points)", "best_points", ""], ["Plus longue survie", "best_time", "time"], ["Temps de jeu total", "total_time", "time"], ["Zombies tués (total)", "total_kills", ""],
+	]
+	for r: Array in rows:
+		var name := UiTheme.label(String(r[0]), 16, Color("dddddd"), UiTheme.body())
+		_stats_grid.add_child(name)
+		var cells: Array = []
+		for d in ["easy", "normal", "hard"]:
+			cells.append(st.by_diff.get(d, GameStats.empty_entry()))
+		cells.append(tot)
+		for e: Dictionary in cells:
+			var v: Variant = e[r[1]]
+			var txt := GameStats.format_time(float(v)) if r[2] == "time" else str(int(v))
+			if r[2] == "" and int(v) == 0:
+				txt = "-"
+			elif r[2] == "time" and float(v) <= 0.0:
+				txt = "-"
+			var l := UiTheme.label(txt, 16, UiTheme.GOLD if e == tot else Color.WHITE, UiTheme.body())
+			l.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+			_stats_grid.add_child(l)
+	_stats_note.text = "Aucune partie enregistrée pour le moment." if st.total_games() == 0 else "Enregistrées à la fin de chaque partie (mort, victoire, ou retour au menu). Fichier : %s" % ProjectSettings.globalize_path(st.path)
+	_stats_reset.disabled = st.total_games() == 0
+
+const CREDITS_TEXT := """[center][b]ZOMBIE SURVIVAL[/b]
+Jeu de survie contre des zombies dans la Grande Île de Strasbourg.
+Le jeu d'origine est écrit en [b]Three.js[/b] (dans le navigateur) ; cette version est un port vers le moteur Godot.[/center]
+
+[b]Moteur[/b]
+Godot Engine, licence MIT : https://godotengine.org
+Copyright (c) 2014-present Godot Engine contributors ; (c) 2007-2014 Juan Linietsky, Ariel Manzur.
+
+[b]Modèles d'armes[/b]
+« Ultimate Gun Pack » (juillet 2019) par Quaternius, licence CC0 1.0 (domaine public).
+https://opengameart.org/content/low-poly-guns-pack  ·  https://quaternius.com
+Utilisé pour 19 des 23 armes ; les autres sont des modèles du jeu.
+
+[b]Textures[/b]
+Textures PBR de Poly Haven, licence CC0 : https://polyhaven.com/license
+
+[b]Carte[/b]
+Données cartographiques (c) les contributeurs d'OpenStreetMap, licence ODbL : https://www.openstreetmap.org/copyright
+
+[b]Sons et musique[/b]
+Sons synthétisés par le jeu d'origine puis pré-rendus ; musique du jeu, boucles par niveau d'intensité.
+
+[b]Version[/b]
+Port Godot v%s (Godot %s)"""
+
+func _build_credits(col: Control) -> void:
+	var p := _panel(UiStack.CREDITS, col, 10)
+	_heading(p, "CRÉDITS")
+	var box := PanelContainer.new()
+	box.add_theme_stylebox_override("panel", UiTheme.box(Color(0, 0, 0, 0.6), Color("444444"), 1, 6, 12))
+	p.add_child(box)
+	var sc := ScrollContainer.new()
+	sc.custom_minimum_size = Vector2(800, 380)
+	sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	sc.focus_mode = Control.FOCUS_ALL   # flèches haut / bas pour faire défiler
+	box.add_child(sc)
+	var r := RichTextLabel.new()
+	r.bbcode_enabled = true
+	r.fit_content = true
+	r.scroll_active = false
+	r.custom_minimum_size = Vector2(780, 0)
+	r.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	r.add_theme_font_size_override("normal_font_size", 16)
+	r.add_theme_font_size_override("bold_font_size", 17)
+	r.add_theme_color_override("default_color", Color("cccccc"))
+	r.add_theme_font_override("normal_font", UiTheme.body())
+	r.add_theme_font_override("bold_font", UiTheme.heading())
+	r.text = CREDITS_TEXT % [Game.version(), Engine.get_version_info()["string"]]
+	r.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	sc.add_child(r)
+	_btn(p, "RETOUR", func() -> void: _back(), "GoButton", 240)
+
+func _build_loading(col: Control) -> void:
+	var p := _panel(UiStack.LOADING, col, 14)
+	_heading(p, "CHARGEMENT", 48, UiTheme.RED)
+	_loading_text = UiTheme.label("", 20, Color("dddddd"), UiTheme.body())
+	_loading_text.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	p.add_child(_loading_text)
+	_loading_bar = ProgressBar.new()
+	_loading_bar.custom_minimum_size = Vector2(520, 22)
+	_loading_bar.min_value = 0.0
+	_loading_bar.max_value = 1.0
+	_loading_bar.step = 0.001
+	_loading_bar.show_percentage = true
+	_loading_bar.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	var fill := UiTheme.box(UiTheme.RED, Color(0, 0, 0, 0), 0, 3, 0)
+	_loading_bar.add_theme_stylebox_override("fill", fill)
+	_loading_bar.add_theme_stylebox_override("background", UiTheme.box(Color(1, 1, 1, 0.12), Color("555555"), 1, 3, 0))
+	p.add_child(_loading_bar)
+	_hint(p, "Strasbourg se prépare…")
+
 
 func _slider_row(parent: Node, key: String, label: String) -> void:
 	var row := HBoxContainer.new()
@@ -355,6 +571,32 @@ func open_menu() -> void:
 	_refresh_cards()
 	_sync()
 
+func open_mapdiff() -> void:
+	stack.push(UiStack.MAPDIFF)
+	_refresh_mapdiff()
+	_sync()
+
+func open_stats() -> void:
+	stack.push(UiStack.STATS)
+	_render_stats()
+	_sync()
+
+func open_credits() -> void:
+	stack.push(UiStack.CREDITS)
+	_sync()
+
+## Écran de chargement (après NOUVELLE PARTIE) : remplace tout, Échap n'y fait rien. frac : 0..1.
+func show_loading(text: String, frac: float) -> void:
+	in_game = false
+	if not stack.has(UiStack.LOADING):
+		_cap = ""
+		_pending = {}
+		stack.clear()
+		stack.push(UiStack.LOADING)
+		_sync()
+	_loading_text.text = text
+	_loading_bar.value = frac
+
 func open_pause() -> void:
 	if stack.has(UiStack.PAUSE):
 		return
@@ -461,12 +703,16 @@ func _sync() -> void:
 	_dim.visible = full
 	_dim.color = Color(0, 0, 0, 0.9) if panel_layer == UiStack.KEYS else Color(0, 0, 0, 0.76)
 	var show_head := panel_layer in [UiStack.TITLE, UiStack.MENU, UiStack.PAUSE, UiStack.OPTIONS]
+	backdrop.set_active(not in_game)   # le fond léger n'existe que tant qu'aucune partie n'est affichée derrière le menu
+	if not in_game and full and panel_layer != UiStack.KEYS:
+		_dim.color = Color(0, 0, 0, 0.1 if panel_layer in [UiStack.TITLE, UiStack.LOADING] else 0.45)
 	_title.visible = show_head
 	_text.visible = show_head
 	match panel_layer:
 		UiStack.TITLE:
 			_title.text = "ZOMBIE SURVIVAL"
 			_text.text = "Survivez à la nuit de Strasbourg."
+			_refresh_summary()
 		UiStack.MENU:
 			_title.text = "ZOMBIE SURVIVAL"
 			_text.text = "Choisissez votre survivant."
@@ -479,7 +725,36 @@ func _sync() -> void:
 	map_view.visible = stack.has(UiStack.MAP)
 	if panel_layer == UiStack.OPTIONS:
 		_sync_options()
+	_focus_first(panel_layer)
 	layers_changed.emit()
+
+func _refresh_summary() -> void:
+	var m := String(settings.get_value("map"))
+	_summary.text = "%s  ·  %s  ·  %s" % [String(CharacterDefs.of_slot(int(settings.get_value("char")))["name"]), MAP_NAMES.get(m, m), Difficulty.name_of(String(settings.get_value("difficulty")))]
+
+## Donne le focus clavier / manette au premier contrôle utile du panneau affiché (sauf Touches : la capture d'une touche ne doit pas déclencher un bouton).
+func _focus_first(panel_layer: String) -> void:
+	if not _panels.has(panel_layer) or panel_layer == UiStack.KEYS or panel_layer == UiStack.LOADING or not is_inside_tree():
+		return
+	var fo := get_viewport().gui_get_focus_owner()
+	if fo != null and _panels[panel_layer].is_ancestor_of(fo) and fo.is_visible_in_tree():
+		return
+	var first := _first_focusable(_panels[panel_layer])
+	if first != null:
+		first.call_deferred("grab_focus")
+
+func _first_focusable(n: Node) -> Control:
+	for c in n.get_children():
+		if c is Control and not c.visible:
+			continue
+		if c is BaseButton and not (c as BaseButton).disabled and c.focus_mode != Control.FOCUS_NONE:
+			return c
+		if c is Slider and c.focus_mode != Control.FOCUS_NONE:
+			return c
+		var r := _first_focusable(c)
+		if r != null:
+			return r
+	return null
 
 func _sync_options() -> void:
 	for key: String in _opt_sliders:
@@ -498,6 +773,9 @@ func _on_setting(key: String) -> void:
 		_sync_options()
 	if key == "char":
 		_refresh_cards()
+	if key in ["char", "map", "difficulty"]:
+		_refresh_summary()
+		_refresh_mapdiff()
 
 func _refresh_cards() -> void:
 	var sel := int(settings.get_value("char"))
@@ -737,6 +1015,10 @@ func _do_swap() -> void:
 
 # ---------------------------------------------------------------- entrées
 func _input(event: InputEvent) -> void:
+	if event is InputEventJoypadButton and event.is_action_pressed("ui_cancel") and stack.blocks_game():   # manette : B = retour
+		escape()
+		get_viewport().set_input_as_handled()
+		return
 	if not (event is InputEventKey):
 		return
 	var e := event as InputEventKey

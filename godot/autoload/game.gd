@@ -85,6 +85,8 @@ var fanal_input := false   ## touche d'interaction maintenue (le Fanal)
 var debug_open := false   ## J11 : le menu debug (F9) est ouvert (Échap le ferme avant d'ouvrir la pause)
 var unstick: Unstick       ## J11 : « Se débloquer » (null dans l'arène)
 var view_aspect := 16.0 / 9.0   ## J11 : rapport largeur / hauteur de la fenêtre (étalement des tirs en coordonnées d'écran), posé par main.gd
+var difficulty := "normal"   ## v0.14.0 : "easy" | "normal" | "hard" (Difficulty) ; lue par RoundDirector.start_round, posée avant new_game
+var stats: GameStats       ## v0.14.0 : statistiques de parties (user://stats.json, ou --stats=chemin)
 var settings: Settings     ## J7 : réglages du joueur et touches (user://settings.cfg, ou --settings=chemin)
 
 func _init() -> void:
@@ -93,6 +95,11 @@ func _init() -> void:
 		if a.begins_with("--settings="):
 			path = a.substr(11)
 	settings = Settings.new(path)
+	var stats_path := GameStats.DEFAULT_PATH
+	for a in OS.get_cmdline_user_args():
+		if a.begins_with("--stats="):
+			stats_path = a.substr(8)
+	stats = GameStats.new(stats_path)
 	for a in OS.get_cmdline_user_args():
 		if a.begins_with("--trophy="):
 			trophy_path = a.substr(9)
@@ -120,7 +127,7 @@ func zombie_health_at(r: int) -> int:
 ## Nouvelle partie (graine fixe pour les tests reproductibles ; -1 : aléatoire). map : "strasbourg" (monde cuit), "arena" (arène de test de J1) ;
 ## "" prend CONFIG.map. Le monde cuit est relu à chaque partie (il porte l'état des portes) : compter ~1 s.
 ## weapons : armes de départ (vide : le M1911 de J1 ; la scène principale passe CONFIG.startWeapons).
-func new_game(seed_value: int = -1, map: String = "", weapons: Array = []) -> void:
+func new_game(seed_value: int = -1, map: String = "", weapons: Array = [], preloaded: Object = null) -> void:
 	_stop_flow_thread()
 	if seed_value >= 0:
 		rng.seed = seed_value
@@ -130,11 +137,11 @@ func new_game(seed_value: int = -1, map: String = "", weapons: Array = []) -> vo
 		rng_loot.randomize()
 	map_name = map if map != "" else String(Config.at("map", "strasbourg"))
 	if map_name == "arena":
-		arena = Arena.load_arena()
+		arena = preloaded if preloaded is Arena else Arena.load_arena()
 		world = null
 		collision = arena.collision
 	else:
-		world = World.load_world()
+		world = preloaded if preloaded is World else World.load_world()   # preloaded : chargé sur un fil de travail pendant l'écran de chargement
 		arena = null
 		collision = world.collision
 	player = PlayerSim.new()
@@ -176,6 +183,29 @@ func new_game(seed_value: int = -1, map: String = "", weapons: Array = []) -> vo
 	over = false
 	playing = true
 	_next_id = 1
+
+## Libère la partie (retour au menu principal) : plus de monde, de joueur ni de zombies en mémoire ; l'état est celui d'avant la première partie.
+func unload() -> void:
+	_stop_flow_thread()
+	zombies.clear()
+	arena = null
+	world = null
+	collision = null
+	player = null
+	arms = null
+	powerups = null
+	machines = null
+	director = null
+	rides = null
+	unstick = null
+	env = null
+	finale = null
+	playing = false
+	over = false
+	debug_open = false
+	points = 0
+	kills = 0
+	time = 0.0
 
 func _stop_flow_thread() -> void:
 	if env != null and env.nav != null:

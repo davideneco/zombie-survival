@@ -7,6 +7,11 @@ extends Node3D
 ## J7 : sans aucun argument, le jeu s'ouvre sur l'écran titre ; avec un argument, la partie démarre tout de suite (outils, captures). --menu force le titre,
 ## --ui=title|menu|options|keys|capture|conflict|pause|map|over|victory ouvre un écran (captures), --hud-demo montre les éléments de la finale (barre de boss, bandeau, Fanal),
 ## --settings=chemin utilise un autre fichier de réglages (Game.settings).
+## v0.14.0 : le menu principal ne charge RIEN de la partie (ni monde, ni zombies, ni vues de jeu : Game.world est nul). NOUVELLE PARTIE (ou tout argument de jeu)
+## lance `_start_session` : chargement par étapes avec barre de progression (données de la carte sur un fil de travail, construction de la ville répartie sur
+## plusieurs images), puis la partie. Retour au menu : tout est libéré (`_unload_session`, Game.unload). Options : --difficulty=easy|normal|hard, --stats=chemin
+## (statistiques), --click=TEXTE[,TEXTE] (appuie sur des boutons du menu, captures), --load-shot=chemin,fraction (capture de l'écran de chargement), --probe-title
+## (imprime l'état de la mémoire au titre puis quitte : tests).
 
 const ZombieView := preload("res://scenes/zombie_view.gd")
 const ARENA := preload("res://scenes/world/arena.tscn")
@@ -26,6 +31,19 @@ const TRACER_WIDTH := 0.012
 
 var _arena_node: Node3D
 var _camera: Camera3D
+var _flow := SessionFlow.new()       ## v0.14.0 : menu / chargement / partie
+var _session_live := false           ## la partie est construite et peut tourner (vues, monde)
+var _difficulty_arg := ""
+var _click: PackedStringArray = []   ## --click=
+var _click_t := 0.0
+var _probe := false                  ## --probe-title
+var _load_shot := ""                 ## --load-shot=chemin,fraction
+var _load_shot_at := 2.0
+var _record_ok := false              ## les statistiques ne comptent que les parties lancées depuis le menu (pas les bots ni les captures)
+var _t_boot_ms := 0
+var _first_draw := false
+var _load_max_dt := 0.0               ## pire durée d'image pendant le chargement (l'interface reste-t-elle vivante ?)
+var _load_frames := 0
 var _hud: CanvasLayer
 var _menus: CanvasLayer
 var _menu := false                ## s'ouvre sur l'écran titre (aucun argument, ou --menu)
@@ -155,75 +173,173 @@ func _ready() -> void:
 			_quit_at = float(a.substr(10))
 		elif a.begins_with("--at="):
 			_shot_at = float(a.substr(5))
-	_camera = Camera3D.new()
-	_camera.fov = float(Game.settings.get_value("fov"))
-	_camera.near = 0.05
-	_camera.far = 180.0               # le JS s'arrête à 170 m : au-delà le brouillard cache tout
-	add_child(_camera)
-	_graphics = GraphicsView.new()
-	add_child(_graphics)
-	_graphics.setup(_camera, _map == "arena")
-	_fx = FxView.new()
-	add_child(_fx)
-	_fx.setup(_camera)
-	_finale_view = FinaleView.new()
-	add_child(_finale_view)
-	_finale_view.setup(_camera, _fx)
-	_hud = HUD.instantiate()
-	add_child(_hud)
+		elif a.begins_with("--difficulty="):
+			_difficulty_arg = a.substr(13)
+		elif a.begins_with("--click="):
+			_click = a.substr(8).split(",")
+		elif a == "--probe-title":
+			_probe = true
+			_menu = true
+		elif a.begins_with("--load-shot="):
+			var f2 := a.substr(12).split(",")
+			_load_shot = f2[0]
+			_load_shot_at = float(f2[1]) if f2.size() > 1 else 0.5
+	_t_boot_ms = Time.get_ticks_msec()
+	_record_ok = _menu and not _bot and _soak_rounds == 0
 	_menus = Menus.new()
 	add_child(_menus)
 	add_child(DebugOverlay.new())
-	_menus.start_requested.connect(_start_game)
+	_menus.start_requested.connect(func() -> void: _start_session())
 	_menus.resume_requested.connect(_apply_layers)
 	_menus.restart_requested.connect(func() -> void:
-		_restart()
-		_menus.begin_game())
-	_menus.title_requested.connect(func() -> void:
-		_restart()
-		_menus.open_title())
+		_record_stats()
+		_start_session())
+	_menus.title_requested.connect(_back_to_menu)
 	_menus.quit_requested.connect(func() -> void: get_tree().quit())
 	_menus.layers_changed.connect(_apply_layers)
 	Game.settings.changed.connect(_on_setting)
-	_weapon_view = Node3D.new()
-	_weapon_view.set_script(WeaponView)
-	add_child(_weapon_view)
-	_weapon_view.setup(_camera)
-	Game.weapon_acquired.connect(func(id): _hud.announce("%s : ARME ACQUISE" % String(Config.weapon(id)["name"])))
-	Game.purchase_denied.connect(func(price): _hud.announce("%d POINTS REQUIS" % price))
-	Game.round_started.connect(func(n): _hud.announce("MANCHE %d" % n))
-	Game.round_ended.connect(func(): _hud.announce("MANCHE TERMINÉE"))
-	Game.zombie_spawned.connect(_on_zombie_spawned)
-	Game.shot_fired.connect(_on_shot)
-	Game.door_opened.connect(func(id): _hud.announce("PORTE OUVERTE : %s" % Game.world.doors[id]["name"]))
-	Game.door_denied.connect(func(id): _hud.announce("%d POINTS REQUIS" % int(Game.world.doors[id]["price"])))
-	Game.game_over.connect(_on_game_over)
-	Game.announced.connect(func(title: String, sub: String): _hud.announce(title, sub))
-	Game.victory_screen.connect(func(title: String, text: String) -> void: _menus.show_victory(title, text))   # J10 : le Bourreau est tombé
-	Game.liberated_screen.connect(func(title: String, text: String) -> void: _menus.show_victory(title, text))   # J10 : STRASBOURG LIBÉRÉE
-	_restart()
+	_connect_game_signals()
 	_apply_audio()
 	if "--no-music" not in user_args:
 		Sfx.start_music()
 	if _menu:
 		_menus.open_title()
+		_open_ui(_ui)
 	else:
-		_menus.begin_game()
-	_open_ui(_ui)
-	if _no_hud:
-		_hud.visible = false
-		_menus.visible = false
-	if _hud_demo:
-		_demo_hud()
-	if _demo:   # un zombie à 5 m devant le joueur, pour les captures
-		var z := ZombieSim.new()
-		z.id = 999
-		z.pos = Vector3(2.0, 0, 2.5)
-		z.speed = 0.5
-		z.health = 1000.0
-		z.rng = Game.rng
-		Game.zombies.append(z)
-		Game.zombie_spawned.emit(z)
+		await _start_session()
+		_open_ui(_ui)
+	print("MENU : prêt %d ms après le lancement du moteur (_ready : %d ms)" % [Time.get_ticks_msec(), Time.get_ticks_msec() - _t_boot_ms])
+
+## Signaux de la simulation : branchés UNE fois (les vues de jeu, elles, sont recréées à chaque partie : on teste leur présence).
+func _connect_game_signals() -> void:
+	Game.weapon_acquired.connect(func(id): if _hud != null: _hud.announce("%s : ARME ACQUISE" % String(Config.weapon(id)["name"])))
+	Game.purchase_denied.connect(func(price): if _hud != null: _hud.announce("%d POINTS REQUIS" % price))
+	Game.round_started.connect(func(n): if _hud != null: _hud.announce("MANCHE %d" % n))
+	Game.round_ended.connect(func(): if _hud != null: _hud.announce("MANCHE TERMINÉE"))
+	Game.zombie_spawned.connect(_on_zombie_spawned)
+	Game.shot_fired.connect(_on_shot)
+	Game.door_opened.connect(func(id): if _hud != null: _hud.announce("PORTE OUVERTE : %s" % Game.world.doors[id]["name"]))
+	Game.door_denied.connect(func(id): if _hud != null: _hud.announce("%d POINTS REQUIS" % int(Game.world.doors[id]["price"])))
+	Game.game_over.connect(_on_game_over)
+	Game.announced.connect(func(title: String, sub: String): if _hud != null: _hud.announce(title, sub))
+	Game.victory_screen.connect(func(title: String, text: String) -> void: _menus.show_victory(title, text))   # J10 : le Bourreau est tombé
+	Game.liberated_screen.connect(func(title: String, text: String) -> void: _menus.show_victory(title, text))   # J10 : STRASBOURG LIBÉRÉE
+
+# ---------------------------------------------------------------- v0.14.0 : session (chargement par étapes, retour au menu)
+func _map_choice() -> String:
+	return _map if _map != "" else String(Game.settings.get_value("map"))
+
+func _progress(text: String, frac: float) -> void:
+	_menus.show_loading(text, _flow.progress(frac))
+	if _load_shot != "" and _flow.progress(frac) >= _load_shot_at:
+		var path := _load_shot
+		_load_shot = ""
+		await RenderingServer.frame_post_draw
+		get_viewport().get_texture().get_image().save_png(path)
+		print("capture du chargement : %s (%.0f %%)" % [path, _flow.progress(frac) * 100.0])
+
+## Passe à l'étape suivante du chargement et laisse l'interface se redessiner.
+func _step(frac_done := 0.0) -> void:
+	await _progress(_flow.step_text(), frac_done)
+	await get_tree().process_frame
+
+func _start_session() -> void:
+	if not _flow.start_loading():
+		return
+	var t0 := Time.get_ticks_msec()
+	_unload_session()
+	_load_max_dt = 0.0
+	_load_frames = 0
+	_report_memory("avant chargement")
+	Game.difficulty = Difficulty.valid(_difficulty_arg if _difficulty_arg != "" else String(Game.settings.get_value("difficulty")))
+	var map := _map_choice()
+	await _step(0.0)
+	# 1. données de la carte sur un fil de travail (l'interface continue d'animer fond et barre)
+	var th := Thread.new()
+	th.start(func() -> Object: return Arena.load_arena() if map == "arena" else World.load_world())
+	var tw := Time.get_ticks_msec()
+	while th.is_alive():
+		await _progress(_flow.step_text(), 1.0 - exp(-(Time.get_ticks_msec() - tw) / 700.0))
+		await get_tree().process_frame
+	var data: Object = th.wait_to_finish()
+	var t_data := Time.get_ticks_msec() - t0
+	# 2. état de la partie (rapide : les données sont déjà là)
+	_flow.next_step()
+	await _step(0.0)
+	_new_game_state(data, map)
+	# 3. vues de jeu
+	_flow.next_step()
+	await _step(0.0)
+	_build_scene_nodes(map)
+	var t_scene := Time.get_ticks_msec() - t0
+	# 4. la ville (tuiles, textures, décor) répartie sur plusieurs images
+	_flow.next_step()
+	if _arena_node != null and _arena_node.has_method("build"):
+		_arena_node.progress.connect(func(f: float) -> void: _progress(_flow.step_text(), f))
+		await _arena_node.build()
+	await _step(1.0)
+	var t_city := Time.get_ticks_msec() - t0
+	# 5. derniers réglages puis la partie
+	_flow.next_step()
+	await _step(0.0)
+	_finish_scene(map)
+	_session_live = true
+	_flow.finish_loading()
+	_menus.begin_game()
+	print("CHARGEMENT : partie prête en %d ms (données %d ms, vues %d ms, ville %d ms, fin %d ms) ; %d images, pire image %.0f ms ; carte %s, difficulté %s" % [
+		Time.get_ticks_msec() - t0, t_data, t_scene - t_data, t_city - t_scene, Time.get_ticks_msec() - t0 - t_city, _load_frames, _load_max_dt * 1000.0, map, Game.difficulty])
+	_report_memory("partie lancée")
+
+## Libère la partie en cours : vues, ville, zombies, simulation (retour au menu, rejouer).
+func _unload_session() -> void:
+	_session_live = false
+	for v in _views.values():
+		_drop(v)
+	_views.clear()
+	for t in _tracers:
+		_drop(t[0])
+	_tracers.clear()
+	for n in [_arena_node, _rides_view, _machines_view, _weapon_view, _finale_view, _fx, _graphics, _hud, _camera]:
+		_drop(n)
+	_arena_node = null
+	_rides_view = null
+	_machines_view = null
+	_weapon_view = null
+	_finale_view = null
+	_fx = null
+	_graphics = null
+	_hud = null
+	_camera = null
+	_pending.clear()
+	_menus.map_view.release()
+	Game.unload()
+	Sfx.reset()
+
+func _drop(n: Node) -> void:
+	if n != null and is_instance_valid(n):
+		if n.get_parent() != null:
+			n.get_parent().remove_child(n)
+		n.queue_free()
+
+func _back_to_menu() -> void:
+	_record_stats()
+	_unload_session()
+	_flow.to_menu()
+	_menus.open_title()
+	await get_tree().process_frame
+	await get_tree().process_frame
+	_report_memory("après retour au menu")
+
+## Fin de partie (mort, victoire puis retour au menu, ou fermeture) : met à jour les statistiques, une seule fois par partie.
+func _record_stats() -> void:
+	if not _flow.needs_record():
+		return
+	_flow.mark_recorded()
+	if not _record_ok or Game.player == null or Game.map_name == "arena":
+		return
+	var broken := Game.stats.record(Game.difficulty, Game.round_number, Game.kills, Game.points, Game.time, Game.finale_done)
+	print("statistiques : manche %d, %d tués, %d points, %.0f s, victoire %s ; records battus : %s" % [Game.round_number, Game.kills, Game.points, Game.time, Game.finale_done, broken])
+
 
 func _soak_end() -> void:
 	var r := _soak.rows
@@ -232,21 +348,10 @@ func _soak_end() -> void:
 		r[0]["mem_mb"], r[-1]["mem_mb"], r[0]["objects"], r[-1]["objects"], r[0]["nodes"], r[-1]["nodes"]])
 	get_tree().quit()
 
-func _restart() -> void:
-	for v in _views.values():
-		v.queue_free()
-	_views.clear()
-	if _arena_node != null:
-		_arena_node.queue_free()
-	Game.new_game(_seed, _map, Config.at("startWeapons", []))
-	if _finale_view != null:
-		_finale_view.clear()
-	_hud_last = {"banner": "", "bar": {}, "mark": "", "fanal": -2.0, "fanal_text": ""}
-	if _graphics != null:
-		_graphics.set_sky_k(0.0)
+## État de la partie (Game.new_game avec les données déjà chargées) et réglages de démonstration des arguments.
+func _new_game_state(data: Object, map: String) -> void:
+	Game.new_game(_seed, map, Config.at("startWeapons", []), data)
 	Sfx.reset()
-	if _fx != null:
-		_fx.clear()
 	if _at_pos != Vector3.INF:
 		Game.player.pos = _at_pos
 		Game.player.yaw = _at_yaw
@@ -256,20 +361,40 @@ func _restart() -> void:
 	Game.flow_threaded = not _sync_flow and Game.world != null
 	if _horde > 0:
 		_spawn_horde(_horde)
+
+## Caméra, ciel, effets, HUD, arme et nœud de la carte (la ville se construit ensuite : `build()`).
+func _build_scene_nodes(map: String) -> void:
+	_camera = Camera3D.new()
+	_camera.fov = float(Game.settings.get_value("fov"))
+	_camera.near = 0.05
+	_camera.far = 180.0               # le JS s'arrête à 170 m : au-delà le brouillard cache tout
+	add_child(_camera)
+	_graphics = GraphicsView.new()
+	add_child(_graphics)
+	_graphics.setup(_camera, map == "arena")
+	_fx = FxView.new()
+	add_child(_fx)
+	_fx.setup(_camera)
+	_finale_view = FinaleView.new()
+	add_child(_finale_view)
+	_finale_view.setup(_camera, _fx)
+	_hud = HUD.instantiate()
+	add_child(_hud)
+	_weapon_view = Node3D.new()
+	_weapon_view.set_script(WeaponView)
+	add_child(_weapon_view)
+	_weapon_view.setup(_camera)
+	_hud_last = {"banner": "", "bar": {}, "mark": "", "fanal": -2.0, "fanal_text": ""}
 	_arena_node = (WORLD if Game.world != null else ARENA).instantiate()
 	add_child(_arena_node)
-	if _rides_view != null:
-		_rides_view.queue_free()
-		_rides_view = null
+
+func _finish_scene(_map_name: String) -> void:
 	if Game.rides != null:
 		_rides_view = Node3D.new()
 		_rides_view.set_script(RidesView)
 		add_child(_rides_view)
 		_rides_view.setup(_camera)
 		_start_mounted()
-	if _machines_view != null:
-		_machines_view.queue_free()
-		_machines_view = null
 	if Game.machines != null:
 		_machines_view = Node3D.new()
 		_machines_view.set_script(MachinesView)
@@ -285,6 +410,20 @@ func _restart() -> void:
 	_apply_brightness()
 	_map_prepare()
 	_pending.clear()
+	if _no_hud:
+		_hud.visible = false
+		_menus.visible = false
+	if _hud_demo:
+		_demo_hud()
+	if _demo:   # un zombie à 5 m devant le joueur, pour les captures
+		var z := ZombieSim.new()
+		z.id = 999
+		z.pos = Vector3(2.0, 0, 2.5)
+		z.speed = 0.5
+		z.health = 1000.0
+		z.rng = Game.rng
+		Game.zombies.append(z)
+		Game.zombie_spawned.emit(z)
 
 ## N zombies variés (marcheurs, coureurs, rampants, chevaliers, pestiférés) autour du joueur, et plus de manches : pour les captures.
 func _spawn_horde(n: int) -> void:
@@ -389,8 +528,12 @@ func _start_mounted() -> void:
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_APPLICATION_FOCUS_OUT and not _bot and _menus != null:
 		_menus.focus_lost()
+	elif what == NOTIFICATION_WM_CLOSE_REQUEST:
+		_record_stats()   # fermeture de la fenêtre en pleine partie : la partie compte quand même
 
 func _unhandled_input(event: InputEvent) -> void:
+	if not _session_live:
+		return
 	var live: bool = Game.playing and not Game.over and _menus.in_game
 	if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED and live:
 		var m := event as InputEventMouseMotion
@@ -434,6 +577,8 @@ func _unhandled_input(event: InputEvent) -> void:
 					_pending["weapon"] = i
 
 func _physics_process(dt: float) -> void:
+	if not _session_live:
+		return
 	_prev_player = Game.player.pos
 	_prev_eye = _eye_now()
 	for v in _views.values():
@@ -482,6 +627,71 @@ func _eye_now() -> Vector3:
 	return p.pos + Vector3(0, float(Config.at("player.eye")), 0)
 
 func _process(dt: float) -> void:
+	if not _first_draw:
+		_first_draw = true
+		if DisplayServer.get_name() != "headless":
+			await RenderingServer.frame_post_draw
+		print("MENU : premier affichage à %d ms après le lancement du moteur" % Time.get_ticks_msec())
+		if _probe:
+			print("PROBE title : world=%s arena=%s player=%s director=%s zombies=%d flow=%d" % [Game.world != null, Game.arena != null, Game.player != null, Game.director != null, Game.zombies.size(), _flow.state])
+			get_tree().quit(0 if Game.world == null and Game.arena == null and Game.player == null and Game.director == null and Game.zombies.is_empty() and _flow.is_menu() else 1)
+			return
+	_real_t += dt
+	if not _session_live:
+		_menu_tick(dt)
+		return
+	_session_process(dt)
+
+## Menu sans partie : boutons à presser (--click), musique du menu, capture d'écran de menu.
+func _menu_tick(dt: float) -> void:
+	if _flow.state == SessionFlow.LOADING:
+		_load_max_dt = maxf(_load_max_dt, dt)
+		_load_frames += 1
+	Sfx.set_mood(AudioRules.mood_intensity(false, false, 0), true)
+	_click_t += dt
+	if not _click.is_empty() and _click_t > 0.6 and _flow.state != SessionFlow.LOADING:
+		_click_t = 0.0
+		_press(_click[0])
+		_click.remove_at(0)
+	if _shot_path != "" and _real_t >= 1.5 + _shot_at and not _shot_done and _click.is_empty() and _flow.state != SessionFlow.LOADING:
+		_shot_done = true
+		await RenderingServer.frame_post_draw
+		get_viewport().get_texture().get_image().save_png(_shot_path)
+		print("capture : %s (menu)" % _shot_path)
+		get_tree().quit()
+
+## --click : texte d'un bouton visible à presser, @ESC (touche Échap) ou @DIE (mort du joueur).
+func _press(want: String) -> void:
+	if want == "@ESC":
+		_menus.escape()
+		return
+	if want == "@DIE" and Game.player != null:   # mort du joueur (vérifie fin de partie, statistiques, écran de fin)
+		Game.zombies.clear()
+		Game.points = 1234
+		Game.kills = 17
+		Game.player.hurt(10000.0, Game.time)
+		Game._end_game()
+		return
+	var b := _find_button(_menus, want)
+	if b != null:
+		b.pressed.emit()
+	else:
+		printerr("--click : bouton « %s » introuvable" % want)
+
+func _report_memory(label: String) -> void:
+	print("MÉMOIRE %s : monde %s, arène %s, joueur %s, zombies %d ; %d objets, %d noeuds, %.0f Mo" % [label, Game.world != null, Game.arena != null, Game.player != null,
+		Game.zombies.size(), int(Performance.get_monitor(Performance.OBJECT_COUNT)), int(Performance.get_monitor(Performance.OBJECT_NODE_COUNT)), Performance.get_monitor(Performance.MEMORY_STATIC) / 1048576.0])
+
+func _find_button(n: Node, text: String) -> BaseButton:
+	for c in n.get_children():
+		if c is BaseButton and (c as BaseButton).text == text and c.is_visible_in_tree():
+			return c
+		var r := _find_button(c, text)
+		if r != null:
+			return r
+	return null
+
+func _session_process(dt: float) -> void:
 	var f := Engine.get_physics_interpolation_fraction()
 	var p := Game.player
 	if p.eye_override != Vector3.INF or _prev_eye != Vector3.ZERO and Game.rides != null and Game.rides.cam.placed:
@@ -527,7 +737,12 @@ func _process(dt: float) -> void:
 		if _tracers[i][1] <= 0.0:
 			_tracers[i][0].queue_free()
 			_tracers.remove_at(i)
-	_real_t += dt
+	if not _click.is_empty():
+		_click_t += dt
+		if _click_t > 0.6:
+			_click_t = 0.0
+			_press(_click[0])
+			_click.remove_at(0)
 	var shot_ready: bool = Game.time >= _shot_at if Game.playing else _real_t >= 3.0 + _shot_at   # un écran de menu n'avance pas le temps de jeu
 	if _shot_path != "" and shot_ready and not _shot_done:
 		_shot_done = true
@@ -598,12 +813,11 @@ func _on_shot(origin: Vector3, end: Vector3) -> void:
 	_tracers.append([m, TRACER_TIME])
 
 func _on_game_over() -> void:
+	_record_stats()
+	_flow.end_game()
 	_menus.show_over("Vous avez survécu jusqu'à la [color=#ffffff][b]manche %d[/b][/color]\n%d zombies tués  ·  %d points" % [Game.round_number, Game.kills, Game.points])
 
 # ---------------------------------------------------------------- J7 : menus, réglages, démonstrations
-func _start_game() -> void:
-	_menus.begin_game()
-
 ## Les couches d'interface ouvertes décident si le jeu tourne et si la souris est capturée.
 func _apply_layers() -> void:
 	var blocked: bool = _menus.stack.blocks_game()
@@ -620,7 +834,8 @@ func _on_setting(key: String) -> void:
 		"volume", "music":
 			_apply_audio()
 		"fov":
-			_camera.fov = float(Game.settings.get_value("fov"))
+			if _camera != null:
+				_camera.fov = float(Game.settings.get_value("fov"))
 
 ## J10 : bandeau, barre de boss, marque et jauge du Fanal du HUD (mis à jour seulement quand ils changent).
 func _hud_finale() -> void:
@@ -747,6 +962,22 @@ func _open_ui(name: String) -> void:
 		"menu":
 			_menus.open_title()
 			_menus.open_menu()
+		"mapdiff":
+			_menus.open_title()
+			_menus.open_mapdiff()
+		"stats":
+			_menus.open_title()
+			_menus.open_stats()
+		"confirm":
+			_menus.open_title()
+			_menus.open_stats()
+			_menus.stack.push(UiStack.CONFIRM)
+			_menus._sync()
+		"credits":
+			_menus.open_title()
+			_menus.open_credits()
+		"loading":
+			_menus.show_loading("Construction de la ville", 0.45)
 		"options":
 			_menus.open_title()
 			_menus.open_options(UiStack.TITLE)
