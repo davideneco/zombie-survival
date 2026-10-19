@@ -55,7 +55,7 @@ func setup(s: TramSim) -> void:
 	apply(1.0)
 
 func _tex(name: String) -> Texture2D:
-	var img := Image.load_from_file(ProjectSettings.globalize_path(DIR + name))
+	var img := Image.load_from_file(DIR + name)   # res:// direct : lisible depuis le .pck exporté
 	if img == null or img.is_empty():
 		return null
 	img.generate_mipmaps()

@@ -111,7 +111,7 @@ func _load_textures() -> void:
 		n_tex += 1
 		progress.emit(0.25 * n_tex / maxf(1.0, list.size()))
 		await _slice()
-		var path := ProjectSettings.globalize_path(String(t["file"]))
+		var path := String(t["file"])   # res:// direct : lisible depuis le .pck exporté
 		var img := Image.load_from_file(path)
 		if img == null or img.is_empty():
 			push_warning("texture absente : %s" % path)

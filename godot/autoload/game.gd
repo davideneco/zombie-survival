@@ -95,6 +95,12 @@ func _init() -> void:
 		if a.begins_with("--settings="):
 			path = a.substr(11)
 	settings = Settings.new(path)
+	if OS.has_feature("windows") and not FileAccess.file_exists(path):
+		# Port Windows : premier lancement sur une puce graphique intégrée (ou un rendu logiciel) -> qualité « Rapide ». Pas de sauvegarde ici :
+		# le joueur garde la main dans Options, et le réglage n'est écrit qu'à sa première modification.
+		var gpu := RenderingServer.get_video_adapter_type()
+		if gpu == RenderingDevice.DEVICE_TYPE_INTEGRATED_GPU or gpu == RenderingDevice.DEVICE_TYPE_CPU:
+			settings.values["quality"] = 0
 	var stats_path := GameStats.DEFAULT_PATH
 	for a in OS.get_cmdline_user_args():
 		if a.begins_with("--stats="):

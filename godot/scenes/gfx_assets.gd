@@ -19,7 +19,7 @@ static func meta() -> Dictionary:
 static func texture(name: String, mipmaps := true) -> Texture2D:
 	if _tex.has(name):
 		return _tex[name]
-	var path := ProjectSettings.globalize_path(DIR + name)
+	var path := DIR + name   # chemin res:// direct : globalize_path casserait l'export (les fichiers sont dans le .pck)
 	var img := Image.load_from_file(path)
 	var t: Texture2D = null
 	if img != null and not img.is_empty():
