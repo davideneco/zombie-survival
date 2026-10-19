@@ -37,7 +37,8 @@ static func ray_box(o: Vector3, d: Vector3, c: Vector3, h: Vector3) -> float:
 			return -1.0
 	return tmin
 
-## Rayon contre un zombie : { t, head } ou {} (le plus proche de la tête et du corps).
+## Rayon contre un zombie : { t, head } ou {} (le plus proche de la tête et du corps). Zombies ordinaires : boîtes du modèle animé (ZombieHit) ;
+## boss, gargouilles et Ange : boîtes du JS (Rules).
 static func ray_zombie(o: Vector3, d: Vector3, max_t: float, z: ZombieSim) -> Dictionary:
 	var cy := cos(z.yaw)
 	var sy := sin(z.yaw)
@@ -48,16 +49,24 @@ static func ray_zombie(o: Vector3, d: Vector3, max_t: float, z: ZombieSim) -> Di
 	var sc := z.body_scale()
 	if z is AngelSim:   # trompette (point faible, « tête »), ailes et corps (jamais « tête ») : angel.js _buildBody
 		return _ray_angel(lo, ld, max_t, z as AngelSim, sc)
-	var body_c := Rules.CRAWLER_BODY_CENTER if z.crawler else Vector3(0, Rules.ZOMBIE_BODY_CENTER_Y, 0)
-	var body_h := Rules.CRAWLER_BODY_HALF if z.crawler else Rules.ZOMBIE_BODY_HALF
-	var head_c := Rules.CRAWLER_HEAD if z.crawler else Rules.ZOMBIE_HEAD_CENTER
-	var tb := ray_box(lo, ld, body_c * sc, body_h * sc)
+	var tb: float
 	var th := -1.0
-	if not z.headless:
-		th = ray_sphere(lo, ld, head_c * sc, Rules.ZOMBIE_HEAD_RADIUS * sc.y)
+	if ZombieHit.uses_model(z):   # v0.20.0 : boîtes du modèle animé (écart assumé avec le JS, voir ZombieHit)
+		var sh := ZombieHit.shapes(z)
+		tb = ray_box(lo, ld, sh["bc"], sh["bh"])
+		if not z.headless:
+			th = ray_sphere(lo, ld, sh["hc"], sh["hr"])
+	else:
+		var body_c := Rules.CRAWLER_BODY_CENTER if z.crawler else Vector3(0, Rules.ZOMBIE_BODY_CENTER_Y, 0)
+		var body_h := Rules.CRAWLER_BODY_HALF if z.crawler else Rules.ZOMBIE_BODY_HALF
+		var head_c := Rules.CRAWLER_HEAD if z.crawler else Rules.ZOMBIE_HEAD_CENTER
+		tb = ray_box(lo, ld, body_c * sc, body_h * sc)
+		if not z.headless:
+			th = ray_sphere(lo, ld, head_c * sc, Rules.ZOMBIE_HEAD_RADIUS * sc.y)
 	if tb < 0.0 and th < 0.0:
 		return {}
-	var head := th >= 0.0 and (tb < 0.0 or th <= tb)
+	# modèle animé : la boîte du corps englobe la tête et les bras tendus devant elle ; si le rayon traverse la sphère de tête c'est une tête
+	var head := th >= 0.0 and (tb < 0.0 or th <= tb or ZombieHit.uses_model(z))
 	var t := th if head else tb
 	if t > max_t:
 		return {}

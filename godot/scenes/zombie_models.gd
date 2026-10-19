@@ -200,6 +200,45 @@ static func _make(model: String, armor: bool) -> Rig:
 	PerfLog.note_load("instance de zombie", k_name(model, armor), pt)
 	return r
 
+## --show-boxes pour les vues en primitives (boss, gargouilles, Ange) : les boîtes du JS (Rules, Hitscan) dessinées dans le repère `parent` (déjà à l'échelle de la taille du zombie).
+## Tête / trompette : sphères rouges ; corps / ailes : boîtes bleues.
+static func add_debug_old(parent: Node3D, z: ZombieSim) -> Array[MeshInstance3D]:
+	var shapes: Array = []   # [type, centre, taille (rayon ou demi-tailles), couleur]
+	var red := Color(1, 0, 0, 0.35)
+	var blue := Color(0.2, 0.4, 1, 0.22)
+	if z is AngelSim:
+		shapes.append(["box", Vector3(0, Rules.ZOMBIE_BODY_CENTER_Y, 0), Rules.ZOMBIE_BODY_HALF, blue])
+		shapes.append(["sph", Rules.ZOMBIE_HEAD_CENTER, Vector3.ONE * Rules.ZOMBIE_HEAD_RADIUS, Color(0.2, 1, 0.2, 0.3)])
+		shapes.append(["box", Vector3(0.0, 1.45, -0.28), Vector3(1.65, 0.75, 0.175), blue])
+		shapes.append(["sph", (z as AngelSim)._trumpet_local(), Vector3.ONE * 0.3, red])
+	else:
+		var hc: Vector3 = Rules.CRAWLER_HEAD if z.crawler else Rules.ZOMBIE_HEAD_CENTER
+		shapes.append(["box", Rules.CRAWLER_BODY_CENTER if z.crawler else Vector3(0, Rules.ZOMBIE_BODY_CENTER_Y, 0), Rules.CRAWLER_BODY_HALF if z.crawler else Rules.ZOMBIE_BODY_HALF, blue])
+		shapes.append(["sph", hc, Vector3.ONE * Rules.ZOMBIE_HEAD_RADIUS, red])
+	var made: Array[MeshInstance3D] = []
+	for sp in shapes:
+		var mi := MeshInstance3D.new()
+		if sp[0] == "box":
+			var bm := BoxMesh.new()
+			bm.size = (sp[2] as Vector3) * 2.0
+			mi.mesh = bm
+		else:
+			var sm := SphereMesh.new()
+			sm.radius = (sp[2] as Vector3).x
+			sm.height = sm.radius * 2.0
+			mi.mesh = sm
+		var m := StandardMaterial3D.new()
+		m.albedo_color = sp[3]
+		m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		m.cull_mode = BaseMaterial3D.CULL_DISABLED
+		mi.material_override = m
+		mi.position = sp[1]
+		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		parent.add_child(mi)
+		made.append(mi)
+	return made
+
 static func k_name(model: String, armor: bool) -> String:
 	return model + ("+armure" if armor else "")
 

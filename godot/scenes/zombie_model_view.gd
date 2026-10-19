@@ -87,31 +87,16 @@ func setup(z: ZombieSim) -> void:
 		_mound.scale = Vector3(0.2, 0.05, 0.2)
 
 ## --show-boxes : les boîtes de touche de la simulation (tête rouge, corps bleu) en transparence, pour juger de l'écart avec le modèle dessiné.
+## v0.20.0 : ce sont les boîtes du modèle (ZombieHit), remises à jour à chaque image selon l'animation.
 func _debug_boxes() -> void:
-	var sc := sim.body_scale()
-	var holder := Node3D.new()
-	holder.scale = sc
-	_group.add_child(holder)
 	var hm := SphereMesh.new()
-	hm.radius = Rules.ZOMBIE_HEAD_RADIUS
-	hm.height = Rules.ZOMBIE_HEAD_RADIUS * 2.0
+	hm.radius = 1.0
+	hm.height = 2.0
 	var bm := BoxMesh.new()
-	var hc: Vector3 = Rules.CRAWLER_HEAD if sim.crawler else Rules.ZOMBIE_HEAD_CENTER
-	var bc: Vector3 = Rules.CRAWLER_BODY_CENTER if sim.crawler else Vector3(0, Rules.ZOMBIE_BODY_CENTER_Y, 0)
-	var bh: Vector3 = Rules.CRAWLER_BODY_HALF if sim.crawler else Rules.ZOMBIE_BODY_HALF
-	bm.size = bh * 2.0
-	for spec in [[hm, hc, Color(1, 0, 0, 0.35)], [bm, bc, Color(0.2, 0.4, 1, 0.22)]]:
-		var mi := MeshInstance3D.new()
-		mi.mesh = spec[0]
-		var m := StandardMaterial3D.new()
-		m.albedo_color = spec[2]
-		m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-		m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-		m.cull_mode = BaseMaterial3D.CULL_DISABLED
-		mi.material_override = m
-		mi.position = spec[1]
-		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		holder.add_child(mi)
+	bm.size = Vector3.ONE
+	_dbg_head = _box_instance(hm, Color(1, 0, 0, 0.35))
+	_dbg_body = _box_instance(bm, Color(0.2, 0.4, 1, 0.22))
+	_update_debug_boxes()
 	# le crâne dessiné (vert) : centre de la boîte du crâne suivi par l'os de la tête, dans l'échelle du modèle (même calcul que la mesure de test_j16)
 	var skull: MeshInstance3D = null
 	for m in _rig.heads:
@@ -138,6 +123,29 @@ func _debug_boxes() -> void:
 		_dbg.append(ba)
 
 var _dbg: Array[Node] = []
+var _dbg_head: MeshInstance3D
+var _dbg_body: MeshInstance3D
+
+func _box_instance(mesh: Mesh, color: Color) -> MeshInstance3D:
+	var mi := MeshInstance3D.new()
+	mi.mesh = mesh
+	var m := StandardMaterial3D.new()
+	m.albedo_color = color
+	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	m.cull_mode = BaseMaterial3D.CULL_DISABLED
+	mi.material_override = m
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_group.add_child(mi)
+	return mi
+
+func _update_debug_boxes() -> void:
+	var sh := ZombieHit.shapes(sim)
+	_dbg_head.position = sh["hc"]
+	_dbg_head.scale = Vector3.ONE * float(sh["hr"])
+	_dbg_head.visible = not sim.headless
+	_dbg_body.position = sh["bc"]
+	_dbg_body.scale = (sh["bh"] as Vector3) * 2.0
 
 ## (Re)pose la variante d'après l'état de la simulation : change de modèle si besoin (l'armuré qui perd ses jambes passe sur le modèle qui sait ramper).
 func _set_variant(first: bool) -> void:
@@ -243,6 +251,8 @@ func _process_view(dt: float) -> void:
 		for m in _rig.meshes:
 			m.set_instance_shader_parameter("blood", _blood)
 	_group.rotation = Vector3(z.lean_x, z.yaw, 0.0)
+	if _dbg_head != null:
+		_update_debug_boxes()
 	if z.dead:
 		_death(z)
 	else:

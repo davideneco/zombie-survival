@@ -452,10 +452,11 @@ func _inventory(t: Node) -> void:
 	t.check(Game.arms.current.gl == 2, "obus sous canon : délai entre deux coups")
 
 # ------------------------------------------------------------------ couteau
+## v0.20.0 : la tête du modèle animé est plus basse que la sphère du JS (sommet à ~1,9 m, bas à ~1,0 m) : le « corps » se vise à 0,6 m.
 func _melee(t: Node) -> void:
 	var K: Dictionary = Config.at("knife")
 	var cases := [
-		{"name": "corps", "yaw_z": 0.0, "aim_y": 1.0, "aim_dx": 0.0, "dmg_head": false, "back": false},
+		{"name": "corps", "yaw_z": 0.0, "aim_y": 0.6, "aim_dx": 0.0, "dmg_head": false, "back": false},
 		{"name": "tête", "yaw_z": 0.0, "aim_y": 1.83, "aim_dx": 0.0, "dmg_head": true, "back": false},
 		{"name": "dos", "yaw_z": PI, "aim_y": 1.0, "aim_dx": 0.0, "dmg_head": false, "back": true},
 		{"name": "cône (visée à côté)", "yaw_z": 0.0, "aim_y": 1.0, "aim_dx": 0.9, "dmg_head": false, "back": false},
@@ -485,7 +486,7 @@ func _melee(t: Node) -> void:
 	Game.director.round_number = 10
 	var zc := _zombie(Vector3(LANE.x, 0, LANE.z - 1.3), 100000.0)
 	Game.zombies.append(zc)
-	_aim_at(Game.player, zc.pos + Vector3(0, 1.0, 0))
+	_aim_at(Game.player, zc.pos + Vector3(0, 0.6, 0))
 	_fire_steps(1, {"knife": true})
 	_fire_steps(10, {"knife": true})
 	_fire_steps(40, {})
@@ -511,7 +512,7 @@ func _melee(t: Node) -> void:
 	var za := _zombie(Vector3(LANE.x, 0, LANE.z - 1.3), 100000.0)
 	var zb := _zombie(Vector3(LANE.x + 1.0, 0, LANE.z - 1.3), 100000.0)
 	Game.zombies.append_array([za, zb])
-	_aim_at(Game.player, za.pos + Vector3(0, 1.0, 0))
+	_aim_at(Game.player, za.pos + Vector3(0, 0.6, 0))
 	_fire_steps(1, {"knife": true})
 	_fire_steps(30, {})
 	t.near(100000.0 - za.health, WeaponMelee.damage(10, false, false, true), "hache : dégâts x3", 1e-6)

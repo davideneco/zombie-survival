@@ -135,8 +135,10 @@ func head_stats(t: Node, model: String, anim: String, variant: String, scale_mul
 	var hb := rig.skel.find_bone("Head")
 	var rest_inv: Transform3D = rig.skel.get_bone_global_rest(hb).affine_inverse()
 	var z := _z(variant, 7)
+	z.moving = anim in ["Walk", "Run"]   # l'état de la simulation doit jouer la même animation que le modèle essayé (ZombieHit.anim_of)
+	z.attacking = anim == "Punch"
 	var sc := z.body_scale()
-	var s: float = float(e["scale"]) * scale_mult * sc.y
+	var s: float = float(e["scale"]) * float(Models.variant(variant).get("scale", 1.0)) * scale_mult * sc.y
 	var xz: float = float(e["xz"]) * (sqrt(sc.x / sc.y) if variant == "bloat" else 1.0)
 	rig.ap.play(anim)
 	var len: float = rig.ap.get_animation(anim).length
@@ -188,11 +190,68 @@ func _hit_coverage(t: Node) -> void:
 				var f := head_stats(t, spec[0], spec[1], spec[2], sm)
 				var sd := head_stats(t, spec[0], spec[1], spec[2], sm, true)
 				print("tête dessinée %s/%s échelle x%.2f : de face %.0f %% tête %.0f %% corps %.0f %% raté ; de côté %.0f %% tête %.0f %% corps %.0f %% raté" % [spec[0], spec[1], sm, f["head"] * 100, f["body"] * 100, f["miss"] * 100, sd["head"] * 100, sd["body"] * 100, sd["miss"] * 100])
-	# le visage dessiné (centre du crâne) ne doit pas passer à travers : au moins un impact (tête ou corps) sur 60 % de la tête dessinée, de face, pour chaque variante
-	for spec in [["basic", "Walk", "normal"], ["basic", "Run", "runner"], ["chubby", "Walk", "bloat"], ["arm", "Walk", "armored"], ["basic", "Crawl", "crawler"]]:
+	# v0.20.0 : les boîtes de touche suivent le modèle animé. Au moins 70 % de la tête dessinée (de face) compte comme TÊTE, quasi rien comme corps, pour chaque
+	# variante et chaque animation de marche / course / coup / ramper.
+	for spec in [["basic", "Walk", "normal"], ["basic", "Run", "runner"], ["basic", "Punch", "normal"], ["chubby", "Walk", "bloat"], ["arm", "Walk", "armored"], ["basic", "Crawl", "crawler"]]:
 		var f := head_stats(t, spec[0], spec[1], spec[2])
-		t.check(f["head"] + f["body"] >= 0.5, "%s/%s : de face, %.0f %% de la tête dessinée est touchable (tête %.0f %%)" % [spec[0], spec[1], (f["head"] + f["body"]) * 100, f["head"] * 100])
-		t.check(f["head"] >= 0.2, "%s/%s : de face, au moins 20 %% de la tête dessinée compte comme tête (%.0f %%)" % [spec[0], spec[1], f["head"] * 100])
+		t.check(f["head"] >= 0.7, "%s/%s : de face, %.0f %% de la tête dessinée compte comme tête (>= 70 %%)" % [spec[0], spec[1], f["head"] * 100])
+		t.check(f["head"] + f["body"] >= 0.85, "%s/%s : de face, %.0f %% de la tête dessinée est touchable" % [spec[0], spec[1], (f["head"] + f["body"]) * 100])
+		var sd := head_stats(t, spec[0], spec[1], spec[2], 1.0, true)
+		t.check(sd["head"] >= 0.6, "%s/%s : de côté, %.0f %% de la tête dessinée compte comme tête (>= 60 %%)" % [spec[0], spec[1], sd["head"] * 100])
+	_aim_tests(t)
+
+## Tir sur la tête du modèle = tête (x2) ; tir à côté = raté ; tir au ventre = corps ; tir sous les pieds / au-dessus de la tête = raté ; pour les 3 modèles.
+func _aim_tests(t: Node) -> void:
+	for spec in [["basic", "Walk", "normal"], ["basic", "Run", "runner"], ["chubby", "Walk", "bloat"], ["arm", "Walk", "armored"], ["basic", "Crawl", "crawler"]]:
+		var model: String = spec[0]
+		var e := Models.model_entry(model)
+		var z := _z(spec[2], 7)
+		z.moving = spec[1] in ["Walk", "Run"]
+		var sh := ZombieHit.shapes(z)
+		var hc: Vector3 = sh["hc"]
+		var hr: float = sh["hr"]
+		var name := "%s/%s" % [model, spec[1]]
+		# ces rayons partent de l'avant du zombie (z > 0, il regarde vers +Z, yaw = 0) vers -Z
+		var o := Vector3(hc.x, hc.y, hc.z + 5.0)
+		var r := Hitscan.ray_zombie(o, Vector3(0, 0, -1), 20.0, z)
+		t.check(not r.is_empty() and r["head"], "%s : un tir au centre de la tête dessinée est un tir à la tête" % name)
+		for off in [Vector3(0.6, 0, 0), Vector3(-0.6, 0, 0), Vector3(0, 0.6, 0), Vector3(0, -0.5, 0)]:
+			var o2: Vector3 = o + off * hr
+			var r2 := Hitscan.ray_zombie(o2, Vector3(0, 0, -1), 20.0, z)
+			t.check(not r2.is_empty() and r2["head"], "%s : tir dans la tête (décalé de %s x rayon) = tête" % [name, off])
+		# à côté de la tête et du corps : raté (1,5 m sur le côté de tout le zombie)
+		var bc: Vector3 = sh["bc"]
+		var bh: Vector3 = sh["bh"]
+		var side := Hitscan.ray_zombie(Vector3(bc.x + bh.x + 0.5, hc.y, 5.0), Vector3(0, 0, -1), 20.0, z)
+		t.check(side.is_empty(), "%s : un tir à 0,5 m à côté du corps rate" % name)
+		var above := Hitscan.ray_zombie(Vector3(hc.x, hc.y + hr + 0.4 + (1.0 if spec[2] == "crawler" else 0.0), hc.z + 5.0), Vector3(0, 0, -1), 20.0, z)
+		t.check(above.is_empty() or not above["head"], "%s : un tir au-dessus de la tête ne compte pas comme tête" % name)
+		# l'ancienne sphère (1,83 m) n'est plus une tête pour un zombie debout dont le modèle est plus bas
+		if spec[2] != "crawler" and hc.y + hr < 1.83 * 1.0:
+			var old := Hitscan.ray_zombie(Vector3(0, 1.83 * z.body_scale().y, 5.0), Vector3(0, 0, -1), 20.0, z)
+			t.check(old.is_empty() or not old["head"], "%s : l'ancienne sphère de tête du JS n'est plus une tête" % name)
+		# tir de face au ventre : corps
+		if spec[2] != "crawler":   # le rampant tient sa tête devant tout son corps : pas de « ventre » de face
+			var belly := Hitscan.ray_zombie(Vector3(bc.x, bc.y * 0.5, 5.0), Vector3(0, 0, -1), 20.0, z)
+			t.check(not belly.is_empty() and not belly["head"], "%s : un tir au ventre est un tir au corps" % name)
+		# cap tourné : la tête suit (yaw = 90 degrés, la tête est alors sur +X)
+		z.yaw = PI / 2.0
+		var rotated := Hitscan.ray_zombie(Vector3(hc.z + 5.0, hc.y, hc.x), Vector3(-1, 0, 0), 20.0, z)
+		t.check(not rotated.is_empty() and rotated["head"], "%s : la boîte de tête suit le cap du zombie" % name)
+		# boss et gargouille : boîtes du JS inchangées
+	var boss := BossSim.new()
+	boss.id = 3
+	boss.rng = Game.rng
+	boss.scale_override = 2.25
+	t.check(not ZombieHit.uses_model(boss), "boss : garde les boîtes du JS (ZombieHit non utilisé)")
+	var garg := _z("normal", 5)
+	garg.kind = "gargoyle"
+	t.check(not ZombieHit.uses_model(garg), "gargouille : garde les boîtes du JS")
+	ZombieHit.enabled = false
+	var zz := _z("normal", 7)
+	var js_head := Hitscan.ray_zombie(Vector3(0, 1.83 * zz.body_scale().y, 5.0 + 0.07), Vector3(0, 0, -1), 20.0, zz)
+	t.check(not js_head.is_empty() and js_head["head"], "ZombieHit.enabled = false : la sphère de tête du JS est rétablie")
+	ZombieHit.enabled = true
 
 func _license(t: Node) -> void:
 	var lic := FileAccess.get_file_as_string("res://assets/zombies/LICENSE.txt")

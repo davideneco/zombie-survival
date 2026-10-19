@@ -14,6 +14,7 @@ var _back_glow: MeshInstance3D
 var _mats: Array[StandardMaterial3D] = []
 var _flash := 0.0
 var _last_hp := 0.0
+var _dbg_trumpet: MeshInstance3D   ## --show-boxes : sphère du point faible, suit la trompette
 
 func setup(a: AngelSim) -> void:
 	sim = a
@@ -23,6 +24,8 @@ func setup(a: AngelSim) -> void:
 	scale = Vector3.ONE * a.scale_override
 	_rig = Node3D.new()
 	add_child(_rig)
+	if ZombieModels.show_boxes:
+		_dbg_trumpet = ZombieModels.add_debug_old(_rig, a)[3]
 	var white := _mat(Color("f4f0e6"), 0.55, Color("7a6e50"))
 	var gold := _mat(Color("f0c040"), 0.3, Color("7a5410"))
 	gold.metallic = 0.8
@@ -177,6 +180,8 @@ func _process(dt: float) -> void:
 
 func _tick(dt: float) -> void:
 	var a := sim
+	if _dbg_trumpet != null:
+		_dbg_trumpet.position = a._trumpet_local()
 	var f := Engine.get_physics_interpolation_fraction()
 	position = _prev_pos.lerp(a.pos, f)
 	rotation = Vector3(0.0, a.yaw, 0.0)

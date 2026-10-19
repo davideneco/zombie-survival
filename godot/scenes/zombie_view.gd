@@ -152,6 +152,8 @@ func setup(z: ZombieSim) -> void:
 	_group.rotation_order = EULER_ORDER_YXZ
 	_group.scale = z.body_scale()
 	add_child(_group)
+	if ZombieModels.show_boxes:
+		ZombieModels.add_debug_old(_group, z)
 	_hips = Node3D.new()
 	_hips.position.y = 0.95
 	_group.add_child(_hips)
