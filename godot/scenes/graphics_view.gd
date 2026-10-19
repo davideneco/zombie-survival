@@ -200,7 +200,7 @@ func _build_cinema() -> void:
 # ---------------------------------------------------------------- réglages
 func _on_setting(key: String) -> void:
 	match key:
-		"quality", "cinema", "halo":
+		"quality", "cinema", "halo", "upscaler", "res_scale", "sharp":   # (le MSAA dépend du mode de mise à l'échelle)
 			apply_quality(int(Game.settings.get_value("quality")))
 		"brightness":
 			apply_exposure()
@@ -215,12 +215,12 @@ func apply_quality(q: int) -> void:
 	level_index = q
 	var L := GraphicsRules.level(q)
 	var vp := get_viewport()
-	vp.scaling_3d_mode = Viewport.SCALING_3D_MODE_BILINEAR
-	vp.scaling_3d_scale = GraphicsRules.pixel_ratio(q)
+	apply_scaling()
 	var cinema: bool = bool(Game.settings.get_value("cinema"))
 	var sz := _size()
 	var post := GraphicsRules.want_post(q, cinema, sz.x, sz.y)
-	vp.msaa_3d = Viewport.MSAA_4X if q == 2 else (Viewport.MSAA_2X if q == 1 else Viewport.MSAA_DISABLED)
+	# FSR 2.2 est temporel et remplace l'anticrénelage : pas de MSAA avec lui (il se combine mal avec le tampon de vecteurs de mouvement)
+	vp.msaa_3d = Viewport.MSAA_DISABLED if int(Game.settings.get_value("upscaler")) == 2 else (Viewport.MSAA_4X if q == 2 else (Viewport.MSAA_2X if q == 1 else Viewport.MSAA_DISABLED))
 	var shadows := bool(L["shadows"])
 	moon.shadow_enabled = shadows
 	if shadows:
@@ -240,6 +240,18 @@ func apply_quality(q: int) -> void:
 	_cinema_layer.visible = cinema
 	apply_exposure()
 	quality_applied.emit(q)
+
+## v0.19.1 « Mise à l'échelle » : le rendu 3D se fait à `res_scale` x la fenêtre puis est agrandi (natif -> bilinéaire, FSR 1.0 spatial, FSR 2.2 temporel). Le HUD et
+## les menus sont des CanvasLayer : ils restent à la résolution de la fenêtre (seule la vue 3D est mise à l'échelle). Sans effet à 100 % en natif.
+func apply_scaling() -> void:
+	var vp := get_viewport()
+	var S := Game.settings
+	var up := int(S.get_value("upscaler"))
+	var scale := float(Settings.RES_SCALES[clampi(int(S.get_value("res_scale")), 0, Settings.RES_SCALES.size() - 1)])
+	vp.scaling_3d_mode = GraphicsRules.scaling_mode(up)
+	vp.scaling_3d_scale = scale
+	vp.fsr_sharpness = GraphicsRules.fsr_sharpness(float(S.get_value("sharp")))
+	vp.texture_mipmap_bias = GraphicsRules.mipmap_bias(scale, up)
 
 ## Halo : seuil et adoucissement de la passe de halo du JS (0,62 / 0,15 sur l'image tone-mappée), intensité 0,85 (réduite à l'Aube), flou de 1,8 texel à demi-résolution.
 func _apply_glow(on: bool) -> void:

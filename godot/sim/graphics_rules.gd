@@ -76,6 +76,33 @@ static func pixel_ratio(q: int) -> float:
 	var r: Variant = level(q)["pixelRatio"]
 	return 1.0 if typeof(r) == TYPE_STRING else float(r)
 
+## Préréglage de mise à l'échelle d'un niveau de qualité (v0.19.1) : { upscaler, res_scale } (indices de Settings.UPSCALER_NAMES / RES_SCALES). La résolution de rendu
+## vient de `pixelRatio` du niveau (Rapide 0,75 ; Normale et Haute 1) : sous 100 % le préréglage prend FSR 1.0 (plus net que le bilinéaire d'avant), à 100 % le natif.
+static func upscale_preset(q: int) -> Dictionary:
+	var r := pixel_ratio(q)
+	var best := 0
+	for i in Settings.RES_SCALES.size():
+		if absf(float(Settings.RES_SCALES[i]) - r) < absf(float(Settings.RES_SCALES[best]) - r):
+			best = i
+	return {"upscaler": 1 if float(Settings.RES_SCALES[best]) < 1.0 else 0, "res_scale": best}
+
+## Mode du moteur pour l'option « mise à l'échelle » (0 natif -> bilinéaire, 1 FSR 1.0, 2 FSR 2.2).
+static func scaling_mode(upscaler: int) -> int:
+	match clampi(upscaler, 0, 2):
+		1:
+			return Viewport.SCALING_3D_MODE_FSR
+		2:
+			return Viewport.SCALING_3D_MODE_FSR2
+	return Viewport.SCALING_3D_MODE_BILINEAR
+
+## Netteté du curseur (0..1, 1 = le plus net) -> rendering/scaling_3d/fsr_sharpness du moteur (0 = le plus net, 2 = le moins net ; défaut du moteur 0,2 = curseur 0,9).
+static func fsr_sharpness(sharp: float) -> float:
+	return 2.0 * (1.0 - clampf(sharp, 0.0, 1.0))
+
+## Biais de mipmap des textures quand on rend sous la résolution de la fenêtre : log2(échelle) (négatif), pour que les textures gardent leur finesse après l'agrandissement.
+static func mipmap_bias(scale: float, upscaler: int) -> float:
+	return log(clampf(scale, 0.1, 1.0)) / log(2.0) if upscaler > 0 and scale < 1.0 else 0.0
+
 ## Table de couleurs (buildLut) : octets RVBA de la bande 1024 x 32 (index ((g x W) + b x N + r) x 4), contraste en S, saturation, teintes ombres / hautes lumières.
 static func lut_bytes() -> PackedByteArray:
 	var G: Dictionary = cfg()["grade"]

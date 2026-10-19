@@ -10,14 +10,17 @@ const DEFAULT_PATH := "user://settings.cfg"
 const DEFAULTS := {
 	"brightness": 1.4, "fov": 80.0, "sens": 1.0, "volume": 1.0, "music": 0.5, "quality": 1, "tp_vehicle": true, "chat": true,
 	"cinema": true, "halo": true, "char": 0, "name": "Joueur",
+	"upscaler": 0, "res_scale": 0, "sharp": 0.9,   ## v0.19.1 « Mise à l'échelle » : 0 natif (bilinéaire), 1 FSR 1.0, 2 FSR 2.2 ; indice de RES_SCALES ; netteté 0..1
 	"difficulty": "normal", "map": "strasbourg",   ## menu « Carte et difficulté » (v0.14.0) : voir Difficulty ; carte : "strasbourg" ou "arena"
 }
 ## bornes des curseurs (index.html : optBrightness…)
 const RANGES := {
-	"brightness": [0.6, 3.0, 0.05], "fov": [60.0, 110.0, 1.0], "sens": [0.3, 3.0, 0.05], "quality": [0, 2, 1], "volume": [0.0, 1.0, 0.05], "music": [0.0, 1.0, 0.05],
+	"brightness": [0.6, 3.0, 0.05], "fov": [60.0, 110.0, 1.0], "sens": [0.3, 3.0, 0.05], "quality": [0, 2, 1], "upscaler": [0, 2, 1], "res_scale": [0, 4, 1], "sharp": [0.0, 1.0, 0.05], "volume": [0.0, 1.0, 0.05], "music": [0.0, 1.0, 0.05],
 }
 const MAPS := ["strasbourg", "arena"]
 const QUALITY_NAMES := ["Rapide", "Normale", "Haute"]
+const UPSCALER_NAMES := ["Natif", "FSR 1.0", "FSR 2.2 (essai)"]   ## FSR 2.2 : images fantômes légères sur les zombies en mouvement (captures v0.19.1)
+const RES_SCALES := [1.0, 0.85, 0.75, 0.67, 0.5]   ## résolution de rendu 3D (le HUD et les menus restent à la résolution de la fenêtre)
 
 var path := DEFAULT_PATH
 var values: Dictionary = DEFAULTS.duplicate()
@@ -41,14 +44,25 @@ func set_value(key: String, v: Variant) -> void:
 	if RANGES.has(key):
 		var r: Array = RANGES[key]
 		v = clampf(float(v), float(r[0]), float(r[1]))
-		if key == "quality":
+		if key in ["quality", "upscaler", "res_scale"]:
 			v = roundi(v)
 	if values[key] == v:
 		return
 	values[key] = v
 	changed.emit(key)
+	if key == "quality":   # un niveau de qualité remet la mise à l'échelle à son préréglage (le joueur peut ensuite la changer)
+		apply_scale_preset(int(v), true)
 	if autosave:
 		save()
+
+## Préréglage de mise à l'échelle du niveau de qualité q (GraphicsRules.upscale_preset). emit : prévient les vues (sinon seulement les valeurs, avant la création de la partie).
+func apply_scale_preset(q: int, emit := true) -> void:
+	var pre := GraphicsRules.upscale_preset(q)
+	for k: String in pre:
+		if values[k] != pre[k]:
+			values[k] = pre[k]
+			if emit:
+				changed.emit(k)
 
 func load_file() -> void:
 	values = DEFAULTS.duplicate()
@@ -65,6 +79,8 @@ func load_file() -> void:
 		values["difficulty"] = Difficulty.valid(String(values["difficulty"]))
 		if values["map"] not in MAPS:
 			values["map"] = "strasbourg"
+		if not cf.has_section_key("settings", "upscaler"):   # réglages d'avant v0.19.1 : la mise à l'échelle suit le préréglage de la qualité enregistrée
+			apply_scale_preset(int(values["quality"]), false)
 		binds.load_from(cf)
 	else:
 		binds.reset_all(false)
@@ -97,4 +113,10 @@ static func format(key: String, v: float) -> String:
 			return "%.2fx" % v
 		"quality":
 			return QUALITY_NAMES[clampi(roundi(v), 0, 2)]
+		"upscaler":
+			return UPSCALER_NAMES[clampi(roundi(v), 0, 2)]
+		"res_scale":
+			return "%d%%" % roundi(float(RES_SCALES[clampi(roundi(v), 0, 4)]) * 100.0)
+		"sharp":
+			return "%d%%" % roundi(v * 100.0)
 	return str(v)

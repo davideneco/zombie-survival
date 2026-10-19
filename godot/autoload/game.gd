@@ -101,6 +101,7 @@ func _init() -> void:
 		var gpu := RenderingServer.get_video_adapter_type()
 		if gpu == RenderingDevice.DEVICE_TYPE_INTEGRATED_GPU or gpu == RenderingDevice.DEVICE_TYPE_CPU:
 			settings.values["quality"] = 0
+			settings.apply_scale_preset(0, false)
 	var stats_path := GameStats.DEFAULT_PATH
 	for a in OS.get_cmdline_user_args():
 		if a.begins_with("--stats="):
@@ -113,6 +114,16 @@ func _init() -> void:
 		if a.begins_with("--quality="):
 			settings.autosave = false
 			settings.values["quality"] = clampi(int(a.substr(10)), 0, 2)
+			settings.apply_scale_preset(int(settings.values["quality"]), false)
+		elif a.begins_with("--upscaler="):   # v0.19.1 : 0 natif, 1 FSR 1.0, 2 FSR 2.2 (captures, mesures)
+			settings.autosave = false
+			settings.values["upscaler"] = clampi(int(a.substr(11)), 0, 2)
+		elif a.begins_with("--res-scale="):   # indice 0..4 dans Settings.RES_SCALES
+			settings.autosave = false
+			settings.values["res_scale"] = clampi(int(a.substr(12)), 0, 4)
+		elif a.begins_with("--sharp="):
+			settings.autosave = false
+			settings.values["sharp"] = clampf(float(a.substr(8)), 0.0, 1.0)
 		elif a == "--no-cinema":
 			settings.autosave = false
 			settings.values["cinema"] = false
