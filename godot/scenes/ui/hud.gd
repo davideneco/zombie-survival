@@ -101,6 +101,7 @@ var _down_extra: Label
 var _toast: PanelContainer
 var _toast_l: Label
 var _announce_t := 0.0
+var intro_hold := false     ## intro de boss en cours : bandeau d'annonce et barre de boss masqués (gelés)
 var _announce_len := 3.0
 var _hurt := 0.0
 var _nuke := 0.0
@@ -534,10 +535,12 @@ func _update_basic(dt: float, p: PlayerSim) -> void:
 	var pr := "" if Game.over else Prompts.text(Game, binds)
 	_prompt.visible = pr != ""
 	_prompt_l.text = pr
-	_announce_t = maxf(0.0, _announce_t - dt)
+	if not intro_hold:   # v0.20.1 : pendant l'intro d'un boss le bandeau et la barre attendent (l'intro a son propre titre)
+		_announce_t = maxf(0.0, _announce_t - dt)
 	var fade := clampf(_announce_t / ANNOUNCE_FADE, 0.0, 1.0)
-	_announce.modulate.a = fade
-	_announce_sub.modulate.a = fade
+	_announce.modulate.a = 0.0 if intro_hold else fade
+	_announce_sub.modulate.a = 0.0 if intro_hold else fade
+	_boss.modulate.a = 0.0 if intro_hold else 1.0
 	if _toast.visible:
 		_toast_t -= dt
 		if _toast_t <= 0.0:

@@ -18,6 +18,7 @@ var _fanal_lit := false
 var _feathers: Array[Dictionary] = []
 var _gusts: Array[Dictionary] = []
 var _iron: StandardMaterial3D
+var silent := false                ## v0.20.1 : préchauffage de l'intro de boss : effets sans son
 
 const GOLD := Color("ffd870")
 const RED := Color("ff3a20")
@@ -116,6 +117,8 @@ func _track(kind: String, node: Node3D, life: float, data := {}) -> Dictionary:
 
 # ---------------------------------------------------------------- évènements
 func _near_vol(d: Dictionary) -> float:
+	if Game.player == null:
+		return 1.0   # (tests, préchauffage sans partie)
 	var p := Game.player.pos
 	return maxf(0.15, 1.0 - Vector2(float(d.get("x", p.x)) - p.x, float(d.get("z", p.z)) - p.z).length() / 60.0)
 
@@ -266,7 +269,8 @@ func _on_event(name: String, d: Dictionary) -> void:
 				ray.rotate_object_local(Vector3.RIGHT, PI / 2.0)
 				_track("ray", n8, 0.6, {"mi": ray})
 				fx.emit(b, {"count": 24, "color": [Color("fff0b0"), Color("ffd060"), Color.WHITE], "speed": 3.0, "up": 2.0, "size": 0.14, "life": 0.9, "grav": 1.0, "spread": 0.7, "glow": true})
-				_sfx("explosion", maxf(0.3, 1.0 - Vector2(b.x - Game.player.pos.x, b.z - Game.player.pos.z).length() / 50.0))
+				var pp: Vector3 = Game.player.pos if Game.player != null else b
+				_sfx("explosion", maxf(0.3, 1.0 - Vector2(b.x - pp.x, b.z - pp.z).length() / 50.0))
 		"angel_death":
 			fx.emit(Vector3(x, y + 1.0, z), {"count": 60, "color": [Color("fff0b0"), Color("ffd060"), Color.WHITE], "speed": 4.0, "up": 3.0, "size": 0.2, "life": 1.8, "grav": -0.3, "spread": 0.9, "glow": true})
 			_sfx("powerup", 1.0)
@@ -292,6 +296,8 @@ func _wood() -> StandardMaterial3D:
 
 # ---------------------------------------------------------------- sons
 func _sfx(name: String, vol: float, delay := 0.0) -> void:
+	if silent:
+		return
 	if delay > 0.0:
 		get_tree().create_timer(delay).timeout.connect(func() -> void: Sfx.play(name, vol))
 		return

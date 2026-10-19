@@ -36,7 +36,7 @@ Play 5 to 10 minutes, close the window normally, then send `perf.txt` (the `SPIK
 
 ## Useful launch options
 
-After `--`: `--map=arena` (Strasbourg otherwise), `--difficulty=easy|normal|hard`, `--seed=N`, `--bot` (the bot plays), `--no-music`, `--no-warmup`, `--perf-log=F`, `--perf-soak=N`, `--quit-at=S`, `--shot=f.png --at=S` (screenshot). The others (`--do=`, `--horde=`, `--seat=`, `--tram-at=`, `--zoo*`…) are for test captures; they are parsed in `scenes/main.gd`.
+After `--`: `--map=arena` (Strasbourg otherwise), `--difficulty=easy|normal|hard`, `--seed=N`, `--bot` (the bot plays), `--no-music`, `--no-warmup`, `--no-boss-intro`, `--perf-log=F`, `--perf-soak=N`, `--quit-at=S`, `--shot=f.png --at=S` (screenshot). The others (`--do=`, `--horde=`, `--seat=`, `--tram-at=`, `--zoo*`…) are for test captures; they are parsed in `scenes/main.gd`.
 
 ## Tests
 

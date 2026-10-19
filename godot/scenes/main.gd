@@ -116,6 +116,12 @@ var _machines_view: Node3D
 var _graphics: Node               # J9 : environnement, ciel, ombres, qualité (graphics_view.gd)
 var _fx: Node3D                   # J9 : particules et taches de sang (fx_view.gd)
 var _finale_view: Node3D          # J10 : effets des boss, faisceau, Fanal (finale_view.gd)
+var _intro: BossIntro             # v0.20.1 : intro animée de la première apparition de chaque boss (pause bornée de la simulation) ; --no-boss-intro la coupe
+var _finale_delay := 0.0          # --finale-delay=S : le boss de --finale=boss1|tanner|angel n'apparaît que S secondes de jeu après le saut (laisse finir le chargement du monde)
+var _late: Array[Callable] = []   # démarrages de boss différés (--finale-delay)
+var _late_at := -1.0
+var _shot_intro_t := -1.0         # --shot-intro=T : capture T secondes après le début de l'intro de boss
+var _finale_at := -1.0            # --finale-at=S : le saut --finale=ETAT se fait à S secondes de jeu (et non avant la première image) : mesures du premier affichage d'un boss
 var _finale_arg := ""             # --finale=ETAT : saute dans la fin de partie (captures) : voir _debug_finale
 var _hud_last := {"banner": "", "bar": {}, "mark": "", "fanal": -2.0, "fanal_text": ""}
 var _do: PackedStringArray = []   # --do=a,b : actions de démonstration au lancement (perks, powerup:TYPE, weapon:ID[:PAP], box, pap, all-doors, money, down)
@@ -143,6 +149,8 @@ func _ready() -> void:
 		elif a.begins_with("--soak="):
 			_soak_rounds = int(a.substr(7))
 			_bot = true
+		elif a == "--no-boss-intro":
+			BossIntro.enabled = false
 		elif a == "--no-warmup":
 			_no_warmup = true
 		elif a.begins_with("--perf-soak="):   # v0.19.0 : N minutes de jeu d'un pilote qui achète, tire et change de zone (provoque les pics, voir PerfLog)
@@ -219,6 +227,12 @@ func _ready() -> void:
 			_tram_in = true
 		elif a == "--first-person":
 			_first_person = true
+		elif a.begins_with("--shot-intro="):
+			_shot_intro_t = float(a.substr(13))
+		elif a.begins_with("--finale-delay="):
+			_finale_delay = float(a.substr(15))
+		elif a.begins_with("--finale-at="):
+			_finale_at = float(a.substr(12))
 		elif a.begins_with("--finale="):
 			_finale_arg = a.substr(9)
 		elif a.begins_with("--seed="):
@@ -424,8 +438,9 @@ func _unload_session() -> void:
 		_drop(t[0])
 	_tracers.clear()
 	_shot_queue.clear()
-	for n in [_arena_node, _rides_view, _machines_view, _weapon_view, _finale_view, _fx, _graphics, _hud, _camera]:
+	for n in [_arena_node, _rides_view, _machines_view, _weapon_view, _finale_view, _fx, _graphics, _hud, _intro, _camera]:
 		_drop(n)
+	_intro = null
 	_arena_node = null
 	_rides_view = null
 	_machines_view = null
@@ -515,6 +530,9 @@ func _build_scene_nodes(map: String) -> void:
 	_weapon_view.setup(_camera)
 	_weapon_view.hold_fx = _hold_fx
 	_weapon_view.posed.connect(_flush_shots)
+	_intro = BossIntro.new()
+	add_child(_intro)
+	_intro.setup(_camera, _hud, _finale_view, _create_view)
 	if not ZombieModels.use_old:
 		ZombieModels.warm()   # J16 : instances de zombies prêtes à l'avance (pas d'à-coup à la première apparition)
 	_hud_last = {"banner": "", "bar": {}, "mark": "", "fanal": -2.0, "fanal_text": ""}
@@ -534,7 +552,8 @@ func _finish_scene(_map_name: String) -> void:
 		add_child(_machines_view)
 		_machines_view.setup()
 	_debug_do()
-	_debug_finale()
+	if _finale_at < 0.0:
+		_debug_finale()
 	if _soak_rounds > 0 and Game.world != null:
 		_soak = SoakBot.new(_seed if _seed >= 0 else 1)
 		_soak.verbose = "--soak-verbose" in OS.get_cmdline_user_args()
@@ -770,7 +789,7 @@ func _notification(what: int) -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if not _session_live:
 		return
-	var live: bool = Game.playing and not Game.over and _menus.in_game
+	var live: bool = Game.playing and not Game.over and _menus.in_game and not (_intro != null and _intro.active)
 	if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED and live:
 		var m := event as InputEventMouseMotion
 		var sens := Rules.MOUSE_SENS * float(Game.settings.get_value("sens")) * Game.arms.sens_zoom()   # visée : souris plus lente (player.js : zoom)
@@ -821,6 +840,8 @@ func _physics_process(dt: float) -> void:
 		v.remember()
 	if _rides_view != null:
 		_rides_view.remember()
+	if _intro != null and _intro.active:
+		return   # intro de boss : la simulation est en pause (aucun pas : joueur protégé, zombies figés), bornée par BossIntro.HARD_CAP
 	var input: Dictionary
 	if _soak != null:
 		input = _soak.think(Game)
@@ -850,6 +871,14 @@ func _physics_process(dt: float) -> void:
 			input["fire"] = true
 		input.merge(_pending, true)
 	_pending.clear()
+	if _finale_at >= 0.0 and Game.time >= _finale_at:
+		_finale_at = -1.0
+		_debug_finale()
+	if _late_at >= 0.0 and Game.time >= _late_at:
+		_late_at = -1.0
+		for c in _late:
+			c.call()
+		_late.clear()
 	var t0 := Time.get_ticks_usec()
 	Game.step(dt, input)
 	PerfLog.add(&"step", t0)
@@ -966,7 +995,11 @@ func _session_process(dt: float) -> void:
 	Game.view_aspect = get_viewport().get_visible_rect().size.aspect()
 	_camera.fov = 68.0 if orbiting else Game.arms.fov(float(Game.settings.get_value("fov")))
 	_weapon_view.hide_gun = _weapon_view.hide_gun or orbiting
-	_hud.set_cinema(orbiting)
+	if _intro != null and _intro.active:
+		_intro.tick(dt, p.yaw, p.pitch)   # caméra tournée vers le boss, overlay, une tâche de préchauffage
+		_weapon_view.hide_gun = true
+	else:
+		_hud.set_cinema(orbiting)
 	_hud_finale()
 	# zombies retirés par la simulation
 	for id: int in _views.keys():
@@ -990,7 +1023,9 @@ func _session_process(dt: float) -> void:
 			_click_t = 0.0
 			_press(_click[0])
 			_click.remove_at(0)
-	var shot_ready: bool = Game.time >= _shot_at if Game.playing else _real_t >= 3.0 + _shot_at   # un écran de menu n'avance pas le temps de jeu
+	var shot_ready: bool = Game.time >= _shot_at if Game.playing else _real_t >= 3.0 + _shot_at
+	if _shot_intro_t >= 0.0:
+		shot_ready = _intro != null and _intro.active and _intro.t >= _shot_intro_t   # un écran de menu n'avance pas le temps de jeu
 	if _shot_path != "" and shot_ready and not _shot_done:
 		_shot_done = true
 		await RenderingServer.frame_post_draw
@@ -1045,13 +1080,22 @@ func _uses_model_view(z: ZombieSim) -> bool:
 	return not ZombieModels.use_old and not (z is BossSim) and z.kind != "gargoyle"
 
 func _on_zombie_spawned(z: ZombieSim) -> void:
+	if _intro != null and not _bot and BossIntro.wants(z):
+		_intro.begin(z)   # première apparition de ce boss : l'intro crée sa vue (et préchauffe) pendant la pause de la simulation
+		return
+	_create_view(z, null)
+
+## Vue d'un zombie. parent null : vue de jeu (enfant de main, enregistrée) ; sinon vue jetable de préchauffage de l'intro (enfant de `parent`, non enregistrée).
+func _create_view(z: ZombieSim, parent: Node3D) -> Node3D:
 	var pt := PerfLog.t()
 	var v := Node3D.new()
 	v.set_script(AngelView if z is AngelSim else (ZombieModelView if _uses_model_view(z) else ZombieView))
-	add_child(v)
+	(parent if parent != null else self).add_child(v)
 	v.setup(z)
-	_views[z.id] = v
+	if parent == null:
+		_views[z.id] = v
 	PerfLog.add(&"apparition", pt)
+	return v
 
 ## Un tir : le traçant est créé après la mise à jour de la caméra et de l'arme de l'image (_flush_shots), pour partir de la VRAIE bouche du modèle.
 func _on_shot(origin: Vector3, end: Vector3) -> void:
@@ -1141,6 +1185,10 @@ func _hud_finale() -> void:
 		_hud_last["fanal_text"] = ft
 		_hud.set_fanal(fan, ft)
 
+func _defer(c: Callable) -> void:
+	_late.append(c)
+	_late_at = Game.time + _finale_delay
+
 ## --finale=ETAT : prépare une partie dans la fin de partie pour les captures : manche 12, quartiers ouverts, tous les atouts, puis
 ## clock (devant l'horloge), boss1 (le Bourreau), boss2 (sur la plateforme), tanner, summit (sur la terrasse), angel, ramp, fanal, dawn.
 func _debug_finale() -> void:
@@ -1164,8 +1212,13 @@ func _debug_finale() -> void:
 		"boss1", "boss2":
 			var at := Cathedral.P(37.0, 0.0)
 			F.start()
-			F.start_boss1()
-			F.f["t"] = 2.5
+			if _finale_arg == "boss1" and _finale_delay > 0.0:
+				_defer(func() -> void:
+					F.start_boss1()
+					F.f["t"] = 2.5)
+			else:
+				F.start_boss1()
+				F.f["t"] = 2.5
 			Game.player.pos = Vector3(at.x - 14.0, 0.0, at.y)
 			Game.player.yaw = atan2(-(at.x - Game.player.pos.x), -(at.y - Game.player.pos.z))
 			if _finale_arg == "boss2":
@@ -1177,11 +1230,16 @@ func _debug_finale() -> void:
 				(F.f["boss"] as BossSim)._enter_phase(3)
 		"tanner":
 			Game.director.round_number = 15
-			F.maybe_spawn_tanner()
-			for z in Game.zombies:
-				if z is TannerSim:
-					Game.player.pos = Vector3(z.pos.x + 7.0, 0.0, z.pos.z)
-					Game.player.yaw = atan2(-(z.pos.x - Game.player.pos.x), -(z.pos.z - Game.player.pos.z))
+			var go_tanner := func() -> void:
+				F.maybe_spawn_tanner()
+				for z in Game.zombies:
+					if z is TannerSim:
+						Game.player.pos = Vector3(z.pos.x + 7.0, 0.0, z.pos.z)
+						Game.player.yaw = atan2(-(z.pos.x - Game.player.pos.x), -(z.pos.z - Game.player.pos.z))
+			if _finale_delay > 0.0:
+				_defer(go_tanner)
+			else:
+				go_tanner.call()
 		"summit", "angel", "ramp", "fanal", "dawn":
 			F.f = {"state": "summit_beam", "t": 0.0, "np": 1, "banner": "", "boss": null, "fan": 0.0, "fh": 0, "fs": 0, "upT": 0.0, "said": true}
 			Game.finale_done = true
@@ -1195,7 +1253,10 @@ func _debug_finale() -> void:
 			_finale_view.show_summit()
 			if _finale_arg == "angel":
 				F.f["state"] = "summit_angel"
-				F.spawn_angel()
+				if _finale_delay > 0.0:
+					_defer(F.spawn_angel)
+				else:
+					F.spawn_angel()
 				Game.player.pitch = 0.5
 			elif _finale_arg in ["ramp", "fanal"]:
 				var rr: Dictionary = lv.regions[F.R["RAMP"]]
