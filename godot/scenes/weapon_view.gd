@@ -2,6 +2,8 @@ extends Node3D
 ## Présentation des armes (J4) : arme à la première personne (modèles de data/weapon_models.json, avec la position à la hanche et en visée de chacun), obus et grenades en vol, flash des explosions, coup de couteau. Ne fait que lire Game.arms.
 
 const WeaponModels := preload("res://scenes/weapon_models.gd")
+const THROW_TIME := 0.45        ## geste de lancer de grenade (v0.20.2 : la main tend la grenade puis se retire ; l'arme se baisse)
+const SPRINT_EASE := 7.0
 
 const VIEW_LIGHT := 1.0
 const EXPLOSION_TIME := 0.45
@@ -25,6 +27,15 @@ var _flash: MeshInstance3D       ## J11 : éclair de bouche (player.js : flash, 
 var _flash_light: OmniLight3D
 var _flash_t := 0.0
 var _flash_tex: GradientTexture2D
+var _hands: HandsRig                ## v0.20.2 : bras et mains de l'arme en main (enfants du modèle)
+var _knife_hand: Node3D             ## poing sur le manche du couteau (enfant du couteau)
+var _knife_sleeve: Array = []
+var _throw: Node3D                  ## main qui lance la grenade (enfant de la caméra)
+var _throw_nade: MeshInstance3D
+var _throw_sleeve: Array = []
+var _throw_t := -1.0
+var _nades_prev := 0
+var _sprint_k := 0.0
 
 func setup(cam: Camera3D) -> void:
 	_cam = cam
@@ -41,6 +52,17 @@ func setup(cam: Camera3D) -> void:
 	_knife.material_override = km
 	_knife.visible = false
 	cam.add_child(_knife)
+	_knife_hand = HandsRig.make_fist()
+	_knife_hand.position = Vector3(0.0, -0.004, 0.075)
+	_knife.add_child(_knife_hand)
+	_knife_sleeve = HandsRig.make_sleeve(_knife)
+	_throw = HandsRig.make_fist()
+	_throw.visible = false
+	cam.add_child(_throw)
+	_throw_nade = HandsRig._part(_throw, "ball", "nade", Vector3(0.0, 0.046, -0.01), Vector3(0.07, 0.07, 0.07))
+	_throw_sleeve = HandsRig.make_sleeve(cam)
+	for n in _throw_sleeve:
+		n.visible = false
 	Game.shot_fired.connect(_on_shot)
 	Game.explosion.connect(_on_explosion)
 
@@ -121,6 +143,8 @@ func _build_gun() -> void:
 	_gun = WeaponModels.build(w.id, Config.color(int(lvl["color"])) if lvl != null else null)   # table data/weapon_models.json
 	_build_flash(_gun, WeaponModels.muzzle(w.id))
 	_build_view_light(_gun)
+	_hands = HandsRig.new()
+	_hands.build(_gun, w.id)
 	_cam.add_child(_gun)
 	_gun_id = w.id
 	_gun_pap = w.pap
@@ -163,10 +187,19 @@ func _tick(dt: float) -> void:
 	var melee_dip := 0.0
 	if arms.melee_t >= 0.0:
 		melee_dip = sin(clampf(arms.melee_t / float(Config.at("knife.anim")), 0.0, 1.0) * PI) * float(Config.at("knife.dip"))
+	_sprint_k = move_toward(_sprint_k, 1.0 if (Game.player.sprinting and arms.aim < 0.05 and not w.reloading) else 0.0, dt * SPRINT_EASE)
+	_update_throw(arms, dt)
+	var throw_dip := sin(clampf(_throw_t / THROW_TIME, 0.0, 1.0) * PI) * 0.12 if _throw_t >= 0.0 else 0.0
+	pos += Vector3(0.07, -0.085, 0.02) * _sprint_k   # sprint : l'arme baissée sur le côté
 	var lo := sin(PI * Game.player.vault_u())   # enjambement : arme baissée (player.js : vm.position.y -= 0.16 x lo ; rotation.x += 0.5 x lo)
-	pos.y -= reload_dip * 0.18 + melee_dip + 0.16 * lo
+	pos.y -= reload_dip * 0.18 + melee_dip + 0.16 * lo + throw_dip
 	_gun.position = pos
-	_gun.rotation = Vector3(_kick * 0.06 + reload_dip * 0.5 + 0.5 * lo, 0, 0)
+	_gun.rotation = Vector3(_kick * 0.06 + reload_dip * 0.5 + 0.5 * lo + 0.22 * _sprint_k, 0.5 * _sprint_k, 0.12 * _sprint_k)
+	if _hands != null:
+		var rp := -1.0
+		if w.reloading:
+			rp = clampf(w.reload_t / float(w.cfg["reloadTime"]), 0.0, 1.0)
+		_hands.update(_gun.transform, rp, arms.melee_t >= 0.0)
 	_gun.visible = not hide_gun and not (w.cfg.has("adsFov") and arms.aim > 0.8)
 	_update_knife(arms)
 	posed.emit()
@@ -184,6 +217,33 @@ func _tick(dt: float) -> void:
 		m.scale = Vector3(s, s, s)
 		(m.material_override as StandardMaterial3D).albedo_color.a = 0.7 * (1.0 - k)
 
+## Grenade à main : à chaque grenade nouvellement lancée (la simulation l'a déjà jetée), la main tend la grenade vers l'avant, la lâche, puis se retire ; l'arme se baisse.
+func _update_throw(arms: WeaponArms, dt: float) -> void:
+	var n: int = arms.blast.nades.size()
+	if n > _nades_prev:
+		_throw_t = 0.0
+	_nades_prev = n
+	if _throw_t < 0.0 or hide_gun:
+		_set_throw_visible(false)
+		return
+	_throw_t += dt
+	if _throw_t >= THROW_TIME:
+		_throw_t = -1.0
+		_set_throw_visible(false)
+		return
+	var t := _throw_t
+	var p := Vector3(0.30, -0.42, -0.22).lerp(Vector3(0.17, -0.14, -0.5), smoothstep(0.0, 0.10, t)) if t < 0.10 else Vector3(0.17, -0.14, -0.5).lerp(Vector3(0.34, -0.52, -0.15), smoothstep(0.10, THROW_TIME, t))
+	_throw.position = p
+	_throw.rotation = Vector3(-0.25 * (1.0 - smoothstep(0.0, 0.2, t)), 0.0, 0.0)
+	_throw_nade.visible = t < 0.10
+	_set_throw_visible(true)
+	HandsRig.place_sleeve(_throw_sleeve[0], _throw_sleeve[1], p + _throw.basis * Vector3(0.0, 0.03, 0.075), HandsRig.SHOULDER_R)
+
+func _set_throw_visible(on: bool) -> void:
+	_throw.visible = on
+	for n in _throw_sleeve:
+		n.visible = on
+
 func _update_knife(arms: WeaponArms) -> void:
 	var on := arms.melee_t >= 0.0
 	_knife.visible = on
@@ -195,6 +255,7 @@ func _update_knife(arms: WeaponArms) -> void:
 	var s := clampf(t / hit, 0.0, 1.0) if t < hit else clampf(1.0 - (t - hit) / (float(K["anim"]) - hit), 0.0, 1.0)
 	_knife.position = Vector3(lerpf(0.3, 0.02, s), lerpf(-0.25, -0.05, s), -0.5)
 	_knife.rotation = Vector3(0.0, lerpf(0.5, 0.0, s), 0.0)
+	HandsRig.place_sleeve(_knife_sleeve[0], _knife_sleeve[1], _knife_hand.position + Vector3(0.0, 0.03, 0.07), _knife.transform.affine_inverse() * HandsRig.SHOULDER_R)
 
 func _sync_projectiles(src: Array, views: Array, radius: float, mat: Material) -> void:
 	while views.size() < src.size():

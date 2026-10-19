@@ -54,6 +54,8 @@ var _hud_demo := false
 var _real_t := 0.0
 var _views: Dictionary = {}     # id de ZombieSim -> ZombieView
 var _prev_player := Vector3.ZERO
+var _acts: Array = []             # --act=ACTION@S : appuie sur ACTION (reload, knife, grenade, gl) à S secondes de jeu, une fois (captures des mains)
+var _hold_sprint := false         # --hold-sprint : le sprint reste enfoncé (captures de la pose de sprint des mains)
 var _hold_aim := false            # --hold-aim : visée maintenue (captures des armes en ADS)
 var _hold_fx := false             # --hold-fx : éclair de bouche et dernier traçant restent affichés (captures)
 var _hold_fire := false           # --hold-fire : détente maintenue (capture de l'éclair de bouche)
@@ -195,6 +197,11 @@ func _ready() -> void:
 			_sync_flow = true
 		elif a.begins_with("--mount="):
 			_mount = a.substr(8)
+		elif a.begins_with("--act="):
+			var f3 := a.substr(6).split("@")
+			_acts.append([f3[0], float(f3[1]) if f3.size() > 1 else 0.3])
+		elif a == "--hold-sprint":
+			_hold_sprint = true
 		elif a == "--hold-aim":
 			_hold_aim = true
 		elif a == "--hold-fx":
@@ -697,6 +704,12 @@ func _debug_do() -> void:
 					Game.arms.current.refresh(Game.arms.perks)
 			"reload":   # un rechargement au lancement (captures)
 				_pending["reload"] = true
+			"ammo":   # ammo:N : chargeur de l'arme en main à N cartouches (captures du rechargement)
+				Game.arms.current.ammo = int(c[1])
+			"knife":   # un coup de couteau au lancement (captures des mains)
+				_pending["knife"] = true
+			"grenade":   # une grenade lancée au lancement (captures des mains)
+				_pending["grenade"] = true
 			"perks":
 				for id: String in Config.at("perks"):
 					Game.add_perk(id)
@@ -867,9 +880,16 @@ func _physics_process(dt: float) -> void:
 			input["unstick"] = true
 		if _hold_aim:
 			input["aim"] = true
+		if _hold_sprint:
+			input["sprint"] = true
 		if _hold_fire:
 			input["fire"] = true
 		input.merge(_pending, true)
+		for act: Array in _acts:
+			if Game.time >= float(act[1]):
+				input[String(act[0])] = true
+				_acts.erase(act)
+				break
 	_pending.clear()
 	if _finale_at >= 0.0 and Game.time >= _finale_at:
 		_finale_at = -1.0

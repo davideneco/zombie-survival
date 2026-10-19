@@ -186,6 +186,7 @@ func _build_ring(p0: Vector3, fx: Node3D, weapon_view: Node3D, machines_view: No
 	var ids: Array = WeaponModels.table().keys()
 	for i in ids.size():
 		var m := WeaponModels.build(String(ids[i]), null)
+		HandsRig.new().build(m, String(ids[i]))   # mains et manches : maillages et matériaux (v0.20.2)
 		_add(m, _ring(p0, i, ids.size(), 2.4 + float(i % 3) * 0.5) + Vector3(0, 1.3 + float(i % 2) * 0.3, 0))
 	for lv in range(1, 4):
 		var tint: Variant = Config.color(int(Config.pap_levels[lv]["color"]))

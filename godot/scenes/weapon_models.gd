@@ -41,6 +41,10 @@ static func ads(id: String) -> Vector3:
 	var a: Array = table()[id]["ads"]
 	return Vector3(float(a[0]), float(a[1]), float(a[2]))
 
+## Positions des mains (v0.20.2, tools/gen-weapon-hands.py) : { style, rear: {pos}, front: {pos, r}, mag } ou {} si l'arme n'en a pas.
+static func hands(id: String) -> Dictionary:
+	return (table()[id] as Dictionary).get("hands", {})
+
 ## Bouche dans le repère de l'arme (là où part l'éclair de bouche).
 static func muzzle(id: String) -> Vector3:
 	var e: Dictionary = table()[id]
