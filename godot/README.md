@@ -1,78 +1,78 @@
-# Zombie Survival — port Godot
+# Zombie Survival — Godot port
 
-Port du jeu de survie de Strasbourg (version navigateur : [`../README.md`](../README.md)) vers **Godot 4.7.2**, en GDScript, rendu Forward+ (Vulkan). Branche `godot-port`.
+Port of the Strasbourg survival game (browser version: [`../README.md`](../README.md)) to **Godot 4.7.2**, in GDScript, Forward+ rendering (Vulkan). `godot-port` branch. The game's text is in French.
 
-**État** : solo complet (carte de Strasbourg, zombies, 23 armes, véhicules dont une rame conduisible, atouts, boss, finale, HUD, menus, audio), export Windows. **Le multijoueur n'est pas porté.** Jamais lancé sous Windows réel par le développeur : voir [`../docs/GODOT_PORT.md`](../docs/GODOT_PORT.md) pour ce qui est vérifié ou non.
+**Status**: complete solo game (Strasbourg map, zombies, 23 weapons, vehicles including a drivable tram, perks, bosses, finale, HUD, menus, audio) and a Windows export. **Multiplayer is not ported.** The developer has never run it on a real Windows machine: see [`../docs/GODOT_PORT.md`](../docs/GODOT_PORT.md) (French) for what is and isn't verified.
 
-## Lancer
+## Running it
 
-Prérequis : [Godot 4.7.2](https://godotengine.org/download) (version standard, pas .NET). Le monde cuit n'est pas versionné en entier (voir « Régénérer les assets »).
+Requirement: [Godot 4.7.2](https://godotengine.org/download) (standard build, not .NET). Part of the baked world is not versioned (see "Regenerating assets").
 
 ```bash
-godot --path godot                 # menu principal ; le monde ne se charge qu'après « Jouer »
-godot --path godot -- --map=arena  # petite arène de test
+godot --path godot                 # main menu; the world only loads after "Jouer"
+godot --path godot -- --map=arena  # small test arena
 ```
 
-Ou ouvrez le dossier `godot/` dans l'éditeur et lancez (F5). Réglages, touches, statistiques et trophée sont dans `user://`.
+Or open the `godot/` folder in the editor and press F5. Settings, key bindings, statistics and the trophy are stored in `user://`.
 
 ### Windows
-Un zip prêt à l'emploi se construit avec `tools/export-windows.sh` : `Zombie.exe`, `Zombie.console.exe`, `Zombie.pck`, `LISEZMOI.txt`, `LICENCES/`. Le zip n'est pas dans le dépôt (`godot/build/` est ignoré). Il faut les modèles d'export Godot 4.7.2 pour Windows (procédure dans `docs/GODOT_PORT.md`, section J21). L'exe n'est pas signé : SmartScreen peut avertir.
+`tools/export-windows.sh` builds a ready-to-run zip: `Zombie.exe`, `Zombie.console.exe`, `Zombie.pck`, `LISEZMOI.txt`, `LICENCES/`. The zip is not in the repository (`godot/build/` is git-ignored). You need the Godot 4.7.2 Windows export templates (procedure in `docs/GODOT_PORT.md`, section J21). The exe is unsigned, so SmartScreen may warn.
 
-## Particularités
+## Notes
 
-- **Menu** : Jouer, Meilleur score / statistiques, choix de la carte (Strasbourg ou arène) et de la difficulté (Facile / Normale / Difficile), Multijoueur (grisé).
-- **Qualité et mise à l'échelle** (Options) : préréglages Rapide / Normale / Haute ; mise à l'échelle 3D **Natif, FSR 1.0 ou FSR 2.2 (essai)**, résolution 3D (100, 85, 75, 67, 50 %) et netteté. Le HUD reste net. Pas de DLSS : le moteur n'en propose pas.
-- **Premier lancement sous Windows** : en cas de GPU intégré, la qualité « Rapide » est choisie d'office.
-- **Chargement** : une étape de préchauffage (pipelines, sons, grilles de navigation) évite les gels en jeu.
-- **Musique** : `theme.*` n'est jamais livré (droits d'auteur). Déposez un fichier mp3, ogg ou wav dans `user://music/` pour l'utiliser.
+- **Menu**: Play, best score / statistics, map choice (Strasbourg or arena) and difficulty (Easy / Normal / Hard), Multiplayer (greyed out).
+- **Quality and upscaling** (Options): Fast / Normal / High presets; 3D upscaling **Native, FSR 1.0 or FSR 2.2 (trial)**, 3D resolution (100, 85, 75, 67, 50 %) and sharpness. The HUD stays sharp. No DLSS: the engine does not offer it.
+- **First launch on Windows**: with an integrated GPU, the "Fast" quality is chosen automatically.
+- **Loading**: a warm-up step (pipelines, sounds, navigation grids) avoids in-game stutters.
+- **Music**: `theme.*` is never shipped (copyright). Drop an mp3, ogg or wav file in `user://music/` to use it.
 
-## Diagnostiquer des gels
+## Diagnosing stutters
 
 ```bash
 Zombie.console.exe -- --perf-log=perf.txt
 ```
 
-Jouez 5 à 10 minutes, fermez la fenêtre normalement, puis envoyez `perf.txt` (les lignes `SPIKE` suffisent). Banc automatique : `--perf-soak=5` (un bot joue 5 minutes).
+Play 5 to 10 minutes, close the window normally, then send `perf.txt` (the `SPIKE` lines are enough). Automatic bench: `--perf-soak=5` (a bot plays for 5 minutes).
 
-## Options de lancement utiles
+## Useful launch options
 
-Après `--` : `--map=arena` (sinon Strasbourg), `--difficulty=easy|normal|hard`, `--seed=N`, `--bot` (le bot joue), `--no-music`, `--no-warmup`, `--perf-log=F`, `--perf-soak=N`, `--quit-at=S`, `--shot=f.png --at=S` (capture). Les autres (`--do=`, `--horde=`, `--seat=`, `--tram-at=`, `--zoo*`…) servent aux captures de test ; elles sont lues dans `scenes/main.gd`.
+After `--`: `--map=arena` (Strasbourg otherwise), `--difficulty=easy|normal|hard`, `--seed=N`, `--bot` (the bot plays), `--no-music`, `--no-warmup`, `--perf-log=F`, `--perf-soak=N`, `--quit-at=S`, `--shot=f.png --at=S` (screenshot). The others (`--do=`, `--horde=`, `--seat=`, `--tram-at=`, `--zoo*`…) are for test captures; they are parsed in `scenes/main.gd`.
 
 ## Tests
 
 ```bash
-tools/godot-check.sh          # tout : export de la config et des golden depuis le JS, import, toutes les suites
-tools/godot-check.sh j9       # une suite
+tools/godot-check.sh          # everything: export config and golden files from the JS, import, run all suites
+tools/godot-check.sh j9       # one suite
 ```
 
-Plus de 159 000 contrôles, 0 échec à la v0.19.1. Les **golden** sont des sorties du jeu JS (Node ou Chrome) que le GDScript doit retrouver : config, collision, navigation, armes, véhicules, prix, tram, boss. Les tests tournent en headless, sans rendu ; les captures demandent un écran (ou `xvfb-run`).
+More than 159,000 checks, 0 failures at v0.19.1. The **golden files** are outputs of the JS game (Node or Chrome) that the GDScript must reproduce: config, collision, navigation, weapons, vehicles, prices, tram, bosses. Tests run headless, without rendering; screenshots need a display (or `xvfb-run`).
 
-## Structure
+## Layout
 
-| Dossier | Contenu |
+| Folder | Contents |
 |---|---|
-| `sim/` | Simulation pure, sans nœuds : collision, navigation (champ de flux), zombies, manches, armes, véhicules, tram, boss, difficulté, réglages |
-| `scenes/` | Vues et interface : monde, zombies, armes, tram, HUD, menus, `main.gd` (entrée et options de test) |
-| `autoload/` | `Config` (équilibrage du JS), `Game` (état), `Sfx` (audio) |
-| `shaders/` | Ciel, sol, façades, eau, feuillage, zombies |
-| `data/` | Config et données exportées du JS ; `golden/` (tests, jamais exporté) |
-| `assets/` | Armes (OBJ), zombies (glb), rame, textures, sons ; une partie est régénérée, voir ci-dessous |
-| `tests/` | Suites `test_j0` à `test_j23` et `runner.tscn` |
+| `sim/` | Pure simulation, no nodes: collision, navigation (flow field), zombies, rounds, weapons, vehicles, tram, bosses, difficulty, settings |
+| `scenes/` | Views and UI: world, zombies, weapons, tram, HUD, menus, `main.gd` (input and test options) |
+| `autoload/` | `Config` (balance from the JS), `Game` (state), `Sfx` (audio) |
+| `shaders/` | Sky, ground, facades, water, foliage, zombies |
+| `data/` | Config and data exported from the JS; `golden/` (tests, never exported) |
+| `assets/` | Weapons (OBJ), zombies (glb), tram, textures, sounds; part of it is regenerated, see below |
+| `tests/` | Suites `test_j0` to `test_j23` and `runner.tscn` |
 
-Les licences des modèles : `assets/weapons/LICENSE.txt` (Quaternius, Tabasco) et `assets/zombies/LICENSE.txt` (Quaternius).
+Model licences: `assets/weapons/LICENSE.txt` (Quaternius, Tabasco) and `assets/zombies/LICENSE.txt` (Quaternius).
 
-## Régénérer les assets
+## Regenerating assets
 
-La carte, les textures et l'audio viennent du jeu JS et se « cuisent » avec Chrome. Ils sont ignorés par git (sauf données de jeu et rame). Lancer `npm run dev` à la racine, puis :
+The map, textures and audio come from the JS game and are "baked" with Chrome. They are git-ignored (except game data and the tram). Run `npm run dev` at the repository root, then:
 
 ```bash
-node tools/bake-world.mjs       # géométrie, collision, navigation, portes
-node tools/bake-vehicles.mjs    # machines, stations, rame
-node tools/bake-graphics.mjs    # atlas, sol
-node tools/bake-portraits.mjs   # carte et portraits
-node tools/bake-audio.mjs       # sons et boucles de musique
-node tools/bake-tram.mjs        # rame (déjà versionnée)
+node tools/bake-world.mjs       # geometry, collision, navigation, doors
+node tools/bake-vehicles.mjs    # machines, stations, tram
+node tools/bake-graphics.mjs    # atlases, ground
+node tools/bake-portraits.mjs   # map and portraits
+node tools/bake-audio.mjs       # sounds and music loops
+node tools/bake-tram.mjs        # tram (already versioned)
 node tools/download-textures.mjs
 ```
 
-Armes et zombies : `tools/build-weapons.py` et `tools/build-zombies.py` (Blender). Les journaux, décisions et mesures sont dans [`../docs/GODOT_PORT.md`](../docs/GODOT_PORT.md).
+Weapons and zombies: `tools/build-weapons.py` and `tools/build-zombies.py` (Blender). Logs, decisions and measurements are in [`../docs/GODOT_PORT.md`](../docs/GODOT_PORT.md) (French).
