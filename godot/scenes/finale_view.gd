@@ -391,6 +391,11 @@ static func _sm(x: float) -> float:
 
 # ---------------------------------------------------------------- chaque image
 func _process(dt: float) -> void:
+	var _pt := PerfLog.t()
+	_tick(dt)
+	PerfLog.add(&"finale", _pt)
+
+func _tick(dt: float) -> void:
 	_update_fx(dt)
 	_update_feathers(dt)
 	_update_gusts(dt)

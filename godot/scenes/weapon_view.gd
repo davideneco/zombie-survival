@@ -137,6 +137,11 @@ func _build_view_light(parent: Node3D) -> void:
 	parent.add_child(l)
 
 func _process(dt: float) -> void:
+	var _pt := PerfLog.t()
+	_tick(dt)
+	PerfLog.add(&"arme", _pt)
+
+func _tick(dt: float) -> void:
 	if Game.arms == null or _cam == null:
 		return
 	var arms: WeaponArms = Game.arms

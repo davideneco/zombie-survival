@@ -171,6 +171,11 @@ func remember() -> void:
 	_prev_pos = sim.pos
 
 func _process(dt: float) -> void:
+	var _pt := PerfLog.t()
+	_tick(dt)
+	PerfLog.add(&"zombies", _pt)
+
+func _tick(dt: float) -> void:
 	var a := sim
 	var f := Engine.get_physics_interpolation_fraction()
 	position = _prev_pos.lerp(a.pos, f)

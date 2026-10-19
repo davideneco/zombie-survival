@@ -483,6 +483,11 @@ func set_fanal(frac: float, text := "") -> void:
 
 # ---------------------------------------------------------------- mise à jour
 func _process(dt: float) -> void:
+	var _pt := PerfLog.t()
+	_tick(dt)
+	PerfLog.add(&"hud", _pt)
+
+func _tick(dt: float) -> void:
 	var p: PlayerSim = Game.player
 	if p == null:
 		return

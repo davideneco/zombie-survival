@@ -327,6 +327,11 @@ func set_sky_k(k: float) -> void:
 
 # ---------------------------------------------------------------- chaque image
 func _process(dt: float) -> void:
+	var _pt := PerfLog.t()
+	_tick(dt)
+	PerfLog.add(&"graphique", _pt)
+
+func _tick(dt: float) -> void:
 	_sky_time += dt
 	sky_mat.set_shader_parameter("cloud_time", _sky_time)
 	sky_mat.set_shader_parameter("stars_k", 1.0 if sky_k < 0.28 else 0.0)

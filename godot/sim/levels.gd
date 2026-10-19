@@ -165,7 +165,9 @@ func nav_of(region: int) -> NavGrid:
 	var r: Dictionary = regions[region]
 	if r["kind"] != "floor" or not _region_has_tris(region):
 		return null
+	var pt := PerfLog.t()
 	navs[region] = NavGrid.build_region(self, region, nav_collision)
+	PerfLog.note_load("grille d'étage", str(region), pt)
 	return navs[region]
 
 ## Grille de navigation de chaque étage plat, d'un coup (outils et tests).

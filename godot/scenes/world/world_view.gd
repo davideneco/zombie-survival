@@ -80,6 +80,11 @@ func build() -> void:
 	print("monde affiché : %d tuiles, %d triangles, %d matériaux, %d ms" % [tile_count, triangle_count, _materials.size(), load_ms])
 
 func _process(dt: float) -> void:
+	var _pt := PerfLog.t()
+	_tick(dt)
+	PerfLog.add(&"monde", _pt)
+
+func _tick(dt: float) -> void:
 	if not built:
 		return
 	_lamp_timer -= dt

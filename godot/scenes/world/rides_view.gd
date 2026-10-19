@@ -244,6 +244,11 @@ func _make_rider() -> void:
 	_box(_rider, Vector3(0.12, 0.45, 0.12), shirt, Vector3(0.3, 0.45, -0.2), Vector3(-1.1, 0, 0))
 
 func _process(dt: float) -> void:
+	var _pt := PerfLog.t()
+	_tick(dt)
+	PerfLog.add(&"rames", _pt)
+
+func _tick(dt: float) -> void:
 	var r: Rides = Game.rides
 	if r == null:
 		return

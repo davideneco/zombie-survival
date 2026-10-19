@@ -78,6 +78,7 @@ func _ready() -> void:
 	_rng.randomize()
 	_build_buses()
 	_load_manifest()
+	_request_streams()
 	_connect_signals()
 	apply_settings()
 	if Game.settings != null:
@@ -152,6 +153,37 @@ func _load_manifest() -> void:
 	if typeof(parsed) == TYPE_DICTIONARY:
 		manifest = parsed
 
+## v0.19.0 : tous les sons sont demandés tout de suite à des fils de travail (le menu s'affiche pendant ce temps) ; `get_sound` ne fait ensuite que récupérer le résultat.
+## Avant, chaque son était lu sur disque (et décodé) au moment où il sonnait pour la première fois : gels d'autant plus longs que le disque est lent.
+func _request_streams() -> void:
+	if not manifest.has("sounds"):
+		return
+	for name: String in manifest["sounds"]:
+		var e: Dictionary = manifest["sounds"][name]
+		for i in e["files"].size():
+			ResourceLoader.load_threaded_request(SFX_DIR + String(e["files"][i]))
+			if e["send"][i] != null:
+				ResourceLoader.load_threaded_request(SFX_DIR + String(e["send"][i]))
+
+## Charge tous les sons dans le cache (terminé en attendant les fils) et crée toutes les voix : plus aucune lecture de disque ni création de lecteur en pleine partie.
+func warm_all() -> void:
+	if not manifest.has("sounds"):
+		return
+	for name: String in manifest["sounds"]:
+		get_sound(name)
+	for positional in [true, false]:
+		var pool: Array[Voice] = _voices_3d if positional else _voices_flat
+		var cap := MAX_VOICES_3D if positional else MAX_VOICES_FLAT
+		while pool.size() < cap:
+			pool.append(_make_voice(positional))
+
+func _make_voice(positional: bool) -> Voice:
+	var v := Voice.new()
+	v.is_3d = positional
+	v.dry = _new_player(positional)
+	v.send = _new_player(positional)
+	return v
+
 # ---------------------------------------------------------------- sons (rendus cuits)
 func has_sound(name: String) -> bool:
 	return manifest.has("sounds") and manifest["sounds"].has(name)
@@ -163,6 +195,7 @@ func get_sound(name: String) -> Dictionary:
 	if not has_sound(name):
 		return {}
 	var e: Dictionary = manifest["sounds"][name]
+	var pt := PerfLog.t()
 	var dry: Array = []
 	var send: Array = []
 	for i in e["files"].size():
@@ -174,6 +207,7 @@ func get_sound(name: String) -> Dictionary:
 		var sf: Variant = e["send"][i]
 		send.append(load(SFX_DIR + String(sf)) if sf != null else null)
 	_streams[name] = {"dry": dry, "send": send, "gain_db": float(e["gain_db"])}
+	PerfLog.note_load("son", name, pt)
 	return _streams[name]
 
 ## Joue un son. vol : volume linéaire du JS (le paramètre `v` des méthodes de Sfx) ; pos : position du monde (INF : non positionné) ; pitch : pitch_scale.
@@ -227,12 +261,10 @@ func _acquire(positional: bool) -> Voice:
 			v.born = _clock
 			return v
 	if pool.size() < cap:
-		var v := Voice.new()
-		v.is_3d = positional
-		v.dry = _new_player(positional)
-		v.send = _new_player(positional)
+		var v := _make_voice(positional)
 		v.born = _clock
 		pool.append(v)
+		PerfLog.event("voix %s créée (%d)" % ["3D" if positional else "plate", pool.size()])
 		return v
 	var oldest: Voice = pool[0]   # pleine : on coupe la plus ancienne
 	for v in pool:
@@ -516,6 +548,11 @@ func _machines(dt: float) -> void:
 
 # ---------------------------------------------------------------- moteur (boucle + pitch_scale)
 func _process(dt: float) -> void:
+	var _pt := PerfLog.t()
+	_tick(dt)
+	PerfLog.add(&"audio", _pt)
+
+func _tick(dt: float) -> void:
 	_update_engine(dt)
 
 func _engine_state() -> Dictionary:

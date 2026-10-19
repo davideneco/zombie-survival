@@ -228,6 +228,11 @@ func remember() -> void:
 		_cur[i] = Vector3(m["x"], m["z"], m["yaw"])
 
 func _process(_dt: float) -> void:
+	var _pt := PerfLog.t()
+	_tick(_dt)
+	PerfLog.add(&"tram", _pt)
+
+func _tick(_dt: float) -> void:
 	if sim != null:
 		apply(Engine.get_physics_interpolation_fraction())
 

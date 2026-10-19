@@ -26,6 +26,7 @@ const GraphicsView := preload("res://scenes/graphics_view.gd")
 const FxView := preload("res://scenes/fx_view.gd")
 const FinaleView := preload("res://scenes/finale_view.gd")   # J10
 const AngelView := preload("res://scenes/angel_view.gd")
+const PERF_ARGS := ["--perf-log="]   ## v0.19.0 : n'ouvre pas la partie (le menu s'affiche quand c'est le seul argument)
 const TRACER_COLOR := Color("ffd27a")
 const TRACER_TIME := 0.06
 const TRACER_WIDTH := 0.012
@@ -61,6 +62,9 @@ var _hold_jump := false           # --hold-jump : Espace maintenu (capture de l'
 var _bot := false
 var _soak: SoakBot = null         # --soak=N : partie d'un pilote qui se promène jusqu'à la manche N (J11)
 var _soak_rounds := 0
+var _no_warmup := false           # --no-warmup : sans le préchauffage du chargement (mesures avant / après, v0.19.0)
+var _warm: Warmup = null
+var _perf_soak_min := 0.0         # --perf-soak=N : durée de jeu en minutes (SoakBot en mode « perf » : portes fermées, achats, changements de zone)
 var _shot_path := ""
 var _shot_at := 0.0
 var _seed := -1
@@ -123,7 +127,10 @@ var _ruin := ""                   # --ruin=smoke|burn|wreck : abîme les motos (
 
 func _ready() -> void:
 	var user_args := OS.get_cmdline_user_args()
-	_menu = user_args.is_empty() or "--menu" in user_args
+	var game_args := Array(user_args).filter(func(a: String) -> bool: return not PERF_ARGS.any(func(p: String) -> bool: return a.begins_with(p)))
+	_menu = game_args.is_empty() or "--menu" in user_args
+	if PerfLog.setup_from_args(user_args, get_tree()):
+		PerfLog.info_cb = _perf_info
 	for a in user_args:
 		if a == "--ui=":
 			continue
@@ -135,6 +142,12 @@ func _ready() -> void:
 			_bot = true
 		elif a.begins_with("--soak="):
 			_soak_rounds = int(a.substr(7))
+			_bot = true
+		elif a == "--no-warmup":
+			_no_warmup = true
+		elif a.begins_with("--perf-soak="):   # v0.19.0 : N minutes de jeu d'un pilote qui achète, tire et change de zone (provoque les pics, voir PerfLog)
+			_perf_soak_min = float(a.substr(12))
+			_soak_rounds = 1000
 			_bot = true
 		elif a == "--demo":
 			_demo = true
@@ -265,8 +278,51 @@ func _connect_game_signals() -> void:
 	Game.door_denied.connect(func(id): if _hud != null: _hud.announce("%d POINTS REQUIS" % int(Game.world.doors[id]["price"])))
 	Game.game_over.connect(_on_game_over)
 	Game.announced.connect(func(title: String, sub: String): if _hud != null: _hud.announce(title, sub))
+	if PerfLog.on:
+		_connect_perf_events()
 	Game.victory_screen.connect(func(title: String, text: String) -> void: _menus.show_victory(title, text))   # J10 : le Bourreau est tombé
 	Game.liberated_screen.connect(func(title: String, text: String) -> void: _menus.show_victory(title, text))   # J10 : STRASBOURG LIBÉRÉE
+
+## v0.19.0 : contexte joint aux lignes du journal de performance (--perf-log).
+func _perf_info() -> Dictionary:
+	if Game.player == null:
+		return {}
+	var alive := Game.alive_count()
+	return {"manche": Game.round_number, "zombies": "%d/%d" % [alive, Game.zombies.size()], "vues": _views.size(), "pv": int(Game.player.health), "arme": Game.weapon.id if Game.arms != null else "",
+		"x": int(Game.player.pos.x), "z": int(Game.player.pos.z), "étage": Game.player.tregion, "qualité": int(Game.settings.get_value("quality"))}
+
+## Évènements de la simulation joints aux lignes lentes (premiers tirs de chaque arme, apparitions, morts, explosions, portes, bonus…).
+func _connect_perf_events() -> void:
+	var shot_seen := {}
+	Game.shot_fired.connect(func(_o: Vector3, _e: Vector3) -> void:
+		var id: String = Game.weapon.id if Game.arms != null else "?"
+		if not shot_seen.has(id):
+			shot_seen[id] = true
+			PerfLog.event("PREMIER tir %s" % id))
+	var kinds_seen := {}
+	Game.zombie_spawned.connect(func(z: ZombieSim) -> void:
+		var k: String = ZombieModels.variant_key(z) if not (z is BossSim) else "boss"
+		var tag := "PREMIER " if not kinds_seen.has(k) else ""
+		kinds_seen[k] = true
+		PerfLog.event("%sapparition %s (%s)" % [tag, k, z.spawn_type]))
+	Game.zombie_killed.connect(func(z: ZombieSim, head: bool) -> void: PerfLog.event("mort %s%s" % [z.kind, " (tête)" if head else ""]))
+	Game.explosion.connect(func(_p: Vector3, r: float, _c: int) -> void: PerfLog.event("explosion r=%.1f" % r))
+	Game.bloat_burst.connect(func(_p: Vector3) -> void: PerfLog.event("pestiféré éclate"))
+	Game.door_opened.connect(func(id: int) -> void: PerfLog.event("porte %d ouverte" % id))
+	Game.round_started.connect(func(n: int) -> void: PerfLog.event("manche %d commence" % n))
+	Game.round_ended.connect(func() -> void: PerfLog.event("manche terminée"))
+	Game.powerup_spawned.connect(func(pu: Dictionary) -> void: PerfLog.event("bonus %s apparaît" % str(pu.get("type", "?"))))
+	Game.powerup_collected.connect(func(t: String) -> void: PerfLog.event("bonus %s ramassé" % t))
+	Game.perk_acquired.connect(func(id: String) -> void: PerfLog.event("atout %s" % id))
+	Game.weapon_acquired.connect(func(id: String) -> void: PerfLog.event("arme %s acquise" % id))
+	Game.box_event.connect(func(n: String, _d: Dictionary) -> void: PerfLog.event("boîte : %s" % n))
+	Game.pap_event.connect(func(n: String, _d: Dictionary) -> void: PerfLog.event("Pack-a-Punch : %s" % n))
+	Game.ride_event.connect(func(n: String, _d: Dictionary) -> void: PerfLog.event("véhicule : %s" % n))
+	Game.zombie_event.connect(func(_z: ZombieSim, n: String) -> void: PerfLog.event("zombie : %s" % n))
+	Game.weapon_event.connect(func(n: String, _d: Dictionary) -> void: PerfLog.event("arme : %s" % n))
+	Game.player_downed.connect(func() -> void: PerfLog.event("joueur à terre"))
+	Game.boss_event.connect(func(n: String, _d: Dictionary) -> void: PerfLog.event("boss : %s" % n))
+	Game.unstuck.connect(func(_a: Vector2, _b: Vector2, d: float, _c: bool) -> void: PerfLog.event("déblocage %.0f m" % d))
 
 # ---------------------------------------------------------------- v0.14.0 : session (chargement par étapes, retour au menu)
 func _map_choice() -> String:
@@ -290,6 +346,7 @@ func _start_session() -> void:
 	if not _flow.start_loading():
 		return
 	var t0 := Time.get_ticks_msec()
+	PerfLog.phase = PerfLog.PHASE_LOADING
 	_unload_session()
 	_load_max_dt = 0.0
 	_load_frames = 0
@@ -322,20 +379,43 @@ func _start_session() -> void:
 		await _arena_node.build()
 	await _step(1.0)
 	var t_city := Time.get_ticks_msec() - t0
-	# 5. derniers réglages puis la partie
+	# 5. préchauffage sous le voile du chargement (pipelines, sons, pools : v0.19.0), puis derniers réglages
 	_flow.next_step()
 	await _step(0.0)
 	_finish_scene(map)
+	var t_warm := Time.get_ticks_msec()
+	if not _no_warmup:
+		await _warmup()
+	var t_warm_ms := Time.get_ticks_msec() - t_warm
+	_flow.next_step()
+	await _step(0.0)
 	_session_live = true
+	PerfLog.phase = PerfLog.PHASE_GAME
+	PerfLog.event("partie prête")
 	_flow.finish_loading()
 	_menus.begin_game()
-	print("CHARGEMENT : partie prête en %d ms (données %d ms, vues %d ms, ville %d ms, fin %d ms) ; %d images, pire image %.0f ms ; carte %s, difficulté %s" % [
-		Time.get_ticks_msec() - t0, t_data, t_scene - t_data, t_city - t_scene, Time.get_ticks_msec() - t0 - t_city, _load_frames, _load_max_dt * 1000.0, map, Game.difficulty])
+	print("CHARGEMENT : partie prête en %d ms (données %d ms, vues %d ms, ville %d ms, préchauffage %d ms, fin %d ms) ; %d images, pire image %.0f ms ; carte %s, difficulté %s" % [
+		Time.get_ticks_msec() - t0, t_data, t_scene - t_data, t_city - t_scene, t_warm_ms, Time.get_ticks_msec() - t0 - t_city - t_warm_ms, _load_frames, _load_max_dt * 1000.0, map, Game.difficulty])
 	_report_memory("partie lancée")
+
+## v0.19.0 : préchauffage (voir warmup.gd), tourne sous l'écran de chargement.
+func _warmup() -> void:
+	_warm = Warmup.new()
+	await _warm.run(self, _camera, _fx, _weapon_view, _machines_view, _hud, _make_warm_view, func(text: String, frac: float) -> void:
+		await _progress(text, frac))
+	_hud_last = {"banner": "", "bar": {}, "mark": "", "fanal": -2.0, "fanal_text": ""}
+
+func _make_warm_view(z: ZombieSim) -> Node3D:
+	var v := Node3D.new()
+	v.set_script(ZombieModelView if _uses_model_view(z) else ZombieView)
+	add_child(v)
+	v.setup(z)
+	return v
 
 ## Libère la partie en cours : vues, ville, zombies, simulation (retour au menu, rejouer).
 func _unload_session() -> void:
 	_session_live = false
+	PerfLog.phase = PerfLog.PHASE_MENU
 	for v in _views.values():
 		_drop(v)
 	_views.clear()
@@ -391,6 +471,8 @@ func _soak_end() -> void:
 	print("SOAK fin : manche %d, %.0f s de jeu, %d tués, partie %s ; pas moyen %.2f ms, pire %.1f ms ; mémoire %.1f -> %.1f Mo, objets %d -> %d, noeuds %d -> %d" % [
 		Game.round_number, Game.time, Game.kills, "terminée" if Game.over else "en cours", _soak.step_us / float(maxi(1, _soak.steps)) / 1000.0, _soak.step_us_max / 1000.0,
 		r[0]["mem_mb"], r[-1]["mem_mb"], r[0]["objects"], r[-1]["objects"], r[0]["nodes"], r[-1]["nodes"]])
+	for l in _soak.errand_log:
+		print("  bot : ", l)
 	get_tree().quit()
 
 ## État de la partie (Game.new_game avec les données déjà chargées) et réglages de démonstration des arguments.
@@ -456,6 +538,10 @@ func _finish_scene(_map_name: String) -> void:
 	if _soak_rounds > 0 and Game.world != null:
 		_soak = SoakBot.new(_seed if _seed >= 0 else 1)
 		_soak.verbose = "--soak-verbose" in OS.get_cmdline_user_args()
+		_soak.perf = _perf_soak_min > 0.0
+		for a in OS.get_cmdline_user_args():
+			if a.begins_with("--perf-round="):
+				_soak.start_round = int(a.substr(13))
 		_soak.setup(Game)
 	_prev_player = Game.player.pos
 	_apply_brightness()
@@ -669,6 +755,7 @@ func _start_mounted() -> void:
 			return
 
 func _exit_tree() -> void:
+	PerfLog.finish()
 	ZombieModels.clear_pool()   # J16 : les instances de zombies du pool ne sont dans aucun arbre
 
 ## Perte de focus de la fenêtre en pleine partie : pause (le JS passe en pause quand le navigateur libère le pointeur ; la souris capturée de Godot est
@@ -677,6 +764,7 @@ func _notification(what: int) -> void:
 	if what == NOTIFICATION_APPLICATION_FOCUS_OUT and not _bot and _menus != null:
 		_menus.focus_lost()
 	elif what == NOTIFICATION_WM_CLOSE_REQUEST:
+		PerfLog.finish()
 		_record_stats()   # fermeture de la fenêtre en pleine partie : la partie compte quand même
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -764,11 +852,12 @@ func _physics_process(dt: float) -> void:
 	_pending.clear()
 	var t0 := Time.get_ticks_usec()
 	Game.step(dt, input)
+	PerfLog.add(&"step", t0)
 	_fps_step_us += Time.get_ticks_usec() - t0
 	_fps_steps += 1
 	if _soak != null:
 		_soak.after_step(Game, Time.get_ticks_usec() - t0)
-		if Game.round_number > _soak_rounds or Game.over:
+		if Game.round_number > _soak_rounds or Game.over or (_perf_soak_min > 0.0 and Game.time >= _perf_soak_min * 60.0):
 			_soak_end()
 
 ## Position de l'œil au pas courant : œil du joueur, ou celui qu'impose le véhicule (caméra externe ou œil de la selle).
@@ -792,7 +881,10 @@ func _process(dt: float) -> void:
 	if not _session_live:
 		_menu_tick(dt)
 		return
+	var pt := PerfLog.t()
+	PerfLog.game_time = Game.time
 	_session_process(dt)
+	PerfLog.add(&"main", pt)
 
 ## Menu sans partie : boutons à presser (--click), musique du menu, capture d'écran de menu.
 func _menu_tick(dt: float) -> void:
@@ -953,11 +1045,13 @@ func _uses_model_view(z: ZombieSim) -> bool:
 	return not ZombieModels.use_old and not (z is BossSim) and z.kind != "gargoyle"
 
 func _on_zombie_spawned(z: ZombieSim) -> void:
+	var pt := PerfLog.t()
 	var v := Node3D.new()
 	v.set_script(AngelView if z is AngelSim else (ZombieModelView if _uses_model_view(z) else ZombieView))
 	add_child(v)
 	v.setup(z)
 	_views[z.id] = v
+	PerfLog.add(&"apparition", pt)
 
 ## Un tir : le traçant est créé après la mise à jour de la caméra et de l'arme de l'image (_flush_shots), pour partir de la VRAIE bouche du modèle.
 func _on_shot(origin: Vector3, end: Vector3) -> void:

@@ -361,6 +361,11 @@ func remember() -> void:
 	_cur = Vector3(sim.x, sim.z, sim.yaw)
 
 func _process(_dt: float) -> void:
+	var _pt := PerfLog.t()
+	_tick(_dt)
+	PerfLog.add(&"vehicule", _pt)
+
+func _tick(_dt: float) -> void:
 	if sim == null:
 		return
 	apply(Engine.get_physics_interpolation_fraction())

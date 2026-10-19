@@ -20,6 +20,7 @@ static func texture(name: String, mipmaps := true) -> Texture2D:
 	if _tex.has(name):
 		return _tex[name]
 	var path := DIR + name   # chemin res:// direct : globalize_path casserait l'export (les fichiers sont dans le .pck)
+	var pt := PerfLog.t()
 	var img := Image.load_from_file(path)
 	var t: Texture2D = null
 	if img != null and not img.is_empty():
@@ -27,6 +28,7 @@ static func texture(name: String, mipmaps := true) -> Texture2D:
 			img.generate_mipmaps()
 		t = ImageTexture.create_from_image(img)
 	_tex[name] = t
+	PerfLog.note_load("texture", name, pt)
 	return t
 
 ## Géométries des zombies : nom -> ArrayMesh (tête, mâchoire, buste, bassin, cuisse, tibia + chaussure, bras, avant-bras + main, œil). Les sommets sont déjà en sens horaire.

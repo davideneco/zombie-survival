@@ -23,7 +23,9 @@ static func has_model(id: String) -> bool:
 
 static func mesh_of(file: String) -> Mesh:
 	if not _meshes.has(file):
+		var pt := PerfLog.t()
 		_meshes[file] = load(DIR + file) as Mesh
+		PerfLog.note_load("maillage d'arme", file, pt)
 	return _meshes[file]
 
 ## Facteur d'échelle (m par unité du pack) : la longueur voulue est celle de la boîte englobante du modèle principal.

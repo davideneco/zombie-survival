@@ -44,6 +44,11 @@ func _open_doors() -> int:
 	return n
 
 func _process(_dt: float) -> void:
+	var _pt := PerfLog.t()
+	_tick(_dt)
+	PerfLog.add(&"radar", _pt)
+
+func _tick(_dt: float) -> void:
 	if Game.player == null:
 		return
 	var open_n := _open_doors()

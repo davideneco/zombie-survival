@@ -477,7 +477,10 @@ func hurt_occupants(v: Object, dmg: float) -> void:
 func _update_levels() -> void:
 	if env.levels == null:
 		return
-	player.tregion = env.levels.end_region(player.region, player.pos.x, player.pos.z, player.pos.y)
+	var tr := env.levels.end_region(player.region, player.pos.x, player.pos.z, player.pos.y)
+	if tr != player.tregion:
+		PerfLog.event("joueur change d'étage : %d -> %d" % [player.tregion, tr])
+	player.tregion = tr
 
 ## Sources du champ de flux d'un étage : les joueurs qui y sont, et le pied de l'escalier qui mène aux autres (main.js fieldTargets).
 func field_targets(region: int) -> Array:

@@ -91,7 +91,9 @@ static func model_entry(model: String) -> Dictionary:
 
 static func _scene(model: String) -> PackedScene:
 	if not _scenes.has(model):
+		var pt := PerfLog.t()
 		_scenes[model] = load(DIR + String(model_entry(model)["file"])) as PackedScene
+		PerfLog.note_load("modèle", model, pt)
 	return _scenes[model]
 
 static func skin_material() -> ShaderMaterial:
@@ -144,6 +146,10 @@ static func release(r: Rig) -> void:
 		return
 	(_pool[k] as Array).append(r)
 
+## Instances prêtes dans le pool (tests : pool prérempli par le préchauffage).
+static func pool_size(model: String, armor: bool) -> int:
+	return (_pool.get(model + ("+armor" if armor else ""), []) as Array).size()
+
 ## Libère tout le pool (retour au menu : les instances ne sont dans aucun arbre).
 static func clear_pool() -> void:
 	for k in _pool:
@@ -163,6 +169,7 @@ static func warm(n_basic := 6, n_other := 2) -> void:
 
 static func _make(model: String, armor: bool) -> Rig:
 	created += 1
+	var pt := PerfLog.t()
 	var r := Rig.new()
 	r.model = model
 	r.armor = armor
@@ -190,7 +197,11 @@ static func _make(model: String, armor: bool) -> Rig:
 			r.heads.append(m)
 	if armor:
 		_add_armor(r)
+	PerfLog.note_load("instance de zombie", k_name(model, armor), pt)
 	return r
+
+static func k_name(model: String, armor: bool) -> String:
+	return model + ("+armure" if armor else "")
 
 ## Casque (calotte + bord), cuirasse et épaulières fixés aux os par des BoneAttachment3D ; positions déduites du maillage de la tête et des os au repos.
 static func _add_armor(r: Rig) -> void:

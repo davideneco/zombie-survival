@@ -313,6 +313,11 @@ func _on_zombie_event(z: ZombieSim, name: String) -> void:
 
 # ---------------------------------------------------------------- chaque image
 func _process(dt: float) -> void:
+	var _pt := PerfLog.t()
+	_tick(dt)
+	PerfLog.add(&"fx", _pt)
+
+func _tick(dt: float) -> void:
 	for pool: Dictionary in _pools:
 		if int(pool["active"]) > 0:
 			_step_pool(pool, dt)

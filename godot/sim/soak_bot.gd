@@ -21,6 +21,21 @@ var _jump_t := 0.0
 var _ammo_t := 0.0
 var _unstick_hold := false
 var verbose := false
+## v0.19.0 (`--perf-soak`) : mode « perf », un joueur qui provoque les premières fois (portes fermées au départ, puis achats de portes, d'atouts, d'armes, de la boîte et
+## du Pack-a-Punch, visites d'étages, moto et tram) : une course toutes les ERRAND_PERIOD s de jeu ; les points sont donnés à l'arrivée (un joueur qui a économisé).
+var perf := false
+var start_round := 4        ## --perf-round=N : manche de départ du mode perf
+const ERRAND_PERIOD := 28.0
+const ERRAND_TIMEOUT := 40.0
+const ERRAND_ORDER := ["door", "perk", "wall", "level", "door", "box", "ride", "pap", "knight", "door", "tram", "level", "perk", "pest", "door", "wall"]
+var errand := ""
+var errand_goal := Vector2.ZERO
+var errand_t := 0.0
+var errand_next := 12.0
+var errand_i := 0
+var errand_hold := 0.0
+var errand_log: Array[String] = []
+var _back := Vector3.INF
 var _round_t0 := 0.0
 var _stall_samples := 0
 var heals := 0
@@ -43,7 +58,10 @@ func _init(seed_value: int = 1) -> void:
 
 ## Loadout et état de départ.
 func setup(g: Node) -> void:
-	g.world.open_all_doors()
+	if perf:
+		g.director.round_number = start_round - 1   # la manche 4 (coureurs, rampants) vient vite ; les chevaliers (8) et pestiférés (10) par les séjours en zone
+	else:
+		g.world.open_all_doors()
 	g.points = 1000000
 	for id in ["m249", "ak47"]:
 		g.arms.give_weapon(id)
@@ -62,9 +80,165 @@ func _pick_goal(g: Node) -> void:
 	else:
 		goal = Vector2(float(c["x"]), float(c["z"]))
 
+## Course en cours : cap vers l'objectif, achat à l'arrivée, téléportation si la course s'éternise (note dans errand_log).
+func _errands(g: Node) -> void:
+	var p: PlayerSim = g.player
+	var dt := 1.0 / 60.0
+	if errand == "":
+		if g.time >= errand_next and not p.downed and not p.dead and (g.rides == null or not g.rides.attached()):
+			_start_errand(g)
+		return
+	errand_t += dt
+	if errand_hold > 0.0:   # visite d'un étage ou trajet à moto : on y reste un moment
+		errand_hold -= dt
+		if errand_hold <= 0.0:
+			_end_errand(g)
+		return
+	goal = errand_goal
+	var here := Vector2(p.pos.x, p.pos.z)
+	if here.distance_to(errand_goal) < 2.0:
+		g.points = maxi(g.points, 30000)
+		g.interact()
+		_log(g, "arrivé, achat")
+		_end_errand(g)
+	elif errand_t > ERRAND_TIMEOUT:
+		var dir := (here - errand_goal).normalized()
+		p.pos = Vector3(errand_goal.x + dir.x * 1.2, p.pos.y, errand_goal.y + dir.y * 1.2)
+		_log(g, "téléporté (course trop longue)")
+		errand_t = ERRAND_TIMEOUT - 3.0
+
+func _log(g: Node, what: String) -> void:
+	errand_log.append("t=%.0f %s : %s" % [g.time, errand, what])
+	PerfLog.event("bot %s : %s" % [errand, what])
+
+func _end_errand(g: Node) -> void:
+	errand = ""
+	errand_next = g.time + ERRAND_PERIOD
+	_pick_goal(g)
+
+func _nearest(g: Node, pts: Array) -> Vector2:
+	var best := Vector2.INF
+	var bd := INF
+	for v: Vector2 in pts:
+		var d := v.distance_to(Vector2(g.player.pos.x, g.player.pos.z))
+		if d < bd and d > 1.0:
+			bd = d
+			best = v
+	return best
+
+func _start_errand(g: Node) -> void:
+	var kind: String = ERRAND_ORDER[errand_i % ERRAND_ORDER.size()]
+	errand_i += 1
+	var pts: Array = []
+	match kind:
+		"door":
+			for d: Dictionary in g.world.doors:
+				if not d["open"]:
+					pts.append(Vector2(d["points"][0][0], d["points"][0][1]))
+		"perk", "box", "pap":
+			for m: Dictionary in g.machines.list:
+				if m["type"] == kind and (kind != "box" or m == g.machines.box.active_box()):
+					if kind == "perk" and g.arms.perks.get(m["id"], false):
+						continue
+					pts.append(Vector2(float(m["pos"]["x"]), float(m["pos"]["z"])))
+		"wall":
+			for ww: Dictionary in g.world.objects.get("wallWeapons", []):
+				pts.append(Vector2(float(ww["pos"]["x"]), float(ww["pos"]["z"])))
+		"level":
+			var seen := {}
+			for t in g.world.levels.tris:
+				var r: int = t["region"]
+				if r > 0 and not seen.has(r) and g.world.levels.regions[r]["kind"] == "floor":
+					seen[r] = true
+					pts.append(Vector3((t["x0"] + t["x1"] + t["x2"]) / 3.0, (t["y0"] + t["y1"] + t["y2"]) / 3.0, (t["z0"] + t["z1"] + t["z2"]) / 3.0))
+		"ride", "knight", "pest":
+			pts.append(Vector2.ZERO)
+		"tram":
+			pts.append(Vector2.ZERO)
+	errand = kind
+	errand_t = 0.0
+	errand_hold = 0.0
+	if pts.is_empty():
+		_log(g, "rien à faire")
+		_end_errand(g)
+		return
+	var p: PlayerSim = g.player
+	if kind == "knight" or kind == "pest":
+		var zn := "Homme de Fer" if kind == "knight" else "Petite France"
+		for z: Dictionary in g.world.objects["zones"]:
+			if String(z.get("name", "")) == zn and z.get("center") != null:
+				_back = p.pos
+				p.pos = Vector3(float(z["center"]["x"]), 0.0, float(z["center"]["z"]))
+				errand_hold = 40.0
+				_log(g, "séjour en zone %s" % zn)
+				return
+		_log(g, "zone %s introuvable" % zn)
+		_end_errand(g)
+		return
+	if kind == "level":
+		var c: Vector3 = pts[rng.randi() % pts.size()]
+		_back = p.pos
+		p.pos = c + Vector3(0, 0.05, 0)
+		var rid: int = g.world.levels.region_at(c.x, c.z, c.y)
+		for k in 2:   # des zombies déjà montés avec lui : le champ de l'étage est demandé (grille de navigation)
+			var zz: ZombieSim = g.debug_spawn(Vector3(c.x + 2.0 + k, c.y, c.z), 1.8)
+			zz.region = rid
+		errand_hold = 22.0
+		_log(g, "visite de l'étage à (%.0f ; %.0f ; %.0f)" % [c.x, c.y, c.z])
+		return
+	if kind == "ride":
+		var v2: Variant = null
+		for v in g.rides.vehicles:
+			if (v.type == "moto" or v.type == "grosseMoto") and v.usable():
+				v2 = v
+				break
+		if v2 == null:
+			_log(g, "aucune moto utilisable")
+			_end_errand(g)
+			return
+		_back = p.pos
+		p.pos = Vector3(v2.x + 1.0, 0.0, v2.z + 0.5)
+		g.rides.try_mount(v2, 0)
+		errand_hold = 16.0
+		_log(g, "monte à moto")
+		return
+	if kind == "tram":
+		if g.rides.trams.is_empty():
+			_end_errand(g)
+			return
+		var tr: TramSim = g.rides.trams[0]
+		g.rides.set_power(true, true)
+		var nose: Dictionary = tr.mods[tr.n - 1]
+		_back = p.pos
+		p.pos = Vector3(nose["x"] + nose["tx"] * (tr.M / 2.0 + 1.0), 0.0, nose["z"] + nose["tz"] * (tr.M / 2.0 + 1.0))
+		g.rides.try_mount(tr, 0)
+		errand_hold = 14.0
+		_log(g, "monte dans la rame")
+		return
+	errand_goal = _nearest(g, pts)
+	if errand_goal == Vector2.INF:
+		_end_errand(g)
+		return
+	_log(g, "part vers (%.0f ; %.0f)" % [errand_goal.x, errand_goal.y])
+
 func think(g: Node) -> Dictionary:
 	var p: PlayerSim = g.player
 	var input := {}
+	if perf:
+		_errands(g)
+		var riding: bool = g.rides != null and g.rides.attached()
+		if riding and errand != "" and errand_hold > 0.0:
+			input["mz"] = 1.0
+			input["mx"] = sin(float(errand_i) + g.time * 0.3) * 0.6
+			input["sprint"] = true
+			return input
+		elif riding and errand == "":
+			g.interact()   # descend de la machine
+			if g.rides.attached():
+				g.rides.leave_vehicle(true)
+		if errand == "" and _back != Vector3.INF and not riding:   # retour de l'étage ou de la machine
+			p.pos = _back
+			_back = Vector3.INF
 	# aide : un joueur qui se soigne (hors fin de partie) et reçoit des munitions
 	if p.health < 35.0 and not p.downed and not p.dead:
 		p.health = p.max_health
@@ -97,8 +271,9 @@ func think(g: Node) -> Dictionary:
 					goal = Vector2(z.pos.x, z.pos.z)
 					break
 		var d := goal - here
-		if d.length() < 8.0:
-			_pick_goal(g)
+		if d.length() < (1.5 if errand != "" else 8.0):
+			if errand == "":
+				_pick_goal(g)
 		else:
 			heading = atan2(-d.x, -d.y)
 	# cible : le zombie visible le plus proche
@@ -170,6 +345,9 @@ func after_step(g: Node, us: int) -> void:
 		print("  t=%.0f joueur (%.0f ; %.0f) PV %.0f, %d zombies : %s" % [g.time, g.player.pos.x, g.player.pos.z, g.player.health, parts.size(), " ".join(parts)])
 	var r: int = g.round_number
 	if r != _round_seen:
+		if perf and r in [5, 7, 9]:
+			g.director.round_number = r + 2   # saute des manches : plus de zombies, les types rares
+			r += 2
 		_report(g, r)
 		_round_seen = r
 		_round_t0 = g.time

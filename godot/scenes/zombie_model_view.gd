@@ -204,6 +204,7 @@ func _process(dt: float) -> void:
 	var t0 := Time.get_ticks_usec()
 	_process_view(dt)
 	ZombieModels.view_us += Time.get_ticks_usec() - t0   # --fps : coût CPU des vues de zombies
+	PerfLog.add(&"zombies", t0)
 
 func _process_view(dt: float) -> void:
 	var z := sim

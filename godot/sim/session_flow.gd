@@ -12,11 +12,12 @@ enum { MENU, LOADING, PLAYING, ENDED }
 
 ## Étapes du chargement : [clé, texte, poids]. Le poids sert à la barre de progression.
 const STEPS := [
-	["data", "Lecture de la carte", 0.40],
-	["game", "Préparation de la partie", 0.08],
-	["scene", "Construction de la ville", 0.30],
-	["views", "Lumières, ciel et effets", 0.15],
-	["final", "Dernières vérifications", 0.07],
+	["data", "Lecture de la carte", 0.34],
+	["game", "Préparation de la partie", 0.06],
+	["scene", "Construction de la ville", 0.25],
+	["views", "Lumières, ciel et effets", 0.10],
+	["warm", "Préchauffage des effets", 0.20],
+	["final", "Dernières vérifications", 0.05],
 ]
 
 var state := MENU

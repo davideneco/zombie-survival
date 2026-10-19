@@ -413,7 +413,33 @@ func _update_powerups(dt: float) -> void:
 			_pu_nodes[id].queue_free()
 			_pu_nodes.erase(id)
 
+## v0.19.0 (préchauffage, warmup.gd) : montre d'un coup tout ce que la boîte mystère et le Pack-a-Punch affichent par moments (faisceau, nounours, arme et son nom, étincelles)
+## pour que leurs pipelines soient compilés sous le voile du chargement. on = vrai : la vue ne se met plus à jour d'elle-même et tout est visible ; faux : elle reprend (le prochain
+## _tick remet la visibilité en ordre).
+func warm_show(on: bool) -> void:
+	set_process(not on)
+	if not on:
+		return
+	for P: Dictionary in _box_parts:
+		(P["node"] as Node3D).visible = true
+		(P["beam"] as Node3D).visible = true
+		(P["teddy"] as Node3D).visible = true
+		(P["disp"] as Node3D).visible = true
+		_fill_gun(P["gun"], String(_pool_ids[0]), 0)
+		(P["name"] as Label3D).text = "ARME"
+	if _pap != null:
+		(_pap_parts["gun"] as Node3D).visible = true
+		_fill_gun(_pap_parts["gun"], String(_pool_ids[0]), 1)
+		_pap_parts["gun_key"] = ""
+		for s: MeshInstance3D in _pap_parts["sparks"]:
+			s.visible = true
+
 func _process(dt: float) -> void:
+	var _pt := PerfLog.t()
+	_tick(dt)
+	PerfLog.add(&"machines", _pt)
+
+func _tick(dt: float) -> void:
 	_time += dt
 	if Game.machines != null:
 		var box: MysteryBox = Game.machines.box
