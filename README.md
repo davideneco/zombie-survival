@@ -1,85 +1,87 @@
 # Zombie Survival — Strasbourg
 
-Jeu de survie coopératif contre des vagues de zombies, dans la **Grande Île de Strasbourg** reconstituée à partir des données OpenStreetMap (bâtiments, quais, places, cathédrale). Seul ou jusqu'à **4 joueurs**.
+A co-op survival game against waves of zombies, set in the **Grande Île of Strasbourg**, rebuilt from OpenStreetMap data (buildings, quays, squares, the cathedral). Play solo or with up to **4 players**.
 
-Il existe deux versions du même jeu :
+There are two versions of the same game:
 
-| Version | Où | Techno | État |
+| Version | Where | Tech | Status |
 |---|---|---|---|
-| **Navigateur** (cette page) | branche `main` | [Three.js](https://threejs.org/), [Vite](https://vite.dev/), relais WebSocket Node.js | complète, solo et multijoueur, déployée sur Render |
-| **Port Godot** | branche `godot-port`, dossier [`godot/`](https://github.com/davideneco/zombie-survival/tree/godot-port/godot) | Godot 4.7 (GDScript, Forward+) | solo complet, export Windows ; multijoueur pas encore porté |
+| **Browser** (this page) | `main` branch | [Three.js](https://threejs.org/), [Vite](https://vite.dev/), Node.js WebSocket relay | complete, solo and multiplayer, deployed on Render |
+| **Godot port** | `godot-port` branch, [`godot/`](https://github.com/davideneco/zombie-survival/tree/godot-port/godot) folder | Godot 4.7 (GDScript, Forward+) | complete solo game, Windows export; multiplayer not ported yet |
 
-## Le principe
+The game's text and menus are in French.
 
-Vous démarrez place du Marché-Neuf avec un pistolet, un fusil d'assaut et 500 points. Les zombies arrivent par manches de plus en plus nombreuses, rapides et résistantes. Tenez le plus longtemps possible.
+## How it works
 
-**Gagner des points** : toucher un zombie (10), le tuer (60), le tuer d'une balle dans la tête (100), réanimer un coéquipier (250).
+You start at place du Marché-Neuf with a pistol, an assault rifle and 500 points. Zombies come in rounds that get bigger, faster and tougher. Survive as long as you can.
 
-**Les dépenser** :
-- **Portes** : 27 zones construites autour de vrais lieux (place Kléber, place Gutenberg, cathédrale, Petite France, Homme de Fer…). Plus on s'éloigne du départ, plus la porte coûte cher.
-- **Armes au mur** (silhouettes à la craie) et leurs munitions.
-- **Atouts** : Mastodonte, Speed Cola, Double Tap, Réanimation rapide, Mule Kick, Stamin-Up, PHD Flopper.
-- **Boîte mystère** : une arme au hasard, la boîte change de place.
-- **Pack-a-Punch** : 3 niveaux, dans la cathédrale.
+**Earning points**: hit a zombie (10), kill it (60), headshot kill (100), revive a teammate (250).
 
-**Bonus** lâchés par les zombies : munitions max, mort instantanée, bombe, points doubles, bidons d'essence.
+**Spending them**:
+- **Doors**: 27 zones built around real places (place Kléber, place Gutenberg, the cathedral, Petite France, Homme de Fer…). The further from the start, the pricier the door.
+- **Wall weapons** (chalk outlines) and their ammo.
+- **Perks**: Mastodonte (extra health), Speed Cola, Double Tap, Quick Revive, Mule Kick, Stamin-Up, PHD Flopper.
+- **Mystery box**: a random weapon; the box then moves.
+- **Pack-a-Punch**: 3 levels, inside the cathedral.
 
-**À terre**, un joueur a 45 s pour être réanimé (touche d'interaction maintenue).
+**Power-ups** dropped by zombies: max ammo, instant kill, bomb, double points, fuel cans.
 
-### Véhicules
-- **Motos** : une moto et une grosse moto à deux places (place Gutenberg, place Broglie). Points de vie, essence, n'écrasent qu'au-dessus d'une certaine vitesse.
-- **Vélos** : 23 vélos gratuits dans 19 stations (pastille « V » sur la carte). 43 km/h, 150 PV, pas de tir, n'écrasent jamais un zombie ; un choc violent fait chuter le cycliste.
-- **Tram** : deux lignes dans les rues les plus larges (A / D et B / C / F), rails, quais, caténaires, feux rouges devant les portes encore fermées. Une **rame conduisible** de 23,5 m (50 km/h, 3 000 PV, fauche les zombies) au quai « Homme de Fer » : remettre le courant à la sous-station (2 000 points, une fois pour l'équipe), puis conduire. On peut monter à pied, marcher et s'asseoir dans la rame en marche, et choisir la voie à l'aiguillage de l'Homme de Fer (`B`). Les zombies n'entrent pas dans la rame.
+A **downed** player has 45 s to be revived (hold the interact key).
 
-### Fin de partie
-- **Maître Tanneur** : à partir de la manche 15, toutes les 5 manches, un pestiféré colossal rôde à Petite France ou Saint-Pierre-le-Vieux.
-- **« L'Heure du Jugement »** : dès la manche 12 avec 18 quartiers ouverts, la cathédrale accueille le boss, **le Bourreau** (350 000 PV, +70 % par joueur en plus), en quatre phases. Son point faible est la lanterne dans son dos. Récompense : 10 000 points et la Hache du Bourreau.
-- **Acte V « L'Aube »** : montée de la flèche (gargouilles, puis **l'Ange du Jugement**, boss secret), puis allumage du **Fanal d'Erwin** par tous les joueurs. Le jour se lève, les zombies tombent en cendres, « STRASBOURG LIBÉRÉE ». Récompenses : la Bénédiction de l'Aube, un trophée, puis la **Nuit éternelle** (zombies +30 % de vie).
+### Vehicles
+- **Motorbikes**: a bike and a big two-seater (place Gutenberg, place Broglie). Hit points, fuel, they only run zombies over above a certain speed.
+- **Bicycles**: 23 free bikes at 19 stations (a "V" marker on the map). 43 km/h, 150 HP, no shooting, never run zombies over; a hard crash throws the rider.
+- **Tram**: two lines through the widest streets (A / D and B / C / F) with rails, platforms, overhead wires, and red lights in front of doors that are still closed. A **drivable tram** (23.5 m, 50 km/h, 3,000 HP, mows zombies down) waits at the "Homme de Fer" platform: restore power at the substation (2,000 points, once for the whole team), then drive. You can board on foot, walk and sit inside while it moves, and pick the track at the Homme de Fer switch (`B`). Zombies cannot enter the tram.
 
-Toutes les valeurs, les prix, les zones et les manches sont dans [`docs/REFERENCE.md`](docs/REFERENCE.md), avec la [carte annotée](docs/carte.png) et des tableaux CSV dans [`docs/csv/`](docs/csv/).
+### Endgame
+- **Maître Tanneur**: from round 15, every 5 rounds, a huge plague victim roams Petite France or Saint-Pierre-le-Vieux.
+- **"L'Heure du Jugement"**: from round 12 with 18 districts open, the cathedral hosts the boss, **the Executioner** (350,000 HP, +70 % per extra player), in four phases. His weak spot is the lantern on his back. Reward: 10,000 points and the Executioner's Axe.
+- **Act V "L'Aube"** (the dawn): climb the spire (gargoyles, then **the Angel of Judgment**, a secret boss), then all players light **Erwin's Beacon**. Day breaks, zombies turn to ashes, "STRASBOURG LIBÉRÉE". Rewards: the Blessing of Dawn, a trophy, then the **Eternal Night** (zombies get +30 % health).
 
-## Commandes
+All values, prices, zones and rounds are in [`docs/REFERENCE.md`](docs/REFERENCE.md) (French), with the [annotated map](docs/carte.png) and CSV tables in [`docs/csv/`](docs/csv/).
 
-Toutes les touches se changent dans **Options > Touches** (clic sur l'action, nouvelle touche, `Échap` annule, échange proposé si la touche est prise). Fixes : souris, molette, `Échap`, `F9`. Touches par défaut :
+## Controls
 
-| Touche | Action |
+Every key can be changed in **Options > Touches** (click an action, press the new key, `Esc` cancels; a swap is offered if the key is taken). Fixed: mouse, wheel, `Esc`, `F9`. Default keys:
+
+| Key | Action |
 |---|---|
-| `Z Q S D` / `W A S D`, flèches | Se déplacer |
-| Souris, clic gauche, clic droit | Viser, tirer, viser à la mire |
-| `Maj gauche` | Sprint |
-| `Espace` | Sauter (enjamber un obstacle bas) |
-| `R` | Recharger |
-| `1` `2` `3` / molette | Changer d'arme |
-| `G` / `V` / `F` | Grenade / couteau / lampe torche |
-| `E` | Acheter, ouvrir, utiliser, monter ou descendre d'un véhicule, réanimer (maintenir) |
-| `M` | Carte |
-| `Échap` | Ferme le chat, la carte ou le menu ; sinon pause |
-| `K` (maintenir 2 s) | Se débloquer |
-| `Entrée` | Chat écrit (multijoueur) |
+| `Z Q S D` / `W A S D`, arrows | Move |
+| Mouse, left click, right click | Aim, shoot, aim down sights |
+| `Left Shift` | Sprint |
+| `Space` | Jump (vault a low obstacle) |
+| `R` | Reload |
+| `1` `2` `3` / wheel | Switch weapon |
+| `G` / `V` / `F` | Grenade / knife / flashlight |
+| `E` | Buy, open, use, mount or dismount a vehicle, revive (hold) |
+| `M` | Map |
+| `Esc` | Closes chat, map or menu; otherwise pause |
+| `K` (hold 2 s) | Get unstuck |
+| `Enter` | Text chat (multiplayer) |
 
-- **Moto / vélo** : `Z Q S D` pour conduire, `Espace` frein à main, `V` change la vue, `E` pour descendre.
-- **Tram** : `Z`/`W` accélérer, `S` frein puis marche arrière, `Espace` frein d'urgence, `O` portes, `H` gong (attire les zombies à moins de 50 m), `V` vue, `B` aiguillage, `E` monter, s'asseoir, se lever.
-- **Fusil d'assaut Pack-a-Punch III** : clic molette pour le lance-grenades.
-- **Hôte** : `F9` ouvre le menu de debug.
+- **Motorbike / bicycle**: `Z Q S D` to drive, `Space` handbrake, `V` changes view, `E` to get off.
+- **Tram**: `Z`/`W` accelerate, `S` brake then reverse, `Space` emergency brake, `O` doors, `H` bell (draws zombies within 50 m), `V` view, `B` switch, `E` board, sit, stand.
+- **Pack-a-Punch III assault rifle**: middle click fires the grenade launcher.
+- **Host**: `F9` opens the debug menu.
 
-## Options graphiques
+## Graphics options
 
-Dans Options : luminosité, champ de vision, sensibilité, **Qualité** (Rapide / Normale / Haute), volumes, effets cinéma, halo, chat, touches, plein écran. Tout est visuel et local : aucun effet sur le réseau, l'équilibrage ou les collisions.
+In Options: brightness, field of view, sensitivity, **Quality** (Rapide / Normale / Haute = Fast / Normal / High), volumes, cinematic effects, halo, chat, keys, fullscreen. All of it is visual and local: no effect on networking, balance or collisions.
 
-| | Rapide | Normale | Haute |
+| | Fast | Normal | High |
 |---|---|---|---|
-| Netteté | x0,75 | x1 | jusqu'à x2 |
-| Ombres de la lune | aucune | douces, 1024 px | douces, 2048 px |
-| Arbres | boules lissées | cartes de feuillage | cartes + branches |
-| Rendu et étalonnage | direct | direct | multi-échantillonné + table de couleurs |
-| Halo lumineux | non | non | oui |
-| Particules / taches de sang | 50 % / 16 | 100 % / 36 | 100 % / 64 |
+| Sharpness (render scale) | x0.75 | x1 | up to x2 |
+| Moon shadows | none | soft, 1024 px | soft, 2048 px |
+| Trees | smooth blobs | foliage cards | cards + branches |
+| Rendering and grading | direct | direct | multisampled + colour LUT |
+| Glow halo | no | no | yes |
+| Particles / blood splats | 50 % / 16 | 100 % / 36 | 100 % / 64 |
 
-Les valeurs sont dans le bloc `graphics` de `src/config.js`.
+The values are in the `graphics` block of `src/config.js`.
 
-## Jouer sur son PC (version navigateur)
+## Playing on your PC (browser version)
 
-Prérequis : [Node.js](https://nodejs.org/) 20 ou plus, un navigateur avec WebGL2 (Chrome ou Edge recommandés), [Git](https://git-scm.com/).
+Requirements: [Node.js](https://nodejs.org/) 20 or newer, a WebGL2 browser (Chrome or Edge recommended), [Git](https://git-scm.com/).
 
 ```bash
 git clone https://github.com/davideneco/zombie-survival.git
@@ -88,37 +90,38 @@ npm install
 npm run dev
 ```
 
-Ouvrez **http://localhost:5173** et cliquez sur *Jouer*. Pour la version optimisée : `npm run build` puis `npm start` (port 3000, ou la variable `PORT`).
+Open **http://localhost:5173** and click *Jouer* (Play). For the optimised build: `npm run build` then `npm start` (port 3000, or the `PORT` variable).
 
-### Jouer à plusieurs
-- Un joueur **crée un salon** et reçoit un **code de 4 lettres** ; les autres le saisissent. L'hôte simule les zombies : s'il part, la partie se termine.
-- **Réseau local** : `npm run dev -- --host`, puis `http://ADRESSE_IP:5173` ; le pare-feu doit laisser passer le port.
-- **En ligne** : n'importe quel hébergeur Node.js (prévu pour [Render](https://render.com/) : build `npm install && npm run build`, start `npm start`). Tous les joueurs doivent avoir la **même version** : rechargez la page après une mise à jour.
+### Playing with others
+- One player **creates a room** and gets a **4-letter code**; the others enter it. The host simulates the zombies: if the host leaves, the game ends.
+- **Local network**: `npm run dev -- --host`, then `http://IP_ADDRESS:5173`; the firewall must allow the port.
+- **Online**: any Node.js host (built for [Render](https://render.com/): build `npm install && npm run build`, start `npm start`). Everyone must run the **same version**: reload the page after an update.
 
-### Musique personnalisée (facultatif)
-Posez `theme.mp3` (ou `.ogg`, `.m4a`, `.wav`) dans `public/music/` pour remplacer le rock synthétisé. Le fichier n'est jamais envoyé sur GitHub (droits d'auteur) ; voir [`public/music/LISEZMOI.txt`](public/music/LISEZMOI.txt).
+### Custom music (optional)
+Drop `theme.mp3` (or `.ogg`, `.m4a`, `.wav`) in `public/music/` to replace the synthesised rock track. The file is never pushed to GitHub (copyright); see [`public/music/LISEZMOI.txt`](public/music/LISEZMOI.txt).
 
-## Problèmes courants
+## Troubleshooting
 
-- **Écran noir ou jeu lent** : activez l'accélération matérielle et vérifiez WebGL2 (`about:gpu` dans Chrome). Le premier chargement prend quelques secondes.
-- **La souris ne se capture pas** : cliquez sur la fenêtre ; le navigateur refuse parfois juste après `Échap`.
-- **Coincé dans le décor** : maintenez `K` 2 secondes ; en multijoueur l'hôte peut vous téléporter avec `F9`.
-- **Salon introuvable** : vérifiez le code, la version du jeu et que le port est joignable.
+- **Black screen or slow game**: enable hardware acceleration and check WebGL2 (`about:gpu` in Chrome). The first load takes a few seconds.
+- **Mouse won't capture**: click the game window; the browser sometimes refuses right after `Esc`.
+- **Stuck in the scenery**: hold `K` for 2 seconds; in multiplayer the host can teleport you with `F9`.
+- **Can't join a room**: check the code, the game version, and that the port is reachable.
 
-## Structure du dépôt
+## Repository layout
 
-| Dossier | Contenu |
+| Folder | Contents |
 |---|---|
-| `src/` | Jeu (modules ES) ; équilibrage dans `src/config.js` |
-| `server/` | Relais multijoueur (`rooms.mjs`) et serveur de production (`prod.mjs`) |
-| `public/` | Carte (`data/area.json`), textures, musique |
-| `tools/` | Extraction OSM, génération des docs, détection de blocages, cuisson et golden pour le port Godot |
-| `docs/` | Référence, carte annotée, CSV |
+| `src/` | The game (ES modules); balance in `src/config.js` |
+| `server/` | Multiplayer relay (`rooms.mjs`) and production server (`prod.mjs`) |
+| `public/` | Map (`data/area.json`), textures, music |
+| `tools/` | OSM extraction, doc generation, stuck detection, baking and golden files for the Godot port |
+| `docs/` | Reference, annotated map, CSV; `GODOT_PORT.md` (plan and log of the port, French) |
+| `godot/` | Godot port (`godot-port` branch) |
 
-Vérifier un changement : `npx vite build`, puis une partie avec `?debug` dans l'URL.
+To check a change: `npx vite build`, then play a game with `?debug` in the URL.
 
-## Crédits
+## Credits
 
-- Cartographie : © contributeurs d'[OpenStreetMap](https://www.openstreetmap.org/copyright), licence ODbL.
-- Moteur 3D : [Three.js](https://threejs.org/). Port : [Godot](https://godotengine.org/).
-- Armes du port Godot : Quaternius et Tabasco ; zombies : Quaternius ; détails et licences dans `godot/assets/*/LICENSE.txt`.
+- Map data: © [OpenStreetMap](https://www.openstreetmap.org/copyright) contributors, ODbL licence.
+- 3D engine: [Three.js](https://threejs.org/). Port: [Godot](https://godotengine.org/).
+- Godot port weapons: Quaternius and Tabasco; zombies: Quaternius; details and licences in `godot/assets/*/LICENSE.txt`.
