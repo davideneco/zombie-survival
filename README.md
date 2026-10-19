@@ -1,149 +1,125 @@
 # Zombie Survival — Strasbourg
 
-Jeu de survie coopératif contre des vagues de zombies, dans la **Grande Île de Strasbourg** reconstituée à partir des données OpenStreetMap (bâtiments, quais, places, cathédrale). Il se joue dans le navigateur, seul ou jusqu'à **4 joueurs**.
+Jeu de survie coopératif contre des vagues de zombies, dans la **Grande Île de Strasbourg** reconstituée à partir des données OpenStreetMap (bâtiments, quais, places, cathédrale). Seul ou jusqu'à **4 joueurs**.
 
-Technique : [Three.js](https://threejs.org/) pour la 3D, [Vite](https://vite.dev/) pour le serveur de développement, un petit relais WebSocket (Node.js) pour le multijoueur.
+Il existe deux versions du même jeu :
+
+| Version | Où | Techno | État |
+|---|---|---|---|
+| **Navigateur** (cette page) | branche `main` | [Three.js](https://threejs.org/), [Vite](https://vite.dev/), relais WebSocket Node.js | complète, solo et multijoueur, déployée sur Render |
+| **Port Godot** | branche `godot-port`, dossier [`godot/`](godot/README.md) | Godot 4.7 (GDScript, Forward+) | solo complet, export Windows ; multijoueur pas encore porté |
 
 ## Le principe
 
-Vous démarrez place du Marché-Neuf avec un pistolet, un fusil d'assaut et 500 points. Les zombies arrivent par vagues (manches) de plus en plus nombreuses, rapides et résistantes. Tenez le plus longtemps possible.
+Vous démarrez place du Marché-Neuf avec un pistolet, un fusil d'assaut et 500 points. Les zombies arrivent par manches de plus en plus nombreuses, rapides et résistantes. Tenez le plus longtemps possible.
 
-- **Gagner des points** : toucher un zombie (10), le tuer (60), le tuer d'une balle dans la tête (100), réanimer un coéquipier (250).
-- **Dépenser des points** :
-  - **Ouvrir des portes** pour atteindre de nouvelles zones. Toute la Grande Île est jouable : 27 zones construites autour de vrais lieux (place Kléber, place Gutenberg, cathédrale, Petite France, place de l'Homme de Fer, etc.). Chaque porte est plus chère en s'éloignant du départ.
-  - **Acheter des armes au mur** (repérables à leur silhouette à la craie) et leurs munitions.
-  - **Boire des atouts** (distributeurs) : Mastodonte, Speed Cola, Double Tap, Réanimation rapide, Mule Kick, Stamin-Up, PHD Flopper.
-  - **Tenter la boîte mystère** : une arme au hasard, la boîte change de place.
-  - **Améliorer une arme au Pack-a-Punch** (3 niveaux, avec accessoires visibles), dans l'intérieur de la cathédrale.
-- **Bonus** lâchés par les zombies : munitions max, mort instantanée, bombe, points doubles, bidons d'essence.
-- **Motos** : une moto et une grosse moto à deux places, garées à la place Gutenberg (et une autre à la place Broglie). Elles ont des points de vie, un réservoir d'essence, et n'écrasent les zombies qu'au-dessus d'une certaine vitesse.
-- **Vélos** (v0.43.0) : 23 vélos **gratuits** répartis dans 19 stations sur toute l'île (une station dans chacune des neuf zones d'origine, dès le Marché-Neuf (sauf l'intérieur de la cathédrale), et dans dix zones extérieures : arceaux et panneau turquoise « VÉLOS », pastille « V » sur la carte avec le nombre de vélos disponibles). On les enfourche avec `E` comme une moto, 43 km/h au plus, 150 PV, aucun réservoir. On ne tire pas à vélo, il n'y a ni sonnette ni nouvelle touche, et la touche du gong du tram (`H`) ne fait rien. Un vélo n'écrase jamais un zombie : un zombie au contact l'arrête net. Un choc de plus de 6 m/s fait chuter le cycliste (jusqu'à 25 PV, jamais mortel, le PHD Flopper protège) ; contre une voiture ou le mobilier, c'est le vélo qui s'abîme (contre un mur, seul le cycliste). À 0 PV le vélo est **cassé** (ni incendie ni explosion), l'épave disparaît au bout de 10 s et le vélo revient gratuitement à sa station à la manche suivante. Les vélos garés le long des rues (décor OpenStreetMap, blancs ou gris) ne sont pas utilisables. Réglages : `CONFIG.vehicles.types.velo`, `bikeStations` et `bikeStation` (`src/config.js`).
-- **Tram** (v0.38.0) : deux lignes de tram tracées dans les rues les plus larges de l'île, avec leurs rails, leurs quais, leurs poteaux et leurs fils de caténaire, un heurtoir à chaque bout de ligne et des arrêts (Homme de Fer, place Kléber, Gutenberg, Alt Winmärik, Broglie, République, Préfecture). La ligne **A / D** passe sous la rotonde de l'Homme de Fer (axe à 64°), la ligne **B / C / F** suit la rue est-ouest au nord de la place. Une porte de zone encore fermée qui coupe une voie porte un **feu rouge** (vert une fois la porte ouverte). Les rames de décor de l'Homme de Fer sont posées sur ces voies ; les tracés sont dans `CONFIG.tram.lines` (`src/config.js`).
-- **Rame conduisible** (v0.39.0) : une rame de 23,5 m (5 modules articulés, deux cabines, quatre portes par côté, 16 places assises) garée au quai « Homme de Fer » de la ligne B / C / F. Vitesse max 50 km/h, virages plafonnés (alarme, freinage automatique), freinage automatique devant une porte de zone fermée, 3 000 PV. Elle repousse les joueurs, fauche les zombies au-dessus de 3 m/s (dégâts = 40 x vitesse) et est bloquée par ceux qui sont plus lents. Les touches sont dans « Commandes » ci-dessous.
-- **Intérieur de la rame** (v0.40.0) : on monte **à pied** par une porte ouverte (rame à l'arrêt) et on marche dans la rame, même quand elle roule : le joueur est solidaire de la rame, ses coéquipiers le voient debout ou assis chez tous. Collision dédiée (banquettes, pupitres, parois), plancher à 0,32 m, `E` près d'un siège pour s'asseoir (conducteur ou passager), `E` assis pour se lever. On tire, lance des grenades, donne des coups de couteau et réanime comme à pied. Descendre en marche est refusé. Les zombies n'entrent pas dans la rame : une porte ouverte les attire et ils frappent le joueur à moins de 1,3 m, ailleurs la caisse encaisse les coups.
-- **Aiguillages** (v0.41.0) : au nœud de l'Homme de Fer, où les lignes A / D et B / C / F se croisent, deux raccords en arc (rayon 25 et 30 m) permettent de passer d'une ligne à l'autre : chaque bras a deux sorties, tout droit ou le raccord. Le conducteur choisit avec `B` (touche modifiable) tant que le nez de la rame est à plus de 3 m du point de divergence ; l'écran indique la direction choisie (« AIGUILLAGE ▸ DÉVIÉ : Place Kléber ») et un signal à trois feux la montre sur la voie. La rame suit la voie choisie sans saut ni déraillement (virage plafonné à 18 km/h), et tous les joueurs voient la même voie. Le quai de l'Homme de Fer a été déplacé de 13 m vers l'ouest pour laisser la place au raccord ; les rames de décor ne bloquent plus le nœud.
-- **Fin de partie** : à partir de la manche 12, avec 18 quartiers ouverts, la cathédrale accueille la finale **« L'Heure du Jugement »** : un siège de l'horloge astronomique contre le boss, le Bourreau (350 000 points de vie, +70 % par joueur en plus), en quatre phases (barre de vie coupée à 70 / 45 / 20 %) : **I** la nef (ruée, onde de choc, **Chaînes** qui vous attirent), le **Glas** (il est invulnérable 10 s, des renforts surgissent), **II** « la Sentence » (un joueur est marqué d'une couronne, seul poursuivi et plus vulnérable), le bond vers la tour (l'escalier), **III** sur le toit (le **Couperet** : une hache lancée dans un couloir annoncé), puis **IV** « le Jugement » (rage, **Bûcher** : des cercles de feu, Glas régulier). Toutes ses attaques sont annoncées au sol. Son point faible est la lanterne dans son dos (dégâts x2) ; face à lui, les balles font x0,75, les explosions x0,25 et le tir direct du pistolet à rayons x0,35. Récompense : 10 000 points et la **Hache du Bourreau**, qui remplace le couteau (dégâts x3, touche deux zombies). La partie n'est pas finie : **Acte V « L'Aube »**. La flèche de la cathédrale s'illumine d'un faisceau (« La flèche s'illumine : montez allumer le Fanal d'Erwin ») ; il faut grimper (plateforme, escalier, terrasse à 104 m, rampe hélicoïdale jusqu'à la pointe à 128 m) en affrontant d'abord des **gargouilles** de pierre (24, +6 par joueur) puis **l'Ange du Jugement** (boss secret de 40 000 points de vie, +70 % par joueur, qui tourne hors de la tour ; point faible : sa trompette, dégâts x2 ; **Trompette** en cône, **Plumes** en éventail, **Jugement** qui vous marque : cachez-vous derrière la flèche). Sur la rampe, des **rafales** toutes les 6 s poussent les joueurs (les garde-corps les retiennent) pendant que des gargouilles montent. En haut, **chaque joueur debout maintient la touche d'interaction 6 s** près du **Fanal d'Erwin** (jauge commune) : c'est **l'Aube** (le ciel passe de la nuit au jour en 30 s, tous les zombies tombent en cendres, vue orbitale de 12 s — Échap la passe — puis l'écran « STRASBOURG LIBÉRÉE » avec les statistiques). Récompenses : la **Bénédiction de l'Aube** (les 7 atouts, gardés même à terre), toutes les portes restantes gratuites et un trophée enregistré sur l'appareil. Puis la **Nuit éternelle** : le jour dure 60 s, la nuit retombe, et les zombies ont 30 % de vie en plus dès la manche suivante ; le mode sans fin continue.
-- **Maître Tanneur** : à partir de la manche 15, toutes les 5 manches, ce pestiféré colossal rôde à Petite France ou Saint-Pierre-le-Vieux (si l'un de ces quartiers est ouvert). Son vomi en cône est annoncé (le PHD Flopper n'en protège pas) ; il appelle des pestiférés et explose en mourant (le PHD Flopper protège). Il rapporte Max Munitions et 1 500 points à chaque joueur.
-- **À terre** : en coopération, un joueur à terre a 45 secondes pour être réanimé par un coéquipier (touche d'interaction, `E` par défaut, maintenue).
-- **Chat écrit** (v0.42.0) : en multijoueur, `Entrée` (touche « Chat », modifiable) ouvre une ligne de saisie en bas à gauche, `Entrée` envoie, `Échap` ferme sans envoyer. Les 8 derniers messages s'affichent avec le nom du joueur dans sa couleur, puis s'estompent au bout de 8 s ; la molette fait défiler les 50 derniers pendant la saisie. Le relais limite les messages (200 caractères, 5 par 4 secondes et par joueur) ; l'option « Afficher le chat » (Options) masque tout, son compris. Pas de commandes : un texte qui commence par `/` est un message comme un autre.
+**Gagner des points** : toucher un zombie (10), le tuer (60), le tuer d'une balle dans la tête (100), réanimer un coéquipier (250).
 
-La fiche de référence complète (armes, atouts, zones, portes, manches, prix) est dans [`docs/REFERENCE.md`](docs/REFERENCE.md), avec la [carte annotée](docs/carte.png) et les mêmes tableaux au format tableur dans [`docs/csv/`](docs/csv/).
+**Les dépenser** :
+- **Portes** : 27 zones construites autour de vrais lieux (place Kléber, place Gutenberg, cathédrale, Petite France, Homme de Fer…). Plus on s'éloigne du départ, plus la porte coûte cher.
+- **Armes au mur** (silhouettes à la craie) et leurs munitions.
+- **Atouts** : Mastodonte, Speed Cola, Double Tap, Réanimation rapide, Mule Kick, Stamin-Up, PHD Flopper.
+- **Boîte mystère** : une arme au hasard, la boîte change de place.
+- **Pack-a-Punch** : 3 niveaux, dans la cathédrale.
+
+**Bonus** lâchés par les zombies : munitions max, mort instantanée, bombe, points doubles, bidons d'essence.
+
+**À terre**, un joueur a 45 s pour être réanimé (touche d'interaction maintenue).
+
+### Véhicules
+- **Motos** : une moto et une grosse moto à deux places (place Gutenberg, place Broglie). Points de vie, essence, n'écrasent qu'au-dessus d'une certaine vitesse.
+- **Vélos** : 23 vélos gratuits dans 19 stations (pastille « V » sur la carte). 43 km/h, 150 PV, pas de tir, n'écrasent jamais un zombie ; un choc violent fait chuter le cycliste.
+- **Tram** : deux lignes dans les rues les plus larges (A / D et B / C / F), rails, quais, caténaires, feux rouges devant les portes encore fermées. Une **rame conduisible** de 23,5 m (50 km/h, 3 000 PV, fauche les zombies) au quai « Homme de Fer » : remettre le courant à la sous-station (2 000 points, une fois pour l'équipe), puis conduire. On peut monter à pied, marcher et s'asseoir dans la rame en marche, et choisir la voie à l'aiguillage de l'Homme de Fer (`B`). Les zombies n'entrent pas dans la rame.
+
+### Fin de partie
+- **Maître Tanneur** : à partir de la manche 15, toutes les 5 manches, un pestiféré colossal rôde à Petite France ou Saint-Pierre-le-Vieux.
+- **« L'Heure du Jugement »** : dès la manche 12 avec 18 quartiers ouverts, la cathédrale accueille le boss, **le Bourreau** (350 000 PV, +70 % par joueur en plus), en quatre phases. Son point faible est la lanterne dans son dos. Récompense : 10 000 points et la Hache du Bourreau.
+- **Acte V « L'Aube »** : montée de la flèche (gargouilles, puis **l'Ange du Jugement**, boss secret), puis allumage du **Fanal d'Erwin** par tous les joueurs. Le jour se lève, les zombies tombent en cendres, « STRASBOURG LIBÉRÉE ». Récompenses : la Bénédiction de l'Aube, un trophée, puis la **Nuit éternelle** (zombies +30 % de vie).
+
+Toutes les valeurs, les prix, les zones et les manches sont dans [`docs/REFERENCE.md`](docs/REFERENCE.md), avec la [carte annotée](docs/carte.png) et des tableaux CSV dans [`docs/csv/`](docs/csv/).
 
 ## Commandes
 
-Toutes les touches du clavier sont **modifiables dans Options > Touches** (accessible depuis le titre et depuis la pause) : cliquez sur une action, appuyez sur la nouvelle touche, `Échap` annule ; si la touche est déjà prise, le jeu propose d'échanger les deux actions ; « Réinitialiser » remet une action par défaut, « Tout réinitialiser » toutes. Le réglage est local (gardé dans le navigateur). Les touches fixes sont la souris, la molette, `Échap` et `F9`. Le tableau donne les touches **par défaut**.
+Toutes les touches se changent dans **Options > Touches** (clic sur l'action, nouvelle touche, `Échap` annule, échange proposé si la touche est prise). Fixes : souris, molette, `Échap`, `F9`. Touches par défaut :
 
-| Touche par défaut | Action |
+| Touche | Action |
 |---|---|
-| `Z Q S D` / `W A S D` (et flèches) | Se déplacer |
-| Souris | Viser |
-| Clic gauche | Tirer |
-| Clic droit | Viser à la mire |
+| `Z Q S D` / `W A S D`, flèches | Se déplacer |
+| Souris, clic gauche, clic droit | Viser, tirer, viser à la mire |
 | `Maj gauche` | Sprint |
-| `Espace` | Sauter |
-| `Espace` (devant un obstacle bas) | Enjamber |
+| `Espace` | Sauter (enjamber un obstacle bas) |
 | `R` | Recharger |
 | `1` `2` `3` / molette | Changer d'arme |
-| `G` | Grenade |
-| `V` | Coup de couteau (aussi : clic gauche quand le chargeur et la réserve sont vides) |
-| `F` | Lampe torche |
-| `E` | Acheter, ouvrir une porte, utiliser une machine ou la borne des motos, monter / descendre d'une moto ou d'un vélo ; réanimer un coéquipier (maintenir) |
+| `G` / `V` / `F` | Grenade / couteau / lampe torche |
+| `E` | Acheter, ouvrir, utiliser, monter ou descendre d'un véhicule, réanimer (maintenir) |
 | `M` | Carte |
-| `Échap` | Ferme la saisie du chat, la carte ou le menu ouvert ; sinon menu pause |
-| `K` (maintenir 2 s) | Se débloquer si vous êtes coincé |
-| `Entrée` | Multijoueur : ouvre le chat écrit (`Entrée` envoie, `Échap` annule ; aucune autre touche n'agit pendant la saisie) |
+| `Échap` | Ferme le chat, la carte ou le menu ; sinon pause |
+| `K` (maintenir 2 s) | Se débloquer |
+| `Entrée` | Chat écrit (multijoueur) |
 
-**En moto ou à vélo** : `Z Q S D` / `W A S D` accélérer, freiner, tourner ; `Espace` (la touche de saut) frein à main (frein à vélo) ; `V` change la vue (3e personne par défaut) ; `E` pour descendre. On ne tire pas à vélo.
+- **Moto / vélo** : `Z Q S D` pour conduire, `Espace` frein à main, `V` change la vue, `E` pour descendre.
+- **Tram** : `Z`/`W` accélérer, `S` frein puis marche arrière, `Espace` frein d'urgence, `O` portes, `H` gong (attire les zombies à moins de 50 m), `V` vue, `B` aiguillage, `E` monter, s'asseoir, se lever.
+- **Fusil d'assaut Pack-a-Punch III** : clic molette pour le lance-grenades.
+- **Hôte** : `F9` ouvre le menu de debug.
 
-**En tram** : `Z` / `W` accélérer, `S` frein de service (puis marche arrière à l'arrêt), `Espace` frein d'urgence, `O` ouvrir / fermer les portes (à l'arrêt), `H` le gong (les zombies à moins de 50 m viennent vers la rame pendant 8 s), `V` change la vue (3e personne à 12 m, ou la cabine), `E` pour monter (portes fermées : la place de conducteur près d'un bout de la rame ; portes ouvertes : à pied, ou en marchant contre la porte), pour s'asseoir près d'un siège et pour se lever. `O` ouvre aussi les portes d'une rame sans conducteur. `B` : aiguillage (tout droit / dévié) au nœud de l'Homme de Fer. Il faut d'abord **remettre le courant** à la sous-station de l'Homme de Fer (kiosque jaune près du quai, `E`, 2 000 points une seule fois pour toute l'équipe) ; ensuite la conduite est gratuite.
+## Options graphiques
 
-**Fusil d'assaut Pack-a-Punch niveau III** : clic molette pour tirer le lance-grenades sous le canon.
-
-**Hôte uniquement** : `F9` ouvre un menu de debug (`1`-`4` choisir un joueur, `T` deux fois pour l'amener sur vous, `Y` pour le rejoindre, `N` pour le réanimer, `U` pour débloquer des zombies coincés, `P` pour les performances).
-
-## Options graphiques (v0.44.0 à v0.47.0)
-
-Options (titre ou pause) : **Luminosité**, **Champ de vision**, **Sensibilité**, **Qualité** (Rapide / Normale / Haute), Volume, Musique, **Effets cinéma** (OUI / NON), **Halo** (OUI / NON, qualité Haute), Chat, Touches, Plein écran. Tout est **visuel et local** : aucun effet sur le jeu en réseau, l'équilibrage, les collisions ni les zones de tir.
+Dans Options : luminosité, champ de vision, sensibilité, **Qualité** (Rapide / Normale / Haute), volumes, effets cinéma, halo, chat, touches, plein écran. Tout est visuel et local : aucun effet sur le réseau, l'équilibrage ou les collisions.
 
 | | Rapide | Normale | Haute |
 |---|---|---|---|
 | Netteté | x0,75 | x1 | jusqu'à x2 |
-| Ombres de la lune | aucune | douces, 1024 px (une image sur deux) | douces, 2048 px (chaque image) |
-| Reflets d'ambiance (ciel, lampadaires, lune), ombres de contact, ciel animé (lune, nuages), vignette | oui (nuages : non) | oui | oui |
-| Rendu et étalonnage | direct | direct | cible multi-échantillonnée + table de couleurs (avec « Effets cinéma ») |
-| Arbres | boules lissées | cartes de feuillage (14 par arbre) | cartes (24) + branches |
-| Halo lumineux (fenêtres, lampadaires, flammes ; demi-résolution, désactivable) | non | non | oui |
-| Particules (images : gouttes, fumée, éclats, étincelles) / taches de sang (sol et murs) | 50 % / 16 | 100 % / 36 | 100 % / 64 |
+| Ombres de la lune | aucune | douces, 1024 px | douces, 2048 px |
+| Arbres | boules lissées | cartes de feuillage | cartes + branches |
+| Rendu et étalonnage | direct | direct | multi-échantillonné + table de couleurs |
+| Halo lumineux | non | non | oui |
+| Particules / taches de sang | 50 % / 16 | 100 % / 36 | 100 % / 64 |
 
-Depuis la v0.45.0, les façades ont du **relief** (encadrements de fenêtres saillants, appuis, balcons, corniches, descentes de gouttière, cheminées) et des salissures (coulures, fissures, taches), dessinés seulement à moins de 30 / 60 / 110 m selon la qualité (Rapide / Normale / Haute) ; les collisions et la navigation restent sur le contour des bâtiments.
+Les valeurs sont dans le bloc `graphics` de `src/config.js`.
 
-Depuis la v0.46.0 : **arbres** en grappes de cartes de feuillage (atlas partagé, instanciées, ondulation légère au vent) avec des troncs évasés et, en Haute, des branches ; **sol** avec trottoirs (dalles, bordure, caniveau) le long des façades des rues de plus de 2,8 m, variation à grande échelle, mousse, taches, **flaques** qui reflètent le ciel d'ambiance et plaques d'égout (les rails, quais, parkings et stations de vélos ne changent pas) ; **cathédrale** : vitraux à plombs (mêmes dessins en albedo et en émissif), taches de lumière colorée au sol, dallage vieilli, bancs à joues sculptées (la pénombre est conservée, les collisions aussi). Depuis la v0.47.0 : **zombies** à tête sculptée (orbites, nez, dents, mâchoire articulée), visages / peaux / vêtements déchirés tirés de l'identifiant du zombie (même apparence chez tous les joueurs) sur deux atlas partagés, **sang qui s'ajoute à chaque touche** (sur l'hôte pour tous les impacts, chez un client pour ses propres tirs : aucun message réseau de plus), personnages avec **visage** peint, particules en vraies images et **taches de sang sur les murs**, éclair de tir étoilé.
+## Jouer sur son PC (version navigateur)
 
-« Effets cinéma » ajoute une vignette et un grain léger (superposition CSS, coût nul) et, en Haute, l'étalonnage par table de couleurs. Les valeurs (intensité de la torche, exposition et reflets par zone, ciel, étalonnage) sont dans le bloc `graphics` de `src/config.js` ; la cathédrale garde sa pénombre (reflets d'ambiance réduits dans l'intérieur).
-
-## Jouer sur son PC
-
-### 1. Prérequis
-
-- [Node.js](https://nodejs.org/) **20 ou plus récent** (la version LTS convient). Il inclut `npm`.
-- Un navigateur récent avec WebGL2 : Chrome, Edge ou Firefox (Chrome / Edge recommandés), idéalement avec une carte graphique correcte : la scène est dense.
-- [Git](https://git-scm.com/) (ou téléchargez le projet en ZIP depuis GitHub : bouton *Code* > *Download ZIP*).
-
-### 2. Installation
+Prérequis : [Node.js](https://nodejs.org/) 20 ou plus, un navigateur avec WebGL2 (Chrome ou Edge recommandés), [Git](https://git-scm.com/).
 
 ```bash
 git clone https://github.com/davideneco/zombie-survival.git
 cd zombie-survival
 npm install
-```
-
-### 3. Lancer le jeu
-
-```bash
 npm run dev
 ```
 
-Ouvrez ensuite **http://localhost:5173** dans votre navigateur et cliquez sur *Jouer*. Le serveur de développement embarque aussi le relais multijoueur.
+Ouvrez **http://localhost:5173** et cliquez sur *Jouer*. Pour la version optimisée : `npm run build` puis `npm start` (port 3000, ou la variable `PORT`).
 
-Pour une version optimisée (comme en ligne) :
+### Jouer à plusieurs
+- Un joueur **crée un salon** et reçoit un **code de 4 lettres** ; les autres le saisissent. L'hôte simule les zombies : s'il part, la partie se termine.
+- **Réseau local** : `npm run dev -- --host`, puis `http://ADRESSE_IP:5173` ; le pare-feu doit laisser passer le port.
+- **En ligne** : n'importe quel hébergeur Node.js (prévu pour [Render](https://render.com/) : build `npm install && npm run build`, start `npm start`). Tous les joueurs doivent avoir la **même version** : rechargez la page après une mise à jour.
 
-```bash
-npm run build
-npm start
-```
-
-Le jeu est alors servi sur **http://localhost:3000** (changez le port avec la variable d'environnement `PORT`).
-
-### 4. Jouer à plusieurs
-
-- Dans le menu, un joueur **crée un salon** : il reçoit un **code de 4 lettres** et devient l'hôte. Les autres **rejoignent** avec ce code (4 joueurs maximum). C'est l'hôte qui simule les zombies : si l'hôte part, la partie se termine.
-- **Sur le même réseau local** : lancez `npm run dev -- --host`, puis les autres joueurs ouvrent `http://ADRESSE_IP_DE_VOTRE_PC:5173`. Le pare-feu doit autoriser le port.
-- **En ligne** : hébergez-le sur un service qui exécute Node.js (le projet est prévu pour [Render](https://render.com/) : *build* `npm install && npm run build`, *start* `npm start`). Tout le monde doit utiliser la **même version** du jeu : rechargez la page après une mise à jour.
-
-### 5. Musique personnalisée (facultatif)
-
-Posez un fichier `theme.mp3` (ou `.ogg`, `.m4a`, `.wav`) dans `public/music/` : il remplace le rock synthétisé. Ce fichier n'est jamais envoyé sur GitHub (droits d'auteur) ; voir [`public/music/LISEZMOI.txt`](public/music/LISEZMOI.txt).
+### Musique personnalisée (facultatif)
+Posez `theme.mp3` (ou `.ogg`, `.m4a`, `.wav`) dans `public/music/` pour remplacer le rock synthétisé. Le fichier n'est jamais envoyé sur GitHub (droits d'auteur) ; voir [`public/music/LISEZMOI.txt`](public/music/LISEZMOI.txt).
 
 ## Problèmes courants
 
-- **Écran noir ou jeu très lent** : vérifiez que l'accélération matérielle est activée dans le navigateur et que WebGL2 fonctionne (`about:gpu` dans Chrome). Le chargement initial de la carte prend quelques secondes.
-- **La souris ne se capture pas / la pause s'affiche** : cliquez sur la fenêtre de jeu. Le navigateur refuse parfois de recapturer la souris juste après `Échap`.
-- **Coincé dans le décor** : maintenez `K` (touche par défaut de « se débloquer ») 2 secondes ; en multijoueur, l'hôte peut vous téléporter avec `F9`.
-- **Impossible de rejoindre un salon** : vérifiez le code, que tout le monde a la même version du jeu, et que le port est joignable (réseau local, pare-feu).
+- **Écran noir ou jeu lent** : activez l'accélération matérielle et vérifiez WebGL2 (`about:gpu` dans Chrome). Le premier chargement prend quelques secondes.
+- **La souris ne se capture pas** : cliquez sur la fenêtre ; le navigateur refuse parfois juste après `Échap`.
+- **Coincé dans le décor** : maintenez `K` 2 secondes ; en multijoueur l'hôte peut vous téléporter avec `F9`.
+- **Salon introuvable** : vérifiez le code, la version du jeu et que le port est joignable.
 
-## Structure du projet
+## Structure du dépôt
 
 | Dossier | Contenu |
 |---|---|
-| `src/` | Code du jeu (modules ES) ; l'équilibrage et les réglages graphiques (bloc `graphics`) sont dans `src/config.js` ; rendu : `graphics.js` (qualité, exposition par zone, reflets, étalonnage), `sky.js`, `contact.js`, `relief.js` (façades en relief), `envmap.js`, `trees.js` (arbres), `ground.js` (sol), `zombieSkin.js` (atlas, visages, sang des zombies), `fx.js` (particules, taches) |
+| `src/` | Jeu (modules ES) ; équilibrage dans `src/config.js` |
 | `server/` | Relais multijoueur (`rooms.mjs`) et serveur de production (`prod.mjs`) |
-| `public/` | Données de la carte (`data/area.json`), textures, dossier de musique |
-| `tools/` | Outils : extraction OSM, génération des docs (`make-docs.mjs`), détection de blocages (`stuck-scan.mjs`), tests |
-| `docs/` | Fiche de référence, carte annotée, tableaux CSV |
+| `public/` | Carte (`data/area.json`), textures, musique |
+| `tools/` | Extraction OSM, génération des docs, détection de blocages, cuisson et golden pour le port Godot |
+| `docs/` | Référence, carte annotée, CSV ; `GODOT_PORT.md` (plan et journal du port) |
+| `godot/` | Port Godot (branche `godot-port`) |
 
-Vérifier un changement : `npx vite build` puis une partie avec `?debug` dans l'URL (outils de développement).
+Vérifier un changement : `npx vite build`, puis une partie avec `?debug` dans l'URL.
 
 ## Crédits
 
-- Données cartographiques : © les contributeurs d'[OpenStreetMap](https://www.openstreetmap.org/copyright), licence ODbL.
-- Moteur 3D : [Three.js](https://threejs.org/).
+- Cartographie : © contributeurs d'[OpenStreetMap](https://www.openstreetmap.org/copyright), licence ODbL.
+- Moteur 3D : [Three.js](https://threejs.org/). Port : [Godot](https://godotengine.org/).
+- Armes du port Godot : Quaternius et Tabasco ; zombies : Quaternius ; détails et licences dans `godot/assets/*/LICENSE.txt`.
