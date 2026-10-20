@@ -5,13 +5,16 @@ extends RefCounted
 func _skel(m: CharacterModel) -> Skeleton3D:
 	return m.skeleton
 
-func _mat_color(m: CharacterModel, mat: String) -> Variant:
+## Le modèle contient-il un matériau de cette couleur (les matériaux de même valeur sont fusionnés par tools/build-characters.py : on cherche par valeur) ?
+func _has_color(m: CharacterModel, c: Color) -> bool:
 	for mi in m._meshes():
 		for s in (mi as MeshInstance3D).mesh.get_surface_count():
 			var mt := (mi as MeshInstance3D).mesh.surface_get_material(s)
-			if mt is StandardMaterial3D and mt.resource_name == "%s_%s" % [m.id, mat]:
-				return (mt as StandardMaterial3D).albedo_color
-	return null
+			if mt is StandardMaterial3D:
+				var a := (mt as StandardMaterial3D).albedo_color
+				if absf(a.r - c.r) < 0.02 and absf(a.g - c.g) < 0.02 and absf(a.b - c.b) < 0.02:
+					return true
+	return false
 
 func run(t: Node) -> void:
 	t.check(CharacterModel.IDS == CharacterDefs.LIST.map(func(c): return c["id"]), "les 8 identifiants de CharacterModel sont ceux de CharacterDefs")
@@ -47,9 +50,8 @@ func run(t: Node) -> void:
 		t.check(m.stats()["meshes"] >= 1, "%s : maillages" % cid)
 		# couleurs de la vue à la première personne = matériaux du modèle (gant, manche)
 		var o := CharacterModel.outfit(cid)
-		for k in ["glove", "sleeve"]:
-			var c: Variant = _mat_color(m, k)
-			t.check(c != null and (c as Color).is_equal_approx((o[k] as Color)) or (c != null and absf((c as Color).r - (o[k] as Color).r) < 0.02 and absf((c as Color).g - (o[k] as Color).g) < 0.02 and absf((c as Color).b - (o[k] as Color).b) < 0.02), "%s : couleur %s de la 1re personne = matériau du modèle" % [cid, k])
+		for k in ["glove", "sleeve", "cuff"]:
+			t.check(_has_color(m, o[k] as Color), "%s : couleur %s de la 1re personne = un matériau du modèle" % [cid, k])
 		# accessoires à la main cachés assis
 		var props := m._meshes().filter(func(n): return n.name.begins_with("Prop_"))
 		if cid in ["picsou", "harry"]:
@@ -68,6 +70,8 @@ func run(t: Node) -> void:
 	t.check(CharacterModel.loaded_count() == 0, "purge totale")
 	t.check(CharacterModel.create("inconnu") == null, "modèle inconnu : null (l'appelant garde son repli)")
 	run_preview(t)
+	run_integration(t)
+	run_teammate(t)
 
 ## Aperçu du menu : un SubViewport à monde propre qui ne garde que le modèle choisi.
 func run_preview(t: Node) -> void:
@@ -80,4 +84,38 @@ func run_preview(t: Node) -> void:
 	for cid in CharacterModel.IDS:
 		t.check(ResourceLoader.exists("res://assets/characters/portrait_%s.png" % cid) or ResourceLoader.exists("res://assets/portraits/%s.png" % cid), "%s : un portrait pour la carte du menu" % cid)
 	pv.free()
+	CharacterModel.purge_except("")
+
+## v0.21.2 : intégration (mains en 1re personne, places assises, locomotion d'un personnage affiché).
+func run_integration(t: Node) -> void:
+	for cid in CharacterModel.IDS:
+		HandsRig.set_outfit(cid)
+		var o := CharacterModel.outfit(cid)
+		t.check(HandsRig.material("glove").albedo_color.is_equal_approx(o["glove"]), "%s : gants de la 1re personne" % cid)
+		t.check(HandsRig.material("sleeve").albedo_color.is_equal_approx(o["sleeve"]), "%s : manches de la 1re personne" % cid)
+	t.check(HandsRig.material("sleeve").albedo_color != HandsRig.material("glove").albedo_color, "gants et manches distincts")
+	t.check(CharacterModel.seat_anim(false, "moto", true) == "Sit_Moto" and CharacterModel.seat_anim(false, "grosseMoto", false) == "Sit_Moto", "places de moto : Sit_Moto")
+	t.check(CharacterModel.seat_anim(false, "velo", true) == "Sit_Bike", "vélo : Sit_Bike")
+	t.check(CharacterModel.seat_anim(true, "tram", true) == "Sit_Tram_Drive" and CharacterModel.seat_anim(true, "tram", false) == "Sit_Tram", "rame : conducteur et passager")
+	for cid in CharacterModel.IDS:
+		var m := CharacterModel.create(cid)
+		var h := m.hip_height()
+		t.check(h > 0.6 and h < 1.1, "%s : hauteur de hanche %.2f m" % [cid, h])
+		m.set_motion(0.0)
+		t.check(m.current == "Idle", "%s : immobile = Idle" % cid)
+		m.set_motion(1.5)
+		t.check(m.current == "Walk", "%s : 1,5 m/s = Walk" % cid)
+		m.set_motion(6.0)
+		t.check(m.current == "Run", "%s : 6 m/s = Run" % cid)
+		m.play("Sit_Tram")
+		m.set_motion(6.0)
+		t.check(m.current == "Sit_Tram", "%s : assis, la vitesse ne change pas l'animation" % cid)
+		m.free()
+	CharacterModel.purge_except("")
+
+func run_teammate(t: Node) -> void:
+	var tm := CharacterModel.teammate("marc", "Léa2", Color("4fc3f7"))
+	t.check(tm != null and tm.get_node_or_null("NameTag") is Label3D and tm.current == "Idle", "coéquipier : modèle + pseudo, en Idle")
+	t.check(CharacterModel.teammate("inconnu", "x", Color.WHITE) == null, "coéquipier sans modèle : null")
+	tm.free()
 	CharacterModel.purge_except("")

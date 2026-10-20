@@ -111,6 +111,15 @@ static func _part(parent: Node3D, kind: String, mat: String, pos: Vector3, scale
 	parent.add_child(mi)
 	return mi
 
+## v0.21.2 : couleurs des gants, des manches et des poignets d'après la tenue du personnage choisi (CharacterModel.outfit : mêmes valeurs que les matériaux du modèle 3D).
+## Les matériaux sont partagés par toutes les mains et les manches : changer la tenue repeint tout (aucun noeud à reparcourir).
+static func set_outfit(cid: String) -> void:
+	var o := CharacterModel.outfit(cid)
+	for kind: String in ["glove", "sleeve", "cuff"]:
+		var m := material(kind)
+		m.albedo_color = o[kind]
+		m.emission = o[kind]
+
 # ------------------------------------------------------------------ mains
 ## Main droite sur une poignée verticale : origine = centre de la poignée ; paume derrière et à droite, quatre doigts qui l'entourent par devant, pouce à gauche, vers l'avant.
 static func make_grip_hand() -> Node3D:

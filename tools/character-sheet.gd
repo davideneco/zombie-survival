@@ -88,5 +88,6 @@ func _init() -> void:
 	for i in 8:
 		await process_frame
 	RenderingServer.force_draw()
+	print("rendu : %d appels de dessin, %d primitives (%d personnage(s), ombres comprises)" % [RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_TOTAL_DRAW_CALLS_IN_FRAME), RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_TOTAL_PRIMITIVES_IN_FRAME), ids.size()])
 	vp.get_texture().get_image().save_png(out)
 	quit(0)

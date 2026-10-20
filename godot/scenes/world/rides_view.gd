@@ -6,7 +6,10 @@ const TramView := preload("res://scenes/tram_view.gd")
 
 var _vehicle_views: Array = []
 var _tram_view: Node3D
-var _rider: Node3D
+var _rider: Node3D              ## repli : cavalier en primitives
+var _char: CharacterModel       ## le personnage choisi (null : pas de modèle 3D)
+var _holder: Node3D
+var _mount_key := ""
 var _cull_t := 0.0
 var _cam: Camera3D
 var _signal_lamps: Array = []   ## [{ straight, diverge, sw }] feux blancs des têtes de signal de l'aiguillage
@@ -268,10 +271,61 @@ func _tick(dt: float) -> void:
 			if cd > 0.0 and v.state != "gone":
 				vv.visible = v.has_driver() or Vector2(v.x - c.x, v.z - c.z).length() < cd
 	# le cavalier : visible si la caméra est assez loin (bras > avatarMin)
-	var show_rider: bool = r.ride != null and not r.ride["v"].is_tram() and r.cam.dist > float(Config.at("vehicles.cam.avatarMin"))
-	_rider.visible = show_rider
-	if show_rider:
-		var v: VehicleSim = r.ride["v"]
-		var hip: Vector3 = v.hip_world(int(r.ride["seat"]))
-		_rider.global_position = hip + Vector3(0, 0.0, 0)
-		_rider.rotation = Vector3(0, v.yaw, v.lean * 0.6)
+	_update_rider(r)
+
+## v0.21.2 : le joueur vu de l'extérieur sur sa machine ou sur sa place de la rame : le modèle 3D du personnage choisi (CharacterModel), assis, enfant de la machine (il
+## en suit cap et inclinaison) ou du module de la rame qui porte la place. Repli : le cavalier en primitives si le modèle manque.
+func _update_rider(r: Rides) -> void:
+	var show_rider: bool = r.ride != null and r.cam.dist > float(Config.at("vehicles.cam.avatarMin"))
+	if not show_rider:
+		_rider.visible = false
+		_unmount_rider()
+		return
+	var v: Object = r.ride["v"]
+	var seat: int = int(r.ride["seat"])
+	var cid := String(CharacterDefs.of_slot(int(Game.settings.get_value("char")))["id"])
+	if _char != null and _char.id != cid:
+		_unmount_rider()
+		_char.queue_free()
+		_char = null
+	if _char == null:
+		_char = CharacterModel.create(cid)
+	if _char == null:   # modèle absent : cavalier en primitives
+		_rider.visible = not v.is_tram()
+		if _rider.visible:
+			var hip0: Vector3 = v.hip_world(seat)
+			_rider.global_position = hip0
+			_rider.rotation = Vector3(0, v.yaw, v.lean * 0.6)
+		return
+	_rider.visible = false
+	var parent: Node3D = null
+	if v.is_tram():
+		parent = _tram_view.module_node(int(v.model_seats[seat]["module"])) if _tram_view != null else null
+	else:
+		for vv in _vehicle_views:
+			if vv.sim == v:
+				parent = vv
+	if parent == null:
+		_unmount_rider()
+		return
+	var key := "%d:%d" % [v.get_instance_id(), seat]
+	if key != _mount_key or _holder == null or _holder.get_parent() != parent:
+		_unmount_rider()
+		_mount_key = key
+		_holder = Node3D.new()
+		_holder.name = "Rider"
+		parent.add_child(_holder)
+		var hp: Array = v.model_seats[seat]["hip"]
+		_holder.add_child(_char)
+		_char.rotation.y = PI   # le modèle regarde vers +Z, la machine vers -Z
+		_char.play(CharacterModel.seat_anim(v.is_tram(), v.type if not v.is_tram() else "tram", v.is_driver(seat)))
+		_holder.position = Vector3(float(hp[0]), float(hp[1]) - _char.hip_height(), float(hp[2]))
+		_holder.rotation.y = float(v.model_seats[seat].get("ry", 0.0))
+
+func _unmount_rider() -> void:
+	if _holder != null:
+		if _char != null and _char.get_parent() == _holder:
+			_holder.remove_child(_char)
+		_holder.queue_free()
+		_holder = null
+	_mount_key = ""

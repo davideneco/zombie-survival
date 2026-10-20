@@ -221,6 +221,10 @@ func _fallback() -> void:
 	apply(1.0)
 
 # ------------------------------------------------------------------ pose
+## Noeud d'un module de la rame (porte les places : un cavalier s'y ajoute en enfant, positions de `model_seats` dans son repère).
+func module_node(i: int) -> Node3D:
+	return _mods[i] if i >= 0 and i < _mods.size() else null
+
 func remember() -> void:
 	for i in sim.n:
 		_prev[i] = _cur[i]

@@ -117,6 +117,8 @@ var _tram_door := false           # --tram-doors : portes de la rame ouvertes au
 var _tram_at := PackedFloat32Array()  # --tram-at=u,w,cap : debout dans la rame à (u le long, w à droite), regard cap degrés à partir de l'avant (captures)
 var _seat := -1                   # --seat=N : monte la place N de la rame (2 à 15 : passagers assis)
 var _tram_in := false             # --tram-in : joueur debout dans la rame
+var _cam_arm := 0.0               # --cam-arm=M : bras de caméra imposé sur la machine montée (captures)
+var _look_yaw := 0.0              # --look-yaw=deg : décalage du regard une fois monté (captures)
 var _first_person := false        # --first-person : vue à la première personne sur les véhicules
 var _machines_view: Node3D
 var _graphics: Node               # J9 : environnement, ciel, ombres, qualité (graphics_view.gd)
@@ -167,6 +169,10 @@ func _ready() -> void:
 			_demo = true
 		elif a.begins_with("--map="):
 			_map = a.substr(6)
+		elif a.begins_with("--char="):   # v0.21.1 : survivant imposé (id ou rang) sans toucher aux réglages enregistrés (captures)
+			var ci := CharacterModel.IDS.find(a.substr(7))
+			Game.settings.autosave = false
+			Game.settings.set_value("char", ci if ci >= 0 else int(a.substr(7)))
 		elif a == "--open-all":
 			_open_all = true
 		elif a.begins_with("--pos="):
@@ -175,6 +181,10 @@ func _ready() -> void:
 			_at_yaw = deg_to_rad(float(f[2])) if f.size() > 2 else 0.0
 		elif a.begins_with("--pitch="):
 			_at_pitch = deg_to_rad(float(a.substr(8)))
+		elif a.begins_with("--cam-arm="):   # v0.21.2 : longueur du bras de la caméra de la machine montée (m), pour voir un siège de la rame de l'intérieur (captures)
+			_cam_arm = float(a.substr(10))
+		elif a.begins_with("--look-yaw="):   # v0.21.2 : une fois monté, la caméra tourne de N degrés autour de la machine (vue de côté ; capturer avant le recentrage de 1,5 s)
+			_look_yaw = deg_to_rad(float(a.substr(11)))
 		elif a.begins_with("--fps="):
 			_fps_secs = float(a.substr(6))
 		elif a == "--fps-counter":   # v0.20.5 : compteur de FPS affiché (captures ; non sauvegardé)
@@ -936,6 +946,11 @@ func _eye_now() -> Vector3:
 	return p.pos + Vector3(0, float(Config.at("player.eye")), 0)
 
 func _process(dt: float) -> void:
+	if _cam_arm > 0.0 and Game.rides != null and Game.rides.ride != null:
+		Game.rides.ride["v"].def["camArm"] = _cam_arm
+	if _look_yaw != 0.0 and Game.rides != null and Game.rides.ride != null:
+		Game.player.yaw += _look_yaw
+		_look_yaw = 0.0
 	if not _first_draw:
 		_first_draw = true
 		if DisplayServer.get_name() != "headless":

@@ -191,6 +191,16 @@ func _build_ring(p0: Vector3, fx: Node3D, weapon_view: Node3D, machines_view: No
 	for lv in range(1, 4):
 		var tint: Variant = Config.color(int(Config.pap_levels[lv]["color"]))
 		_add(WeaponModels.build(String(ids[0]), tint), _ring(p0, lv * 3, 11, 2.8) + Vector3(0, 1.5, 0))
+	# v0.21.2 : le personnage choisi (fichier lu et pipelines de la peau compilés avant la première vue à la troisième personne : moto, vélo, rame), quatre poses autour du joueur
+	var cid := String(CharacterDefs.of_slot(int(Game.settings.get_value("char")))["id"])
+	var poses := ["Idle", "Sit_Moto", "Death", "Run"]
+	for i in poses.size():
+		var cm := CharacterModel.create(cid)
+		if cm == null:
+			break
+		_add(cm, _ring(p0, i, poses.size(), 3.2))
+		cm.rotation.y = TAU * float(i) / float(poses.size())
+		cm.pose(poses[i], 0.4)
 	# particules, taches, explosion
 	if fx != null:
 		var c := p0 + Vector3(0, 0, -4.0)

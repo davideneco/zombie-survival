@@ -17,7 +17,7 @@ const BONES := ["Root", "Hips", "Abdomen", "Torso", "Neck", "Head", "Shoulder.L"
 ## Couleurs de la vue à la première personne (mains et manches de hands_rig.gd) : gant, manche, poignet. Reprennent `fp` de CHARACTERS (src/characters.js)
 ## et les matériaux du modèle (un test les compare).
 const OUTFIT := {
-	"marc": {"glove": "1c1c1e", "sleeve": "4a5530", "cuff": "262c1a"},
+	"marc": {"glove": "1c1c1e", "sleeve": "4a5530", "cuff": "3a4228"},
 	"lea": {"glove": "4aa8e0", "sleeve": "dfe6ee", "cuff": "2c6a90"},
 	"karim": {"glove": "2a2a2e", "sleeve": "d8541a", "cuff": "2a2a2e"},
 	"chloe": {"glove": "e0d0b8", "sleeve": "b8283c", "cuff": "8a1c2c"},
@@ -89,6 +89,26 @@ static func create(cid: String) -> CharacterModel:
 			a.loop_mode = Animation.LOOP_NONE if n in ONE_SHOT else Animation.LOOP_LINEAR
 	return m
 
+## Pour le multijoueur (J12) : un coéquipier affiché avec son pseudo au-dessus de la tête. Même scène que le joueur local : `set_motion(vitesse)` à pied,
+## `play(seat_anim(...))` assis sur une machine (le parent est alors la machine ou le module de la rame, comme pour le cavalier de rides_view.gd).
+static func teammate(cid: String, label: String, accent: Color) -> CharacterModel:
+	var m := create(cid)
+	if m == null:
+		return null
+	var l := Label3D.new()
+	l.name = "NameTag"
+	l.text = label
+	l.font_size = 48
+	l.pixel_size = 0.0045
+	l.modulate = accent
+	l.outline_size = 10
+	l.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	l.no_depth_test = false
+	l.position = Vector3(0, 2.05, 0)
+	m.add_child(l)
+	m.set_motion(0.0)
+	return m
+
 static func _find(n: Node, cls: String) -> Node:
 	if n.is_class(cls):
 		return n
@@ -108,6 +128,30 @@ func play(anim: String, speed := 1.0, blend := 0.18) -> void:
 	player.play(anim, blend, speed)
 	seated = anim.begins_with("Sit_")
 	set_props_visible(not seated)
+
+## Animation assise d'une place : machine (type "moto", "grosseMoto", "velo" ou "tram") et conducteur ou passager.
+static func seat_anim(is_tram: bool, kind: String, driver: bool) -> String:
+	if is_tram:
+		return "Sit_Tram_Drive" if driver else "Sit_Tram"
+	return "Sit_Bike" if kind == "velo" else "Sit_Moto"
+
+## Hauteur de la hanche du squelette au repos (m, pieds à y = 0) : un personnage assis est posé à (hanche du siège - hip_height).
+func hip_height() -> float:
+	if skeleton == null:
+		return 0.92
+	var i := skeleton.find_bone("Hips")
+	return skeleton.get_bone_global_rest(i).origin.y if i >= 0 else 0.92
+
+## Locomotion d'un personnage affiché (coéquipier du multijoueur, aperçu) : Idle / Walk / Run d'après la vitesse (m/s), cadence de pas proportionnelle.
+func set_motion(speed: float) -> void:
+	if seated:
+		return
+	if speed < 0.15:
+		play("Idle")
+	elif speed < 4.2:
+		play("Walk", clampf(speed / 1.7, 0.6, 2.2))
+	else:
+		play("Run", clampf(speed / 6.0, 0.8, 1.6))
 
 ## Les accessoires tenus à la main (canne, baguette : noeuds « Prop_* ») sont cachés assis.
 func set_props_visible(on: bool) -> void:

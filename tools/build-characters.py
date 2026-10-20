@@ -299,11 +299,11 @@ def hair(b, c):
             b.ell((math.cos(a) * 0.085, math.sin(a) * 0.09 + 0.0, 1.745 + (k % 3) * 0.008), (0.04, 0.04, 0.035), 'hair', 'Head', segs=6, rings=4)
         b.ell((0.03, -0.1, 1.725), (0.05, 0.02, 0.025), 'hair', 'Head', segs=6, rings=4)
     elif st == 'longtail':
-        dome(b, 'hair', cut=0.52, rz=0.143, tilt=-0.55)
+        dome(b, 'hair', rx=0.114, ry=0.126, rz=0.139, cut=0.5, tilt=-0.5)
         b.tube((0, 0.115, 1.69), (0, 0.17, 1.30), 0.048, 0.022, 'hair', 'Head', 8)
         b.ell((0, 0.17, 1.26), (0.03, 0.03, 0.08), 'hair', 'Head', segs=8, rings=5)
         for sx in (-1, 1):
-            b.tube((sx * 0.108, 0.02, 1.62), (sx * 0.112, 0.05, 1.49), 0.024, 0.018, 'hair', 'Head', 8)
+            b.tube((sx * 0.105, 0.035, 1.64), (sx * 0.11, 0.07, 1.50), 0.022, 0.016, 'hair', 'Head', 8)
         b.torus((0, 0.115, 1.67), 0.04, 0.01, 'accessory', 'Head', rot=(1.0, 0, 0))
     if c.get('beard'):
         b.lathe([(0.0, -0.04), (0.092, -0.01), (0.10, 0.035), (0.092, 0.07)], (0, -0.012, 1.545), (0, 0, 0), (1, 1.02, 1), 12, 'hair', 'Head', cap0=False, cap1=False, a0=0, a1=2 * math.pi)
@@ -647,8 +647,13 @@ def build(cid):
     b = Builder(mats)
     fn(b)
     # matériaux Blender
-    bmats = []
-    for nm, spec in mats.items():
+    # matériaux Blender : ceux de même valeur sont fusionnés (moins de surfaces, donc moins d'appels de dessin dans Godot)
+    bmats, remap, seen = [], {}, {}
+    for i, (nm, spec) in enumerate(mats.items()):
+        key = tuple(spec) if len(spec) > 3 else tuple(spec) + (None,)
+        if key in seen:
+            remap[i] = seen[key]
+            continue
         col, rough, metal = spec[0], spec[1], spec[2]
         m = bpy.data.materials.new(f'{cid}_{nm}')
         m.use_nodes = True
@@ -659,6 +664,8 @@ def build(cid):
         if len(spec) > 3 and spec[3] is not None:
             bsdf.inputs['Emission Color'].default_value = hexc(spec[3])
             bsdf.inputs['Emission Strength'].default_value = 1.2
+        seen[key] = len(bmats)
+        remap[i] = len(bmats)
         bmats.append(m)
     # armature (mise à l'échelle de référence -> taille du personnage)
     S = Vector((sw, sw, sh))
@@ -697,6 +704,8 @@ def build(cid):
             if b.parts[part] == 'Head':
                 v.co = Vector((0, 0, 1.50)) + (v.co - Vector((0, 0, 1.50))) * HEAD_K
             v.co = sc(v.co)
+        for f in bm.faces:
+            f.material_index = remap[f.material_index]
         bm.normal_update()
         bm.to_mesh(mesh)
         for m in bmats: mesh.materials.append(m)

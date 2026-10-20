@@ -44,6 +44,7 @@ var _sprint_k := 0.0
 
 func setup(cam: Camera3D) -> void:
 	_cam = cam
+	HandsRig.set_outfit(String(CharacterDefs.of_slot(int(Game.settings.get_value("char")))["id"]))   # v0.21.2 : gants et manches de la tenue choisie
 	_shell_mat.albedo_color = Color("2f3b1f")
 	_nade_mat.albedo_color = Color("2f3b1f")
 	_knife = Node3D.new()   # couteau tenu (MeleeModels.build_knife) ; _axe : Hache du Bourreau (remplace le couteau)
