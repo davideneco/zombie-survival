@@ -14,6 +14,8 @@ uniform float metallic = 0.0;
 uniform vec2 uv_scale = vec2(1.0);
 uniform vec2 uv_offset = vec2(0.0);
 uniform vec2 detail_repeat = vec2(5.0, 3.7);
+uniform float glow_k = 0.0;          // v0.22.4 : halo des fenêtres allumées sur le mur (0 : aucun)
+uniform float glow_lod = 3.5;
 uniform float detail_k = 1.0;        // 0 : sans détail (qualité Rapide)
 
 void fragment() {
@@ -23,5 +25,10 @@ void fragment() {
 	ALBEDO = col;
 	ROUGHNESS = roughness;
 	METALLIC = metallic;
-	EMISSION = emission_color * texture(emission_tex, uv).rgb * emission_energy;
+	vec3 em = texture(emission_tex, uv).rgb;
+	// halo : la même carte lue en niveau de détail grossier (flou) : la lueur des fenêtres déborde sur le mur autour, comme un bloom, sans passe d'écran ni bruit
+	if (glow_k > 0.0) {
+		em += textureLod(emission_tex, uv, glow_lod).rgb * glow_k;
+	}
+	EMISSION = emission_color * em * emission_energy;
 }

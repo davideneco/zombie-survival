@@ -13,6 +13,7 @@ const TREE_CARD_RANGE := [60.0, 190.0, 190.0]   ## portée des cartes de feuilla
 ## décroissance 2) ; Three.js divise la diffusion par pi, pas Godot : énergie = intensité / pi, atténuation en 1 / d^2 comme Three.js.
 const LampGlow := preload("res://scenes/world/lamp_glow.gd")
 const LAMP_ENERGY_K := 1.0 / PI   ## intensité Three.js -> énergie Godot
+const FACADE_GLOW := 1.2         ## halo des fenêtres allumées (facade.gdshader, glow_k)
 const LAMP_Y := 4.2
 const LAMP_LIGHTS_MAX := 8        ## lampadaires éclairants : les plus proches du joueur (les autres restent des ampoules)
 
@@ -103,6 +104,8 @@ func set_quality(q: int) -> void:
 	# (le sol, ses flaques et le détail des façades sont dans le shader à tous les niveaux : le JS ne les retire pas en Rapide)
 	for m: ShaderMaterial in _kinds.get("water", []):
 		m.set_shader_parameter("layers", 1.0 if q == 0 else 2.0)
+	for m: ShaderMaterial in _kinds.get("facade", []):   # v0.22.4 : halo des fenêtres (une lecture de texture de plus par pixel de façade) : Normale et Haute
+		m.set_shader_parameter("glow_k", 0.0 if q == 0 or "--dbg-nowinglow" in OS.get_cmdline_user_args() else FACADE_GLOW)
 	for m: ShaderMaterial in _kinds.get("foliage", []):
 		m.set_shader_parameter("wind_on", 0.0 if q == 0 else 1.0)
 	for mm in _tree_cards:
