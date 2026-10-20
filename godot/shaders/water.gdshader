@@ -1,18 +1,18 @@
 shader_type spatial;
 render_mode cull_disabled;
 #include "env_reflect.gdshaderinc"
-// Eau de l'Ill : MeshStandardMaterial de realworld.js (0x0f2a3c, rugosité 0,08, métal 0,6, normale d'ondulations répétée tous les 6 m et qui dérive de
-// (0,004 ; 0,0025) par seconde), avec une seconde couche de ridules qui va à contre-sens (la deuxième échelle casse la répétition).
-// Reflète le ciel d'ambiance et la lune (rayonnement du ciel).
+// Eau de l'Ill (v0.22.1). Avant : MeshStandardMaterial de realworld.js (0x0f2a3c, rugosité 0,08, métal 0,6) avec la carte de normales du JS, une grille de sinusoïdes en
+// diagonale répétée tous les 6 m, qui donnait un quadrillage net et un moiré en perspective. Maintenant : relief calculé par six trains de vagues de directions et de longueurs
+// d'onde sans rapport (aucune texture, donc aucune répétition lisible), dont l'amplitude varie lentement dans l'espace ; les petites vagues s'estompent avec la distance
+// (plus de moiré au loin : l'eau lointaine est lisse et ne fait que refléter le ciel). Reflets : ciel d'ambiance (env_reflect.gdshaderinc) par Fresnel de Schlick, plus la
+// lueur de la lune par la lumière directionnelle (SPECULAR) sur des vagues douces (rugosité 0,14 : pas de points brillants qui scintillent).
 
-uniform sampler2D normal_tex : hint_normal, repeat_enable, filter_linear_mipmap_anisotropic;
 uniform vec4 albedo : source_color = vec4(0.0588, 0.1647, 0.2353, 1.0);
-uniform float roughness = 0.08;
+uniform float roughness = 0.14;
 uniform float metallic = 0.6;
-uniform float normal_depth = 0.6;
-uniform float uv_repeat = 0.16666667;
-uniform vec2 drift = vec2(0.004, 0.0025);
-uniform float layers = 2.0;           // 1 en qualité Rapide
+uniform float normal_depth = 0.6;     // intensité du relief (1 = pente maximale des vagues ci-dessous)
+uniform float layers = 2.0;           // 1 en qualité Rapide : trois trains de vagues au lieu de six
+uniform float refl_gain = 2.2;      // le ciel d'ambiance du JS (0,16) est faible : l'eau noire le renvoie nettement plus qu'un sol mat
 
 varying vec3 wpos;
 
@@ -20,22 +20,38 @@ void vertex() {
 	wpos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 }
 
+// pente (dérivée de la hauteur) d'un train de vagues : direction d, longueur d'onde wl, pente max s, vitesse v (m/s), phase ph, modulation d'amplitude lente
+vec2 wave(vec2 p, vec2 d, float wl, float s, float v, float ph, float fade) {
+	float k = 6.2831853 / wl;
+	float a = dot(p, d) * k - v * k * TIME + ph;
+	float m = 0.65 + 0.35 * sin(dot(p, vec2(d.y, -d.x)) * 0.043 + ph * 1.7) * sin(dot(p, d) * 0.021 - ph);
+	return d * (s * m * fade * cos(a));
+}
+
 void fragment() {
-	vec2 uv = UV * uv_repeat + drift * TIME;
-	vec2 n = texture(normal_tex, uv).xy * 2.0 - 1.0;
+	vec2 p = wpos.xz;
+	float dist = length(VERTEX);   // VERTEX est en espace vue dans fragment() : distance à la caméra
+	float f1 = 1.0 - smoothstep(60.0, 150.0, dist);
+	float f2 = 1.0 - smoothstep(35.0, 95.0, dist);
+	float f3 = 1.0 - smoothstep(18.0, 55.0, dist);
+	vec2 g = wave(p, normalize(vec2(0.83, 0.56)), 4.7, 0.050, 0.55, 0.0, 1.0);
+	g += wave(p, normalize(vec2(-0.42, 0.91)), 2.9, 0.045, 0.62, 1.3, f1);
+	g += wave(p, normalize(vec2(0.97, -0.25)), 1.7, 0.040, 0.48, 2.1, f1);
 	if (layers > 1.5) {
-		vec2 n2 = texture(normal_tex, UV * uv_repeat * 2.7 - drift * 1.7 * TIME + vec2(0.31, 0.77)).xy * 2.0 - 1.0;
-		n = (n + n2 * 0.6) / 1.3;
+		g += wave(p, normalize(vec2(-0.74, -0.67)), 1.05, 0.032, 0.40, 0.7, f2);
+		g += wave(p, normalize(vec2(0.10, 0.99)), 0.63, 0.026, 0.35, 3.3, f3);
+		g += wave(p, normalize(vec2(0.61, -0.79)), 0.37, 0.020, 0.30, 4.6, f3);
 	}
-	ALBEDO = albedo.rgb;
+	g *= normal_depth / 0.6;
+	vec3 nw = normalize(vec3(-g.x, 1.0, -g.y));
+	vec3 nv = normalize((VIEW_MATRIX * vec4(nw, 0.0)).xyz);
+	NORMAL = nv;
+	ALBEDO = albedo.rgb * 0.5;   // eau profonde : peu de diffusion (l'ambiance bleue la rendait d'un bleu uni de plastique)
 	ROUGHNESS = roughness;
 	METALLIC = 0.0;
-	SPECULAR = 0.0;
-	NORMAL_MAP = vec3(n * 0.5 + 0.5, 1.0);
-	NORMAL_MAP_DEPTH = normal_depth;
-	// reflet : ciel d'ambiance (env_reflect.gdshaderinc) sous la normale ondulée, Fresnel de Schlick (F0 ~ 0,03 : eau sombre, métal 0,6 du JS)
-	vec3 nrm = normalize(NORMAL + (TANGENT * n.x + BINORMAL * n.y) * normal_depth);
-	vec3 rw = (INV_VIEW_MATRIX * vec4(reflect(-VIEW, nrm), 0.0)).xyz;
-	float fr = 0.03 + 0.97 * pow(1.0 - clamp(dot(nrm, VIEW), 0.0, 1.0), 5.0);
-	EMISSION = env_sky(rw) * fr * (1.0 + metallic * 2.0);
+	SPECULAR = 0.6;
+	vec3 rw = (INV_VIEW_MATRIX * vec4(reflect(normalize(VERTEX), nv), 0.0)).xyz;
+	rw.y = abs(rw.y);   // un reflet qui plongerait sous l'horizon (vagues rasantes) renvoie le ciel, pas le sol
+	float fr = 0.03 + 0.97 * pow(1.0 - clamp(dot(nv, normalize(-VERTEX)), 0.0, 1.0), 5.0);
+	EMISSION = env_sky(rw) * fr * (1.0 + metallic * 2.0) * refl_gain;
 }

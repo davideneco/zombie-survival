@@ -47,6 +47,7 @@ var dbg_noamb := false
 var _last_brightness := -1.0
 var _last_noamb := false
 var dbg_torch_k := 1.0
+var dbg_sky := -1.0                 ## --sky=K : ciel figé (captures), sans la finale
 
 signal quality_applied(q: int)
 signal torch_toggled(on: bool)   ## v0.20.6 : retour visible (message) quand la touche F bascule la lampe
@@ -360,7 +361,7 @@ func _tick(dt: float) -> void:
 	var k := GraphicsRules.zone_blend(dt)
 	for key: String in ["exposure", "env", "torch"]:
 		zone_k[key] += (float(Z[key]) - float(zone_k[key])) * k
-	if Game.finale != null and not is_equal_approx(Game.finale.sky_k, sky_k):
+	if Game.finale != null and dbg_sky < 0.0 and not is_equal_approx(Game.finale.sky_k, sky_k):
 		set_sky_k(Game.finale.sky_k)
 	apply_exposure()
 	_update_torch()

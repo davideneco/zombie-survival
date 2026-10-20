@@ -76,6 +76,7 @@ var _quit_at := 0.0
 var _shot_done := false
 var _demo := false
 var _map := ""
+var _sky_arg := -1.0             ## --sky=K (0 nuit, 0,33 aube, 1 jour) : ciel de la finale sans la finale (captures, v0.22.0)
 var _at_pos := Vector3.INF      ## --pos=x,z[,yaw_deg] : téléporte le joueur (captures de lieux repères)
 var _at_yaw := 0.0
 var _at_pitch := 0.0            ## --pitch=deg : inclinaison de la caméra au départ (captures)
@@ -175,6 +176,8 @@ func _ready() -> void:
 			Game.settings.set_value("char", ci if ci >= 0 else int(a.substr(7)))
 		elif a == "--open-all":
 			_open_all = true
+		elif a.begins_with("--sky="):
+			_sky_arg = float(a.substr(6))
 		elif a.begins_with("--pos="):
 			var f := a.substr(6).split(",")
 			_at_pos = Vector3(float(f[0]), 0.0, float(f[1]))
@@ -548,6 +551,9 @@ func _build_scene_nodes(map: String) -> void:
 	_graphics = GraphicsView.new()
 	add_child(_graphics)
 	_graphics.setup(_camera, map == "arena")
+	if _sky_arg >= 0.0:
+		_graphics.dbg_sky = _sky_arg
+		_graphics.set_sky_k(_sky_arg)
 	_fx = FxView.new()
 	add_child(_fx)
 	_fx.setup(_camera)

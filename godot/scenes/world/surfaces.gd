@@ -58,12 +58,9 @@ static func make(k: String, m: Dictionary, tex: Callable) -> ShaderMaterial:
 				sm.set_shader_parameter("quality", 0.0)
 		"water":
 			sm.shader = WATER
-			sm.set_shader_parameter("normal_tex", tex.call(int(m["nmap"])))
-			sm.set_shader_parameter("albedo", base)
-			sm.set_shader_parameter("roughness", float(m["r"]))
+			sm.set_shader_parameter("albedo", base)   # (v0.22.1 : relief des vagues calculé dans le shader, la normale cuite du JS et sa rugosité 0,08 ne servent plus)
 			sm.set_shader_parameter("metallic", float(m["m"]))
 			sm.set_shader_parameter("normal_depth", float(m["ns"]))
-			sm.set_shader_parameter("uv_repeat", float((m["rep"] as Array)[0]))
 		"facade":
 			sm.shader = FACADE
 			sm.set_shader_parameter("albedo_tex", tex.call(int(m["map"])))
