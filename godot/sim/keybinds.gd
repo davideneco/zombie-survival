@@ -9,6 +9,13 @@ extends RefCounted
 signal changed
 
 ## action de liaison -> action de l'InputMap lue par main.gd
+const PORT_RESERVED := {"F3": "F3 affiche le compteur de FPS"}   ## touches réservées propres au port Godot (le JS n'a pas de compteur) ; `reserved()` ajoute celles de config.json
+
+## Raison du refus d'une touche (null si libre) : réservées du JS (config.json) puis du port.
+static func reserved(code: String) -> Variant:
+	var why: Variant = Config.at("reservedKeys.%s" % code)
+	return why if why != null else PORT_RESERVED.get(code)
+
 const ACTIONS := {
 	"forward": "move_forward", "left": "move_left", "back": "move_back", "right": "move_right", "sprint": "sprint", "jump": "jump",
 	"reload": "reload", "weapon1": "weapon_1", "weapon2": "weapon_2", "weapon3": "weapon_3", "grenade": "grenade", "knife": "knife",
@@ -189,7 +196,7 @@ func from_event(id: String, e: InputEventKey) -> Dictionary:
 	var code := code_of(e)
 	if code == "":
 		return {"error": "Touche non reconnue."}
-	var why: Variant = Config.at("reservedKeys.%s" % code)
+	var why: Variant = reserved(code)
 	if why != null:
 		return {"error": "Touche refusée : %s." % why}
 	var l := typed_letter(e)
@@ -261,7 +268,7 @@ func load_from(cf: ConfigFile) -> void:
 		var id: String = d["id"]
 		var s := String(cf.get_value("keys", id, ""))
 		var p := parse(s)
-		if p.is_empty() or (p["t"] == "code" and Config.at("reservedKeys.%s" % p["v"]) != null):
+		if p.is_empty() or (p["t"] == "code" and reserved(p["v"]) != null):
 			continue
 		var prev: String = map[id]
 		map[id] = s

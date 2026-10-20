@@ -10,7 +10,7 @@ const DEFAULT_PATH := "user://settings.cfg"
 const DEFAULTS := {
 	"brightness": 1.4, "fov": 80.0, "sens": 1.0, "volume": 1.0, "music": 0.5, "quality": 1, "tp_vehicle": true, "chat": true,
 	"cinema": true, "halo": true, "char": 0, "name": "Joueur",
-	"upscaler": 0, "res_scale": 0, "sharp": 0.9, "aa": 0, "aniso": 0,   ## v0.19.1 « Mise à l'échelle » : 0 natif (bilinéaire), 1 FSR 1.0, 2 FSR 2.2 ; indice de RES_SCALES ; netteté 0..1
+	"upscaler": 0, "res_scale": 0, "sharp": 0.9, "aa": 0, "aniso": 0, "fps": false,   ## v0.19.1 « Mise à l'échelle » : 0 natif (bilinéaire), 1 FSR 1.0, 2 FSR 2.2 ; indice de RES_SCALES ; netteté 0..1
 	"difficulty": "normal", "map": "strasbourg",   ## menu « Carte et difficulté » (v0.14.0) : voir Difficulty ; carte : "strasbourg" ou "arena"
 }
 ## bornes des curseurs (index.html : optBrightness…)

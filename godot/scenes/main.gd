@@ -79,6 +79,7 @@ var _at_yaw := 0.0
 var _at_pitch := 0.0            ## --pitch=deg : inclinaison de la caméra au départ (captures)
 var _fps_secs := 0.0            ## --fps=S : mesure les images par seconde pendant S secondes (après 3 s d'échauffement), imprime un résumé puis quitte ; --spin : la caméra tourne
 var _spin := false
+var _fps_overlay: FpsOverlay      ## v0.20.5 compteur de FPS (F3 / option)
 var _spin_rate := 0.0           ## --spin-rate=DEG : la caméra tourne de DEG degrés par seconde dès le début de la partie (captures en rotation ; v0.20.4)
 var _fps_t := 0.0
 var _fps_frames: PackedFloat32Array = []
@@ -174,6 +175,9 @@ func _ready() -> void:
 			_at_pitch = deg_to_rad(float(a.substr(8)))
 		elif a.begins_with("--fps="):
 			_fps_secs = float(a.substr(6))
+		elif a == "--fps-counter":   # v0.20.5 : compteur de FPS affiché (captures ; non sauvegardé)
+			Game.settings.autosave = false
+			Game.settings.values["fps"] = true
 		elif a == "--spin":
 			_spin = true
 		elif a.begins_with("--spin-rate="):
@@ -269,6 +273,8 @@ func _ready() -> void:
 	_menus = Menus.new()
 	add_child(_menus)
 	add_child(DebugOverlay.new())
+	_fps_overlay = FpsOverlay.new()
+	add_child(_fps_overlay)
 	_menus.start_requested.connect(func() -> void: _start_session())
 	_menus.resume_requested.connect(_apply_layers)
 	_menus.restart_requested.connect(func() -> void:
@@ -930,6 +936,7 @@ func _process(dt: float) -> void:
 			get_tree().quit(0 if Game.world == null and Game.arena == null and Game.player == null and Game.director == null and Game.zombies.is_empty() and _flow.is_menu() else 1)
 			return
 	_real_t += dt
+	_fps_overlay.live = _session_live and _flow.state == SessionFlow.PLAYING and _menus.in_game   # pas pendant le chargement
 	if not _session_live:
 		_menu_tick(dt)
 		return

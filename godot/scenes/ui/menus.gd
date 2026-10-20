@@ -459,12 +459,12 @@ func _build_options(col: Control) -> void:
 	var box := PanelContainer.new()
 	box.add_theme_stylebox_override("panel", UiTheme.box(Color(0, 0, 0, 0.5), Color("444444"), 1, 6, 14))
 	var inner := VBoxContainer.new()
-	inner.add_theme_constant_override("separation", 8)
+	inner.add_theme_constant_override("separation", 4)
 	box.add_child(inner)
 	p.add_child(box)
 	for pair in [["brightness", "Luminosité"], ["fov", "Champ de vision"], ["sens", "Sensibilité"], ["quality", "Qualité"], ["upscaler", "Mise à l'échelle"], ["res_scale", "Résolution 3D"], ["sharp", "Netteté"], ["aa", "Anticrénelage"], ["aniso", "Filtrage textures"], ["volume", "Volume"], ["music", "Musique"]]:
 		_slider_row(inner, pair[0], pair[1])
-	for pair in [["chat", "AFFICHER LE CHAT"], ["cinema", "EFFETS CINÉMA"], ["halo", "HALO (HAUTE)"]]:
+	for pair in [["chat", "AFFICHER LE CHAT"], ["cinema", "EFFETS CINÉMA"], ["halo", "HALO (HAUTE)"], ["fps", "COMPTEUR FPS (F3)"]]:
 		var key: String = pair[0]
 		var b := _btn(inner, "", func() -> void: settings.set_value(key, not bool(settings.get_value(key))), "SubButton")
 		b.add_theme_font_size_override("font_size", 18)
