@@ -1,0 +1,25 @@
+Characters of the Godot port (marc, lea, karim, chloe, lucian, picsou, klukai, harry) - assets/characters/*.glb
+
+Origin : ORIGINAL work, modelled from scratch for this project by tools/build-characters.py (Blender 5.2 script, no external model, texture or animation
+file is read: every mesh is generated from ellipsoids, tubes, rounded boxes and surfaces of revolution; the skeleton and the 8 animations (Idle, Walk, Run,
+Sit_Moto, Sit_Bike, Sit_Tram, Sit_Tram_Drive, Death) are written in the same script, bone rotations only). Colours are plain PBR material values, no image.
+
+Licence : same as the rest of the project (the repository owner's licence). Nothing in these files comes from Quaternius, Kenney or any other pack: the
+low-poly cartoon look is only meant to sit well next to the Quaternius zombies (assets/zombies, CC0, see ../zombies/LICENSE.txt), which are NOT reused here.
+The earlier idea of adapting "Ultimate Modular Men / Women" (Quaternius) was dropped: the pack page and the QAL licence note (see ../zombies/LICENSE.txt)
+make redistribution of derived models uncertain, and building from scratch avoids the question.
+
+Originality of the designs: the 8 names and accent colours come from the browser game (src/characters.js), and the outfits are loosely inspired by the game's
+primitive avatars (colours, accessories), but the designs are NOT reproductions of any copyrighted character:
+  - marc    : soldier (helmet with night-vision goggles, tactical vest, backpack with a rolled mat, knee pads).
+  - lea     : nurse (white coat over blue scrubs, red headband, stethoscope, green medical bag with a cross).
+  - karim   : firefighter (orange jacket with reflective bands, yellow helmet with neck flap, air tanks, axe on the back).
+  - chloe   : student (red parka, cream scarf, headphones, light-blue backpack, long dark hair).
+  - lucian  : "the Purifier" (long black coat with white lining and gold epaulettes, white full-face mask, glowing relic).
+  - picsou  : billionaire. The browser game's avatar is an anthropomorphic duck with a top hat; to stay clear of the protected cartoon character, the port
+              uses an ORIGINAL design: a short stout elderly human tycoon (red frock coat, black top hat, monocle, white moustache, gold cane). Only the name,
+              the red/white/gold palette and the top hat come from the game.
+  - klukai  : tactical doll (black cap, long pale-blue ponytail, purple cropped jacket, cyan straps, porcelain joints at knees and elbows).
+  - harry   : sorcerer. Original design: dark midnight robe, floppy pointed hat with a gold band, round glasses, teal scarf, gold sash, wand. No scar, no house
+              colours, no uniform from any film or game.
+No model, texture or sound was extracted from any game or film.
