@@ -42,6 +42,8 @@ var _btn_toggles: Dictionary = {}
 var _btn_fs: Button
 var _name_edit: LineEdit
 var _cards: Array = []
+var _preview: CharacterPreview     ## aperçu 3D du survivant (null sans modèle)
+var _preview_name: Label
 var _over_text: RichTextLabel
 var _over_title: Label
 var _victory_text: RichTextLabel
@@ -187,28 +189,45 @@ func _build_menu(col: Control) -> void:
 	_name_edit.alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_name_edit.text_changed.connect(func(t: String) -> void: settings.set_value("name", t if t != "" else "Joueur"))
 	row.add_child(_name_edit)
-	var grid := HFlowContainer.new()
-	grid.alignment = FlowContainer.ALIGNMENT_CENTER
+	# v0.21.1 : aperçu 3D tournant du survivant choisi à gauche, les 8 cartes (portraits) à droite en deux rangées de quatre ; sans modèle 3D, une seule rangée de portraits
+	var has_3d := CharacterModel.exists("marc")
+	var body := HBoxContainer.new()
+	body.alignment = BoxContainer.ALIGNMENT_CENTER
+	body.add_theme_constant_override("separation", 14)
+	p.add_child(body)
+	if has_3d:
+		var pv_box := VBoxContainer.new()
+		pv_box.add_theme_constant_override("separation", 2)
+		body.add_child(pv_box)
+		_preview = CharacterPreview.new(Vector2(270, 330))
+		pv_box.add_child(_preview)
+		_preview_name = UiTheme.label("", 20, UiTheme.GOLD, UiTheme.heading(), 3)
+		_preview_name.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		pv_box.add_child(_preview_name)
+	var grid := GridContainer.new()
+	grid.columns = 4 if has_3d else 8
 	grid.add_theme_constant_override("h_separation", 10)
 	grid.add_theme_constant_override("v_separation", 10)
-	grid.custom_minimum_size = Vector2(920, 0)
-	p.add_child(grid)
+	grid.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	body.add_child(grid)
 	for i in CharacterDefs.LIST.size():
 		var c: Dictionary = CharacterDefs.LIST[i]
 		var card := Button.new()
 		card.custom_minimum_size = Vector2(104, 96)
 		card.toggle_mode = false
-		var portrait := "res://assets/portraits/%s.png" % c["id"]   # cuit par tools/bake-portraits.mjs (renderPortraits du JS)
+		var portrait := "res://assets/characters/portrait_%s.png" % c["id"]   # rendu du modèle 3D (tools/character-sheet.gd --portraits)
+		if not ResourceLoader.exists(portrait):
+			portrait = "res://assets/portraits/%s.png" % c["id"]   # repli : portrait cuit par tools/bake-portraits.mjs (renderPortraits du JS)
 		if ResourceLoader.exists(portrait):
 			card.icon = load(portrait)
 			card.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
 			card.vertical_icon_alignment = VERTICAL_ALIGNMENT_TOP
 			card.expand_icon = true
 			card.add_theme_constant_override("icon_max_width", 96)
-			card.custom_minimum_size = Vector2(104, 196)
+			card.custom_minimum_size = Vector2(104, 140 if has_3d else 196)
 		card.text = "%s\n%s" % [c["name"], c["role"]]
 		card.add_theme_font_size_override("font_size", 13)
-		card.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART   # « Le Purificateur » passe à la ligne : toutes les cartes font 104 px (une seule rangée de 8)
+		card.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART   # « Le Purificateur » passe à la ligne : toutes les cartes font 104 px
 		card.add_theme_color_override("font_color", Color(String(c["accent"])))
 		card.add_theme_color_override("font_hover_color", Color(String(c["accent"])).lightened(0.3))
 		card.pressed.connect(func() -> void: settings.set_value("char", i))
@@ -786,6 +805,12 @@ func _on_setting(key: String) -> void:
 
 func _refresh_cards() -> void:
 	var sel := int(settings.get_value("char"))
+	if _preview != null:
+		var cd: Dictionary = CharacterDefs.of_slot(sel)
+		if _preview.current_id() != String(cd["id"]):
+			_preview.show_character(String(cd["id"]), Color(String(cd["accent"])))
+		_preview_name.text = "%s · %s" % [cd["name"], cd["role"]]
+		_preview_name.add_theme_color_override("font_color", Color(String(cd["accent"])))
 	for i in _cards.size():
 		var c: Dictionary = CharacterDefs.LIST[i]
 		var accent := Color(String(c["accent"]))

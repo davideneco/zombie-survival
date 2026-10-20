@@ -1,6 +1,8 @@
 extends SceneTree
 ## Planche des personnages (captures réelles, besoin d'un affichage) :
 ##   godot --path godot --script ../tools/character-sheet.gd -- out.png [anim] [t] [id,id,..]
+## Mode portraits : godot --path godot --script ../tools/character-sheet.gd -- <dossier> PORTRAITS : écrit <dossier>/portrait_<id>.png (192 x 256, fond transparent, trois quarts)
+## pour les cartes du menu SURVIVANT.
 ## Une rangée de 8 personnages (ou ceux demandés) dans l'animation `anim` (Idle par défaut) à la date `t` (s), vus de face puis de trois quarts arrière.
 func _init() -> void:
 	var a := OS.get_cmdline_user_args()
@@ -8,9 +10,13 @@ func _init() -> void:
 	var anim: String = a[1] if a.size() > 1 else "Idle"
 	var t := float(a[2]) if a.size() > 2 else 0.0
 	var ids: Array = String(a[3]).split(",") if a.size() > 3 else CharacterModel.IDS.duplicate()
+	var portraits := anim == "PORTRAITS"
 	await process_frame
 	var vp := SubViewport.new()
-	vp.size = Vector2i(400 * ids.size(), 700)
+	if portraits:
+		ids = CharacterModel.IDS.duplicate()
+	vp.size = Vector2i(192, 256) if portraits else Vector2i(400 * ids.size(), 700)
+	vp.transparent_bg = portraits
 	vp.msaa_3d = Viewport.MSAA_4X
 	vp.render_target_update_mode = SubViewport.UPDATE_ALWAYS
 	root.add_child(vp)
@@ -33,6 +39,28 @@ func _init() -> void:
 	fill.rotation = Vector3(deg_to_rad(-20), deg_to_rad(-40), 0)
 	fill.light_energy = 0.5
 	vp.add_child(fill)
+	if portraits:
+		env.background_mode = Environment.BG_CLEAR_COLOR
+		var cam0 := Camera3D.new()
+		cam0.fov = 20
+		cam0.position = Vector3(0.8, 1.35, 4.6)
+		vp.add_child(cam0)
+		cam0.look_at(Vector3(0, 1.1, 0))
+		cam0.current = true
+		for cid: String in ids:
+			var pm := CharacterModel.create(cid)
+			pm.rotation.y = deg_to_rad(-18)
+			vp.add_child(pm)
+			pm.pose("Idle", 0.3)
+			for i in 6:
+				await process_frame
+			RenderingServer.force_draw()
+			var img := vp.get_texture().get_image()
+			img.save_png("%s/portrait_%s.png" % [out, cid])
+			pm.queue_free()
+			await process_frame
+		quit(0)
+		return
 	var floor_m := MeshInstance3D.new()
 	var pm := PlaneMesh.new()
 	pm.size = Vector2(60, 20)

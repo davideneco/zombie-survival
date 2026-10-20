@@ -67,3 +67,17 @@ func run(t: Node) -> void:
 	CharacterModel.purge_except("")
 	t.check(CharacterModel.loaded_count() == 0, "purge totale")
 	t.check(CharacterModel.create("inconnu") == null, "modèle inconnu : null (l'appelant garde son repli)")
+	run_preview(t)
+
+## Aperçu du menu : un SubViewport à monde propre qui ne garde que le modèle choisi.
+func run_preview(t: Node) -> void:
+	var pv := CharacterPreview.new(Vector2(200, 260))
+	t.check(pv.show_character("karim", Color("ff8a3d")), "aperçu : karim affiché")
+	t.check(pv.model() != null and pv.model().id == "karim" and pv.model().current == "Idle", "aperçu : modèle karim en Idle")
+	t.check(CharacterModel.loaded_count() == 1, "aperçu : un seul modèle chargé")
+	t.check(pv.show_character("harry", Color("e0b040")) and CharacterModel.loaded_count() == 1 and CharacterModel.is_loaded("harry"), "aperçu : changer de survivant libère l'ancien modèle")
+	t.check(not pv.show_character("inconnu", Color.WHITE) and not pv.visible, "aperçu : modèle absent = conteneur masqué (repli sur les portraits)")
+	for cid in CharacterModel.IDS:
+		t.check(ResourceLoader.exists("res://assets/characters/portrait_%s.png" % cid) or ResourceLoader.exists("res://assets/portraits/%s.png" % cid), "%s : un portrait pour la carte du menu" % cid)
+	pv.free()
+	CharacterModel.purge_except("")
