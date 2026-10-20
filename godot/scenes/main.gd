@@ -540,6 +540,7 @@ func _build_scene_nodes(map: String) -> void:
 	_finale_view.setup(_camera, _fx)
 	_hud = HUD.instantiate()
 	add_child(_hud)
+	_graphics.torch_toggled.connect(func(on: bool) -> void: _hud.toast("Lampe torche allumée" if on else "Lampe torche éteinte", 1.5))
 	_weapon_view = Node3D.new()
 	_weapon_view.set_script(WeaponView)
 	add_child(_weapon_view)

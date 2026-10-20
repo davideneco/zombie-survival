@@ -49,6 +49,7 @@ var _last_noamb := false
 var dbg_torch_k := 1.0
 
 signal quality_applied(q: int)
+signal torch_toggled(on: bool)   ## v0.20.6 : retour visible (message) quand la touche F bascule la lampe
 
 func setup(cam: Camera3D, is_arena: bool) -> void:
 	camera = cam
@@ -184,6 +185,7 @@ func _update_torch() -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo and event.is_action_pressed("torch") and Game.playing and not Game.over:
 		set_torch(not torch_on)
+		torch_toggled.emit(torch_on)
 
 func _build_cinema() -> void:
 	_cinema_layer = CanvasLayer.new()
