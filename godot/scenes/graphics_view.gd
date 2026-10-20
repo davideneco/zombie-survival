@@ -47,6 +47,7 @@ var dbg_noamb := false
 var _last_brightness := -1.0
 var _last_noamb := false
 var dbg_torch_k := 1.0
+var dbg_noatmo := false             ## --dbg-noatmo : sans perspective aérienne, diffusion de la lune ni brume basse (comparaisons avant / après de v0.22.3)
 var dbg_sky := -1.0                 ## --sky=K : ciel figé (captures), sans la finale
 
 signal quality_applied(q: int)
@@ -63,7 +64,10 @@ func setup(cam: Camera3D, is_arena: bool) -> void:
 	apply_quality(int(Game.settings.get_value("quality")))
 	apply_exposure()
 	for a in OS.get_cmdline_user_args():   # mise au point : --dbg-nomoon, --dbg-noamb (comparaisons avec le JS, une lumière à la fois)
-		if a == "--dbg-nomoon":
+		if a == "--dbg-noatmo":
+			dbg_noatmo = true
+			_set_atmosphere(sky_k)
+		elif a == "--dbg-nomoon":
 			moon.light_energy = 0.0
 		elif a == "--dbg-albedo":   # sans lumière ni brouillard ni mappage tonal : une ambiance blanche (rayonnement = albédo)
 			env.background_mode = Environment.BG_COLOR
@@ -132,12 +136,25 @@ func _build_environment() -> void:
 	env.fog_light_color = FOG_COLOR
 	env.fog_mode = Environment.FOG_MODE_DEPTH
 	env.fog_sky_affect = 0.0
+	# v0.22.3 : atmosphère de nuit : la couleur du ciel se mêle au brouillard avec la distance (perspective aérienne : les rangées de façades s'éloignent en bleuissant au lieu de
+	# rester des silhouettes noires), la lune diffuse dans l'air (halo de brouillard du côté de la lune) et une brume basse épaissit le brouillard au ras du sol. Coût nul (même passe).
+	env.fog_sun_scatter = 0.15
+	env.fog_height = 3.0
+	env.fog_height_density = 0.1
+	_set_atmosphere(0.0)
 	_set_fog(FOG_DENSITY_ARENA if arena else FOG_DENSITY)
 	# halo (Haute) : réglé par _apply_glow
 	env.glow_enabled = false
 	world_env = WorldEnvironment.new()
 	world_env.environment = env
 	add_child(world_env)
+
+## Dosage de la perspective aérienne selon le ciel (k : 0 nuit, 1 jour) : de jour le brouillard est déjà dense et clair, il n'en reçoit pas.
+func _set_atmosphere(k: float) -> void:
+	var f := 0.0 if dbg_noatmo else 1.0 - clampf(k * 3.0, 0.0, 1.0)
+	env.fog_aerial_perspective = 0.22 * f
+	env.fog_sun_scatter = 0.15 * f
+	env.fog_height_density = 0.1 * f
 
 ## Le brouillard de profondeur de Godot vaut smoothstep(début, fin, d) x densité (mesuré sur des quads blancs, voir docs/GODOT_PORT.md J9). Avec début 0, fin = 1,65 / densité
 ## et courbe 1, il suit le brouillard exponentiel carré de Three.js 1 - exp(-(d x densité)^2) à 0,07 près (écart maximal à 70 m ; 0,00 à 0 m et à 100 m).
@@ -335,6 +352,7 @@ func set_sky_k(k: float) -> void:
 	_hemi_k = _pick_n(SKY_HEMI, k)
 	_last_brightness = -1.0   # relance le calcul de l'ambiance avec la nouvelle intensité
 	env.fog_light_color = _pick_c(SKY_FOG, k)
+	_set_atmosphere(k)
 	_set_fog(_pick_n(SKY_DENSITY, k) * (1.15 if arena else 1.0))
 	moon.light_color = _pick_c(SKY_SUN, k)
 	moon.light_energy = _pick_n(SKY_SUN_I, k) * THREE_TO_GODOT
