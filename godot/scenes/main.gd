@@ -79,6 +79,7 @@ var _at_yaw := 0.0
 var _at_pitch := 0.0            ## --pitch=deg : inclinaison de la caméra au départ (captures)
 var _fps_secs := 0.0            ## --fps=S : mesure les images par seconde pendant S secondes (après 3 s d'échauffement), imprime un résumé puis quitte ; --spin : la caméra tourne
 var _spin := false
+var _spin_rate := 0.0           ## --spin-rate=DEG : la caméra tourne de DEG degrés par seconde dès le début de la partie (captures en rotation ; v0.20.4)
 var _fps_t := 0.0
 var _fps_frames: PackedFloat32Array = []
 var _fps_gpu := 0.0
@@ -175,6 +176,8 @@ func _ready() -> void:
 			_fps_secs = float(a.substr(6))
 		elif a == "--spin":
 			_spin = true
+		elif a.begins_with("--spin-rate="):
+			_spin_rate = deg_to_rad(float(a.substr(12)))
 		elif a == "--no-hud":
 			_no_hud = true
 		elif a.begins_with("--horde="):
@@ -989,6 +992,8 @@ func _session_process(dt: float) -> void:
 		_door_probe_tick(dt)
 	var f := Engine.get_physics_interpolation_fraction()
 	var p := Game.player
+	if _spin_rate != 0.0 and Game.playing:
+		p.yaw += _spin_rate * dt
 	if p.eye_override != Vector3.INF or _prev_eye != Vector3.ZERO and Game.rides != null and Game.rides.cam.placed:
 		_camera.position = _prev_eye.lerp(_eye_now(), f)
 	else:
@@ -1013,7 +1018,7 @@ func _session_process(dt: float) -> void:
 	if Game.rides != null:   # arme de la vue cachée en conduisant et en vue externe
 		_weapon_view.hide_gun = Game.rides.driving() or Game.rides.cam.external()
 	Game.view_aspect = get_viewport().get_visible_rect().size.aspect()
-	_camera.fov = 68.0 if orbiting else Game.arms.fov(float(Game.settings.get_value("fov")))
+	_camera.fov = 68.0 if orbiting else GraphicsRules.fov_for_aspect(Game.arms.fov(float(Game.settings.get_value("fov"))), Game.view_aspect)
 	_weapon_view.hide_gun = _weapon_view.hide_gun or orbiting
 	if _intro != null and _intro.active:
 		_intro.tick(dt, p.yaw, p.pitch)   # caméra tournée vers le boss, overlay, une tâche de préchauffage
@@ -1051,6 +1056,7 @@ func _session_process(dt: float) -> void:
 		await RenderingServer.frame_post_draw
 		get_viewport().get_texture().get_image().save_png(_shot_path)
 		print("capture : %s (manche %d, %d tués, %d points, %d PV)" % [_shot_path, Game.round_number, Game.kills, Game.points, Game.player.health])
+		print("capture pose : %.2f,%.2f,%.3f" % [Game.player.pos.x, Game.player.pos.z, rad_to_deg(Game.player.yaw)])
 		get_tree().quit()
 
 ## --fps : durée de chaque image (temps réel), appels de rendu, primitives, temps GPU mesuré par le moteur. Imprime le résumé sur une ligne « FPS ... » puis quitte.

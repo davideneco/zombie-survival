@@ -200,7 +200,7 @@ func _build_cinema() -> void:
 # ---------------------------------------------------------------- réglages
 func _on_setting(key: String) -> void:
 	match key:
-		"quality", "cinema", "halo", "upscaler", "res_scale", "sharp":   # (le MSAA dépend du mode de mise à l'échelle)
+		"quality", "cinema", "halo", "upscaler", "res_scale", "sharp", "aa", "aniso":   # (le MSAA dépend du mode de mise à l'échelle)
 			apply_quality(int(Game.settings.get_value("quality")))
 		"brightness":
 			apply_exposure()
@@ -220,7 +220,10 @@ func apply_quality(q: int) -> void:
 	var sz := _size()
 	var post := GraphicsRules.want_post(q, cinema, sz.x, sz.y)
 	# FSR 2.2 est temporel et remplace l'anticrénelage : pas de MSAA avec lui (il se combine mal avec le tampon de vecteurs de mouvement)
-	vp.msaa_3d = Viewport.MSAA_DISABLED if int(Game.settings.get_value("upscaler")) == 2 else (Viewport.MSAA_4X if q == 2 else (Viewport.MSAA_2X if q == 1 else Viewport.MSAA_DISABLED))
+	var aa := int(Game.settings.get_value("aa"))
+	vp.msaa_3d = GraphicsRules.msaa_mode(q, aa, int(Game.settings.get_value("upscaler")))
+	vp.screen_space_aa = Viewport.SCREEN_SPACE_AA_FXAA if aa == 4 else Viewport.SCREEN_SPACE_AA_DISABLED
+	vp.anisotropic_filtering_level = GraphicsRules.aniso_level(int(Game.settings.get_value("aniso")))
 	var shadows := bool(L["shadows"])
 	moon.shadow_enabled = shadows
 	if shadows:

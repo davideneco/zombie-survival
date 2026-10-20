@@ -462,7 +462,7 @@ func _build_options(col: Control) -> void:
 	inner.add_theme_constant_override("separation", 8)
 	box.add_child(inner)
 	p.add_child(box)
-	for pair in [["brightness", "Luminosité"], ["fov", "Champ de vision"], ["sens", "Sensibilité"], ["quality", "Qualité"], ["upscaler", "Mise à l'échelle"], ["res_scale", "Résolution 3D"], ["sharp", "Netteté"], ["volume", "Volume"], ["music", "Musique"]]:
+	for pair in [["brightness", "Luminosité"], ["fov", "Champ de vision"], ["sens", "Sensibilité"], ["quality", "Qualité"], ["upscaler", "Mise à l'échelle"], ["res_scale", "Résolution 3D"], ["sharp", "Netteté"], ["aa", "Anticrénelage"], ["aniso", "Filtrage textures"], ["volume", "Volume"], ["music", "Musique"]]:
 		_slider_row(inner, pair[0], pair[1])
 	for pair in [["chat", "AFFICHER LE CHAT"], ["cinema", "EFFETS CINÉMA"], ["halo", "HALO (HAUTE)"]]:
 		var key: String = pair[0]

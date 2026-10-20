@@ -99,6 +99,37 @@ static func scaling_mode(upscaler: int) -> int:
 static func fsr_sharpness(sharp: float) -> float:
 	return 2.0 * (1.0 - clampf(sharp, 0.0, 1.0))
 
+## v0.20.4 : champ de vision VERTICAL (degrés) réellement appliqué. Le curseur est vertical (comme le JS) : sur un écran plus large que 16:9 le champ horizontal
+## explose (80 degrés vertical = 111 degrés horizontal en 16:9, 127 en 21:9) et les bords s'étirent et bavent quand on tourne. Le champ horizontal ne dépasse donc jamais celui
+## du même réglage en 16:9 : au-delà, le champ vertical est réduit. Jamais plus grand que le réglage.
+static func fov_for_aspect(vfov: float, aspect: float) -> float:
+	if aspect <= 16.0 / 9.0 + 0.001:
+		return vfov
+	var tan_h := tan(deg_to_rad(vfov) * 0.5) * (16.0 / 9.0)
+	return minf(vfov, rad_to_deg(2.0 * atan(tan_h / aspect)))
+
+## MSAA du viewport : `aa` (Settings.AA_NAMES) 0 Auto = selon la qualité ; FSR 2.2 coupe le MSAA (il le remplace) ; FXAA (4) et Aucun (1) : pas de MSAA.
+static func msaa_mode(q: int, aa: int, upscaler: int) -> int:
+	if upscaler == 2:
+		return Viewport.MSAA_DISABLED
+	match aa:
+		1, 4:
+			return Viewport.MSAA_DISABLED
+		2:
+			return Viewport.MSAA_2X
+		3:
+			return Viewport.MSAA_4X
+	return Viewport.MSAA_4X if q == 2 else (Viewport.MSAA_2X if q == 1 else Viewport.MSAA_DISABLED)
+
+## Filtrage anisotrope du viewport : `aniso` (Settings.ANISO_NAMES) 0 Auto = x4 (défaut du moteur), 1 aucun, 2 x4, 3 x16.
+static func aniso_level(aniso: int) -> int:
+	match aniso:
+		1:
+			return Viewport.ANISOTROPY_DISABLED
+		3:
+			return Viewport.ANISOTROPY_16X
+	return Viewport.ANISOTROPY_4X
+
 ## Biais de mipmap des textures quand on rend sous la résolution de la fenêtre : log2(échelle) (négatif), pour que les textures gardent leur finesse après l'agrandissement.
 static func mipmap_bias(scale: float, upscaler: int) -> float:
 	return log(clampf(scale, 0.1, 1.0)) / log(2.0) if upscaler > 0 and scale < 1.0 else 0.0

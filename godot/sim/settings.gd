@@ -10,16 +10,18 @@ const DEFAULT_PATH := "user://settings.cfg"
 const DEFAULTS := {
 	"brightness": 1.4, "fov": 80.0, "sens": 1.0, "volume": 1.0, "music": 0.5, "quality": 1, "tp_vehicle": true, "chat": true,
 	"cinema": true, "halo": true, "char": 0, "name": "Joueur",
-	"upscaler": 0, "res_scale": 0, "sharp": 0.9,   ## v0.19.1 « Mise à l'échelle » : 0 natif (bilinéaire), 1 FSR 1.0, 2 FSR 2.2 ; indice de RES_SCALES ; netteté 0..1
+	"upscaler": 0, "res_scale": 0, "sharp": 0.9, "aa": 0, "aniso": 0,   ## v0.19.1 « Mise à l'échelle » : 0 natif (bilinéaire), 1 FSR 1.0, 2 FSR 2.2 ; indice de RES_SCALES ; netteté 0..1
 	"difficulty": "normal", "map": "strasbourg",   ## menu « Carte et difficulté » (v0.14.0) : voir Difficulty ; carte : "strasbourg" ou "arena"
 }
 ## bornes des curseurs (index.html : optBrightness…)
 const RANGES := {
-	"brightness": [0.6, 3.0, 0.05], "fov": [60.0, 110.0, 1.0], "sens": [0.3, 3.0, 0.05], "quality": [0, 2, 1], "upscaler": [0, 2, 1], "res_scale": [0, 4, 1], "sharp": [0.0, 1.0, 0.05], "volume": [0.0, 1.0, 0.05], "music": [0.0, 1.0, 0.05],
+	"brightness": [0.6, 3.0, 0.05], "fov": [60.0, 110.0, 1.0], "sens": [0.3, 3.0, 0.05], "quality": [0, 2, 1], "upscaler": [0, 2, 1], "res_scale": [0, 4, 1], "sharp": [0.0, 1.0, 0.05], "aa": [0, 4, 1], "aniso": [0, 3, 1], "volume": [0.0, 1.0, 0.05], "music": [0.0, 1.0, 0.05],
 }
 const MAPS := ["strasbourg", "arena"]
 const QUALITY_NAMES := ["Rapide", "Normale", "Haute"]
-const UPSCALER_NAMES := ["Natif", "FSR 1.0", "FSR 2.2 (essai)"]   ## FSR 2.2 : images fantômes légères sur les zombies en mouvement (captures v0.19.1)
+const UPSCALER_NAMES := ["Natif", "FSR 1.0", "FSR 2.2 (expérimental)"]   ## FSR 2.2 : temporel, perd ~40 % de netteté en rotation (mesuré v0.20.4) : jamais choisi automatiquement ni relu d'un fichier de réglages
+const AA_NAMES := ["Auto", "Aucun", "MSAA 2x", "MSAA 4x", "FXAA"]   ## v0.20.4 « Anticrénelage » : Auto = selon la qualité (Rapide aucun, Normale 2x, Haute 4x) ; réglage de diagnostic du flou
+const ANISO_NAMES := ["Auto", "Aucun", "x4", "x16"]   ## v0.20.4 « Filtrage des textures » : Auto = x4 (défaut du moteur)
 const RES_SCALES := [1.0, 0.85, 0.75, 0.67, 0.5]   ## résolution de rendu 3D (le HUD et les menus restent à la résolution de la fenêtre)
 
 var path := DEFAULT_PATH
@@ -44,7 +46,7 @@ func set_value(key: String, v: Variant) -> void:
 	if RANGES.has(key):
 		var r: Array = RANGES[key]
 		v = clampf(float(v), float(r[0]), float(r[1]))
-		if key in ["quality", "upscaler", "res_scale"]:
+		if key in ["quality", "upscaler", "res_scale", "aa", "aniso"]:
 			v = roundi(v)
 	if values[key] == v:
 		return
@@ -81,6 +83,8 @@ func load_file() -> void:
 			values["map"] = "strasbourg"
 		if not cf.has_section_key("settings", "upscaler"):   # réglages d'avant v0.19.1 : la mise à l'échelle suit le préréglage de la qualité enregistrée
 			apply_scale_preset(int(values["quality"]), false)
+		if int(values["upscaler"]) == 2:   # v0.20.4 : FSR 2.2 (temporel) bave en rotation : un fichier qui l'avait choisi repasse en FSR 1.0 (ou natif à 100 %)
+			values["upscaler"] = 1 if int(values["res_scale"]) > 0 else 0
 		binds.load_from(cf)
 	else:
 		binds.reset_all(false)
@@ -115,6 +119,10 @@ static func format(key: String, v: float) -> String:
 			return QUALITY_NAMES[clampi(roundi(v), 0, 2)]
 		"upscaler":
 			return UPSCALER_NAMES[clampi(roundi(v), 0, 2)]
+		"aa":
+			return AA_NAMES[clampi(roundi(v), 0, 4)]
+		"aniso":
+			return ANISO_NAMES[clampi(roundi(v), 0, 3)]
 		"res_scale":
 			return "%d%%" % roundi(float(RES_SCALES[clampi(roundi(v), 0, 4)]) * 100.0)
 		"sharp":
