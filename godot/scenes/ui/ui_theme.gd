@@ -137,12 +137,22 @@ void fragment() {
 const CINEMA_SHADER := """
 shader_type canvas_item;
 uniform float grain = 0.085;
-float hash(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
+uint pcg(uint v) {
+	uint s = v * 747796405u + 2891336453u;
+	uint w = ((s >> ((s >> 28u) + 4u)) ^ s) * 277803737u;
+	return (w >> 22u) ^ w;
+}
+// bruit entier PCG sur des coordonnées entières (sans sin ni grandes valeurs flottantes : pas de motif de trame selon le GPU) -> [0, 1)
+float hash(vec2 p, float step_t) {
+	uvec2 q = uvec2(ivec2(p));
+	uint h = pcg(q.x + pcg(q.y + pcg(uint(step_t))));
+	return float(h >> 8u) * (1.0 / 16777216.0);
+}
 void fragment() {
 	vec2 d = UV - 0.5;
 	float r = length(d) * 1.4142;
 	float vig = smoothstep(0.52, 0.80, r) * 0.30 + smoothstep(0.80, 1.0, r) * 0.36;
-	float g = hash(floor(FRAGCOORD.xy) + floor(TIME * 8.0) * 17.0) - 0.5;
+	float g = hash(floor(FRAGCOORD.xy), floor(TIME * 8.0)) - 0.5;
 	vec3 col = g > 0.0 ? vec3(1.0) : vec3(0.0);
 	float ga = abs(g) * grain;
 	float a = vig + ga * (1.0 - vig);

@@ -685,3 +685,8 @@ une session visuelle.
 - **Options de capture** : `--hold-sprint`, `--act=reload|knife|grenade@S`, `--do=ammo:N`.
 - **Test** : `tests/test_j25.gd` (23 armes : données saines, courbe de rechargement bornée et fermée, montage sans nœud de jeu).
 - **Non vérifié** : toutes les armes en images (vues : AK, M1911 en hanche / visée / rechargement, sprint, couteau, grenade) ; clipping contre les murs ; coût GPU sous Windows / Vulkan.
+
+## Grain « effets cinéma » sans motif de trame (v0.20.3)
+- **Retour du joueur** (Windows) : un « grillage » texturé sur tout l'écran, disparu en coupant « Effets cinéma ». Cause probable : le grain utilisait `fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453)`, dont le résultat dépend de la précision de `sin` sur de grands arguments flottants : selon le GPU / pilote, il dégénère en motifs réguliers.
+- **Correctif** : bruit entier PCG (`pcg(uint)`, Jarzynski & Olano) sur les coordonnées entières du pixel et le pas de temps (`pcg(x + pcg(y + pcg(t)))`, 24 bits de mantisse), sans `sin` ni grandes valeurs flottantes ; mêmes deux shaders (`shaders/cinema.gdshader`, vue 3D ; `UiTheme.CINEMA_SHADER`, HUD). Amplitude, saut à 6,7 Hz (0,15 s) et mélange « overlay » inchangés.
+- **Vérifié** (RTX 3060, 1280x720, `--seed=1 --shot`) : zone lisse (mur) filtrée passe-haut et agrandie 3x avec contraste x10 : bruit sans structure ; pic spectral / médiane (FFT 2D sur 240x240) 30 avant, 10 après. Ce GPU n'affichait déjà pas de grillage net avant : **non vérifié sur le GPU du joueur**, mais le nouveau hash n'emploie que des opérations entières exactes.
