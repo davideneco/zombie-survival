@@ -11,3 +11,5 @@ Blaster Kit 2.1 by Kenney (www.kenney.nl) - https://kenney-assets.itch.io/blaste
 License: CC0 1.0 Universal. Used: blaster-r (Kenney_Raygun.obj/.mtl), palette baked into plain materials.
 
 Barrett.obj, M79.obj, Crossbow.obj: built for this project by tools/build-weapons.py (Blender script, primitives). No external source.
+
+Combat knife and Executioner's Axe (first-person melee, v0.20.7): built procedurally in scenes/melee_models.gd (lofted blade, guard, grip). No external source, no licence.

@@ -57,6 +57,8 @@ var _prev_player := Vector3.ZERO
 var _acts: Array = []             # --act=ACTION@S : appuie sur ACTION (reload, knife, grenade, gl) à S secondes de jeu, une fois (captures des mains)
 var _hold_sprint := false         # --hold-sprint : le sprint reste enfoncé (captures de la pose de sprint des mains)
 var _hold_aim := false            # --hold-aim : visée maintenue (captures des armes en ADS)
+var _melee_pose := -1.0
+var _axe_arg := false
 var _hold_fx := false             # --hold-fx : éclair de bouche et dernier traçant restent affichés (captures)
 var _hold_fire := false           # --hold-fire : détente maintenue (capture de l'éclair de bouche)
 var _hold_unstick := false        # --hold-unstick : touche « se débloquer » maintenue (capture)
@@ -178,6 +180,10 @@ func _ready() -> void:
 		elif a == "--fps-counter":   # v0.20.5 : compteur de FPS affiché (captures ; non sauvegardé)
 			Game.settings.autosave = false
 			Game.settings.values["fps"] = true
+		elif a.begins_with("--melee-pose="):   # v0.20.7 : fige le coup de couteau (ou de hache avec --axe) à T secondes du coup (captures)
+			_melee_pose = float(a.substr(13))
+		elif a == "--axe":
+			_axe_arg = true
 		elif a == "--spin":
 			_spin = true
 		elif a.begins_with("--spin-rate="):
@@ -546,6 +552,9 @@ func _build_scene_nodes(map: String) -> void:
 	add_child(_weapon_view)
 	_weapon_view.setup(_camera)
 	_weapon_view.hold_fx = _hold_fx
+	_weapon_view.dbg_melee_t = _melee_pose
+	if _axe_arg:
+		Game.arms.has_axe = true
 	_weapon_view.posed.connect(_flush_shots)
 	_intro = BossIntro.new()
 	add_child(_intro)

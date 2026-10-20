@@ -2,6 +2,7 @@ extends Node3D
 ## Présentation des armes (J4) : arme à la première personne (modèles de data/weapon_models.json, avec la position à la hanche et en visée de chacun), obus et grenades en vol, flash des explosions, coup de couteau. Ne fait que lire Game.arms.
 
 const WeaponModels := preload("res://scenes/weapon_models.gd")
+const MeleeModels := preload("res://scenes/melee_models.gd")
 const THROW_TIME := 0.45        ## geste de lancer de grenade (v0.20.2 : la main tend la grenade puis se retire ; l'arme se baisse)
 const SPRINT_EASE := 7.0
 
@@ -16,7 +17,11 @@ var _cam: Camera3D
 var _gun: Node3D
 var _gun_id := ""
 var _gun_pap := -1
-var _knife: MeshInstance3D
+var dbg_melee_t := -1.0              ## captures : fige le coup de couteau / de hache à cet instant (--melee-pose=T), sans toucher à la sim
+var _knife: Node3D
+var _axe: Node3D
+var _axe_hand: Node3D
+var _axe_sleeve: Array = []
 var _kick := 0.0
 var _shells: Array[MeshInstance3D] = []
 var _nades: Array[MeshInstance3D] = []
@@ -41,21 +46,21 @@ func setup(cam: Camera3D) -> void:
 	_cam = cam
 	_shell_mat.albedo_color = Color("2f3b1f")
 	_nade_mat.albedo_color = Color("2f3b1f")
-	_knife = MeshInstance3D.new()
-	var kb := BoxMesh.new()
-	kb.size = Vector3(0.025, 0.02, 0.28)
-	_knife.mesh = kb
-	var km := StandardMaterial3D.new()
-	km.albedo_color = Color("c8ccd0")
-	km.metallic = 0.8
-	km.roughness = 0.35
-	_knife.material_override = km
+	_knife = Node3D.new()   # couteau tenu (MeleeModels.build_knife) ; _axe : Hache du Bourreau (remplace le couteau)
 	_knife.visible = false
 	cam.add_child(_knife)
+	_knife.add_child(MeleeModels.build_knife())
+	_axe = Node3D.new()
+	_axe.visible = false
+	cam.add_child(_axe)
+	_axe.add_child(MeleeModels.build_axe())
 	_knife_hand = HandsRig.make_fist()
-	_knife_hand.position = Vector3(0.0, -0.004, 0.075)
+	_knife_hand.position = Vector3.ZERO
 	_knife.add_child(_knife_hand)
 	_knife_sleeve = HandsRig.make_sleeve(_knife)
+	_axe_hand = HandsRig.make_fist()
+	_axe.add_child(_axe_hand)
+	_axe_sleeve = HandsRig.make_sleeve(_axe)
 	_throw = HandsRig.make_fist()
 	_throw.visible = false
 	cam.add_child(_throw)
@@ -165,6 +170,9 @@ func _process(dt: float) -> void:
 	_tick(dt)
 	PerfLog.add(&"arme", _pt)
 
+func _melee_t(arms: WeaponArms) -> float:
+	return dbg_melee_t if dbg_melee_t >= 0.0 else arms.melee_t
+
 func _tick(dt: float) -> void:
 	if Game.arms == null or _cam == null:
 		return
@@ -185,8 +193,8 @@ func _tick(dt: float) -> void:
 		var p := w.reload_t / float(w.cfg["reloadTime"])
 		reload_dip = sin(clampf(p, 0.0, 1.0) * PI)
 	var melee_dip := 0.0
-	if arms.melee_t >= 0.0:
-		melee_dip = sin(clampf(arms.melee_t / float(Config.at("knife.anim")), 0.0, 1.0) * PI) * float(Config.at("knife.dip"))
+	if _melee_t(arms) >= 0.0:
+		melee_dip = sin(clampf(_melee_t(arms) / float(Config.at("knife.anim")), 0.0, 1.0) * PI) * float(Config.at("knife.dip"))
 	_sprint_k = move_toward(_sprint_k, 1.0 if (Game.player.sprinting and arms.aim < 0.05 and not w.reloading) else 0.0, dt * SPRINT_EASE)
 	_update_throw(arms, dt)
 	var throw_dip := sin(clampf(_throw_t / THROW_TIME, 0.0, 1.0) * PI) * 0.12 if _throw_t >= 0.0 else 0.0
@@ -199,7 +207,7 @@ func _tick(dt: float) -> void:
 		var rp := -1.0
 		if w.reloading:
 			rp = clampf(w.reload_t / float(w.cfg["reloadTime"]), 0.0, 1.0)
-		_hands.update(_gun.transform, rp, arms.melee_t >= 0.0)
+		_hands.update(_gun.transform, rp, _melee_t(arms) >= 0.0)
 	_gun.visible = not hide_gun and not (w.cfg.has("adsFov") and arms.aim > 0.8)
 	_update_knife(arms)
 	posed.emit()
@@ -245,17 +253,17 @@ func _set_throw_visible(on: bool) -> void:
 		n.visible = on
 
 func _update_knife(arms: WeaponArms) -> void:
-	var on := arms.melee_t >= 0.0
-	_knife.visible = on
+	var on := _melee_t(arms) >= 0.0
+	var axe := arms.has_axe
+	_knife.visible = on and not axe
+	_axe.visible = on and axe
 	if not on:
 		return
 	var K: Dictionary = Config.at("knife")
-	var hit := float(K["hitDelay"])
-	var t := arms.melee_t
-	var s := clampf(t / hit, 0.0, 1.0) if t < hit else clampf(1.0 - (t - hit) / (float(K["anim"]) - hit), 0.0, 1.0)
-	_knife.position = Vector3(lerpf(0.3, 0.02, s), lerpf(-0.25, -0.05, s), -0.5)
-	_knife.rotation = Vector3(0.0, lerpf(0.5, 0.0, s), 0.0)
-	HandsRig.place_sleeve(_knife_sleeve[0], _knife_sleeve[1], _knife_hand.position + Vector3(0.0, 0.03, 0.07), _knife.transform.affine_inverse() * HandsRig.SHOULDER_R)
+	var holder: Node3D = _axe if axe else _knife
+	holder.transform = MeleeModels.pose(axe, _melee_t(arms), float(K["hitDelay"]), float(K["anim"]))   # l'impact visuel est à hitDelay : l'instant des dégâts de la sim
+	var sl: Array = _axe_sleeve if axe else _knife_sleeve
+	HandsRig.place_sleeve(sl[0], sl[1], Vector3(0.0, 0.03, 0.07), holder.transform.affine_inverse() * HandsRig.SHOULDER_R)
 
 func _sync_projectiles(src: Array, views: Array, radius: float, mat: Material) -> void:
 	while views.size() < src.size():
