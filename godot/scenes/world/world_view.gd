@@ -11,6 +11,7 @@ const TILE_VIS_RANGE := 190.0     ## m : au-delà, la tuile n'est plus dessinée
 const TREE_CARD_RANGE := [60.0, 190.0, 190.0]   ## portée des cartes de feuillage selon la qualité (Rapide : arbres plus proches seulement)
 ## Lampadaires (realworld.js : lightSources { color 0xffc77a, intensity 60, dist 20, y 4,2 }) : le JS redistribue 8 PointLight sur les sources les plus proches (LIGHTS = 8,
 ## décroissance 2) ; Three.js divise la diffusion par pi, pas Godot : énergie = intensité / pi, atténuation en 1 / d^2 comme Three.js.
+const LampGlow := preload("res://scenes/world/lamp_glow.gd")
 const LAMP_ENERGY_K := 1.0 / PI   ## intensité Three.js -> énergie Godot
 const LAMP_Y := 4.2
 const LAMP_LIGHTS_MAX := 8        ## lampadaires éclairants : les plus proches du joueur (les autres restent des ampoules)
@@ -22,6 +23,9 @@ var _materials: Array = []
 var _textures: Array = []         ## Texture2D ou null, par indice de textures.json
 var _door_nodes: Dictionary = {}  ## id -> Node3D
 var _lamp_lights: Array[OmniLight3D] = []
+var _glow: LampGlow
+var _glow_gain := 1.0
+var _glow_pools := true          ## flaques de lumière au sol : Normale et Haute
 var _lamp_pos: Array = []         ## [x, y, z, couleur, intensité, portée]
 var _lamp_door: Array[int] = []   ## porte dont dépend la source (-1 : aucune)
 var _lamp_timer := 0.0
@@ -103,6 +107,9 @@ func set_quality(q: int) -> void:
 		m.set_shader_parameter("wind_on", 0.0 if q == 0 else 1.0)
 	for mm in _tree_cards:
 		mm.visibility_range_end = float(TREE_CARD_RANGE[clampi(q, 0, 2)]) + (INSTANCE_CELL * 0.5 if q > 0 else 0.0)
+	_glow_pools = q >= 1
+	if _glow != null:
+		_glow.set_state(_glow_gain, _glow_pools)
 	var shadows: bool = bool(L["shadows"])
 	for c in get_children():
 		if c is MeshInstance3D and c.has_meta("tile"):
@@ -356,6 +363,10 @@ func _lamps() -> void:
 				if dd < best:
 					best = dd
 					_lamp_door[i] = int(d["id"])
+	_glow = LampGlow.new()   # v0.22.2 : halos et flaques de lumière de toutes les sources fixes (les 8 plus proches éclairent en plus)
+	add_child(_glow)
+	_glow.setup(_lamp_pos)
+	_glow.set_state(1.0, _glow_pools)
 	for _i in LAMP_LIGHTS_MAX:
 		var l := OmniLight3D.new()
 		l.omni_attenuation = 2.0
@@ -379,6 +390,8 @@ func _assign_lamps(p: Vector3) -> void:
 	# l'Aube éteint peu à peu les lampadaires (summit.js : setLampScale(1 - 0,92 x lissage(min(1, k x 1,3))))
 	var lk := minf(1.0, (Game.finale.sky_k if Game.finale != null else 0.0) * 1.3)
 	var lamp_scale := 1.0 - 0.92 * (lk * lk * (3.0 - 2.0 * lk))
+	_glow_gain = lamp_scale
+	_glow.set_state(lamp_scale, _glow_pools)
 	for i in _lamp_lights.size():
 		var l := _lamp_lights[i]
 		if i < near.size():
