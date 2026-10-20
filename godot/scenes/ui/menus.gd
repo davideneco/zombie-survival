@@ -390,6 +390,9 @@ Barrett M82, M79 et arbalète : modèles construits pour le jeu (tools/build-wea
 « Zombie Apocalypse Kit » par Quaternius : modèles et animations de zombies (normal, trapu, brute), CC0 d'après la page du pack au 18/10/2026 (assombris et salis pour le jeu).
 https://quaternius.com/packs/zombieapocalypsekit.html
 
+[b]Personnages[/b]
+Les 8 survivants jouables : modèles 3D low-poly et animations créés pour le jeu (tools/build-characters.py), designs originaux inspirés des tenues du jeu web ; aucun élément repris d'un jeu ou d'un film.
+
 [b]Textures[/b]
 Textures PBR de Poly Haven, licence CC0 : https://polyhaven.com/license
 

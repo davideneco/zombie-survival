@@ -38,6 +38,7 @@ need assets/audio/sfx/gun_scar_0.wav  "node tools/bake-audio.mjs"
 need assets/audio/music/music_0.ogg   "node tools/bake-audio.mjs"
 need assets/weapons/LICENSE.txt       "(versionné : git checkout)"
 need assets/zombies/LICENSE.txt       "(versionné : git checkout)"
+need assets/characters/LICENSE.txt    "(versionné : git checkout)"
 [ "$missing" = 0 ] || fail "cuissons absentes : lance les commandes ci-dessus (voir docs/GODOT_PORT.md)"
 
 GODOT_VER="$(godot --version | cut -d. -f1-4)"   # 4.7.2.stable.arch_linux.<hash> -> 4.7.2.stable
@@ -72,7 +73,7 @@ if grep -E '	(tests/|data/golden/|data/world/golden_j2|assets/audio/music/theme\
 for f in project.binary data/config.json data/arena.json data/cathedral.json data/audio.json data/weapon_models.json data/zombie_models.json \
 	data/graphics/lights.json data/world/vehicles.json data/world/instances.bin data/world/nav/blocked.u8.gz data/world/collision/segs.f64 \
 	assets/baked/c3.png assets/textures/cobble/diff.jpg assets/graphics/graphics.json assets/graphics/zombie_geo.bin assets/graphics/map.png \
-	assets/tram/car.bin assets/tram/car_map.png assets/audio/music/music_0.ogg.import assets/weapons/LICENSE.txt assets/zombies/LICENSE.txt; do
+	assets/tram/car.bin assets/tram/car_map.png assets/audio/music/music_0.ogg.import assets/weapons/LICENSE.txt assets/zombies/LICENSE.txt assets/characters/LICENSE.txt; do
 	grep -q "	$f\$" "$SCRATCH/pck.txt" || fail "absent du .pck : $f"
 done
 [ "$(grep -c '	data/world/tiles/' "$SCRATCH/pck.txt")" = "$(ls "$PROJ/data/world/tiles" | wc -l)" ] || fail "tuiles du monde manquantes dans le .pck"
@@ -82,6 +83,7 @@ file "$APP/Zombie.exe" | grep -q 'PE32+ executable.*x86-64' || fail "Zombie.exe 
 mkdir -p "$APP/LICENCES"
 cp "$PROJ/assets/weapons/LICENSE.txt" "$APP/LICENCES/armes-LICENSE.txt"
 cp "$PROJ/assets/zombies/LICENSE.txt" "$APP/LICENCES/zombies-LICENSE.txt"
+cp "$PROJ/assets/characters/LICENSE.txt" "$APP/LICENCES/personnages-LICENSE.txt"
 godot --headless --path "$SCRATCH/empty" --script "$ROOT/tools/godot-licenses.gd" -- "$APP/LICENCES/Godot-MIT-et-composants.txt" >/dev/null
 [ -s "$APP/LICENCES/Godot-MIT-et-composants.txt" ] || fail "licence de Godot non écrite"
 cat >"$APP/LISEZMOI.txt" <<EOF
@@ -121,6 +123,7 @@ LICENCES ET CRÉDITS
   Le moteur Godot est sous licence MIT (LICENCES\\Godot-MIT-et-composants.txt).
   Modèles d'armes : Quaternius (CC0), Kenney (CC0), Tabasco (CC-BY 3.0) : LICENCES\\armes-LICENSE.txt.
   Modèles de zombies : voir LICENCES\\zombies-LICENSE.txt.
+  Modèles des 8 personnages : créations originales du projet : LICENCES\\personnages-LICENSE.txt.
   Plan et bâtiments de Strasbourg : données OpenStreetMap (c) les contributeurs d'OpenStreetMap, licence ODbL.
 EOF
 sed -i 's/$/\r/' "$APP/LISEZMOI.txt"   # fins de ligne Windows (Bloc-notes)

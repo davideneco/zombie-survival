@@ -23,6 +23,7 @@ Or open the `godot/` folder in the editor and press F5. Settings, key bindings, 
 - **Menu**: Play, best score / statistics, map choice (Strasbourg or arena) and difficulty (Easy / Normal / Hard), Multiplayer (greyed out).
 - **Quality and upscaling** (Options): Fast / Normal / High presets; 3D upscaling **Native, FSR 1.0 or FSR 2.2 (trial)**, 3D resolution (100, 85, 75, 67, 50 %) and sharpness. The HUD stays sharp. No DLSS: the engine does not offer it.
 - **First launch on Windows**: with an integrated GPU, the "Fast" quality is chosen automatically.
+- **Characters**: the 8 playable survivors have original low-poly 3D models (`assets/characters/*.glb`, built by `tools/build-characters.py`, see `assets/characters/LICENSE.txt`): rotating preview in the character menu, seated on bikes and tram seats in third person, first-person gloves and sleeves from their outfit. Sheet: `docs/personnages.png`.
 - **Loading**: a warm-up step (pipelines, sounds, navigation grids) avoids in-game stutters.
 - **Music**: `theme.*` is never shipped (copyright). Drop an mp3, ogg or wav file in `user://music/` to use it.
 

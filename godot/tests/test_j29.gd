@@ -18,6 +18,7 @@ func _has_color(m: CharacterModel, c: Color) -> bool:
 
 func run(t: Node) -> void:
 	t.check(CharacterModel.IDS == CharacterDefs.LIST.map(func(c): return c["id"]), "les 8 identifiants de CharacterModel sont ceux de CharacterDefs")
+	CharacterModel.purge_except("")   # d'autres suites (préchauffage) ont pu charger le personnage choisi
 	t.check(CharacterModel.loaded_count() == 0, "rien n'est chargé avant la première demande (chargement paresseux)")
 	for cid: String in CharacterModel.IDS:
 		t.check(CharacterModel.exists(cid), "%s : modèle présent" % cid)
