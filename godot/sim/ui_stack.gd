@@ -24,6 +24,9 @@ const STATS := "stats"
 const CONFIRM := "confirm"
 const CREDITS := "credits"
 const LOADING := "loading"
+## v0.26.0 : « Mode de jeu » (Classique / Zone unique et choix de la zone) ; v0.27.0 : PERKS, la liste des atouts (aide).
+const MODE := "mode"
+const PERKS := "perks"
 
 var layers: Array[String] = []
 
@@ -71,7 +74,7 @@ func escape(in_game: bool) -> String:
 		CAPTURE, CONFLICT:
 			pop()
 			return "cancel_capture"
-		KEYS, OPTIONS, MENU, MAPDIFF, STATS, CREDITS, CONFIRM:
+		KEYS, OPTIONS, MENU, MAPDIFF, STATS, CREDITS, CONFIRM, MODE, PERKS:
 			pop()
 			return "back"
 		LOADING:

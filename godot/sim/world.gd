@@ -19,6 +19,7 @@ var objects: Dictionary = {}
 var doors: Array = []            ## { id, price, a, b, toZone, name, points, segs (indices), cells, open, opened, opens }
 var zone_names: PackedStringArray = []
 var zone_open: PackedByteArray = []
+var sealed := false              ## v0.26.0 : mode Zone unique : toutes les portes sont murées (ni invite, ni achat, ni ouverture)
 var start_pos := Vector3.ZERO
 var start_zone := 0
 var half_x := 820.0
@@ -192,6 +193,15 @@ func clearance(ix: int, iz: int, r: int) -> bool:
 # ------------------------------------------------------------------ portes
 ## Porte payante à portée (n'importe quel point de la barrière) : indice, -1 si aucune (main.js nearDoor).
 func near_door(p: Vector3) -> int:
+	if sealed:
+		return -1
+	return _nearest_door(p)
+
+## v0.26.0 : porte murée à portée (mode Zone unique), -1 si aucune : invite « Passage muré ».
+func near_sealed(p: Vector3) -> int:
+	return _nearest_door(p) if sealed else -1
+
+func _nearest_door(p: Vector3) -> int:
 	var best := -1
 	var best_d := DOOR_REACH
 	for d: Dictionary in doors:
@@ -206,7 +216,7 @@ func near_door(p: Vector3) -> int:
 
 ## Ouvre la porte : retire ses barrières de la collision, libère ses cases de navigation, ouvre les zones reliées (realworld.js openDoor).
 func open_door(id: int) -> bool:
-	if id < 0 or id >= doors.size():
+	if sealed or id < 0 or id >= doors.size():
 		return false
 	var d: Dictionary = doors[id]
 	if d["open"]:

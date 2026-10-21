@@ -6,11 +6,14 @@ extends Control
 const SCALE_KEY := "scale"
 const LEGEND := "▲ vous   ● vert : munitions   ● orange : arme murale   ● bleu ? : boîte mystère   P : Pack-a-Punch   ● couleurs : atouts   ■ rouge : porte verrouillée (prix)   P bleu : motos   V turquoise : vélos   ━ lignes de tram   N ↑"
 const BIKE := Color("1fa89a")
+const LEGEND_ZONE := "▲ vous   S vert : PORTE DE SORTIE (victoire)   ● vert : munitions   ● orange : arme murale   ● bleu ? : boîte mystère   ● couleurs : atouts   MURÉ : passage fermé   N ↑"
 
 var _tex: ImageTexture
 var _thread: Thread
 var _building := false
 var _world: World
+var _zone_crop: Dictionary = {}   ## v0.26.0 : Zone unique : cadre et échelle du plan zoomé sur la zone ({} : carte entière)
+var _zone_scale := 0.0
 var player_color := Color("66ff99")
 
 func _ready() -> void:
@@ -27,6 +30,11 @@ func prepare() -> void:
 	_building = true
 	_thread = Thread.new()
 	var w := _world
+	_zone_crop = {}
+	if Game.gm != null and Game.gm.layout != null:   # v0.26.0 : plan zoomé sur la zone
+		var L: ZoneLayout = Game.gm.layout
+		_thread.start(func() -> Dictionary: return MapImage.build_zone(w, L))
+		return
 	_thread.start(func() -> Image: return MapImage.build(w))
 
 ## Retour au menu : oublie le monde et le plan (attend la fin du fil de travail s'il tourne encore).
@@ -37,15 +45,23 @@ func release() -> void:
 	_building = false
 	_tex = null
 	_world = null
+	_zone_crop = {}
 
 func ready_image() -> bool:
 	return _tex != null
 
 func _process(_dt: float) -> void:
 	if _thread != null and not _thread.is_alive():
-		var img: Image = _thread.wait_to_finish()
+		var res: Variant = _thread.wait_to_finish()
 		_thread = null
 		_building = false
+		var img: Image = null
+		if res is Dictionary:
+			img = res["image"]
+			_zone_crop = res["crop"]
+			_zone_scale = float(res["scale"])
+		else:
+			img = res
 		if img != null:
 			_tex = ImageTexture.create_from_image(img)
 	if visible:
@@ -68,6 +84,13 @@ func _draw() -> void:
 		return
 	var crop: Dictionary = w.objects["mapCrop"]
 	var scale := float(w.objects["mapView"]["scale"])
+	var zoned := not _zone_crop.is_empty()
+	if zoned:
+		crop = _zone_crop
+		scale = _zone_scale
+	elif Game.gm != null:
+		UiTheme.draw_outlined(self, UiTheme.body(), size / 2.0, "Chargement du plan…", 20, Color.WHITE, HORIZONTAL_ALIGNMENT_CENTER, 0)
+		return
 	var lay := HudCalc.map_layout(size.x, size.y, crop, scale)
 	var k: float = lay["k"]
 	if _tex != null:
@@ -85,6 +108,8 @@ func _draw() -> void:
 		if c.is_empty():
 			continue
 		var i: int = z["i"]
+		if zoned:   # le titre porte déjà le nom de la zone
+			continue
 		var p: Vector2 = P.call(float(c["x"]), float(c["z"]))
 		var fs := HudCalc.zone_font_size(float(z.get("area", 0.0)), i == here)
 		var col := UiTheme.GOLD if i == here else (Color(1, 1, 1, 0.92) if w.is_zone_open(i) else Color(1, 1, 1, 0.62))
@@ -95,7 +120,12 @@ func _draw() -> void:
 		var pts: Array = d["points"]
 		for pt: Array in pts:
 			var q: Vector2 = P.call(float(pt[0]), float(pt[1]))
-			draw_rect(Rect2(q - Vector2(2, 2), Vector2(4, 4)), Color(0.31, 0.86, 0.47, 0.6) if open else Color("ff4433"))
+			draw_rect(Rect2(q - Vector2(2, 2), Vector2(4, 4)), Color(0.31, 0.86, 0.47, 0.6) if open else (Color("8a8580") if w.sealed else Color("ff4433")))
+		if w.sealed and not pts.is_empty():   # v0.26.0 : Zone unique : portes murées, sans prix
+			if Game.gm != null and (int(d["a"]) == Game.gm.zone or int(d["b"]) == Game.gm.zone):
+				var mm: Array = pts[pts.size() / 2]
+				UiTheme.draw_outlined(self, body, P.call(float(mm[0]), float(mm[1])) + Vector2(0, -7), "MURÉ", 11, Color("c8c0b8"), HORIZONTAL_ALIGNMENT_CENTER, 80)
+			continue
 		if not open and not pts.is_empty():
 			var m: Array = pts[pts.size() / 2]
 			var q: Vector2 = P.call(float(m[0]), float(m[1]))
@@ -124,17 +154,25 @@ func _draw() -> void:
 				UiTheme.draw_outlined(self, body, q + Vector2(0, 19), String(st["name"]), 11, Color("e6edf5"), HORIZONTAL_ALIGNMENT_CENTER, 140)
 	# bornes, armes murales
 	for s: Dictionary in w.objects.get("stations", []):
+		if zoned and not _zin(w, float(s["x"]), float(s["z"])):
+			continue
 		_icon(P.call(float(s["x"]), float(s["z"])), Color("2a9d4a"), "")
 	for ww: Dictionary in w.objects.get("wallWeapons", []):
+		if zoned and not _zin(w, float(ww["pos"]["x"]), float(ww["pos"]["z"])):
+			continue
 		_icon(P.call(float(ww["pos"]["x"]), float(ww["pos"]["z"])), Color("d98a2b"), "")
 	# parkings et stations de vélos
 	for pk: Dictionary in w.objects.get("parkings", []):
+		if zoned and not _zin(w, float(pk["x"]), float(pk["z"])):
+			continue
 		var q: Vector2 = P.call(float(pk["x"]), float(pk["z"]))
 		draw_rect(Rect2(q - Vector2(12, 12), Vector2(24, 24)), Color("2a6fd8"))
 		draw_rect(Rect2(q - Vector2(12, 12), Vector2(24, 24)), Color.WHITE, false, 2.0)
 		draw_string(body, q + Vector2(-12, 6), "P", HORIZONTAL_ALIGNMENT_CENTER, 24, 17, Color.WHITE)
 	var vehicles: Array = Game.rides.vehicles if Game.rides != null else []
 	for st: Dictionary in w.objects.get("bikeStations", []):
+		if zoned and not _zin(w, float(st["x"]), float(st["z"])):
+			continue
 		var n := 0
 		for v: VehicleSim in vehicles:
 			if v.station == int(st["index"]) and v.state == "ok" and Vector2(v.x - v.spawn["x"], v.z - v.spawn["z"]).length() < 6.0:
@@ -148,6 +186,8 @@ func _draw() -> void:
 			draw_circle(q + Vector2(9, 8), 5.5, Color("10201e"))
 			draw_string(body, q + Vector2(5, 11.2), str(n), HORIZONTAL_ALIGNMENT_CENTER, 8, 9, Color.WHITE)
 	for v: VehicleSim in vehicles:
+		if zoned and not _zin(w, v.x, v.z):
+			continue
 		if v.station >= 0:
 			if v.state == "gone" or Vector2(v.x - v.spawn["x"], v.z - v.spawn["z"]).length() < 6.0:
 				continue
@@ -182,6 +222,13 @@ func _draw() -> void:
 			if type == "box" and m != active:
 				continue
 			var letter: Variant = m.get("letter")
+			if type == "exit":   # v0.26.0 : porte de sortie (Zone unique)
+				var qe: Vector2 = P.call(float(m["pos"]["x"]), float(m["pos"]["z"]))
+				draw_rect(Rect2(qe - Vector2(11, 11), Vector2(22, 22)), Color("2fb35a"))
+				draw_rect(Rect2(qe - Vector2(11, 11), Vector2(22, 22)), Color.WHITE, false, 2.0)
+				draw_string(body, qe + Vector2(-11, 5.5), "S", HORIZONTAL_ALIGNMENT_CENTER, 22, 16, Color.WHITE)
+				UiTheme.draw_outlined(self, body, qe + Vector2(0, 26), "SORTIE %d pts" % int(m["price"]), 12, Color("8cffaa"), HORIZONTAL_ALIGNMENT_CENTER, 160)
+				continue
 			var label := "?" if type == "box" else ("P" if type == "pap" else (String(letter) if letter != null else String(m["name"]).substr(0, 1)))
 			var cv: Variant = m.get("color")
 			var col := Color("3f8fd8") if type == "box" else (Color(String(cv)) if typeof(cv) == TYPE_STRING else (Config.color(int(cv)) if cv != null else Color.WHITE))
@@ -194,9 +241,21 @@ func _draw() -> void:
 		pts[i] = pp + pts[i].rotated(rot)
 	draw_colored_polygon(pts, player_color)
 	draw_polyline(PackedVector2Array([pts[0], pts[1], pts[2], pts[3], pts[0]]), Color.BLACK, 2.0)
+	if zoned:   # v0.26.0 : le plan zoomé : ce qui déborde du cadre de la zone est masqué
+		var r := Rect2(float(lay["ox"]), float(lay["oy"]), float(lay["sw"]) * k, float(lay["sh"]) * k)
+		var mask := Color(0.02, 0.02, 0.03, 0.94)
+		draw_rect(Rect2(0, 0, size.x, r.position.y), mask)
+		draw_rect(Rect2(0, r.end.y, size.x, size.y - r.end.y), mask)
+		draw_rect(Rect2(0, r.position.y, r.position.x, r.size.y), mask)
+		draw_rect(Rect2(r.end.x, r.position.y, size.x - r.end.x, r.size.y), mask)
+		draw_rect(r, Color("6a5a2a"), false, 2.0)
 	# titre et légende
-	UiTheme.draw_outlined(self, font, Vector2(30, 36), String(w.objects.get("mapTitle", "CARTE")), 26, UiTheme.GOLD)
-	draw_string(body, Vector2(30, size.y - 18), LEGEND, HORIZONTAL_ALIGNMENT_LEFT, size.x - 60, 13, Color("cccccc"))
+	UiTheme.draw_outlined(self, font, Vector2(30, 36), ("ZONE UNIQUE — %s" % Game.gm.zone_name.to_upper()) if zoned else String(w.objects.get("mapTitle", "CARTE")), 26, UiTheme.GOLD)
+	draw_string(body, Vector2(30, size.y - 18), LEGEND_ZONE if zoned else LEGEND, HORIZONTAL_ALIGNMENT_LEFT, size.x - 60, 13, Color("cccccc"))
+
+## v0.26.0 : le point est-il dans la zone du mode Zone unique (plan zoomé : on n'y montre que la zone) ?
+func _zin(w: World, x: float, z: float) -> bool:
+	return Game.gm == null or w.zone_of(x, z) == Game.gm.zone
 
 func _icon(p: Vector2, color: Color, label: String) -> void:
 	draw_circle(p, 7, color)

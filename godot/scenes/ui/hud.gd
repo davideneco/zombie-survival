@@ -99,6 +99,7 @@ var _down_sec: Label
 var _down_sub: Label
 var _down_extra: Label
 var _clock: Label          ## v0.25.0 : heure du jeu et moment de la journée (sous le radar), en cycle Auto
+var _exit_l: Label         ## v0.26.0 : Zone unique : « SORTIE 4 250 / 20 000 » au-dessus des points
 var _toast: PanelContainer
 var _toast_l: Label
 var _announce_t := 0.0
@@ -194,6 +195,8 @@ func _build_left() -> void:
 	UiTheme.place(_round_num, 0, 1, 24, -112, 240, 100)
 	_points = _lbl(root, "0", 34, UiTheme.GOLD)
 	UiTheme.place(_points, 0, 1, 24, -166, 300, 44)
+	_exit_l = _lbl(root, "", 14, Color("8cffaa"))
+	UiTheme.place(_exit_l, 0, 1, 26, -238, 420, 22)
 	_perks_row = HBoxContainer.new()
 	_perks_row.add_theme_constant_override("separation", 6)
 	_perks_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -506,6 +509,10 @@ func _update_basic(dt: float, p: PlayerSim) -> void:
 	_health.set_bar(p.health / p.max_health, Color("cc2222"))
 	_low = 1.0 - p.health / p.max_health
 	_points.text = HudCalc.points_text(Game.points)
+	_exit_l.visible = Game.gm != null
+	if _exit_l.visible:
+		var price := int(Game.gm.exit["price"])
+		_exit_l.text = "SORTIE : %s / %s pts%s" % [HudCalc.points_text(mini(Game.points, price)), HudCalc.points_text(price), "  — achetez-la !" if Game.points >= price else ""]
 	_round_num.text = str(maxi(1, Game.round_number))
 	var wname := String(w.cfg.get("name", ""))
 	_weapon.text = wname

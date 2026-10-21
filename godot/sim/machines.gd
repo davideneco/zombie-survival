@@ -8,10 +8,10 @@ var box: MysteryBox
 var pap: PackAPunch
 var g: Node
 
-func _init(g_: Node, objs: Array) -> void:
+func _init(g_: Node, objs: Array, start_zone := -1) -> void:
 	g = g_
 	list = objs
-	box = MysteryBox.new(objs, g.world.start_zone, g)
+	box = MysteryBox.new(objs, g.world.start_zone if start_zone < 0 else start_zone, g)
 	pap = PackAPunch.new(objs)
 
 ## Machine à portée (2,6 m) ; seule la boîte active compte, et pas pendant son déplacement.
@@ -46,6 +46,8 @@ func prompt() -> String:
 			return box.prompt(g, m)
 		"clock":   # horloge astronomique de la cathédrale : lance l'Heure du Jugement
 			return g.finale.prompt() if g.finale != null else ""
+		"exit":    # v0.26.0 : mode Zone unique
+			return "E PORTE DE SORTIE — s'évader et gagner la partie (%d pts)" % int(m["price"])
 	return ""
 
 ## Touche d'interaction sur une machine. Renvoie true si l'appui est consommé.
@@ -81,6 +83,14 @@ func interact() -> bool:
 		"clock":
 			if g.finale != null:
 				g.finale.use_clock()
+			return true
+		"exit":
+			var price := int(m["price"])
+			if g.points < price:
+				g.purchase_denied.emit(price)
+				return true
+			g.points -= price
+			g.escape_zone()
 			return true
 	return false
 

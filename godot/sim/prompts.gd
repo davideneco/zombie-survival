@@ -48,6 +48,8 @@ static func text(g: Node, binds: Keybinds = null) -> String:
 			var here: int = g.world.zone_of(g.player.pos.x, g.player.pos.z)
 			var to: int = int(d["b"]) if here == int(d["a"]) else (int(d["a"]) if here == int(d["b"]) else int(d["toZone"]))
 			return "%s Ouvrir la porte vers %s (%s)" % [k, g.world.zone_names[to], "gratuit" if g.free_doors else "%d pts" % int(d["price"])]
+		if g.world.near_sealed(g.player.pos) >= 0:   # v0.26.0 : Zone unique
+			return "Passage muré — seule la porte de sortie mène hors de la zone"
 	if g.player.vault_ready and g.player.vault.is_empty():   # devant un obstacle bas
 		return "%s Enjamber" % (binds.tag("jump") if binds != null else "[Espace]")
 	return ""

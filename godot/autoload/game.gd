@@ -89,6 +89,11 @@ var unstick: Unstick       ## J11 : « Se débloquer » (null dans l'arène)
 var view_aspect := 16.0 / 9.0   ## J11 : rapport largeur / hauteur de la fenêtre (étalement des tirs en coordonnées d'écran), posé par main.gd
 var difficulty := "normal"   ## v0.14.0 : "easy" | "normal" | "hard" (Difficulty) ; lue par RoundDirector.start_round, posée avant new_game
 var stats: GameStats       ## v0.14.0 : statistiques de parties (user://stats.json, ou --stats=chemin)
+var mode := GameMode.CLASSIC   ## v0.26.0 : mode de jeu (GameMode) ; posé avant new_game, comme la difficulté
+var zone_pick := 0             ## v0.26.0 : zone choisie pour le mode Zone unique (indice des zones de la carte)
+var gm: GameMode           ## mode de la partie en cours : null en Classique (et dans l'arène)
+var escaped := false       ## Zone unique : la porte de sortie a été achetée (fin de partie en victoire)
+var points_earned := 0     ## v0.26.0 : total des points gagnés (somme des points_gained), dépenses non déduites : score du mode Zone unique
 var settings: Settings     ## J7 : réglages du joueur et touches (user://settings.cfg, ou --settings=chemin)
 
 func _init() -> void:
@@ -109,6 +114,7 @@ func _init() -> void:
 		if a.begins_with("--stats="):
 			stats_path = a.substr(8)
 	stats = GameStats.new(stats_path)
+	points_gained.connect(func(n: int, _c: String) -> void: points_earned += n)
 	for a in OS.get_cmdline_user_args():
 		if a.begins_with("--trophy="):
 			trophy_path = a.substr(9)
@@ -163,12 +169,26 @@ func new_game(seed_value: int = -1, map: String = "", weapons: Array = [], prelo
 		world = preloaded if preloaded is World else World.load_world()   # preloaded : chargé sur un fil de travail pendant l'écran de chargement
 		arena = null
 		collision = world.collision
+	gm = null
+	if world != null and GameMode.valid(mode) == GameMode.ZONE:   # v0.26.0 : Zone unique (portes murées, sortie, machines de base)
+		gm = GameMode.new(GameMode.ZONE, zone_pick)
+		if not gm.setup(world):
+			push_warning("Zone unique : zone %d invalide, partie classique" % zone_pick)
+			gm = null
 	player = PlayerSim.new()
 	foot_cam = RideCam.new()
-	player.reset(arena.start_pos if arena != null else world.start_pos)
+	player.reset(arena.start_pos if arena != null else (gm.start if gm != null else world.start_pos))
+	if gm != null:
+		player.yaw = gm.start_yaw
 	arms = WeaponArms.new(weapons if not weapons.is_empty() else [Rules.J1_WEAPON])
 	powerups = Powerups.new()
-	machines = Machines.new(self, world.objects["machines"]) if world != null else null
+	if gm != null:
+		machines = Machines.new(self, gm.filter_machines(world.objects["machines"]), gm.zone)
+		machines.box.stay_alone = true
+		for e: Dictionary in gm.collision_boxes():
+			collision.set_dynamic(e["key"], [e["box"]])
+	else:
+		machines = Machines.new(self, world.objects["machines"]) if world != null else null
 	director = RoundDirector.new()
 	director.reset()
 	zombies.clear()
@@ -201,6 +221,8 @@ func new_game(seed_value: int = -1, map: String = "", weapons: Array = [], prelo
 	relocate_t = 0.0
 	relocated = 0
 	points = int(Config.at("player.startPoints"))
+	points_earned = 0
+	escaped = false
 	kills = 0
 	time = 0.0
 	over = false
@@ -223,6 +245,8 @@ func unload() -> void:
 	unstick = null
 	env = null
 	finale = null
+	gm = null
+	escaped = false
 	playing = false
 	over = false
 	debug_open = false
@@ -401,6 +425,18 @@ func on_zombie_killed(z: ZombieSim) -> void:
 func _end_game() -> void:
 	over = true
 	game_over.emit()
+
+## v0.26.0 : porte de sortie achetée (mode Zone unique) : fin de partie en victoire. Le signal game_over part comme pour une mort ;
+## `escaped` dit à l'écran de fin et aux statistiques que c'est une évasion.
+func escape_zone() -> void:
+	if over:
+		return
+	escaped = true
+	_end_game()
+
+## Mode de la partie en cours : "classic" ou "zone".
+func mode_id() -> String:
+	return gm.id if gm != null else GameMode.CLASSIC
 
 # ---------------------------------------------------------------- tir : voir sim/weapon_arms.gd
 
@@ -650,6 +686,8 @@ func spawn_weights(pool: Array[PlayerSim]) -> Array[float]:
 
 ## Où apparaît le prochain zombie (main.js pickSpawn) : { type: "window", index } ou { type: "ground", pos }.
 func _pick_spawn() -> Dictionary:
+	if gm != null:   # v0.26.0 : Zone unique : fenêtres et sol de la zone, hors du champ de vision
+		return gm.pick_spawn(self)
 	if world != null:
 		var alive: Array[PlayerSim] = []
 		for pl in env.players:

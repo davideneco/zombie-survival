@@ -6,6 +6,8 @@ const SIZE := HudCalc.RADAR_SIZE
 const POI_STATION := Color("33ff77")
 const POI_DOOR := Color("ff5533")
 const POI_WALL := Color("ffaa33")
+const POI_EXIT := Color("3ddc6a")      ## v0.26.0 : porte de sortie (Zone unique)
+const POI_SEALED := Color("8a8580")    ## v0.26.0 : porte murée
 
 var pois: Array = []             ## [Vector2 (x, z), Color]
 var _doors_version := -1
@@ -31,7 +33,9 @@ func rebuild_pois() -> void:
 	for d: Dictionary in w.doors:
 		if not d["open"]:
 			for pt: Array in d["points"]:
-				pois.append([Vector2(float(pt[0]), float(pt[1])), POI_DOOR])
+				pois.append([Vector2(float(pt[0]), float(pt[1])), POI_SEALED if w.sealed else POI_DOOR])
+	if Game.gm != null and not Game.gm.exit.is_empty():
+		pois.append([Vector2(float(Game.gm.exit["pos"]["x"]), float(Game.gm.exit["pos"]["z"])), POI_EXIT])
 	for ww: Dictionary in w.objects.get("wallWeapons", []):
 		pois.append([Vector2(float(ww["pos"]["x"]), float(ww["pos"]["z"])), POI_WALL])
 

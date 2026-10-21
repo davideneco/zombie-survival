@@ -11,6 +11,8 @@ var uses := 0                ## tirages depuis son arrivée
 var limit := 10              ## au tirage numéro `limit`, c'est le nounours
 var roll: Dictionary = {}    ## tirage en cours : { phase "roll"|"teddy"|"offer"|"sink", t, age, result, teddy, offer_t, taken, pool: Array }
 var move: Dictionary = {}    ## déplacement en cours : { t, from, next }
+var stay_alone := false      ## v0.26.0 (Zone unique) : sans autre emplacement ouvert, le nounours remet le compteur à zéro (la boîte reste) ;
+                             ## faux en Classique : comportement du JS (le nounours revient à chaque tirage tant qu'aucune porte n'est ouverte)
 
 func _init(machines: Array, start_zone: int, g: Node) -> void:
 	for m: Dictionary in machines:
@@ -143,12 +145,18 @@ func step(g: Node, dt: float) -> void:
 ## hostMoveBox : prochaine boîte au hasard parmi les emplacements des zones ouvertes, jamais au même endroit.
 func _host_move(g: Node) -> void:
 	if boxes.size() < 2:
+		if stay_alone:
+			uses = 0
+			limit = _new_limit(g)
 		return
 	var open: Array = []
 	for i in boxes.size():
 		if i != active and (g.world == null or g.world.is_zone_open(int(boxes[i]["zone"]))):
 			open.append(i)
 	if open.is_empty():
+		if stay_alone:
+			uses = 0
+			limit = _new_limit(g)
 		return
 	var nxt: int = open[g.rng_loot.randi() % open.size()]
 	uses = 0

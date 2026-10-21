@@ -107,3 +107,61 @@ static func _grow(m: PackedByteArray, gw: int, gh: int, r: int, val: int) -> Pac
 					out[j * gw + i] = val
 					break
 	return out
+
+
+## v0.26.0 : plan zoomé d'UNE zone (mode Zone unique), tiré de la grille de navigation : rues de la zone claires, rues des autres zones assombries,
+## bâti brun, hors grille noir. Renvoie { image, crop {x0, z0, x1, z1}, scale (px / m) } : le cadre englobe la zone (+ marge), au rapport `aspect`.
+static func build_zone(world: World, L: ZoneLayout, aspect := 1.8, max_px := 1400) -> Dictionary:
+	var nav: NavGrid = world.nav
+	var x0 := INF
+	var z0 := INF
+	var x1 := -INF
+	var z1 := -INF
+	for i in L.cells:
+		var x := nav.world_x(i % nav.nx)
+		var z := nav.world_z(i / nav.nx)
+		x0 = minf(x0, x)
+		x1 = maxf(x1, x)
+		z0 = minf(z0, z)
+		z1 = maxf(z1, z)
+	var m := 28.0
+	x0 -= m
+	x1 += m
+	z0 -= m
+	z1 += m
+	var cw := x1 - x0
+	var ch := z1 - z0
+	if cw / ch < aspect:   # élargit au rapport voulu
+		var add := ch * aspect - cw
+		x0 -= add / 2.0
+		x1 += add / 2.0
+	else:
+		var add2 := cw / aspect - ch
+		z0 -= add2 / 2.0
+		z1 += add2 / 2.0
+	var scale := clampf(float(max_px) / (x1 - x0), 0.7, 8.0)
+	var w := int(round((x1 - x0) * scale))
+	var h := int(round((z1 - z0) * scale))
+	var data := PackedByteArray()
+	data.resize(w * h * 3)
+	var lit := Color8(92, 98, 108)
+	var other := Color8(40, 43, 48)
+	var o := 0
+	for py in h:
+		var iz := nav.cz(z0 + (py + 0.5) / scale)
+		for px in w:
+			var ix := nav.cx(x0 + (px + 0.5) / scale)
+			var c := VOID
+			if nav.inside(ix, iz):
+				var i := nav.idx(ix, iz)
+				if nav.blocked[i] != 0:
+					c = BUILT if nav.zone[i] == L.zone else BUILT.darkened(0.55)
+				elif L.has_cell(i):
+					c = lit
+				else:
+					c = other
+			data[o] = c.r8
+			data[o + 1] = c.g8
+			data[o + 2] = c.b8
+			o += 3
+	return {"image": Image.create_from_data(w, h, false, Image.FORMAT_RGB8, data), "crop": {"x0": x0, "z0": z0, "x1": x1, "z1": z1}, "scale": scale}

@@ -70,6 +70,13 @@ func setup() -> void:
 			"pap":
 				_pap = n
 				_build_pap(n)
+			"perk":   # v0.26.0 : distributeurs absents du monde cuit (jeu de base de la Zone unique ; v0.27.0 : nouveaux atouts)
+				if m.get("added", false) or m.get("proc", false):
+					n.add_child(PerkMachineModel.build_perk(m))
+				else:
+					n.queue_free()
+			"exit":   # v0.26.0 : porte de sortie du mode Zone unique
+				n.add_child(PerkMachineModel.build_exit(m))
 			_:
 				n.queue_free()
 

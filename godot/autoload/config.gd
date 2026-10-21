@@ -23,6 +23,7 @@ func reload() -> bool:
 		return false
 	data = parsed["CONFIG"]
 	data["dayNight"] = DayNight.CONFIG   # v0.25.0 : section propre au port (cycle jour / nuit), absente du JS
+	data["zoneMode"] = GameMode.CONFIG   # v0.26.0 : mode Zone unique (porte de sortie, apparitions), propre au port
 	pap_levels = parsed["PAP_LEVELS"]
 	loaded = true
 	return true

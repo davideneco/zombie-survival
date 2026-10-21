@@ -35,6 +35,15 @@ var _stats_grid: GridContainer
 var _stats_note: Label
 var _stats_reset: Button
 var _map_cards: Dictionary = {}
+var _mode_cards: Dictionary = {}    ## v0.26.0 : id du mode -> carte
+var _zone_box: Control              ## partie « choix de la zone » du panneau Mode (visible en Zone unique)
+var _zone_btns: Array = []
+var _zone_scroll: ScrollContainer
+var _zone_thumb: TextureRect        ## miniature de la carte (shader : zone choisie en or)
+var _zone_info: RichTextLabel
+var _zone_thread: Thread
+var _zone_tex: ImageTexture
+var _zone_stats: RichTextLabel      ## meilleurs scores Zone unique (panneau MEILLEURS SCORES)
 var _diff_cards: Dictionary = {}
 var _opt_sliders: Dictionary = {}
 var _opt_values: Dictionary = {}
@@ -111,6 +120,7 @@ func _ready() -> void:
 	_build_over(col)
 	_build_victory(col)
 	_build_mapdiff(col)
+	_build_mode(col)
 	_build_stats(col)
 	_build_credits(col)
 	_build_loading(col)
@@ -159,7 +169,7 @@ func _build_title(col: Control) -> void:
 	grid.add_theme_constant_override("v_separation", 8)
 	grid.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	p.add_child(grid)
-	for e in [["SURVIVANT", func() -> void: open_menu()], ["CARTE ET DIFFICULTÉ", func() -> void: open_mapdiff()],
+	for e in [["MODE DE JEU", func() -> void: open_mode()], ["SURVIVANT", func() -> void: open_menu()], ["CARTE ET DIFFICULTÉ", func() -> void: open_mapdiff()],
 			["MEILLEURS SCORES", func() -> void: open_stats()], ["OPTIONS", func() -> void: open_options(UiStack.TITLE)],
 			["TOUCHES", func() -> void: open_keys()], ["CRÉDITS", func() -> void: open_credits()]]:
 		var b := _btn(grid, e[0], e[1], "SubButton", 205)
@@ -262,6 +272,8 @@ func _card(parent: Node, text: String, w: float, h: float, cb: Callable) -> Butt
 	return c
 
 func _style_card(b: Button, on: bool, accent: Color) -> void:
+	b.add_theme_stylebox_override("disabled", UiTheme.box(Color(0.1, 0.1, 0.1, 0.55), Color("333333"), 1, 6, 8))   # v0.26.0 : modes à venir
+	b.add_theme_color_override("font_disabled_color", Color("777777"))
 	for st in ["normal", "hover", "pressed", "focus"]:
 		var sb := UiTheme.box(Color(0.12, 0.12, 0.12, 0.8) if st == "hover" else Color(0, 0, 0, 0.55), accent if on else Color("444444"), 3 if on else 2, 6, 8)
 		if st == "focus":
@@ -291,7 +303,7 @@ func _build_mapdiff(col: Control) -> void:
 	for d: Dictionary in Difficulty.LIST:
 		var id: String = d["id"]
 		_diff_cards[id] = _card(drow, "%s\n%s" % [d["name"], d["desc"]], 224, 110, func() -> void: settings.set_value("difficulty", id))
-	_hint(p, "Les statistiques sont comptées par difficulté (Strasbourg seulement).")
+	_hint(p, "Les statistiques sont comptées par difficulté (Strasbourg seulement). Le mode Zone unique se joue toujours sur Strasbourg.")
 	_btn(p, "RETOUR", func() -> void: _back(), "GoButton", 240)
 
 func _refresh_mapdiff() -> void:
@@ -299,6 +311,231 @@ func _refresh_mapdiff() -> void:
 		_style_card(_map_cards[m], settings.get_value("map") == m, UiTheme.GOLD)
 	for id: String in _diff_cards:
 		_style_card(_diff_cards[id], settings.get_value("difficulty") == id, {"easy": Color("7cb342"), "normal": UiTheme.GOLD, "hard": Color("ff5544")}[id])
+
+# ---------------------------------------------------------------- v0.26.0 : mode de jeu (Classique, Zone unique et sa zone)
+const ZONE_THUMB_SHADER := """
+shader_type canvas_item;
+uniform sampler2D map_tex : filter_linear, repeat_disable;
+uniform sampler2D zone_tex : filter_nearest, repeat_disable;
+uniform bool has_map = false;
+uniform vec4 crop = vec4(0.0, 0.0, 1.0, 1.0);
+uniform float sel = 0.0;
+uniform vec2 texel = vec2(0.001);
+uniform vec2 pin = vec2(-1.0);     // centre de la zone choisie (UV de la miniature)
+uniform float aspect = 1.6;
+float zid(vec2 uv) { return floor(texture(zone_tex, uv).r * 255.0 + 0.5); }
+void fragment() {
+	vec2 uv = mix(crop.xy, crop.zw, UV);
+	float z = zid(uv);
+	vec3 base = has_map ? texture(map_tex, uv).rgb : (z < 254.5 ? vec3(0.30, 0.31, 0.33) : vec3(0.07, 0.08, 0.09));
+	bool on = abs(z - sel) < 0.5;
+	vec3 gold = vec3(1.0, 0.82, 0.29);
+	vec3 col = on ? mix(base, gold, 0.55) : base * (z < 254.5 ? 0.5 : 0.38);
+	if (on) {
+		float e = 0.0;
+		e += step(0.5, abs(zid(uv + vec2(texel.x * 1.5, 0.0)) - sel));
+		e += step(0.5, abs(zid(uv - vec2(texel.x * 1.5, 0.0)) - sel));
+		e += step(0.5, abs(zid(uv + vec2(0.0, texel.y * 1.5)) - sel));
+		e += step(0.5, abs(zid(uv - vec2(0.0, texel.y * 1.5)) - sel));
+		col = mix(col, vec3(1.0, 0.9, 0.45), clamp(e, 0.0, 1.0) * 0.85);
+	}
+	if (pin.x >= 0.0) {   // anneau de repère autour de la zone (les petites zones se voient mal à cette échelle)
+		vec2 d = (UV - pin) * vec2(aspect, 1.0);
+		float r = length(d);
+		float ring = smoothstep(0.012, 0.0, abs(r - 0.075)) * 0.9;
+		col = mix(col, vec3(1.0, 0.85, 0.3), ring);
+	}
+	COLOR = vec4(col, 1.0);
+}
+"""
+
+func _build_mode(col: Control) -> void:
+	var p := _panel(UiStack.MODE, col, 8)
+	_heading(p, "MODE DE JEU", 34)
+	var mrow := HBoxContainer.new()
+	mrow.alignment = BoxContainer.ALIGNMENT_CENTER
+	mrow.add_theme_constant_override("separation", 10)
+	p.add_child(mrow)
+	for m: Dictionary in GameMode.LIST:
+		var id: String = m["id"]
+		var ready: bool = m["ready"]
+		var c := _card(mrow, "%s%s\n%s" % [m["name"], "" if ready else " (BIENTÔT)", m["desc"]], 250, 92, func() -> void: settings.set_value("mode", id))
+		c.add_theme_font_size_override("font_size", 14)
+		c.disabled = not ready
+		_mode_cards[id] = c
+	_zone_box = HBoxContainer.new()
+	_zone_box.alignment = BoxContainer.ALIGNMENT_CENTER
+	_zone_box.add_theme_constant_override("separation", 14)
+	p.add_child(_zone_box)
+	var left := VBoxContainer.new()
+	left.add_theme_constant_override("separation", 4)
+	_zone_box.add_child(left)
+	left.add_child(UiTheme.label("CHOISISSEZ VOTRE ZONE (%d)" % ZoneCatalog.count(), 14, UiTheme.GOLD, UiTheme.heading()))
+	_zone_scroll = ScrollContainer.new()
+	_zone_scroll.custom_minimum_size = Vector2(280, 352)
+	_zone_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	left.add_child(_zone_scroll)
+	var list := VBoxContainer.new()
+	list.add_theme_constant_override("separation", 3)
+	list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_zone_scroll.add_child(list)
+	_zone_btns.clear()
+	for z: Dictionary in ZoneCatalog.zones():
+		var zi: int = z["i"]
+		var b := Button.new()
+		b.text = "%s   %s m²" % [z["name"], _thousands(roundi(float(z["area"])))]
+		b.alignment = HORIZONTAL_ALIGNMENT_LEFT
+		b.custom_minimum_size = Vector2(262, 30)
+		b.add_theme_font_size_override("font_size", 15)
+		b.pressed.connect(func() -> void: settings.set_value("zone", zi))
+		list.add_child(b)
+		_zone_btns.append(b)
+	var right := VBoxContainer.new()
+	right.add_theme_constant_override("separation", 6)
+	_zone_box.add_child(right)
+	var frame := PanelContainer.new()
+	frame.add_theme_stylebox_override("panel", UiTheme.box(Color(0, 0, 0, 0.7), Color("6a5a2a"), 2, 4, 2))
+	right.add_child(frame)
+	_zone_thumb = TextureRect.new()
+	_zone_thumb.custom_minimum_size = Vector2(500, 300)
+	_zone_thumb.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_zone_thumb.stretch_mode = TextureRect.STRETCH_SCALE
+	var sm := ShaderMaterial.new()
+	var sh := Shader.new()
+	sh.code = ZONE_THUMB_SHADER
+	sm.shader = sh
+	_zone_thumb.material = sm
+	frame.add_child(_zone_thumb)
+	_zone_info = RichTextLabel.new()
+	_zone_info.bbcode_enabled = true
+	_zone_info.fit_content = true
+	_zone_info.scroll_active = false
+	_zone_info.custom_minimum_size = Vector2(500, 0)
+	_zone_info.add_theme_font_size_override("normal_font_size", 14)
+	_zone_info.add_theme_font_size_override("bold_font_size", 15)
+	_zone_info.add_theme_color_override("default_color", Color("cccccc"))
+	_zone_info.add_theme_font_override("normal_font", UiTheme.body())
+	_zone_info.add_theme_font_override("bold_font", UiTheme.heading())
+	_zone_info.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	right.add_child(_zone_info)
+	_btn(p, "VALIDER", func() -> void: _back(), "GoButton", 240)
+
+static func _thousands(n: int) -> String:
+	var s := str(absi(n))
+	var out := ""
+	while s.length() > 3:
+		out = " " + s.substr(s.length() - 3) + out
+		s = s.substr(0, s.length() - 3)
+	return ("-" if n < 0 else "") + s + out
+
+func open_mode() -> void:
+	stack.push(UiStack.MODE)
+	_prepare_zone_thumb()
+	_refresh_mode()
+	_sync()
+	var zi := int(settings.get_value("zone"))
+	if zi >= 0 and zi < _zone_btns.size():
+		_zone_scroll.call_deferred("ensure_control_visible", _zone_btns[zi])
+
+## Miniature : l'image des zones (grille de navigation) se construit sur un fil de travail à la première ouverture ; le plan cuit
+## (assets/graphics/map.png, s'il existe) sert de fond.
+func _prepare_zone_thumb() -> void:
+	if _zone_tex != null or _zone_thread != null:
+		return
+	_zone_thread = Thread.new()
+	_zone_thread.start(func() -> Image: return ZoneCatalog.build_zone_image())
+	var sm := _zone_thumb.material as ShaderMaterial
+	if FileAccess.file_exists(MapImage.BAKED):
+		var img := Image.load_from_file(MapImage.BAKED)
+		if img != null and not img.is_empty():
+			sm.set_shader_parameter("map_tex", ImageTexture.create_from_image(img))
+			sm.set_shader_parameter("has_map", true)
+	var crop := ZoneCatalog.map_crop()
+	if not crop.is_empty():   # même cadrage que la carte plein écran (mapCrop), en coordonnées 0..1 du monde
+		var hx := 820.0
+		var hz := 560.0
+		var u0 := (float(crop["x0"]) + hx) / (2.0 * hx)
+		var u1 := (float(crop["x1"]) + hx) / (2.0 * hx)
+		var v0 := (float(crop["z0"]) + hz) / (2.0 * hz)
+		var v1 := (float(crop["z1"]) + hz) / (2.0 * hz)
+		sm.set_shader_parameter("crop", Vector4(u0, v0, u1, v1))
+		_zone_thumb.custom_minimum_size = Vector2(500, roundf(500.0 * (v1 - v0) * 2.0 * hz / ((u1 - u0) * 2.0 * hx)))
+
+func _poll_zone_thumb() -> void:
+	if _zone_thread == null or _zone_thread.is_alive():
+		return
+	var img: Image = _zone_thread.wait_to_finish()
+	_zone_thread = null
+	if img == null:
+		return
+	_zone_tex = ImageTexture.create_from_image(img)
+	_zone_thumb.texture = _zone_tex
+	var sm := _zone_thumb.material as ShaderMaterial
+	sm.set_shader_parameter("zone_tex", _zone_tex)
+	sm.set_shader_parameter("texel", Vector2(1.0 / img.get_width(), 1.0 / img.get_height()))
+
+func _process(_dt: float) -> void:
+	if _zone_thread != null:
+		_poll_zone_thumb()
+
+func _exit_tree() -> void:
+	if _zone_thread != null:
+		_zone_thread.wait_to_finish()
+		_zone_thread = null
+
+func _refresh_mode() -> void:
+	if _zone_box == null:
+		return
+	var mode := GameMode.valid(String(settings.get_value("mode")))
+	for id: String in _mode_cards:
+		_style_card(_mode_cards[id], mode == id, UiTheme.GOLD if id == GameMode.CLASSIC else Color("3ddc6a"))
+	_zone_box.visible = mode == GameMode.ZONE
+	var zi := int(settings.get_value("zone"))
+	for i in _zone_btns.size():
+		var on := i == zi
+		var b: Button = _zone_btns[i]
+		for st in ["normal", "hover", "pressed", "focus"]:
+			var sb := UiTheme.box(Color(0.25, 0.2, 0.05, 0.85) if on else (Color(0.12, 0.12, 0.12, 0.85) if st == "hover" else Color(0, 0, 0, 0.5)), UiTheme.GOLD if on else (UiTheme.GOLD if st == "focus" else Color("3a3a3a")), 2 if on or st == "focus" else 1, 4, 4)
+			b.add_theme_stylebox_override(st, sb)
+		b.add_theme_color_override("font_color", UiTheme.GOLD if on else Color("dddddd"))
+	var tsm := _zone_thumb.material as ShaderMaterial
+	tsm.set_shader_parameter("sel", float(zi))
+	var zc: Variant = ZoneCatalog.zones()[zi].get("center") if zi >= 0 and zi < ZoneCatalog.count() else null
+	var crop := ZoneCatalog.map_crop()
+	if zc != null and not crop.is_empty():
+		var cw := float(crop["x1"]) - float(crop["x0"])
+		var ch := float(crop["z1"]) - float(crop["z0"])
+		tsm.set_shader_parameter("pin", Vector2((float(zc["x"]) - float(crop["x0"])) / cw, (float(zc["z"]) - float(crop["z0"])) / ch))
+		tsm.set_shader_parameter("aspect", cw / ch)
+	if zi < 0 or zi >= ZoneCatalog.count():
+		_zone_info.text = ""
+		return
+	var z: Dictionary = ZoneCatalog.zones()[zi]
+	var add := ZoneCatalog.added_text(zi)
+	var e: Dictionary = Game.stats.by_zone.get(String(z["name"]), {})
+	var rec := "Aucune partie dans cette zone."
+	if not e.is_empty() and int(e["games"]) > 0:
+		rec = "Record : manche %d · %s points · %d tués · %d évasion%s sur %d partie%s%s" % [int(e["best_round"]), _thousands(int(e["best_points"])), int(e["best_kills"]),
+			int(e["escapes"]), "s" if int(e["escapes"]) > 1 else "", int(e["games"]), "s" if int(e["games"]) > 1 else "",
+			(" · évasion la plus rapide %s" % GameStats.format_time(float(e["fastest"]))) if float(e["fastest"]) > 0.0 else ""]
+	_zone_info.text = "[b]%s[/b]  ·  %s m²  ·  %d porte%s murée%s\n%s%s\n[color=#3ddc6a]Porte de sortie au milieu de la zone : %s points[/color]\n[color=#ffd24a]%s[/color]" % [
+		String(z["name"]).to_upper(), _thousands(roundi(float(z["area"]))), int(z["doors"]), "s" if int(z["doors"]) > 1 else "", "s" if int(z["doors"]) > 1 else "",
+		ZoneCatalog.machines_text(zi), ("\nAjouté pour ce mode : " + add) if add != "" else "", _thousands(GameMode.exit_price()), rec]
+
+## v0.26.0 : écran de fin du mode Zone unique (même panneau que « ÉQUIPE ÉLIMINÉE », titre or).
+func show_escape(zone_name: String, seconds: float, round_number: int, kills: int, points: int, entry: Dictionary) -> void:
+	stack.close(UiStack.MAP)
+	_over_title.text = "ÉVASION RÉUSSIE"
+	_over_title.add_theme_color_override("font_color", UiTheme.GOLD)
+	var rec := ""
+	if not entry.is_empty() and int(entry.get("escapes", 0)) > 0:
+		rec = "\n[color=#999999]%s : %d évasion%s · la plus rapide %s · meilleure manche %d[/color]" % [zone_name, int(entry["escapes"]), "s" if int(entry["escapes"]) > 1 else "",
+			GameStats.format_time(float(entry["fastest"])), int(entry["best_round"])]
+	_over_text.text = "Vous vous êtes échappé de [color=#ffffff][b]%s[/b][/color] !\nTemps : [color=#ffffff][b]%s[/b][/color]  ·  manche [color=#ffffff][b]%d[/b][/color]  ·  %d zombies tués  ·  %s points gagnés%s" % [
+		zone_name, GameStats.format_time(seconds), round_number, kills, _thousands(points), rec]
+	stack.clear()
+	stack.push(UiStack.OVER)
+	_sync()
 
 func _build_stats(col: Control) -> void:
 	var p := _panel(UiStack.STATS, col, 10)
@@ -311,6 +548,18 @@ func _build_stats(col: Control) -> void:
 	_stats_grid.add_theme_constant_override("h_separation", 26)
 	_stats_grid.add_theme_constant_override("v_separation", 6)
 	box.add_child(_stats_grid)
+	_zone_stats = RichTextLabel.new()   # v0.26.0 : meilleurs scores du mode Zone unique, par zone
+	_zone_stats.bbcode_enabled = true
+	_zone_stats.fit_content = true
+	_zone_stats.scroll_active = false
+	_zone_stats.custom_minimum_size = Vector2(820, 0)
+	_zone_stats.add_theme_font_size_override("normal_font_size", 14)
+	_zone_stats.add_theme_font_size_override("bold_font_size", 15)
+	_zone_stats.add_theme_color_override("default_color", Color("dddddd"))
+	_zone_stats.add_theme_font_override("normal_font", UiTheme.body())
+	_zone_stats.add_theme_font_override("bold_font", UiTheme.heading())
+	_zone_stats.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	p.add_child(_zone_stats)
 	_stats_note = UiTheme.label("", 13, Color("888888"), UiTheme.body())
 	_stats_note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	p.add_child(_stats_note)
@@ -367,6 +616,17 @@ func _render_stats() -> void:
 			var l := UiTheme.label(txt, 16, UiTheme.GOLD if e == tot else Color.WHITE, UiTheme.body())
 			l.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 			_stats_grid.add_child(l)
+	var zl: Array[String] = []
+	var names: Array = st.by_zone.keys()
+	names.sort()
+	for zn: String in names:
+		var e: Dictionary = st.by_zone[zn]
+		if int(e["games"]) <= 0:
+			continue
+		zl.append("[color=#ffd24a]%s[/color] : %d partie%s, %d évasion%s%s · manche %d · %s pts · %d tués" % [zn, int(e["games"]), "s" if int(e["games"]) > 1 else "",
+			int(e["escapes"]), "s" if int(e["escapes"]) > 1 else "", (" (la plus rapide %s)" % GameStats.format_time(float(e["fastest"]))) if float(e["fastest"]) > 0.0 else "",
+			int(e["best_round"]), _thousands(int(e["best_points"])), int(e["best_kills"])])
+	_zone_stats.text = "[center][b]ZONE UNIQUE[/b] (meilleurs scores par zone)\n%s[/center]" % ("\n".join(zl) if not zl.is_empty() else "[color=#888888]Aucune partie en Zone unique.[/color]")
 	_stats_note.text = "Aucune partie enregistrée pour le moment." if st.total_games() == 0 else "Enregistrées à la fin de chaque partie (mort, victoire, ou retour au menu). Fichier : %s" % ProjectSettings.globalize_path(st.path)
 	_stats_reset.disabled = st.total_games() == 0
 
@@ -653,6 +913,8 @@ func open_keys() -> void:
 
 func show_over(subtitle: String) -> void:
 	stack.close(UiStack.MAP)
+	_over_title.text = "ÉQUIPE ÉLIMINÉE"
+	_over_title.add_theme_color_override("font_color", UiTheme.RED)
 	_over_text.text = subtitle
 	stack.clear()
 	stack.push(UiStack.OVER)
@@ -764,7 +1026,9 @@ func _sync() -> void:
 
 func _refresh_summary() -> void:
 	var m := String(settings.get_value("map"))
-	_summary.text = "%s  ·  %s  ·  %s" % [String(CharacterDefs.of_slot(int(settings.get_value("char")))["name"]), MAP_NAMES.get(m, m), Difficulty.name_of(String(settings.get_value("difficulty")))]
+	var mode := GameMode.valid(String(settings.get_value("mode")))
+	var where: String = MAP_NAMES.get(m, m) if mode == GameMode.CLASSIC else "ZONE UNIQUE : %s" % ZoneCatalog.name_of(int(settings.get_value("zone"))).to_upper()
+	_summary.text = "%s  ·  %s  ·  %s" % [String(CharacterDefs.of_slot(int(settings.get_value("char")))["name"]), where, Difficulty.name_of(String(settings.get_value("difficulty")))]
 
 ## Donne le focus clavier / manette au premier contrôle utile du panneau affiché (sauf Touches : la capture d'une touche ne doit pas déclencher un bouton).
 func _focus_first(panel_layer: String) -> void:
@@ -807,9 +1071,10 @@ func _on_setting(key: String) -> void:
 		_sync_options()
 	if key == "char":
 		_refresh_cards()
-	if key in ["char", "map", "difficulty"]:
+	if key in ["char", "map", "difficulty", "mode", "zone"]:
 		_refresh_summary()
 		_refresh_mapdiff()
+		_refresh_mode()
 
 func _refresh_cards() -> void:
 	var sel := int(settings.get_value("char"))

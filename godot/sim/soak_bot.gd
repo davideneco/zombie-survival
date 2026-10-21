@@ -72,6 +72,9 @@ func setup(g: Node) -> void:
 	g.vaulted.connect(func() -> void: vaults += 1)
 
 func _pick_goal(g: Node) -> void:
+	if g.gm != null and g.gm.layout != null and not g.gm.layout.ground.is_empty():   # v0.26.0 : Zone unique : on reste dans la zone
+		goal = g.gm.layout.ground[rng.randi() % g.gm.layout.ground.size()]
+		return
 	var zones: Array = g.world.objects["zones"]
 	var z: Dictionary = zones[rng.randi() % zones.size()]
 	var c: Variant = z.get("center")
@@ -129,6 +132,11 @@ func _nearest(g: Node, pts: Array) -> Vector2:
 func _start_errand(g: Node) -> void:
 	var kind: String = ERRAND_ORDER[errand_i % ERRAND_ORDER.size()]
 	errand_i += 1
+	if g.gm != null and kind in ["door", "level", "ride", "tram", "knight", "pest"]:   # v0.26.0 : Zone unique : rien hors de la zone
+		errand = kind
+		_log(g, "rien à faire (zone unique)")
+		_end_errand(g)
+		return
 	var pts: Array = []
 	match kind:
 		"door":
@@ -377,12 +385,12 @@ func _report(g: Node, r: int) -> void:
 		"resources": int(Performance.get_monitor(Performance.OBJECT_RESOURCE_COUNT)),
 		"step_avg_ms": (_us_round / float(maxi(1, _steps_round))) / 1000.0, "step_max_ms": _us_max_round / 1000.0,
 		"heals": heals, "stuck": stuck_events, "unstuck": g.unstick.unstuck_count if g.unstick != null else 0, "vaults": vaults,
-		"points": g.points, "sfx_voices": Sfx.voice_count(),
+		"points": g.points, "earned": g.points_earned, "sfx_voices": Sfx.voice_count(),
 	}
 	rows.append(row)
 	_us_round = 0
 	_steps_round = 0
 	_us_max_round = 0
-	print("SOAK manche %2d t=%6.1f s : %3d tués, %2d en vie, mém %.1f Mo, objets %d, noeuds %d (orphelins %d), ressources %d, pas %.2f ms (max %.1f), %d soins, %d blocages, %d déblocages, %d enjambements, relogés %d" % [
-		r, g.time, g.kills, g.zombies.size(), row["mem_mb"], row["objects"], row["nodes"], row["orphans"], row["resources"], row["step_avg_ms"], row["step_max_ms"],
+	print("SOAK manche %2d t=%6.1f s : %3d tués, %6d points gagnés, %2d en vie, mém %.1f Mo, objets %d, noeuds %d (orphelins %d), ressources %d, pas %.2f ms (max %.1f), %d soins, %d blocages, %d déblocages, %d enjambements, relogés %d" % [
+		r, g.time, g.kills, g.points_earned, g.zombies.size(), row["mem_mb"], row["objects"], row["nodes"], row["orphans"], row["resources"], row["step_avg_ms"], row["step_max_ms"],
 		heals, stuck_events, row["unstuck"], vaults, g.relocated])

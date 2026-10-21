@@ -22,6 +22,7 @@ const Menus := preload("res://scenes/ui/menus.gd")
 const WeaponView := preload("res://scenes/weapon_view.gd")
 const RidesView := preload("res://scenes/world/rides_view.gd")
 const MachinesView := preload("res://scenes/world/machines_view.gd")
+const ZoneModeView := preload("res://scenes/world/zone_mode_view.gd")
 const GraphicsView := preload("res://scenes/graphics_view.gd")
 const FxView := preload("res://scenes/fx_view.gd")
 const FinaleView := preload("res://scenes/finale_view.gd")   # J10
@@ -36,6 +37,8 @@ var _camera: Camera3D
 var _flow := SessionFlow.new()       ## v0.14.0 : menu / chargement / partie
 var _session_live := false           ## la partie est construite et peut tourner (vues, monde)
 var _difficulty_arg := ""
+var _mode_arg := ""                  ## v0.26.0 : --mode=classic|zone (sans toucher aux réglages enregistrés)
+var _zone_arg := -1                  ## v0.26.0 : --zone=N ou --zone=Nom (mode Zone unique)
 var _click: PackedStringArray = []   ## --click=
 var _click_t := 0.0
 var _probe := false                  ## --probe-title
@@ -132,6 +135,7 @@ var _cam_arm := 0.0               # --cam-arm=M : bras de caméra imposé sur la
 var _look_yaw := 0.0              # --look-yaw=deg : décalage du regard une fois monté (captures)
 var _first_person := false        # --first-person : vue à la première personne sur les véhicules
 var _machines_view: Node3D
+var _zone_view: Node3D            # v0.26.0 : murs des portes en Zone unique
 var _graphics: Node               # J9 : environnement, ciel, ombres, qualité (graphics_view.gd)
 var _fx: Node3D                   # J9 : particules et taches de sang (fx_view.gd)
 var _finale_view: Node3D          # J10 : effets des boss, faisceau, Fanal (finale_view.gd)
@@ -314,6 +318,12 @@ func _ready() -> void:
 			_shot_at = float(a.substr(5))
 		elif a.begins_with("--difficulty="):
 			_difficulty_arg = a.substr(13)
+		elif a.begins_with("--mode="):
+			_mode_arg = a.substr(7)
+		elif a.begins_with("--zone="):
+			_zone_arg = int(a.substr(7)) if a.substr(7).is_valid_int() else ZoneCatalog.index_of(a.substr(7))
+			if _mode_arg == "":
+				_mode_arg = GameMode.ZONE
 		elif a.begins_with("--click="):
 			_click = a.substr(8).split(",")
 		elif a == "--probe-title":
@@ -411,7 +421,14 @@ func _connect_perf_events() -> void:
 
 # ---------------------------------------------------------------- v0.14.0 : session (chargement par étapes, retour au menu)
 func _map_choice() -> String:
-	return _map if _map != "" else String(Game.settings.get_value("map"))
+	if _map != "":
+		return _map
+	if _mode_choice() == GameMode.ZONE:   # v0.26.0 : la Zone unique se joue toujours sur la carte de Strasbourg
+		return "strasbourg"
+	return String(Game.settings.get_value("map"))
+
+func _mode_choice() -> String:
+	return GameMode.valid(_mode_arg if _mode_arg != "" else String(Game.settings.get_value("mode")))
 
 func _progress(text: String, frac: float) -> void:
 	_menus.show_loading(text, _flow.progress(frac))
@@ -437,6 +454,8 @@ func _start_session() -> void:
 	_load_frames = 0
 	_report_memory("avant chargement")
 	Game.difficulty = Difficulty.valid(_difficulty_arg if _difficulty_arg != "" else String(Game.settings.get_value("difficulty")))
+	Game.mode = _mode_choice()
+	Game.zone_pick = clampi(_zone_arg if _zone_arg >= 0 else int(Game.settings.get_value("zone")), 0, Settings.ZONE_COUNT - 1)
 	var map := _map_choice()
 	await _step(0.0)
 	# 1. données de la carte sur un fil de travail (l'interface continue d'animer fond et barre)
@@ -509,8 +528,9 @@ func _unload_session() -> void:
 		_drop(t[0])
 	_tracers.clear()
 	_shot_queue.clear()
-	for n in [_arena_node, _rides_view, _machines_view, _weapon_view, _finale_view, _fx, _graphics, _hud, _intro, _camera]:
+	for n in [_arena_node, _rides_view, _machines_view, _zone_view, _weapon_view, _finale_view, _fx, _graphics, _hud, _intro, _camera]:
 		_drop(n)
+	_zone_view = null
 	_intro = null
 	_arena_node = null
 	_rides_view = null
@@ -547,6 +567,10 @@ func _record_stats() -> void:
 		return
 	_flow.mark_recorded()
 	if not _record_ok or Game.player == null or Game.map_name == "arena":
+		return
+	if Game.gm != null:   # v0.26.0 : Zone unique : meilleurs scores par zone, à part
+		var zb := Game.stats.record_zone(Game.gm.zone_name, Game.difficulty, Game.round_number, Game.kills, Game.points_earned, Game.time, Game.escaped)
+		print("statistiques Zone unique (%s) : manche %d, %d tués, %d points gagnés, %.0f s, évasion %s ; records battus : %s" % [Game.gm.zone_name, Game.round_number, Game.kills, Game.points_earned, Game.time, Game.escaped, zb])
 		return
 	var broken := Game.stats.record(Game.difficulty, Game.round_number, Game.kills, Game.points, Game.time, Game.finale_done)
 	print("statistiques : manche %d, %d tués, %d points, %.0f s, victoire %s ; records battus : %s" % [Game.round_number, Game.kills, Game.points, Game.time, Game.finale_done, broken])
@@ -637,6 +661,14 @@ func _finish_scene(_map_name: String) -> void:
 		_machines_view.set_script(MachinesView)
 		add_child(_machines_view)
 		_machines_view.setup()
+	if Game.gm != null:   # v0.26.0 : Zone unique : portes murées
+		_zone_view = Node3D.new()
+		_zone_view.set_script(ZoneModeView)
+		add_child(_zone_view)
+		_zone_view.setup(_arena_node)
+		print("ZONE UNIQUE : %s (zone %d), %d portes murées (%d pans), départ (%.1f ; %.1f), sortie (%.1f ; %.1f), %d machines ajoutées, %d fenêtres, %d points au sol, %.0f m2" % [
+			Game.gm.zone_name, Game.gm.zone, _zone_view.doors_sealed.size(), _zone_view.walls, Game.gm.start.x, Game.gm.start.z, float(Game.gm.exit["pos"]["x"]), float(Game.gm.exit["pos"]["z"]),
+			Game.gm.extra.size(), Game.gm.layout.windows.size(), Game.gm.layout.ground.size(), Game.gm.layout.area])
 	if _show_collision and Game.world != null:
 		var cv := Node3D.new()
 		cv.set_script(preload("res://scenes/world/collision_view.gd"))
@@ -1256,6 +1288,9 @@ func _spawn_tracer(origin: Vector3, end: Vector3) -> void:
 func _on_game_over() -> void:
 	_record_stats()
 	_flow.end_game()
+	if Game.escaped:   # v0.26.0 : Zone unique, porte de sortie achetée
+		_menus.show_escape(Game.gm.zone_name if Game.gm != null else "", Game.time, Game.round_number, Game.kills, Game.points_earned, Game.stats.zone_entry(Game.gm.zone_name) if Game.gm != null else {})
+		return
 	_menus.show_over("Vous avez survécu jusqu'à la [color=#ffffff][b]manche %d[/b][/color]\n%d zombies tués  ·  %d points" % [Game.round_number, Game.kills, Game.points])
 
 # ---------------------------------------------------------------- J7 : menus, réglages, démonstrations
@@ -1472,6 +1507,15 @@ func _open_ui(name: String) -> void:
 		"over":
 			Game.player.hurt(10000.0, Game.time)
 			Game._end_game()
+		"escape":   # v0.26.0 : écran « ÉVASION RÉUSSIE » (Zone unique)
+			Game.points = 1000000
+			Game.escape_zone()
+		"mode":
+			_menus.open_title()
+			_menus.open_mode()
+		"perks":
+			_menus.open_title()
+			_menus.open_perks()
 		"victory":
 			_menus.show_victory("VICTOIRE !", "Le Bourreau est vaincu : vous avez sauvé la cathédrale.\nManche 12  ·  240 zombies tués")
 
