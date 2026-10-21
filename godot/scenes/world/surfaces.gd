@@ -11,6 +11,9 @@ const GfxAssets := preload("res://scenes/gfx_assets.gd")
 const GROUND := preload("res://shaders/ground.gdshader")
 const WATER := preload("res://shaders/water.gdshader")
 const FACADE := preload("res://shaders/facade.gdshader")
+const ROOF := preload("res://shaders/roof.gdshader")
+const PBR_ROOF_A := preload("res://assets/pbr/roof_clay/a.png")
+const PBR_ROOF_M := preload("res://assets/pbr/roof_clay/m.png")
 const FOLIAGE := preload("res://shaders/foliage.gdshader")
 ## v0.24.1 : matériaux PBR des façades (godot/assets/pbr/, tools/pack-pbr.py ; a : détail d'albédo, m : normale RG + rugosité + AO ; VRAM compressés à l'import)
 const PBR_PLASTER_A := preload("res://assets/pbr/wall_plaster/a.png")
@@ -33,6 +36,9 @@ static func kind(m: Dictionary, files: Array) -> String:
 		return "water"
 	if bool(m["vc"]) and map >= 0 and int(m["emap"]) >= 0 and "--dbg-nofacade" not in OS.get_cmdline_user_args():
 		return "facade"
+	if bool(m["vc"]) and map >= 0 and int(m["nmap"]) >= 0 and int(m["rmap"]) >= 0 and int(m["emap"]) < 0 and int(m["side"]) == 2 and int(m["bmap"]) < 0 \
+			and "--dbg-noroof" not in OS.get_cmdline_user_args():
+		return "roof"
 	if map >= 0 and absf(float(m["at"]) - 0.46) < 0.001 and int(m["side"]) == 2:
 		return "foliage"
 	return ""
@@ -89,6 +95,11 @@ static func make(k: String, m: Dictionary, tex: Callable, rel: Callable = Callab
 			sm.set_shader_parameter("uv_scale", Vector2(float(rep[0]), float(rep[1])))
 			sm.set_shader_parameter("uv_offset", Vector2(float(off[0]), float(off[1])))
 			_facade_pbr(sm, m, tex, rel)
+		"roof":
+			sm.shader = ROOF
+			sm.set_shader_parameter("albedo_tex", tex.call(int(m["map"])))
+			sm.set_shader_parameter("pbr_a", PBR_ROOF_A)
+			sm.set_shader_parameter("pbr_m", PBR_ROOF_M)
 		"foliage":
 			sm.shader = FOLIAGE
 			sm.set_shader_parameter("albedo_tex", tex.call(int(m["map"])))

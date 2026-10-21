@@ -122,6 +122,8 @@ func set_quality(q: int) -> void:
 		if m.get_shader_parameter("bump_tex") != null:   # v0.24.1 : Rapide = ancien rendu ; Normale = PBR + relief ; Haute = + bois PBR des colombages
 			m.set_shader_parameter("pbr_k", 0.0 if q == 0 else 1.0)
 			m.set_shader_parameter("pbr_hi", 1.0 if q >= 2 else 0.0)
+	for m: ShaderMaterial in _kinds.get("roof", []):   # v0.24.4 : toits PBR en Normale et Haute
+		m.set_shader_parameter("pbr_k", 0.0 if q == 0 else 1.0)
 	for m: ShaderMaterial in _kinds.get("foliage", []):
 		m.set_shader_parameter("wind_on", 0.0 if q == 0 else 1.0)
 	for mm in _tree_cards:

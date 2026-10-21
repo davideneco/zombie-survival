@@ -152,7 +152,7 @@ func _surfaces(t: Node) -> void:
 	var files: Array = []
 	for tx: Dictionary in JSON.parse_string(FileAccess.get_file_as_string("res://data/world/textures.json")):
 		files.append(String(tx["file"]))
-	var count := {"": 0, "ground": 0, "water": 0, "facade": 0, "foliage": 0}
+	var count := {"": 0, "ground": 0, "water": 0, "facade": 0, "foliage": 0, "roof": 0}
 	var mats: Array = JSON.parse_string(FileAccess.get_file_as_string("res://data/world/materials.json"))
 	for i in mats.size():
 		count[Surfaces.kind(mats[i], files)] += 1
@@ -160,6 +160,7 @@ func _surfaces(t: Node) -> void:
 	t.check(count["water"] == 1, "un seul matériau d'eau (%d)" % count["water"])
 	t.check(count["facade"] == 20, "20 matériaux de façade (%d)" % count["facade"])
 	t.check(count["foliage"] >= 1, "feuillage (%d)" % count["foliage"])
+	t.check(count["roof"] >= 1, "toits PBR (%d)" % count["roof"])
 	var tex := func(_i: int) -> Texture2D: return null
 	for i in mats.size():
 		var k := Surfaces.kind(mats[i], files)
@@ -205,7 +206,7 @@ func _graphics_view(t: Node) -> void:
 	s.set_value("quality", 1)
 	t.near(vp.scaling_3d_scale, 1.0, "Normale : résolution 1")
 	t.check(gv.moon.shadow_enabled, "Normale : ombres de la lune")
-	t.check(not env.glow_enabled and not env.adjustment_enabled, "Normale : sans halo ni table de couleurs")
+	t.check(not env.glow_enabled and env.adjustment_color_correction == null, "Normale : sans halo ni table de couleurs")
 	t.near(float(gv.sky_mat.get_shader_parameter("cloud_cover")), float(Config.at("graphics.sky.cloudCover")), "Normale : nuages")
 	# Haute
 	s.set_value("quality", 2)
@@ -216,7 +217,7 @@ func _graphics_view(t: Node) -> void:
 	t.check(not env.glow_enabled and env.adjustment_enabled, "Haute, halo décoché : pas de halo, table gardée")
 	s.set_value("halo", true)
 	s.set_value("cinema", false)
-	t.check(not env.glow_enabled and not env.adjustment_enabled and not gv._cinema_layer.visible, "Haute sans effets cinéma : ni halo, ni table, ni vignette")
+	t.check(not env.glow_enabled and env.adjustment_color_correction == null and not gv._cinema_layer.visible, "Haute sans effets cinéma : ni halo, ni table, ni vignette")
 	s.set_value("cinema", true)
 	# réglages fixes de main.js / graphics.js
 	t.check(env.tonemap_mode == Environment.TONE_MAPPER_ACES, "tone mapping ACES (CONFIG.graphics.tone.type)")

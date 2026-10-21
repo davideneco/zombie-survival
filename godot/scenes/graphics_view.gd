@@ -24,6 +24,9 @@ const MOON_OFFSET := Vector3(25, 55, 15)
 const THREE_TO_GODOT := 1.0 / PI
 ## Étalonnage du tone mapping : l'ACES de Godot (biais d'exposition 1,8) et celui de Three.js (1 / 0,6) diffèrent d'un facteur constant (mesuré : voir le plan).
 const TONE_K := 1.0
+const GRADE_CONTRAST := 1.07
+const GRADE_SATURATION := 1.12
+var _dbg_nograde := OS.get_cmdline_user_args().has("--dbg-nograde")
 ## Fond de ciel mesuré contre le JS : facteur appliqué à l'exposition.
 
 var camera: Camera3D
@@ -260,6 +263,14 @@ func apply_quality(q: int) -> void:
 	else:
 		env.adjustment_enabled = false
 		env.adjustment_color_correction = null
+	# v0.24.4 : étalonnage « pellicule » (Normale et Haute, sans passe en plus : le réglage d'ajustement est fusionné au mappage tonal) : contraste et saturation légèrement relevés
+	if q >= 1 and not _dbg_nograde:
+		env.adjustment_enabled = true
+		env.adjustment_contrast = GRADE_CONTRAST
+		env.adjustment_saturation = GRADE_SATURATION
+	else:
+		env.adjustment_contrast = 1.0
+		env.adjustment_saturation = 1.0
 	_apply_glow(GraphicsRules.want_halo(q, cinema, bool(Game.settings.get_value("halo")), sz.x, sz.y))
 	_cinema_layer.visible = cinema
 	apply_exposure()
