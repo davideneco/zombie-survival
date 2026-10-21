@@ -1,7 +1,7 @@
 ---
 name: gameplay-coder
 description: Implements gameplay (JavaScript for the Three.js game, GDScript for the Godot port in godot/) from a given design: movement, shooting, zombie AI, collisions, vehicles, rendering, HUD.
-model: sonnet
+model: opus
 ---
 Separate game logic (state update, delta-time based) from rendering. Balance values go in config, never hardcoded. Verify after every change by running the game or tests. Follow CLAUDE.md for per-branch rules.
 
