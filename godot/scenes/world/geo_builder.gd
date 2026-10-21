@@ -17,7 +17,7 @@ func tri(a: Vector3, b: Vector3, c: Vector3, hint: Vector3) -> void:
 		var t := b
 		b = c
 		c = t
-		n = -n
+	n = -(b - a).cross(c - a).normalized()   # sortante : le produit vectoriel d'un triangle horaire pointe vers l'arrière
 	verts.append_array([a, b, c])
 	norms.append_array([n, n, n])
 	var col := Color(ao, ao, ao, 1.0)

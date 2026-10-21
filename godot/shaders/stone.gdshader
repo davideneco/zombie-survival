@@ -11,8 +11,8 @@ uniform float scale = 2.8;            // m par répétition
 uniform float night = 1.0;            // 1 : nuit (projecteurs allumés), 0 : jour
 uniform vec3 flood_color : source_color = vec3(1.0, 0.70, 0.40);
 uniform vec3 flood_dir = vec3(-0.869, 0.0, 0.494);   // sens vers lequel la façade fait face (vers l'extérieur) ; réglé par cathedral_view.gd
-uniform float flood_energy = 0.55;
-uniform float flood_height = 46.0;    // m : le lavis s'éteint avec la hauteur
+uniform float flood_energy = 0.8;
+uniform float flood_height = 60.0;    // m : le lavis s'éteint avec la hauteur
 uniform float normal_k = 0.9;
 
 varying vec3 wpos;

@@ -168,7 +168,7 @@ func _build_piers() -> void:
 		# pinacle : fût carré, puis flèche à quatre pans
 		var wt := w0 - 0.2 * 3
 		_stone.ao = 0.95
-		_stone.prism(SKIN + (f_out - SKIN - 0.3) * 0.5, z, wt * 0.62, wt * 0.55, 62.0, 66.0, 4, PI / 4.0, false)
+		_stone.box(Vector3(SKIN + (f_out - SKIN - 0.3) * 0.5, 64.0, z), Vector3(wt * 1.1, 4.0, wt * 1.1), 63)
 		_stone.spire(SKIN + (f_out - SKIN - 0.3) * 0.5, z, wt * 0.62 * 1.1, 66.0, 71.0 if corner else 69.0, 4, PI / 4.0)
 		# crochets du pinacle
 		for k in 3:

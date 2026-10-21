@@ -881,3 +881,9 @@ Décision du joueur : le jeu navigateur est abandonné ; la collision, la géom�
 - **Coût** (Intel UHD, 2560x1080, jour, face à la façade ; GPU ms) : Normale 31,0 avec / 31,1 sans (bruit) ; Haute 41,1 / 41,1 ; Rapide 19,3 / 19,3. +40 k triangles, +4 appels de dessin. Négligeable ; non mesuré sur AMD.
 - **Avant / après** : `docs/audit-ville/avant-apres-facade-cathedrale.png` (haut : vue d'ensemble depuis la rue ; bas : pied de façade ; avant à gauche).
 - **Non vérifié / faible** : GPU AMD et 3440x1440 ; le rendu de nuit (projecteurs, vitraux) n'a pas été regardé en capture ; les pinacles des angles flottent visiblement (à recaler) ; statues très schématiques ; la tour d'escalier nord (octogone, lancettes, tourelles), les arcs-boutants, la nef latérale, les toits et l'intérieur ne sont PAS faits (reste de D) ; le cadre gris de la porte du jeu (existant) dépasse devant la peau.
+
+### v0.24.3 : D, suite) normales de `GeoBuilder` corrigées, projecteurs de nuit de la façade
+- **Bug trouvé en regardant la nuit** : `GeoBuilder.tri` stockait la normale du mauvais côté pour une moitié des triangles (la face avant était éclairée à l'envers : façade sombre, lavis des projecteurs nul sur la peau). Normale maintenant déduite de l'enroulement final (sortante). Visible aussi de jour (relief de la pierre).
+- `stone.gdshader` : `flood_energy` 0,8, `flood_height` 60 m (lavis chaud des projecteurs, éteint de jour par `on_sky_k`). Pinacles : fût remplacé par une boîte.
+- **Avant / après de nuit** : `docs/audit-ville/avant-apres-nuit-cathedrale.png` (avant à gauche : façade bleu sombre ; après : façade au grès éclairé, vitraux lumineux). Coût : aucun appel ni triangle en plus (shader seulement).
+- **Non vérifié** : AMD / 3440x1440 ; la teinte des projecteurs est franche (orange), à régler au goût ; les pinacles d'angle paraissent toujours détachés du mur vus d'en bas.
