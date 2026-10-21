@@ -122,6 +122,8 @@
       rep: m.map ? [m.map.repeat.x, m.map.repeat.y] : m.normalMap ? [m.normalMap.repeat.x, m.normalMap.repeat.y] : [1, 1],
       off: m.map ? [m.map.offset.x, m.map.offset.y] : [0, 0],
       ns: m.normalScale ? m.normalScale.x : 1,
+      // v0.24.1 : relief dessiné des façades (carte de bosses : encadrements, appuis, vitres en retrait, poutres) et rang de style (polygonOffset : plaster 1-4, timber 5-7, sandstone 8-10, modern 11, gothic 12, shop 13-18, dormer 19, flood 23)
+      bmap: await texId(m.bumpMap, false), bs: m.bumpScale || 0, rank: m.polygonOffset ? Math.floor(-m.polygonOffsetFactor) : 0,
     };
     const key = JSON.stringify(e);
     let id = materials.findIndex((q) => q.__k === key);

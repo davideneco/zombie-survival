@@ -16,6 +16,7 @@ const LampGlow := preload("res://scenes/world/lamp_glow.gd")
 const LAMP_ENERGY_K := 1.0 / PI   ## intensité Three.js -> énergie Godot
 const FACADE_GLOW := 1.2         ## halo des fenêtres allumées (facade.gdshader, glow_k)
 const LAMP_Y := 4.2
+const BUMP_SCALE := 6.0          ## force de Image.bump_map_to_normal_map pour les bosses des façades
 const LAMP_LIGHTS_MAX := 8        ## lampadaires éclairants : les plus proches du joueur (les autres restent des ampoules)
 
 var load_ms := 0
@@ -23,6 +24,8 @@ var tile_count := 0
 var triangle_count := 0
 var _materials: Array = []
 var _textures: Array = []         ## Texture2D ou null, par indice de textures.json
+var _bump_ids: Dictionary = {}    ## indices de textures.json qui sont des cartes de bosses de façade
+var _relief: Dictionary = {}      ## indice de bosse -> normale de relief (Texture2D)
 var _door_nodes: Dictionary = {}  ## id -> Node3D
 var _lamp_lights: Array[OmniLight3D] = []
 var _glow: LampGlow
@@ -110,6 +113,9 @@ func set_quality(q: int) -> void:
 		m.set_shader_parameter("layers", 1.0 if q == 0 else 2.0)
 	for m: ShaderMaterial in _kinds.get("facade", []):   # v0.22.4 : halo des fenêtres (une lecture de texture de plus par pixel de façade) : Normale et Haute
 		m.set_shader_parameter("glow_k", 0.0 if q == 0 or "--dbg-nowinglow" in OS.get_cmdline_user_args() else FACADE_GLOW)
+		if m.get_shader_parameter("bump_tex") != null:   # v0.24.1 : Rapide = ancien rendu ; Normale = PBR + relief ; Haute = + bois PBR des colombages
+			m.set_shader_parameter("pbr_k", 0.0 if q == 0 else 1.0)
+			m.set_shader_parameter("pbr_hi", 1.0 if q >= 2 else 0.0)
 	for m: ShaderMaterial in _kinds.get("foliage", []):
 		m.set_shader_parameter("wind_on", 0.0 if q == 0 else 1.0)
 	for mm in _tree_cards:
@@ -125,6 +131,9 @@ func set_quality(q: int) -> void:
 # ---------------------------------------------------------------- textures et matériaux
 func _load_textures() -> void:
 	var list: Array = _json(DIR + "textures.json")
+	for m: Dictionary in _json(DIR + "materials.json"):
+		if m.has("bmap") and int(m["bmap"]) >= 0 and bool(m["vc"]) and int(m["emap"]) >= 0:
+			_bump_ids[int(m["bmap"])] = true
 	var n_tex := 0
 	for t: Dictionary in list:
 		n_tex += 1
@@ -138,8 +147,19 @@ func _load_textures() -> void:
 			continue
 		if img.get_format() != Image.FORMAT_RGBA8 and img.get_format() != Image.FORMAT_RGB8:
 			img.convert(Image.FORMAT_RGBA8)
+		if _bump_ids.has(_textures.size()):   # v0.24.1 : carte de bosses des façades : la normale de relief est calculée ici (Image.bump_map_to_normal_map, natif) puis compressée (BC5)
+			var nimg := img.duplicate() as Image
+			nimg.bump_map_to_normal_map(BUMP_SCALE)
+			nimg.generate_mipmaps()
+			if DisplayServer.get_name() != "headless":
+				nimg.compress_from_channels(Image.COMPRESS_S3TC, Image.USED_CHANNELS_RG)
+			_relief[_textures.size()] = ImageTexture.create_from_image(nimg)
+			img.convert(Image.FORMAT_L8)
 		img.generate_mipmaps()
 		_textures.append(ImageTexture.create_from_image(img))
+
+func _relief_tex(i: int) -> Texture2D:
+	return _relief.get(i)
 
 func _tex(i: int) -> Texture2D:
 	return null if i < 0 or i >= _textures.size() else _textures[i]
@@ -151,7 +171,7 @@ func _load_materials() -> void:
 	for m: Dictionary in _json(DIR + "materials.json"):
 		var k := Surfaces.kind(m, files)
 		if k != "":
-			var shm := Surfaces.make(k, m, _tex)
+			var shm := Surfaces.make(k, m, _tex, _relief_tex)
 			if not _kinds.has(k):
 				_kinds[k] = []
 			_kinds[k].append(shm)

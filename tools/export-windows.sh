@@ -29,6 +29,7 @@ need data/world/doors/d0.bin          "node tools/bake-world.mjs"
 need data/world/instances.bin         "node tools/bake-world.mjs"
 need assets/baked/c3.png              "node tools/bake-world.mjs"
 need assets/textures/cobble/diff.jpg  "node tools/download-textures.mjs"
+need assets/pbr/wall_stone/a.png         "node tools/download-textures.mjs --godot && python3 tools/pack-pbr.py"
 need assets/graphics/graphics.json    "node tools/bake-graphics.mjs"
 need assets/graphics/zombie_geo.bin   "node tools/bake-graphics.mjs"
 need assets/graphics/map.png          "node tools/bake-portraits.mjs"
@@ -73,7 +74,8 @@ if grep -E '	(tests/|data/golden/|data/world/golden_j2|assets/audio/music/theme\
 for f in project.binary data/config.json data/arena.json data/cathedral.json data/audio.json data/weapon_models.json data/zombie_models.json \
 	data/graphics/lights.json data/world/vehicles.json data/world/instances.bin data/world/nav/blocked.u8.gz data/world/collision/segs.f64 \
 	assets/baked/c3.png assets/textures/cobble/diff.jpg assets/graphics/graphics.json assets/graphics/zombie_geo.bin assets/graphics/map.png \
-	assets/tram/car.bin assets/tram/car_map.png assets/audio/music/music_0.ogg.import assets/weapons/LICENSE.txt assets/zombies/LICENSE.txt assets/characters/LICENSE.txt; do
+	assets/tram/car.bin assets/tram/car_map.png assets/audio/music/music_0.ogg.import assets/weapons/LICENSE.txt assets/zombies/LICENSE.txt assets/characters/LICENSE.txt \
+	data/world_collision_extra.json assets/pbr/LICENSE.txt assets/pbr/wall_stone/a.png.remap assets/pbr/wall_stone/m.png.remap; do
 	grep -q "	$f\$" "$SCRATCH/pck.txt" || fail "absent du .pck : $f"
 done
 [ "$(grep -c '	data/world/tiles/' "$SCRATCH/pck.txt")" = "$(ls "$PROJ/data/world/tiles" | wc -l)" ] || fail "tuiles du monde manquantes dans le .pck"

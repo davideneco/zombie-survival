@@ -12,6 +12,17 @@ const GROUND := preload("res://shaders/ground.gdshader")
 const WATER := preload("res://shaders/water.gdshader")
 const FACADE := preload("res://shaders/facade.gdshader")
 const FOLIAGE := preload("res://shaders/foliage.gdshader")
+## v0.24.1 : matériaux PBR des façades (godot/assets/pbr/, tools/pack-pbr.py ; a : détail d'albédo, m : normale RG + rugosité + AO ; VRAM compressés à l'import)
+const PBR_PLASTER_A := preload("res://assets/pbr/wall_plaster/a.png")
+const PBR_PLASTER_M := preload("res://assets/pbr/wall_plaster/m.png")
+const PBR_STONE_A := preload("res://assets/pbr/wall_stone/a.png")
+const PBR_STONE_M := preload("res://assets/pbr/wall_stone/m.png")
+const PBR_TIMBER_A := preload("res://assets/pbr/wall_timber_plaster/a.png")
+const PBR_TIMBER_M := preload("res://assets/pbr/wall_timber_plaster/m.png")
+const PBR_STUCCO_A := preload("res://assets/pbr/wall_stucco/a.png")
+const PBR_STUCCO_M := preload("res://assets/pbr/wall_stucco/m.png")
+const PBR_WOOD_A := preload("res://assets/pbr/wood_beam/a.png")
+const PBR_WOOD_M := preload("res://assets/pbr/wood_beam/m.png")
 
 ## m : entrée de materials.json ; files : chemins des textures (textures.json) pour reconnaître le pavé.
 static func kind(m: Dictionary, files: Array) -> String:
@@ -26,7 +37,7 @@ static func kind(m: Dictionary, files: Array) -> String:
 		return "foliage"
 	return ""
 
-static func make(k: String, m: Dictionary, tex: Callable) -> ShaderMaterial:
+static func make(k: String, m: Dictionary, tex: Callable, rel: Callable = Callable()) -> ShaderMaterial:
 	var sm := ShaderMaterial.new()
 	var base := Config.color(int(m["c"]))
 	match k:
@@ -77,6 +88,7 @@ static func make(k: String, m: Dictionary, tex: Callable) -> ShaderMaterial:
 			var off: Array = m["off"]
 			sm.set_shader_parameter("uv_scale", Vector2(float(rep[0]), float(rep[1])))
 			sm.set_shader_parameter("uv_offset", Vector2(float(off[0]), float(off[1])))
+			_facade_pbr(sm, m, tex, rel)
 		"foliage":
 			sm.shader = FOLIAGE
 			sm.set_shader_parameter("albedo_tex", tex.call(int(m["map"])))
@@ -85,3 +97,60 @@ static func make(k: String, m: Dictionary, tex: Callable) -> ShaderMaterial:
 			sm.set_shader_parameter("alpha_cut", float(m["at"]))
 			sm.set_shader_parameter("sway", float(Config.at("graphics.trees.sway")))
 	return sm
+
+## Style de la façade d'après son rang de profondeur (architecture.js RANK + variante + 1 ; +0,5 pour la tuile voisine) : plaster 1-4, timber 5-7, sandstone 8-10, modern 11,
+## gothic 12, shop 13-18, dormer 19, floodlit 23.
+static func facade_style(rank: float) -> String:
+	var r := int(floor(rank))
+	if r >= 1 and r <= 4:
+		return "plaster"
+	if r >= 5 and r <= 7:
+		return "timber"
+	if r >= 8 and r <= 10:
+		return "sandstone"
+	if r == 11:
+		return "modern"
+	if r == 12 or r == 23:
+		return "gothic"
+	if r >= 13 and r <= 18:
+		return "shop"
+	if r == 19:
+		return "dormer"
+	return ""
+
+static func _facade_pbr(sm: ShaderMaterial, m: Dictionary, tex: Callable, rel: Callable) -> void:
+	var bi := int(m["bmap"]) if m.has("bmap") else -1
+	var style := facade_style(float(m["rank"])) if m.has("rank") else ""
+	if bi < 0 or style == "" or not rel.is_valid() or "--dbg-nopbr" in OS.get_cmdline_user_args():
+		return
+	var bump: Texture2D = tex.call(bi)
+	var relief: Texture2D = rel.call(bi)
+	if bump == null or relief == null:
+		return
+	sm.set_shader_parameter("bump_tex", bump)
+	sm.set_shader_parameter("relief_tex", relief)
+	sm.set_shader_parameter("wood_a", PBR_WOOD_A)
+	sm.set_shader_parameter("wood_m", PBR_WOOD_M)
+	sm.set_shader_parameter("trim_wood", 1.0 if style == "timber" else 0.0)
+	match style:
+		"plaster", "dormer":
+			sm.set_shader_parameter("wall_a", PBR_PLASTER_A)
+			sm.set_shader_parameter("wall_m", PBR_PLASTER_M)
+			sm.set_shader_parameter("wall_scale", 1.6)
+			sm.set_shader_parameter("wall_amt", 0.75)
+		"timber":
+			sm.set_shader_parameter("wall_a", PBR_TIMBER_A)
+			sm.set_shader_parameter("wall_m", PBR_TIMBER_M)
+			sm.set_shader_parameter("wall_scale", 1.2)
+			sm.set_shader_parameter("wall_amt", 0.8)
+		"modern":
+			sm.set_shader_parameter("wall_a", PBR_STUCCO_A)
+			sm.set_shader_parameter("wall_m", PBR_STUCCO_M)
+			sm.set_shader_parameter("wall_scale", 2.0)
+			sm.set_shader_parameter("wall_amt", 0.6)
+		_:   # sandstone, gothic, shop (trumeaux de pierre) : grès
+			sm.set_shader_parameter("wall_a", PBR_STONE_A)
+			sm.set_shader_parameter("wall_m", PBR_STONE_M)
+			sm.set_shader_parameter("wall_scale", 2.4)
+			sm.set_shader_parameter("wall_amt", 0.9)
+	sm.set_shader_parameter("pbr_k", 1.0)

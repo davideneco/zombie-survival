@@ -1,0 +1,14 @@
+Textures PBR du port Godot (1k).
+Toutes sous licence CC0 1.0 (domaine public) de Poly Haven : https://polyhaven.com/license
+Aucune attribution requise ; téléchargées par tools/download-textures.mjs --godot.
+
+wall_plaster: Poly Haven "grey_plaster_02" (https://polyhaven.com/a/grey_plaster_02), CC0 1.0
+wall_stucco: Poly Haven "white_stucco" (https://polyhaven.com/a/white_stucco), CC0 1.0
+wall_stone: Poly Haven "red_sandstone_wall" (https://polyhaven.com/a/red_sandstone_wall), CC0 1.0
+wall_stone_big: Poly Haven "large_sandstone_blocks_01" (https://polyhaven.com/a/large_sandstone_blocks_01), CC0 1.0
+wall_brick: Poly Haven "red_brick" (https://polyhaven.com/a/red_brick), CC0 1.0
+wall_timber_plaster: Poly Haven "rough_plaster_03" (https://polyhaven.com/a/rough_plaster_03), CC0 1.0
+wood_beam: Poly Haven "dark_wood" (https://polyhaven.com/a/dark_wood), CC0 1.0
+wood_door: Poly Haven "dark_planks" (https://polyhaven.com/a/dark_planks), CC0 1.0
+roof_slate: Poly Haven "roof_slates_02" (https://polyhaven.com/a/roof_slates_02), CC0 1.0
+roof_clay: Poly Haven "clay_roof_tiles_02" (https://polyhaven.com/a/clay_roof_tiles_02), CC0 1.0
