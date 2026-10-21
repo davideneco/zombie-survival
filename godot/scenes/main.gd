@@ -872,6 +872,20 @@ func _debug_do() -> void:
 			"back":   # back:N : v0.29.0, the player steps N m backward (captures of the mystery box after buying a draw)
 				var fw: Vector3 = Game.player.forward()
 				Game.player.pos -= Vector3(fw.x, 0, fw.z).normalized() * float(c[1])
+			"tram-front", "tram-rear", "tram-side":   # v0.30.0 : tram-front:D[:S] : the player stands D m before the front nose (S m aside), facing it (captures)
+				var tr: TramSim = Game.rides.trams[0]
+				var nose: Dictionary = tr.mods[tr.n - 1] if c[0] != "tram-rear" else tr.mods[0]
+				var sg := 1.0 if c[0] != "tram-rear" else -1.0
+				var tv := Vector3(float(nose["tx"]), 0, float(nose["tz"])) * sg
+				var d := float(c[1]) if c.size() > 1 else 6.0
+				var side := float(c[2]) if c.size() > 2 else 0.0
+				var at := Vector3(float(nose["x"]), 0, float(nose["z"])) + tv * (tr.M / 2.0 + d) + Vector3(tv.z, 0, -tv.x) * side
+				if c[0] == "tram-side":
+					at = Vector3(float(tr.mods[2]["x"]), 0, float(tr.mods[2]["z"])) + Vector3(tv.z, 0, -tv.x) * d
+					tv = Vector3(tv.z, 0, -tv.x)
+				Game.player.pos = at
+				var look := (Vector3(float(nose["x"]), 0, float(nose["z"])) if c[0] != "tram-side" else Vector3(float(tr.mods[2]["x"]), 0, float(tr.mods[2]["z"]))) - at
+				Game.player.yaw = atan2(-look.x, -look.z)
 			"teddy":   # le prochain tirage de la boîte est le nounours
 				Game.machines.box.limit = Game.machines.box.uses + 1
 			"open-doors":

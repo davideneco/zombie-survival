@@ -81,7 +81,8 @@ func _view(t: Node, view: Node3D, meta: Dictionary, sim: TramSim) -> void:
 			lo = lo.min(p)
 			hi = hi.max(p)
 	var ext := hi - lo
-	t.check(ext.y > 3.3 and ext.y < 4.6 and is_finite(ext.x) and is_finite(ext.z), "vue : hauteur %.2f m" % ext.y)
+	# v0.30.0 : the single-arm pantograph reaches the contact wire (5.5 m)
+	t.check(ext.y > 3.3 and ext.y < 5.7 and is_finite(ext.x) and is_finite(ext.z), "vue : hauteur %.2f m" % ext.y)
 	t.check(maxf(ext.x, ext.z) > 22.5 and maxf(ext.x, ext.z) < 25.5, "vue : longueur %.1f m (rame de 23,5 m)" % maxf(ext.x, ext.z))
 
 func _all(n: Node, cls: String, out := []) -> Array:
@@ -95,15 +96,16 @@ func _all(n: Node, cls: String, out := []) -> Array:
 func _body_tris(view: Node3D, i: int) -> Array:
 	var tris: Array = []
 	var inner: Node3D = view.get_child(i).get_child(0)
-	var mi: MeshInstance3D = inner.get_child(0)
-	var arr: Array = mi.mesh.surface_get_arrays(0)
-	var pv: PackedVector3Array = arr[Mesh.ARRAY_VERTEX]
-	for k in range(0, pv.size(), 3):
-		var tri: Array = []
-		for j in 3:
-			var q := pv[k + j]
-			tri.append(Vector3(q.z, q.y, -q.x))   # inner tourne de PI/2 autour de y
-		tris.append(tri)
+	var mi: MeshInstance3D = inner.get_child(0).get_child(0)   # v0.30.0 : shell of TramBody (paint and glass surfaces)
+	for sf in mi.mesh.get_surface_count():
+		var arr: Array = mi.mesh.surface_get_arrays(sf)
+		var pv: PackedVector3Array = arr[Mesh.ARRAY_VERTEX]
+		for k in range(0, pv.size(), 3):
+			var tri: Array = []
+			for j in 3:
+				var q := pv[k + j]
+				tri.append(Vector3(q.z, q.y, -q.x))   # inner tourne de PI/2 autour de y
+			tris.append(tri)
 	return tris
 
 ## Premier triangle FACE AVANT (vu de `eye`) touché par le rayon, distance ; INF si aucun.
@@ -149,7 +151,7 @@ func _sight(t: Node, view: Node3D, meta: Dictionary, sim: TramSim) -> void:
 	# test du test : vu de dehors, 6 m devant le nez, le même rayon (en sens inverse) touche la caisse
 	var out_eye := Vector3(0, 1.9, -7.0)
 	var hit := _first_front_hit(tris, out_eye, Vector3(0, 0, 1), 20.0)
-	t.check(hit < 12.0, "de l'extérieur, le pare-brise (nez peint) est bien plein (%.2f m)" % hit)
+	t.check(hit < 12.0, "de l'extérieur, le pare-brise (verre du nez, v0.30.0) est bien plein (%.2f m)" % hit)
 	# passager assis (module 1) : regard vers l'allée, 2 m de visée
 	var sp: Dictionary = sim.model_seats[2]
 	var peye := Vector3(sp["eye"][0], sp["eye"][1], sp["eye"][2])
