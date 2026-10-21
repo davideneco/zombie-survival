@@ -431,6 +431,8 @@ func _on_box_event(name: String, _data: Dictionary) -> void:
 			play("nuke")
 		"offer":
 			play("powerup")
+		"leaving":   # v0.29.0 : the box shakes before flying away (existing sound)
+			play("rumble", 0.7)
 
 func _on_pap_event(name: String, _data: Dictionary) -> void:
 	match name:

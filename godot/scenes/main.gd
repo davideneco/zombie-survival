@@ -869,6 +869,9 @@ func _debug_do() -> void:
 			"box", "pap":
 				Game.points = maxi(Game.points, 100000)
 				Game.interact()
+			"back":   # back:N : v0.29.0, the player steps N m backward (captures of the mystery box after buying a draw)
+				var fw: Vector3 = Game.player.forward()
+				Game.player.pos -= Vector3(fw.x, 0, fw.z).normalized() * float(c[1])
 			"teddy":   # le prochain tirage de la boîte est le nounours
 				Game.machines.box.limit = Game.machines.box.uses + 1
 			"open-doors":

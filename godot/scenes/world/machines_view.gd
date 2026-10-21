@@ -1,6 +1,6 @@
 extends Node3D
-## Présentation de J6 (primitives) : boîte mystère (coffre, couvercle, tirage, faisceau, nounours, envol : les 19 emplacements sont dessinés ici, le monde
-## cuit n'en contient plus), Pack-a-Punch (l'arme qui entre, les étincelles et l'arme proposée : la machine, elle, est dans le monde cuit) et bonus au sol
+## Présentation de J6 : boîte mystère (v0.29.0 : modèle box_model.gd, animation BoxAnim.pose appliquée ici ; coffre, couvercle, tirage avec les vrais
+## modèles des 23 armes, faisceau, étincelles, fumée, nounours, envol et arrivée : les 19 emplacements sont dessinés ici, le monde cuit n'en contient plus), Pack-a-Punch (l'arme qui entre, les étincelles et l'arme proposée : la machine, elle, est dans le monde cuit) et bonus au sol
 ## (dodécaèdre lumineux, bidon d'essence). Les distributeurs d'atouts sont entièrement dans le monde cuit. Ne fait que lire Game.machines et Game.powerups.
 
 const WeaponModels := preload("res://scenes/weapon_models.gd")
@@ -15,11 +15,12 @@ var _pap: Node3D
 var _pap_parts: Dictionary = {}
 var _pu_nodes: Dictionary = {}    ## id du bonus -> Node3D
 var _time := 0.0
-var _spin_t := 0.0
-var _spin_k := 0
-var _shown_roll := ""
 var _pool_ids: Array = []
-var _display_id := ""
+var _gallery: Dictionary = {}     ## v0.29.0 : weapon id -> world model (BoxModel.weapon_model), shown by the active box
+var _gallery_id := ""
+var _gallery_parent: Node3D
+var _arrive_t := 1.0e9            ## v0.29.0 : seconds since the box arrived at its new place (view-only drop animation)
+var _last_active := -1
 
 static func _mat(color: Color, emissive := 0.0, metallic := 0.0, rough := 0.7) -> StandardMaterial3D:
 	var m := StandardMaterial3D.new()
@@ -81,105 +82,35 @@ func setup() -> void:
 				n.queue_free()
 
 # ------------------------------------------------------------------ boîte mystère
+## v0.29.0 : model in box_model.gd, animation = BoxAnim.pose (pure function of the sim, sim/box_anim.gd) applied here.
 func _build_box(n: Node3D) -> Dictionary:
-	var W := 1.7   # machines.js makeMysteryBox : 1,7 x 0,72 x 0,85
-	var H := 0.72
-	var D := 0.85
-	var wood := _mat(Color("3a2516"), 0.0, 0.0, 0.85)
-	var iron := _mat(Color("3a3b3e"), 0.0, 0.8, 0.45)
-	var glow := _mat(Color("6ac8ff"), 1.4)
-	_box(n, Vector3(W, H, D), wood, Vector3(0, H / 2.0 + 0.05, 0))
-	for sx in [-1.0, 1.0]:
-		_box(n, Vector3(0.16, 0.08, D + 0.04), iron, Vector3(sx * (W / 2.0 - 0.12), 0.04, 0))
-	for fz in [1.0, -1.0]:   # points d'interrogation lumineux sur les grandes faces
-		var q := _label(n, "?   ?   ?", 0.42, Vector3(0, H / 2.0 + 0.07, fz * (D / 2.0 + 0.012)), Color("6ac8ff"))
-		if fz < 0.0:
-			q.rotation.y = PI
-	var lid_pivot := Node3D.new()   # couvercle bombé sur charnières
-	lid_pivot.position = Vector3(0, H + 0.05, -D / 2.0)
-	n.add_child(lid_pivot)
-	var lm := MeshInstance3D.new()
-	var cyl := CylinderMesh.new()
-	cyl.top_radius = D / 2.0
-	cyl.bottom_radius = D / 2.0
-	cyl.height = W
-	cyl.radial_segments = 16
-	lm.mesh = cyl
-	lm.material_override = wood
-	lm.rotation.z = PI / 2.0
-	lm.scale = Vector3(0.45, 1.0, 1.0)
-	lm.position = Vector3(0, 0, D / 2.0)
-	lid_pivot.add_child(lm)
-	_box(lid_pivot, Vector3(W, 0.03, D), wood, Vector3(0, 0.0, D / 2.0))
-	for sx in [-0.55, 0.0, 0.55]:
-		_box(lid_pivot, Vector3(0.07, 0.2, D + 0.05), iron, Vector3(sx, 0.08, D / 2.0))
-	_box(n, Vector3(0.16, 0.2, 0.05), iron, Vector3(0, H - 0.02, D / 2.0 + 0.03))
-	var sign := Node3D.new()   # écriteau : « BOÎTE MYSTÈRE 950 PTS »
-	sign.position = Vector3(0, 1.45, 0)
-	n.add_child(sign)
-	_box(sign, Vector3(1.5, 0.5, 0.04), _mat(Color("0a0e14")), Vector3.ZERO)
-	_box(sign, Vector3(1.56, 0.04, 0.05), glow, Vector3(0, 0.27, 0))
-	_box(sign, Vector3(1.56, 0.04, 0.05), glow, Vector3(0, -0.27, 0))
-	_label(sign, "BOÎTE MYSTÈRE", 0.17, Vector3(0, 0.08, 0.03), Color("6ac8ff"))
-	_label(sign, "%d PTS" % int(Config.at("box.price")), 0.15, Vector3(0, -0.12, 0.03), Color("ffe08a"))
-	var disp := Node3D.new()
-	disp.visible = false
-	n.add_child(disp)
-	var name_lbl := _label(disp, "", 0.22, Vector3(0, 0.55, 0), Color("ffe08a"))
-	name_lbl.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	var gun := Node3D.new()
-	disp.add_child(gun)
-	var beam := MeshInstance3D.new()   # faisceau du tirage
-	var cm := CylinderMesh.new()
-	cm.top_radius = 0.35
-	cm.bottom_radius = 0.7
-	cm.height = 3.2
-	beam.mesh = cm
-	var bmat := StandardMaterial3D.new()
-	bmat.albedo_color = Color(1, 0.88, 0.54, 0.1)
-	bmat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	bmat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	bmat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-	bmat.cull_mode = BaseMaterial3D.CULL_DISABLED
-	beam.material_override = bmat
-	beam.position = Vector3(0, 2.1, 0)
-	beam.visible = false
-	n.add_child(beam)
-	var far := MeshInstance3D.new()    # repère de loin : faisceau bleu de 30 m (makeMysteryBox)
-	var fc := CylinderMesh.new()
-	fc.top_radius = 0.22
-	fc.bottom_radius = 0.32
-	fc.height = 30.0
-	fc.radial_segments = 14
-	far.mesh = fc
-	var fmat := StandardMaterial3D.new()
-	fmat.albedo_color = Color(0.37, 0.72, 1.0, 0.1)
-	fmat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	fmat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	fmat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-	fmat.cull_mode = BaseMaterial3D.CULL_DISABLED
-	far.material_override = fmat
-	far.position = Vector3(0, 15.0, 0)
-	n.add_child(far)
-	var teddy := _make_teddy()
-	teddy.visible = false
-	n.add_child(teddy)
-	return {"node": n, "lid": lid_pivot, "sign": sign, "disp": disp, "gun": gun, "name": name_lbl, "beam": beam, "bmat": bmat, "teddy": teddy}
+	return BoxModel.build(n)
 
 func _make_teddy() -> Node3D:
-	var t := Node3D.new()
-	var fur := _mat(Color("b07a45"), 0.0, 0.0, 0.9)
-	for spec in [[Vector3(0, 0.0, 0), 0.3], [Vector3(0, 0.38, 0), 0.22], [Vector3(-0.17, 0.55, 0), 0.08], [Vector3(0.17, 0.55, 0), 0.08], [Vector3(-0.28, 0.05, 0), 0.1], [Vector3(0.28, 0.05, 0), 0.1]]:
-		var mi := MeshInstance3D.new()
-		var s := SphereMesh.new()
-		s.radius = spec[1]
-		s.height = spec[1] * 2.0
-		mi.mesh = s
-		mi.material_override = fur
-		mi.position = spec[0]
-		t.add_child(mi)
-	t.scale = Vector3.ONE * 1.6
-	return t
+	return BoxModel.teddy()
+
+## The 23 weapons of the pool as world models, built once; parented to the display of the box that shows them.
+func _gallery_of(id: String) -> Node3D:
+	if not _gallery.has(id):
+		var g := BoxModel.weapon_model(id)
+		g.visible = false
+		_gallery[id] = g
+	return _gallery[id]
+
+func _show_weapon(P: Dictionary, id: String) -> void:
+	var disp: Node3D = P["disp"]
+	if _gallery_id == id and _gallery_parent == disp:
+		return
+	if _gallery_id != "" and _gallery.has(_gallery_id):
+		(_gallery[_gallery_id] as Node3D).visible = false
+	var g := _gallery_of(id)
+	if g.get_parent() != disp:
+		if g.get_parent() != null:
+			g.get_parent().remove_child(g)
+		disp.add_child(g)
+	g.visible = true
+	_gallery_id = id
+	_gallery_parent = disp
 
 ## Arme affichée au-dessus de la boîte : le vrai modèle (WeaponModels), centré sur sa longueur, teinté selon le niveau du Pack-a-Punch.
 func _fill_gun(gun: Node3D, id: String, pap_lv: int) -> void:
@@ -200,81 +131,67 @@ func _fill_gun(gun: Node3D, id: String, pap_lv: int) -> void:
 	center.add_child(model)
 	model.position = Basis(Vector3.UP, PI / 2.0) * Vector3(0, 0, (float(e["length"]) / 2.0 - float(e["grip"])) * k)   # milieu du modèle à l'origine
 
-func _update_box(i: int, active: bool, dt: float) -> void:
+func _update_box(i: int, _active: bool, _dt: float) -> void:
 	var P: Dictionary = _box_parts[i]
 	var n: Node3D = P["node"]
 	var box: MysteryBox = Game.machines.box
-	n.visible = active or (not box.move.is_empty() and box.move["from"] == i)
+	var arrive := _arrive_t if i == box.active else 1.0e9
+	var A := BoxAnim.pose(box, i, _time, arrive, _pool_ids.size())
+	n.visible = bool(A["shown"]) or (P["poof"] as GPUParticles3D).emitting
+	(P["far"] as Node3D).visible = i == box.active and box.move.is_empty() and box.roll.is_empty() and arrive > BoxAnim.ARRIVE_TIME * 0.5
 	if not n.visible:
 		return
-	var lid: Node3D = P["lid"]
-	var disp: Node3D = P["disp"]
+	var body: Node3D = P["body"]
+	body.visible = bool(A["shown"]) and float(A["scale"]) > 0.001
+	var sh := float(A["shake"])
+	body.position = Vector3(sin(_time * 53.0) * sh, float(A["lift"]) + absf(sin(_time * 41.0)) * sh * 0.5, cos(_time * 47.0) * sh)
+	body.rotation = Vector3(sin(_time * 31.0) * sh * 0.6, float(A["box_yaw"]), cos(_time * 37.0) * sh * 0.6)
+	body.scale = Vector3.ONE * maxf(0.001, float(A["scale"]))
+	(P["lid"] as Node3D).rotation.x = -float(A["lid"])
+	var glow := float(A["glow"])
+	var red := float(A["beam_red"])
+	var col := BoxModel.GLOW.lerp(BoxModel.RED, red)
+	(P["inner"] as StandardMaterial3D).albedo_color = col * (0.25 + 2.2 * glow) if glow > 0.0 else Color(0.02, 0.03, 0.05)
+	(P["leak"] as StandardMaterial3D).albedo_color = col * clampf(glow * 3.0, 0.0, 2.0) if float(A["lid"]) < 0.05 else Color(0.03, 0.03, 0.03)
 	var beam: MeshInstance3D = P["beam"]
-	var teddy: Node3D = P["teddy"]
-	var roll := box.roll
-	var open := 0.0
-	disp.visible = false
-	beam.visible = false
-	teddy.visible = false
-	P["sign"].visible = roll.is_empty() or not active
-	if active and not roll.is_empty():
-		var ph := String(roll["phase"])
-		var r := float(roll["age"])
-		beam.visible = ph != "sink"
-		(P["bmat"] as StandardMaterial3D).albedo_color.a = 0.1 + 0.05 * sin(r * 18.0) if ph == "roll" else 0.07
-		match ph:
-			"roll":
-				var t := float(roll["t"])
-				var p := minf(1.0, t / float(Config.at("box.spin")))
-				open = minf(1.25, t * 2.5)
-				disp.visible = true
-				disp.position.y = 0.7 + 1.0 * (1.0 - pow(1.0 - minf(1.0, t / 0.9), 2.0)) + sin(r * 5.0) * 0.04
-				disp.rotation.y += dt * (5.0 - 3.5 * p)
-				_spin_t -= dt
-				if _spin_t <= 0.0:   # les armes défilent de plus en plus lentement
-					_spin_t = 0.055 + 0.42 * p * p * p
-					_spin_k += 1
-					_set_display(P, _pool_ids[(_spin_k * 7 + hash(String(roll["result"]))) % _pool_ids.size()], false)
-			"teddy":
-				open = 1.25
-				teddy.visible = true
-				var t2 := float(roll["t"])
-				teddy.position = Vector3(0, 1.0 + minf(1.0, t2) * 0.5 + absf(sin(t2 * 7.0)) * 0.12, 0)
-				teddy.rotation.y += dt * 4.0
-			"offer":
-				open = 1.25
-				disp.visible = float(roll["offer_t"]) > Rules.BOX_OFFER_WARN or int(r * 8.0) % 2 == 0
-				disp.position.y = 1.7 + sin(r * 3.0) * 0.07
-				disp.rotation.y += dt * 1.4
-				_set_display(P, String(roll["result"]), true)
-			"sink":
-				var ts := float(roll["t"])
-				open = maxf(0.0, 1.25 - ts * 3.0)
-				disp.visible = true
-				disp.position.y = maxf(0.6, disp.position.y - dt * 3.0)
-				disp.scale = Vector3.ONE * maxf(0.05, 1.0 - ts * 1.6)
-		if ph != "sink":
-			disp.scale = Vector3.ONE
-	elif not box.move.is_empty() and box.move["from"] == i:   # nounours, puis la boîte s'envole
-		var mt := float(box.move["t"])
-		open = 0.0
-		teddy.visible = mt < 2.4
-		teddy.position = Vector3(0, 0.9 + minf(1.0, mt) * 0.6, 0)
-		teddy.rotation.y += dt * 3.0
-		if mt > 1.2:
-			n.position.y = (mt - 1.2) * (mt - 1.2) * 6.0
-			n.rotation.y += dt * 2.0 * (mt - 1.2)
-	else:
-		_shown_roll = ""
-	lid.rotation.x = -open
-
-func _set_display(P: Dictionary, id: String, final: bool) -> void:
-	if _display_id == id and final:
-		return
-	_display_id = id
-	_fill_gun(P["gun"], id, 0)
+	beam.visible = float(A["beam"]) > 0.01
+	(P["bmat"] as StandardMaterial3D).albedo_color = Color(col.r, col.g, col.b, 0.07 * float(A["beam"]))
+	P["sign"].visible = box.roll.is_empty() and box.move.is_empty()
+	for q: Label3D in P["marks"]:
+		q.modulate = col.lerp(Color(0.75, 0.9, 1.0), 0.4 * glow)
+	var disp: Node3D = P["disp"]
+	disp.visible = bool(A["gun"])
+	if disp.visible:
+		var k := int(A["gun_k"])
+		var id: String = String(box.roll["result"]) if k < 0 or box.roll.is_empty() else String(_pool_ids[k])
+		if box.roll.is_empty():
+			id = _gallery_id
+		_show_weapon(P, id)
+		disp.position = Vector3(0, float(A["gun_y"]), 0)
+		disp.rotation.y = float(A["gun_yaw"])
+		disp.scale = Vector3.ONE * float(A["gun_scale"])
 	var lbl: Label3D = P["name"]
-	lbl.text = String(Config.weapon(id)["name"]) if final else ""
+	lbl.visible = bool(A["name"]) and bool(A["blink"]) and not box.roll.is_empty()
+	if lbl.visible:
+		lbl.text = String(Config.weapon(String(box.roll["result"]))["name"])
+		disp.visible = bool(A["blink"])
+	var td: Node3D = P["teddy"]
+	td.visible = bool(A["teddy"])
+	if td.visible:
+		td.position = Vector3(0, float(A["teddy_y"]), 0)
+		td.rotation = Vector3(0, float(A["teddy_yaw"]), float(A["teddy_shake"]))
+	(P["sparks"] as GPUParticles3D).emitting = float(A["sparks"]) > 0.0
+	(P["sparks"] as GPUParticles3D).amount_ratio = clampf(float(A["sparks"]), 0.05, 1.0)
+	(P["sparks"] as GPUParticles3D).position.y = BoxModel.TOP + float(A["lift"])
+	(P["smoke"] as GPUParticles3D).emitting = float(A["smoke"]) > 0.0
+	var poof := float(A["poof"]) > 0.0
+	if poof and not bool(P.get("poofed", false)):
+		var pp: GPUParticles3D = P["poof"]
+		pp.position.y = BoxModel.TOP + float(A["lift"])
+		pp.restart()
+		pp.emitting = true
+		Sfx.play("dirt", 0.8, n.global_position + Vector3(0, 1.0, 0))
+	P["poofed"] = poof
 
 # ------------------------------------------------------------------ Pack-a-Punch
 func _build_pap(n: Node3D) -> void:
@@ -426,14 +343,33 @@ func _update_powerups(dt: float) -> void:
 func warm_show(on: bool) -> void:
 	set_process(not on)
 	if not on:
+		for g: Node3D in _gallery.values():
+			g.visible = false
+			g.position = Vector3.ZERO
+		_gallery_id = ""
+		for P: Dictionary in _box_parts:
+			for k in ["sparks", "smoke", "poof"]:
+				(P[k] as GPUParticles3D).emitting = false
 		return
-	for P: Dictionary in _box_parts:
+	for P: Dictionary in _box_parts:   # v0.29.0 : chest, open lid, inside light, beam, teddy, sparks, smoke, the 23 weapons at once
 		(P["node"] as Node3D).visible = true
+		(P["body"] as Node3D).visible = true
+		(P["lid"] as Node3D).rotation.x = -BoxAnim.LID_OPEN
 		(P["beam"] as Node3D).visible = true
 		(P["teddy"] as Node3D).visible = true
 		(P["disp"] as Node3D).visible = true
-		_fill_gun(P["gun"], String(_pool_ids[0]), 0)
 		(P["name"] as Label3D).text = "ARME"
+		(P["name"] as Label3D).visible = true
+		for k in ["sparks", "smoke", "poof"]:
+			(P[k] as GPUParticles3D).emitting = true
+	if not _box_parts.is_empty():
+		var P0: Dictionary = _box_parts[Game.machines.box.active]
+		for j in _pool_ids.size():
+			var g := _gallery_of(String(_pool_ids[j]))
+			if g.get_parent() == null:
+				P0["disp"].add_child(g)
+			g.position = Vector3((float(j % 6) - 2.5) * 0.4, float(j / 6) * 0.35, 0)
+			g.visible = true
 	if _pap != null:
 		(_pap_parts["gun"] as Node3D).visible = true
 		_fill_gun(_pap_parts["gun"], String(_pool_ids[0]), 1)
@@ -450,6 +386,12 @@ func _tick(dt: float) -> void:
 	_time += dt
 	if Game.machines != null:
 		var box: MysteryBox = Game.machines.box
+		_arrive_t += dt
+		if box.active != _last_active:   # v0.29.0 : arrival at a new place (not at the start of the game)
+			_arrive_t = 0.0 if _last_active >= 0 else 1.0e9
+			_last_active = box.active
+			if _arrive_t == 0.0 and box.active < _box_parts.size():
+				Sfx.play("knock", 0.9, (_box_parts[box.active]["node"] as Node3D).global_position)
 		for i in _box_parts.size():
 			var n: Node3D = _box_parts[i]["node"]
 			if box.move.is_empty() and n.position.y != _box_base_y(i):   # revient posée après un envol
