@@ -75,9 +75,10 @@ for f in project.binary data/config.json data/arena.json data/cathedral.json dat
 	data/graphics/lights.json data/world/vehicles.json data/world/instances.bin data/world/nav/blocked.u8.gz data/world/collision/segs.f64 \
 	assets/baked/c3.png assets/textures/cobble/diff.jpg assets/graphics/graphics.json assets/graphics/zombie_geo.bin assets/graphics/map.png \
 	assets/tram/car.bin assets/tram/car_map.png assets/audio/music/music_0.ogg.import assets/weapons/LICENSE.txt assets/zombies/LICENSE.txt assets/characters/LICENSE.txt \
-	data/world_collision_extra.json assets/pbr/LICENSE.txt assets/pbr/wall_stone/a.png.remap assets/pbr/wall_stone/m.png.remap; do
+	data/world_collision_extra.json assets/pbr/LICENSE.txt assets/pbr/wall_stone/a.png.import assets/pbr/wall_stone/m.png.import; do
 	grep -q "	$f\$" "$SCRATCH/pck.txt" || fail "absent du .pck : $f"
 done
+[ "$(grep -c "\.godot/imported/a.png-.*bptc.ctex" "$SCRATCH/pck.txt")" -ge 10 ] || fail "textures PBR (ctex) absentes du .pck"
 [ "$(grep -c '	data/world/tiles/' "$SCRATCH/pck.txt")" = "$(ls "$PROJ/data/world/tiles" | wc -l)" ] || fail "tuiles du monde manquantes dans le .pck"
 file "$APP/Zombie.exe" | grep -q 'PE32+ executable.*x86-64' || fail "Zombie.exe n'est pas un PE x86-64"
 
