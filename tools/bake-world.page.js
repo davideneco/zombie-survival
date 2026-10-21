@@ -12,6 +12,7 @@
   const v3 = (v) => ({ x: v.x, y: v.y, z: v.z });
   const num = (v) => (Number.isFinite(v) ? v : (v > 0 ? 1e30 : -1e30)); // JSON n'a pas Infinity (les .f64 le portent tel quel)
   const stats = {};
+  let flippedTris = 0;   // triangles retournés pour suivre leurs normales (v0.23.1)
 
   // ------------------------------------------------------------ collision
   const segIdx = new Map();
@@ -279,7 +280,18 @@
           } else B.tan.push(0, 0, 0, 1);
           return k;
         });
-        if (detH) B.idx.push(ids[0], ids[2], ids[1]); else B.idx.push(ids[0], ids[1], ids[2]);
+        // v0.23.1 : sens d'enroulement cohérent avec les normales stockées. Le JS dessine en double face, donc ne s'en aperçoit pas ; une face dont l'enroulement
+        // est contraire à sa normale est éclairée à l'envers (noire : 65 % des toits, 49 346 triangles) ou, en simple face, coupée de son bon côté.
+        let o1 = detH ? 2 : 1, o2 = detH ? 1 : 2;
+        {
+          const ax = wp[a * 3], ay = wp[a * 3 + 1], az = wp[a * 3 + 2];
+          const abx = wp[(o1 === 1 ? b : c) * 3] - ax, aby = wp[(o1 === 1 ? b : c) * 3 + 1] - ay, abz = wp[(o1 === 1 ? b : c) * 3 + 2] - az;
+          const acx = wp[(o2 === 1 ? b : c) * 3] - ax, acy = wp[(o2 === 1 ? b : c) * 3 + 1] - ay, acz = wp[(o2 === 1 ? b : c) * 3 + 2] - az;
+          const fx = aby * acz - abz * acy, fy = abz * acx - abx * acz, fz = abx * acy - aby * acx;
+          const sx = wn[a * 3] + wn[b * 3] + wn[c * 3], sy = wn[a * 3 + 1] + wn[b * 3 + 1] + wn[c * 3 + 1], sz = wn[a * 3 + 2] + wn[b * 3 + 2] + wn[c * 3 + 2];
+          if (fx * sx + fy * sy + fz * sz < 0 && fx * fx + fy * fy + fz * fz > 1e-14) { const tmp = o1; o1 = o2; o2 = tmp; flippedTris++; }
+        }
+        B.idx.push(ids[0], ids[o1], ids[o2]);
       }
     }
   }
@@ -331,6 +343,7 @@
     doorPacks.push([...bk.values()].reduce((a, B) => a + B.idx.length / 3, 0));
   }
   stats.doorTriangles = doorPacks.reduce((a, b) => a + b, 0);
+  stats.flippedTris = flippedTris;
 
   // ------------------------------------------------------------ instances (arbres, mobilier, rails…)
   const instMeta = [], instBlobs = [];
