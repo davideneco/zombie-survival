@@ -7,6 +7,8 @@ render_mode cull_disabled;
 uniform sampler2D albedo_tex : source_color, repeat_enable, filter_linear_mipmap_anisotropic;
 uniform sampler2D pbr_a : source_color, repeat_enable, filter_linear_mipmap_anisotropic;
 uniform sampler2D pbr_m : hint_default_white, repeat_enable, filter_linear_mipmap_anisotropic;
+uniform sampler2D slate_a : source_color, repeat_enable, filter_linear_mipmap_anisotropic;
+uniform sampler2D slate_m : hint_default_white, repeat_enable, filter_linear_mipmap_anisotropic;
 uniform float pbr_k = 1.0;
 uniform float pbr_scale = 0.85;     // répétitions par unité d'UV du JS (1 unité = 3 m environ)
 uniform float amt = 0.75;
@@ -24,8 +26,12 @@ void fragment() {
 	float ao = 1.0;
 	if (pbr_k > 0.5) {
 		vec2 uv = UV * pbr_scale;
-		vec3 a = mix(vec3(1.0), texture(pbr_a, uv).rgb * 2.0, amt);
-		vec4 m = texture(pbr_m, uv);
+		// toits gris (ardoise : teinte de sommet peu saturée) : ardoise PBR ; sinon tuiles de terre cuite
+		float mx = max(COLOR.r, max(COLOR.g, COLOR.b));
+		float sat = (mx - min(COLOR.r, min(COLOR.g, COLOR.b))) / max(mx, 1e-3);
+		bool slate = sat < 0.16;
+		vec3 a = mix(vec3(1.0), (slate ? texture(slate_a, uv * 0.8).rgb : texture(pbr_a, uv).rgb) * 2.0, amt);
+		vec4 m = slate ? texture(slate_m, uv * 0.8) : texture(pbr_m, uv);
 		col *= a;
 		rough = mix(0.85, m.b, 0.8);
 		ao = mix(1.0, m.a, 0.5);

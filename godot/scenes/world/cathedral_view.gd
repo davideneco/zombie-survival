@@ -163,7 +163,7 @@ func _build_piers() -> void:
 			_stone.ao = 1.0
 			_stone.quad(Vector3(SKIN, y1, z - w * 0.5), Vector3(SKIN + d - 0.3, y1, z - w * 0.5), Vector3(SKIN + d - 0.3, y1 + 0.0, z + w * 0.5), Vector3(SKIN, y1, z + w * 0.5), Vector3.UP)
 			# niche à statue dans le fût
-			if i < 3:
+			if i < 3 and not corner:
 				_add_statue(Vector3(SKIN + d + 0.08, (y0 + y1) * 0.5 - 1.0, z), 2.2, Basis.IDENTITY, false)
 		# pinacle : fût carré, puis flèche à quatre pans
 		var wt := w0 - 0.2 * 3

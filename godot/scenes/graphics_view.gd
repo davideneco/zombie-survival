@@ -26,6 +26,8 @@ const THREE_TO_GODOT := 1.0 / PI
 const TONE_K := 1.0
 const GRADE_CONTRAST := 1.07
 const GRADE_SATURATION := 1.12
+var _fog_base := FOG_DENSITY
+var _dbg_fogday := OS.get_cmdline_user_args().has("--dbg-fogday")
 var _dbg_nograde := OS.get_cmdline_user_args().has("--dbg-nograde")
 ## Fond de ciel mesuré contre le JS : facteur appliqué à l'exposition.
 
@@ -146,7 +148,8 @@ func _build_environment() -> void:
 	env.fog_height = 3.0
 	env.fog_height_density = 0.1
 	_set_atmosphere(0.0)
-	_set_fog(FOG_DENSITY_ARENA if arena else FOG_DENSITY)
+	_fog_base = FOG_DENSITY_ARENA if arena else FOG_DENSITY
+	_set_fog(_fog_base)
 	# halo (Haute) : réglé par _apply_glow
 	env.glow_enabled = false
 	world_env = WorldEnvironment.new()
@@ -366,6 +369,8 @@ func set_sky_k(k: float) -> void:
 	_hemi_k = _pick_n(SKY_HEMI, k)
 	_last_brightness = -1.0   # relance le calcul de l'ambiance avec la nouvelle intensité
 	env.fog_light_color = _pick_c(SKY_FOG, k)
+	if not _dbg_fogday:   # v0.24.5 : de jour le brouillard (celui de la nuit du JS) est ramené à 40 % : l'aube et le jour ne sont plus laiteux
+		_set_fog(_fog_base * (1.0 - 0.6 * _sm(clampf((k - 0.2) / 0.5, 0.0, 1.0))))
 	_set_atmosphere(k)
 	_set_fog(_pick_n(SKY_DENSITY, k) * (1.15 if arena else 1.0))
 	moon.light_color = _pick_c(SKY_SUN, k)

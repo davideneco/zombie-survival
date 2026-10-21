@@ -152,7 +152,7 @@ func _surfaces(t: Node) -> void:
 	var files: Array = []
 	for tx: Dictionary in JSON.parse_string(FileAccess.get_file_as_string("res://data/world/textures.json")):
 		files.append(String(tx["file"]))
-	var count := {"": 0, "ground": 0, "water": 0, "facade": 0, "foliage": 0, "roof": 0}
+	var count := {"": 0, "ground": 0, "water": 0, "facade": 0, "foliage": 0, "roof": 0, "stone": 0}
 	var mats: Array = JSON.parse_string(FileAccess.get_file_as_string("res://data/world/materials.json"))
 	for i in mats.size():
 		count[Surfaces.kind(mats[i], files)] += 1

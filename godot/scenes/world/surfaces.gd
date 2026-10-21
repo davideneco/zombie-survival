@@ -11,8 +11,13 @@ const GfxAssets := preload("res://scenes/gfx_assets.gd")
 const GROUND := preload("res://shaders/ground.gdshader")
 const WATER := preload("res://shaders/water.gdshader")
 const FACADE := preload("res://shaders/facade.gdshader")
+const STONE := preload("res://shaders/stone.gdshader")
+const PBR_STONE_BIG_A := preload("res://assets/pbr/wall_stone_big/a.png")
+const PBR_STONE_BIG_M := preload("res://assets/pbr/wall_stone_big/m.png")
 const ROOF := preload("res://shaders/roof.gdshader")
 const PBR_ROOF_A := preload("res://assets/pbr/roof_clay/a.png")
+const PBR_SLATE_A := preload("res://assets/pbr/roof_slate/a.png")
+const PBR_SLATE_M := preload("res://assets/pbr/roof_slate/m.png")
 const PBR_ROOF_M := preload("res://assets/pbr/roof_clay/m.png")
 const FOLIAGE := preload("res://shaders/foliage.gdshader")
 ## v0.24.1 : matériaux PBR des façades (godot/assets/pbr/, tools/pack-pbr.py ; a : détail d'albédo, m : normale RG + rugosité + AO ; VRAM compressés à l'import)
@@ -36,6 +41,8 @@ static func kind(m: Dictionary, files: Array) -> String:
 		return "water"
 	if bool(m["vc"]) and map >= 0 and int(m["emap"]) >= 0 and "--dbg-nofacade" not in OS.get_cmdline_user_args():
 		return "facade"
+	if (int(m["c"]) == 0xa87c6a or int(m["c"]) == 0xa88070 or int(m["c"]) == 0x8a6e60) and map < 0 and not bool(m["vc"]) and int(m["side"]) != 1 and "--dbg-nostone" not in OS.get_cmdline_user_args():
+		return "stone"   # v0.24.5 : grès de la cathédrale (PORTAL, tour, nef, contreforts du JS) : même pierre que la peau de la façade
 	if bool(m["vc"]) and map >= 0 and int(m["nmap"]) >= 0 and int(m["rmap"]) >= 0 and int(m["emap"]) < 0 and int(m["side"]) == 2 and int(m["bmap"]) < 0 \
 			and "--dbg-noroof" not in OS.get_cmdline_user_args():
 		return "roof"
@@ -95,11 +102,18 @@ static func make(k: String, m: Dictionary, tex: Callable, rel: Callable = Callab
 			sm.set_shader_parameter("uv_scale", Vector2(float(rep[0]), float(rep[1])))
 			sm.set_shader_parameter("uv_offset", Vector2(float(off[0]), float(off[1])))
 			_facade_pbr(sm, m, tex, rel)
+		"stone":
+			sm.shader = STONE
+			sm.set_shader_parameter("stone_a", PBR_STONE_BIG_A)
+			sm.set_shader_parameter("stone_m", PBR_STONE_BIG_M)
+			sm.set_shader_parameter("night", 0.0)
 		"roof":
 			sm.shader = ROOF
 			sm.set_shader_parameter("albedo_tex", tex.call(int(m["map"])))
 			sm.set_shader_parameter("pbr_a", PBR_ROOF_A)
 			sm.set_shader_parameter("pbr_m", PBR_ROOF_M)
+			sm.set_shader_parameter("slate_a", PBR_SLATE_A)
+			sm.set_shader_parameter("slate_m", PBR_SLATE_M)
 		"foliage":
 			sm.shader = FOLIAGE
 			sm.set_shader_parameter("albedo_tex", tex.call(int(m["map"])))
