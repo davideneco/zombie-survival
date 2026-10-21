@@ -321,7 +321,10 @@ func _connect_signals() -> void:
 	Game.round_started.connect(_on_round_started)
 	Game.round_ended.connect(_on_round_ended)
 	Game.weapon_acquired.connect(func(_id: String) -> void: play("buy"))
-	Game.perk_acquired.connect(func(_id: String) -> void: play("buy"))
+	Game.perk_acquired.connect(func(id: String) -> void:
+		play("buy")
+		play("jingle", 0.55, Vector3.INF, PERK_PITCH.get(id, 1.0)))   # v0.27.0 : petit air propre à chaque distributeur
+	Game.perk_event.connect(_on_perk_event)
 	Game.vaulted.connect(func() -> void: play("vault"))
 	Game.unstuck.connect(func(_a: Vector2, _b: Vector2, _d: float, _c: bool) -> void: play("vault"))
 	Game.door_opened.connect(func(_id: int) -> void: play("buy"))
@@ -332,6 +335,29 @@ func _connect_signals() -> void:
 	Game.pap_event.connect(_on_pap_event)
 	Game.weapon_event.connect(_on_weapon_event)
 	Game.ride_event.connect(_on_ride_event)
+
+## v0.27.0 : hauteur du jingle d'achat de chaque atout (le même air, transposé : on reconnaît la machine à l'oreille).
+const PERK_PITCH := {"juggernog": 0.8, "speedcola": 1.12, "doubletap": 1.0, "quickrevive": 1.25, "mulekick": 0.9, "staminup": 1.18, "phdflopper": 0.85,
+	"deadshot": 0.75, "electriccherry": 1.35, "widowswine": 0.7, "vultureaid": 0.95, "tombstone": 0.66, "dyingwish": 1.5, "stronghold": 0.84, "deathperception": 1.08, "bandolier": 1.05}
+
+func _on_perk_event(name: String, data: Dictionary) -> void:
+	var pos: Vector3 = data.get("pos", Vector3.INF)
+	match name:
+		"cherry":
+			play("tram_switch", 0.9, pos, 1.7)
+			play("glass", 0.5, pos, 1.6)
+		"web":
+			play("dirt", 0.8, pos, 0.7)
+		"wish":
+			play("bell", 0.9, Vector3.INF, 1.3)
+		"crit":
+			play("hit_head", 0.45, Vector3.INF, 1.35)
+		"vulture_pick":
+			play("powerup", 0.5, Vector3.INF, 1.5)
+		"tomb_pick":
+			play("jingle", 0.7, Vector3.INF, 0.66)
+		"tomb":
+			play("bell", 0.5, pos, 0.6)
 
 ## Un tir : une seule fois par pas de simulation (un fusil à pompe émet un signal par plomb).
 func _on_shot(_origin: Vector3, _end: Vector3) -> void:

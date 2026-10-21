@@ -197,6 +197,8 @@ func step(g: Node, dt: float, input_in: Dictionary) -> void:
 				break
 	if current == w and w.reloading and not was_reloading:
 		g.weapon_event.emit("reload", {"id": w.id, "cat": String(w.cfg["cat"]), "time": float(w.cfg["reloadTime"])})
+		if g.has_method("on_reload_start"):   # v0.27.0 : Cerise-foudre
+			g.on_reload_start(w)
 	_update_melee(g, dt)
 	blast.update_shells(g, dt)
 	blast.update_nades(g, dt)

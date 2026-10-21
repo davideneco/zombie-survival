@@ -64,6 +64,9 @@ static func build_perk(m: Dictionary) -> Node3D:
 	var col := Color(String(m.get("color", "#888888")))
 	var dark := Color("17181b")
 	var body := _mat(col.darkened(0.15), 0.0, 0.35, 0.42)
+	body.emission_enabled = true   # une lueur propre : lisible la nuit, même pour les couleurs sombres (Veuve noire)
+	body.emission = col.lightened(0.3)
+	body.emission_energy_multiplier = 0.12
 	var trim := _mat(dark, 0.0, 0.6, 0.35)
 	var glow := _mat(col.lightened(0.25), 1.6)
 	var W := 1.15
@@ -73,7 +76,7 @@ static func build_perk(m: Dictionary) -> Node3D:
 	_box(n, Vector3(W, H, D), body, Vector3(0, 0.12 + H / 2.0, 0))                          # caisse
 	for sx in [-1.0, 1.0]:                                                                  # montants de façade
 		_box(n, Vector3(0.09, H, 0.06), trim, Vector3(sx * (W / 2.0 - 0.02), 0.12 + H / 2.0, D / 2.0 + 0.01))
-	var panel := _mat(col.lightened(0.45), 0.9, 0.0, 0.15)                                  # vitrine lumineuse
+	var panel := _mat(col.lightened(0.2), 0.55, 0.0, 0.15)                                  # vitrine lumineuse
 	_box(n, Vector3(W - 0.3, 1.1, 0.04), panel, Vector3(0, 1.32, D / 2.0 + 0.01))
 	_box(n, Vector3(0.62, 0.62, 0.05), _mat(dark, 0.0, 0.2, 0.5), Vector3(0, 1.42, D / 2.0 + 0.03))   # médaillon du logo
 	_box(n, Vector3(0.66, 0.04, 0.06), glow, Vector3(0, 1.75, D / 2.0 + 0.04))
@@ -90,7 +93,7 @@ static func build_perk(m: Dictionary) -> Node3D:
 		price = Machines.perk_price(String(m["id"]))
 	_box(n, Vector3(0.62, 0.17, 0.04), _mat(Color("0b0b0d")), Vector3(0, 0.66, D / 2.0 + 0.02))   # plaque du prix
 	_label(n, "%d PTS" % price, 0.12, Vector3(0, 0.66, D / 2.0 + 0.045), Color("ffe08a"), 8)
-	_light(n, col.lightened(0.2), Vector3(0, 1.6, D / 2.0 + 0.6), 0.8, 3.6)
+	_light(n, col.lightened(0.35), Vector3(0, 1.6, D / 2.0 + 0.7), 1.1, 4.2)
 	return n
 
 ## Porte de sortie (mode Zone unique). m : { price }.

@@ -609,7 +609,8 @@ func _update_perks_buffs(dt: float) -> void:
 			pc.tooltip_text = String(pd["name"])
 			pc.add_theme_stylebox_override("panel", UiTheme.box(Color(String(pd["color"])), Color(1, 1, 1, 0.8), 2, 15, 0))
 			pc.mouse_filter = Control.MOUSE_FILTER_IGNORE
-			var l := _lbl(pc, String(pd["letter"]), 17, Color.WHITE, HORIZONTAL_ALIGNMENT_CENTER)
+			var bgc := Color(String(pd["color"]))
+			var l := _lbl(pc, String(pd["letter"]), 17, Color("1a1a1a") if bgc.get_luminance() > 0.6 else Color.WHITE, HORIZONTAL_ALIGNMENT_CENTER)   # v0.27.0 : fond clair -> lettre sombre
 			l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 			l.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 			_perks_row.add_child(pc)
@@ -620,14 +621,29 @@ func _update_perks_buffs(dt: float) -> void:
 			want["insta"] = "MORT INSTANTANÉE (%ds)" % ceili(pu.insta_kill)
 		if pu.double_points > 0.0:
 			want["double"] = "POINTS DOUBLES (%ds)" % ceili(pu.double_points)
+	var pfx: PerkFx = Game.pfx   # v0.27.0 : états des nouveaux atouts
+	if pfx != null and Game.player != null:
+		if pfx.invuln > 0.0:
+			want["wish"] = "ULTIME VOLONTÉ : INVULNÉRABLE (%ds)" % ceili(pfx.invuln)
+		if pfx.anchored(Game):
+			want["bastion"] = "BASTION : -30 % DE DÉGÂTS"
+		if not pfx.tomb.is_empty():
+			var tp: Vector3 = pfx.tomb["pos"]
+			want["tomb"] = "TOMBE : %d m · %ds%s" % [roundi(Vector2(tp.x - Game.player.pos.x, tp.z - Game.player.pos.z).length()), ceili(float(pfx.tomb["life"])), "" if float(pfx.tomb["arm"]) <= 0.0 else " (pas encore)"]
 	for k: String in want:
 		if not _buff_labels.has(k):
 			var pc := PanelContainer.new()
 			var bg := Color(180 / 255.0, 20 / 255.0, 20 / 255.0, 0.65) if k == "insta" else Color(180 / 255.0, 140 / 255.0, 20 / 255.0, 0.65)
 			var bd := Color("ff3333") if k == "insta" else Color("ffd24a")
+			if k == "bastion":
+				bg = Color(0.17, 0.31, 0.49, 0.7)
+				bd = Color("7fa8e0")
+			elif k == "tomb":
+				bg = Color(0.3, 0.3, 0.32, 0.7)
+				bd = Color("e6e6e6")
 			pc.add_theme_stylebox_override("panel", UiTheme.box(bg, bd, 1, 4, 3))
 			pc.mouse_filter = Control.MOUSE_FILTER_IGNORE
-			var l := _lbl(pc, "", 20, Color("ff7777") if k == "insta" else Color("ffe666"), HORIZONTAL_ALIGNMENT_CENTER)
+			var l := _lbl(pc, "", 20, Color("ff7777") if k == "insta" else (Color("cfe2ff") if k == "bastion" else (Color("f0f0f0") if k == "tomb" else Color("ffe666"))), HORIZONTAL_ALIGNMENT_CENTER)
 			pc.set_meta("label", l)
 			_buffs.add_child(pc)
 			_buff_labels[k] = pc

@@ -72,15 +72,24 @@ func _draw() -> void:
 	draw_line(Vector2(c.x - r, c.y), Vector2(c.x + r, c.y), ring, 1.0)
 	if Game.player != null:
 		var p: PlayerSim = Game.player
+		var rr := HudCalc.RADAR_RANGE   # v0.27.0 : Sixième sens : radar plus large (et un cercle turquoise)
+		if Game.arms != null and Game.arms.perks.get("deathperception", false):
+			rr *= float(PerkFx.cfg("deathperception.radarMult"))
+			draw_arc(c, r * 0.97, 0, TAU, 56, Color(0.12, 0.71, 0.64, 0.7), 2.0, true)
 		for poi: Array in pois:
-			var q := HudCalc.radar_point(p.pos.x, p.pos.z, p.yaw, (poi[0] as Vector2).x, (poi[0] as Vector2).y)
+			var q := HudCalc.radar_point(p.pos.x, p.pos.z, p.yaw, (poi[0] as Vector2).x, (poi[0] as Vector2).y, rr)
 			if q.x != INF:
 				draw_circle(q, 3.5, poi[1])
 		for z: ZombieSim in Game.zombies:
 			if z.dead or z.spawn_t > 0.5:
 				continue
-			var q := HudCalc.radar_point(p.pos.x, p.pos.z, p.yaw, z.pos.x, z.pos.z)
+			var q := HudCalc.radar_point(p.pos.x, p.pos.z, p.yaw, z.pos.x, z.pos.z, rr)
 			if q.x != INF:
 				draw_circle(q, 2.5, Color("ff2a2a"))
+		if Game.pfx != null and not Game.pfx.tomb.is_empty():   # v0.27.0 : Pierre tombale
+			var tp: Vector3 = Game.pfx.tomb["pos"]
+			var qt := HudCalc.radar_point(p.pos.x, p.pos.z, p.yaw, tp.x, tp.z, rr)
+			if qt.x != INF:
+				draw_rect(Rect2(qt - Vector2(3.5, 4.5), Vector2(7, 9)), Color("e6e6e6"))
 	draw_colored_polygon(PackedVector2Array([Vector2(c.x, c.y - 5), Vector2(c.x - 3.5, c.y + 4), Vector2(c.x + 3.5, c.y + 4)]), player_color)
 	draw_arc(c, SIZE / 2.0 - 1.0, 0, TAU, 64, Color(1, 1, 1, 0.25), 2.0, true)

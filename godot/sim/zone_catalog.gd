@@ -32,6 +32,10 @@ static func zones() -> Array:
 				_zones[zi]["box"] = true
 			"pap":
 				_zones[zi]["pap"] = true
+	for pm: Dictionary in PerkPlaces.list():   # v0.27.0 : distributeurs des nouveaux atouts
+		var pz := int(pm["zone"])
+		if pz >= 0 and pz < _zones.size():
+			_zones[pz]["perks"].append(String(pm["id"]))
 	for ww: Dictionary in o.get("wallWeapons", []):
 		var zi := int(ww.get("zone", -1))
 		if zi >= 0 and zi < _zones.size():

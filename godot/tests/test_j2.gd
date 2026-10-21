@@ -57,7 +57,7 @@ func _counts(t: Node, w: World, g: Dictionary, n_js: int) -> void:
 	t.check(w.zone_names.size() == int(c["zones"]) and w.zone_names.size() == 27, "27 zones")
 	t.check(w.doors.size() == int(c["doors"]), "portes %d != %d" % [w.doors.size(), c["doors"]])
 	t.check(w.window_count() == int(c["windows"]), "fenêtres d'apparition %d != %d" % [w.window_count(), c["windows"]])
-	t.check(w.objects["machines"].size() == int(c["machines"]), "machines")
+	t.check(w.objects["machines"].size() == int(c["machines"]) + PerkPlaces.list().size(), "machines (cuites + %d distributeurs des nouveaux atouts, v0.27.0)" % PerkPlaces.list().size())
 	t.check(w.objects["wallWeapons"].size() == int(c["wallWeapons"]), "armes murales")
 	t.check(w.objects["stations"].size() == int(c["stations"]), "bornes de munitions")
 	t.check(w.objects["vehicleSpawns"].size() == int(c["vehicleSpawns"]), "motos")

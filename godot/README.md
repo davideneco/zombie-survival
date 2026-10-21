@@ -22,6 +22,7 @@ Or open the `godot/` folder in the editor and press F5. Settings, key bindings, 
 
 - **Menu**: Play, game mode, best score / statistics, map choice (Strasbourg or arena) and difficulty (Easy / Normal / Hard), Multiplayer (greyed out).
 - **Game modes** (menu "Mode de jeu", v0.26.0): **Classique** (the whole Grande Île, paid doors, finale; unchanged) and **Zone unique**: pick one of the 27 zones on a map thumbnail; you are locked in it (every door is bricked up for good), zombies spawn from the zone's windows and ground out of your sight, the zone's machines stay (plus a mystery box, Juggernog-like and Quick Revive-like perks and an MP5 when the zone has none), and an **exit door** in the middle of the zone costs 20,000 points: buying it ends the game in victory ("Évasion réussie"). Zone scores are kept per zone, apart from the classic statistics. Two more modes are listed as "coming soon".
+- **Perks** (v0.27.0): 16 perks, at most **4 carried** (the Dawn Blessing lifts the limit). Besides the 7 of the browser game, nine new ones inspired by Call of Duty Zombies under original names, each with its own machine on the map: Œil-de-lynx (headshots), Cerise-foudre (shock on reload), Veuve noire (web that slows zombies), Vautour (ammo / point drops), Pierre tombale (get your perks back after going down), Ultime Volonté (survive a lethal hit), Bastion (less damage while holding a spot), Sixième sens (wider radar, critical hits), Cartouchière (more reserve ammo). List in the menu: "ATOUTS"; details in `docs/GODOT_PORT.md` (v0.27.0).
 - **Quality and upscaling** (Options): Fast / Normal / High presets; 3D upscaling **Native, FSR 1.0 or FSR 2.2 (trial)**, 3D resolution (100, 85, 75, 67, 50 %) and sharpness. The HUD stays sharp. No DLSS: the engine does not offer it.
 - **First launch on Windows**: with an integrated GPU, the "Fast" quality is chosen automatically.
 - **Characters**: the 8 playable survivors have original low-poly 3D models (`assets/characters/*.glb`, built by `tools/build-characters.py`, see `assets/characters/LICENSE.txt`): rotating preview in the character menu, seated on bikes and tram seats in third person, first-person gloves and sleeves from their outfit. Sheet: `docs/personnages.png`.
@@ -59,7 +60,7 @@ More than 159,000 checks, 0 failures at v0.19.1. The **golden files** are output
 | `shaders/` | Sky, ground, facades, water, foliage, zombies |
 | `data/` | Config and data exported from the JS; `golden/` (tests, never exported) |
 | `assets/` | Weapons (OBJ), zombies (glb), tram, textures, sounds; part of it is regenerated, see below |
-| `tests/` | Suites `test_j0` to `test_j33` and `runner.tscn` |
+| `tests/` | Suites `test_j0` to `test_j34`, `runner.tscn`, and the `place_perks` tool (writes `data/perk_machines.json`) |
 
 Model licences: `assets/weapons/LICENSE.txt` (Quaternius, Tabasco) and `assets/zombies/LICENSE.txt` (Quaternius).
 

@@ -140,6 +140,7 @@ func _stat_drops(t: Node) -> void:
 # ------------------------------------------------------------------ atouts
 func _perk_scenarios(t: Node) -> void:
 	_new()
+	Game.blessed = true   # v0.27.0 : la limite de 4 atouts portés est levée (comme sous la Bénédiction) pour acheter les 16 à la suite ; la limite : test_j34
 	var arms: WeaponArms = Game.arms
 	var base := Config.weapon(arms.current.id)
 	for id: String in Config.at("perks"):

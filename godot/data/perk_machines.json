@@ -1,0 +1,113 @@
+{
+	"machines": [
+		{
+			"id": "deadshot",
+			"pos": {
+				"x": 77.375,
+				"y": 0.0,
+				"z": -137.375
+			},
+			"proc": true,
+			"type": "perk",
+			"yaw": -0.1651,
+			"zone": 3
+		},
+		{
+			"id": "electriccherry",
+			"pos": {
+				"x": 122.375,
+				"y": 0.0,
+				"z": 47.875
+			},
+			"proc": true,
+			"type": "perk",
+			"yaw": -1.0304,
+			"zone": 7
+		},
+		{
+			"id": "widowswine",
+			"pos": {
+				"x": -140.125,
+				"y": 0.0,
+				"z": -317.375
+			},
+			"proc": true,
+			"type": "perk",
+			"yaw": -2.191,
+			"zone": 10
+		},
+		{
+			"id": "vultureaid",
+			"pos": {
+				"x": -347.125,
+				"y": 0.0,
+				"z": 1.375
+			},
+			"proc": true,
+			"type": "perk",
+			"yaw": 0.245,
+			"zone": 11
+		},
+		{
+			"id": "dyingwish",
+			"pos": {
+				"x": 345.875,
+				"y": 0.0,
+				"z": -42.875
+			},
+			"proc": true,
+			"type": "perk",
+			"yaw": 1.8158,
+			"zone": 12
+		},
+		{
+			"id": "deathperception",
+			"pos": {
+				"x": 180.125,
+				"y": 0.0,
+				"z": 197.125
+			},
+			"proc": true,
+			"type": "perk",
+			"yaw": 2.191,
+			"zone": 14
+		},
+		{
+			"id": "stronghold",
+			"pos": {
+				"x": 124.625,
+				"y": 0.0,
+				"z": -316.625
+			},
+			"proc": true,
+			"type": "perk",
+			"yaw": 1.0517,
+			"zone": 15
+		},
+		{
+			"id": "bandolier",
+			"pos": {
+				"x": -506.125,
+				"y": 0.0,
+				"z": -147.875
+			},
+			"proc": true,
+			"type": "perk",
+			"yaw": 1.7506,
+			"zone": 18
+		},
+		{
+			"id": "tombstone",
+			"pos": {
+				"x": -202.375,
+				"y": 0.0,
+				"z": 239.125
+			},
+			"proc": true,
+			"type": "perk",
+			"yaw": 0.0,
+			"zone": 20
+		}
+	],
+	"note": "v0.27.0 : distributeurs des nouveaux atouts, écrit par tools/place-perks.gd"
+}

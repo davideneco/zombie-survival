@@ -23,6 +23,7 @@ const WeaponView := preload("res://scenes/weapon_view.gd")
 const RidesView := preload("res://scenes/world/rides_view.gd")
 const MachinesView := preload("res://scenes/world/machines_view.gd")
 const ZoneModeView := preload("res://scenes/world/zone_mode_view.gd")
+const PerkFxView := preload("res://scenes/perk_fx_view.gd")
 const GraphicsView := preload("res://scenes/graphics_view.gd")
 const FxView := preload("res://scenes/fx_view.gd")
 const FinaleView := preload("res://scenes/finale_view.gd")   # J10
@@ -136,6 +137,7 @@ var _look_yaw := 0.0              # --look-yaw=deg : décalage du regard une foi
 var _first_person := false        # --first-person : vue à la première personne sur les véhicules
 var _machines_view: Node3D
 var _zone_view: Node3D            # v0.26.0 : murs des portes en Zone unique
+var _perk_view: Node3D            # v0.27.0 : effets des nouveaux atouts
 var _graphics: Node               # J9 : environnement, ciel, ombres, qualité (graphics_view.gd)
 var _fx: Node3D                   # J9 : particules et taches de sang (fx_view.gd)
 var _finale_view: Node3D          # J10 : effets des boss, faisceau, Fanal (finale_view.gd)
@@ -528,9 +530,10 @@ func _unload_session() -> void:
 		_drop(t[0])
 	_tracers.clear()
 	_shot_queue.clear()
-	for n in [_arena_node, _rides_view, _machines_view, _zone_view, _weapon_view, _finale_view, _fx, _graphics, _hud, _intro, _camera]:
+	for n in [_arena_node, _rides_view, _machines_view, _zone_view, _perk_view, _weapon_view, _finale_view, _fx, _graphics, _hud, _intro, _camera]:
 		_drop(n)
 	_zone_view = null
+	_perk_view = null
 	_intro = null
 	_arena_node = null
 	_rides_view = null
@@ -583,6 +586,7 @@ func _soak_end() -> void:
 		r[0]["mem_mb"], r[-1]["mem_mb"], r[0]["objects"], r[-1]["objects"], r[0]["nodes"], r[-1]["nodes"]])
 	for l in _soak.errand_log:
 		print("  bot : ", l)
+	print("SOAK atouts : %s ; effets des nouveaux atouts : %s ; points gagnés %d" % [Game.arms.perks.keys(), Game.pfx.stats, Game.points_earned])
 	get_tree().quit()
 
 ## État de la partie (Game.new_game avec les données déjà chargées) et réglages de démonstration des arguments.
@@ -661,6 +665,11 @@ func _finish_scene(_map_name: String) -> void:
 		_machines_view.set_script(MachinesView)
 		add_child(_machines_view)
 		_machines_view.setup()
+	_perk_view = Node3D.new()   # v0.27.0 : gouttes, tombe, décharges, toiles
+	_perk_view.set_script(PerkFxView)
+	add_child(_perk_view)
+	_perk_view.setup()
+	_perk_view.hold = "--hold-perkfx" in OS.get_cmdline_user_args()
 	if Game.gm != null:   # v0.26.0 : Zone unique : portes murées
 		_zone_view = Node3D.new()
 		_zone_view.set_script(ZoneModeView)
@@ -681,6 +690,9 @@ func _finish_scene(_map_name: String) -> void:
 		_soak = SoakBot.new(_seed if _seed >= 0 else 1)
 		_soak.verbose = "--soak-verbose" in OS.get_cmdline_user_args()
 		_soak.perf = _perf_soak_min > 0.0
+		for a in OS.get_cmdline_user_args():
+			if a.begins_with("--bot-perks="):   # v0.27.0 : atouts du bot (nouveaux atouts : équilibrage, performance)
+				_soak.perks = Array(a.substr(12).split(","))
 		for a in OS.get_cmdline_user_args():
 			if a.begins_with("--perf-round="):
 				_soak.start_round = int(a.substr(13))
@@ -834,6 +846,13 @@ func _debug_do() -> void:
 				Game.powerups.spawn(Game, Game.player.pos + f, c[1] if c.size() > 1 else "")
 			"collect":   # ramasse tout de suite un bonus (HUD des bonus actifs, Bombe)
 				Game.powerups.collect(Game, {"type": c[1]})
+			"perkfx":   # v0.27.0 : effets des nouveaux atouts devant le joueur (captures ; avec --hold-perkfx)
+				var f := Game.player.forward()
+				var at := Game.player.pos + Vector3(f.x, 0, f.z).normalized() * 5.0
+				Game.pfx.drops = [{"id": 900, "pos": at + Vector3(-1.6, 0, 0), "type": "ammo", "life": 60.0}, {"id": 901, "pos": at + Vector3(1.6, 0, 0), "type": "points", "life": 60.0}]
+				Game.pfx.tomb = {"pos": at + Vector3(0, 0, 0) + Vector3(f.x, 0, f.z).normalized() * 3.0, "perks": ["juggernog"], "life": 60.0, "arm": 60.0}
+				Game.perk_event.emit("cherry", {"pos": at + Vector3(-3.5, 0, 2), "radius": 4.0, "power": 1.0, "hit": 0})
+				Game.perk_event.emit("web", {"pos": at + Vector3(3.5, 0, 2), "radius": 5.0, "count": 0})
 			"to-box", "to-pap", "to-perk":
 				var type := "box" if c[0] == "to-box" else ("pap" if c[0] == "to-pap" else "perk")
 				for m: Dictionary in Game.machines.list:

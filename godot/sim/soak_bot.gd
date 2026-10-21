@@ -21,6 +21,7 @@ var _jump_t := 0.0
 var _ammo_t := 0.0
 var _unstick_hold := false
 var verbose := false
+var perks: Array = ["juggernog", "staminup", "doubletap", "speedcola", "quickrevive", "phdflopper"]   ## atouts donnés au départ (v0.27.0 : --bot-perks=a,b,c)
 ## v0.19.0 (`--perf-soak`) : mode « perf », un joueur qui provoque les premières fois (portes fermées au départ, puis achats de portes, d'atouts, d'armes, de la boîte et
 ## du Pack-a-Punch, visites d'étages, moto et tram) : une course toutes les ERRAND_PERIOD s de jeu ; les points sont donnés à l'arrivée (un joueur qui a économisé).
 var perf := false
@@ -65,7 +66,7 @@ func setup(g: Node) -> void:
 	g.points = 1000000
 	for id in ["m249", "ak47"]:
 		g.arms.give_weapon(id)
-	for id in ["juggernog", "staminup", "doubletap", "speedcola", "quickrevive", "phdflopper"]:
+	for id in perks:
 		if g.has_method("add_perk"):
 			g.add_perk(id)
 	_pick_goal(g)

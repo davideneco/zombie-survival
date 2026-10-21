@@ -23,7 +23,14 @@ func refresh(perks: Dictionary) -> void:
 		s["damage"] = float(s["damage"]) * 1.25
 	if perks.get("speedcola", false):
 		s["reloadTime"] = float(s["reloadTime"]) * 0.5
+	if perks.get("deadshot", false):   # v0.27.0 : Œil-de-lynx (sim/perk_fx.gd)
+		s["headMult"] = float(s["headMult"]) * float(PerkFx.cfg("deadshot.headMult"))
+		s["spread"] = float(s["spread"]) * float(PerkFx.cfg("deadshot.spreadMult"))
+	if perks.get("bandolier", false):  # v0.27.0 : Cartouchière
+		s["maxReserve"] = roundi(float(s["maxReserve"]) * float(PerkFx.cfg("bandolier.reserveMult")))
 	cfg = s
+	if reserve > int(s["maxReserve"]):   # Cartouchière perdue : la réserve revient dans la borne
+		reserve = int(s["maxReserve"])
 
 ## Remplit la réserve (borne, mur, munitions max, Pack-a-Punch) ; refait aussi le plein d'obus sous canon.
 func refill() -> void:

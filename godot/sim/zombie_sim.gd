@@ -51,6 +51,8 @@ var strike_target: PlayerSim   ## joueur touché par le coup de ce pas (null si 
 var strike_damage := 0.0
 var events: PackedStringArray = PackedStringArray()   ## "knock", "glass", "rumble", "emerge" (sons et effets, vidés par Game)
 var target: PlayerSim          ## cible poursuivie ce pas (null : personne)
+var slow_t := 0.0              ## v0.27.0 : Veuve noire : secondes de ralentissement restantes
+var slow_mult := 1.0           ## vitesse x slow_mult tant que slow_t > 0
 var run_over_until := 0.0      ## J5 : moto ou rame : pas d'autre coup avant ce temps de jeu (écrasement)
 
 # apparition
@@ -102,6 +104,11 @@ func init_traits(r: RandomNumberGenerator) -> void:
 	walk_t = r.randf() * 10.0
 	limp = r.randf() < Rules.LIMP_CHANCE
 	runner = speed > 3.2
+
+## v0.27.0 : englué (Veuve noire) : vitesse x mult pendant t s (le ralentissement le plus fort et le plus long l'emporte).
+func slow(mult: float, t: float) -> void:
+	slow_mult = minf(mult, slow_mult) if slow_t > 0.0 else mult
+	slow_t = maxf(slow_t, t)
 
 func make_crawler() -> void:
 	if crawler:
@@ -234,6 +241,8 @@ func step(dt: float, env: ZombieEnv) -> void:
 	if spawn_t > 0.0:
 		_spawn_update(dt)
 		return
+	if slow_t > 0.0:
+		slow_t = maxf(0.0, slow_t - dt)
 	var Z: Dictionary = Config.at("zombie")
 	var lv := env.levels
 	var has_lv := lv != null and not lv.links.is_empty()
@@ -341,7 +350,7 @@ func step(dt: float, env: ZombieEnv) -> void:
 			dirx = tx
 		var bx := pos.x
 		var bz := pos.z
-		var sp := speed * Rules.LIMP_SPEED if limp else speed
+		var sp := (speed * Rules.LIMP_SPEED if limp else speed) * (slow_mult if slow_t > 0.0 else 1.0)
 		if not visible and vault_cd <= 0.0 and not crawler and region == 0 and nav != null and _try_vault(dirx, dirz, env, nav):
 			return   # le champ de flux traverse un obstacle bas : on l'enjambe
 		pos.x += dirx * sp * dt
@@ -450,7 +459,7 @@ func _on_link(dt: float, Z: Dictionary, env: ZombieEnv) -> void:
 	var in_range := d3 < float(Z["attackRange"]) + 0.2 and absf(dy) < 2.2
 	if in_range:
 		mv = false
-	var sp := speed * Rules.LIMP_SPEED if limp else speed
+	var sp := (speed * Rules.LIMP_SPEED if limp else speed) * (slow_mult if slow_t > 0.0 else 1.0)
 	var tmp := {}
 	if mv:
 		link["s"] = float(link["s"]) + float(link["dir"]) * sp * Rules.LINK_SPEED * dt

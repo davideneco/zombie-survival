@@ -843,7 +843,7 @@ func show_liberated() -> void:
 	var t := roundi(g.time)
 	var trophies := FinaleRules.record_trophy(g.trophy_path, {"round": g.round_number, "kills": g.kills, "time": t, "players": 1})
 	g.trophy = trophies
-	g.liberated_screen.emit("STRASBOURG LIBÉRÉE", "Le Fanal d'Erwin brûle au sommet de la cathédrale : l'aube se lève sur la ville.\nManche %d  ·  %d zombies tués  ·  %d points  ·  %d quartiers ouverts  ·  1 joueur  ·  %d min %02d s\nBénédiction de l'Aube : les sept atouts, même à terre  ·  toutes les portes sont gratuites.%s\nLa nuit reviendra : la Nuit éternelle commence, les zombies auront 30 %% de vie en plus." % [g.round_number, g.kills, g.points, open_zones(), t / 60, t % 60, ("\nTrophée « Strasbourg libérée » n° %d enregistré sur cet appareil." % trophies) if trophies > 0 else ""])
+	g.liberated_screen.emit("STRASBOURG LIBÉRÉE", "Le Fanal d'Erwin brûle au sommet de la cathédrale : l'aube se lève sur la ville.\nManche %d  ·  %d zombies tués  ·  %d points  ·  %d quartiers ouverts  ·  1 joueur  ·  %d min %02d s\nBénédiction de l'Aube : tous les atouts (%d), même à terre, sans limite  ·  toutes les portes sont gratuites.%s\nLa nuit reviendra : la Nuit éternelle commence, les zombies auront 30 %% de vie en plus." % [g.round_number, g.kills, g.points, open_zones(), t / 60, t % 60, (Config.at("perks") as Dictionary).size(), ("\nTrophée « Strasbourg libérée » n° %d enregistré sur cet appareil." % trophies) if trophies > 0 else ""])
 
 # ------------------------------------------------------------------ Maître Tanneur (manches 15, 20, 25…)
 func maybe_spawn_tanner() -> bool:

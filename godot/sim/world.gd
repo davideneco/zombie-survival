@@ -79,6 +79,12 @@ func _load() -> void:
 		var es := collision.add_segment(e[0], e[1], e[2], e[3], float(extra["h"]), float(extra["y0"]), "wall", 0)
 		es["off"] = false
 		seg_list.append(es)
+	var perk_places := PerkPlaces.list()   # v0.27.0 : distributeurs des nouveaux atouts (data/perk_machines.json) : collision ajoutée après le JS
+	for m: Dictionary in perk_places:
+		for e: Array in PerkPlaces.segments(m):
+			var es := collision.add_segment(e[0], e[1], e[2], e[3], PerkPlaces.HEIGHT, -INF, "prop", 0)
+			es["off"] = false
+			seg_list.append(es)
 	for f: Dictionary in _json(DIR + "collision/floors.json"):
 		collision.add_floor(float(f["y"]), f["tris"])
 	collision.build()
@@ -88,6 +94,7 @@ func _load() -> void:
 	nav.load_dir(DIR, _json(DIR + "nav/meta.json"))
 	levels.nav_collision = collision   # champ de flux des étages (cathédrale) : grilles locales construites à la demande, comme levels.buildNavs du JS
 	objects = _json(DIR + "objects.json")
+	objects["machines"].append_array(perk_places)
 	start_pos = Vector3(objects["start"]["x"], objects["start"]["y"], objects["start"]["z"])
 	start_zone = int(objects["startZone"])
 	for z: Dictionary in objects["zones"]:

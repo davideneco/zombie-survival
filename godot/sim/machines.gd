@@ -39,6 +39,8 @@ func prompt() -> String:
 		"perk":
 			if g.arms.perks.get(m["id"], false):
 				return "%s (déjà acquis)" % m["name"]
+			if not g.blessed and g.arms.perks.size() >= PerkFx.slots():   # v0.27.0 : limite d'atouts portés
+				return "%s — LIMITE DE %d ATOUTS ATTEINTE" % [m["name"], PerkFx.slots()]
 			return "E %s — %s (%d pts)" % [m["name"], Config.at("perks.%s.desc" % m["id"]), perk_price(m["id"])]
 		"pap":
 			return pap.prompt(g)
@@ -59,6 +61,9 @@ func interact() -> bool:
 		"perk":
 			var id: String = m["id"]
 			if g.arms.perks.get(id, false):
+				return true
+			if not g.blessed and g.arms.perks.size() >= PerkFx.slots():
+				g.announce("LIMITE D'ATOUTS", "%d atouts au plus (la Bénédiction de l'Aube lève la limite)" % PerkFx.slots())
 				return true
 			var price := perk_price(id)
 			if g.points < price:

@@ -15,7 +15,8 @@ const SHORT := {"m1911": "1911", "arex": "AREX", "deagle": "DEAGLE", "magnum": "
 
 ## Point d'un objet (px, pz) sur le radar du joueur (pos, yaw) : position dans le carré de 120 px, ou (INF, INF) hors portée.
 ## Le radar est orienté selon la vue : « haut » = devant.
-static func radar_point(player_x: float, player_z: float, yaw: float, px: float, pz: float) -> Vector2:
+## range_m : mètres au bord du radar (RADAR_RANGE ; v0.27.0 : Sixième sens l'élargit).
+static func radar_point(player_x: float, player_z: float, yaw: float, px: float, pz: float, range_m := RADAR_RANGE) -> Vector2:
 	var cx := RADAR_SIZE / 2.0
 	var r := RADAR_SIZE / 2.0 - 3.0
 	var cos_y := cos(-yaw)
@@ -24,9 +25,9 @@ static func radar_point(player_x: float, player_z: float, yaw: float, px: float,
 	var dz := pz - player_z
 	var rx := dx * cos_y + dz * sin_y
 	var rz := -dx * sin_y + dz * cos_y
-	if sqrt(rx * rx + rz * rz) > RADAR_RANGE:
+	if sqrt(rx * rx + rz * rz) > range_m:
 		return Vector2(INF, INF)
-	return Vector2(cx + rx / RADAR_RANGE * r, cx + rz / RADAR_RANGE * r)
+	return Vector2(cx + rx / range_m * r, cx + rz / range_m * r)
 
 ## Cap de la boussole en degrés (0 = nord (-z), 90 = est (+x)).
 static func heading_deg(yaw: float) -> float:

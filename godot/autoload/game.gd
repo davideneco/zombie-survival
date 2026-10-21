@@ -37,6 +37,7 @@ signal victory_screen(title: String, text: String)           ## J10 : le Bourrea
 signal liberated_screen(title: String, text: String)         ## J10 : « STRASBOURG LIBÉRÉE » (fin de la vue orbitale de l'Aube)
 signal vaulted                                               ## J11 : le joueur enjambe un obstacle (son)
 signal unstuck(from: Vector2, to: Vector2, distance: float, center: bool)   ## J11 : le joueur s'est débloqué
+signal perk_event(name: String, data: Dictionary)            ## v0.27.0 : nouveaux atouts : "cherry", "web", "wish", "crit", "vulture_drop", "vulture_pick", "tomb", "tomb_pick", "tomb_gone"
 signal ride_event(name: String, data: Dictionary)            ## J5 : "mount", "dismount", "crash", "burn", "break", "respawn", "gong", "chime", "service", "knock", "cough", "beep", "dry"
 
 var round_number: int:
@@ -93,6 +94,7 @@ var mode := GameMode.CLASSIC   ## v0.26.0 : mode de jeu (GameMode) ; posé avant
 var zone_pick := 0             ## v0.26.0 : zone choisie pour le mode Zone unique (indice des zones de la carte)
 var gm: GameMode           ## mode de la partie en cours : null en Classique (et dans l'arène)
 var escaped := false       ## Zone unique : la porte de sortie a été achetée (fin de partie en victoire)
+var pfx := PerkFx.new()    ## v0.27.0 : nouveaux atouts (sim/perk_fx.gd) : recharges, gouttes, tombe, Bastion
 var points_earned := 0     ## v0.26.0 : total des points gagnés (somme des points_gained), dépenses non déduites : score du mode Zone unique
 var settings: Settings     ## J7 : réglages du joueur et touches (user://settings.cfg, ou --settings=chemin)
 
@@ -182,6 +184,7 @@ func new_game(seed_value: int = -1, map: String = "", weapons: Array = [], prelo
 		player.yaw = gm.start_yaw
 	arms = WeaponArms.new(weapons if not weapons.is_empty() else [Rules.J1_WEAPON])
 	powerups = Powerups.new()
+	pfx = PerkFx.new(seed_value if seed_value >= 0 else rng.seed)
 	if gm != null:
 		machines = Machines.new(self, gm.filter_machines(world.objects["machines"]), gm.zone)
 		machines.box.stay_alone = true
@@ -247,6 +250,7 @@ func unload() -> void:
 	finale = null
 	gm = null
 	escaped = false
+	pfx.reset()
 	playing = false
 	over = false
 	debug_open = false
@@ -328,6 +332,7 @@ func step(dt: float, input: Dictionary) -> void:
 	if unstick != null:
 		unstick.step(self, dt, input)
 	powerups.step(self, dt)
+	pfx.step(self, dt)
 	if machines != null:
 		machines.step(dt)
 	# manches
@@ -358,9 +363,13 @@ func step(dt: float, input: Dictionary) -> void:
 		if z.strike_damage > 0.0:
 			var shielded := rides != null and rides.tram_shield(z)   # une rame : la caisse encaisse (sauf devant une porte ouverte)
 			if not shielded:
-				player_hurt.emit(z.strike_damage)
-				if z.strike_target.hurt(z.strike_damage, time):
-					_end_game()
+				var dmg := pfx.filter_damage(self, z.strike_damage) if z.strike_target == player else z.strike_damage   # v0.27.0 : Bastion, Ultime Volonté
+				if dmg > 0.0:
+					player_hurt.emit(dmg)
+					if z.strike_target.hurt(dmg, time):
+						_end_game()
+				if z.strike_target == player:
+					pfx.on_struck(self)   # Veuve noire
 			if rides != null:
 				rides.on_zombie_strike()   # le véhicule de la victime perd des PV
 		if z.dead and z.death_t > Rules.CORPSE_TIME:
@@ -373,6 +382,7 @@ func _player_events() -> void:
 	if player.down_event:
 		player.down_event = false
 		if not blessed:   # à terre : on perd tous ses atouts (sauf sous la Bénédiction de l'Aube)
+			pfx.on_down(self)   # v0.27.0 : Pierre tombale (avant l'effacement)
 			arms.clear_perks()
 			player.quick_revive = false
 			player.stamin = false
@@ -406,6 +416,10 @@ func add_perk(id: String) -> void:
 			player.phd = true
 	perk_acquired.emit(id)
 
+## v0.27.0 : début d'un rechargement (WeaponArms) : Cerise-foudre.
+func on_reload_start(w: WeaponState) -> void:
+	pfx.on_reload(self, w)
+
 ## PHD Flopper : onde explosive aux pieds du joueur à l'atterrissage (main.js flop) ; dégâts aux zombies seulement.
 func flop(pos: Vector3) -> void:
 	var F: Dictionary = Config.at("phd")
@@ -421,6 +435,7 @@ func on_zombie_killed(z: ZombieSim) -> void:
 	if finale != null:
 		finale.on_kill(z)
 	powerups.on_kill(self, z)
+	pfx.on_kill(self, z)   # v0.27.0 : Vautour
 
 func _end_game() -> void:
 	over = true
@@ -444,6 +459,11 @@ func mode_id() -> String:
 ## mel : coup de couteau (pas de bonus de tête, armure ignorée, points de CONFIG.knife.points).
 func hit_zombie(z: ZombieSim, head: bool, dmg: float, head_mult: float, mel: bool = false, extra: Dictionary = {}) -> bool:
 	var armor: Variant = z.get("armor")
+	if not mel:   # v0.27.0 : Sixième sens : coups critiques des armes à feu (aucun tirage sans l'atout)
+		var cm := pfx.crit_mult(self)
+		if cm > 1.0:
+			dmg *= cm
+			perk_event.emit("crit", {"pos": z.pos})
 	if powerups.insta_kill > 0.0 and not is_boss(z):
 		dmg = 999999.0   # Mort instantanée
 	var amount: float = dmg / (float(armor) if armor != null and float(armor) > 0.0 else 1.0) if mel else dmg * (head_mult if head else 1.0)
@@ -459,6 +479,8 @@ func hit_zombie(z: ZombieSim, head: bool, dmg: float, head_mult: float, mel: boo
 			hit["x"] = extra["px"]
 			hit["z"] = extra["pz"]
 	var killed := z.damage(amount, head, hit)
+	if mel and not killed:
+		pfx.on_knife(self, z)   # v0.27.0 : Veuve noire : couteau collant
 	var K: Dictionary = Config.at("knife.points")
 	var mult := powerups.points_mult()   # Points doubles
 	last_hit_head = head
@@ -483,6 +505,9 @@ func hurt_player(amount: float, src: String = "") -> void:
 	if over or player.dead or player.downed:
 		return
 	if (src == "blast" or src == "crash") and arms.perks.get("phdflopper", false):
+		return
+	amount = pfx.filter_damage(self, amount)   # v0.27.0 : Bastion, Ultime Volonté
+	if amount <= 0.0:
 		return
 	player_hurt.emit(amount)
 	if player.hurt(amount, time):

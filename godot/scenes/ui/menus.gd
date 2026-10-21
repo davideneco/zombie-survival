@@ -44,6 +44,7 @@ var _zone_info: RichTextLabel
 var _zone_thread: Thread
 var _zone_tex: ImageTexture
 var _zone_stats: RichTextLabel      ## meilleurs scores Zone unique (panneau MEILLEURS SCORES)
+var _perk_grid: GridContainer       ## v0.27.0 : écran ATOUTS (liste des 16 atouts)
 var _diff_cards: Dictionary = {}
 var _opt_sliders: Dictionary = {}
 var _opt_values: Dictionary = {}
@@ -121,6 +122,7 @@ func _ready() -> void:
 	_build_victory(col)
 	_build_mapdiff(col)
 	_build_mode(col)
+	_build_perks(col)
 	_build_stats(col)
 	_build_credits(col)
 	_build_loading(col)
@@ -171,7 +173,7 @@ func _build_title(col: Control) -> void:
 	p.add_child(grid)
 	for e in [["MODE DE JEU", func() -> void: open_mode()], ["SURVIVANT", func() -> void: open_menu()], ["CARTE ET DIFFICULTÉ", func() -> void: open_mapdiff()],
 			["MEILLEURS SCORES", func() -> void: open_stats()], ["OPTIONS", func() -> void: open_options(UiStack.TITLE)],
-			["TOUCHES", func() -> void: open_keys()], ["CRÉDITS", func() -> void: open_credits()]]:
+			["TOUCHES", func() -> void: open_keys()], ["ATOUTS", func() -> void: open_perks()], ["CRÉDITS", func() -> void: open_credits()]]:
 		var b := _btn(grid, e[0], e[1], "SubButton", 205)
 		b.add_theme_font_size_override("font_size", 19)
 	var host := _btn(grid, "CRÉER SALON", func() -> void: pass, "SubButton", 205)
@@ -535,6 +537,73 @@ func show_escape(zone_name: String, seconds: float, round_number: int, kills: in
 		zone_name, GameStats.format_time(seconds), round_number, kills, _thousands(points), rec]
 	stack.clear()
 	stack.push(UiStack.OVER)
+	_sync()
+
+# ---------------------------------------------------------------- v0.27.0 : liste des atouts (aide)
+func _build_perks(col: Control) -> void:
+	var p := _panel(UiStack.PERKS, col, 8)
+	_heading(p, "ATOUTS", 34)
+	_hint(p, "%d atouts portés au plus (la Bénédiction de l'Aube lève la limite) · tous perdus à terre · M : carte (pastilles de couleur)" % PerkFx.slots())
+	var box := PanelContainer.new()
+	box.add_theme_stylebox_override("panel", UiTheme.box(Color(0, 0, 0, 0.65), Color("444444"), 1, 6, 10))
+	p.add_child(box)
+	var sc := ScrollContainer.new()
+	sc.custom_minimum_size = Vector2(1060, 470)
+	sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	sc.focus_mode = Control.FOCUS_ALL
+	box.add_child(sc)
+	_perk_grid = GridContainer.new()
+	_perk_grid.columns = 2
+	_perk_grid.add_theme_constant_override("h_separation", 18)
+	_perk_grid.add_theme_constant_override("v_separation", 6)
+	sc.add_child(_perk_grid)
+	_btn(p, "RETOUR", func() -> void: _back(), "GoButton", 240)
+
+func _render_perks() -> void:
+	for c in _perk_grid.get_children():
+		c.queue_free()
+	var where := {}   # atout -> nom de zone du distributeur
+	var objs: Variant = JSON.parse_string(FileAccess.get_file_as_string(ZoneCatalog.OBJECTS)) if FileAccess.file_exists(ZoneCatalog.OBJECTS) else null
+	if typeof(objs) == TYPE_DICTIONARY:
+		for m: Dictionary in objs["machines"]:
+			if m["type"] == "perk":
+				where[String(m["id"])] = ZoneCatalog.name_of(int(m["zone"]))
+	for pm: Dictionary in PerkPlaces.list():
+		where[String(pm["id"])] = ZoneCatalog.name_of(int(pm["zone"]))
+	for id: String in Config.at("perks"):
+		var P: Dictionary = Config.at("perks.%s" % id)
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 10)
+		row.custom_minimum_size = Vector2(515, 0)
+		_perk_grid.add_child(row)
+		var badge := PanelContainer.new()
+		badge.custom_minimum_size = Vector2(34, 34)
+		var bgc := Color(String(P["color"]))
+		badge.add_theme_stylebox_override("panel", UiTheme.box(bgc, Color(1, 1, 1, 0.8), 2, 17, 0))
+		badge.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		var bl := UiTheme.label(String(P["letter"]), 18, Color("1a1a1a") if bgc.get_luminance() > 0.6 else Color.WHITE, UiTheme.heading())
+		bl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		badge.add_child(bl)
+		row.add_child(badge)
+		var txt := RichTextLabel.new()
+		txt.bbcode_enabled = true
+		txt.fit_content = true
+		txt.scroll_active = false
+		txt.custom_minimum_size = Vector2(465, 0)
+		txt.add_theme_font_size_override("normal_font_size", 13)
+		txt.add_theme_font_size_override("bold_font_size", 15)
+		txt.add_theme_font_override("normal_font", UiTheme.body())
+		txt.add_theme_font_override("bold_font", UiTheme.heading())
+		txt.add_theme_color_override("default_color", Color("cccccc"))
+		txt.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		txt.text = "[b][color=#%s]%s[/color][/b]  [color=#ffd24a]%d pts[/color]%s\n%s\n[color=#888888]%s[/color]" % [
+			bgc.lightened(0.25).to_html(false), String(P["name"]), Machines.perk_price(id), "  [color=#7fd0c0]NOUVEAU[/color]" if PerkFx.is_new(id) else "",
+			String(P["desc"]), ("Distributeur : " + String(where[id])) if where.has(id) else "Distributeur : ?"]
+		row.add_child(txt)
+
+func open_perks() -> void:
+	stack.push(UiStack.PERKS)
+	_render_perks()
 	_sync()
 
 func _build_stats(col: Control) -> void:
