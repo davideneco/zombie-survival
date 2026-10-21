@@ -98,6 +98,7 @@ var _down: VBoxContainer
 var _down_sec: Label
 var _down_sub: Label
 var _down_extra: Label
+var _clock: Label          ## v0.25.0 : heure du jeu et moment de la journée (sous le radar), en cycle Auto
 var _toast: PanelContainer
 var _toast_l: Label
 var _announce_t := 0.0
@@ -183,6 +184,8 @@ func _build_top() -> void:
 	UiTheme.place(_zone, 0.5, 0, -250, 43, 500, 22)
 	_map_hint = _lbl(root, "", 11, Color("999999"), HORIZONTAL_ALIGNMENT_CENTER, false)
 	UiTheme.place(_map_hint, 0.5, 0, -250, 66, 500, 16)
+	_clock = _lbl(root, "", 15, Color("d8dce8"), HORIZONTAL_ALIGNMENT_CENTER)
+	UiTheme.place(_clock, 0, 0, 24, 148, 120, 22)
 
 func _build_left() -> void:
 	var small := _lbl(root, "MANCHE", 16, Color("cccccc"))
@@ -531,6 +534,10 @@ func _update_basic(dt: float, p: PlayerSim) -> void:
 		var zi: int = Game.world.zone_of(p.pos.x, p.pos.z)
 		zone = String(Game.world.zone_names[zi]) if zi >= 0 else ""
 	_zone.text = zone.to_upper() if zone != "" else ""
+	var dn: DayNight = Game.daynight
+	_clock.visible = dn.clock_visible()
+	if _clock.visible:
+		_clock.text = "%s  %s" % [dn.clock_text(), dn.phase_name()]
 	(compass as Control).call("set_yaw", p.yaw)
 	var pr := "" if Game.over else Prompts.text(Game, binds)
 	_prompt.visible = pr != ""

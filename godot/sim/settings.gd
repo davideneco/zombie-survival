@@ -11,13 +11,15 @@ const DEFAULTS := {
 	"brightness": 1.4, "fov": 80.0, "sens": 1.0, "volume": 1.0, "music": 0.5, "quality": 1, "tp_vehicle": true, "chat": true,
 	"cinema": true, "halo": true, "char": 0, "name": "Joueur",
 	"upscaler": 0, "res_scale": 0, "sharp": 0.9, "aa": 0, "aniso": 0, "fps": false,   ## v0.19.1 « Mise à l'échelle » : 0 natif (bilinéaire), 1 FSR 1.0, 2 FSR 2.2 ; indice de RES_SCALES ; netteté 0..1
+	"daynight": 0, "day_minutes": 14, "view": 0,   ## v0.25.0 : cycle jour / nuit (DayNight : 0 Auto, 1 Toujours nuit, 2 Toujours jour), minutes réelles pour 24 h de jeu, vue à pied (0 première, 1 troisième personne)
 	"difficulty": "normal", "map": "strasbourg",   ## menu « Carte et difficulté » (v0.14.0) : voir Difficulty ; carte : "strasbourg" ou "arena"
 }
 ## bornes des curseurs (index.html : optBrightness…)
 const RANGES := {
-	"brightness": [0.6, 3.0, 0.05], "fov": [60.0, 110.0, 1.0], "sens": [0.3, 3.0, 0.05], "quality": [0, 2, 1], "upscaler": [0, 2, 1], "res_scale": [0, 4, 1], "sharp": [0.0, 1.0, 0.05], "aa": [0, 4, 1], "aniso": [0, 3, 1], "volume": [0.0, 1.0, 0.05], "music": [0.0, 1.0, 0.05],
+	"brightness": [0.6, 3.0, 0.05], "fov": [60.0, 110.0, 1.0], "sens": [0.3, 3.0, 0.05], "quality": [0, 2, 1], "daynight": [0, 2, 1], "day_minutes": [4, 30, 1], "view": [0, 1, 1], "upscaler": [0, 2, 1], "res_scale": [0, 4, 1], "sharp": [0.0, 1.0, 0.05], "aa": [0, 4, 1], "aniso": [0, 3, 1], "volume": [0.0, 1.0, 0.05], "music": [0.0, 1.0, 0.05],
 }
 const MAPS := ["strasbourg", "arena"]
+const VIEW_NAMES := ["1re personne", "3e personne"]
 const QUALITY_NAMES := ["Rapide", "Normale", "Haute"]
 const UPSCALER_NAMES := ["Natif", "FSR 1.0", "FSR 2.2 (expérimental)"]   ## FSR 2.2 : temporel, perd ~40 % de netteté en rotation (mesuré v0.20.4) : jamais choisi automatiquement ni relu d'un fichier de réglages
 const AA_NAMES := ["Auto", "Aucun", "MSAA 2x", "MSAA 4x", "FXAA"]   ## v0.20.4 « Anticrénelage » : Auto = selon la qualité (Rapide aucun, Normale 2x, Haute 4x) ; réglage de diagnostic du flou
@@ -46,7 +48,7 @@ func set_value(key: String, v: Variant) -> void:
 	if RANGES.has(key):
 		var r: Array = RANGES[key]
 		v = clampf(float(v), float(r[0]), float(r[1]))
-		if key in ["quality", "upscaler", "res_scale", "aa", "aniso"]:
+		if key in ["quality", "upscaler", "res_scale", "aa", "aniso", "daynight", "day_minutes", "view"]:
 			v = roundi(v)
 	if values[key] == v:
 		return
@@ -117,6 +119,12 @@ static func format(key: String, v: float) -> String:
 			return "%.2fx" % v
 		"quality":
 			return QUALITY_NAMES[clampi(roundi(v), 0, 2)]
+		"daynight":
+			return DayNight.MODE_NAMES[clampi(roundi(v), 0, 2)]
+		"day_minutes":
+			return "%d min" % roundi(v)
+		"view":
+			return VIEW_NAMES[clampi(roundi(v), 0, 1)]
 		"upscaler":
 			return UPSCALER_NAMES[clampi(roundi(v), 0, 2)]
 		"aa":

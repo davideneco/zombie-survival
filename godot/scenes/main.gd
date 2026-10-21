@@ -76,6 +76,8 @@ var _quit_at := 0.0
 var _shot_done := false
 var _demo := false
 var _map := ""
+var _hour_arg := -1.0            ## --hour=H : heure de jeu de départ (cycle Auto) ; --hold-hour : l'heure ne bouge plus (captures, v0.25.0) ; --daynight=0|1|2 : mode sans toucher aux réglages
+var _hold_hour := false
 var _sky_arg := -1.0             ## --sky=K (0 nuit, 0,33 aube, 1 jour) : ciel de la finale sans la finale (captures, v0.22.0)
 var _at_pos := Vector3.INF      ## --pos=x,z[,yaw_deg] : téléporte le joueur (captures de lieux repères)
 var _at_yaw := 0.0
@@ -182,6 +184,16 @@ func _ready() -> void:
 			_open_all = true
 		elif a.begins_with("--sky="):
 			_sky_arg = float(a.substr(6))
+		elif a.begins_with("--hour="):
+			_hour_arg = fposmod(float(a.substr(7)), 24.0)
+		elif a == "--hold-hour":
+			_hold_hour = true
+		elif a.begins_with("--daynight="):
+			Game.settings.autosave = false
+			Game.settings.values["daynight"] = clampi(int(a.substr(11)), 0, 2)
+		elif a.begins_with("--day-minutes="):
+			Game.settings.autosave = false
+			Game.settings.values["day_minutes"] = clampi(int(a.substr(14)), 2, 120)
 		elif a.begins_with("--pos="):
 			var f := a.substr(6).split(",")
 			_at_pos = Vector3(float(f[0]), 0.0, float(f[1]))
@@ -539,6 +551,7 @@ func _soak_end() -> void:
 ## État de la partie (Game.new_game avec les données déjà chargées) et réglages de démonstration des arguments.
 func _new_game_state(data: Object, map: String) -> void:
 	Game.new_game(_seed, map, Config.at("startWeapons", []), data)
+	_apply_daynight(true)
 	Sfx.reset()
 	if _at_pos != Vector3.INF:
 		Game.player.pos = _at_pos
@@ -1231,8 +1244,26 @@ func _apply_layers() -> void:
 		return
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED if (Game.playing and not Game.over) else Input.MOUSE_MODE_VISIBLE
 
+## v0.25.0 : cycle jour / nuit : réglages du joueur (Options) vers Game.daynight ; au début de la partie, heure de départ du mode (ou --hour).
+func _apply_daynight(start: bool) -> void:
+	var dn := Game.daynight
+	var mode := int(Game.settings.get_value("daynight"))
+	var mins := float(Game.settings.get_value("day_minutes"))
+	if start:
+		dn.reset(mode, mins)
+		if _hour_arg >= 0.0:
+			dn.mode = DayNight.MODE_AUTO if int(Game.settings.get_value("daynight")) == DayNight.MODE_AUTO else dn.mode
+			dn.hour = _hour_arg
+			dn.sky_k = DayNight.sky_k_at(_hour_arg)
+		dn.frozen = _hold_hour
+	else:
+		dn.configure(mode, mins)
+
 func _on_setting(key: String) -> void:
 	match key:
+		"daynight", "day_minutes":
+			if _session_live and Game.daynight != null:
+				_apply_daynight(false)
 		"brightness":
 			_apply_brightness()
 		"volume", "music":

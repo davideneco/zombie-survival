@@ -36,6 +36,9 @@ var _lamp_door: Array[int] = []   ## porte dont dépend la source (-1 : aucune)
 var _lamp_timer := 0.0
 var _kinds: Dictionary = {}       ## "ground" / "water" / "facade" / "foliage" -> Array de ShaderMaterial (réglés par set_quality)
 var _tree_cards: Array[MultiMeshInstance3D] = []
+var _emissive: Array = []         ## v0.25.0 : matériaux dont l'émission s'éteint le jour : [matériau, énergie de base] (fenêtres, ampoules, enseignes de la carte)
+var _lit := 1.0                   ## 1 : nuit (tout est allumé), 0 : plein jour ; suit DayNight.lamps_of(sky_k)
+var _gv: Node
 
 static func _json(path: String) -> Variant:
 	return JSON.parse_string(FileAccess.get_file_as_string(path))
@@ -118,7 +121,7 @@ func set_quality(q: int) -> void:
 	for m: ShaderMaterial in _kinds.get("water", []):
 		m.set_shader_parameter("layers", 1.0 if q == 0 else 2.0)
 	for m: ShaderMaterial in _kinds.get("facade", []):   # v0.22.4 : halo des fenêtres (une lecture de texture de plus par pixel de façade) : Normale et Haute
-		m.set_shader_parameter("glow_k", 0.0 if q == 0 or "--dbg-nowinglow" in OS.get_cmdline_user_args() else FACADE_GLOW)
+		m.set_shader_parameter("glow_k", 0.0 if q == 0 or "--dbg-nowinglow" in OS.get_cmdline_user_args() else FACADE_GLOW * _lit)
 		if m.get_shader_parameter("bump_tex") != null:   # v0.24.1 : Rapide = ancien rendu ; Normale = PBR + relief ; Haute = + bois PBR des colombages
 			m.set_shader_parameter("pbr_k", 0.0 if q == 0 else 1.0)
 			m.set_shader_parameter("pbr_hi", 1.0 if q >= 2 else 0.0)
@@ -213,6 +216,7 @@ func _load_materials() -> void:
 			sm.emission_enabled = true
 			sm.emission = Config.color(em)
 			sm.emission_energy_multiplier = float(m["ei"])
+			_emissive.append([sm, float(m["ei"])])
 			var te := _tex(int(m["emap"]))
 			if te != null:
 				sm.emission_texture = te
@@ -410,6 +414,20 @@ func _lamps() -> void:
 		add_child(l)
 		_lamp_lights.append(l)
 
+## Fenêtres, ampoules et enseignes : l'émission suit `lit` (1 la nuit, 0 le jour) ; le halo des fenêtres aussi.
+func _apply_lit(lit: float) -> void:
+	if absf(lit - _lit) < 0.01 and not (lit <= 0.0 and _lit > 0.0) and not (lit >= 1.0 and _lit < 1.0):
+		return
+	_lit = lit
+	for m: ShaderMaterial in _kinds.get("facade", []):
+		if m.get_meta("emis_base", -1.0) < 0.0:
+			m.set_meta("emis_base", float(m.get_shader_parameter("emission_energy")))
+		m.set_shader_parameter("emission_energy", float(m.get_meta("emis_base")) * lit)
+		if float(m.get_shader_parameter("glow_k")) > 0.0 or lit > 0.0:
+			m.set_shader_parameter("glow_k", 0.0 if int(Game.settings.get_value("quality")) == 0 or "--dbg-nowinglow" in OS.get_cmdline_user_args() else FACADE_GLOW * lit)
+	for e: Array in _emissive:
+		(e[0] as StandardMaterial3D).emission_energy_multiplier = float(e[1]) * lit
+
 func _assign_lamps(p: Vector3) -> void:
 	if "--dbg-nolamps" in OS.get_cmdline_user_args():   # mise au point : sans lampadaires ni lumières de machines
 		return
@@ -422,9 +440,12 @@ func _assign_lamps(p: Vector3) -> void:
 	near.sort_custom(func(a, b): return a[0] < b[0])
 	if "--dbg-lights" in OS.get_cmdline_user_args():
 		print("lampes : %d proches de %s ; plus proche %s" % [near.size(), p, near[0] if near.size() > 0 else null])
-	# l'Aube éteint peu à peu les lampadaires (summit.js : setLampScale(1 - 0,92 x lissage(min(1, k x 1,3))))
-	var lk := minf(1.0, (Game.finale.sky_k if Game.finale != null else 0.0) * 1.3)
-	var lamp_scale := 1.0 - 0.92 * (lk * lk * (3.0 - 2.0 * lk))
+	# v0.25.0 : lampadaires et fenêtres suivent le ciel (cycle jour / nuit, ou l'Aube de la finale) : allumés au crépuscule, éteints à l'aube ; il en reste 8 % de jour (summit.js : 1 - 0,92 x lissage)
+	if _gv == null:
+		_gv = get_tree().get_first_node_in_group("graphics_view")
+	var lit := DayNight.lamps_of(float(_gv.sky_k) if _gv != null else 0.0)
+	_apply_lit(lit)
+	var lamp_scale := 0.08 + 0.92 * lit
 	_glow_gain = lamp_scale
 	_glow.set_state(lamp_scale, _glow_pools)
 	for i in _lamp_lights.size():
@@ -435,6 +456,6 @@ func _assign_lamps(p: Vector3) -> void:
 			l.light_color = Config.color(int(lp[3]))
 			l.light_energy = float(lp[4]) * LAMP_ENERGY_K * lamp_scale
 			l.omni_range = float(lp[5])
-			l.visible = true
+			l.visible = lit > 0.02   # plein jour : les lampadaires éteints n'éclairent plus (aucun coût)
 		else:
 			l.visible = false

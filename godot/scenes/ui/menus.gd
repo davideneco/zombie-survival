@@ -484,11 +484,16 @@ func _build_options(col: Control) -> void:
 	inner.add_theme_constant_override("separation", 4)
 	box.add_child(inner)
 	p.add_child(box)
-	for pair in [["brightness", "Luminosité"], ["fov", "Champ de vision"], ["sens", "Sensibilité"], ["quality", "Qualité"], ["upscaler", "Mise à l'échelle"], ["res_scale", "Résolution 3D"], ["sharp", "Netteté"], ["aa", "Anticrénelage"], ["aniso", "Filtrage textures"], ["volume", "Volume"], ["music", "Musique"]]:
+	for pair in [["brightness", "Luminosité"], ["fov", "Champ de vision"], ["sens", "Sensibilité"], ["quality", "Qualité"], ["upscaler", "Mise à l'échelle"], ["res_scale", "Résolution 3D"], ["sharp", "Netteté"], ["aa", "Anticrénelage"], ["aniso", "Filtrage textures"], ["daynight", "Cycle jour/nuit"], ["day_minutes", "Durée du jour"], ["view", "Vue à pied"], ["volume", "Volume"], ["music", "Musique"]]:
 		_slider_row(inner, pair[0], pair[1])
+	var grid := GridContainer.new()   # v0.25.0 : les quatre boutons sur deux colonnes (les trois nouveaux réglages ne tenaient plus en 720p)
+	grid.columns = 2
+	grid.add_theme_constant_override("h_separation", 8)
+	grid.add_theme_constant_override("v_separation", 4)
+	inner.add_child(grid)
 	for pair in [["chat", "AFFICHER LE CHAT"], ["cinema", "EFFETS CINÉMA"], ["halo", "HALO (HAUTE)"], ["fps", "COMPTEUR FPS (F3)"]]:
 		var key: String = pair[0]
-		var b := _btn(inner, "", func() -> void: settings.set_value(key, not bool(settings.get_value(key))), "SubButton")
+		var b := _btn(grid, "", func() -> void: settings.set_value(key, not bool(settings.get_value(key))), "SubButton", 330.0)
 		b.add_theme_font_size_override("font_size", 18)
 		_btn_toggles[key] = [b, pair[1]]
 	var kb := _btn(inner, "TOUCHES", func() -> void: open_keys(), "SubButton")

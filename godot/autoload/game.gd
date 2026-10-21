@@ -75,6 +75,7 @@ var flow_us := 0           ## microsecondes passées dans le champ de flux au de
 var rng := RandomNumberGenerator.new()
 var _next_id := 1
 var finale: FinaleSim      ## J10 : fin de partie, Acte V, Maître Tanneur (null dans l'arène)
+var daynight := DayNight.new()   ## v0.25.0 : heure du jeu, ciel, lampadaires (sim/day_night.gd) ; en tests : la nuit d'avant, rien ne change
 var finale_done := false   ## le Bourreau a été vaincu
 var eternal := false       ## Nuit éternelle (après l'Aube) : +30 % de vie aux zombies dès la manche suivante
 var blessed := false       ## Bénédiction de l'Aube : atouts gardés à terre
@@ -189,6 +190,7 @@ func new_game(seed_value: int = -1, map: String = "", weapons: Array = [], prelo
 	finale = FinaleSim.new(self) if world != null else null
 	finale_done = false
 	eternal = false
+	daynight = DayNight.new()
 	blessed = false
 	free_doors = false
 	fanal_input = false
@@ -240,6 +242,12 @@ func alive_count() -> int:
 			n += 1
 	return n
 
+## Ciel de la finale quand elle le dessine (Acte V en cours, aube, jour, crépuscule : sky_k), sinon -1 : le cycle jour / nuit reprend la main.
+func finale_sky() -> float:
+	if finale != null and (finale.active() or finale.sky_phase != "night" or finale.sky_k > 0.0):
+		return finale.sky_k
+	return -1.0
+
 ## Un pas de simulation. input : { mx, mz, sprint, jump, fire (maintenu), reload (appui) } ; yaw et pitch sont lus sur player
 ## (posés par la visée, hors du pas fixe).
 func step(dt: float, input: Dictionary) -> void:
@@ -264,6 +272,7 @@ func step(dt: float, input: Dictionary) -> void:
 		if finale.cam_lock:   # vue orbitale de l'Aube : le joueur est immobile
 			input = {}
 		fanal_input = bool(input.get("interact", false))
+	daynight.update(dt, finale_sky(), eternal)
 	player.locked = arms.locked
 	player.step(dt, time, input, collision, world.levels if world != null else null, world)
 	if player.vault_event:
@@ -699,6 +708,7 @@ func _spawn_zombie() -> void:
 		hp = float(Pap.js_round(director.zombie_health * float(Z["ironKnight"]["healthMult"])))
 	elif pest:
 		hp = float(Pap.js_round(director.zombie_health * float(Z["pestilent"]["healthMult"])))
+	hp *= daynight.zombie_health_mult()   # v0.25.0 : +10 % la nuit en cycle Auto (sim/day_night.gd)
 	z.health = hp
 	z.max_health = hp
 	z.speed = spd

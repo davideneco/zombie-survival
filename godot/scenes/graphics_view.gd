@@ -117,11 +117,15 @@ func setup(cam: Camera3D, is_arena: bool) -> void:
 func _build_environment() -> void:
 	var C: Dictionary = Config.at("graphics")
 	var S: Dictionary = C["sky"]
+	if not _global_added:   # (global_shader_parameter_get_list est réservé à l'éditeur)
+		_global_added = true
+		RenderingServer.global_shader_parameter_add("cloud_time", RenderingServer.GLOBAL_VAR_TYPE_FLOAT, 0.0)
 	sky_mat = ShaderMaterial.new()
 	sky_mat.shader = SKY_SHADER
 	var el := float(S["moonElevation"])
 	var az := float(S["moonAzimuth"])
-	sky_mat.set_shader_parameter("moon_dir", Vector3(cos(el) * cos(az), sin(el), cos(el) * sin(az)).normalized())
+	_moon_dir_night = Vector3(cos(el) * cos(az), sin(el), cos(el) * sin(az)).normalized()
+	sky_mat.set_shader_parameter("moon_dir", _moon_dir_night)
 	sky_mat.set_shader_parameter("moon_size", float(S["moonSize"]))
 	sky_mat.set_shader_parameter("cloud_night", Color(String(S["cloudNight"])))
 	sky_mat.set_shader_parameter("hemi_sky", HEMI_SKY)
@@ -129,7 +133,9 @@ func _build_environment() -> void:
 	var sky := Sky.new()
 	sky.sky_material = sky_mat
 	sky.radiance_size = Sky.RADIANCE_SIZE_256
-	sky.process_mode = Sky.PROCESS_MODE_REALTIME   # le rayonnement (éclairage ambiant) change avec la luminosité : un ciel « statique » ne se recalcule pas quand un uniforme change
+	# v0.25.0 : le rayonnement (éclairage ambiant) n'est plus recalculé à chaque image : le temps des nuages est un uniforme global (qui ne marque pas le matériau comme modifié) ;
+	# le ciel ne se recalcule que quand set_sky_k / apply_exposure changent un paramètre du matériau (paliers du cycle jour / nuit, luminosité)
+	sky.process_mode = Sky.PROCESS_MODE_AUTOMATIC
 	env = Environment.new()
 	env.background_mode = Environment.BG_SKY
 	env.sky = sky
@@ -204,7 +210,7 @@ func set_torch(on: bool) -> void:
 	_update_torch()
 
 func _update_torch() -> void:
-	torch.light_energy = float(Config.at("graphics.torch.intensity")) * THREE_TO_GODOT * float(zone_k["torch"]) * dbg_torch_k if torch_on else 0.0
+	torch.light_energy = float(Config.at("graphics.torch.intensity")) * THREE_TO_GODOT * float(zone_k["torch"]) * dbg_torch_k * _torch_day if torch_on else 0.0
 	torch.visible = torch_on
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -331,6 +337,14 @@ const SKY_TOP := ["04070d", "2a2f5a", "3f78c8"]
 const SKY_MID := ["0c1522", "b8706a", "7fb2e8"]
 const SKY_BOT := ["1b2535", "f3b074", "c9e0f4"]
 var _hemi_k := HEMI_INTENSITY
+const LIGHT_MIN_ELEV := 14.0         ## v0.25.0 : la lumière directionnelle ne descend pas sous cette hauteur (ombres démesurées et instables au ras de l'horizon) ; le ciel garde la vraie position
+const CYCLE_K_STEP := 0.004          ## v0.25.0 : le ciel est recalculé par paliers (sky_k de 0,4 % ou 0,02 h de jeu), pas à chaque image
+const CYCLE_HOUR_STEP := 0.02
+static var _global_added := false
+var _torch_day := 1.0                ## la lampe torche pâlit en plein jour
+var _cyc := false
+var _last_hour := -1.0
+var _moon_dir_night := Vector3.UP
 
 static func _sm(x: float) -> float:
 	return x * x * (3.0 - 2.0 * x)
@@ -350,8 +364,10 @@ static func _pick_n(arr: Array, k: float) -> float:
 	var sg := _seg(k)
 	return lerpf(float(arr[sg[0]]), float(arr[sg[1]]), float(sg[2]))
 
-## L'Aube : le ciel passe de la nuit au jour (k de 0 à 1) : dôme, brouillard, ambiance, lune qui devient le soleil, étoiles, halo (summit.js applySky).
-func set_sky_k(k: float) -> void:
+## Le ciel à l'instant k (0 nuit .. 1 jour) : dôme, brouillard, ambiance, lumière directionnelle, étoiles, halo. Deux emplois :
+##  - hour < 0 : l'Aube de la finale (summit.js applySky) ou « Toujours nuit » : le soleil monte à l'est de -4 à 38 degrés, la lune est celle du JS (fixe) ;
+##  - hour >= 0 : le cycle jour / nuit (v0.25.0, sim/day_night.gd) : le soleil et la lune suivent l'heure, la lumière passe de l'un à l'autre à l'horizon.
+func set_sky_k(k: float, hour := -1.0) -> void:
 	sky_k = k
 	if is_inside_tree():
 		get_tree().call_group("sky_listener", "on_sky_k", k)
@@ -361,9 +377,25 @@ func set_sky_k(k: float) -> void:
 	sky_mat.set_shader_parameter("bot", _pick_c(SKY_BOT, k))
 	sky_mat.set_shader_parameter("moon_k", 1.0 - _sm(minf(1.0, k / 0.35)))
 	sky_mat.set_shader_parameter("day_k", _sm(clampf((k - 0.25) / 0.6, 0.0, 1.0)))
-	var el := deg_to_rad(-4.0 + 42.0 * _sm(k))   # le soleil monte à l'est de -4° à 38° d'élévation
-	sky_mat.set_shader_parameter("sun_dir", Vector3(cos(el) * cos(deg_to_rad(20.0)), sin(el), cos(el) * sin(deg_to_rad(20.0))))
-	sky_mat.set_shader_parameter("sun_k", (minf(1.0, k * 5.0) * (1.0 - 0.35 * _sm(maxf(0.0, k - 0.6) / 0.4))) if k > 0.02 else 0.0)
+	sky_mat.set_shader_parameter("stars_k", 1.0 - smoothstep(0.08, 0.30, k))
+	var cycle := hour >= 0.0
+	var sun_d: Vector3
+	var moon_d := _moon_dir_night
+	var elev := -4.0 + 42.0 * _sm(k)   # degrés (L'Aube : le soleil monte à l'est)
+	if cycle:
+		sun_d = DayNight.sun_dir(hour)
+		moon_d = DayNight.moon_dir(hour)
+		elev = rad_to_deg(asin(clampf(sun_d.y, -1.0, 1.0)))
+	else:
+		var el := deg_to_rad(elev)
+		sun_d = Vector3(cos(el) * cos(deg_to_rad(20.0)), sin(el), cos(el) * sin(deg_to_rad(20.0)))
+	sky_mat.set_shader_parameter("sun_dir", sun_d)
+	sky_mat.set_shader_parameter("moon_dir", moon_d)
+	var sun_fade := 1.0 - 0.35 * _sm(maxf(0.0, k - 0.6) / 0.4)
+	if cycle:
+		sky_mat.set_shader_parameter("sun_k", clampf((elev + 3.0) / 5.0, 0.0, 1.0) * sun_fade)
+	else:
+		sky_mat.set_shader_parameter("sun_k", (minf(1.0, k * 5.0) * sun_fade) if k > 0.02 else 0.0)
 	sky_mat.set_shader_parameter("hemi_sky", _pick_c(SKY_HEMI_SKY, k))
 	sky_mat.set_shader_parameter("hemi_ground", _pick_c(SKY_HEMI_GROUND, k))
 	_hemi_k = _pick_n(SKY_HEMI, k)
@@ -373,12 +405,46 @@ func set_sky_k(k: float) -> void:
 		_set_fog(_fog_base * (1.0 - 0.6 * _sm(clampf((k - 0.2) / 0.5, 0.0, 1.0))))
 	_set_atmosphere(k)
 	_set_fog(_pick_n(SKY_DENSITY, k) * (1.15 if arena else 1.0))
-	moon.light_color = _pick_c(SKY_SUN, k)
-	moon.light_energy = _pick_n(SKY_SUN_I, k) * THREE_TO_GODOT
-	var off: Vector3 = SKY_SUN_POS[sg[0]].lerp(SKY_SUN_POS[sg[1]], float(sg[2]))
-	moon.global_transform = Transform3D(Basis.looking_at(-off.normalized(), Vector3.UP), Vector3.ZERO)
+	if cycle:
+		# une seule lumière directionnelle : le soleil au-dessus de l'horizon, la lune dessous ; chacune s'éteint en s'approchant de l'horizon (le relais se fait à énergie nulle,
+		# l'ambiance du ciel porte le crépuscule)
+		var use_sun := elev > -3.5
+		var ld := _lift(sun_d if use_sun else moon_d)
+		moon.light_color = _pick_c(SKY_SUN, k) if use_sun else MOON_COLOR
+		var e := _pick_n(SKY_SUN_I, k) * smoothstep(-4.0, 3.0, elev) if use_sun else MOON_INTENSITY * smoothstep(3.0, 12.0, -elev)
+		moon.light_energy = e * THREE_TO_GODOT
+		moon.global_transform = Transform3D(Basis.looking_at(-ld, Vector3.UP), Vector3.ZERO)
+	else:
+		moon.light_color = _pick_c(SKY_SUN, k)
+		moon.light_energy = _pick_n(SKY_SUN_I, k) * THREE_TO_GODOT
+		var off: Vector3 = SKY_SUN_POS[sg[0]].lerp(SKY_SUN_POS[sg[1]], float(sg[2]))
+		moon.global_transform = Transform3D(Basis.looking_at(-off.normalized(), Vector3.UP), Vector3.ZERO)
+	_torch_day = lerpf(1.0, 0.12, _sm(clampf(k / 0.6, 0.0, 1.0)))
 	_apply_glow(env.glow_enabled)
 	_update_torch()
+
+## Direction de lumière relevée à LIGHT_MIN_ELEV au moins (le ciel, lui, garde la vraie hauteur de l'astre).
+static func _lift(d: Vector3) -> Vector3:
+	var smin := sin(deg_to_rad(LIGHT_MIN_ELEV))
+	if d.y >= smin:
+		return d
+	var h := Vector2(d.x, d.z)
+	h = h.normalized() if h.length() > 1e-4 else Vector2(1, 0)
+	var c := sqrt(1.0 - smin * smin)
+	return Vector3(h.x * c, smin, h.y * c)
+
+## Le cycle jour / nuit : relit Game.daynight à chaque image mais ne recalcule le ciel que par paliers.
+func _follow_cycle() -> void:
+	var dn: DayNight = Game.daynight
+	if dn == null or dbg_sky >= 0.0:
+		return
+	var cyc := not dn.override and dn.mode != DayNight.MODE_NIGHT
+	var dk := absf(dn.sky_k - sky_k)
+	var moved := dk >= CYCLE_K_STEP or (dk > 0.0 and (dn.sky_k <= 0.0 or dn.sky_k >= 1.0))
+	if cyc != _cyc or moved or (cyc and absf(dn.hour - _last_hour) >= CYCLE_HOUR_STEP) or _last_hour < 0.0:
+		_cyc = cyc
+		_last_hour = dn.hour
+		set_sky_k(dn.sky_k, dn.hour if cyc else -1.0)
 
 # ---------------------------------------------------------------- chaque image
 func _process(dt: float) -> void:
@@ -388,8 +454,7 @@ func _process(dt: float) -> void:
 
 func _tick(dt: float) -> void:
 	_sky_time += dt
-	sky_mat.set_shader_parameter("cloud_time", _sky_time)
-	sky_mat.set_shader_parameter("stars_k", 1.0 if sky_k < 0.28 else 0.0)
+	RenderingServer.global_shader_parameter_set("cloud_time", _sky_time)
 	# zone courante : exposition (lissée : pas de saut en franchissant une porte)
 	if Game.world != null and Game.player != null:
 		var zi: int = Game.world.zone_of(Game.player.pos.x, Game.player.pos.z)
@@ -398,8 +463,7 @@ func _tick(dt: float) -> void:
 	var k := GraphicsRules.zone_blend(dt)
 	for key: String in ["exposure", "env", "torch"]:
 		zone_k[key] += (float(Z[key]) - float(zone_k[key])) * k
-	if Game.finale != null and dbg_sky < 0.0 and not is_equal_approx(Game.finale.sky_k, sky_k):
-		set_sky_k(Game.finale.sky_k)
+	_follow_cycle()
 	apply_exposure()
 	_update_torch()
 	# l'ombre de la lune suit le joueur (lumière à (25, 55, 15) de la cible) : l'orientation est fixe, seul le volume d'ombre suit la caméra

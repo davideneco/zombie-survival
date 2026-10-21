@@ -16,7 +16,7 @@ uniform vec3 sun_dir = vec3(0.9, 0.0, 0.3);
 uniform float sun_k = 0.0;       // J10 : le soleil de l'Aube (summit.js buildSun : disque + halo additifs), 0 la nuit
 uniform float cloud_cover = 1.0;  // 0 en qualité Rapide
 uniform float stars_k = 1.0;      // visibles tant que k < 0,28
-uniform float cloud_time = 0.0;   // temps du ciel (secondes)
+global uniform float cloud_time;  // temps du ciel (secondes) : uniforme GLOBAL (ajouté à l'exécution par graphics_view.gd) : un uniforme de matériau changé à chaque image ferait recalculer le rayonnement du ciel à chaque image
 uniform vec3 hemi_sky : source_color = vec3(0.4, 0.467, 0.667);     // 0x6677aa
 uniform vec3 hemi_ground : source_color = vec3(0.133, 0.125, 0.094); // 0x222018
 uniform float ambient_scale = 0.49;  // 1,1 x luminosité / pi : l'énergie ambiante d'Environment est ignorée pour un ambiant venu du ciel, le facteur est donc dans le ciel
