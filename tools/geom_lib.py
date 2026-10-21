@@ -181,3 +181,26 @@ def ray_tris(T, O, D, maxd=400.0):
         return None, None
     idx = np.where(ok)[0]; j = idx[np.argmin(t[idx])]
     return float(t[j]), int(j)
+
+
+def add_patch_tris(T, path=None):
+    """Ajoute à T les bouchons de godot/data/world_patches.json (panneaux et colonnes à 12 pans) comme triangles à deux faces (matériau 0 : côté 0, on force deux faces)."""
+    path = path or os.path.join(ROOT, 'godot', 'data', 'world_patches.json')
+    d = json.load(open(path))
+    A, B, C = [], [], []
+    def quad(a, b, y0, y1):
+        p0 = (a[0], y0, a[1]); p1 = (b[0], y0, b[1]); p2 = (b[0], y1, b[1]); p3 = (a[0], y1, a[1])
+        A.extend([p0, p0]); B.extend([p1, p2]); C.extend([p2, p3])
+    for w in d['walls']:
+        if 'c' in w:
+            for k in range(12):
+                a0 = 2 * np.pi * k / 12; a1 = 2 * np.pi * (k + 1) / 12
+                quad((w['c'][0] + w['r'] * np.cos(a0), w['c'][1] + w['r'] * np.sin(a0)), (w['c'][0] + w['r'] * np.cos(a1), w['c'][1] + w['r'] * np.sin(a1)), w['y0'], w['y1'])
+        else:
+            quad(w['a'], w['b'], w['y0'], w['y1'])
+    n = len(A)
+    T = dict(T)
+    T['A'] = np.concatenate([T['A'], np.array(A)]); T['B'] = np.concatenate([T['B'], np.array(B)]); T['C'] = np.concatenate([T['C'], np.array(C)])
+    T['mat'] = np.concatenate([T['mat'], np.full(n, -1, np.int32)])
+    T['src'] = np.concatenate([T['src'], np.full(n, 3, np.int32)]); T['src_id'] = np.concatenate([T['src_id'], np.full(n, -1, np.int32)])
+    return T

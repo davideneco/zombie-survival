@@ -6,6 +6,7 @@ extends Node3D
 
 const DIR := "res://data/world/"
 const Surfaces := preload("res://scenes/world/surfaces.gd")
+const PatchView := preload("res://scenes/world/patch_view.gd")
 const INSTANCE_CELL := 160.0      ## m : maille de rangement des instances (MultiMesh)
 const TILE_VIS_RANGE := 190.0     ## m : au-delà, la tuile n'est plus dessinée (le brouillard la cache déjà ; la caméra du JS s'arrête à 170 m)
 const TREE_CARD_RANGE := [60.0, 190.0, 190.0]   ## portée des cartes de feuillage selon la qualité (Rapide : arbres plus proches seulement)
@@ -69,6 +70,9 @@ func build() -> void:
 			tile_count += 1
 			triangle_count += int(t["tri"])
 	await _slice()
+	var patches := PatchView.build()   # v0.23.2 : murs de collision sans surface dessinée
+	if patches != null:
+		add_child(patches)
 	_load_doors()
 	await _slice()
 	_load_instances()

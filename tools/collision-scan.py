@@ -2,7 +2,7 @@
 """Murs invisibles et murs à sens unique (v0.23.0) : compare la collision cuite (godot/data/world/collision) à la géométrie visible
 (tuiles, portes, instances de godot/data/world) et écrit un rapport.
 
-  python3 tools/collision-scan.py [--tol=0.3] [--out=rapport.json] [--top=60] [--step=0.4]
+  python3 tools/collision-scan.py [--tol=0.3] [--out=rapport.json] [--top=60] [--step=0.4] [--high] [--patches=f.json] [--with-patches]
 
 Test 1, MUR INVISIBLE : un segment / cercle de collision est testé en des points espacés de 0,4 m, à deux hauteurs du corps (0,6 et 1,5 m, bornées par sa
 bande) ; un point est « vu » si une face (de n'importe quel sens) est à moins de TOL en 3D. Plus de 60 % de points non vus = INVISIBLE. Sont écartés : portes
@@ -123,13 +123,71 @@ def cluster(items, gap=0.6):
     return res
 
 
+def dist_only(T, bins, lo, hi, P):
+    """Distance de chaque point de P à la face visible la plus proche (sans orientation)."""
+    A, B, C = T['A'], T['B'], T['C']
+    dist = np.full(len(P), np.inf)
+    cx = np.floor(P[:, 0] / CELL).astype(int); cz = np.floor(P[:, 2] / CELL).astype(int)
+    keys = {}
+    for k in range(len(P)):
+        keys.setdefault((cx[k], cz[k]), []).append(k)
+    for key, ids in keys.items():
+        cand = bins.get(key)
+        if not cand:
+            continue
+        cand = np.array(cand); ids = np.array(ids); Q = P[ids]
+        cand = cand[(hi[cand, 1] >= Q[:, 1].min()) & (lo[cand, 1] <= Q[:, 1].max())]
+        for s0 in range(0, len(cand), 400):
+            cs = cand[s0:s0 + 400]
+            pp = np.repeat(Q, len(cs), axis=0); tt = np.tile(cs, len(Q))
+            d = g.point_tri_dist(pp, A[tt], B[tt], C[tt]).reshape(len(Q), len(cs)).min(1)
+            dist[ids] = np.minimum(dist[ids], d)
+    return dist
+
+
+def make_patches(items, T, bins, lo, hi, far_min):
+    """Bouchons visibles des collisions sans face (ne touchent pas à la collision) :
+    - mur de sol (far >= far_min) : panneau de 0 jusqu'à la plus basse face visible au-dessus (partie flottante : portique de l'Opéra), bornée à 2,5-4,5 m, 3 m sans face ;
+    - mur d'étage (cathédrale : escalier de la flèche) à plus de 1 m de toute face : parapet de 1,1 m ;
+    - cercle d'étage (colonne de la plateforme) à plus de 1 m de toute face : colonne de y0 à min(h, y0 + 10)."""
+    out = []
+    ys = np.arange(1.8, 24.0, 0.3)
+    for o in items:
+        if o['kind'] == 'circle':
+            if o['y0'] is None or o['far'] < 1.0:
+                continue
+            out.append(dict(c=o['a'], r=o['r'], y0=o['y0'], y1=round(min(o['h'] or 99.0, o['y0'] + 10.0), 2), zone=o['zone'], circle=o['i']))
+            continue
+        if o['prop']:
+            continue
+        if o['y0'] is not None:
+            if o['far'] >= 1.0:
+                out.append(dict(a=o['a'], b=o['b'], y0=o['y0'], y1=round(o['y0'] + 1.1, 2), zone=o['zone'], seg=o['i']))
+            continue
+        if o['far'] < far_min:
+            continue
+        (ax, az), (bx, bz) = o['a'], o['b']
+        ts = np.linspace(0.15, 0.85, 5)
+        P = np.array([(ax + (bx - ax) * t, y, az + (bz - az) * t) for t in ts for y in ys])
+        d = dist_only(T, bins, lo, hi, P).reshape(len(ts), len(ys))
+        tops = []
+        for row in d:
+            ok = np.where(row <= TOL)[0]
+            tops.append(ys[ok[0]] if len(ok) else 3.0)
+        top = float(np.clip(np.median(tops), 2.5, 4.5))
+        out.append(dict(a=[ax, az], b=[bx, bz], y0=0.0, y1=round(top, 2), zone=o['zone'], seg=o['i']))
+    return out
+
+
 def main():
     t0 = time.time()
     T = g.load_world_tris()
+    if 'with-patches' in args:   # compte les bouchons (world_patches.json) comme géométrie visible : état « après »
+        T = g.add_patch_tris(T)
     mats = g.jload('materials.json')
     A, B, C = T['A'], T['B'], T['C']
     wn = np.cross(B - A, C - A); wn /= np.linalg.norm(wn, axis=1)[:, None] + 1e-18
-    two_sided = np.array([m['side'] == 2 for m in mats])[T['mat']]
+    two_sided = np.array([m['side'] == 2 for m in mats + [dict(side=2)]])[T['mat']]   # (matériau -1 : les bouchons, deux faces)
     segs, circles = g.load_collision()
     nav = g.Nav(); zones = g.Zones()
     P, owner, nrm, tix = sample_points(segs, circles, dynamic_points())
@@ -215,6 +273,10 @@ def main():
             d['side'] = r['side']; one.append(d)
     inv.sort(key=lambda o: -o['len']); one.sort(key=lambda o: -o['len'])
     ci, co = cluster(inv), cluster(one)
+    if 'patches' in args:
+        pl = make_patches(inv, T, bins, lo, hi, float(args.get('patch-far', 0.5)))
+        json.dump(dict(comment='Bouchons visibles des murs invisibles (tools/collision-scan.py --patches) : panneau de (a) à (b), de y0 à y1, dessiné par scenes/world/patch_view.gd ; la collision ne change pas.', walls=pl), open(args['patches'], 'w'), indent=0)
+        print('bouchons écrits : %d panneaux dans %s' % (len(pl), args['patches']))
     if 'out' in args:
         json.dump(dict(tol=TOL, invisible=len(inv), one_sided=len(one), items=inv + [dict(o, kind=o['kind']) for o in one], invisible_items=inv, one_sided_items=one, clusters=ci, one_sided_clusters=co), open(args['out'], 'w'))
     walls = [c for c in ci if not c['prop']]
