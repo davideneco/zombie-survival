@@ -645,6 +645,7 @@ CONFIG.keybinds = [
   { id: 'weapon3', group: 'Combat', label: 'Arme 3', def: 'code:Digit3', kind: 'code', ctx: 'all' },
   { id: 'grenade', group: 'Combat', label: 'Grenade', def: 'key:g', kind: 'key', ctx: 'all' },
   { id: 'knife', group: 'Combat', label: 'Coup de couteau (à pied)', def: 'key:v', kind: 'key', ctx: 'foot' },
+  { id: 'footView', group: 'Équipement', label: 'Vue à la 3e personne à pied (port Godot : option « Vue »)', def: 'key:t', kind: 'key', ctx: 'foot' },
   { id: 'torch', group: 'Équipement', label: 'Lampe torche', def: 'key:f', kind: 'key', ctx: 'all' },
   { id: 'interact', group: 'Équipement', label: 'Interagir (acheter, porte, machine, réanimer, moto, vélo)', def: 'key:e', kind: 'key', ctx: 'all' },
   { id: 'map', group: 'Équipement', label: 'Carte', def: 'key:m', kind: 'key', ctx: 'all' },

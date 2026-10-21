@@ -21,7 +21,7 @@ static func damage(round_number: int, head: bool, back: bool, has_axe: bool) -> 
 static func pick_target(p: PlayerSim, zombies: Array, col: Collision) -> Dictionary:
 	var K: Dictionary = Config.at("knife")
 	var rng_ := float(K["range"])
-	var ro := p.eye()
+	var ro := p.shot_eye()
 	var rd := p.forward()
 	var wall_t := col.ray_hit(ro.x, ro.y, ro.z, rd.x, rd.y, rd.z, rng_ + 0.5)
 	var best_t := INF

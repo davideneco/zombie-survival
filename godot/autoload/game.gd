@@ -61,6 +61,7 @@ var powerups: Powerups     ## J6 : bonus au sol et bonus actifs (Mort instantan�
 var machines: Machines     ## J6 : atouts, boîte mystère, Pack-a-Punch (null dans l'arène)
 var rng_loot := RandomNumberGenerator.new()   ## J6 : tirages des bonus et de la boîte (séparé de `rng` : les apparitions restent reproductibles)
 var rides: Rides           ## J5 : motos, vélos, tram (null dans l'arène)
+var foot_cam := RideCam.new()   ## v0.25.1 : caméra de la vue à la troisième personne à pied dans l'arène (sur la carte de Strasbourg : rides.cam)
 var shake := 0.0           ## J5 : secousse de la caméra (chocs, explosions), décroît d'elle-même
 var vehicles: Array[VehicleSim]:   ## les motos et vélos (pour les chocs entre machines)
 	get: return rides.vehicles if rides != null else []
@@ -163,6 +164,7 @@ func new_game(seed_value: int = -1, map: String = "", weapons: Array = [], prelo
 		arena = null
 		collision = world.collision
 	player = PlayerSim.new()
+	foot_cam = RideCam.new()
 	player.reset(arena.start_pos if arena != null else world.start_pos)
 	arms = WeaponArms.new(weapons if not weapons.is_empty() else [Rules.J1_WEAPON])
 	powerups = Powerups.new()
@@ -248,6 +250,14 @@ func finale_sky() -> float:
 		return finale.sky_k
 	return -1.0
 
+## La caméra à la troisième personne : celle des machines (rides.cam) sur la carte de Strasbourg, `foot_cam` dans l'arène.
+func view_cam() -> RideCam:
+	return rides.cam if rides != null else foot_cam
+
+## Réglage « Vue » = 3e personne, hors rame (on y reste à la première personne).
+func foot_third_wanted() -> bool:
+	return settings != null and int(settings.get_value("view")) == 1 and not (rides != null and rides.on_tram != null)
+
 ## Un pas de simulation. input : { mx, mz, sprint, jump, fire (maintenu), reload (appui) } ; yaw et pitch sont lus sur player
 ## (posés par la visée, hors du pas fixe).
 func step(dt: float, input: Dictionary) -> void:
@@ -256,7 +266,9 @@ func step(dt: float, input: Dictionary) -> void:
 	time += dt
 	shake = maxf(0.0, shake - shake * dt * 3.0)
 	var arms_input := input
+	var foot_tp := foot_third_wanted()
 	if rides != null:
+		rides.cam.foot_third = foot_tp
 		rides.step(dt, input)   # motos et rame d'abord, puis le joueur (il suit la selle, ou marche dans la rame)
 		if rides.attached():
 			arms_input = input.duplicate()
@@ -267,6 +279,12 @@ func step(dt: float, input: Dictionary) -> void:
 				arms_input["aim"] = false
 				arms_input["grenade"] = false
 				arms_input["gl"] = false
+	else:   # arène : pas de machines, la caméra à pied est la nôtre
+		foot_cam.foot_third = foot_tp
+		foot_cam.update(dt, null, player.pos + Vector3(0, float(Config.at("player.eye")), 0), player, bool(input.get("aim", false)), self)
+		player.eye_override = foot_cam.cam_pos if foot_cam.placed else Vector3.INF
+	var vc := view_cam()
+	player.eye_ext = vc.dist if vc.external() else 0.0
 	if finale != null:
 		finale.step(dt)
 		if finale.cam_lock:   # vue orbitale de l'Aube : le joueur est immobile

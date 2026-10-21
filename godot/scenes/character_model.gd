@@ -1,7 +1,7 @@
 class_name CharacterModel
 extends Node3D
 ## v0.21.0 : modèle 3D d'un personnage jouable (assets/characters/<id>.glb, fabriqué par tools/build-characters.py, voir assets/characters/LICENSE.txt).
-## Squelette humanoïde commun (mêmes noms d'os pour les 8) et animations : Idle, Walk, Run, Sit_Moto, Sit_Bike, Sit_Tram, Sit_Tram_Drive, Death.
+## Squelette humanoïde commun (mêmes noms d'os pour les 8) et animations : Idle, Walk, Run, Sit_Moto, Sit_Bike, Sit_Tram, Sit_Tram_Drive, Death, Jump (v0.25.1).
 ## Repère du modèle : pieds à y = 0, face vers +Z (comme les zombies). Pour une moto ou une rame (avant = -Z), tourner le noeud de PI.
 ## Un même noeud sert au menu (aperçu qui tourne), à la vue externe du joueur (moto, vélo, rame) et, plus tard, à l'affichage d'un coéquipier (multijoueur) :
 ##   var m := CharacterModel.create("lea"); parent.add_child(m); m.play("Walk")
@@ -10,7 +10,7 @@ extends Node3D
 
 const DIR := "res://assets/characters/"
 const IDS := ["marc", "lea", "karim", "chloe", "lucian", "picsou", "klukai", "harry"]
-const ANIMS := ["Idle", "Walk", "Run", "Sit_Moto", "Sit_Bike", "Sit_Tram", "Sit_Tram_Drive", "Death"]
+const ANIMS := ["Idle", "Walk", "Run", "Sit_Moto", "Sit_Bike", "Sit_Tram", "Sit_Tram_Drive", "Death", "Jump"]
 const ONE_SHOT := ["Death"]
 const BONES := ["Root", "Hips", "Abdomen", "Torso", "Neck", "Head", "Shoulder.L", "UpperArm.L", "LowerArm.L", "Shoulder.R", "UpperArm.R", "LowerArm.R",
 	"UpperLeg.L", "LowerLeg.L", "Foot.L", "UpperLeg.R", "LowerLeg.R", "Foot.R"]

@@ -115,6 +115,10 @@ var _tracers: Array = []         # [mesh, temps restant]
 var _shot_queue: Array = []       # tirs de l'image, [origine, fin] : traçants créés après la mise à jour de la caméra
 var _pending: Dictionary = {}    # J4 : appuis (couteau, grenade, obus sous canon, arme, molette) lus au prochain pas de simulation
 var _weapon_view: Node3D
+var _avatar: PlayerAvatar          # v0.25.1 : le joueur vu de l'extérieur (vue à la 3e personne à pied)
+var _tp_orbit := 0.0
+var _tp_arm := 0.0
+var _avatar_pose := ""             # --avatar-pose=Idle|Walk|Run|Jump : animation figée (captures)
 var _rides_view: Node3D
 var _prev_eye := Vector3.ZERO    # J5 : œil (caméra) au pas précédent, pour l'interpolation sur un véhicule
 var _mount := ""                  # --mount=moto|grosseMoto|velo|tram : monte sur la machine la plus proche de l'arrivée
@@ -184,6 +188,15 @@ func _ready() -> void:
 			_open_all = true
 		elif a.begins_with("--sky="):
 			_sky_arg = float(a.substr(6))
+		elif a.begins_with("--view="):   # v0.25.1 : 1 : première personne, 3 : troisième personne à pied (sans toucher aux réglages enregistrés)
+			Game.settings.autosave = false
+			Game.settings.values["view"] = 1 if int(a.substr(7)) == 3 else 0
+		elif a.begins_with("--tp-orbit="):   # v0.25.1 : la caméra de la 3e personne tourne autour du joueur de N degrés (captures)
+			_tp_orbit = deg_to_rad(float(a.substr(11)))
+		elif a.begins_with("--tp-arm="):
+			_tp_arm = float(a.substr(9))
+		elif a.begins_with("--avatar-pose="):
+			_avatar_pose = a.substr(14)
 		elif a.begins_with("--hour="):
 			_hour_arg = fposmod(float(a.substr(7)), 24.0)
 		elif a == "--hold-hour":
@@ -596,6 +609,13 @@ func _build_scene_nodes(map: String) -> void:
 	if _axe_arg:
 		Game.arms.has_axe = true
 	_weapon_view.posed.connect(_flush_shots)
+	Game.view_cam().dbg_orbit = _tp_orbit
+	Game.view_cam().dbg_arm = _tp_arm
+	_avatar = PlayerAvatar.new()
+	_avatar.dbg_pose = _avatar_pose
+	add_child(_avatar)
+	_avatar.setup(_camera)
+	_weapon_view.avatar = _avatar
 	_intro = BossIntro.new()
 	add_child(_intro)
 	_intro.setup(_camera, _hud, _finale_view, _create_view)
@@ -893,6 +913,10 @@ func _unhandled_input(event: InputEvent) -> void:
 		elif event.is_action_pressed("vehicle_view") and riding:
 			Game.rides.toggle_view()   # assis : la touche de vue change de vue
 			Game.settings.set_value("tp_vehicle", Game.rides.cam.third_person)
+		elif event.is_action_pressed("foot_view") and not riding:
+			var third := int(Game.settings.get_value("view")) == 0   # touche T : bascule la vue à pied (réglage « Vue », mémorisé)
+			Game.settings.set_value("view", 1 if third else 0)
+			_hud.toast("Vue : 3e personne" if third else "Vue : 1re personne", 1.5)
 		elif event.is_action_pressed("knife") and not riding:
 			_pending["knife"] = true
 		elif Game.rides != null and event.is_action_pressed("tram_gong"):
@@ -1061,7 +1085,7 @@ func _session_process(dt: float) -> void:
 	var p := Game.player
 	if _spin_rate != 0.0 and Game.playing:
 		p.yaw += _spin_rate * dt
-	if p.eye_override != Vector3.INF or _prev_eye != Vector3.ZERO and Game.rides != null and Game.rides.cam.placed:
+	if p.eye_override != Vector3.INF or _prev_eye != Vector3.ZERO and Game.view_cam().placed:
 		_camera.position = _prev_eye.lerp(_eye_now(), f)
 	else:
 		_camera.position = _prev_player.lerp(p.pos, f) + Vector3(0, p.eye_height() + p.bob(), 0)
@@ -1072,7 +1096,7 @@ func _session_process(dt: float) -> void:
 		roll = Game.rides.ride["v"].lean * 0.5   # la vue penche avec la moto
 	if Game.shake > 0.0:
 		_camera.position += Vector3(randf() - 0.5, randf() - 0.5, randf() - 0.5) * Game.shake * 0.25
-	_camera.rotation = Vector3(p.pitch, p.yaw, roll)   # ordre YXZ : lacet puis tangage
+	_camera.rotation = Vector3(p.pitch, p.yaw + Game.view_cam().dbg_orbit, roll)   # ordre YXZ : lacet puis tangage
 	if _finale_arg == "angel":   # mise au point des captures : la visée suit l'Ange
 		for z in Game.zombies:
 			if z is AngelSim:
@@ -1084,8 +1108,8 @@ func _session_process(dt: float) -> void:
 		var op: Dictionary = Game.finale.orbit_pose()
 		_camera.position = op["pos"]
 		_camera.look_at(op["look"], Vector3.UP)
-	if Game.rides != null:   # arme de la vue cachée en conduisant et en vue externe
-		_weapon_view.hide_gun = Game.rides.driving() or Game.rides.cam.external()
+	var vcam := Game.view_cam()
+	_weapon_view.hide_gun = (Game.rides != null and Game.rides.driving()) or vcam.external()   # arme de la vue cachée en conduisant et en vue externe (machine, ou 3e personne à pied)
 	Game.view_aspect = get_viewport().get_visible_rect().size.aspect()
 	_camera.fov = 68.0 if orbiting else GraphicsRules.fov_for_aspect(Game.arms.fov(float(Game.settings.get_value("fov"))), Game.view_aspect)
 	_weapon_view.hide_gun = _weapon_view.hide_gun or orbiting

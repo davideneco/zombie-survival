@@ -2798,6 +2798,14 @@
     "ctx": "foot"
    },
    {
+    "id": "footView",
+    "group": "Équipement",
+    "label": "Vue à la 3e personne à pied (port Godot : option « Vue »)",
+    "def": "key:t",
+    "kind": "key",
+    "ctx": "foot"
+   },
+   {
     "id": "torch",
     "group": "Équipement",
     "label": "Lampe torche",

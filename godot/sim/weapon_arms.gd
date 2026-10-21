@@ -226,8 +226,9 @@ func _spread_dir(g: Node, spread: float) -> Vector3:
 
 ## Vue externe d'un véhicule : distance caméra - pilote dont le tir est avancé (player.js : ride.dist) ; 0 en vue à la première personne.
 func _external_dist(g: Node) -> float:
-	if g.rides != null and g.rides.cam.external():
-		return g.rides.cam.dist
+	var c: RideCam = g.view_cam() if g.has_method("view_cam") else (g.rides.cam if g.rides != null else null)
+	if c != null and c.external():
+		return c.dist
 	return 0.0
 
 func shoot(g: Node, now: float) -> void:
@@ -322,7 +323,7 @@ func throw_grenade(g: Node) -> bool:
 		return false
 	grenades -= 1
 	var dir := p.forward()
-	var origin := p.eye() + dir * WeaponBlast.NADE_THROW_FWD
+	var origin := p.shot_eye() + dir * WeaponBlast.NADE_THROW_FWD
 	var v := dir * WeaponBlast.NADE_THROW_SPEED + Vector3(0, WeaponBlast.NADE_THROW_LIFT, 0) + Vector3(p.vel.x, 0, p.vel.z)
 	blast.throw_grenade(origin, v)
 	return true

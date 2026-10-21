@@ -18,7 +18,8 @@ var moving := false
 var tregion := 0             ## étage « utile » pour les zombies (un joueur sur un escalier compte pour l'extrémité la plus proche)
 var region := 0              ## région d'étage sous les pieds (0 = sol de la ville), voir Levels
 var attached := false         ## J5 : assis sur un véhicule ou debout dans la rame (Rides pose pos et yaw)
-var eye_override := Vector3.INF   ## J5 : œil imposé (caméra externe d'un véhicule) ; INF : œil du joueur
+var eye_override := Vector3.INF   ## J5 : œil imposé (caméra externe d'un véhicule, ou à pied à la troisième personne) ; INF : œil du joueur
+var eye_ext := 0.0            ## v0.25.1 : distance caméra - pivot en vue externe : les tirs, le couteau et les grenades partent du pivot (`shot_eye`), pas de la caméra
 var last_mouse := 0.0         ## temps de jeu du dernier mouvement de souris (recentrage de la vue du conducteur)
 var _floor := {"y": 0.0, "region": 0}
 var _was_grounded := true
@@ -105,6 +106,11 @@ func eye() -> Vector3:
 	if eye_override != Vector3.INF:
 		return eye_override
 	return pos + Vector3(0, eye_height(), 0)
+
+## Point de départ des tirs, du couteau et des grenades : l'œil, avancé dans l'axe de visée de la distance caméra - pivot (vue externe : le rayon part de la tête du joueur
+## et suit exactement l'axe de la caméra, donc passe par le réticule).
+func shot_eye() -> Vector3:
+	return eye() + forward() * eye_ext
 
 ## Hauteur de l'œil au-dessus des pieds : 0,55 m à terre, élevée pendant l'enjambement (player.js : eyeH), sans le balancement de la marche.
 func eye_height() -> float:

@@ -12,6 +12,7 @@ const KICK_DECAY := 9.0
 
 signal posed                    ## fin de _process : l'arme est à sa pose de l'image (la caméra est déjà à jour : main passe avant)
 var hold_fx := false            ## --hold-fx : l'éclair de bouche reste affiché (captures)
+var avatar: Node3D              ## v0.25.1 : le personnage de la vue à la 3e personne : la bouche du traçant est celle de SON arme (PlayerAvatar.muzzle_world)
 var hide_gun := false           ## J5 : arme de la vue cachée (on conduit, ou la caméra regarde de l'extérieur d'un véhicule)
 var _cam: Camera3D
 var _gun: Node3D
@@ -100,6 +101,10 @@ func muzzle_world() -> Vector3:
 ## Départ du traçant : la bouche du modèle ; `fallback` si l'arme n'est pas montrée (vue externe d'un véhicule, Aube).
 func tracer_start(fallback: Vector3) -> Vector3:
 	if hide_gun:
+		if avatar != null and avatar.visible:
+			var am: Vector3 = avatar.muzzle_world()
+			if am != Vector3.INF:
+				return am
 		return fallback
 	var m := muzzle_world()
 	return fallback if m == Vector3.INF else m
@@ -254,7 +259,7 @@ func _set_throw_visible(on: bool) -> void:
 		n.visible = on
 
 func _update_knife(arms: WeaponArms) -> void:
-	var on := _melee_t(arms) >= 0.0
+	var on := _melee_t(arms) >= 0.0 and not hide_gun   # (à la 3e personne le personnage porte le couteau : PlayerAvatar)
 	var axe := arms.has_axe
 	_knife.visible = on and not axe
 	_axe.visible = on and axe

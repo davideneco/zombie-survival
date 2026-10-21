@@ -19,7 +19,7 @@ static func reserved(code: String) -> Variant:
 const ACTIONS := {
 	"forward": "move_forward", "left": "move_left", "back": "move_back", "right": "move_right", "sprint": "sprint", "jump": "jump",
 	"reload": "reload", "weapon1": "weapon_1", "weapon2": "weapon_2", "weapon3": "weapon_3", "grenade": "grenade", "knife": "knife",
-	"torch": "torch", "interact": "use", "map": "map", "vehicleView": "vehicle_view", "tramGong": "tram_gong", "tramDoors": "tram_doors",
+	"footView": "foot_view", "torch": "torch", "interact": "use", "map": "map", "vehicleView": "vehicle_view", "tramGong": "tram_gong", "tramDoors": "tram_doors",
 	"tramSwitch": "tram_switch", "unstick": "unstick", "chat": "chat",
 }
 

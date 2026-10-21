@@ -18,6 +18,20 @@ var was_want := false
 var placed := false       ## la caméra a été posée ici (sinon vue à la première personne)
 var cam_pos := Vector3.ZERO
 var third_person := true  ## réglage tpVehicle (touche V)
+## v0.25.1 : vue à la troisième personne À PIED (Options > « Vue », touche T). Même caméra que sur une machine : pivot à l'épaule droite du joueur, bras avec collision
+## (trois rayons, médiane), sol, lissage. Le tir part du pivot, dans l'axe de la caméra : il passe donc par le réticule (le centre de l'écran).
+const FOOT := {
+	"arm": 2.7,           ## m : longueur du bras à la hanche
+	"armAds": 1.5,        ## m : en visée, la caméra se rapproche
+	"pivotUp": 0.10,      ## m au-dessus de l'oeil
+	"pivotRight": 0.55,   ## m à droite : le personnage est à gauche du réticule
+	"downArm": 0.55,      ## regard vers le bas : le bras raccourcit (jusqu'à -55 % à -1,2 rad) pour que la caméra ne passe pas au-dessus des toits
+	"aimTime": 0.15,
+}
+var foot_third := false   ## réglage « Vue » : à pied, la caméra est à la troisième personne
+var _aim_k := 0.0
+var dbg_arm := 0.0        ## --tp-arm=M : longueur du bras imposée (captures de près)
+var dbg_orbit := 0.0      ## --tp-orbit=DEG : la caméra tourne autour du personnage (captures de côté, de face) ; la visée n'est pas touchée
 var _fl := {"y": 0.0, "region": 0}
 
 func reset() -> void:
@@ -34,7 +48,9 @@ func external() -> bool:
 	return dist >= float(Config.at("vehicles.cam.viewmodelMax"))
 
 func want_third(ride: Variant, aiming: bool) -> bool:
-	return ride != null and third_person and not (not ride["v"].is_driver(ride["seat"]) and aiming)
+	if ride == null:
+		return foot_third
+	return third_person and not (not ride["v"].is_driver(ride["seat"]) and aiming)
 
 static func _ease(t: float) -> float:
 	return 1.0 - pow(1.0 - t, 3.0)
@@ -47,14 +63,22 @@ func update(dt: float, ride: Variant, foot: Vector3, p: PlayerSim, aiming: bool,
 		rate_up = 1.0 / float(C["mountTime"])
 	elif ride != null and want and not was_want:
 		rate_up = 1.0 / float(C["aimTime"])   # retour après la visée, ou touche V
+	elif ride == null and want and not was_want:
+		rate_up = 1.0 / float(C["mountTime"])   # vue à pied : même fondu que la montée
 	was_veh = ride != null
 	was_want = want
 	if want:
 		k = minf(1.0, k + dt * rate_up)
 	else:
 		k = maxf(0.0, k - dt / (float(C["aimTime"]) if ride != null else float(C["leaveTime"])))
+	_aim_k = move_toward(_aim_k, 1.0 if aiming else 0.0, dt / float(FOOT["aimTime"]))
 	if ride != null:
 		arm_len = float(ride["v"].def["camArm"])
+	elif foot_third:
+		var target := lerpf(float(FOOT["arm"]), float(FOOT["armAds"]), _aim_k) * (1.0 - float(FOOT["downArm"]) * clampf(-p.pitch / 1.2, 0.0, 1.0))
+		if dbg_arm > 0.0:
+			target = dbg_arm
+		arm_len = target if arm_len < 0.01 else move_toward(arm_len, target, 8.0 * dt)
 	if k <= 0.0:
 		dist = 0.0
 		cl = INF
@@ -62,7 +86,7 @@ func update(dt: float, ride: Variant, foot: Vector3, p: PlayerSim, aiming: bool,
 		placed = false
 		return false
 	var arm := arm_len * _ease(k)
-	var yaw := p.yaw
+	var yaw := p.yaw + dbg_orbit
 	var pitch := p.pitch
 	var sy := sin(yaw)
 	var cy := cos(yaw)
@@ -74,6 +98,10 @@ func update(dt: float, ride: Variant, foot: Vector3, p: PlayerSim, aiming: bool,
 		if not ride["v"].is_driver(ride["seat"]):
 			t.x += cy * float(C["pivotRight"])
 			t.z -= sy * float(C["pivotRight"])   # passager : épaule droite
+	elif foot_third:
+		t = foot + Vector3(0.0, float(FOOT["pivotUp"]), 0.0)
+		t.x += cy * float(FOOT["pivotRight"])
+		t.z -= sy * float(FOOT["pivotRight"])   # épaule droite : le personnage est à gauche du réticule
 	else:
 		t = foot   # sortie de moto : le pivot rejoint l'œil du joueur à pied
 	if not has_pivot:

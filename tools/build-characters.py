@@ -3,7 +3,8 @@
 # Aucun asset externe : tout est modélisé ici, de zéro (ellipsoïdes, tubes, boîtes arrondies, tours de révolution), en low-poly « cartoon » proche des zombies
 # (assets/zombies). Un squelette humanoïde commun (mêmes noms d'os pour les 8 : Root, Hips, Abdomen, Torso, Neck, Head, Shoulder/UpperArm/LowerArm .L/.R,
 # UpperLeg/LowerLeg/Foot .L/.R), proportions propres à chaque personnage, 7 animations rédigées à la main (rotations d'os seulement) :
-#   Idle, Walk, Run, Sit_Moto, Sit_Bike, Sit_Tram, Sit_Tram_Drive, Death.
+#   Idle, Walk, Run, Sit_Moto, Sit_Bike, Sit_Tram, Sit_Tram_Drive, Death, Jump (v0.25.1 : en l'air, pour la vue à la troisième personne à pied ;
+# la visée, le tir, le rechargement et le coup de couteau sont posés par le jeu : scenes/avatar_pose.gd, un modificateur de squelette qui oriente le buste et les bras).
 # Repère Blender : Z haut, l'avant est -Y, la gauche du personnage est +X (os « .L ») ; à l'export glTF l'avant devient +Z (comme les zombies).
 # Les pièces sont rigides (un os par pièce) ; les manteaux et robes longs sont pondérés entre le bassin et les cuisses (ils suivent les jambes).
 # Un objet « Prop_* » (canne, baguette) est une pièce séparée que le jeu cache quand le personnage est assis.
@@ -600,6 +601,13 @@ def anim_pose(name, t):
                 'Foot.L': dict(rotx=-2), 'Foot.R': dict(rotx=-2),
                 'UpperArm.L': dict(rotx=-48 if drive else -28, roty=-8), 'UpperArm.R': dict(rotx=-48 if drive else -28, roty=8),
                 'LowerArm.L': dict(rotx=-58 if drive else -68), 'LowerArm.R': dict(rotx=-58 if drive else -68)}
+    if name == 'Jump':   # en l'air : genoux relevés, jambes écartées, bras un peu en avant ; une respiration lente (boucle)
+        return {'Abdomen': dict(rotx=3 + 0.8 * s), 'Torso': dict(rotx=5 + 0.8 * s), 'Head': dict(rotx=-5 - 0.6 * s),
+                'UpperLeg.L': dict(rotx=-48 - 2 * s, roty=-5), 'UpperLeg.R': dict(rotx=-14 + 2 * s, roty=5),
+                'LowerLeg.L': dict(rotx=70), 'LowerLeg.R': dict(rotx=28),
+                'Foot.L': dict(rotx=-22), 'Foot.R': dict(rotx=-6),
+                'UpperArm.L': dict(rotx=-38 - 3 * s, roty=-16), 'UpperArm.R': dict(rotx=-26 + 3 * s, roty=16),
+                'LowerArm.L': dict(rotx=-42), 'LowerArm.R': dict(rotx=-36)}
     if name == 'Death':
         u = min(1.0, t / 0.8)
         e = u * u * (3 - 2 * u)
@@ -611,7 +619,7 @@ def anim_pose(name, t):
     return {}
 
 ANIMS = {  # nom -> (images, fps, bouclée)
-    'Idle': (48, 24), 'Walk': (28, 24), 'Run': (18, 24), 'Sit_Moto': (48, 24), 'Sit_Bike': (48, 24), 'Sit_Tram': (48, 24), 'Sit_Tram_Drive': (48, 24), 'Death': (24, 24),
+    'Idle': (48, 24), 'Walk': (28, 24), 'Run': (18, 24), 'Sit_Moto': (48, 24), 'Sit_Bike': (48, 24), 'Sit_Tram': (48, 24), 'Sit_Tram_Drive': (48, 24), 'Death': (24, 24), 'Jump': (48, 24),
 }
 
 def make_actions(arm):
