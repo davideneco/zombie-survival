@@ -54,6 +54,7 @@ signal quality_applied(q: int)
 signal torch_toggled(on: bool)   ## v0.20.6 : retour visible (message) quand la touche F bascule la lampe
 
 func setup(cam: Camera3D, is_arena: bool) -> void:
+	add_to_group("graphics_view")
 	camera = cam
 	arena = is_arena
 	_build_environment()
@@ -338,6 +339,8 @@ static func _pick_n(arr: Array, k: float) -> float:
 ## L'Aube : le ciel passe de la nuit au jour (k de 0 à 1) : dôme, brouillard, ambiance, lune qui devient le soleil, étoiles, halo (summit.js applySky).
 func set_sky_k(k: float) -> void:
 	sky_k = k
+	if is_inside_tree():
+		get_tree().call_group("sky_listener", "on_sky_k", k)
 	var sg := _seg(k)
 	sky_mat.set_shader_parameter("top", _pick_c(SKY_TOP, k))
 	sky_mat.set_shader_parameter("mid", _pick_c(SKY_MID, k))

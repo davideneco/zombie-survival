@@ -74,6 +74,10 @@ func _load() -> void:
 		var es := collision.add_segment(e[0], e[1], e[2], e[3], float(extra["h"]), float(extra["y0"]), "wall", 0)
 		es["off"] = false
 		seg_list.append(es)
+	for e: Array in Cathedral.facade_segments():   # v0.24.2 : peau de la façade ouest
+		var es := collision.add_segment(e[0], e[1], e[2], e[3], float(extra["h"]), float(extra["y0"]), "wall", 0)
+		es["off"] = false
+		seg_list.append(es)
 	for f: Dictionary in _json(DIR + "collision/floors.json"):
 		collision.add_floor(float(f["y"]), f["tris"])
 	collision.build()

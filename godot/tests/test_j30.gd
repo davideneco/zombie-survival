@@ -306,6 +306,7 @@ func run(t: Node) -> void:
 	t.check(roofless.size() == 0, "chaque bâtiment fermé a un toit au-dessus de ses points intérieurs : %s" % ", ".join(roofless.slice(0, 6)))
 	_sweep(t, w)
 	_stairs(t, w)
+	_facade(t, w)
 	print("j30 : %d anneaux fermés ; %d murs de sol, %d sans face avant bouchons, %d après ; %d ms" % [rings, ground.size(), bad_before.size(), bad.size(), Time.get_ticks_msec() - t0])
 
 ## Balayage « le joueur ne traverse pas les murs visibles » : un cercle de 0,4 m (le joueur) avance de 1,5 m en deçà à 1,5 m au-delà d'une face verticale visible
@@ -381,3 +382,24 @@ func _stairs(t: Node, w: World) -> void:
 	print("j30 : %d points d'escaliers testés, %d gênés par les murs ajoutés %s" % [samples, worse.size(), ", ".join(worse.slice(0, 6))])
 	t.check(samples > 200, "%d points d'escaliers" % samples)
 	t.check(worse.size() == 0, "les murs ajoutés ne gênent aucun escalier : %d points : %s" % [worse.size(), ", ".join(worse.slice(0, 6))])
+
+## v0.24.2 : la peau de la façade ouest bloque (contreforts, portails latéraux bouchés, mur) mais le grand portail reste ouvert : on marche du parvis vers l'intérieur
+## (axe s, à différents t), en cercle de 0,4 m, portes ouvertes.
+func _facade(t: Node, w: World) -> void:
+	w.open_all_doors()
+	var col: Collision = w.collision
+	var results := {}
+	for tt: float in [0.0, 1.5, -1.5, 14.75, -13.0, 8.4, -8.4, 20.8, 26.0, -10.0, 4.5]:
+		var a := Cathedral.P(-62.0, tt)
+		var b := Cathedral.P(-44.0, tt)
+		var pos := Vector3(a.x, 0.0, a.y)
+		var dir := Vector3(b.x - a.x, 0.0, b.y - a.y).normalized()
+		for _k in 260:
+			pos = col.resolve(pos + dir * 0.075, 0.4)
+		var s := (Vector2(pos.x, pos.z) - Cathedral.P(0.0, 0.0)).dot(Cathedral.P(1.0, 0.0) - Cathedral.P(0.0, 0.0))
+		results[tt] = s
+	print("j30 : façade, abscisse atteinte : ", results)
+	for tt: float in [0.0, 1.5, -1.5]:
+		t.check(float(results[tt]) > -45.5, "le grand portail reste franchissable (t = %.1f : s = %.1f)" % [tt, results[tt]])
+	for tt: float in [14.75, -13.0, 8.4, -8.4, 20.8, 26.0]:
+		t.check(float(results[tt]) < -49.0, "la façade bloque à t = %.1f (s = %.1f)" % [tt, results[tt]])

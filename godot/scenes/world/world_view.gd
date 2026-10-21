@@ -52,6 +52,8 @@ func _slice() -> void:
 		_slice_t = Time.get_ticks_usec()
 
 ## Construit la carte (v0.14.0 : ce n'est plus fait dans _ready, pour pouvoir le répartir sur plusieurs images). À attendre : `await view.build()`.
+var _no_cathedral := OS.get_cmdline_user_args().has("--dbg-nocath")
+
 func build() -> void:
 	var t0 := Time.get_ticks_msec()
 	_slice_t = Time.get_ticks_usec()
@@ -78,6 +80,10 @@ func build() -> void:
 		add_child(patches)
 	_load_doors()
 	await _slice()
+	if not _no_cathedral:
+		var cv := preload("res://scenes/world/cathedral_view.gd").new()
+		add_child(cv)
+		cv.build()
 	_load_instances()
 	await _slice()
 	_lamps()
