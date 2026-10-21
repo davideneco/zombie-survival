@@ -19,3 +19,4 @@ godot/assets/textures/
 
 # J9 : atlas, géométries des zombies, champ de distance du sol (node tools/bake-graphics.mjs, jeu JS + Chrome)
 godot/assets/graphics/
+tools/__pycache__/

@@ -97,6 +97,10 @@ var _fps_steps := 0
 var _fps_n := 0
 var _no_hud := false            ## --no-hud : sans HUD ni menus (comparaisons de rendu avec le JS)
 var _open_all := false
+var _show_collision := false     ## --show-collision[=rapport.json] : collision en surimpression (scenes/world/collision_view.gd)
+var _collision_report := ""
+var _eye_y := -1.0e9             ## --eye-y=Y : hauteur de la caméra (vue aérienne)
+var _collision_floor := -1.0e9   ## --collision-floor=Y : un seul étage
 var _horde := 0
 var _zoo := 0.0                  ## --zoo=D : une rangée de chaque type de zombie (normal, coureur, boiteux, rampant, chevalier, pestiféré) à D m devant le joueur (captures)
 var _zoo_state := ""             ## --zoo-state=death|headless|hit|window|ground : état imposé aux zombies du zoo (à --zoo-at=S secondes de jeu pour death / headless / hit ; dès le départ pour window / ground)
@@ -215,6 +219,13 @@ func _ready() -> void:
 			_zoo_state = a.substr(12)
 		elif a.begins_with("--zoo-at="):
 			_zoo_at = float(a.substr(9))
+		elif a == "--show-collision" or a.begins_with("--show-collision="):   # v0.23.0 : segments et cercles de la collision en surimpression (a : rapport de collision-scan.py)
+			_show_collision = true
+			_collision_report = a.substr(17) if a.length() > 17 else ""
+		elif a.begins_with("--eye-y="):   # v0.23.0 : caméra placée à Y m au-dessus du sol au point de --pos (vues aériennes de diagnostic)
+			_eye_y = float(a.substr(8))
+		elif a.begins_with("--collision-floor="):
+			_collision_floor = float(a.substr(18))
 		elif a == "--show-boxes":
 			ZombieModels.show_boxes = true
 		elif a == "--old-zombies":
@@ -593,6 +604,11 @@ func _finish_scene(_map_name: String) -> void:
 		_machines_view.set_script(MachinesView)
 		add_child(_machines_view)
 		_machines_view.setup()
+	if _show_collision and Game.world != null:
+		var cv := Node3D.new()
+		cv.set_script(preload("res://scenes/world/collision_view.gd"))
+		add_child(cv)
+		cv.setup(_collision_report, _collision_floor)
 	_debug_do()
 	if _finale_at < 0.0:
 		_debug_finale()
@@ -1036,6 +1052,8 @@ func _session_process(dt: float) -> void:
 		_camera.position = _prev_eye.lerp(_eye_now(), f)
 	else:
 		_camera.position = _prev_player.lerp(p.pos, f) + Vector3(0, p.eye_height() + p.bob(), 0)
+	if _eye_y > -1.0e8:
+		_camera.position.y = _eye_y
 	var roll := 0.0
 	if Game.rides != null and Game.rides.ride != null and not Game.rides.cam.placed and not Game.rides.ride["v"].is_tram():
 		roll = Game.rides.ride["v"].lean * 0.5   # la vue penche avec la moto
