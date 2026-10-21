@@ -456,11 +456,14 @@ export function createArchitecture({ renderer, plasterImg, plaster2Img, roofP, r
     b.pos.push(...p0, ...p1, ...p2);
     const ex = p1[0] - p0[0], ey = p1[1] - p0[1], ez = p1[2] - p0[2], fx = p2[0] - p0[0], fy = p2[1] - p0[1], fz = p2[2] - p0[2];
     let nx = ey * fz - ez * fy, ny = ez * fx - ex * fz, nz = ex * fy - ey * fx; const l = Math.hypot(nx, ny, nz) || 1;
-    if (ny < 0) { nx = -nx; ny = -ny; nz = -nz; }
+    // normale toujours vers le haut (toits) ; l'ordre des sommets doit la suivre (v0.47.3 : avant, seule la normale etait retournee, ~60 000 triangles
+    // de toit avaient un enroulement contraire a leur normale : toits noirs hors du rendu double face)
+    const flip = ny < 0;
+    if (flip) { nx = -nx; ny = -ny; nz = -nz; }
     for (let k = 0; k < 3; k++) b.nor.push(nx / l, ny / l, nz / l);
     b.uv.push(...uv);
     for (let k = 0; k < 3; k++) b.col.push(c.r, c.g, c.b);
-    b.idx.push(base, base + 1, base + 2);
+    if (flip) b.idx.push(base, base + 2, base + 1); else b.idx.push(base, base + 1, base + 2);
   };
 
   // Mur vertical de a à b (tranche [t0, t1] du segment, hauteurs y0..y1), découpé au niveau du rez-de-chaussée
@@ -628,7 +631,10 @@ export function createArchitecture({ renderer, plasterImg, plaster2Img, roofP, r
     for (let i = 0; i < n; i++) {
       const a = pts[i], b = pts[(i + 1) % n], ia = inner[i], ib = inner[(i + 1) % n];
       const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
-      quad(roofB, [a[0], top, a[1]], [b[0], top, b[1]], [ib[0], top + rh, ib[1]], [ia[0], top + rh, ia[1]], [0, 0, len / 3, 0, len / 3, rh / 2.5, 0, rh / 2.5], roofCol, roofCol);
+      // deux triangles (tri oriente toujours vers le haut) : sur une arete courte le decalage interieur peut retourner l'arete du haut, le quad se vrille et son enroulement contredit sa normale
+      const pa = [a[0], top, a[1]], pb = [b[0], top, b[1]], pib = [ib[0], top + rh, ib[1]], pia = [ia[0], top + rh, ia[1]];
+      tri(roofB, pa, pb, pib, [0, 0, len / 3, 0, len / 3, rh / 2.5], roofCol);
+      tri(roofB, pa, pib, pia, [0, 0, len / 3, rh / 2.5, 0, rh / 2.5], roofCol);
     }
     flat(polyArea(inner) > 1 ? inner : pts, top + rh, roofCol);
   }

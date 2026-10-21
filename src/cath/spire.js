@@ -155,13 +155,18 @@ export function buildSpire(h) {
   // pointe : petit balcon circulaire autour de l'aiguille
   slab(TIP, circleST(c, 2.8, 20), TIP_Y, [circleST(c, 1.75, 20)], mats.stone);
   {
+    const tipRail = [];
     for (let k = 0; k < 20; k++) {
       // pas de garde-corps là où la rampe passe juste dessous (dernier demi-tour, jusqu'à 2 m sous le balcon) ni à son arrivée
       const back = ((((phiR(TIP_Y) - (k * 18 + 9)) % 360) + 360) % 360);
       if (back < 190 || back > 320) continue;
       const A = polar(c, 2.85, k * 18), B = polar(c, 2.85, (k + 1) * 18);
       collision.addSegment(A[0], A[1], B[0], B[1], TIP_Y + 1.4, TIP_Y);
+      // garde-corps dessine (v0.47.3) : ces 8 segments etaient un parapet invisible ; lisse a 1,1 m et poteau a chaque extremite
+      tipRail.push(new THREE.BoxGeometry(0.06, 0.06, Math.hypot(B[0] - A[0], B[1] - A[1]) + 0.04).rotateY(Math.atan2(B[0] - A[0], B[1] - A[1])).translate((A[0] + B[0]) / 2, TIP_Y + 1.1, (A[1] + B[1]) / 2));
+      tipRail.push(new THREE.BoxGeometry(0.06, 1.1, 0.06).translate(A[0], TIP_Y + 0.55, A[1]), new THREE.BoxGeometry(0.06, 1.1, 0.06).translate(B[0], TIP_Y + 0.55, B[1]));
     }
+    if (tipRail.length) mesher.geo(mats.iron, mergeSimple(tipRail));
     collision.addCircle(...(() => { const [x, z] = W(c[0], c[1]); return [x, z]; })(), 1.8, TIP_Y + 20, TIP_Y - 0.5);
   }
   // liens de la rampe : terrasse -> pointe

@@ -229,7 +229,7 @@ export function buildUpper(ctx) {
       const [x, z] = W(s, t);
       g.push(new THREE.LatheGeometry([[0.25, 0], [r * 0.7, 0.2], [r, 0.2 + r * 0.3], [r * 0.85, 2.6 * r], [r * 0.5, 3.3 * r], [0.12, 3.6 * r]].map(([a, b]) => new THREE.Vector2(a, b)), 14).translate(x, Y.W2 + 4, z));
       g.push(new THREE.BoxGeometry(0.4, 0.4, r * 3).translate(x, Y.W2 + 4 + 3.8 * r, z));
-      collision.addCircle(x, z, r * 0.95, Y.W2 + 4 + 3.8 * r, Y.W2 - 0.3);
+      collision.addCircle(x, z, r * 0.95, Y.W2 + 4 + 3.8 * r, Y.W2 + 3.7); // cloche suspendue a 4 m du plancher : rien dessous (v0.47.3, avant : colonne invisible depuis le plancher)
     }
     mesher.geo(bronze, mergeSimple(g));
   }

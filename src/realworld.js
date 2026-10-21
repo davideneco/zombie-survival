@@ -344,7 +344,8 @@ export async function buildRealWorld(scene, renderer) {
           let minX = Infinity, minZ = Infinity, maxX = -Infinity, maxZ = -Infinity;
           for (const [x, z] of pts) { minX = Math.min(minX, x); maxX = Math.max(maxX, x); minZ = Math.min(minZ, z); maxZ = Math.max(maxZ, z); }
           if (!partsOf.has(k)) partsOf.set(k, []);
-          partsOf.get(k).push({ pts, minX, minZ, maxX, maxZ });
+          const th = parseFloat(prt.tags?.height); // hauteur dessinee (meme regle que arch.part) : un mur de contour porte par une partie basse ne monte pas plus haut qu'elle
+          partsOf.get(k).push({ pts, minX, minZ, maxX, maxZ, h: Number.isFinite(th) ? th : prt.tags?.min_height ? Infinity : (blds[k].h || 12) });
         }
       }
     }
@@ -375,10 +376,13 @@ export async function buildRealWorld(scene, renderer) {
   const supportedRuns = (k, ax, az, bx, bz, tight = false) => {
     const parts = partsOf.get(k) || [], tol = tight ? SUPPORT_TOL : 1;
     const len = Math.hypot(bx - ax, bz - az), n = Math.max(1, Math.ceil(len / (tight ? 0.25 : 0.5)));
-    const okAt = (t) => {
+    const supAt = (t) => { // hauteur de la partie la plus haute qui porte ce point (-1 : aucune)
       const x = ax + (bx - ax) * t, z = az + (bz - az) * t;
-      return parts.some((q) => x >= q.minX - 1 && x <= q.maxX + 1 && z >= q.minZ - 1 && z <= q.maxZ + 1 && (pointInPoly(x, z, q.pts) || distToRing(x, z, q.pts) < tol));
+      let best = -1;
+      for (const q of parts) if (q.h > best && x >= q.minX - 1 && x <= q.maxX + 1 && z >= q.minZ - 1 && z <= q.maxZ + 1 && (pointInPoly(x, z, q.pts) || distToRing(x, z, q.pts) < tol)) best = q.h;
+      return best;
     };
+    const okAt = (t) => supAt(t) >= 0;
     const edge = (tIn, tOut) => { for (let i = 0; i < 6; i++) { const m = (tIn + tOut) / 2; if (okAt(m)) tIn = m; else tOut = m; } return tIn; }; // dernier point soutenu entre tIn (soutenu) et tOut (non)
     const runs = [];
     let start = -1;
@@ -388,17 +392,32 @@ export async function buildRealWorld(scene, renderer) {
       if (!ok && start >= 0) { runs.push([start, tight ? edge((i - 1) / n, t) : i / n]); start = -1; }
     }
     if (start >= 0) runs.push([start, 1]);
-    return runs.filter(([a, b]) => b > a);
+    if (!tight) return runs.filter(([a, b]) => b > a);
+    // v0.47.3 : hauteur du mur = celle de la partie qui le porte, si elle est basse (marches de l'Opera : 1,5 m ; avant, un mur infini au-dessus
+    // d'une marche dessinee, donc un mur invisible). Les runs sont coupes la ou cette hauteur change.
+    const capOf = (t) => { const h = supAt(t); return h >= 0 && h < 2.6 ? h : Infinity; };
+    const out = [];
+    for (const [a, b] of runs) {
+      if (b <= a) continue;
+      let from = a, cap = capOf(Math.min(b, a + 1e-6));
+      for (let i = Math.floor(a * n) + 1; i < Math.ceil(b * n); i++) {
+        const t = i / n; if (t <= a || t >= b) continue;
+        const c = capOf(t);
+        if (c !== cap) { const m = t - 0.5 / n; out.push([from, m, cap]); from = m; cap = c; }
+      }
+      out.push([from, b, cap]);
+    }
+    return out;
   };
   // intersection de deux listes d'intervalles triés
   const clipRuns = (runs, cuts) => {
     let out = runs;
     for (const [c0, c1] of cuts) {
       const next = [];
-      for (const [a, b] of out) {
-        if (c1 <= a || c0 >= b) { next.push([a, b]); continue; }
-        if (c0 > a) next.push([a, c0]);
-        if (c1 < b) next.push([c1, b]);
+      for (const [a, b, ...r] of out) {
+        if (c1 <= a || c0 >= b) { next.push([a, b, ...r]); continue; }
+        if (c0 > a) next.push([a, c0, ...r]);
+        if (c1 < b) next.push([c1, b, ...r]);
       }
       out = next;
     }
@@ -430,9 +449,11 @@ export async function buildRealWorld(scene, renderer) {
       // creuse : seul le contour extérieur bloque (ouvert au grand portail) ; l'intérieur est construit à part
       for (let i = 0; i < pts.length; i++) {
         const [ax, az] = pts[i], [bx, bz] = pts[(i + 1) % pts.length], dx = bx - ax, dz = bz - az;
-        for (const [t0, t1] of clipRuns(supportedRuns(k, ax, az, bx, bz), cath.cutsOf(ax, az, bx, bz))) {
-          if ((t1 - t0) * Math.hypot(dx, dz) > 0.05) collision.addSegment(ax + dx * t0, az + dz * t0, ax + dx * t1, az + dz * t1);
+        const cuts = cath.cutsOf(ax, az, bx, bz), made = [];
+        for (const [t0, t1] of clipRuns(supportedRuns(k, ax, az, bx, bz), cuts)) {
+          if ((t1 - t0) * Math.hypot(dx, dz) > 0.05) made.push(collision.addSegment(ax + dx * t0, az + dz * t0, ax + dx * t1, az + dz * t1));
         }
+        partialEdges.push({ k, ax, az, bx, bz, cuts, made }); // resserre a la fin (applyMapFixes), comme les autres batiments a parties 3D
       }
       continue;
     }
@@ -1866,7 +1887,7 @@ export async function buildRealWorld(scene, renderer) {
       const len = Math.hypot(e.bx - e.ax, e.bz - e.az), dx = e.bx - e.ax, dz = e.bz - e.az;
       const solid = clipRuns(supportedRuns(e.k, e.ax, e.az, e.bx, e.bz, true), e.cuts).filter(([t0, t1]) => (t1 - t0) * len > 0.05);
       for (const sg of e.made) sg.dead = true;
-      for (const [t0, t1] of solid) collision.addSegment(e.ax + dx * t0, e.az + dz * t0, e.ax + dx * t1, e.az + dz * t1);
+      for (const [t0, t1, cap] of solid) collision.addSegment(e.ax + dx * t0, e.az + dz * t0, e.ax + dx * t1, e.az + dz * t1, cap ?? Infinity);
     }
     collision.segs = collision.segs.filter((sg) => !sg.dead);
     // (2) fontaine : vasque de 0,6 m de haut (les balles passent au-dessus, comme le maillage), colonne et coupe au-dessus
@@ -1883,13 +1904,17 @@ export async function buildRealWorld(scene, renderer) {
       const pts = cleanRing(prt.pts);
       if (pts.length < 3 || (parseFloat(prt.tags?.min_height) || 0) >= 0.5 || Math.abs(polyArea(pts)) < 1) continue;
       const c = pts.reduce((a, q) => [a[0] + q[0] / pts.length, a[1] + q[1] / pts.length], [0, 0]);
-      if (cath && inPoly(c[0], c[1], cath.outline)) continue;
+      const inCath = !!cath && inPoly(c[0], c[1], cath.outline);
+      if (inCath) { // cathedrale (v0.47.3) : seulement les murs exterieurs dessines ; les planchers du massif sont remplaces par l'interieur modelise (cf. rendu)
+        const sc = cath.S(c[0], c[1]), tc = cath.T(c[0], c[1]);
+        if (sc > -53 && sc < -26 && Math.abs(tc) < 27 && (parseFloat(prt.tags?.height) || 0) - (parseFloat(prt.tags?.min_height) || 0) <= 1.6 && Math.abs(polyArea(pts)) > 300) continue;
+      }
       let minX = Infinity, minZ = Infinity, maxX = -Infinity, maxZ = -Infinity;
       for (const [x, z] of pts) { minX = Math.min(minX, x); maxX = Math.max(maxX, x); minZ = Math.min(minZ, z); maxZ = Math.max(maxZ, z); }
       // même règle de hauteur que le rendu (arch.part) : une partie sans hauteur et rattachée à aucun bâtiment n'est pas dessinée, donc ne bloque pas
       const th = parseFloat(prt.tags?.height), height = Number.isFinite(th) ? th : prt._k != null && !prt.tags?.min_height ? blds[prt._k].h || 12 : null;
       if (height == null || height - (parseFloat(prt.tags?.min_height) || 0) < 0.4) continue;
-      const q = { pts, minX, minZ, maxX, maxZ, h: height };
+      const q = { pts, minX, minZ, maxX, maxZ, h: height, inCath };
       grounded.push(q);
       cellsOf(minX - 0.5, minZ - 0.5, maxX + 0.5, maxZ + 0.5, (key) => { const a = partGrid.get(key); if (a) a.push(q); else partGrid.set(key, [q]); });
     }
@@ -1904,7 +1929,12 @@ export async function buildRealWorld(scene, renderer) {
         const [ax, az] = pts[i], [bx, bz] = pts[(i + 1) % pts.length], dx = bx - ax, dz = bz - az, len = Math.hypot(dx, dz);
         if (len < 0.3) continue;
         const nx = dz / len, nz = -dx / len, n = Math.max(1, Math.ceil(len / 0.5));
-        const cuts = cutIntervals(passages, ax, az, bx, bz, axisInside);
+        const cuts = q.inCath ? cath.cutsOf(ax, az, bx, bz) : cutIntervals(passages, ax, az, bx, bz, axisInside);
+        if (q.inCath) { // mur exterieur seulement (meme test que keepEdge du rendu) : une cloison interieure est masquee, elle ne bloque pas
+          const nn = Math.max(1, Math.ceil(len / 1.5)); let ext = 0;
+          for (let i = 0; i <= nn; i++) { const x = ax + (dx * i) / nn, z = az + (dz * i) / nn; if (cath.ceilAt(x + nx * 0.7, z + nz * 0.7) == null && cath.ceilAt(x - nx * 0.7, z - nz * 0.7) == null && cath.ceilAt(x, z) == null) ext++; }
+          if (ext <= nn / 2) continue;
+        }
         const need = (t) => { // ce point de l'arête doit-il recevoir un mur ?
           if (cuts.some(([c0, c1]) => t >= c0 - 0.001 && t <= c1 + 0.001)) return false;
           const x = ax + dx * t, z = az + dz * t;
