@@ -54,6 +54,55 @@ static func text(g: Node, binds: Keybinds = null) -> String:
 		return "%s Enjamber" % (binds.tag("jump") if binds != null else "[Espace]")
 	return ""
 
+## v0.28.0 : the same prompt, split for the HUD (icon, price in its own colour): { text (= text()), main (text without « (N pts) »), price (-1 : none),
+## afford, kind (wall_buy, wall_ammo, wall_full, station, station_full, machine, door, other, ""), id (weapon id for the wall / station kinds), pap }.
+static var _price_rx: RegEx
+
+static func info(g: Node, binds: Keybinds = null) -> Dictionary:
+	var txt := text(g, binds)
+	var out := {"text": txt, "main": txt, "price": -1, "afford": true, "kind": "", "id": "", "pap": false}
+	if txt == "":
+		return out
+	out["kind"] = "other"
+	if _price_rx == null:
+		_price_rx = RegEx.create_from_string("\\s*\\((\\d+) pts\\)")
+	var m := _price_rx.search(txt)
+	if m != null:
+		out["price"] = int(m.get_string(1))
+		out["main"] = txt.substr(0, m.get_start()) + txt.substr(m.get_end())
+		out["afford"] = int(g.points) >= int(out["price"])
+	var rides: Rides = g.rides
+	if (rides != null and rides.ride != null) or g.player.downed or g.player.dead:
+		return out
+	var arms: WeaponArms = g.arms
+	if WeaponShop.near_station(g):
+		out["kind"] = "station" if int(out["price"]) >= 0 else "station_full"
+		out["id"] = arms.current.id
+		out["pap"] = arms.current.pap > 0
+		return out
+	if g.machines != null and g.machines.prompt() != "":
+		out["kind"] = "machine"
+		return out
+	var ww := WeaponShop.near_wall_weapon(g)
+	if not ww.is_empty():
+		out["id"] = String(ww["id"])
+		var st := wall_state(g, String(ww["id"]))
+		out["pap"] = st == "pap"
+		out["kind"] = "wall_buy" if st == "buy" else ("wall_full" if int(out["price"]) < 0 else "wall_ammo")
+		return out
+	if g.world != null and g.world.near_door(g.player.pos) >= 0:
+		out["kind"] = "door"
+	return out
+
+## v0.28.0 : what a wall weapon panel offers to the player: "buy" (not carried), "ammo" (carried), "pap" (carried and Pack-a-Punched).
+static func wall_state(g: Node, id: String) -> String:
+	if g.arms == null:
+		return "buy"
+	for w: WeaponState in (g.arms as WeaponArms).inventory:
+		if w.id == id:
+			return "pap" if w.pap > 0 else "ammo"
+	return "buy"
+
 ## Les invites de Rides et de Machines s'écrivent « E Descendre · V vue · O portes · H gong » : les lettres de touche suivent les liaisons du joueur
 ## (le JS les compose avec `binds.tag`, « [E] »).
 static func _keys(s: String, binds: Keybinds) -> String:

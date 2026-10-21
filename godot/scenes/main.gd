@@ -138,6 +138,7 @@ var _first_person := false        # --first-person : vue à la première personn
 var _machines_view: Node3D
 var _zone_view: Node3D            # v0.26.0 : murs des portes en Zone unique
 var _perk_view: Node3D            # v0.27.0 : effets des nouveaux atouts
+var _shop_view: Node3D            # v0.28.0 : wall weapon panels and ammo stations
 var _graphics: Node               # J9 : environnement, ciel, ombres, qualité (graphics_view.gd)
 var _fx: Node3D                   # J9 : particules et taches de sang (fx_view.gd)
 var _finale_view: Node3D          # J10 : effets des boss, faisceau, Fanal (finale_view.gd)
@@ -530,10 +531,11 @@ func _unload_session() -> void:
 		_drop(t[0])
 	_tracers.clear()
 	_shot_queue.clear()
-	for n in [_arena_node, _rides_view, _machines_view, _zone_view, _perk_view, _weapon_view, _finale_view, _fx, _graphics, _hud, _intro, _camera]:
+	for n in [_arena_node, _rides_view, _machines_view, _zone_view, _perk_view, _shop_view, _weapon_view, _finale_view, _fx, _graphics, _hud, _intro, _camera]:
 		_drop(n)
 	_zone_view = null
 	_perk_view = null
+	_shop_view = null
 	_intro = null
 	_arena_node = null
 	_rides_view = null
@@ -665,6 +667,9 @@ func _finish_scene(_map_name: String) -> void:
 		_machines_view.set_script(MachinesView)
 		add_child(_machines_view)
 		_machines_view.setup()
+	_shop_view = ShopView.new()   # v0.28.0 : wall weapon panels and ammo stations (the JS ones are dropped from the baked tiles)
+	add_child(_shop_view)
+	_shop_view.setup()
 	_perk_view = Node3D.new()   # v0.27.0 : gouttes, tombe, décharges, toiles
 	_perk_view.set_script(PerkFxView)
 	add_child(_perk_view)

@@ -39,6 +39,8 @@ var _tree_cards: Array[MultiMeshInstance3D] = []
 var _emissive: Array = []         ## v0.25.0 : matériaux dont l'émission s'éteint le jour : [matériau, énergie de base] (fenêtres, ampoules, enseignes de la carte)
 var _lit := 1.0                   ## 1 : nuit (tout est allumé), 0 : plein jour ; suit DayNight.lamps_of(sky_k)
 var _gv: Node
+var _shop_mats: Dictionary = {}   ## v0.28.0 : materials of the JS wall boards and ammo stations (ShopView replaces them) -> surfaces dropped
+var shop_surfaces_dropped := 0
 
 static func _json(path: String) -> Variant:
 	return JSON.parse_string(FileAccess.get_file_as_string(path))
@@ -179,7 +181,10 @@ func _load_materials() -> void:
 	var files: Array = []
 	for t: Dictionary in _json(DIR + "textures.json"):
 		files.append(String(t["file"]))
+	var keep_shops := "--dbg-oldshops" in OS.get_cmdline_user_args()
 	for m: Dictionary in _json(DIR + "materials.json"):
+		if not keep_shops and ShopView.baked_shop_material(m):
+			_shop_mats[_materials.size()] = true
 		var k := Surfaces.kind(m, files)
 		if k != "":
 			var shm := Surfaces.make(k, m, _tex, _relief_tex)
@@ -296,8 +301,13 @@ func _mesh_from_pack(path: String) -> MeshInstance3D:
 	var head: Dictionary = pk[0]
 	var mesh := ArrayMesh.new()
 	for s: Dictionary in head["surfaces"]:
+		if _shop_mats.has(int(s["mat"])):
+			shop_surfaces_dropped += 1
+			continue
 		mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, _surface_arrays(s, pk[1], pk[2], true))
 		mesh.surface_set_material(mesh.get_surface_count() - 1, _materials[int(s["mat"])])
+	if mesh.get_surface_count() == 0:
+		return null
 	var mi := MeshInstance3D.new()
 	mi.mesh = mesh
 	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
@@ -343,6 +353,9 @@ func _load_instances() -> void:
 			ids_k.append(i)
 			buckets[key] = ids_k   # (un tableau compact est copié à la lecture : il faut le réécrire)
 		for s: Dictionary in m["surfaces"]:
+			if _shop_mats.has(int(s["mat"])):
+				shop_surfaces_dropped += 1
+				continue
 			var mesh := ArrayMesh.new()
 			mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, _surface_arrays(s, bytes, base, true))
 			var mat: Material = _materials[int(s["mat"])]

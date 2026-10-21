@@ -182,6 +182,8 @@ func _build_ring(p0: Vector3, fx: Node3D, weapon_view: Node3D, machines_view: No
 			_add(pu, _ring(p0, t, 5, 3.2) + Vector3(0, 1.0, 0))
 			t += 1
 		_add(machines_view._make_teddy(), _ring(p0, 2, 7, 3.6) + Vector3(0, 0.6, 0))
+	# v0.28.0 : wall weapon panel and ammo station (their shaders, labels and silhouette)
+	_add(ShopView.sample(), _ring(p0, 5, 8, 3.4))
 	# armes : modèles normaux (chargement des maillages) et un modèle par niveau du Pack-a-Punch
 	var ids: Array = WeaponModels.table().keys()
 	for i in ids.size():

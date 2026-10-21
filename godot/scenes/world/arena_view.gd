@@ -5,8 +5,6 @@ extends Node3D
 const FLOOR_COLOR := Color("4a4d48")
 const WALL_COLOR := Color("5a5550")
 const CRATE_COLOR := Color("6b4a2b")
-const STATION_COLOR := Color("2a3a2a")
-const PANEL_COLOR := Color("22ff66")
 const POLE_COLOR := Color("222222")
 const BULB_COLOR := Color("ffe9b0")
 const LAMP_LIGHT_COLOR := Color("ffd9a0")
@@ -30,14 +28,13 @@ func _ready() -> void:
 	# caisses
 	for o in a.obstacles:
 		_box(Vector3(o[0], o[4] / 2.0, o[1]), Vector3(o[2], o[4], o[3]), _tile_material(CRATE_COLOR, Vector3(maxf(o[2], o[3]) / 2.0, o[4] / 2.0, 1.0), 0.85))
-	# borne d'achat de munitions
+	# borne d'achat de munitions : v0.28.0, the locker itself is drawn by ShopView (shop_models.gd); here, two stacks of ammo crates fill the rest of its
+	# 3 m collision box on each side
 	var sp := a.station_pos
-	_box(Vector3(sp.x, Arena.STATION_SIZE.y / 2.0, 0), Arena.STATION_SIZE, _flat(STATION_COLOR, 0.6))
-	var panel_mat := _flat(PANEL_COLOR, 0.5)
-	panel_mat.emission_enabled = true
-	panel_mat.emission = Color("11cc44")
-	panel_mat.emission_energy_multiplier = 1.5
-	_box(Vector3(sp.x + 0.62, 1.1, 0), Vector3(0.05, 0.9, 2.4), panel_mat)
+	var side_len := (Arena.STATION_SIZE.z - 1.3) / 2.0
+	for sz in [-1.0, 1.0]:
+		for lv in 2:
+			_box(Vector3(sp.x, 0.45 + lv * 0.9, sz * (0.65 + side_len / 2.0)), Vector3(Arena.STATION_SIZE.x - 0.05 * lv, 0.88, side_len - 0.04 * lv), ShopModels.mat("pine"))
 	var sl := OmniLight3D.new()
 	sl.light_color = Color("33ff77")
 	sl.omni_range = 8.0

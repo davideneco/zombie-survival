@@ -66,6 +66,8 @@ var _zone: Label
 var _map_hint: Label
 var _prompt: PanelContainer
 var _prompt_l: Label
+var _prompt_icon: PromptIcon      ## v0.28.0 : icon of the prompt (weapon silhouette, cartridges, machine, door)
+var _prompt_price: Label          ## v0.28.0 : price apart, gold or red (not enough points)
 var _announce: Label
 var _announce_sub: Label
 var _buffs: HBoxContainer
@@ -236,7 +238,16 @@ func _build_center() -> void:
 	_prompt.anchor_top = 0.62
 	_prompt.anchor_bottom = 0.62
 	_prompt.grow_horizontal = Control.GROW_DIRECTION_BOTH
-	_prompt_l = _lbl(_prompt, "", 22, Color.WHITE, HORIZONTAL_ALIGNMENT_CENTER)
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 10)
+	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_prompt.add_child(row)
+	_prompt_icon = PromptIcon.new()
+	row.add_child(_prompt_icon)
+	_prompt_l = _lbl(row, "", 22, Color.WHITE, HORIZONTAL_ALIGNMENT_CENTER)
+	_prompt_l.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_prompt_price = _lbl(row, "", 22, UiTheme.GOLD, HORIZONTAL_ALIGNMENT_CENTER)
+	_prompt_price.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	_prompt.visible = false
 	root.add_child(_prompt)
 	_announce = _lbl(root, "", 64, Color("b01818"), HORIZONTAL_ALIGNMENT_CENTER)
@@ -546,9 +557,19 @@ func _update_basic(dt: float, p: PlayerSim) -> void:
 	if _clock.visible:
 		_clock.text = "%s  %s" % [dn.clock_text(), dn.phase_name()]
 	(compass as Control).call("set_yaw", p.yaw)
-	var pr := "" if Game.over else Prompts.text(Game, binds)
-	_prompt.visible = pr != ""
-	_prompt_l.text = pr
+	var pi: Dictionary = {"text": ""} if Game.over else Prompts.info(Game, binds)
+	_prompt.visible = String(pi["text"]) != ""
+	if _prompt.visible:
+		var priced := int(pi["price"]) >= 0
+		_prompt_l.text = String(pi["main"]) if priced else String(pi["text"])
+		_prompt_price.visible = priced
+		var col := UiTheme.GOLD if bool(pi["afford"]) else Color("ff4a3a")
+		if priced:
+			var miss := int(pi["price"]) - int(Game.points)
+			_prompt_price.text = "%d pts" % int(pi["price"]) if bool(pi["afford"]) else "%d pts (manque %d)" % [int(pi["price"]), miss]
+			_prompt_price.add_theme_color_override("font_color", col)
+		var icol := Color("8a5cff") if bool(pi["pap"]) else (Color("7fe08a") if String(pi["kind"]) == "wall_buy" else Color("ffcf6a"))
+		_prompt_icon.show_for(String(pi["kind"]), String(pi["id"]), icol if bool(pi["afford"]) else Color("ff6a5a"))
 	if not intro_hold:   # v0.20.1 : pendant l'intro d'un boss le bandeau et la barre attendent (l'intro a son propre titre)
 		_announce_t = maxf(0.0, _announce_t - dt)
 	var fade := clampf(_announce_t / ANNOUNCE_FADE, 0.0, 1.0)
