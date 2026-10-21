@@ -16,9 +16,13 @@ func run(t: Node) -> void:
 	var w := World.load_world()
 	print("monde chargé en %d ms : %d segments, %d cercles, %d dalles, %d triangles d'étage, case %dx%d" % [w.load_ms, w.collision.segs.size(), w.collision.circles.size(), w.collision.floors.size(), w.levels.tris.size(), w.nav.nx, w.nav.nz])
 	t.check(w.load_ms < 15000, "chargement du monde en moins de 15 s (%d ms)" % w.load_ms)
-	_counts(t, w, g)
+	# v0.24.0 : la collision du JS est comparée SANS les murs ajoutés (écart voulu, voir test_j30) ; le reste du test les garde
+	t.check(w.seg_list.size() > w.extra_first, "murs ajoutés présents (%d)" % (w.seg_list.size() - w.extra_first))
+	w.set_extras(false)
+	_counts(t, w, g, w.extra_first)
 	_golden_closed(t, w, g)
 	_golden_open(t, w, g)
+	w.set_extras(true)
 	_game(t)
 	_stairs(t)
 	_crossing(t)
@@ -41,9 +45,9 @@ func _manifest(t: Node) -> void:
 	t.check(checked > 10, "manifeste : des fichiers de données présents")
 
 # ------------------------------------------------------------------ comptes
-func _counts(t: Node, w: World, g: Dictionary) -> void:
+func _counts(t: Node, w: World, g: Dictionary, n_js: int) -> void:
 	var c: Dictionary = g["counts"]
-	t.check(w.collision.segs.size() == int(c["segs"]), "segments %d != %d" % [w.collision.segs.size(), c["segs"]])
+	t.check(n_js == int(c["segs"]), "segments du JS %d != %d" % [n_js, c["segs"]])
 	t.check(w.collision.circles.size() == int(c["circles"]), "cercles")
 	t.check(w.collision.vaults.size() == int(c["vaults"]), "obstacles enjambables")
 	t.check(w.collision.floors.size() == int(c["floors"]), "dalles")

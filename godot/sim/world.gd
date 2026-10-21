@@ -23,6 +23,7 @@ var start_pos := Vector3.ZERO
 var start_zone := 0
 var half_x := 820.0
 var half_z := 560.0
+var extra_first := 0                      ## indice du premier segment ajouté (data/world_collision_extra.json)
 var seg_list: Array[Dictionary] = []     ## segments de collision dans l'ordre du fichier (les portes les désignent par indice)
 var windows := PackedFloat64Array()
 var window_busy := PackedFloat64Array()  ## busyUntil de chaque fenêtre
@@ -66,6 +67,13 @@ func _load() -> void:
 			for k: float in v["segs"]:
 				ss.append(seg_list[int(k)])
 			collision.vaults.append({"id": int(v["id"]), "h": float(v["h"]), "segs": ss})
+	# v0.24.0 : murs ajoutés (écart voulu avec le JS) pour que les murs visibles de la cathédrale bloquent ; ajoutés APRÈS les segments du JS (indices des portes inchangés)
+	var extra: Dictionary = _json("res://data/world_collision_extra.json")
+	extra_first = seg_list.size()
+	for e: Array in extra["segs"]:
+		var es := collision.add_segment(e[0], e[1], e[2], e[3], float(extra["h"]), float(extra["y0"]), "wall", 0)
+		es["off"] = false
+		seg_list.append(es)
 	for f: Dictionary in _json(DIR + "collision/floors.json"):
 		collision.add_floor(float(f["y"]), f["tris"])
 	collision.build()
@@ -213,6 +221,11 @@ func open_door(id: int) -> bool:
 	zone_open[int(d["a"])] = 1
 	zone_open[int(d["b"])] = 1
 	return true
+
+## v0.24.0 : active / désactive les murs ajoutés au JS (data/world_collision_extra.json) ; les tests golden J2 comparent la collision du JS : ils les coupent.
+func set_extras(on: bool) -> void:
+	for i in range(extra_first, seg_list.size()):
+		seg_list[i]["off"] = not on
 
 func open_all_doors() -> void:
 	for d: Dictionary in doors:

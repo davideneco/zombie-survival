@@ -22,7 +22,7 @@ def main():
     opaque = np.array([not (m['tr'] or m['op'] < 1 or m['at'] > 0) for m in mats])[T['mat']]
     n = np.cross(B - A, C - A); ln = np.linalg.norm(n, axis=1); n /= ln[:, None] + 1e-18
     ymin = np.minimum(np.minimum(A[:, 1], B[:, 1]), C[:, 1]); ymax = np.maximum(np.maximum(A[:, 1], B[:, 1]), C[:, 1])
-    sel = opaque & (np.abs(n[:, 1]) < 0.3) & (ymin < Y) & (ymax > Y) & (ln > 0.01)
+    sel = opaque & (np.abs(n[:, 1]) < 0.5) & (ymin < Y) & (ymax > Y) & (ln > 0.01)
     idx = np.where(sel)[0]
     print('faces verticales coupant y=%.1f : %d' % (Y, len(idx)), flush=True)
     # coupe par le plan : deux points parmi les arêtes
@@ -86,7 +86,11 @@ def main():
     nn = n[src]; off = 0.9
     pa = nav.in_mask(reach, pts[:, 0] + nn[:, 0] * off, pts[:, 2] + nn[:, 2] * off); pb = nav.in_mask(reach, pts[:, 0] - nn[:, 0] * off, pts[:, 2] - nn[:, 2] * off)
     fa = nav.free(pts[:, 0] + nn[:, 0] * off, pts[:, 2] + nn[:, 2] * off); fb = nav.free(pts[:, 0] - nn[:, 0] * off, pts[:, 2] - nn[:, 2] * off)
-    bad &= (pa & fb) | (pb & fa)
+    if 'cathedral-all' in args:   # sans le filtre d'atteignabilité, dans l'emprise de la cathédrale (la carte de navigation voit parfois le pied de la tour comme plein)
+        inbox = (pts[:, 0] > 100) & (pts[:, 0] < 235) & (pts[:, 2] > -25) & (pts[:, 2] < 100)
+        bad &= ((pa & fb) | (pb & fa)) | inbox
+    else:
+        bad &= (pa & fb) | (pb & fa)
     zones = g.Zones()
     # grappes : par face source, puis cases de 6 m
     cl = {}
@@ -103,6 +107,27 @@ def main():
         print('  %6.1f m  (%7.1f, %7.1f)  %s' % (o['len'], o['x'], o['z'], o['zone']))
     if 'out' in args:
         json.dump(dict(tol=TOL, total_m=float(tot), clusters=items), open(args['out'], 'w'))
+    if 'extras' in args:
+        # v0.24.0 : segments de collision AJOUTÉS (écart volontaire avec le JS) pour fermer les murs visibles traversables : un segment par suite
+        # continue de points sans collision d'une même face, étage 0 seulement (y0 = -1 m : n'atteint pas la crypte ; h = 6 m : pas les galeries à 14,5 m)
+        out = []; bi = np.where(bad)[0]; run = []
+        def flush():
+            if not run:
+                return
+            a, b = pts[run[0]], pts[run[-1]]
+            d = np.array([b[0] - a[0], b[2] - a[2]]); L = float(np.hypot(*d))
+            u = d / L if L > 1e-6 else np.array([1.0, 0.0])
+            ext = STEP * 0.5 + 0.05
+            out.append([round(float(a[0] - u[0] * ext), 2), round(float(a[2] - u[1] * ext), 2), round(float(b[0] + u[0] * ext), 2), round(float(b[2] + u[1] * ext), 2)])
+        for k in bi:
+            if ymax[src[k]] < 2.0:   # contremarches d'escaliers, bordures : on les monte, elles ne bloquent pas
+                continue
+            if run and (src[k] != src[run[-1]] or k != run[-1] + 1):
+                flush(); run = []
+            run.append(k)
+        flush()
+        json.dump(dict(y0=-1.0, h=6.0, segs=out), open(args['extras'], 'w'), separators=(',', ':'))
+        print('extras : %d segments -> %s' % (len(out), args['extras']))
 
 
 main()

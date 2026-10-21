@@ -81,7 +81,7 @@ func _load_tiles() -> bool:
 							cut.append(Vector2(pos[p] + (pos[q] - pos[p]) * f, pos[p + 2] + (pos[q + 2] - pos[p + 2]) * f))
 					if cut.size() == 2:
 						_add_cut(cut[0], cut[1])
-						if cut[0].distance_to(cut[1]) >= 0.8:
+						if cut[0].distance_to(cut[1]) >= 0.8 and ymax >= 2.0:   # sous 2 m : contremarches, bordures (on les monte)
 							_cut_list.append([cut[0].x, cut[0].y, cut[1].x, cut[1].y])
 				elif ny > 0.3 and ymin > 2.0:
 					var tri := [pos[a], pos[a + 2], pos[b], pos[b + 2], pos[c], pos[c + 2]]
@@ -305,6 +305,7 @@ func run(t: Node) -> void:
 	t.check(open_rings.size() == 0, "contour de chaque bâtiment fermé dessiné (moins de 3 %% du pourtour sans face) : %s" % ", ".join(open_rings.slice(0, 6)))
 	t.check(roofless.size() == 0, "chaque bâtiment fermé a un toit au-dessus de ses points intérieurs : %s" % ", ".join(roofless.slice(0, 6)))
 	_sweep(t, w)
+	_stairs(t, w)
 	print("j30 : %d anneaux fermés ; %d murs de sol, %d sans face avant bouchons, %d après ; %d ms" % [rings, ground.size(), bad_before.size(), bad.size(), Time.get_ticks_msec() - t0])
 
 ## Balayage « le joueur ne traverse pas les murs visibles » : un cercle de 0,4 m (le joueur) avance de 1,5 m en deçà à 1,5 m au-delà d'une face verticale visible
@@ -316,7 +317,7 @@ func _sweep(t: Node, w: World) -> void:
 	var comps := nav.components()
 	var main_label := nav.label_of(nav.idx(nav.cx(w.start_pos.x), nav.cz(w.start_pos.z)))
 	var col: Collision = w.collision
-	var stride := maxi(1, _cut_list.size() / 12000)
+	var stride := 1   # toutes les coupes (≈ 13 000, ~6 s)
 	var tested := 0
 	var passed: PackedStringArray = []
 	var i := 0
@@ -342,4 +343,41 @@ func _sweep(t: Node, w: World) -> void:
 				passed.append("(%.1f, %.1f)" % [p.x, p.y])
 	print("j30 : balayage de %d traversées de murs visibles, %d franchies %s" % [tested, passed.size(), ", ".join(passed.slice(0, 12))])
 	t.check(tested > 1000, "%d traversées simulées" % tested)
-	t.check(passed.size() <= tested / 100, "le joueur ne franchit pas les murs visibles : %d franchies sur %d (au plus 1 %%) : %s" % [passed.size(), tested, ", ".join(passed.slice(0, 10))])
+	t.check(passed.size() == 0, "le joueur ne franchit aucun mur visible (hauteur >= 2 m) : %d franchies sur %d : %s" % [passed.size(), tested, ", ".join(passed.slice(0, 10))])
+
+## v0.24.0 : les murs ajoutés (data/world_collision_extra.json) ne gênent aucun escalier / lien d'étage : on marche le long de chaque lien (points du chemin tous les 0,4 m,
+## à leur hauteur) avec Collision.resolve, un cercle de 0,4 m, portes ouvertes ; le déplacement imposé par la collision ne doit pas être plus grand avec les murs
+## ajoutés que sans eux (le JS a déjà quelques points serrés).
+func _stairs(t: Node, w: World) -> void:
+	w.open_all_doors()
+	var col: Collision = w.collision
+	var extra: Array = []
+	for i in range(w.extra_first, w.seg_list.size()):
+		extra.append(w.seg_list[i])
+	t.check(extra.size() > 100, "%d murs ajoutés chargés" % extra.size())
+	var worse: PackedStringArray = []
+	var samples := 0
+	for li in w.levels.links.size():
+		var L: Dictionary = w.levels.links[li]
+		var path: Array = L["path"]
+		var pts: Array = []
+		for k in range(1, path.size()):
+			var a: Array = path[k - 1]
+			var b: Array = path[k]
+			var n := maxi(1, ceili(Vector3(b[0] - a[0], 0.0, b[2] - a[2]).length() / 0.4))
+			for j in n + 1:
+				var f := float(j) / n
+				pts.append(Vector3(a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f, a[2] + (b[2] - a[2]) * f))
+		for p: Vector3 in pts:
+			samples += 1
+			for e: Dictionary in extra:
+				e["off"] = true
+			var d0 := col.resolve(p, 0.4).distance_to(p)
+			for e: Dictionary in extra:
+				e["off"] = false
+			var d1 := col.resolve(p, 0.4).distance_to(p)
+			if d1 > d0 + 0.05:
+				worse.append("lien %d (%.1f, %.1f, %.1f) %.2f -> %.2f" % [li, p.x, p.y, p.z, d0, d1])
+	print("j30 : %d points d'escaliers testés, %d gênés par les murs ajoutés %s" % [samples, worse.size(), ", ".join(worse.slice(0, 6))])
+	t.check(samples > 200, "%d points d'escaliers" % samples)
+	t.check(worse.size() == 0, "les murs ajoutés ne gênent aucun escalier : %d points : %s" % [worse.size(), ", ".join(worse.slice(0, 6))])
