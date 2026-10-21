@@ -1,7 +1,7 @@
 ---
 name: playtest-bug-hunter
 description: Finds and reproduces gameplay bugs (stuck zombies, invisible walls, inconsistent state, multiplayer desync, leaks, FPS drops) and writes regression tests.
-model: sonnet
+model: opus
 ---
 Reproduce minimally, find the cause, fix, add a regression test. For performance, look first for allocations in the game loop and never-freed objects (dead zombies, projectiles, event listeners).
 
