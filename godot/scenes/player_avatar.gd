@@ -4,7 +4,7 @@ extends Node3D
 ## en main (les modèles de la vue à la première personne, WeaponModels) et son couteau. Les mains et bras de la première personne sont cachés (weapon_view.hide_gun) pendant ce temps.
 ## Sur une machine ou dans la rame, le cavalier est celui de rides_view.gd : cet avatar ne s'y montre pas.
 ## Mouvement : le corps regarde dans le sens de la marche (jambes), le buste se tord vers la visée (AvatarPose) ; en marche arrière, jambes à l'envers.
-## Animations du modèle : Idle, Walk, Run, Jump, Death (à terre) ; visée, tir, rechargement, coup de couteau : posés par AvatarPose. Aucune lecture de la simulation sauf Game.player / Game.arms.
+## Animations du modèle : Idle, Walk, Run, Sprint (v0.31.0), Jump, Death (à terre) ; visée, tir, rechargement, coup de couteau : posés par AvatarPose. Aucune lecture de la simulation sauf Game.player / Game.arms.
 
 const WeaponModels := preload("res://scenes/weapon_models.gd")
 const MeleeModels := preload("res://scenes/melee_models.gd")
@@ -38,6 +38,10 @@ func setup(cam: Camera3D) -> void:
 	_cam = cam
 	visible = false
 	Game.shot_fired.connect(_on_shot)
+	# v0.31.0 : le personnage (30 k triangles, 57 os, matériaux) est créé dès le chargement, caché : son instanciation (~20 ms) ne tombe pas
+	# sur la première image de la vue à la troisième personne
+	if Game.settings != null:
+		_make_char(String(CharacterDefs.of_slot(int(Game.settings.get_value("char")))["id"]))
 
 func _physics_process(_dt: float) -> void:
 	if Game.player == null:
@@ -115,8 +119,8 @@ func _tick(dt: float) -> void:
 	elif not p.on_ground or not p.vault.is_empty():
 		anim = "Jump"
 	elif spd >= 4.3:
-		anim = "Run"
-		scale = clampf(spd / 6.0, 0.8, 1.6)
+		anim = "Sprint" if p.sprinting and _char.player.has_animation("Sprint") else "Run"
+		scale = clampf(spd / (7.0 if anim == "Sprint" else 6.0), 0.8, 1.6)
 	elif spd > 0.4:
 		anim = "Walk"
 		scale = clampf(spd / 1.7, 0.6, 2.2)

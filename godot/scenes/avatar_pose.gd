@@ -27,6 +27,12 @@ var _scale := 1.0               ## taille du personnage / taille de référence 
 var _l_up := 0.285              ## longueur du bras
 var _l_fore := 0.265            ## longueur de l'avant-bras jusqu'au poignet (le bout de l'os)
 
+const FINGERS := ["Thumb", "Index", "Middle", "Ring", "Pinky"]
+## Courbure des doigts (degrés, phalanges 1-2-3, autour de l'axe X local des os : + referme) : main arrière sur la poignée (index sur la détente),
+## main avant sous le garde-main, poing fermé sur le couteau.
+const GRIP_REAR := {"Thumb": [24, 32, 26], "Index": [28, 30, 18], "Middle": [70, 84, 44], "Ring": [74, 86, 46], "Pinky": [78, 88, 48]}
+const GRIP_FRONT := {"Thumb": [18, 22, 18], "Index": [42, 50, 30], "Middle": [48, 56, 32], "Ring": [52, 58, 34], "Pinky": [56, 60, 36]}
+const GRIP_FIST := {"Thumb": [30, 40, 35], "Index": [82, 95, 55], "Middle": [86, 98, 55], "Ring": [88, 98, 55], "Pinky": [90, 98, 55]}
 const GUN_SCALE := 1.18         ## l'arme est un peu agrandie : à 2,7 m de la caméra, un fusil à taille réelle se lit mal
 const SPINE_PITCH := 0.7        ## part du tangage de la visée portée par le buste (le reste : la tête)
 const GRIP_ORIGIN := Vector3(-0.10, -0.15, 0.22)   ## prise arrière de l'arme par rapport au milieu des épaules, dans le repère de la visée (x : +gauche du personnage)
@@ -39,6 +45,16 @@ func _bones(sk: Skeleton3D) -> void:
 	_scale = hip / 0.92
 	_l_up = sk.get_bone_global_rest(int(_b["UpperArm.R"])).origin.distance_to(sk.get_bone_global_rest(int(_b["LowerArm.R"])).origin)
 	_l_fore = 0.26 * _scale
+	# v0.31.0 : squelette étendu : la main (os Hand.*) part du poignet ; ses doigts se referment sur les prises de l'arme
+	var hr := sk.find_bone("Hand.R")
+	if hr >= 0:
+		_l_fore = sk.get_bone_global_rest(int(_b["LowerArm.R"])).origin.distance_to(sk.get_bone_global_rest(hr).origin)
+		for s in ["L", "R"]:
+			_b["Hand." + s] = sk.find_bone("Hand." + s)
+			for f in FINGERS:
+				for k in [1, 2, 3]:
+					var n := "%s%d.%s" % [f, k, s]
+					_b[n] = sk.find_bone(n)
 
 func _process_modification_with_delta(_dt: float) -> void:
 	var sk := get_skeleton()
@@ -84,6 +100,44 @@ func _process_modification_with_delta(_dt: float) -> void:
 	var wrist_l := Vector3(-0.012, -(fr + 0.024), 0.082)
 	_arm(sk, true, gun_xf * (rear + wrist_r), s_r, Vector3(-0.55, -1.0, -0.35))
 	_arm(sk, false, gun_xf * (front + wrist_l), s_l, Vector3(0.55, -1.0, -0.35))
+	_hands_on_gun(sk, reload_p >= 0.0)
+
+## v0.31.0 : orientation des mains et doigts refermés sur l'arme. Repère de l'arme : -Z devant, +Y haut, +X à droite (vue du tireur).
+## Main droite : doigts vers le bas et l'avant autour de la poignée, paume tournée vers la gauche ; main gauche : doigts vers l'avant sous le garde-main,
+## paume vers le haut. Axes des os de la main (tools/charlib/skel.py) : Y du poignet vers les doigts, Z sort de la paume.
+func _hands_on_gun(sk: Skeleton3D, reloading: bool) -> void:
+	if not _b.has("Hand.R") or int(_b["Hand.R"]) < 0:
+		return
+	var gb := gun_xf.basis.orthonormalized()
+	var fwd := -gb.z
+	var up := gb.y
+	var right := gb.x
+	_orient_hand(sk, int(_b["Hand.R"]), (fwd * 0.45 - up * 0.9).normalized(), -right)
+	if not reloading:
+		_orient_hand(sk, int(_b["Hand.L"]), (fwd * 0.9 + right * 0.25).normalized(), (up * 0.85 + right * 0.3).normalized())
+	_curl(sk, "R", GRIP_REAR, 1.0)
+	_curl(sk, "L", GRIP_FRONT if not reloading else GRIP_FIST, 1.0 if not reloading else 0.6)
+
+func _orient_hand(sk: Skeleton3D, i: int, y_dir: Vector3, z_dir: Vector3) -> void:
+	var g := sk.get_bone_global_pose(i)
+	var y := y_dir.normalized()
+	var z := (z_dir - y * z_dir.dot(y)).normalized()
+	var x := y.cross(z)
+	var sc := g.basis.get_scale()
+	g.basis = Basis(x, y, z).scaled(sc)
+	sk.set_bone_global_pose(i, g)
+
+## Doigts : rotation locale autour de X à partir de la pose de repos (positif : la phalange se replie vers la paume).
+func _curl(sk: Skeleton3D, side: String, grip: Dictionary, k: float) -> void:
+	for f in FINGERS:
+		var a: Array = grip[f]
+		for j in 3:
+			var n := "%s%d.%s" % [f, j + 1, side]
+			var i := int(_b.get(n, -1))
+			if i < 0:
+				continue
+			var q := sk.get_bone_rest(i).basis.get_rotation_quaternion() * Quaternion(Vector3.RIGHT, deg_to_rad(float(a[j]) * k))
+			sk.set_bone_pose_rotation(i, q)
 
 ## Coup de couteau : la main droite balaie un arc devant le buste, le couteau dans le poing ; la main gauche reste au flanc ; l'arme est rengainée (cachée).
 func _melee(sk: Skeleton3D, c: Vector3, s_l: Vector3, s_r: Vector3) -> void:
@@ -98,6 +152,9 @@ func _melee(sk: Skeleton3D, c: Vector3, s_l: Vector3, s_r: Vector3) -> void:
 		knife.transform = Transform3D(r * Basis(Vector3.UP, PI) * Basis(Vector3.RIGHT, ang), hand)
 	_arm(sk, true, hand, s_r, Vector3(-0.6, -1.0, -0.2))
 	_arm(sk, false, c + r * (Vector3(0.28, -0.42, 0.05) * _scale), s_l, Vector3(0.6, -1.0, -0.1))
+	if _b.has("Hand.R") and int(_b["Hand.R"]) >= 0:
+		_curl(sk, "R", GRIP_FIST, 1.0)
+		_curl(sk, "L", GRIP_FRONT, 0.4)
 
 static func _v(a: Array) -> Vector3:
 	return Vector3(float(a[0]), float(a[1]), float(a[2]))

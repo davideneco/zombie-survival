@@ -1,6 +1,6 @@
 extends SceneTree
 ## Planche des personnages (captures réelles, besoin d'un affichage) :
-##   godot --path godot --script ../tools/character-sheet.gd -- out.png [anim] [t] [id,id,..]
+##   godot --path godot --script ../tools/character-sheet.gd -- out.png [anim] [t] [id,id,..|all] [lacet en degrés : 90 profil, 180 dos]
 ## Mode portraits : godot --path godot --script ../tools/character-sheet.gd -- <dossier> PORTRAITS : écrit <dossier>/portrait_<id>.png (192 x 256, fond transparent, trois quarts)
 ## pour les cartes du menu SURVIVANT.
 ## Une rangée de 8 personnages (ou ceux demandés) dans l'animation `anim` (Idle par défaut) à la date `t` (s), vus de face puis de trois quarts arrière.
@@ -9,7 +9,8 @@ func _init() -> void:
 	var out: String = a[0] if a.size() > 0 else "sheet.png"
 	var anim: String = a[1] if a.size() > 1 else "Idle"
 	var t := float(a[2]) if a.size() > 2 else 0.0
-	var ids: Array = String(a[3]).split(",") if a.size() > 3 else CharacterModel.IDS.duplicate()
+	var ids: Array = String(a[3]).split(",") if a.size() > 3 and a[3] != "all" else CharacterModel.IDS.duplicate()
+	var yaw := deg_to_rad(float(a[4])) if a.size() > 4 else 0.0   # v0.31.0 : vue de profil (90) ou de dos (180)
 	var portraits := anim == "PORTRAITS"
 	await process_frame
 	var vp := SubViewport.new()
@@ -52,6 +53,8 @@ func _init() -> void:
 			pm.rotation.y = deg_to_rad(-18)
 			vp.add_child(pm)
 			pm.pose("Idle", 0.3)
+			if pm.face != null:
+				pm.face.look_at_world = cam0.global_position
 			for i in 6:
 				await process_frame
 			RenderingServer.force_draw()
@@ -75,8 +78,11 @@ func _init() -> void:
 			printerr("modèle absent : ", ids[i])
 			continue
 		m.position = Vector3((i - (ids.size() - 1) / 2.0) * 1.1, 0, 0)
+		m.rotation.y = yaw
 		vp.add_child(m)
 		m.pose(anim, t)
+		if m.face != null:
+			m.face.look_at_world = Vector3(0, 1.2, 8.0)
 		var st := m.stats()
 		print("%s : %d triangles, %d surfaces" % [ids[i], st["tris"], st["surfaces"]])
 	var cam := Camera3D.new()

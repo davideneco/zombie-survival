@@ -1,25 +1,36 @@
-Characters of the Godot port (marc, lea, karim, chloe, lucian, picsou, klukai, harry) - assets/characters/*.glb
+Characters of the Godot port (marc, lea, karim, chloe, lucian, picsou, klukai, harry) - assets/characters/<id>.gltf, <id>.bin and the textures
+<id>_albedo.jpg, <id>_normal.jpg, <id>_orm.jpg, <id>_emission.jpg, <id>_hair.png, <id>_fp_glove|sleeve|cuff.jpg, portrait_<id>.png
 
-Origin : ORIGINAL work, modelled from scratch for this project by tools/build-characters.py (Blender 5.2 script, no external model, texture or animation
-file is read: every mesh is generated from ellipsoids, tubes, rounded boxes and surfaces of revolution; the skeleton and the 8 animations (Idle, Walk, Run,
-Sit_Moto, Sit_Bike, Sit_Tram, Sit_Tram_Drive, Death) are written in the same script, bone rotations only). Colours are plain PBR material values, no image.
+Origin : ORIGINAL work, generated from scratch for this project by tools/build-characters.py and the modules in tools/charlib/ (Blender 5.2 script,
+v0.31.0). No external model, texture, scan, photo or animation file is read or downloaded:
+  - shapes : signed distance fields written in the scripts (ellipsoids, round cones, rounded boxes, tori, surfaces of revolution, smooth unions,
+    offsets for the clothes, displacements for the folds), meshed with the OpenVDB library bundled with Blender, decimated by Blender;
+  - textures : computed per texel by tools/charlib/tex.py (value noise, fractal noise, cellular noise, stitches, camouflage, fabric, leather,
+    skin, eyes) plus normals and ambient occlusion baked by Blender Cycles from the dense meshes generated above; the hair strands texture
+    is drawn by tools/charlib/hair.py;
+  - skeleton (57 bones), skin weights and the 10 animations (Idle, Walk, Run, Sprint, Sit_Moto, Sit_Bike, Sit_Tram, Sit_Tram_Drive, Death,
+    Jump) are written in tools/charlib/skel.py, rig.py and anims.py.
+The v0.21 low-poly models (previous tools/build-characters.py, in the git history) were also original; they are replaced, not reused.
 
-Licence : same as the rest of the project (the repository owner's licence). Nothing in these files comes from Quaternius, Kenney or any other pack: the
-low-poly cartoon look is only meant to sit well next to the Quaternius zombies (assets/zombies, CC0, see ../zombies/LICENSE.txt), which are NOT reused here.
-The earlier idea of adapting "Ultimate Modular Men / Women" (Quaternius) was dropped: the pack page and the QAL licence note (see ../zombies/LICENSE.txt)
-make redistribution of derived models uncertain, and building from scratch avoids the question.
+Licence : same as the rest of the project (the repository owner's licence). Nothing in these files comes from Quaternius, Kenney, Poly Haven,
+ambientCG or any other pack.
 
-Originality of the designs: the 8 names and accent colours come from the browser game (src/characters.js), and the outfits are loosely inspired by the game's
-primitive avatars (colours, accessories), but the designs are NOT reproductions of any copyrighted character:
-  - marc    : soldier (helmet with night-vision goggles, tactical vest, backpack with a rolled mat, knee pads).
-  - lea     : nurse (white coat over blue scrubs, red headband, stethoscope, green medical bag with a cross).
-  - karim   : firefighter (orange jacket with reflective bands, yellow helmet with neck flap, air tanks, axe on the back).
-  - chloe   : student (red parka, cream scarf, headphones, light-blue backpack, long dark hair).
-  - lucian  : "the Purifier" (long black coat with white lining and gold epaulettes, white full-face mask, glowing relic).
-  - picsou  : billionaire. The browser game's avatar is an anthropomorphic duck with a top hat; to stay clear of the protected cartoon character, the port
-              uses an ORIGINAL design: a short stout elderly human tycoon (red frock coat, black top hat, monocle, white moustache, gold cane). Only the name,
-              the red/white/gold palette and the top hat come from the game.
-  - klukai  : tactical doll (black cap, long pale-blue ponytail, purple cropped jacket, cyan straps, porcelain joints at knees and elbows).
-  - harry   : sorcerer. Original design: dark midnight robe, floppy pointed hat with a gold band, round glasses, teal scarf, gold sash, wand. No scar, no house
-              colours, no uniform from any film or game.
+Originality of the designs: the 8 names and accent colours come from the browser game (src/characters.js), and the outfits are loosely
+inspired by the game's primitive avatars (colours, accessories), but the designs are NOT reproductions of any copyrighted character:
+  - marc    : soldier (generic woodland-like camouflage made by noise, helmet with a night-vision mount, plate carrier with pouches, backpack
+              with a rolled mat, knee pads, gloves, boots).
+  - lea     : nurse (blue scrubs, open white lab coat with pockets, pens and badge, stethoscope, red headband, red ponytail, blue nitrile
+              gloves, green medical bag with a white cross, red-cross armband).
+  - karim   : firefighter (orange turnout coat and dark trousers with reflective bands, yellow helmet with a raised visor and a neck flap,
+              breathing apparatus with a cylinder and hose, axe on the back, leather gloves, short beard).
+  - chloe   : student (quilted red parka, knitted scarf, headphones round the neck, jeans, sneakers, light-blue backpack, long dark hair).
+  - lucian  : "the Purifier" (long black leather coat with white trims, gold epaulettes and buttons, hood, rubber respirator with two
+              filter cartridges and a valve, round goggles, glowing relic).
+  - picsou  : billionaire. The browser game's avatar is an anthropomorphic duck with a top hat; to stay clear of the protected cartoon
+              character, the port uses an ORIGINAL design: a short stout elderly human tycoon (red tailcoat, gold waistcoat, cravat,
+              top hat, monocle, white moustache, spats, gold cane). Only the name, the red/white/gold palette and the top hat come from the game.
+  - klukai  : tactical doll (black bodysuit with doll-joint seams, cropped purple jacket with cyan piping, harness, holster, porcelain knee
+              caps, knee boots, pale-blue hair in a high ponytail with a side-swept fringe).
+  - harry   : sorcerer. Original design: midnight-blue robe with bell sleeves, floppy pointed hat with a gold band, round glasses, teal and
+              gold striped scarf, gold sash, wand. No scar, no house colours, no uniform from any film or game.
 No model, texture or sound was extracted from any game or film.

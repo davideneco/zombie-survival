@@ -1,734 +1,596 @@
-# Construit les 8 personnages jouables du port Godot (v0.21.0). Usage (Blender 5.x, sans scripts auto-exécutés) :
-#   blender -b --disable-autoexec --python tools/build-characters.py -- <dossier de sortie> [id ...]
-# Aucun asset externe : tout est modélisé ici, de zéro (ellipsoïdes, tubes, boîtes arrondies, tours de révolution), en low-poly « cartoon » proche des zombies
-# (assets/zombies). Un squelette humanoïde commun (mêmes noms d'os pour les 8 : Root, Hips, Abdomen, Torso, Neck, Head, Shoulder/UpperArm/LowerArm .L/.R,
-# UpperLeg/LowerLeg/Foot .L/.R), proportions propres à chaque personnage, 7 animations rédigées à la main (rotations d'os seulement) :
-#   Idle, Walk, Run, Sit_Moto, Sit_Bike, Sit_Tram, Sit_Tram_Drive, Death, Jump (v0.25.1 : en l'air, pour la vue à la troisième personne à pied ;
-# la visée, le tir, le rechargement et le coup de couteau sont posés par le jeu : scenes/avatar_pose.gd, un modificateur de squelette qui oriente le buste et les bras).
-# Repère Blender : Z haut, l'avant est -Y, la gauche du personnage est +X (os « .L ») ; à l'export glTF l'avant devient +Z (comme les zombies).
-# Les pièces sont rigides (un os par pièce) ; les manteaux et robes longs sont pondérés entre le bassin et les cuisses (ils suivent les jambes).
-# Un objet « Prop_* » (canne, baguette) est une pièce séparée que le jeu cache quand le personnage est assis.
-import bpy, bmesh, sys, os, math
-from mathutils import Vector, Matrix, Euler, Quaternion
+# Builds the 8 playable characters of the Godot port (v0.31.0). Usage (Blender 5.x, no auto-run scripts):
+#   blender -b --disable-autoexec --python tools/build-characters.py -- <output dir> [id ...] [--fast] [--tex=2048]
+# Pipeline (modules in tools/charlib/, all original, nothing external is read):
+#   1. designs.py : each character is an SDF (signed distance field) tree: anatomical body (body.py) on the shared skeleton (skel.py), face
+#      (face.py), clothes and gear (design.py, cloth.py), hair cap; three grids: body (2.5 mm), head (1 mm), hands (1 mm), plus props;
+#   2. mesher.py  : narrow-band evaluation, OpenVDB volume-to-mesh (dense mesh, ~1-2 M faces), Blender decimation to the budget (~25-30 k triangles);
+#   3. skin weights from the SDF body regions (rig.py), extended skeleton (fingers, toes, jaw, eyes, lids);
+#   4. UVs (smart projection, more texels for the face, hands and eyes), Cycles bakes (rest position, normal, normals and ambient occlusion from
+#      the dense mesh), procedural PBR textures per texel (tex.py): albedo, normal, occlusion / roughness / metallic, emission;
+#   5. hair cards (hair.py), animations (anims.py), export glTF (separate .gltf + .bin + .jpg/.png, see godot/assets/characters/LICENSE.txt).
+import sys, os, time, math
+sys.dont_write_bytecode = True
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import bpy, bmesh
+import numpy as np
+from mathutils import Vector, Matrix
+from charlib import sdf, mesher, bl, designs, face, rig, anims, tex, hair
 
 args = sys.argv[sys.argv.index('--') + 1:]
-OUT = args[0]
-ONLY = set(args[1:])
+OUT = os.path.abspath(args[0])
+FAST = '--fast' in args
+TEXRES = 1024 if FAST else 2048
+for a in args:
+    if a.startswith('--tex='):
+        TEXRES = int(a[6:])
+ONLY = [a for a in args[1:] if not a.startswith('--')]
 os.makedirs(OUT, exist_ok=True)
+T0 = time.time()
+import tempfile
+TMPDIR = os.path.join(tempfile.gettempdir(), 'zs-character-build')   # intermediate images (the exporter copies them next to the .gltf)
 
-def hexc(h):
-    r, g, b = ((h >> 16) & 255) / 255.0, ((h >> 8) & 255) / 255.0, (h & 255) / 255.0
-    f = lambda c: c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4
-    return (f(r), f(g), f(b), 1.0)
+def log(*a):
+    print('[%6.1f s]' % (time.time() - T0), *a, flush=True)
 
-# ------------------------------------------------------------------ constructeur de maillage
-class Builder:
-    def __init__(self, mats):
-        self.mats = mats                  # nom -> (couleur hex, rugosité, métal, émission hex ou None)
-        self.matnames = list(mats.keys())
-        self.objs = {}                    # nom d'objet -> bmesh
-        self.parts = []                   # indice de pièce -> os (str) ou fonction poids(co) -> {os: poids}
+# ------------------------------------------------------------------ meshing
+def mesh_part(name, tree, h, budget, lo=None, hi=None):
+    pts, tris, quads = mesher.mesh(tree, h=h, lo=lo, hi=hi, log=log)
+    hi_ob = bl.new_mesh(name + '_hi', pts, tris, quads)
+    lo_ob = hi_ob.copy()
+    lo_ob.data = hi_ob.data.copy()
+    lo_ob.name = name
+    bpy.context.scene.collection.objects.link(lo_ob)
+    bl.decimate(lo_ob, budget)
+    log('  %s: %d -> %d triangles' % (name, bl.tri_count(hi_ob), bl.tri_count(lo_ob)))
+    return hi_ob, lo_ob
 
-    def _bm(self, obj):
-        if obj not in self.objs:
-            bm = bmesh.new()
-            bm.faces.layers.int.new('part')
-            self.objs[obj] = bm
-        return self.objs[obj]
+def set_attr(ob, name, domain, values, kind='INT'):
+    me = ob.data
+    if name in me.attributes:
+        me.attributes.remove(me.attributes[name])
+    at = me.attributes.new(name, kind, domain)
+    at.data.foreach_set('value', np.asarray(values, np.int32 if kind == 'INT' else np.float32))
 
-    def _emit(self, obj, vs, fs, mat, bone, smooth=True, flat_faces=None):
-        """vs : sommets (Vector, repère de référence) ; fs : listes d'indices ; une pièce = un os."""
-        bm = self._bm(obj)
-        layer = bm.faces.layers.int['part']
-        pid = len(self.parts)
-        self.parts.append(bone)
-        mi = self.matnames.index(mat)
-        bv = [bm.verts.new(v) for v in vs]
-        c = sum(vs, Vector()) / len(vs)
-        made = []
-        votes = 0
-        for f in fs:
-            try:
-                face = bm.faces.new([bv[i] for i in f])
-            except ValueError:
-                continue
-            made.append(face)
-        bm.faces.ensure_lookup_table()
-        for face in made:
-            face.normal_update()
-            fc = face.calc_center_median()
-            votes += 1 if face.normal.dot(fc - c) >= 0 else -1
-        flip = votes < 0
-        for k, face in enumerate(made):
-            if flip:
-                face.normal_flip()
-            face.material_index = mi
-            face.smooth = smooth
-            face[layer] = pid
-        return pid
+def get_attr(ob, name, n):
+    a = np.empty(n, np.int32)
+    ob.data.attributes[name].data.foreach_get('value', a)
+    return a
 
-    @staticmethod
-    def _xf(pts, pos, rot, scale):
-        m = Matrix.Translation(pos) @ Euler(rot, 'XYZ').to_matrix().to_4x4() @ Matrix.Diagonal((scale[0], scale[1], scale[2], 1.0))
-        return [m @ Vector(p) for p in pts]
+def face_centres(ob):
+    me = ob.data
+    c = np.empty(len(me.polygons) * 3, np.float32)
+    me.polygons.foreach_get('center', c)
+    return c.reshape(-1, 3).astype(np.float64)
 
-    def lathe(self, prof, pos=(0, 0, 0), rot=(0, 0, 0), scale=(1, 1, 1), segs=12, mat='skin', bone='Torso', obj='Body',
-              cap0=True, cap1=True, smooth=True, a0=0.0, a1=2 * math.pi):
-        """Surface de révolution autour de l'axe local Z ; prof = [(rayon, hauteur)] du bas vers le haut."""
-        if callable(bone) and len(prof) < 8:   # vêtement pondéré : profil plus fin pour que la flexion reste lisse
-            fine = []
-            for k in range(len(prof) - 1):
-                for q in range(4):
-                    t = q / 4.0
-                    fine.append((prof[k][0] + (prof[k + 1][0] - prof[k][0]) * t, prof[k][1] + (prof[k + 1][1] - prof[k][1]) * t))
-            fine.append(prof[-1])
-            prof = fine
-        vs, fs, rings = [], [], []
-        full = abs((a1 - a0) - 2 * math.pi) < 1e-6
-        nseg = segs if full else segs + 1
-        for (r, h) in prof:
-            if r < 1e-6:
-                vs.append((0, 0, h)); rings.append([len(vs) - 1] * nseg)
-            else:
-                ids = []
-                for s in range(nseg):
-                    a = a0 + (a1 - a0) * (s / segs)
-                    vs.append((r * math.cos(a), r * math.sin(a), h)); ids.append(len(vs) - 1)
-                rings.append(ids)
-        ns = segs if full else segs
-        for i in range(len(prof) - 1):
-            for s in range(ns):
-                s2 = (s + 1) % nseg
-                a, b, c, d = rings[i][s], rings[i][s2], rings[i + 1][s2], rings[i + 1][s]
-                if a == b: fs.append([a, c, d] if c != d else [])
-                elif c == d: fs.append([a, b, c])
-                else: fs.append([a, b, c, d])
-        fs = [f for f in fs if len(f) >= 3]
-        def cap(ring_r, ring_h, up):
-            if ring_r < 1e-6: return
-            base = len(vs)
-            vs.append((0, 0, ring_h))
-            ids = []
-            for s in range(nseg):
-                a = a0 + (a1 - a0) * (s / segs)
-                vs.append((ring_r * math.cos(a), ring_r * math.sin(a), ring_h)); ids.append(len(vs) - 1)
-            for s in range(ns):
-                s2 = (s + 1) % nseg
-                fs.append([base, ids[s], ids[s2]])
-        if cap0: cap(prof[0][0], prof[0][1], False)
-        if cap1: cap(prof[-1][0], prof[-1][1], True)
-        # le plat des bouchons est lisse seulement si la pièce l'est : on garde un seul drapeau de lissage
-        return self._emit(obj, self._xf(vs, Vector(pos), rot, scale), fs, mat, bone, smooth)
+def label(ob, tree, part_idx, fixed=None):
+    """Region per vertex, material per face (from the SDF), part index per face."""
+    V = bl.verts_of(ob)
+    F = face_centres(ob)
+    if fixed is None:
+        _, _, reg = sdf.evaluate(tree, V)
+        _, mat, _ = sdf.evaluate(tree, F)
+    else:
+        mat = np.full(len(F), sdf.mat_id(fixed[0]))
+        reg = np.full(len(V), sdf.reg_id(fixed[1]))
+    set_attr(ob, 'reg', 'POINT', reg)
+    set_attr(ob, 'mat', 'FACE', mat)
+    set_attr(ob, 'part', 'FACE', np.full(len(F), part_idx))
 
-    def ell(self, pos, radii, mat, bone, rot=(0, 0, 0), segs=10, rings=6, obj='Body', top=0.0, bot=0.0):
-        """Ellipsoïde (rayons x, y, z) ; top/bot : fraction coupée aux pôles (0 = entier)."""
-        prof = []
-        for i in range(rings + 1):
-            t = math.pi * i / rings
-            prof.append((math.sin(t), -math.cos(t)))
-        return self.lathe(prof, pos, rot, radii, segs, mat, bone, obj, True, True, True)
+def label_high(ob, tree, part_idx, fixed_mat=None):
+    """Dense mesh: per face material id and part id in a colour attribute (baked onto the low mesh: exact labels, no bleeding)."""
+    me = ob.data
+    F = face_centres(ob)
+    mat = sdf.evaluate(tree, F)[1] if fixed_mat is None else np.full(len(F), sdf.mat_id(fixed_mat))
+    mat = np.where(mat < 0, sdf.mat_id('skin'), mat)
+    nl = np.empty(len(me.polygons), np.int32)
+    me.polygons.foreach_get('loop_total', nl)
+    lf = np.repeat(np.arange(len(F)), nl)
+    col = np.zeros((len(lf), 4), np.float32)
+    col[:, 0] = (mat[lf] + 0.5) / 256.0
+    col[:, 1] = (part_idx + 0.5) / 16.0
+    col[:, 3] = 1
+    ca = me.color_attributes.new('lab', 'FLOAT_COLOR', 'CORNER')
+    ca.data.foreach_set('color', col.ravel())
 
-    def tube(self, p0, p1, r0, r1, mat, bone, segs=8, obj='Body', smooth=True, caps=True):
-        p0, p1 = Vector(p0), Vector(p1)
-        d = p1 - p0
-        q = Vector((0, 0, 1)).rotation_difference(d.normalized())
-        e = q.to_euler('XYZ')
-        return self.lathe([(r0, 0.0), (r1, d.length)], p0, tuple(e), (1, 1, 1), segs, mat, bone, obj, caps, caps, smooth)
+def eye_mesh(name, c, r, side):
+    bm = bmesh.new()
+    bmesh.ops.create_uvsphere(bm, u_segments=28, v_segments=16, radius=r)
+    # pole towards the front (-Y)
+    bmesh.ops.rotate(bm, verts=bm.verts, cent=(0, 0, 0), matrix=Matrix.Rotation(math.pi / 2, 3, 'X'))
+    bmesh.ops.translate(bm, verts=bm.verts, vec=Vector(c))
+    me = bpy.data.meshes.new(name)
+    bm.to_mesh(me); bm.free()
+    ob = bpy.data.objects.new(name, me)
+    bpy.context.scene.collection.objects.link(ob)
+    return ob
 
-    def rbox(self, pos, size, mat, bone, r=0.02, rot=(0, 0, 0), n=3, obj='Body', weights=None):
-        """Boîte aux arêtes arrondies (rayon r), maillage soudé, ombrage lisse."""
-        if callable(bone): n = max(n, 10)
-        hx, hy, hz = size[0] / 2, size[1] / 2, size[2] / 2
-        r = min(r, hx * 0.95, hy * 0.95, hz * 0.95)
-        keymap, vs, fs = {}, [], []
-        def vid(p):
-            k = (round(p[0], 5), round(p[1], 5), round(p[2], 5))
-            if k not in keymap:
-                keymap[k] = len(vs); vs.append(p)
-            return keymap[k]
-        def proj(p):
-            ix, iy, iz = (max(-(hx - r), min(hx - r, p[0])), max(-(hy - r), min(hy - r, p[1])), max(-(hz - r), min(hz - r, p[2])))
-            d = Vector((p[0] - ix, p[1] - iy, p[2] - iz))
-            if d.length < 1e-9: return (p[0], p[1], p[2])
-            d.normalize()
-            return (ix + d.x * r, iy + d.y * r, iz + d.z * r)
-        hs = (hx, hy, hz)
-        for ax in range(3):
-            for sgn in (-1, 1):
-                u, v = [i for i in range(3) if i != ax]
-                grid = []
-                for a in range(n + 1):
-                    row = []
-                    for b in range(n + 1):
-                        p = [0, 0, 0]
-                        p[ax] = sgn * hs[ax]
-                        p[u] = -hs[u] + 2 * hs[u] * a / n
-                        p[v] = -hs[v] + 2 * hs[v] * b / n
-                        row.append(vid(proj(p)))
-                    grid.append(row)
-                for a in range(n):
-                    for b in range(n):
-                        fs.append([grid[a][b], grid[a + 1][b], grid[a + 1][b + 1], grid[a][b + 1]])
-        return self._emit(obj, self._xf(vs, Vector(pos), rot, (1, 1, 1)), fs, mat, bone, True)
-
-    def box(self, pos, size, mat, bone, rot=(0, 0, 0), obj='Body'):
-        return self.rbox(pos, size, mat, bone, r=0.003, rot=rot, n=1, obj=obj)
-
-    def torus(self, pos, R, r, mat, bone, rot=(0, 0, 0), segs=14, tsegs=6, obj='Body', scale=(1, 1, 1)):
-        vs, fs = [], []
-        for i in range(segs):
-            a = 2 * math.pi * i / segs
-            for j in range(tsegs):
-                b = 2 * math.pi * j / tsegs
-                vs.append(((R + r * math.cos(b)) * math.cos(a), (R + r * math.cos(b)) * math.sin(a), r * math.sin(b)))
-        for i in range(segs):
-            for j in range(tsegs):
-                i2, j2 = (i + 1) % segs, (j + 1) % tsegs
-                fs.append([i * tsegs + j, i2 * tsegs + j, i2 * tsegs + j2, i * tsegs + j2])
-        return self._emit(obj, self._xf(vs, Vector(pos), rot, scale), fs, mat, bone, True)
-
-    def poly(self, vs, fs, mat, bone, obj='Body', smooth=False):
-        return self._emit(obj, [Vector(v) for v in vs], fs, mat, bone, smooth)
-
-# ------------------------------------------------------------------ squelette (repère de référence, taille 1,75 m)
-HIP_Z = 0.92
-HEAD_K = 1.12
-def skirt_w(co):
-    """Pondération d'un vêtement long : bassin en haut, cuisse du côté du sommet en bas."""
-    t = max(0.0, min(1.0, (HIP_Z - 0.02 - co[2]) / 0.32))
-    wl = max(0.0, min(1.0, 0.5 + co[0] / 0.07))
-    return {'Hips': 1.0 - t, 'UpperLeg.L': t * wl, 'UpperLeg.R': t * (1.0 - wl)}
-
-def bones_def(x_leg=0.095, x_sh=0.235):
-    B = []
-    def add(name, parent, head, tail): B.append((name, parent, Vector(head), Vector(tail)))
-    add('Root', None, (0, 0, 0), (0, 0, 0.1))
-    add('Hips', 'Root', (0, 0, 0.92), (0, 0, 1.0))
-    add('Abdomen', 'Hips', (0, 0, 1.0), (0, 0, 1.12))
-    add('Torso', 'Abdomen', (0, 0, 1.12), (0, 0, 1.40))
-    add('Neck', 'Torso', (0, 0, 1.40), (0, 0, 1.50))
-    add('Head', 'Neck', (0, 0, 1.50), (0, 0, 1.50 + 0.25 * HEAD_K))
-    for s, sx in (('L', 1), ('R', -1)):
-        add('Shoulder.' + s, 'Torso', (sx * 0.04, 0, 1.38), (sx * x_sh, 0, 1.38))
-        add('UpperArm.' + s, 'Shoulder.' + s, (sx * x_sh, 0, 1.38), (sx * (x_sh + 0.01), 0, 1.10))
-        add('LowerArm.' + s, 'UpperArm.' + s, (sx * (x_sh + 0.01), 0, 1.10), (sx * (x_sh + 0.01), 0, 0.84))
-        add('UpperLeg.' + s, 'Hips', (sx * x_leg, 0, 0.92), (sx * x_leg, 0, 0.50))
-        add('LowerLeg.' + s, 'UpperLeg.' + s, (sx * x_leg, 0, 0.50), (sx * x_leg, 0, 0.09))
-        add('Foot.' + s, 'LowerLeg.' + s, (sx * x_leg, 0, 0.09), (sx * x_leg, -0.14, 0.04))
-    return B
-
-# ------------------------------------------------------------------ corps de base commun
-def humanoid(b, c):
-    """c : dict de style. Construit jambes, bassin, buste, cou, tête, visage, bras, mains."""
-    sk = 'skin'
-    fem = c.get('fem', False)
-    belly = c.get('belly', 0.0)
-    for s, sx in (('L', 1), ('R', -1)):
-        x = sx * 0.095
-        # jambes : cuisse, genou, mollet, chaussure
-        b.tube((x, 0, 0.93), (x, 0, 0.52), 0.098, 0.074, 'pants', 'UpperLeg.' + s, 10)
-        b.ell((x, 0, 0.50), (0.077, 0.077, 0.077), c.get('knee_mat', 'pants'), 'UpperLeg.' + s if c.get('knee_mat') is None else 'LowerLeg.' + s, segs=8, rings=5)
-        b.tube((x, 0, 0.50), (x, 0, 0.13), 0.074, 0.055, 'pants_low', 'LowerLeg.' + s, 10)
-        b.tube((x, 0, 0.20), (x, 0, 0.06), 0.060, 0.062, 'boots', 'LowerLeg.' + s, 10)   # tige de la chaussure
-        b.rbox((x, -0.04, 0.05), (0.105, 0.215, 0.09), 'boots', 'Foot.' + s, r=0.04)
-        b.rbox((x, -0.04, 0.013), (0.11, 0.225, 0.028), 'sole', 'Foot.' + s, r=0.013)
-    # bassin et buste
-    b.ell((0, 0, 0.99), (0.165 * (1.06 if fem else 1.0), 0.115, 0.115), 'pants', 'Hips', segs=12, rings=6)
-    b.rbox((0, 0, 1.065), (0.30 + belly, 0.20 + belly * 0.8, 0.16), 'top', 'Abdomen', r=0.07)
-    chest_w = 0.40 if not fem else 0.36
-    b.rbox((0, 0, 1.25), (chest_w, 0.235, 0.32), 'top', 'Torso', r=0.09)
-    b.tube((0, 0, 1.38), (0, 0, 1.50), 0.052, 0.046, sk, 'Neck', 8)
-    if not c.get('no_belt'):
-        b.tube((0, 0, 1.03), (0, 0, 1.075), 0.168 + belly * 0.4, 0.168 + belly * 0.4, 'belt', 'Abdomen', 14)
-    # tête
-    hc = (0, 0, 1.625)
-    b.ell(hc, (0.108, 0.118, 0.133), sk, 'Head', segs=14, rings=9)
-    b.ell((0, -0.04, 1.555), (0.085, 0.085, 0.07), sk, 'Head', segs=10, rings=5)             # mâchoire / menton
-    if not c.get('no_face'):
-        for sx in (-1, 1):
-            b.ell((sx * 0.045, -0.101, 1.64), (0.017, 0.010, 0.021), c.get('eye_white', 'eye'), 'Head', segs=8, rings=4)
-            b.ell((sx * 0.045, -0.109, 1.64), (0.0105, 0.006, 0.0135), c.get('iris', 'iris'), 'Head', segs=8, rings=4)
-            b.box((sx * 0.047, -0.103, 1.678), (0.045, 0.012, 0.011 if not fem else 0.008), 'hair', 'Head', rot=(0, 0, sx * -0.18))
-        b.ell((0, -0.117, 1.60), (0.017, 0.02, 0.018), sk, 'Head', segs=8, rings=4)               # nez
-        if not c.get('mask'):
-            b.box((0, -0.108, 1.563), (0.05, 0.01, 0.007), 'mouth', 'Head')
-    for sx in (-1, 1):
-        b.ell((sx * 0.109, 0.0, 1.625), (0.018, 0.028, 0.034), sk, 'Head', segs=8, rings=4)   # oreilles
-    # bras
-    for s, sx in (('L', 1), ('R', -1)):
-        x0, x1 = sx * 0.235, sx * 0.245
-        b.ell((x0, 0, 1.375), (0.08, 0.08, 0.075), 'sleeve', 'UpperArm.' + s, segs=10, rings=6)    # épaule
-        b.tube((x0, 0, 1.37), (x1, 0, 1.11), 0.064, 0.053, 'sleeve', 'UpperArm.' + s, 9)
-        elbow_mat = c.get('elbow_mat')
-        b.ell((x1, 0, 1.10), (0.058, 0.058, 0.058), elbow_mat or 'forearm', 'LowerArm.' + s, segs=8, rings=5)
-        b.tube((x1, 0, 1.10), (x1, 0, 0.88), 0.053, 0.041, 'forearm', 'LowerArm.' + s, 9)
-        b.tube((x1, 0, 0.90), (x1, 0, 0.86), 0.042, 0.042, 'cuff', 'LowerArm.' + s, 9)
-        b.ell((x1, 0, 0.79), (0.040, 0.05, 0.062), 'glove', 'LowerArm.' + s, segs=8, rings=5)           # main (moufle)
-        b.ell((x1 - sx * 0.036, -0.026, 0.82), (0.017, 0.017, 0.034), 'glove', 'LowerArm.' + s, segs=6, rings=4, rot=(0.3, 0, 0))   # pouce
-
-# ------------------------------------------------------------------ coiffures et pièces de tête
-def dome(b, mat, cz=1.655, rx=0.121, ry=0.130, rz=0.140, tilt=-0.42, cut=0.45, y=0.008, bone='Head'):
-    """Calotte de cheveux ou de casque : ellipsoïde ouvert par le bas (cut : angle polaire max / pi)."""
-    prof = []
-    n = 8
-    for i in range(n + 1):
-        t = math.pi * cut * i / n
-        prof.append((math.sin(t), math.cos(t)))
-    prof = prof[::-1]
-    return b.lathe(prof, (0, y, cz), (tilt, 0, 0), (rx, ry, rz), 14, mat, bone, cap0=False, cap1=False)
-
-def hair(b, c):
-    st = c.get('hair_style', 'short')
-    if st == 'short':
-        dome(b, 'hair', cut=0.6)
-    elif st == 'buzz':
-        dome(b, 'hair', rx=0.114, ry=0.123, rz=0.137, cut=0.5)
-    elif st == 'ponytail':
-        dome(b, 'hair', cut=0.58)
-        b.tube((0, 0.115, 1.69), (0, 0.19, 1.50), 0.04, 0.026, 'hair', 'Head', 8)
-        b.ell((0, 0.19, 1.47), (0.03, 0.03, 0.06), 'hair', 'Head', segs=8, rings=5)
-        b.torus((0, 0.113, 1.685), 0.035, 0.009, 'accessory', 'Head', rot=(0.9, 0, 0))
-    elif st == 'long':
-        dome(b, 'hair', cut=0.6)
-        b.ell((0, 0.05, 1.52), (0.125, 0.085, 0.17), 'hair', 'Head', segs=12, rings=7)
-        for sx in (-1, 1):
-            b.tube((sx * 0.1, -0.02, 1.62), (sx * 0.115, 0.0, 1.43), 0.03, 0.026, 'hair', 'Head', 8)
-    elif st == 'messy':
-        dome(b, 'hair', cut=0.58, rz=0.145)
-        for k in range(9):
-            a = math.tau * k / 9
-            b.ell((math.cos(a) * 0.085, math.sin(a) * 0.09 + 0.0, 1.745 + (k % 3) * 0.008), (0.04, 0.04, 0.035), 'hair', 'Head', segs=6, rings=4)
-        b.ell((0.03, -0.1, 1.725), (0.05, 0.02, 0.025), 'hair', 'Head', segs=6, rings=4)
-    elif st == 'longtail':
-        dome(b, 'hair', rx=0.114, ry=0.126, rz=0.139, cut=0.5, tilt=-0.5)
-        b.tube((0, 0.115, 1.69), (0, 0.17, 1.30), 0.048, 0.022, 'hair', 'Head', 8)
-        b.ell((0, 0.17, 1.26), (0.03, 0.03, 0.08), 'hair', 'Head', segs=8, rings=5)
-        for sx in (-1, 1):
-            b.tube((sx * 0.105, 0.035, 1.64), (sx * 0.11, 0.07, 1.50), 0.022, 0.016, 'hair', 'Head', 8)
-        b.torus((0, 0.115, 1.67), 0.04, 0.01, 'accessory', 'Head', rot=(1.0, 0, 0))
-    if c.get('beard'):
-        b.lathe([(0.0, -0.04), (0.092, -0.01), (0.10, 0.035), (0.092, 0.07)], (0, -0.012, 1.545), (0, 0, 0), (1, 1.02, 1), 12, 'hair', 'Head', cap0=False, cap1=False, a0=0, a1=2 * math.pi)
-        b.box((0, -0.112, 1.575), (0.07, 0.014, 0.014), 'hair', 'Head')
-
-# ------------------------------------------------------------------ les 8 personnages
-def mk_marc(b):
-    c = dict(hair_style='short')
-    humanoid(b, c)
-    # cheveux courts sous le casque : calotte basse
-    # casque : coque, couvre-casque, jugulaire, lunettes de vision nocturne relevées
-    dome(b, 'helmet', cz=1.665, rx=0.138, ry=0.148, rz=0.150, cut=0.56, y=0.004)
-    b.tube((0, 0, 1.665), (0, 0, 1.667), 0.147, 0.147, 'helmet', 'Head', 14)
-    b.torus((0, 0.004, 1.652), 0.135, 0.012, 'helmet_d', 'Head', rot=(0, 0, 0), segs=16)
-    b.box((0, -0.14, 1.77), (0.05, 0.05, 0.05), 'vest', 'Head')
-    for sx in (-1, 1):
-        b.tube((sx * 0.02, -0.13, 1.82), (sx * 0.02, -0.18, 1.82), 0.017, 0.017, 'vest', 'Head', 8)
-        b.tube((sx * 0.12, -0.02, 1.58), (sx * 0.08, -0.08, 1.5), 0.006, 0.006, 'vest', 'Head', 4)  # jugulaire
-    # gilet tactique + poches + radio
-    b.rbox((0, -0.015, 1.25), (0.43, 0.27, 0.33), 'vest', 'Torso', r=0.05)
-    for x in (-0.12, 0.0, 0.12):
-        b.rbox((x, -0.145, 1.17), (0.095, 0.05, 0.11), 'olive', 'Torso', r=0.015)
-    b.rbox((-0.11, -0.14, 1.33), (0.10, 0.04, 0.08), 'olive', 'Torso', r=0.012)
-    b.rbox((0.13, -0.14, 1.33), (0.05, 0.04, 0.06), 'gold', 'Torso', r=0.01)
-    for sx in (-1, 1):
-        b.rbox((sx * 0.14, 0, 1.43), (0.13, 0.20, 0.045), 'vest', 'Torso', r=0.02)
-    b.tube((0.21, 0.02, 1.36), (0.21, 0.02, 1.47), 0.014, 0.011, 'helmet_d', 'Torso', 6)      # radio d'épaule
-    # sac à dos + couchage roulé
-    b.rbox((0, 0.19, 1.25), (0.30, 0.17, 0.36), 'olive', 'Torso', r=0.04)
-    b.rbox((0, 0.285, 1.18), (0.22, 0.04, 0.16), 'helmet_d', 'Torso', r=0.015)
-    b.tube((-0.15, 0.2, 1.48), (0.15, 0.2, 1.48), 0.058, 0.058, 'roll', 'Torso', 10)
-    for s in ('L', 'R'):
-        sx = 1 if s == 'L' else -1
-        b.rbox((sx * 0.095, -0.058, 0.51), (0.12, 0.05, 0.12), 'vest', 'LowerLeg.' + s, r=0.02)  # genouillères
-    b.rbox((0, -0.05, 0.98), (0.12, 0.04, 0.10), 'olive', 'Hips', r=0.015)
-
-def mk_lea(b):
-    c = dict(fem=True, hair_style='ponytail')
-    humanoid(b, c)
-    hair(b, c)
-    # blouse blanche ouverte sur le haut bleu, brassard rouge sur le bandeau, stéthoscope, sac de soins vert
-    b.rbox((0, 0, 1.26), (0.385, 0.255, 0.33), 'coat', 'Torso', r=0.09)
-    b.rbox((0, -0.13, 1.25), (0.05, 0.02, 0.3), 'top', 'Torso', r=0.008)                           # ouverture
-    b.lathe([(0.17, 0.0), (0.22, -0.2)], (0, 0, 1.06), (0, 0, 0), (1, 0.76, 1), 14, 'coat', 'Hips', cap0=False, cap1=False, smooth=True)   # pans de blouse
-    b.torus((0, 0, 1.745), 0.12, 0.016, 'cross', 'Head', rot=(0, 0, 0), segs=16, scale=(0.95, 1.05, 1))   # bandeau rouge
-    b.torus((0, -0.02, 1.43), 0.07, 0.011, 'dark', 'Torso', rot=(0.5, 0, 0), segs=14)
-    b.ell((0, -0.12, 1.30), (0.024, 0.014, 0.024), 'metal', 'Torso', segs=8, rings=4)
-    b.tube((0.0, -0.1, 1.39), (0.0, -0.13, 1.30), 0.006, 0.006, 'dark', 'Torso', 5)
-    b.rbox((-0.255, 0, 1.30), (0.075, 0.075, 0.075), 'coat', 'UpperArm.R', r=0.02)
-    b.box((-0.255, -0.002, 1.30), (0.083, 0.082, 0.014), 'cross', 'UpperArm.R'); b.box((-0.255, -0.002, 1.30), (0.014, 0.082, 0.083), 'cross', 'UpperArm.R')
-    b.rbox((0, 0.185, 1.25), (0.28, 0.15, 0.30), 'bag', 'Torso', r=0.045)
-    b.box((0, 0.262, 1.27), (0.10, 0.012, 0.03), 'coat', 'Torso'); b.box((0, 0.262, 1.27), (0.03, 0.012, 0.10), 'cross', 'Torso')
-    b.rbox((0, 0.185, 1.43), (0.30, 0.16, 0.06), 'bag_d', 'Torso', r=0.025)
-    for sx in (-1, 1):
-        b.rbox((sx * 0.09, -0.115, 1.27), (0.035, 0.015, 0.3), 'bag_d', 'Torso', r=0.007)
-
-def mk_karim(b):
-    c = dict(hair_style='buzz', beard=True)
-    humanoid(b, c)
-    hair(b, c)
-    # veste de pompier : bandes réfléchissantes, casque jaune à bavolet, bouteilles d'air, hache
-    b.rbox((0, 0, 1.25), (0.43, 0.27, 0.33), 'top', 'Torso', r=0.09)
-    b.rbox((0, 0, 1.07), (0.34, 0.225, 0.17), 'top', 'Abdomen', r=0.07)
-    for z, bone in ((1.19, 'Torso'), (1.075, 'Abdomen')):
-        b.tube((0, 0, z - 0.015), (0, 0, z + 0.015), 0.178, 0.178, 'refl', bone, 14, smooth=True, caps=False)
-    for sx in (-1, 1):
-        b.rbox((sx * 0.07, -0.13, 1.28), (0.045, 0.015, 0.28), 'refl', 'Torso', r=0.006)
-    for s, sx in (('L', 1), ('R', -1)):
-        b.tube((sx * 0.245, 0, 0.99), (sx * 0.245, 0, 1.0), 0.054, 0.054, 'refl', 'UpperArm.' + s, 9, caps=False)
-        b.tube((sx * 0.095, 0, 0.62), (sx * 0.095, 0, 0.66), 0.091, 0.089, 'refl', 'UpperLeg.' + s, 10, caps=False)
-    dome(b, 'helmet', cz=1.67, rx=0.138, ry=0.15, rz=0.152, cut=0.57, y=0.004)
-    b.rbox((0, 0.0, 1.835), (0.03, 0.27, 0.025), 'helmet', 'Head', r=0.01)                                # crête
-    b.rbox((0, -0.15, 1.69), (0.23, 0.09, 0.016), 'helmet', 'Head', r=0.008, rot=(0.12, 0, 0))             # visière
-    b.rbox((0, 0.115, 1.60), (0.27, 0.07, 0.09), 'helmet', 'Head', r=0.02, rot=(-0.35, 0, 0))              # bavolet
-    b.torus((0, -0.15, 1.725), 0.0, 0.0, 'refl', 'Head') if False else None
-    b.tube((-0.075, 0.2, 1.44), (-0.075, 0.2, 1.20), 0.062, 0.062, 'metal', 'Torso', 12)
-    b.tube((0.075, 0.2, 1.44), (0.075, 0.2, 1.20), 0.062, 0.062, 'metal', 'Torso', 12)
-    b.tube((0, 0.2, 1.46), (0, 0.2, 1.50), 0.02, 0.02, 'dark', 'Torso', 8)
-    b.rbox((0, 0.14, 1.32), (0.30, 0.04, 0.05), 'dark', 'Torso', r=0.012)
-    b.tube((0.17, 0.25, 1.05), (0.19, 0.25, 1.50), 0.014, 0.014, 'wood', 'Torso', 6)                      # manche de hache
-    b.rbox((0.215, 0.25, 1.51), (0.12, 0.025, 0.08), 'axe', 'Torso', r=0.01)
-
-def mk_chloe(b):
-    c = dict(fem=True, hair_style='long')
-    humanoid(b, c)
-    hair(b, c)
-    b.rbox((0, 0, 1.26), (0.395, 0.255, 0.32), 'top', 'Torso', r=0.09)
-    b.lathe([(0.17, 0.0), (0.2, -0.13)], (0, 0, 1.06), (0, 0, 0), (1, 0.78, 1), 14, 'top', 'Hips', cap0=False, cap1=False)   # bas de parka
-    b.rbox((0, -0.125, 1.25), (0.035, 0.02, 0.30), 'dark', 'Torso', r=0.007)
-    b.ell((0, 0.115, 1.43), (0.12, 0.07, 0.07), 'top', 'Torso', segs=10, rings=6, rot=(0.4, 0, 0))        # capuche rabattue
-    b.torus((0, -0.005, 1.46), 0.085, 0.036, 'cream', 'Neck', rot=(0.15, 0, 0), segs=14)                    # écharpe
-    b.rbox((0.05, -0.1, 1.33), (0.075, 0.03, 0.2), 'cream', 'Torso', r=0.012, rot=(0.0, 0, 0.08))
-    b.torus((0, 0.01, 1.43), 0.098, 0.014, 'dark', 'Neck', rot=(0.2, 0, 0), segs=14)                         # casque audio
-    for sx in (-1, 1):
-        b.ell((sx * 0.1, -0.04, 1.40), (0.025, 0.04, 0.04), 'dark', 'Neck', segs=8, rings=4)
-    b.rbox((0, 0.185, 1.27), (0.27, 0.15, 0.31), 'bag', 'Torso', r=0.05)
-    b.rbox((0, 0.265, 1.2), (0.20, 0.03, 0.12), 'bag_d', 'Torso', r=0.012)
-    for sx in (-1, 1):
-        b.rbox((sx * 0.09, -0.115, 1.28), (0.035, 0.015, 0.3), 'bag', 'Torso', r=0.007)
-    b.ell((0.12, 0.27, 1.17), (0.02, 0.02, 0.02), 'gold', 'Torso', segs=6, rings=4)
-
-def mk_lucian(b):
-    c = dict(hair_style='buzz', mask=True, no_face=True)
-    humanoid(b, c)
-    hair(b, c)
-    # long manteau noir (pondéré sur les cuisses), liserés blancs, col montant, épaulettes dorées, relique lumineuse
-    b.rbox((0, 0, 1.26), (0.43, 0.275, 0.33), 'coat', 'Torso', r=0.09)
-    b.lathe([(0.18, 0.0), (0.205, -0.25), (0.255, -0.58)], (0, 0, 1.06), (0, 0, 0), (1, 0.82, 1), 16, 'coat', skirt_w, cap0=False, cap1=False)
-    b.rbox((0, -0.14, 0.78), (0.24, 0.02, 0.62), 'trim', skirt_w, r=0.005)      # revers
-    for sx in (-1, 1):
-        b.rbox((sx * 0.075, -0.137, 1.22), (0.03, 0.02, 0.4), 'trim', 'Torso', r=0.005)
-        b.rbox((sx * 0.235, 0, 1.43), (0.14, 0.17, 0.035), 'gold', 'UpperArm.' + ('L' if sx > 0 else 'R'), r=0.012)
-    b.tube((0, 0, 1.40), (0, 0, 1.52), 0.098, 0.088, 'coat', 'Neck', 12, caps=False)                    # col montant
-    b.ell((0, -0.13, 1.28), (0.026, 0.02, 0.026), 'glow', 'Torso', segs=8, rings=4)                       # relique
-    b.tube((0, 0, 1.03), (0, 0, 1.08), 0.205, 0.205, 'gold', 'Abdomen', 16, smooth=True, caps=False)      # ceinture dorée
-    # masque du Purificateur : coque blanche couvrant tout le visage, deux fentes noires, filtre lumineux au menton
-    prof = [(math.sin(math.pi * k / 10), -math.cos(math.pi * k / 10)) for k in range(11)]
-    b.lathe(prof, (0, -0.035, 1.625), (0, 0, 0), (0.118, 0.105, 0.14), 14, 'mask', 'Head', cap0=False, cap1=False, a0=math.pi * 1.2, a1=math.pi * 1.8)
-    for sx in (-1, 1):
-        b.rbox((sx * 0.047, -0.133, 1.645), (0.05, 0.02, 0.014), 'dark', 'Head', r=0.005, rot=(0, 0, sx * -0.2))
-    b.rbox((0, -0.145, 1.60), (0.012, 0.02, 0.06), 'trim', 'Head', r=0.004)
-    b.ell((0, -0.14, 1.552), (0.03, 0.02, 0.026), 'glow', 'Head', segs=8, rings=4)
-
-def mk_picsou(b):
-    c = dict(hair_style='none', belly=0.1, no_belt=True)
-    humanoid(b, c)
-    # cheveux blancs sur les côtés, grosses moustaches, sourcils blancs, monocle ; redingote rouge, haut-de-forme, guêtres blanches, canne dorée
-    for sx in (-1, 1):
-        b.ell((sx * 0.1, 0.02, 1.63), (0.03, 0.06, 0.06), 'hair', 'Head', segs=8, rings=5)
-        b.ell((sx * 0.035, -0.11, 1.575), (0.045, 0.02, 0.022), 'hair', 'Head', segs=8, rings=4, rot=(0, 0, sx * -0.35))
-    b.ell((0, 0.04, 1.69), (0.108, 0.1, 0.07), 'hair', 'Head', segs=10, rings=5)
-    b.torus((-0.046, -0.12, 1.64), 0.026, 0.004, 'gold', 'Head', rot=(math.pi / 2, 0, 0), segs=12)          # monocle
-    b.tube((-0.07, -0.118, 1.625), (-0.09, -0.08, 1.44), 0.002, 0.002, 'gold', 'Head', 3)
-    # redingote : buste, basques longues (pondérées sur les cuisses), revers sombres, col
-    b.rbox((0, 0, 1.27), (0.43, 0.29, 0.34), 'coat', 'Torso', r=0.1)
-    b.ell((0, -0.04, 1.08), (0.23, 0.17, 0.14), 'coat', 'Abdomen', segs=12, rings=6)                       # bedaine
-    b.lathe([(0.19, 0.0), (0.24, -0.22), (0.27, -0.42)], (0, 0, 1.04), (0, 0, 0), (1, 0.85, 1), 16, 'coat', skirt_w, cap0=False, cap1=False)
-    b.rbox((0, -0.135, 1.285), (0.09, 0.016, 0.24), 'shirt', 'Torso', r=0.006)
-    for sx in (-1, 1):
-        b.rbox((sx * 0.095, -0.145, 1.28), (0.075, 0.025, 0.26), 'dark', 'Torso', r=0.01, rot=(0, 0, sx * 0.14))
-    b.rbox((0, 0, 1.455), (0.17, 0.15, 0.04), 'dark', 'Neck', r=0.015)
-    b.tube((0, -0.2, 1.3), (0.0, -0.205, 1.12), 0.01, 0.01, 'gold', 'Torso', 4)                              # chaîne de montre
-    for s, sx in (('L', 1), ('R', -1)):
-        b.tube((sx * 0.095, 0, 0.17), (sx * 0.095, 0, 0.10), 0.07, 0.07, 'shirt', 'LowerLeg.' + s, 10)       # guêtres
-    # haut-de-forme
-    b.tube((0, 0.0, 1.745), (0, 0, 1.775), 0.19, 0.19, 'hat', 'Head', 16)
-    b.lathe([(0.118, 0.0), (0.112, 0.2)], (0, 0, 1.77), (0, 0, 0), (1, 1.05, 1), 16, 'hat', 'Head', cap0=False, cap1=True)
-    b.tube((0, 0, 1.775), (0, 0, 1.815), 0.12, 0.12, 'cross', 'Head', 16, caps=False)
-    # canne
-    b.tube((-0.256, -0.02, 0.84), (-0.256, -0.02, -0.0), 0.012, 0.012, 'gold', 'LowerArm.R', 6, obj='Prop_Cane')
-    b.ell((-0.256, -0.02, 0.86), (0.03, 0.03, 0.03), 'gold', 'LowerArm.R', segs=8, rings=5, obj='Prop_Cane')
-
-def mk_klukai(b):
-    c = dict(fem=True, hair_style='longtail', iris='iris_g', knee_mat='skin', elbow_mat='skin')
-    humanoid(b, c)
-    hair(b, c)
-    # casquette noire, masque autour du cou, veste violette courte, sangles cyan, sac tactique, genoux articulés de poupée
-    dome(b, 'dark', cz=1.675, rx=0.125, ry=0.135, rz=0.14, cut=0.52)
-    b.rbox((0, -0.13, 1.715), (0.2, 0.13, 0.014), 'dark', 'Head', r=0.006, rot=(0.1, 0, 0))
-    b.box((0, -0.009, 1.735), (0.04, 0.2, 0.02), 'accessory', 'Head') if False else None
-    b.torus((0, 0, 1.455), 0.07, 0.026, 'dark', 'Neck', rot=(0.1, 0, 0), segs=14)
-    b.rbox((0, 0, 1.275), (0.40, 0.255, 0.27), 'jacket', 'Torso', r=0.09)
-    b.rbox((0, 0, 1.08), (0.30, 0.205, 0.10), 'dark', 'Abdomen', r=0.05)
-    for sx in (-1, 1):
-        b.rbox((sx * 0.07, -0.13, 1.28), (0.02, 0.014, 0.24), 'accessory', 'Torso', r=0.005)
-    b.rbox((0, 0.175, 1.26), (0.24, 0.13, 0.27), 'dark', 'Torso', r=0.04)
-    b.rbox((0, 0.245, 1.22), (0.16, 0.025, 0.04), 'accessory', 'Torso', r=0.008)
-    for s, sx in (('L', 1), ('R', -1)):
-        b.rbox((sx * 0.095, 0, 0.74), (0.19, 0.17, 0.045), 'accessory', 'UpperLeg.' + s, r=0.01)
-        b.ell((sx * 0.245, 0, 1.31), (0.06, 0.06, 0.05), 'jacket', 'UpperArm.' + s, segs=8, rings=5)
-
-def mk_harry(b):
-    c = dict(hair_style='messy', iris='iris_g')
-    humanoid(b, c)
-    hair(b, c)
-    # robe sombre (pondérée sur les cuisses), écharpe et ceinture dorées, chapeau pointu mou, lunettes rondes, baguette
-    b.rbox((0, 0, 1.26), (0.42, 0.27, 0.34), 'robe', 'Torso', r=0.09)
-    b.lathe([(0.17, 0.0), (0.21, -0.2), (0.28, -0.52)], (0, 0, 1.05), (0, 0, 0), (1, 0.86, 1), 16, 'robe', skirt_w, cap0=False, cap1=False)
-    b.rbox((0, -0.145, 0.8), (0.07, 0.01, 0.5), 'gold', skirt_w, r=0.004)
-    b.tube((0, 0, 1.025), (0, 0, 1.085), 0.19, 0.19, 'gold', 'Abdomen', 16, caps=False)
-    b.torus((0, 0, 1.455), 0.083, 0.032, 'scarf', 'Neck', rot=(0.1, 0, 0), segs=14)
-    b.rbox((0.06, -0.1, 1.33), (0.07, 0.03, 0.2), 'scarf', 'Torso', r=0.01)
-    b.ell((0, 0.12, 1.34), (0.17, 0.08, 0.14), 'robe', 'Torso', segs=10, rings=5)                             # capuchon sur le dos
-    for s, sx in (('L', 1), ('R', -1)):
-        b.lathe([(0.052, 0.0), (0.075, -0.2)], (sx * 0.245, 0, 1.06), (0, 0, 0), (1, 1, 1), 10, 'robe', 'LowerArm.' + s, cap0=False, cap1=False)   # manche évasée
-    for sx in (-1, 1):
-        b.torus((sx * 0.045, -0.112, 1.64), 0.026, 0.0035, 'frame', 'Head', rot=(math.pi / 2, 0, 0), segs=12)
-    b.box((0, -0.112, 1.645), (0.02, 0.006, 0.005), 'frame', 'Head')
-    # chapeau : large bord, cône mou plié
-    b.tube((0, 0.0, 1.725), (0, 0, 1.738), 0.20, 0.2, 'hat', 'Head', 16)
-    b.lathe([(0.125, 0.0), (0.095, 0.1), (0.06, 0.2), (0.03, 0.29), (0.0, 0.34)], (0, 0.005, 1.735), (-0.22, 0, 0), (1, 1, 1), 14, 'hat', 'Head')
-    b.tube((0, 0.0, 1.745), (0, 0, 1.775), 0.126, 0.122, 'gold', 'Head', 14, caps=False)
-    b.tube((-0.256, -0.07, 0.8), (-0.256, -0.2, 0.9), 0.009, 0.006, 'wood', 'LowerArm.R', 5, obj='Prop_Wand')
-    b.ell((-0.256, -0.2, 0.9), (0.008, 0.008, 0.008), 'glow', 'LowerArm.R', segs=6, rings=4, obj='Prop_Wand')
-
-# nom -> (constructeur, matériaux, échelle (largeur, hauteur))
-def M(*a): return a
-CHARS = {
- 'marc': (mk_marc, dict(skin=(0xe0b48f, .75, 0), eye=(0xf2efe8, .4, 0), iris=(0x4a6a80, .4, 0), mouth=(0x7a3b2e, .6, 0), hair=(0x2b1d12, .9, 0),
-    top=(0x4a5530, .9, 0), sleeve=(0x4a5530, .9, 0), forearm=(0x4a5530, .9, 0), cuff=(0x3a4228, .9, 0), pants=(0x424b2b, .9, 0), pants_low=(0x424b2b, .9, 0),
-    boots=(0x1b1710, .85, 0), sole=(0x0c0c0c, .9, 0), belt=(0x2a2418, .6, 0), glove=(0x1c1c1e, .7, 0), helmet=(0x56603f, .6, .15), helmet_d=(0x2f3524, .7, .1),
-    vest=(0x1d1f1c, .75, 0), olive=(0x3a4228, .85, 0), gold=(0xb89a30, .5, .6), roll=(0x5a5a46, .9, 0)), (1.04, 1.02)),
- 'lea': (mk_lea, dict(skin=(0xf1d0b0, .75, 0), eye=(0xf2efe8, .4, 0), iris=(0x3a7a98, .4, 0), mouth=(0xb0505a, .6, 0), hair=(0x8a3a18, .9, 0), accessory=(0xc22a3a, .6, 0),
-    top=(0x3a8ab8, .8, 0), coat=(0xf0f3f6, .7, 0), sleeve=(0xdfe6ee, .8, 0), forearm=(0x3a8ab8, .8, 0), cuff=(0x2c6a90, .8, 0), pants=(0x3a8ab8, .8, 0), pants_low=(0x3a8ab8, .8, 0),
-    boots=(0xf0f0f0, .6, 0), sole=(0x9a9aa4, .7, 0), belt=(0x1c3a52, .7, 0), glove=(0x4aa8e0, .6, 0), cross=(0xc8202c, .5, 0), dark=(0x222226, .5, .6), metal=(0xc0c0c8, .3, .9),
-    bag=(0x3a7a52, .8, 0), bag_d=(0x2d6042, .8, 0)), (0.94, 0.97)),
- 'karim': (mk_karim, dict(skin=(0x8d5a3b, .75, 0), eye=(0xf2efe8, .4, 0), iris=(0x3a2a1c, .4, 0), mouth=(0x5a2a22, .6, 0), hair=(0x111111, .9, 0),
-    top=(0xd8541a, .75, 0), sleeve=(0xd8541a, .75, 0), forearm=(0xd8541a, .75, 0), cuff=(0x2a2a2e, .7, 0), pants=(0x1d2536, .85, 0), pants_low=(0x1d2536, .85, 0),
-    boots=(0x141414, .7, 0), sole=(0x0a0a0a, .9, 0), belt=(0x111111, .6, 0), glove=(0x2a2a2e, .7, 0), refl=(0xdfe600, .4, .2), helmet=(0xe8c020, .5, .1),
-    metal=(0x9a9aa2, .4, .8), dark=(0x141414, .7, 0), wood=(0x6a4a2a, .8, 0), axe=(0xa02020, .5, .6)), (1.10, 1.04)),
- 'chloe': (mk_chloe, dict(skin=(0xc9a07a, .75, 0), eye=(0xf2efe8, .4, 0), iris=(0x3a2a1c, .4, 0), mouth=(0xa0505a, .6, 0), hair=(0x1c1a24, .9, 0),
-    top=(0xb8283c, .85, 0), sleeve=(0xb8283c, .85, 0), forearm=(0xb8283c, .85, 0), cuff=(0x8a1c2c, .85, 0), pants=(0x3f5f9a, .9, 0), pants_low=(0x3f5f9a, .9, 0),
-    boots=(0xf2f2f2, .65, 0), sole=(0xc8c8d0, .8, 0), belt=(0x3a2a22, .7, 0), glove=(0xe0d0b8, .9, 0), cream=(0xece0c8, .95, 0), dark=(0x1a1a1e, .7, 0),
-    bag=(0x7ab8d8, .8, 0), bag_d=(0x5a98b8, .8, 0), gold=(0xffd24a, .5, 0), patch=(0x2f4a7a, .9, 0)), (0.96, 0.99)),
- 'lucian': (mk_lucian, dict(skin=(0x6b4630, .75, 0), eye=(0xf2efe8, .4, 0), iris=(0x2a1a10, .4, 0), mouth=(0x3a1a14, .6, 0), hair=(0x15110e, .9, 0),
-    top=(0x16161c, .65, 0), coat=(0x16161c, .65, 0), sleeve=(0x16161c, .65, 0), forearm=(0x16161c, .65, 0), cuff=(0xe8e8ee, .5, 0), pants=(0x1e1e24, .8, 0), pants_low=(0x1e1e24, .8, 0),
-    boots=(0x0e0e10, .6, 0), sole=(0x060606, .9, 0), belt=(0xc8a040, .35, .8), glove=(0x24242a, .6, 0), trim=(0xe8e8ee, .5, 0), gold=(0xc8a040, .35, .8),
-    mask=(0xe6e6ec, .35, .05), dark=(0x101014, .6, 0), glow=(0xdfe8ff, .3, 0, 0x8fa8ff)), (1.03, 1.05)),
- 'picsou': (mk_picsou, dict(skin=(0xecc9a8, .75, 0), eye=(0xf2efe8, .4, 0), iris=(0x2a4a6a, .4, 0), mouth=(0x8a4a3a, .6, 0), hair=(0xf2f0ea, .9, 0),
-    top=(0xf2f0ea, .8, 0), coat=(0xb02020, .75, 0), sleeve=(0xb02020, .75, 0), forearm=(0xb02020, .75, 0), cuff=(0xf6f4ee, .9, 0), pants=(0x3a3a44, .8, 0), pants_low=(0x3a3a44, .8, 0),
-    boots=(0x15151a, .5, .1), sole=(0x15151a, .8, 0), belt=(0x2a1a14, .6, 0), glove=(0xf6f4ee, .9, 0), shirt=(0xf6f4ee, .85, 0), dark=(0x2a0e0e, .7, 0),
-    gold=(0xd4a640, .3, .8), hat=(0x15151a, .55, .05), cross=(0xb02020, .6, 0)), (1.14, 0.86)),
- 'klukai': (mk_klukai, dict(skin=(0xf3dccb, .55, 0), eye=(0xf2efe8, .4, 0), iris=(0x2a2a30, .4, 0), iris_g=(0x3aa060, .35, 0), mouth=(0xb0606a, .6, 0), hair=(0x9fd0ee, .8, 0), accessory=(0x3ac8ff, .3, .3, 0x1a6a90),
-    top=(0x141418, .6, 0), jacket=(0x6a3a9a, .7, 0), sleeve=(0x6a3a9a, .7, 0), forearm=(0x141418, .6, 0), cuff=(0x3ac8ff, .3, .3), pants=(0x22222a, .7, 0), pants_low=(0x0c0c10, .5, 0),
-    boots=(0x101014, .5, 0), sole=(0x050505, .9, 0), belt=(0x3ac8ff, .3, .3), glove=(0x141418, .6, 0), dark=(0x141418, .6, 0)), (0.93, 0.98)),
- 'harry': (mk_harry, dict(skin=(0xf0cfb4, .75, 0), eye=(0xf2efe8, .4, 0), iris=(0x2f8a3a, .4, 0), iris_g=(0x2f8a3a, .4, 0), mouth=(0xb0605a, .6, 0), hair=(0x16110d, .9, 0),
-    top=(0x1b1f33, .85, 0), robe=(0x1b1f33, .85, 0), sleeve=(0x1b1f33, .85, 0), forearm=(0x1b1f33, .85, 0), cuff=(0xe0b040, .5, .3), pants=(0x4a4a50, .85, 0), pants_low=(0x4a4a50, .85, 0),
-    boots=(0x3a2414, .6, 0), sole=(0x0a0a0a, .9, 0), belt=(0xe0b040, .5, .3), glove=(0xf0cfb4, .75, 0), gold=(0xe0b040, .5, .3), scarf=(0x2a6a6a, .85, 0),
-    hat=(0x1b1f33, .85, 0), frame=(0x2a2a30, .3, .7), wood=(0x5a3a1e, .8, 0), glow=(0xfff0b0, .3, 0, 0xffd060)), (0.95, 0.97)),
-}
-# reste de la table de matériaux communs
-for _, (_, mats, _) in CHARS.items():
-    mats.setdefault('eye', (0xf2efe8, .4, 0)); mats.setdefault('iris', (0x3a2a1c, .4, 0)); mats.setdefault('mouth', (0x7a3b2e, .6, 0))
-
-# ------------------------------------------------------------------ animations
-def R(axis, deg):
-    return Matrix.Rotation(math.radians(deg), 3, axis)
-
-def pose_set(arm, name, rotx=0.0, roty=0.0, rotz=0.0, loc=None):
-    pb = arm.pose.bones[name]
-    rest = pb.bone.matrix_local.to_3x3()
-    D = R('Z', rotz) @ R('Y', roty) @ R('X', rotx)
-    basis = rest.inverted() @ D @ rest
-    pb.rotation_mode = 'QUATERNION'
-    pb.rotation_quaternion = basis.to_quaternion()
-    pb.location = (rest.inverted() @ Vector(loc)) if loc else (0, 0, 0)
-
-def A(n, fwd=True):
-    return n
-
-def walk_pose(ph, A_, K, Bsw, elbow, lean, twist):
-    s = math.sin(ph); c = math.cos(ph)
-    P = {}
-    for side, sg in (('L', 1), ('R', -1)):
-        sp = math.sin(ph + (0 if sg == 1 else math.pi)); cp = math.cos(ph + (0 if sg == 1 else math.pi))
-        P['UpperLeg.' + side] = dict(rotx=-A_ * sp)
-        P['LowerLeg.' + side] = dict(rotx=K * max(0.0, cp) + 4)
-        P['Foot.' + side] = dict(rotx=A_ * sp * 0.5 - K * max(0.0, cp) * 0.3)
-        P['UpperArm.' + side] = dict(rotx=Bsw * sp, roty=(-4 if sg == 1 else 4))
-        P['LowerArm.' + side] = dict(rotx=-elbow - 8 * max(0.0, -sp))
-    P['Abdomen'] = dict(rotx=lean * 0.5, rotz=twist * s)
-    P['Torso'] = dict(rotx=lean * 0.5, rotz=twist * s * 0.6)
-    P['Head'] = dict(rotx=-lean * 0.7, rotz=-twist * s * 0.6)
-    P['Hips'] = dict(rotz=-twist * s * 0.6)
-    return P
-
-def anim_pose(name, t):
-    ph = math.tau * t
-    s = math.sin(ph)
-    if name == 'Idle':
-        return {'Torso': dict(rotx=1.4 * s), 'Abdomen': dict(rotx=0.6 * s), 'Head': dict(rotx=-1.2 * s, rotz=1.5 * math.sin(ph * 0.5)),
-                'UpperArm.L': dict(rotx=2 * s, roty=-5), 'UpperArm.R': dict(rotx=2 * s, roty=5),
-                'LowerArm.L': dict(rotx=-10 - 2 * s), 'LowerArm.R': dict(rotx=-10 - 2 * s),
-                'UpperLeg.L': dict(roty=-1.5), 'UpperLeg.R': dict(roty=1.5), 'Hips': dict(rotz=1.0 * math.sin(ph * 0.5))}
-    if name == 'Walk':
-        return walk_pose(ph, 28, 44, 24, 18, 4, 5)
-    if name == 'Run':
-        return walk_pose(ph, 52, 88, 48, 82, 14, 8)
-    if name in ('Sit_Moto', 'Sit_Bike'):
-        moto = name == 'Sit_Moto'
-        th = -62 if moto else -52
-        kn = 78 if moto else 70
-        return {'Abdomen': dict(rotx=11 + 0.5 * s), 'Torso': dict(rotx=(20 if moto else 24) + 0.5 * s), 'Head': dict(rotx=-26 - 0.4 * s),
-                'UpperLeg.L': dict(rotx=th, roty=-6), 'UpperLeg.R': dict(rotx=th, roty=6),
-                'LowerLeg.L': dict(rotx=kn), 'LowerLeg.R': dict(rotx=kn),
-                'Foot.L': dict(rotx=-(th + kn) * 0.8), 'Foot.R': dict(rotx=-(th + kn) * 0.8),
-                'UpperArm.L': dict(rotx=-70 if moto else -66, roty=-14), 'UpperArm.R': dict(rotx=-70 if moto else -66, roty=14),
-                'LowerArm.L': dict(rotx=-22), 'LowerArm.R': dict(rotx=-22)}
-    if name in ('Sit_Tram', 'Sit_Tram_Drive'):
-        drive = name == 'Sit_Tram_Drive'
-        return {'Abdomen': dict(rotx=2 + 0.4 * s), 'Torso': dict(rotx=3 + 0.4 * s), 'Head': dict(rotx=-3 - 0.3 * s),
-                'UpperLeg.L': dict(rotx=-90, roty=-5), 'UpperLeg.R': dict(rotx=-90, roty=5),
-                'LowerLeg.L': dict(rotx=88), 'LowerLeg.R': dict(rotx=88),
-                'Foot.L': dict(rotx=-2), 'Foot.R': dict(rotx=-2),
-                'UpperArm.L': dict(rotx=-48 if drive else -28, roty=-8), 'UpperArm.R': dict(rotx=-48 if drive else -28, roty=8),
-                'LowerArm.L': dict(rotx=-58 if drive else -68), 'LowerArm.R': dict(rotx=-58 if drive else -68)}
-    if name == 'Jump':   # en l'air : genoux relevés, jambes écartées, bras un peu en avant ; une respiration lente (boucle)
-        return {'Abdomen': dict(rotx=3 + 0.8 * s), 'Torso': dict(rotx=5 + 0.8 * s), 'Head': dict(rotx=-5 - 0.6 * s),
-                'UpperLeg.L': dict(rotx=-48 - 2 * s, roty=-5), 'UpperLeg.R': dict(rotx=-14 + 2 * s, roty=5),
-                'LowerLeg.L': dict(rotx=70), 'LowerLeg.R': dict(rotx=28),
-                'Foot.L': dict(rotx=-22), 'Foot.R': dict(rotx=-6),
-                'UpperArm.L': dict(rotx=-38 - 3 * s, roty=-16), 'UpperArm.R': dict(rotx=-26 + 3 * s, roty=16),
-                'LowerArm.L': dict(rotx=-42), 'LowerArm.R': dict(rotx=-36)}
-    if name == 'Death':
-        u = min(1.0, t / 0.8)
-        e = u * u * (3 - 2 * u)
-        P = {'Root': dict(rotx=-92 * e, loc=(0, 0, 0.12 * e)),
-             'Head': dict(rotx=-8 * e), 'UpperArm.L': dict(roty=-52 * e, rotx=-10 * e), 'UpperArm.R': dict(roty=52 * e, rotx=-10 * e),
-             'LowerArm.L': dict(rotx=-12 * e), 'LowerArm.R': dict(rotx=-12 * e),
-             'UpperLeg.L': dict(roty=-9 * e), 'UpperLeg.R': dict(roty=9 * e)}
-        return P
-    return {}
-
-ANIMS = {  # nom -> (images, fps, bouclée)
-    'Idle': (48, 24), 'Walk': (28, 24), 'Run': (18, 24), 'Sit_Moto': (48, 24), 'Sit_Bike': (48, 24), 'Sit_Tram': (48, 24), 'Sit_Tram_Drive': (48, 24), 'Death': (24, 24), 'Jump': (48, 24),
-}
-
-def make_actions(arm):
-    arm.animation_data_create()
-    for name, (n, fps) in ANIMS.items():
-        act = bpy.data.actions.new(name)
-        arm.animation_data.action = act
-        loop = name != 'Death'
-        step = 2
-        frames = list(range(0, n + 1, step)) if loop else [0, 4, 8, 12, 16, 20, 23]
-        for f in frames:
-            t = (f % n) / n if loop else f / (n - 1)
-            P = anim_pose(name, t)
-            for pb in arm.pose.bones:
-                kw = P.get(pb.name, {})
-                pose_set(arm, pb.name, kw.get('rotx', 0.0), kw.get('roty', 0.0), kw.get('rotz', 0.0), kw.get('loc'))
-                pb.keyframe_insert('rotation_quaternion', frame=f + 1)
-                if 'loc' in kw or pb.name == 'Root':
-                    pb.keyframe_insert('location', frame=f + 1)
-        act.use_frame_range = True
-        act.frame_start = 1
-        act.frame_end = n + 1 if loop else 24
-        act.use_cyclic = loop
-    # on laisse une pose neutre
-    for pb in arm.pose.bones:
-        pb.rotation_quaternion = (1, 0, 0, 0); pb.location = (0, 0, 0)
-    arm.animation_data.action = None
-
-# ------------------------------------------------------------------ assemblage d'un personnage
-def build(cid):
-    fn, mats, (sw, sh) = CHARS[cid]
-    bpy.ops.wm.read_factory_settings(use_empty=True)
-    b = Builder(mats)
-    fn(b)
-    # matériaux Blender
-    # matériaux Blender : ceux de même valeur sont fusionnés (moins de surfaces, donc moins d'appels de dessin dans Godot)
-    bmats, remap, seen = [], {}, {}
-    for i, (nm, spec) in enumerate(mats.items()):
-        key = tuple(spec) if len(spec) > 3 else tuple(spec) + (None,)
-        if key in seen:
-            remap[i] = seen[key]
+def cull_hidden(ob, keep_part, rays=24, dist=0.6):
+    """Deletes the faces nobody can see: a face whose rays (cosine hemisphere around its normal) all hit the character within `dist` is enclosed
+    (inner body under the clothes, neck inside the collar, wrist inside the glove, hair cap under the helmet). The eyeballs are kept (they turn)."""
+    from mathutils.bvhtree import BVHTree
+    import bmesh as _bm
+    bm = _bm.new(); bm.from_mesh(ob.data)
+    bm.faces.ensure_lookup_table()
+    tree = BVHTree.FromBMesh(bm)
+    pl = bm.faces.layers.int.get('part')
+    rng = np.random.default_rng(0)
+    dirs = rng.normal(size=(rays, 3)); dirs /= np.linalg.norm(dirs, axis=1, keepdims=True)
+    dead = []
+    for f in bm.faces:
+        if pl is not None and f[pl] == keep_part:
             continue
-        col, rough, metal = spec[0], spec[1], spec[2]
-        m = bpy.data.materials.new(f'{cid}_{nm}')
-        m.use_nodes = True
-        bsdf = m.node_tree.nodes['Principled BSDF']
-        bsdf.inputs['Base Color'].default_value = hexc(col)
-        bsdf.inputs['Roughness'].default_value = rough
-        bsdf.inputs['Metallic'].default_value = metal
-        if len(spec) > 3 and spec[3] is not None:
-            bsdf.inputs['Emission Color'].default_value = hexc(spec[3])
-            bsdf.inputs['Emission Strength'].default_value = 1.2
-        seen[key] = len(bmats)
-        remap[i] = len(bmats)
-        bmats.append(m)
-    # armature (mise à l'échelle de référence -> taille du personnage)
-    S = Vector((sw, sw, sh))
-    sc = lambda v: Vector((v.x * S.x, v.y * S.y, v.z * S.z))
+        n = f.normal
+        c = f.calc_center_median() + n * 0.0005
+        hidden = True
+        for dv in dirs:
+            d = Vector(dv)
+            if d.dot(n) < 0:
+                d = -d
+            d = (d + n * 0.3).normalized()
+            hit = tree.ray_cast(c, d, dist)
+            if hit[0] is None:
+                hidden = False
+                break
+        if hidden:
+            dead.append(f)
+    _bm.ops.delete(bm, geom=dead, context='FACES')
+    bm.to_mesh(ob.data); bm.free()
+    ob.data.update()
+    return len(dead)
+
+def join(obs, name):
+    bl.select_only(*obs)
+    bpy.ops.object.join()
+    ob = bpy.context.view_layer.objects.active
+    ob.name = name
+    ob.data.name = name
+    return ob
+
+# ------------------------------------------------------------------ bakes
+def bake_image(name, res, float_buf=True):
+    img = bpy.data.images.new(name, res, res, alpha=True, float_buffer=float_buf)
+    img.generated_color = (0, 0, 0, 0)
+    return img
+
+def temp_material(img, emit=None):
+    """Material whose emission is `emit` (callable building nodes -> output socket); the image node is the bake target."""
+    m = bpy.data.materials.new('bake_tmp')
+    m.use_nodes = True
+    nt = m.node_tree
+    for nd in list(nt.nodes):
+        nt.nodes.remove(nd)
+    out = nt.nodes.new('ShaderNodeOutputMaterial')
+    em = nt.nodes.new('ShaderNodeEmission')
+    nt.links.new(em.outputs[0], out.inputs[0])
+    if emit is not None:
+        nt.links.new(emit(nt), em.inputs['Color'])
+    it = nt.nodes.new('ShaderNodeTexImage')
+    it.image = img
+    nt.nodes.active = it
+    return m
+
+def emit_position(nt):
+    g = nt.nodes.new('ShaderNodeNewGeometry')
+    add = nt.nodes.new('ShaderNodeVectorMath'); add.operation = 'ADD'
+    add.inputs[1].default_value = (2.0, 2.0, 2.0)
+    nt.links.new(g.outputs['Position'], add.inputs[0])
+    return add.outputs[0]
+
+def emit_normal(nt):
+    g = nt.nodes.new('ShaderNodeNewGeometry')
+    m = nt.nodes.new('ShaderNodeVectorMath'); m.operation = 'MULTIPLY_ADD'
+    m.inputs[1].default_value = (0.5, 0.5, 0.5); m.inputs[2].default_value = (0.5, 0.5, 0.5)
+    nt.links.new(g.outputs['Normal'], m.inputs[0])
+    return m.outputs[0]
+
+def emit_attr(name):
+    def f(nt):
+        a = nt.nodes.new('ShaderNodeAttribute'); a.attribute_name = name
+        return a.outputs['Color']
+    return f
+
+def do_bake(low, high, img, kind, emit=None, samples=1, extrusion=0.0, maxdist=0.0):
+    m = temp_material(img, emit)
+    low.data.materials.clear()
+    low.data.materials.append(m)
+    if high is not None:
+        high.data.materials.clear()
+        if emit is not None:
+            high.data.materials.append(temp_material(img, emit))
+    sc = bpy.context.scene
+    sc.cycles.samples = samples
+    sc.render.bake.margin = 24
+    sc.render.bake.margin_type = 'EXTEND'
+    sc.render.bake.use_clear = False
+    if high is not None:
+        bl.select_only(low)
+        high.select_set(True)
+        bpy.context.view_layer.objects.active = low
+        sc.render.bake.use_selected_to_active = True
+        sc.render.bake.cage_extrusion = extrusion
+        sc.render.bake.max_ray_distance = maxdist
+    else:
+        bl.select_only(low)
+        sc.render.bake.use_selected_to_active = False
+    t = time.time()
+    if kind == 'NORMAL':
+        sc.render.bake.normal_space = 'TANGENT'
+        bpy.ops.object.bake(type='NORMAL', normal_space='TANGENT', use_selected_to_active=high is not None)
+    else:
+        bpy.ops.object.bake(type=kind, use_selected_to_active=high is not None)
+    log('  bake %s %.1f s' % (kind, time.time() - t))
+    low.data.materials.clear()
+    a = np.empty(img.size[0] * img.size[1] * 4, np.float32)
+    img.pixels.foreach_get(a)
+    return a.reshape(img.size[1], img.size[0], 4)
+
+# ------------------------------------------------------------------ texture synthesis
+def synth(d, trees_by_part, part_names, pos, nrm, part, ao, nmap, pos_lo, partf_img=None):
+    H, W = pos.shape[:2]
+    valid = pos_lo[..., 3] > 0.5
+    P_hi = pos[..., :3] - 2.0
+    P_lo = pos_lo[..., :3] - 2.0
+    # the ray from the low surface may reach another layer (inside of an open coat -> the legs): then the low position is labelled from the SDF
+    far = (np.linalg.norm(P_hi - P_lo, axis=-1) > 0.004) | (pos[..., 3] < 0.5)
+    P = np.where(far[..., None], P_lo, P_hi)
+    N = nrm[..., :3] * 2 - 1
+    N /= np.maximum(np.linalg.norm(N, axis=-1, keepdims=True), 1e-6)
+    vi = np.flatnonzero(valid.ravel())
+    Pv, Nv, Av = P.reshape(-1, 3)[vi], N.reshape(-1, 3)[vi], ao.reshape(-1, 4)[vi, 0]
+    lab = part.reshape(-1, 4)[vi]
+    mats = np.floor(lab[:, 0] * 256).astype(np.int32)
+    mats = np.where((mats < 0) | (lab[:, 3] < 0.5), sdf.mat_id('skin'), mats)
+    fv = far.ravel()[vi]
+    if fv.any():
+        q = Pv[fv]
+        # the part of the low face this texel belongs to (body, head, hands, prop, eyes): only its own SDF labels it
+        pk = np.round(partf_img.reshape(-1, 4)[vi][fv, 0] * 16).astype(int)
+        bm = np.full(len(q), -1, np.int32)
+        for k, pn in enumerate(part_names):
+            sel = pk == k
+            if not sel.any():
+                continue
+            tr = trees_by_part[pn]
+            bm[sel] = sdf.mat_id(tr) if isinstance(tr, str) else sdf.evaluate(tr, q[sel])[1]
+        eye_m = np.abs(np.linalg.norm(q[:, None, :] - np.array(face.eye_centres(d.sk)[0])[None], axis=-1).min(1) - face.eye_centres(d.sk)[1]) < 0.002
+        bm = np.where(eye_m, sdf.mat_id('eye'), bm)
+        mats[fv] = np.where(bm >= 0, bm, mats[fv])
+        log('  [tex] %d texels labelled at the low surface (the bake ray reached another layer)' % fv.sum())
+    inv = {v: k for k, v in sdf.MATS.items()}
+    n = len(vi)
+    col = np.zeros((n, 3)); rough = np.full(n, 0.8); metal = np.zeros(n); height = np.zeros(n); emit = np.zeros((n, 3)); skin = np.zeros(n)
+    extra = d.tex_extra()
+    for mid in np.unique(mats):
+        name = inv.get(int(mid), None)
+        spec = d.palette.get(name) if name else None
+        m = mats == mid
+        if spec is None:
+            log('  [tex] no palette entry for material', name)
+            spec = dict(kind='plastic', color=0xff00ff)
+        o = tex.shade(spec['kind'], spec, Pv[m], Nv[m], Av[m], int(mid) * 13 + 1, extra)
+        col[m], rough[m], metal[m], height[m], emit[m], skin[m] = o.col, o.rough, o.metal, o.height, o.emit, o.skin
+    # seams and stitches
+    for f in d.seams:
+        sel = np.ones(n, bool)
+        if getattr(f, 'mats', None):
+            ids = [sdf.MATS[x] for x in f.mats if x in sdf.MATS]
+            sel = np.isin(mats, ids)
+        if not sel.any():
+            continue
+        st, gr = f(Pv[sel])
+        thread = getattr(f, 'thread', None)
+        c = col[sel]
+        tc = tex.hexrgb(thread) if thread is not None else c * 0.55
+        c = c * (1 - st[:, None] * 0.6) + (tc if thread is not None else c * 0.55) * st[:, None] * 0.6
+        c = c * (1 - 0.25 * gr[:, None])
+        col[sel] = c
+        height[sel] += -0.0004 * gr + 0.00015 * st
+    # cavity: a bit of the occlusion goes into the albedo
+    col = col * (1.0 - (0.28 - 0.16 * skin) * (1.0 - Av))[:, None]     # less on the skin (soft shadows, no dark creases)
+    # images
+    def img_of(v, ch):
+        a = np.zeros((H * W, ch))
+        a[vi] = v.reshape(n, ch)
+        return a.reshape(H, W, ch)
+    alb = img_of(tex.lin_to_srgb(col), 3)
+    orm = img_of(np.stack([Av, rough, metal], 1), 3)
+    em = img_of(tex.lin_to_srgb(np.clip(emit, 0, 1)), 3)
+    hgt = img_of(height, 1)[..., 0]
+    # detail normals from the height map, in UV space (tangent = +U, bitangent = +V: the pixel rows of a Blender image grow with V)
+    Pg = np.where(valid[..., None], P, np.nan)
+    du = np.nanmedian(np.linalg.norm(Pg[:, 2:] - Pg[:, :-2], axis=-1)) / 2
+    dv = np.nanmedian(np.linalg.norm(Pg[2:] - Pg[:-2], axis=-1)) / 2
+    hx = np.zeros_like(hgt); hy = np.zeros_like(hgt)
+    vm = valid.astype(float)
+    hx[:, 1:-1] = np.where(vm[:, 2:] * vm[:, :-2] > 0, (hgt[:, 2:] - hgt[:, :-2]) / (2 * du), 0)
+    hy[1:-1] = np.where(vm[2:] * vm[:-2] > 0, (hgt[2:] - hgt[:-2]) / (2 * dv), 0)
+    n2 = np.stack([-hx, -hy, np.ones_like(hx)], -1)
+    n2 /= np.linalg.norm(n2, axis=-1, keepdims=True)
+    n1 = nmap[..., :3] * 2 - 1
+    n1 = np.where(valid[..., None], n1, np.array([0, 0, 1.0]))
+    nn = np.concatenate([n1[..., :2] + n2[..., :2], (n1[..., 2] * n2[..., 2])[..., None]], -1)
+    nn /= np.maximum(np.linalg.norm(nn, axis=-1, keepdims=True), 1e-6)
+    nrm_img = nn * 0.5 + 0.5
+    # outside the islands: dilate (mip levels do not bleed black)
+    alb, orm, em, nrm_img = [dilate(x, valid) for x in (alb, orm, em, nrm_img)]
+    sk_img = dilate(img_of(skin, 1), valid)
+    return alb, orm, em, nrm_img, sk_img, bool((emit > 0.002).any())
+
+def dilate(img, valid, steps=24):
+    out = img.copy()
+    v = valid.copy()
+    for _ in range(steps):
+        if v.all():
+            break
+        acc = np.zeros_like(out); cnt = np.zeros(v.shape)
+        for dy, dx in ((0, 1), (0, -1), (1, 0), (-1, 0)):
+            sv = np.roll(v, (dy, dx), (0, 1))
+            so = np.roll(out, (dy, dx), (0, 1))
+            acc += np.where(sv[..., None], so, 0)
+            cnt += sv
+        new = (~v) & (cnt > 0)
+        out[new] = acc[new] / cnt[new][:, None]
+        v = v | new
+    if not v.all():
+        out[~v] = out[v].mean(0)
+    return out
+
+def save_image(name, arr, path, fmt='JPEG', quality=92, srgb=True):
+    H, W, C = arr.shape
+    img = bpy.data.images.new(name, W, H, alpha=(C == 4), is_data=not srgb)
+    rgba = np.ones((H, W, 4), np.float32)
+    rgba[..., :C] = arr
+    if C == 1:
+        rgba[..., 1] = rgba[..., 2] = rgba[..., 0]
+    img.pixels.foreach_set(rgba.ravel())
+    img.filepath_raw = path
+    img.file_format = fmt
+    sc = bpy.context.scene
+    sc.render.image_settings.quality = quality
+    img.save(filepath=path, quality=quality)
+    img.source = 'FILE'
+    img.filepath = path
+    img.reload()
+    if not srgb:
+        img.colorspace_settings.name = 'Non-Color'
+    return img
+
+def fp_texture(d, out, res=256):
+    """First-person glove, sleeve and cuff fabric (scenes/hands_rig.gd): each material on a flat 12 cm patch, made tileable, divided by twice its
+    mean colour (the game tints it with the outfit colour): <id>_fp_glove.jpg, <id>_fp_sleeve.jpg, <id>_fp_cuff.jpg."""
+    extra = d.tex_extra()
+    u = (np.arange(res) + 0.5) / res * 0.12
+    X, Z = np.meshgrid(u, u)
+    P = np.stack([X.ravel(), np.full(X.size, -0.1), Z.ravel() + 1.0], 1)
+    N = np.tile([0, -1.0, 0], (len(P), 1))
+    t = np.minimum(np.arange(res), res - 1 - np.arange(res)) / (res / 2)
+    w = np.clip(np.minimum.outer(t, t) * 2.2, 0, 1)[..., None]
+    for key in ('glove', 'sleeve', 'cuff'):
+        name = d.fp[key]
+        sp = dict(d.palette.get(name, dict(kind='plastic', color=0x808080)))
+        sp['dirt'] = 0.0
+        ex = dict(extra)
+        if sp['kind'] == 'skin':
+            ex['head_frame'] = None; ex['nails'] = None
+        o = tex.shade(sp['kind'], sp, P, N, np.ones(len(P)), sdf.mat_id(name) * 13 + 1, ex)
+        c = (o.col / np.maximum(o.col.mean(0), 1e-4)).reshape(res, res, 3)
+        c = c * w + np.roll(c, (res // 2, res // 2), (0, 1)) * (1 - w)     # seamless when repeated
+        save_image('%s_fp_%s' % (d.cid, key), tex.lin_to_srgb(np.clip(c * 0.5, 0, 1)), os.path.join(out, '%s_fp_%s.jpg' % (d.cid, key)), quality=90)
+
+def gltf_output_group():
+    g = bpy.data.node_groups.get('glTF Material Output')
+    if g is None:
+        g = bpy.data.node_groups.new('glTF Material Output', 'ShaderNodeTree')
+        g.interface.new_socket('Occlusion', in_out='INPUT', socket_type='NodeSocketFloat')
+        g.interface.new_socket('Thickness', in_out='INPUT', socket_type='NodeSocketFloat')
+    return g
+
+def pbr_material(name, alb, nrm, orm, emis=None, rough_k=None, alpha=None, double=False):
+    m = bpy.data.materials.new(name)
+    m.use_nodes = True
+    nt = m.node_tree
+    bsdf = nt.nodes['Principled BSDF']
+    ta = nt.nodes.new('ShaderNodeTexImage'); ta.image = alb
+    nt.links.new(ta.outputs['Color'], bsdf.inputs['Base Color'])
+    if alpha is not None:
+        nt.links.new(ta.outputs['Alpha'], bsdf.inputs['Alpha'])
+        m.blend_method = 'CLIP' if hasattr(m, 'blend_method') else None
+        try:
+            m.surface_render_method = 'DITHERED'
+        except Exception:
+            pass
+        m.alpha_threshold = alpha if hasattr(m, 'alpha_threshold') else None
+    if nrm is not None:
+        tn = nt.nodes.new('ShaderNodeTexImage'); tn.image = nrm
+        nm = nt.nodes.new('ShaderNodeNormalMap')
+        nt.links.new(tn.outputs['Color'], nm.inputs['Color'])
+        nt.links.new(nm.outputs['Normal'], bsdf.inputs['Normal'])
+    if orm is not None:
+        to = nt.nodes.new('ShaderNodeTexImage'); to.image = orm
+        sp = nt.nodes.new('ShaderNodeSeparateColor')
+        nt.links.new(to.outputs['Color'], sp.inputs['Color'])
+        nt.links.new(sp.outputs['Green'], bsdf.inputs['Roughness'])
+        nt.links.new(sp.outputs['Blue'], bsdf.inputs['Metallic'])
+        go = nt.nodes.new('ShaderNodeGroup'); go.node_tree = gltf_output_group()
+        nt.links.new(sp.outputs['Red'], go.inputs['Occlusion'])
+    else:
+        bsdf.inputs['Roughness'].default_value = rough_k if rough_k is not None else 0.6
+    if emis is not None:
+        te = nt.nodes.new('ShaderNodeTexImage'); te.image = emis
+        nt.links.new(te.outputs['Color'], bsdf.inputs['Emission Color'])
+        bsdf.inputs['Emission Strength'].default_value = 1.0
+    m.use_backface_culling = not double
+    return m
+
+# ------------------------------------------------------------------ build one character
+def build(cid):
+    log('== ' + cid)
+    bpy.ops.wm.read_factory_settings(use_empty=True)
+    d = designs.CHARS[cid]()
+    sk = d.sk
+    T = d.trees()
+    sc = bpy.context.scene
+    sc.render.engine = 'CYCLES'
+    sc.cycles.device = 'CPU'
+    k = 1.6 if FAST else 1.0
+    bk = 1.22   # ~20 % of the faces are hidden (inside the clothes) and removed after the decimation
+    specs = [('body', T['body'], 0.0025 * k, int(d.budget['body'] * bk), None, None)]
+    hlo = T['head'].lo.copy() + sdf.MARGIN * 0.5
+    hlo[2] = d.collar_z - 0.025
+    specs.append(('head', T['head'], 0.001 * k, int(d.budget['head'] * bk), hlo, T['head'].hi - sdf.MARGIN * 0.5))
+    specs.append(('hands', T['hands'], 0.001 * k, int(d.budget['hands'] * 1.1), None, None))
+    for pn, tr in (d.props.items() if not os.environ.get('ZS_NOPROPS') else []):
+        specs.append(('Prop_' + pn, tr, 0.0012 * k, d.budget['props'], None, None))
+    part_names = [s[0] for s in specs] + ['eyes']
+    trees_by_part = {s[0]: s[1] for s in specs}
+    trees_by_part['eyes'] = 'eye'
+    his, los = [], []
+    for i, (nm, tr, h, bud, lo, hi) in enumerate(specs):
+        hob, lob = mesh_part(nm, tr, h, bud, lo, hi)
+        label(lob, tr, i)
+        label_high(hob, tr, i)
+        his.append(hob); los.append(lob)
+    # eyeballs (same mesh for the bake source and the result)
+    eyes, re = face.eye_centres(sk)
+    for e, s in zip(eyes, ('L', 'R')):
+        ob = eye_mesh('eye_' + s, e, re, s)
+        label(ob, None, len(specs), fixed=('eye', 'Eye.' + s))
+        hob = ob.copy(); hob.data = ob.data.copy(); bpy.context.scene.collection.objects.link(hob)
+        label_high(hob, None, len(specs), fixed_mat='eye')
+        his.append(hob); los.append(ob)
+    low = join(los, cid + '_body')
+    high = join(his, cid + '_high')
+    nd = cull_hidden(low, len(specs))
+    log('hidden faces removed: %d' % nd)
+    nv, nf = len(low.data.vertices), len(low.data.polygons)
+    log('low: %d vertices, %d triangles' % (nv, bl.tri_count(low)))
+    # UVs: more texels on the face, the hands and the eyes
+    partf = get_attr(low, 'part', nf)
+    regf = None
+    w = np.ones(nf)
+    w[partf == part_names.index('head')] = 1.9
+    w[partf == part_names.index('hands')] = 1.5
+    w[partf == part_names.index('eyes')] = 5.0
+    bl.shade_smooth(low)
+    bl.smart_uv(low, margin=0.003, weights=w)
+    log('uv done')
+    # part id as a colour attribute (for the bake)
+    me = low.data
+    ca = me.color_attributes.new('partcol', 'FLOAT_COLOR', 'CORNER')
+    li = np.empty(len(me.loops), np.int32)
+    me.polygons.foreach_get('loop_total', np.empty(nf, np.int32))
+    loop_face = np.repeat(np.arange(nf), [p.loop_total for p in me.polygons])
+    cols = np.zeros((len(me.loops), 4), np.float32)
+    cols[:, 0] = partf[loop_face] / 16.0
+    cols[:, 3] = 1
+    ca.data.foreach_set('color', cols.ravel())
+    R = TEXRES
+    pos = do_bake(low, high, bake_image('pos', R), 'EMIT', emit_position, extrusion=0.007, maxdist=0.016)
+    pos_lo = do_bake(low, None, bake_image('poslo', R), 'EMIT', emit_position)
+    part_lo = do_bake(low, None, bake_image('partlo', R), 'EMIT', emit_attr('partcol'))
+    nrm = do_bake(low, None, bake_image('nrm', R), 'EMIT', emit_normal)
+    prt = do_bake(low, high, bake_image('lab', R), 'EMIT', emit_attr('lab'), extrusion=0.007, maxdist=0.016)
+    sc.cycles.samples = 1
+    nmap = do_bake(low, high, bake_image('nmap', R), 'NORMAL', samples=1, extrusion=0.007, maxdist=0.016)
+    # occlusion of the low mesh itself (with the dense mesh in the scene, each surface would shadow the other one, almost coincident)
+    high.hide_render = True
+    sc.world = sc.world or bpy.data.worlds.new('w')
+    sc.world.light_settings.distance = 0.25
+    ao = do_bake(low, None, bake_image('ao', R // 2), 'AO', samples=16 if FAST else 32)
+    high.hide_render = False
+    ao = np.repeat(np.repeat(ao, 2, 0), 2, 1)
+    bpy.data.objects.remove(high)
+    log('bakes done')
+    alb, orm, em, nimg, skm, has_em = synth(d, trees_by_part, part_names, pos, nrm, prt, ao, nmap, pos_lo, part_lo)
+    log('textures done', [ (float(np.nanmin(x)), float(np.nanmax(x)), int(np.isnan(x).sum())) for x in (alb, orm, nimg)])
+    TMP = os.path.join(TMPDIR, cid)
+    os.makedirs(TMP, exist_ok=True)
+    i_alb = save_image(cid + '_albedo', alb, os.path.join(TMP, cid + '_albedo.jpg'), quality=90)
+    i_nrm = save_image(cid + '_normal', nimg, os.path.join(TMP, cid + '_normal.jpg'), quality=94, srgb=False)
+    i_orm = save_image(cid + '_orm', orm, os.path.join(TMP, cid + '_orm.jpg'), quality=90, srgb=False)
+    i_em = save_image(cid + '_emission', em, os.path.join(TMP, cid + '_emission.jpg'), quality=90) if has_em else None
+    m_body = pbr_material(cid + '_body', i_alb, i_nrm, i_orm, i_em)
+    m_skin = pbr_material(cid + '_skin', i_alb, i_nrm, i_orm, None)
+    me.materials.clear()
+    me.materials.append(m_body)
+    me.materials.append(m_skin)
+    matf = get_attr(low, 'mat', nf)
+    skin_ids = [sdf.MATS[x] for x in d.skin_mats if x in sdf.MATS]
+    me.polygons.foreach_set('material_index', np.isin(matf, skin_ids).astype(np.int32))
+    # hair cards
+    hair_ob = None
+    if d.hair is not None:
+        hair_ob = hair.build(d, OUT, log)
+    # armature
     adata = bpy.data.armatures.new('CharacterArmature')
     arm = bpy.data.objects.new('CharacterArmature', adata)
-    bpy.context.scene.collection.objects.link(arm)
-    bpy.context.view_layer.objects.active = arm
+    sc.collection.objects.link(arm)
+    bl.select_only(arm)
     bpy.ops.object.mode_set(mode='EDIT')
     eb = {}
-    for name, parent, head, tail in bones_def():
-        e = adata.edit_bones.new(name)
-        e.head, e.tail = sc(head), sc(tail)
-        if parent: e.parent = eb[parent]
-        eb[name] = e
+    for (n, p, hd, tl, z) in sk.bones:
+        e = adata.edit_bones.new(n)
+        e.head, e.tail = Vector(hd), Vector(tl)
+        e.align_roll(Vector(z))
+        if p:
+            e.parent = eb[p]
+        eb[n] = e
     bpy.ops.object.mode_set(mode='OBJECT')
-    # objets maillage
-    tri = 0
-    for oname, bm in b.objs.items():
-        layer = bm.faces.layers.int['part']
-        dl = bm.verts.layers.deform.verify()
-        names = [x.name for x in bpy.data.armatures['CharacterArmature'].bones]
-        mesh = bpy.data.meshes.new(cid + '_' + oname)
-        obj = bpy.data.objects.new(oname, mesh)
-        bpy.context.scene.collection.objects.link(obj)
-        for v in bm.verts:
-            part = v.link_faces[0][layer] if v.link_faces else 0
-            spec = b.parts[part]
-            w = spec(v.co) if callable(spec) else {spec: 1.0}
-            for bone, wt in w.items():
-                if wt > 1e-4:
-                    vg = obj.vertex_groups.get(bone) or obj.vertex_groups.new(name=bone)
-                    v[dl][vg.index] = wt
-        for v in bm.verts:
-            part = v.link_faces[0][layer] if v.link_faces else 0
-            if b.parts[part] == 'Head':
-                v.co = Vector((0, 0, 1.50)) + (v.co - Vector((0, 0, 1.50))) * HEAD_K
-            v.co = sc(v.co)
-        for f in bm.faces:
-            f.material_index = remap[f.material_index]
-        bm.normal_update()
-        bm.to_mesh(mesh)
-        for m in bmats: mesh.materials.append(m)
-        bm.free()
-        mod = obj.modifiers.new('Armature', 'ARMATURE'); mod.object = arm
-        obj.parent = arm
-        tri += sum(len(p.vertices) - 2 for p in mesh.polygons)
-        # normales : lissage par face déjà posé ; recalcule les normales extérieures
-    make_actions(arm)
-    path = os.path.join(OUT, cid + '.glb')
-    bpy.ops.export_scene.gltf(filepath=path, export_format='GLB', export_apply=False, export_animations=True, export_animation_mode='ACTIONS',
-        export_skins=True, export_def_bones=False, export_yup=True, export_materials='EXPORT', export_image_format='NONE',
-        export_cameras=False, export_lights=False, export_extras=False, export_force_sampling=True, export_optimize_animation_size=False)
-    print('BUILT', cid, 'tris', tri, 'size', os.path.getsize(path))
+    # weights
+    objs = [low] + ([hair_ob] if hair_ob is not None else [])
+    reg_names = {v: k for k, v in sdf.REGS.items()}
+    for ob in objs:
+        Vt = bl.verts_of(ob)
+        regs = get_attr(ob, 'reg', len(ob.data.vertices))
+        W = rig.weights(sk, Vt, regs, reg_names, extra=lambda W, P, vb: rig.lid_jaw_fix(sk, W, P, vb))
+        e = np.empty(len(ob.data.edges) * 2, np.int32)
+        ob.data.edges.foreach_get('vertices', e)
+        W = rig.smooth_on_mesh(W, e.reshape(-1, 2), ['Jaw', 'Lid.L', 'Lid.R'], n_iter=5)
+        bi, ww = rig.top4(W, sk.names)
+        groups = {}
+        for b in sk.names:
+            groups[b] = ob.vertex_groups.new(name=b)
+        for j in range(4):
+            for b_i in np.unique(bi[:, j]):
+                sel = np.flatnonzero((bi[:, j] == b_i) & (ww[:, j] > 0))
+                if len(sel) == 0:
+                    continue
+                g = groups[sk.names[b_i]]
+                for wv in np.unique(np.round(ww[sel, j], 3)):
+                    ids = sel[np.round(ww[sel, j], 3) == wv]
+                    g.add(ids.tolist(), float(wv), 'REPLACE')
+        mod = ob.modifiers.new('Armature', 'ARMATURE'); mod.object = arm
+        ob.parent = arm
+    # props: separate objects (the game hides them when seated)
+    for i, (nm, *_r) in enumerate(specs):
+        if not nm.startswith('Prop_'):
+            continue
+        bl.select_only(low)
+        bpy.ops.object.mode_set(mode='EDIT')
+        bpy.ops.mesh.select_all(action='DESELECT')
+        bpy.ops.object.mode_set(mode='OBJECT')
+        sel = (partf == i)
+        low.data.polygons.foreach_set('select', sel)
+        bpy.ops.object.mode_set(mode='EDIT')
+        bpy.ops.mesh.separate(type='SELECTED')
+        bpy.ops.object.mode_set(mode='OBJECT')
+        for o in bpy.context.selected_objects:
+            if o != low:
+                o.name = nm
+                o.data.name = cid + '_' + nm
+        partf = get_attr(low, 'part', len(low.data.polygons))
+    fp_texture(d, OUT)
+    tris = sum(bl.tri_count(o) for o in sc.objects if o.type == 'MESH')
+    anims.make_actions(arm)
+    path = os.path.join(OUT, cid + '.gltf')
+    bl.select_only(arm)
+    bpy.ops.export_scene.gltf(filepath=path, export_format='GLTF_SEPARATE', export_texture_dir='', export_image_format='AUTO',
+        export_apply=False, export_animations=True, export_animation_mode='ACTIONS', export_skins=True, export_def_bones=False, export_yup=True,
+        export_materials='EXPORT', export_tangents=True, export_cameras=False, export_lights=False, export_extras=False,
+        export_force_sampling=True, export_optimize_animation_size=False, export_attributes=False, use_selection=False)
+    size = sum(os.path.getsize(os.path.join(OUT, f)) for f in os.listdir(OUT) if f.startswith(cid + '.') or f.startswith(cid + '_'))
+    log('BUILT %s tris %d size %.1f MB' % (cid, tris, size / 1e6))
 
-for cid in CHARS:
+for cid in designs.CHARS:
     if not ONLY or cid in ONLY:
         build(cid)

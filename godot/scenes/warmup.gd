@@ -195,7 +195,7 @@ func _build_ring(p0: Vector3, fx: Node3D, weapon_view: Node3D, machines_view: No
 		_add(WeaponModels.build(String(ids[0]), tint), _ring(p0, lv * 3, 11, 2.8) + Vector3(0, 1.5, 0))
 	# v0.21.2 : le personnage choisi (fichier lu et pipelines de la peau compilés avant la première vue à la troisième personne : moto, vélo, rame), quatre poses autour du joueur
 	var cid := String(CharacterDefs.of_slot(int(Game.settings.get_value("char")))["id"])
-	var poses := ["Idle", "Sit_Moto", "Death", "Run"]
+	var poses := ["Idle", "Sit_Moto", "Death", "Sprint"]
 	for i in poses.size():
 		var cm := CharacterModel.create(cid)
 		if cm == null:
@@ -203,6 +203,16 @@ func _build_ring(p0: Vector3, fx: Node3D, weapon_view: Node3D, machines_view: No
 		_add(cm, _ring(p0, i, poses.size(), 3.2))
 		cm.rotation.y = TAU * float(i) / float(poses.size())
 		cm.pose(poses[i], 0.4)
+		if i == 0:
+			# v0.31.0 : arme, couteau et hache tels que la 3e personne les montre (couche du monde, ombres) : leurs pipelines ne se compilent pas au premier coup
+			var PA := load("res://scenes/player_avatar.gd")
+			var MM := load("res://scenes/melee_models.gd")
+			var held: Array = [WeaponModels.build(String(ids[0]), null), MM.build_knife(), MM.build_axe()]
+			for k in held.size():
+				var n: Node3D = held[k]
+				PA._world(n, 0.10 if k == 0 else 0.0)
+				cm.add_child(n)
+				n.position = Vector3(0.25 - 0.25 * k, 1.1, 0.3)
 	# particules, taches, explosion
 	if fx != null:
 		var c := p0 + Vector3(0, 0, -4.0)

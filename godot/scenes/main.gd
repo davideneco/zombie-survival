@@ -150,6 +150,7 @@ var _shot_intro_t := -1.0         # --shot-intro=T : capture T secondes après l
 var _finale_at := -1.0            # --finale-at=S : le saut --finale=ETAT se fait à S secondes de jeu (et non avant la première image) : mesures du premier affichage d'un boss
 var _finale_arg := ""             # --finale=ETAT : saute dans la fin de partie (captures) : voir _debug_finale
 var _hud_last := {"banner": "", "bar": {}, "mark": "", "fanal": -2.0, "fanal_text": ""}
+var _god := false                 # --god : (v0.31.0, mesures de performance) les PV du joueur restent pleins
 var _do: PackedStringArray = []   # --do=a,b : actions de démonstration au lancement (perks, powerup:TYPE, weapon:ID[:PAP], box, pap, all-doors, money, down)
 var _door_probe := false          # --door-probe : achète une porte à 2 s et imprime les temps d'image qui suivent (v0.17.2)
 var _probe_log: Array[float] = []
@@ -170,6 +171,8 @@ func _ready() -> void:
 			_ui = a.substr(5)
 		elif a == "--hud-demo":
 			_hud_demo = true
+		elif a == "--god":
+			_god = true
 		elif a == "--bot":
 			_bot = true
 		elif a.begins_with("--soak="):
@@ -1008,6 +1011,8 @@ func _unhandled_input(event: InputEvent) -> void:
 func _physics_process(dt: float) -> void:
 	if not _session_live:
 		return
+	if _god:
+		Game.player.health = Game.player.max_health
 	_prev_player = Game.player.pos
 	_prev_eye = _eye_now()
 	for v in _views.values():

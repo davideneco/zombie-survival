@@ -28,7 +28,7 @@ Or open the `godot/` folder in the editor and press F5. Settings, key bindings, 
 - **Drivable tram** (v0.30.0): the body is now built by code after the Alstom Citadis 405 of the CTS (Strasbourg): raked panoramic windscreen, rounded snout, double LED headlights, lit destination display, wipers, mirrors, white livery with red and blue stripes and a plain "CTS" text logo, large glazed bays, roof air-conditioning and a single-arm pantograph (`scenes/tram_body.gd`); the interior, doors and seats are still the JS bake. Same dimensions (23.5 m).
 - **Quality and upscaling** (Options): Fast / Normal / High presets; 3D upscaling **Native, FSR 1.0 or FSR 2.2 (trial)**, 3D resolution (100, 85, 75, 67, 50 %) and sharpness. The HUD stays sharp. No DLSS: the engine does not offer it.
 - **First launch on Windows**: with an integrated GPU, the "Fast" quality is chosen automatically.
-- **Characters**: the 8 playable survivors have original low-poly 3D models (`assets/characters/*.glb`, built by `tools/build-characters.py`, see `assets/characters/LICENSE.txt`): rotating preview in the character menu, seated on bikes and tram seats in third person, first-person gloves and sleeves from their outfit. Sheet: `docs/personnages.png`.
+- **Characters** (v0.31.0): the 8 playable survivors are original high-quality models generated entirely by script (`tools/build-characters.py` + `tools/charlib/`: signed distance fields meshed with OpenVDB, decimated, procedural PBR textures baked per texel, hair cards, 57-bone skeleton with fingers, eyes, eyelids and jaw; 21-32 k triangles, 2048 px textures, LODs generated on import; see `assets/characters/LICENSE.txt`): rotating studio-lit preview in the character menu (the survivor looks at the camera and blinks; drag to rotate), third-person view on foot with hands and fingers on the weapon, seated on bikes and tram seats with fists on the handlebars, first-person gloves and sleeves using the outfit's generated fabric. Sheet: `docs/personnages.png`.
 - **Loading**: a warm-up step (pipelines, sounds, navigation grids) avoids in-game stutters.
 - **Music**: `theme.*` is never shipped (copyright). Drop an mp3, ogg or wav file in `user://music/` to use it.
 
@@ -42,7 +42,7 @@ Play 5 to 10 minutes, close the window normally, then send `perf.txt` (the `SPIK
 
 ## Useful launch options
 
-After `--`: `--map=arena` (Strasbourg otherwise), `--mode=classic|zone`, `--zone=N|Name` (Zone unique in that zone), `--difficulty=easy|normal|hard`, `--seed=N`, `--bot` (the bot plays), `--no-music`, `--no-warmup`, `--no-boss-intro`, `--perf-log=F`, `--perf-soak=N`, `--quit-at=S`, `--shot=f.png --at=S` (screenshot). `--show-collision[=report.json]` draws the collision through the walls, `--eye-y=Y` raises the camera (see `docs/GODOT_PORT.md`, geometry diagnostics). The others (`--do=`, `--horde=`, `--seat=`, `--tram-at=`, `--zoo*`…) are for test captures; they are parsed in `scenes/main.gd`.
+After `--`: `--map=arena` (Strasbourg otherwise), `--mode=classic|zone`, `--zone=N|Name` (Zone unique in that zone), `--difficulty=easy|normal|hard`, `--seed=N`, `--bot` (the bot plays), `--no-music`, `--no-warmup`, `--no-boss-intro`, `--perf-log=F`, `--perf-soak=N`, `--quit-at=S`, `--shot=f.png --at=S` (screenshot), `--god` (health kept full, for performance runs). `--show-collision[=report.json]` draws the collision through the walls, `--eye-y=Y` raises the camera (see `docs/GODOT_PORT.md`, geometry diagnostics). The others (`--do=`, `--horde=`, `--seat=`, `--tram-at=`, `--zoo*`…) are for test captures; they are parsed in `scenes/main.gd`.
 
 ## Tests
 
@@ -81,4 +81,4 @@ node tools/bake-tram.mjs        # tram (already versioned)
 node tools/download-textures.mjs
 ```
 
-Weapons and zombies: `tools/build-weapons.py` and `tools/build-zombies.py` (Blender). Logs, decisions and measurements are in [`../docs/GODOT_PORT.md`](../docs/GODOT_PORT.md) (French).
+Weapons and zombies: `tools/build-weapons.py` and `tools/build-zombies.py` (Blender). Characters: `blender -b --disable-autoexec --python tools/build-characters.py -- godot/assets/characters [id ...]` (about 20 min for the 8; `--fast` for quick 1024 px previews), then `godot --path godot --script ../tools/character-sheet.gd -- assets/characters PORTRAITS` for the menu portraits. Logs, decisions and measurements are in [`../docs/GODOT_PORT.md`](../docs/GODOT_PORT.md) (French).

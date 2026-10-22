@@ -10,21 +10,33 @@ extends Node3D
 
 const DIR := "res://assets/characters/"
 const IDS := ["marc", "lea", "karim", "chloe", "lucian", "picsou", "klukai", "harry"]
-const ANIMS := ["Idle", "Walk", "Run", "Sit_Moto", "Sit_Bike", "Sit_Tram", "Sit_Tram_Drive", "Death", "Jump"]
+const ANIMS := ["Idle", "Walk", "Run", "Sprint", "Sit_Moto", "Sit_Bike", "Sit_Tram", "Sit_Tram_Drive", "Death", "Jump"]
 const ONE_SHOT := ["Death"]
 const BONES := ["Root", "Hips", "Abdomen", "Torso", "Neck", "Head", "Shoulder.L", "UpperArm.L", "LowerArm.L", "Shoulder.R", "UpperArm.R", "LowerArm.R",
 	"UpperLeg.L", "LowerLeg.L", "Foot.L", "UpperLeg.R", "LowerLeg.R", "Foot.R"]
-## Couleurs de la vue à la première personne (mains et manches de hands_rig.gd) : gant, manche, poignet. Reprennent `fp` de CHARACTERS (src/characters.js)
-## et les matériaux du modèle (un test les compare).
+## v0.31.0 : squelette étendu (tools/charlib/skel.py) : mains, cinq doigts de trois phalanges, orteils, mâchoire, yeux, paupières supérieures.
+const FINGERS := ["Thumb", "Index", "Middle", "Ring", "Pinky"]
+const FACE_BONES := ["Jaw", "Eye.L", "Eye.R", "Lid.L", "Lid.R"]
+const EXTRA_BONES := ["Hand.L", "Hand.R", "Toe.L", "Toe.R"]
+
+static func finger_bones() -> Array:
+	var out: Array = []
+	for s in ["L", "R"]:
+		for f in FINGERS:
+			for i in [1, 2, 3]:
+				out.append("%s%d.%s" % [f, i, s])
+	return out
+## Couleurs de la vue à la première personne (mains et manches de hands_rig.gd) : gant, manche, poignet = couleurs de base des matières du modèle
+## (palettes de tools/charlib/designs.py, clé `fp`), qui teintent les tissus générés assets/characters/<id>_fp_*.jpg.
 const OUTFIT := {
-	"marc": {"glove": "1c1c1e", "sleeve": "4a5530", "cuff": "3a4228"},
-	"lea": {"glove": "4aa8e0", "sleeve": "dfe6ee", "cuff": "2c6a90"},
-	"karim": {"glove": "2a2a2e", "sleeve": "d8541a", "cuff": "2a2a2e"},
-	"chloe": {"glove": "e0d0b8", "sleeve": "b8283c", "cuff": "8a1c2c"},
-	"lucian": {"glove": "24242a", "sleeve": "16161c", "cuff": "e8e8ee"},
-	"picsou": {"glove": "f6f4ee", "sleeve": "b02020", "cuff": "f6f4ee"},
-	"klukai": {"glove": "141418", "sleeve": "6a3a9a", "cuff": "3ac8ff"},
-	"harry": {"glove": "f0cfb4", "sleeve": "1b1f33", "cuff": "e0b040"},
+	"marc": {"glove": "1c1c1e", "sleeve": "5f6444", "cuff": "2a2b25"},
+	"lea": {"glove": "4aa0d8", "sleeve": "eef1f3", "cuff": "3f86b8"},
+	"karim": {"glove": "2a2622", "sleeve": "c8661c", "cuff": "2a2a2e"},
+	"chloe": {"glove": "e6dcc8", "sleeve": "b02236", "cuff": "b02236"},
+	"lucian": {"glove": "1e1e22", "sleeve": "1a1a1e", "cuff": "e2e2e8"},
+	"picsou": {"glove": "f4f2ec", "sleeve": "a81c1c", "cuff": "2a0e0e"},
+	"klukai": {"glove": "141418", "sleeve": "5e3490", "cuff": "3ac8ff"},
+	"harry": {"glove": "e8c2a4", "sleeve": "1b1f33", "cuff": "e8e4dc"},
 }
 
 static var _scenes: Dictionary = {}     ## id -> PackedScene
@@ -36,12 +48,13 @@ var player: AnimationPlayer
 var model: Node3D
 var current := ""
 var seated := false
+var face: FaceRig              ## v0.31.0 : clignement et regard (null : modèle sans paupières)
 
 static func ids() -> Array:
 	return IDS
 
 static func path_of(cid: String) -> String:
-	return DIR + cid + ".glb"
+	return DIR + cid + ".gltf"
 
 static func exists(cid: String) -> bool:
 	return ResourceLoader.exists(path_of(cid))
@@ -82,12 +95,47 @@ static func create(cid: String) -> CharacterModel:
 	m.add_child(m.model)
 	m.skeleton = _find(m.model, "Skeleton3D") as Skeleton3D
 	m.player = _find(m.model, "AnimationPlayer") as AnimationPlayer
-	if m.player != null and not _prepped.has(cid):
+	if not _prepped.has(cid):
 		_prepped[cid] = true
-		for n in m.player.get_animation_list():
-			var a := m.player.get_animation(n)
-			a.loop_mode = Animation.LOOP_NONE if n in ONE_SHOT else Animation.LOOP_LINEAR
+		if m.player != null:
+			for n in m.player.get_animation_list():
+				var a := m.player.get_animation(n)
+				a.loop_mode = Animation.LOOP_NONE if n in ONE_SHOT else Animation.LOOP_LINEAR
+		_prep_materials(m)
+	if m.skeleton != null and m.skeleton.find_bone("Lid.L") >= 0:
+		m.face = FaceRig.new()
+		m.face.name = "FaceRig"
+		m.skeleton.add_child(m.face)
 	return m
+
+## v0.31.0 : réglages que le glTF ne porte pas, une fois par personnage (les matériaux sont partagés par ses instances) : peau (surface « _skin ») avec une
+## diffusion sous la surface légère et un liseré de contre-jour ; cheveux (« _hair ») en cartes à canal alpha : test alpha avec couverture MSAA, deux faces ;
+## filtrage anisotrope des textures (tissus vus en biais).
+static func _prep_materials(m: CharacterModel) -> void:
+	for mi: MeshInstance3D in m._meshes():
+		if mi.mesh == null:
+			continue
+		for i in mi.mesh.get_surface_count():
+			var mat := mi.mesh.surface_get_material(i) as StandardMaterial3D
+			if mat == null:
+				continue
+			var nm := String(mat.resource_name)
+			mat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
+			if nm.ends_with("_skin"):
+				mat.subsurf_scatter_enabled = true
+				mat.subsurf_scatter_strength = 0.16
+				mat.subsurf_scatter_skin_mode = true
+				mat.rim_enabled = true
+				mat.rim = 0.08
+				mat.rim_tint = 0.7
+			elif nm.ends_with("_hair"):
+				mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
+				mat.alpha_scissor_threshold = 0.42
+				mat.alpha_antialiasing_mode = BaseMaterial3D.ALPHA_ANTIALIASING_ALPHA_TO_COVERAGE
+				mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+				mat.rim_enabled = true
+				mat.rim = 0.12
+				mat.rim_tint = 0.8
 
 ## Pour le multijoueur (J12) : un coéquipier affiché avec son pseudo au-dessus de la tête. Même scène que le joueur local : `set_motion(vitesse)` à pied,
 ## `play(seat_anim(...))` assis sur une machine (le parent est alors la machine ou le module de la rame, comme pour le cavalier de rides_view.gd).
@@ -178,7 +226,7 @@ func pose(anim: String, t: float) -> void:
 	player.speed_scale = 0.0
 	player.seek(t, true)
 
-## { tris, surfaces, meshes } du modèle (budget : 4 à 8 k triangles).
+## { tris, surfaces, meshes } du modèle (v0.31.0 : 20 à 32 k triangles au plus près ; niveaux de détail générés à l'import).
 func stats() -> Dictionary:
 	var tris := 0
 	var surfaces := 0

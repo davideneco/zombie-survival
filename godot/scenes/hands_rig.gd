@@ -14,6 +14,7 @@ const WeaponModels := preload("res://scenes/weapon_models.gd")
 const GLOVE := Color("201d1a")
 const SLEEVE := Color("2a3022")
 const CUFF := Color("141210")
+const FP_TINT := 0.45            ## v0.31.0 : teinte (linéaire) appliquée au tissu généré de la tenue
 ## Épaules dans le repère de la caméra (x droite, y haut, z vers l'arrière) : hors champ, en bas de l'écran.
 const SHOULDER_R := Vector3(0.36, -0.58, 0.10)
 const SHOULDER_L := Vector3(-0.34, -0.52, 0.08)
@@ -61,29 +62,29 @@ static func _mesh(kind: String) -> Mesh:
 			var s := SphereMesh.new()
 			s.radius = 0.5
 			s.height = 1.0
-			s.radial_segments = 10
-			s.rings = 5
+			s.radial_segments = 16
+			s.rings = 8
 			m = s
 		"finger":
 			var c := CapsuleMesh.new()
 			c.radius = 0.0105
 			c.height = 0.05
-			c.radial_segments = 8
-			c.rings = 2
+			c.radial_segments = 12
+			c.rings = 3
 			m = c
 		"thumb":
 			var c2 := CapsuleMesh.new()
 			c2.radius = 0.0118
 			c2.height = 0.052
-			c2.radial_segments = 8
-			c2.rings = 2
+			c2.radial_segments = 12
+			c2.rings = 3
 			m = c2
 		"sleeve":
 			var cy := CylinderMesh.new()
 			cy.top_radius = 0.034
 			cy.bottom_radius = 0.030
 			cy.height = 1.0
-			cy.radial_segments = 10
+			cy.radial_segments = 16
 			cy.rings = 1
 			cy.cap_top = false
 			cy.cap_bottom = false
@@ -93,7 +94,7 @@ static func _mesh(kind: String) -> Mesh:
 			cf.top_radius = 0.034
 			cf.bottom_radius = 0.034
 			cf.height = 0.034
-			cf.radial_segments = 10
+			cf.radial_segments = 16
 			cf.rings = 1
 			m = cf
 	_meshes[kind] = m
@@ -113,12 +114,29 @@ static func _part(parent: Node3D, kind: String, mat: String, pos: Vector3, scale
 
 ## v0.21.2 : couleurs des gants, des manches et des poignets d'après la tenue du personnage choisi (CharacterModel.outfit : mêmes valeurs que les matériaux du modèle 3D).
 ## Les matériaux sont partagés par toutes les mains et les manches : changer la tenue repeint tout (aucun noeud à reparcourir).
+## v0.31.0 : plus le tissu de la tenue (assets/characters/<id>_fp_glove|sleeve|cuff.jpg, générés par tools/build-characters.py avec les matières du modèle :
+## camouflage de Marc, coton de la blouse de Léa, toile de Karim...) : motifs raccordables divisés par leur couleur moyenne, posés en projection triplanaire
+## (les manches s'étirent à chaque image : pas d'UV stables) et teintés par la couleur de la tenue.
 static func set_outfit(cid: String) -> void:
 	var o := CharacterModel.outfit(cid)
 	for kind: String in ["glove", "sleeve", "cuff"]:
+		var path := "res://assets/characters/%s_fp_%s.jpg" % [cid, kind]
+		var tex: Texture2D = load(path) as Texture2D if ResourceLoader.exists(path) else null
 		var m := material(kind)
 		m.albedo_color = o[kind]
 		m.emission = o[kind]
+		m.albedo_texture = tex
+		m.emission_texture = null
+		if tex != null:
+			# la tuile vaut la moitié de la couleur moyenne (marge pour les tons clairs du motif) ; la lumière de la vue à la première personne est forte :
+			# la teinte est ramenée à 0,45 (en linéaire) pour retrouver le ton du modèle ; la lueur propre suit aussi le motif
+			m.albedo_color = (Color(o[kind]).srgb_to_linear() * FP_TINT).linear_to_srgb()
+			m.emission_texture = tex
+			m.emission_operator = BaseMaterial3D.EMISSION_OP_MULTIPLY
+			m.uv1_triplanar = true
+			m.uv1_world_triplanar = false
+			m.uv1_scale = Vector3(8.0, 8.0, 8.0)
+			m.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
 
 # ------------------------------------------------------------------ mains
 ## Main droite sur une poignée verticale : origine = centre de la poignée ; paume derrière et à droite, quatre doigts qui l'entourent par devant, pouce à gauche, vers l'avant.

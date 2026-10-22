@@ -720,7 +720,7 @@ Barrett M82, M79 et arbalète : modèles construits pour le jeu (tools/build-wea
 https://quaternius.com/packs/zombieapocalypsekit.html
 
 [b]Personnages[/b]
-Les 8 survivants jouables : modèles 3D low-poly et animations créés pour le jeu (tools/build-characters.py), designs originaux inspirés des tenues du jeu web ; aucun élément repris d'un jeu ou d'un film.
+Les 8 survivants jouables : modèles 3D, textures, cheveux, squelette et animations entièrement générés par script pour le jeu (tools/build-characters.py, tools/charlib/), designs originaux inspirés des tenues du jeu web ; aucun élément repris d'un jeu ou d'un film.
 
 [b]Textures[/b]
 Textures PBR de Poly Haven, licence CC0 : https://polyhaven.com/license

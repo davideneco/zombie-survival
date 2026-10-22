@@ -24,3 +24,4 @@ tools/__pycache__/
 # v0.24.1 : matériaux PBR (Poly Haven CC0) : sources .jpg et .png emballés se régénèrent par  node tools/download-textures.mjs --godot  puis  python3 tools/pack-pbr.py ; seuls LICENSE.txt et les .import (réglages VRAM / mipmaps) sont versionnés
 godot/assets/pbr_src/
 godot/assets/pbr/*/*.png
+tools/charlib/__pycache__/
