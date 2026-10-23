@@ -1103,3 +1103,32 @@ Demande du joueur : refaire la cathédrale, les bâtiments et la ville dans un s
 - **Coût** (Intel UHD, 2560x1080, jour, ms GPU, place Kléber (arbres, pelouse) ; sans -> avec) : Rapide 17,4 -> 17,6, Normale 31,6 -> 31,9, Haute 41,6 -> 42,1 ; Marché-Neuf (voitures) Normale 31,4 -> 31,7.
 - **Captures** : `avant-apres-v032-voiture.png`, `avant-apres-v032-vegetation.png`.
 - **Faible / non fait** : un seul modèle de voiture (couleurs du JS) ; arbres toujours en cartes du JS (pas de nouveau modèle d'arbre) ; pas de buissons (sans collision, ils seraient traversables) ; **mobilier urbain** : celui du JS (bancs, corbeilles, bornes, jardinières, chalets, kiosques) n'est pas remodelé ; aucun mobilier ajouté (sans collision il serait traversable : décision de ne pas en ajouter).
+
+### v0.32.5 : reflets de l'eau (reflet plan, Haute) et bilan de la série v0.32
+- **Essai écarté** : sondes de réflexion (`ReflectionProbe`, projection en boîte, 56 sondes au-dessus des mailles d'eau) : aucune façade visible dans l'eau même à intensité x8 (la face inférieure de l'eau, en double face, bouchait la vue des sondes ; et elles ne suivent pas le regard) : code retiré.
+- **Reflet plan** (`scenes/world/water_reflection.gd`, `water.gdshader`) : toute l'eau de la carte est à y = 0,04 ; une caméra miroir (position et orientation réfléchies, axe x retourné pour rester une rotation propre, image relue en miroir horizontal par le shader) rend la ville dans un `SubViewport` au quart de la résolution de la fenêtre, à 120 m au plus, sans ombres de projecteurs ni MSAA, **seulement en Haute et quand une maille d'eau à moins de 140 m est dans le champ de la caméra** (testé toutes les 0,25 s). L'eau lit l'image à la position d'écran, décalée par la pente des vagues, pondérée par Fresnel : façades, ponts, arbres, **fenêtres allumées et lampadaires la nuit** se reflètent dans l'Ill et les canaux. Le dessous de l'eau est écarté pour la caméra miroir (`discard` quand la caméra est sous l'eau). `--dbg-norefl`. Normale et Rapide : reflet du ciel seulement (v0.32.3).
+- **Coût** (Intel UHD, 2560x1080, Haute, jour, temps d'image : la mesure GPU du moteur ne compte que la fenêtre principale) : quai de l'Ancienne Douane 37,5 -> 41,8 ms (+4,3) ; place Kléber (eau dans le champ) 42,2 -> 46,7 ms (+4,5) ; aucun coût sans eau en vue.
+- **Captures** : `avant-apres-v032-reflets-eau.png` (jour), `avant-apres-v032-reflets-eau-nuit.png` (nuit : fenêtres allumées dans l'eau).
+- **Vérifié** : `tools/godot-check.sh` : **161 948 contrôles, 0 échec** (j30 : 35 contrôles, dont ceux de la cathédrale et des détails ; j10 : finale complète avec Pack-a-Punch, Bourreau, plateforme, Ange, rampe et Fanal) ; partie de 60 s par le bot (Normale, 1280x720, `--perf-log`) : moyenne 13,7 ms, p99 18,0 ms, pire 29,9 ms, 1 image > 25 ms, aucune erreur de script.
+
+#### Réglages par qualité après v0.32 (ce qui s'ajoute à v0.22)
+| | Rapide | Normale | Haute |
+|---|---|---|---|
+| Cathédrale (extérieur, intérieur) | oui | oui | oui |
+| Détails des façades (encadrements, volets, balcons, jardinières) | non | 40 m | 75 m |
+| Détails des toits (gouttières, corniches, cheminées) | 80 m | 130 m | 180 m |
+| Vitres en retrait (parallaxe) | non | oui | oui |
+| Pelouses, touffes d'herbe | non | oui (touffes 32 m) | oui (touffes 55 m) |
+| Feuillage varié et translucide | non | oui | oui |
+| Reflet plan de l'eau | non | non | oui (eau en vue) |
+| Voitures, grilles d'arbres, bois des barricades, ciel et reflets qui suivent le jour | oui | oui | oui |
+
+#### Coût cumulé de la série (Intel UHD, 2560x1080, jour, ms GPU de la fenêtre ; v0.31 -> v0.32.5)
+Rue dense (-185, -205) : Rapide 16,9 -> 17,1 ; Normale 28,9 -> 30,3 ; Haute 39,1 -> 41,7. Parvis de la cathédrale : Normale 30,8 -> 32,5 ; nef vue de l'ouest (intérieur) : Normale 31,5 -> 34,8. Place Kléber : Normale 31,6 -> 31,9 (+ pelouses 0,7 déjà compté) ; Haute + reflet de l'eau +4,5 (temps d'image). Ce sont des coûts relatifs d'un GPU intégré (le GPU NVIDIA du poste est toujours hors service) : **non mesuré sur la RX 7700 XT du joueur ni en 3440x1440**.
+
+#### Ce qui reste faible (honnêtement)
+- Les **façades restent des canevas peints** du JS (murs, colombages, vitres) : le volume ajouté porte sur les baies, volets, balcons, corniches, toits ; pas de nouvelles lucarnes ; les bâtiments OSM gardent leurs volumes simples.
+- **Trottoirs et mobilier urbain** : ceux du JS (maillages cuits) ; texture de dalles téléchargée, pas employée ; aucun mobilier ajouté (sans collision il serait traversable).
+- **Arbres** : cartes de feuillage du JS (teintes et translucidité améliorées seulement).
+- **Cathédrale** : statues et gargouilles schématiques ; murs bas OSM en gradins autour des cours ; pas de portail sud du transept ; l'escalier des tourelles reste à l'intérieur (décor) ; vitraux intérieurs = dessins du JS.
+- Pas de rayons de lumière, pas de nuages volumétriques ; une seule silhouette de voiture.

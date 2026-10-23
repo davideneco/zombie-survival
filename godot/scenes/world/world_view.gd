@@ -118,6 +118,13 @@ func build() -> void:
 	_load_instances()
 	await _slice()
 	_grass_mask()
+	if not _water_cells.is_empty():   # v0.32.5 : reflet plan de l'eau (Haute)
+		var cells := PackedVector2Array()
+		for k: Vector2i in _water_cells:
+			cells.append(Vector2((k.x + 0.5) * 48.0, (k.y + 0.5) * 48.0))
+		water_reflection = preload("res://scenes/world/water_reflection.gd").new()
+		add_child(water_reflection)
+		water_reflection.setup(cells, _kinds.get("water", []))
 	_lamps()
 	progress.emit(1.0)
 	built = true
@@ -149,6 +156,8 @@ func set_quality(q: int) -> void:
 	# (le sol, ses flaques et le détail des façades sont dans le shader à tous les niveaux : le JS ne les retire pas en Rapide)
 	for m: ShaderMaterial in _kinds.get("water", []):
 		m.set_shader_parameter("layers", 1.0 if q == 0 else 2.0)
+	if water_reflection != null:
+		water_reflection.set_enabled(q >= 2)
 	for m: ShaderMaterial in _kinds.get("facade", []):   # v0.22.4 : halo des fenêtres (une lecture de texture de plus par pixel de façade) : Normale et Haute
 		m.set_shader_parameter("glow_k", 0.0 if q == 0 or "--dbg-nowinglow" in OS.get_cmdline_user_args() else FACADE_GLOW * _lit)
 		if m.get_shader_parameter("bump_tex") != null:   # v0.24.1 : Rapide = ancien rendu ; Normale = PBR + relief ; Haute = + bois PBR des colombages
@@ -392,6 +401,11 @@ func _mesh_from_pack(path: String, cath := false) -> MeshInstance3D:
 			shop_surfaces_dropped += 1
 			continue
 		var arr := _surface_arrays(s, pk[1], pk[2], true)
+		if _materials[int(s["mat"])] is ShaderMaterial and (_materials[int(s["mat"])] as ShaderMaterial).shader == Surfaces.WATER:
+			var wv: PackedVector3Array = arr[Mesh.ARRAY_VERTEX]
+			for i in range(0, wv.size(), 3):
+				var key := Vector2i(floori(wv[i].x / 48.0), floori(wv[i].z / 48.0))
+				_water_cells[key] = true
 		if cath and _cath_role.has(int(s["mat"])):
 			_add_cath_split(mesh, arr, int(s["mat"]))
 			continue
@@ -583,6 +597,8 @@ func _car_signature(meshes: Array, bytes: PackedByteArray, base: int) -> Diction
 var _tree_pos: PackedVector2Array = []
 var grass_texture: ImageTexture
 var vegetation: Node3D
+var _water_cells: Dictionary = {}
+var water_reflection: Node
 func _grass_mask() -> void:
 	var meta := GfxAssets.meta()
 	if meta.is_empty() or _tree_pos.is_empty() or "--dbg-nograss" in OS.get_cmdline_user_args():

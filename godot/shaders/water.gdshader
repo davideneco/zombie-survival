@@ -13,6 +13,11 @@ uniform float metallic = 0.6;
 uniform float normal_depth = 0.6;     // intensité du relief (1 = pente maximale des vagues ci-dessous)
 uniform float layers = 2.0;           // 1 en qualité Rapide : trois trains de vagues au lieu de six
 uniform float refl_gain = 2.2;      // le ciel d'ambiance du JS (0,16) est faible : l'eau noire le renvoie nettement plus qu'un sol mat
+// v0.32.5 : reflet plan (Haute) : image de la ville vue par une caméra miroir (scenes/world/water_reflection.gd), lue à la position d'écran (miroir en x)
+// et décalée par la pente des vagues ; elle remplace le ciel d'ambiance là où elle existe (alpha) : façades, ponts, fenêtres allumées, arbres, lampadaires.
+uniform sampler2D refl_tex : source_color, filter_linear, repeat_disable;
+uniform float refl_on = 0.0;
+uniform float refl_k = 0.55;        // l'image est déjà passée par le mappage tonal : ramenée dans la plage de l'émission
 
 varying vec3 wpos;
 
@@ -29,6 +34,9 @@ vec2 wave(vec2 p, vec2 d, float wl, float s, float v, float ph, float fade) {
 }
 
 void fragment() {
+	if (CAMERA_POSITION_WORLD.y < wpos.y) {
+		discard;   // v0.32.5 : la caméra miroir du reflet (sous l'eau) ne doit pas voir le dessous de l'eau
+	}
 	vec2 p = wpos.xz;
 	float dist = length(VERTEX);   // VERTEX est en espace vue dans fragment() : distance à la caméra
 	float f1 = 1.0 - smoothstep(60.0, 150.0, dist);
@@ -53,5 +61,11 @@ void fragment() {
 	vec3 rw = (INV_VIEW_MATRIX * vec4(reflect(normalize(VERTEX), nv), 0.0)).xyz;
 	rw.y = abs(rw.y);   // un reflet qui plongerait sous l'horizon (vagues rasantes) renvoie le ciel, pas le sol
 	float fr = 0.03 + 0.97 * pow(1.0 - clamp(dot(nv, normalize(-VERTEX)), 0.0, 1.0), 5.0);
-	EMISSION = env_sky(rw) * fr * (1.0 + metallic * 2.0) * refl_gain;
+	vec3 sky = env_sky(rw) * (1.0 + metallic * 2.0) * refl_gain;
+	if (refl_on > 0.5) {
+		vec2 suv = vec2(1.0 - SCREEN_UV.x, SCREEN_UV.y) + vec2(-g.x, g.y) * 0.12 * (1.0 - smoothstep(20.0, 120.0, dist));
+		vec4 r = texture(refl_tex, clamp(suv, vec2(0.001), vec2(0.999)));
+		sky = mix(sky, r.rgb * r.rgb * refl_k, 0.9);   // (sRGB -> à peu près linéaire)
+	}
+	EMISSION = sky * fr;
 }
