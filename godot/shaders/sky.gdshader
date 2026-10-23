@@ -55,6 +55,9 @@ vec3 night_sky(vec3 d, float md) {
 		dens = smoothstep(0.46, 0.80, c1 * 0.78 + c2 * 0.34) * smoothstep(0.03, 0.30, d.y) * cloud_cover;
 		vec3 night = cloud_night * (1.0 + 3.0 * pow(md, 14.0) * moon_k);
 		vec3 day = mix(mid * 1.25 + 0.1, vec3(1.0), 0.65);
+		// v0.32.3 : de jour, nuages modelés : dessous gris bleuté là où ils sont épais, bords et sommets éclairés
+		float thick = smoothstep(0.55, 0.95, c1 * 0.78 + c2 * 0.34);
+		day = mix(day, day * vec3(0.66, 0.70, 0.78), thick * 0.8);
 		vec3 cc = mix(night, day, day_k) * (0.75 + 0.5 * c2);
 		col = mix(col, cc, dens * 0.82);
 	}
@@ -87,7 +90,8 @@ vec3 night_sky(vec3 d, float md) {
 	}
 	if (sun_k > 0.0) {
 		float sd = max(dot(d, normalize(sun_dir)), 0.0);
-		col += sun_k * (vec3(1.0, 0.93, 0.7) * pow(sd, 1400.0) * 6.0 + vec3(1.0, 0.8, 0.45) * (pow(sd, 90.0) * 0.55 + pow(sd, 10.0) * 0.16));
+		// v0.32.3 : halo resserré (l'ancien pow 10 blanchissait un quart du ciel autour du soleil)
+		col += sun_k * (vec3(1.0, 0.93, 0.7) * pow(sd, 1400.0) * 6.0 + vec3(1.0, 0.8, 0.45) * (pow(sd, 120.0) * 0.45 + pow(sd, 18.0) * 0.07));
 	}
 	return col;
 }

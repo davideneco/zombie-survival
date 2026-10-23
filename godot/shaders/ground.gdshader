@@ -20,6 +20,14 @@ uniform float sdf_range = 16.0;
 uniform float apron_total = 1.51;     // apron + kerb + gutter : pas de flaque sur le trottoir
 uniform vec4 puddle = vec4(0.66, 0.72, 3.5, 0.4);  // seuil bas, seuil haut, gain des reflets, assombrissement
 uniform float quality = 1.0;          // 0 : sans flaques ni mousse (qualité Rapide)
+// v0.32.3 : pelouses et pieds d'arbres. grass_mask (1 m par texel, même emprise que sdf_tex) : R = densité d'arbres (pelouses des places et jardins),
+// G = fosse de l'arbre (terre et feuilles mortes). Herbe PBR (Poly Haven CC0 leafy_grass) en projection en mètres, teinte et touffes variées par le bruit.
+uniform sampler2D grass_mask : filter_linear, repeat_disable;
+uniform sampler2D grass_a : source_color, repeat_enable, filter_linear_mipmap_anisotropic;
+uniform sampler2D grass_m : hint_default_white, repeat_enable, filter_linear_mipmap_anisotropic;
+uniform float grass_on = 0.0;
+uniform vec3 grass_tint : source_color = vec3(0.21, 0.27, 0.12);
+uniform vec3 soil_tint : source_color = vec3(0.24, 0.18, 0.12);
 
 varying vec3 wpos;
 
@@ -59,18 +67,39 @@ void fragment() {
 		col *= 1.0 - 0.28 * wet;
 		col = mix(col, col * puddle.w, pd);
 	}
+	// v0.32.3 : pelouses et fosses des arbres (pas contre les façades ni sur les trottoirs)
+	float lawn = 0.0;
+	float pit = 0.0;
+	vec3 gn = vec3(0.0, 0.0, 1.0);
+	if (grass_on > 0.5 && inside && quality > 0.5) {   // Rapide : pas de pelouses (coût : ~0,7 ms Intel)
+		vec2 gm = texture(grass_mask, suv).rg;
+		float away = smoothstep(apron_total + 0.4, apron_total + 2.2, sd);
+		lawn = smoothstep(0.42, 0.62, gm.r + (nM - 0.5) * 0.35 + (nF - 0.5) * 0.12) * away;
+		pit = smoothstep(0.35, 0.7, gm.g) * (1.0 - lawn);
+		vec2 guv = gp / 1.7;
+		vec3 ga = texture(grass_a, guv).rgb * 2.0;
+		vec4 gmm = texture(grass_m, guv);
+		vec3 gcol = grass_tint * ga * (0.82 + 0.36 * nL) * mix(vec3(1.0), vec3(1.12, 1.05, 0.7), smoothstep(0.55, 0.8, nF));   // plaques jaunies
+		vec3 scol = soil_tint * mix(vec3(1.0), ga.ggg * 0.8, 0.4) * (0.8 + 0.4 * nG);
+		col = mix(col, gcol, lawn);
+		col = mix(col, scol, pit);
+		gn = vec3(gmm.rg * 2.0 - 1.0, 1.0);
+		pd *= 1.0 - max(lawn, pit);
+		wet *= 1.0 - max(lawn, pit);
+	}
 	ALBEDO = col;
 	float r = texture(rough_tex, uv).g * roughness_k;
+	r = mix(r, 0.92, max(lawn, pit));
 	r = mix(r, r * 0.72, wet);
 	ROUGHNESS = mix(r, 0.045, pd);
-	NORMAL_MAP = texture(normal_tex, uv).xyz;
+	NORMAL_MAP = mix(texture(normal_tex, uv).xyz, gn * 0.5 + 0.5, max(lawn, pit));
 	NORMAL_MAP_DEPTH = normal_depth * (1.0 - pd);
-	SPECULAR = 0.5 * (1.0 - pd);
+	SPECULAR = 0.5 * (1.0 - pd) * (1.0 - 0.6 * max(lawn, pit));
 	METALLIC = 0.0;
 	// flaques : reflet du ciel d'ambiance x puddle.reflect (3,5 dans le JS), Fresnel de Schlick
 	if (pd > 0.001) {
 		vec3 rw = (INV_VIEW_MATRIX * vec4(reflect(-VIEW, NORMAL), 0.0)).xyz;
 		float fr = 0.04 + 0.96 * pow(1.0 - clamp(dot(NORMAL, VIEW), 0.0, 1.0), 5.0);
-		EMISSION = env_sky(rw) * fr * pd * puddle.z;
+		EMISSION = min(env_sky(rw) * fr * puddle.z, vec3(0.10, 0.12, 0.15)) * pd;   // v0.32.3 : plafonné (ciel de jour : flaques sombres qui reflètent, pas blanches)
 	}
 }

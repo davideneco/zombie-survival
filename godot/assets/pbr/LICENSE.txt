@@ -12,3 +12,5 @@ wood_beam: Poly Haven "dark_wood" (https://polyhaven.com/a/dark_wood), CC0 1.0
 wood_door: Poly Haven "dark_planks" (https://polyhaven.com/a/dark_planks), CC0 1.0
 roof_slate: Poly Haven "roof_slates_02" (https://polyhaven.com/a/roof_slates_02), CC0 1.0
 roof_clay: Poly Haven "clay_roof_tiles_02" (https://polyhaven.com/a/clay_roof_tiles_02), CC0 1.0
+ground_grass: Poly Haven "leafy_grass" (https://polyhaven.com/a/leafy_grass), CC0 1.0
+ground_paving: Poly Haven "rectangular_paving" (https://polyhaven.com/a/rectangular_paving), CC0 1.0

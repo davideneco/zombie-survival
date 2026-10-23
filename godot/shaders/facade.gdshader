@@ -144,7 +144,7 @@ void fragment() {
 			vec3 rd = reflect(-vdir, nw * side);
 			float fr = 0.04 + 0.96 * pow(1.0 - clamp(dot(nw * side, vdir), 0.0, 1.0), 5.0);
 			vec3 sk = env_sky(rd);
-			sky_refl = mix(vec3(dot(sk, vec3(0.33))), sk, 0.5) * fr * glass * glass_k * 3.0;
+			sky_refl = min(mix(vec3(dot(sk, vec3(0.33))), sk, 0.5) * fr * glass * glass_k * 3.0, vec3(0.09, 0.11, 0.14));   // v0.32.3 : plafonné (ciel de jour : reflet gris bleuté, pas blanc)
 		}
 	} else {
 		col *= mix(1.0, 0.74 + 0.56 * texture(detail_tex, uv * detail_repeat).r, detail_k);

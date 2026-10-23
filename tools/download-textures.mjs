@@ -27,6 +27,8 @@ const GODOT_TEXTURES = {
   wood_door: 'dark_planks',               // portes
   roof_slate: 'roof_slates_02',           // ardoise
   roof_clay: 'clay_roof_tiles_02',        // tuiles rouges
+  ground_grass: 'leafy_grass',            // v0.32.3 : pelouses des places et pieds d'arbres
+  ground_paving: 'rectangular_paving',    // v0.32.3 : dalles des trottoirs
 };
 if (process.argv.includes('--godot')) {
   const out = path.join('godot', 'assets', 'pbr_src'); // sources .jpg (ignorées par Godot : .gdignore) ; tools/pack-pbr.py écrit godot/assets/pbr/*/{a,m}.png

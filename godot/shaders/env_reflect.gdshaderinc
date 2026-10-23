@@ -3,13 +3,15 @@
 // les reflets du ciel sont coupés (reflected_light_source = désactivé) et les surfaces qui reflètent (eau, flaques) appellent cette fonction.
 // Couleurs de CONFIG.graphics.env (nuit), en sRGB convertis en linéaire par la fonction.
 
-uniform vec3 env_top : source_color = vec3(0.0392, 0.0706, 0.1333);      // #0a1222
-uniform vec3 env_mid : source_color = vec3(0.1333, 0.1882, 0.2902);      // #22304a
-uniform vec3 env_horizon : source_color = vec3(0.2902, 0.2275, 0.1725);  // #4a3a2c
-uniform vec3 env_ground : source_color = vec3(0.0784, 0.0706, 0.0627);   // #141210
-uniform vec3 env_moon_dir = vec3(0.6, 0.66, 0.36);
-uniform float env_intensity = 0.16;
-uniform float env_moon = 0.7;
+// v0.32.3 : uniformes GLOBAUX (graphics_view.gd : _set_env_reflect) qui suivent le ciel (nuit / aube / jour : CONFIG.graphics.env top, mid, horizon, ground,
+// phaseIntensity) : avant, le reflet restait celui de la nuit en plein jour (eau, flaques et vitres sombres et bleues à midi). Couleurs en linéaire.
+global uniform vec3 env_top;
+global uniform vec3 env_mid;
+global uniform vec3 env_horizon;
+global uniform vec3 env_ground;
+global uniform vec3 env_moon_dir;
+global uniform float env_intensity;
+global uniform float env_moon;
 
 vec3 env_sky(vec3 dir) {
 	float el = asin(clamp(dir.y, -1.0, 1.0));            // -pi/2 .. pi/2

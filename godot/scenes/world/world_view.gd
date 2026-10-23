@@ -6,6 +6,7 @@ extends Node3D
 
 const DIR := "res://data/world/"
 const Surfaces := preload("res://scenes/world/surfaces.gd")
+const GfxAssets := preload("res://scenes/gfx_assets.gd")
 const PatchView := preload("res://scenes/world/patch_view.gd")
 const INSTANCE_CELL := 160.0      ## m : maille de rangement des instances (MultiMesh)
 const TILE_VIS_RANGE := 190.0     ## m : au-delà, la tuile n'est plus dessinée (le brouillard la cache déjà ; la caméra du JS s'arrête à 170 m)
@@ -116,6 +117,7 @@ func build() -> void:
 		cv.build()
 	_load_instances()
 	await _slice()
+	_grass_mask()
 	_lamps()
 	progress.emit(1.0)
 	built = true
@@ -491,6 +493,9 @@ func _load_instances() -> void:
 			cols = bytes.slice(base + int(m["colors"]), base + int(m["colors"]) + n * 12).to_float32_array()
 		# les instances sont rangées par mailles de 160 m (comme les tuiles) : le culling par image et la portée de visibilité (distance au nœud, donc à la maille et
 		# non à l'origine du monde) ne valent que par maille ; un seul MultiMesh pour toute la carte serait toujours « à l'écran » et caché à plus de 190 m de l'origine
+		if String(m.get("name", "")) == "trees" and n < 10000:   # v0.32.3 : troncs : positions des arbres (pelouses, fosses)
+			for i in n:
+				_tree_pos.append(Vector2(xf[i * 12 + 3], xf[i * 12 + 11]))
 		var buckets: Dictionary = {}
 		for i in n:
 			var key := Vector2i(floori(xf[i * 12 + 3] / INSTANCE_CELL), floori(xf[i * 12 + 11] / INSTANCE_CELL))
@@ -534,6 +539,46 @@ func _load_instances() -> void:
 				if foliage:
 					_tree_cards.append(mmi)
 				add_child(mmi)
+
+## v0.32.3 : masque des pelouses (R : densité d'arbres) et des fosses d'arbres (G), 1 m par texel sur l'emprise du champ de distance du sol ; lu par ground.gdshader.
+var _tree_pos: PackedVector2Array = []
+var grass_texture: ImageTexture
+func _grass_mask() -> void:
+	var meta := GfxAssets.meta()
+	if meta.is_empty() or _tree_pos.is_empty() or "--dbg-nograss" in OS.get_cmdline_user_args():
+		return
+	var o: Array = meta["sdf_origin"]
+	var sz: Array = meta["sdf_size"]
+	var w := int(ceil(float(sz[0])))
+	var h := int(ceil(float(sz[1])))
+	var dens := PackedFloat32Array()
+	dens.resize(w * h)
+	var pit := PackedByteArray()
+	pit.resize(w * h)
+	var R := 9.0
+	for p in _tree_pos:
+		var cx := p.x - float(o[0])
+		var cz := p.y - float(o[1])
+		for iz in range(maxi(0, int(cz - R)), mini(h, int(cz + R) + 1)):
+			for ix in range(maxi(0, int(cx - R)), mini(w, int(cx + R) + 1)):
+				var d := Vector2(ix + 0.5 - cx, iz + 0.5 - cz).length()
+				if d < R:
+					var k := 1.0 - d / R
+					dens[iz * w + ix] += k * k * 0.34
+					if d < 1.6:
+						pit[iz * w + ix] = maxi(pit[iz * w + ix], int(255.0 * clampf((1.6 - d) / 0.6, 0.0, 1.0)))
+	var data := PackedByteArray()
+	data.resize(w * h * 2)
+	for i in w * h:
+		data[i * 2] = int(clampf(dens[i], 0.0, 1.0) * 255.0)
+		data[i * 2 + 1] = pit[i]
+	var img := Image.create_from_data(w, h, false, Image.FORMAT_RG8, data)
+	grass_texture = ImageTexture.create_from_image(img)
+	for m: ShaderMaterial in _kinds.get("ground", []):
+		m.set_shader_parameter("grass_mask", grass_texture)
+		m.set_shader_parameter("grass_a", preload("res://assets/pbr/ground_grass/a.png"))
+		m.set_shader_parameter("grass_m", preload("res://assets/pbr/ground_grass/m.png"))
+		m.set_shader_parameter("grass_on", 1.0)
 
 # ---------------------------------------------------------------- sources de lumière
 ## Le JS redistribue 8 PointLight (décroissance 2) sur les sources les plus proches du joueur toutes les 0,4 s (realworld.js assignLights) : lampadaires (60, portée 20), panneaux

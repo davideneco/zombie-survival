@@ -122,6 +122,10 @@ func _build_environment() -> void:
 	if not _global_added:   # (global_shader_parameter_get_list est réservé à l'éditeur)
 		_global_added = true
 		RenderingServer.global_shader_parameter_add("cloud_time", RenderingServer.GLOBAL_VAR_TYPE_FLOAT, 0.0)
+		for nm in ["env_top", "env_mid", "env_horizon", "env_ground", "env_moon_dir"]:
+			RenderingServer.global_shader_parameter_add(nm, RenderingServer.GLOBAL_VAR_TYPE_VEC3, Vector3.ZERO)
+		RenderingServer.global_shader_parameter_add("env_intensity", RenderingServer.GLOBAL_VAR_TYPE_FLOAT, 0.16)
+		RenderingServer.global_shader_parameter_add("env_moon", RenderingServer.GLOBAL_VAR_TYPE_FLOAT, 0.7)
 	sky_mat = ShaderMaterial.new()
 	sky_mat.shader = SKY_SHADER
 	var el := float(S["moonElevation"])
@@ -427,6 +431,24 @@ func set_sky_k(k: float, hour := -1.0) -> void:
 	_torch_day = lerpf(1.0, 0.12, _sm(clampf(k / 0.6, 0.0, 1.0)))
 	_apply_glow(env.glow_enabled)
 	_update_torch()
+	_set_env_reflect(k, moon_d)
+
+## v0.32.3 : ciel des reflets (eau, flaques, vitres : shaders/env_reflect.gdshaderinc) : couleurs de CONFIG.graphics.env par phase, intensité du JS (0,16 x phase)
+## relevée de jour (x2,2 en plein jour : un ciel clair se reflète nettement, sans éblouir), tache de lune la nuit seulement.
+const ENV_DAY_GAIN := 1.2
+func _set_env_reflect(k: float, moon_d: Vector3) -> void:
+	var E: Dictionary = Config.at("graphics.env")
+	var lin := func(key: String) -> Vector3:
+		var c := _pick_c(E[key], k).srgb_to_linear()
+		return Vector3(c.r, c.g, c.b)
+	RenderingServer.global_shader_parameter_set("env_top", lin.call("top"))
+	RenderingServer.global_shader_parameter_set("env_mid", lin.call("mid"))
+	RenderingServer.global_shader_parameter_set("env_horizon", lin.call("horizon"))
+	RenderingServer.global_shader_parameter_set("env_ground", lin.call("ground"))
+	RenderingServer.global_shader_parameter_set("env_moon_dir", moon_d.normalized())
+	var day := _sm(clampf((k - 0.3) / 0.5, 0.0, 1.0))
+	RenderingServer.global_shader_parameter_set("env_intensity", GraphicsRules.env_intensity(k, 1.0) * (1.0 + ENV_DAY_GAIN * day))
+	RenderingServer.global_shader_parameter_set("env_moon", float(E["moonStrength"]) * (1.0 - _sm(minf(1.0, k / 0.35))))
 
 ## Direction de lumière relevée à LIGHT_MIN_ELEV au moins (le ciel, lui, garde la vraie hauteur de l'astre).
 static func _lift(d: Vector3) -> Vector3:
