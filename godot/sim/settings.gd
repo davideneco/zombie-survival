@@ -13,7 +13,7 @@ const DEFAULTS := {
 	"upscaler": 0, "res_scale": 0, "sharp": 0.9, "aa": 0, "aniso": 0, "fps": false,   ## v0.19.1 « Mise à l'échelle » : 0 natif (bilinéaire), 1 FSR 1.0, 2 FSR 2.2 ; indice de RES_SCALES ; netteté 0..1
 	"daynight": 0, "day_minutes": 14, "view": 0,   ## v0.25.0 : cycle jour / nuit (DayNight : 0 Auto, 1 Toujours nuit, 2 Toujours jour), minutes réelles pour 24 h de jeu, vue à pied (0 première, 1 troisième personne)
 	"difficulty": "normal", "map": "strasbourg",   ## menu « Carte et difficulté » (v0.14.0) : voir Difficulty ; carte : "strasbourg" ou "arena"
-	"mode": "classic", "zone": 0,   ## v0.26.0 : menu « Mode de jeu » : GameMode ("classic" | "zone") et zone choisie (indice 0..26)
+	"mode": "classic", "zone": 0,   ## v0.26.0 : menu « Mode de jeu » : GameMode ("classic" | "zone" | "timed" | "arsenal", v0.33.0) et zone choisie (indice 0..26)
 }
 ## bornes des curseurs (index.html : optBrightness…)
 const RANGES := {

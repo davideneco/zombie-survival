@@ -38,6 +38,7 @@ signal liberated_screen(title: String, text: String)         ## J10 : « STRASBO
 signal vaulted                                               ## J11 : le joueur enjambe un obstacle (son)
 signal unstuck(from: Vector2, to: Vector2, distance: float, center: bool)   ## J11 : le joueur s'est débloqué
 signal perk_event(name: String, data: Dictionary)            ## v0.27.0 : nouveaux atouts : "cherry", "web", "wish", "crit", "vulture_drop", "vulture_pick", "tomb", "tomb_pick", "tomb_gone"
+signal mode_event(name: String, data: Dictionary)            ## v0.33.0 : Contre la montre / Arsenal aléatoire : "time_bonus" {seconds, head, round}, "time_up", "arsenal_weapon" {id, name, round}
 signal ride_event(name: String, data: Dictionary)            ## J5 : "mount", "dismount", "crash", "burn", "break", "respawn", "gong", "chime", "service", "knock", "cough", "beep", "dry"
 
 var round_number: int:
@@ -94,6 +95,9 @@ var mode := GameMode.CLASSIC   ## v0.26.0 : mode de jeu (GameMode) ; posé avant
 var zone_pick := 0             ## v0.26.0 : zone choisie pour le mode Zone unique (indice des zones de la carte)
 var gm: GameMode           ## mode de la partie en cours : null en Classique (et dans l'arène)
 var escaped := false       ## Zone unique : la porte de sortie a été achetée (fin de partie en victoire)
+var timed: TimedMode       ## v0.33.0 : mode Contre la montre (chrono) ; null sinon
+var arsenal: ArsenalMode   ## v0.33.0 : mode Arsenal aléatoire (arme imposée par manche) ; null sinon
+var time_up := false       ## Contre la montre : le chrono est arrivé à 0 (fin de partie « TEMPS ÉCOULÉ »)
 var pfx := PerkFx.new()    ## v0.27.0 : nouveaux atouts (sim/perk_fx.gd) : recharges, gouttes, tombe, Bastion
 var points_earned := 0     ## v0.26.0 : total des points gagnés (somme des points_gained), dépenses non déduites : score du mode Zone unique
 var settings: Settings     ## J7 : réglages du joueur et touches (user://settings.cfg, ou --settings=chemin)
@@ -185,13 +189,26 @@ func new_game(seed_value: int = -1, map: String = "", weapons: Array = [], prelo
 	arms = WeaponArms.new(weapons if not weapons.is_empty() else [Rules.J1_WEAPON])
 	powerups = Powerups.new()
 	pfx = PerkFx.new(seed_value if seed_value >= 0 else rng.seed)
+	timed = null
+	arsenal = null
+	time_up = false
+	if world != null and gm == null:   # v0.33.0 : Contre la montre, Arsenal aléatoire : toute la carte, sans finale
+		match GameMode.valid(mode):
+			GameMode.TIMED:
+				timed = TimedMode.new()
+			GameMode.ARSENAL:
+				arsenal = ArsenalMode.new(seed_value if seed_value >= 0 else int(rng.seed))
 	if gm != null:
 		machines = Machines.new(self, gm.filter_machines(world.objects["machines"]), gm.zone)
 		machines.box.stay_alone = true
 		for e: Dictionary in gm.collision_boxes():
 			collision.set_dynamic(e["key"], [e["box"]])
+	elif timed != null or arsenal != null:
+		machines = Machines.new(self, GameMode.without_finale(world.objects["machines"]))
 	else:
 		machines = Machines.new(self, world.objects["machines"]) if world != null else null
+	if arsenal != null:   # l'arme de la manche 1 remplace les armes de départ
+		arsenal.roll(arms, 1)
 	director = RoundDirector.new()
 	director.reset()
 	zombies.clear()
@@ -250,6 +267,9 @@ func unload() -> void:
 	finale = null
 	gm = null
 	escaped = false
+	timed = null
+	arsenal = null
+	time_up = false
 	pfx.reset()
 	playing = false
 	over = false
@@ -342,6 +362,8 @@ func step(dt: float, input: Dictionary) -> void:
 			_spawn_zombie()
 		RoundDirector.ROUND_START:
 			arms.on_round_start()
+			if arsenal != null:   # v0.33.0 : nouvelle arme imposée
+				_arsenal_roll()
 			if rides != null:
 				rides.on_round_start()
 			round_started.emit(director.round_number)
@@ -349,6 +371,10 @@ func step(dt: float, input: Dictionary) -> void:
 				finale.maybe_spawn_tanner()
 		RoundDirector.ROUND_END:
 			round_ended.emit()
+			if timed != null:   # v0.33.0 : manche finie : secondes rendues au chrono
+				var sec := timed.on_round_end()
+				if sec > 0.0:
+					mode_event.emit("time_bonus", {"seconds": sec, "head": false, "round": true})
 	# champ de flux, puis zombies
 	env.time = time
 	_update_levels()
@@ -376,6 +402,21 @@ func step(dt: float, input: Dictionary) -> void:
 			zombies.remove_at(i)
 	_relocate(dt)
 	_player_events()
+	if arsenal != null and arsenal.pending:   # arme rendue par le Pack-a-Punch : le changement d'arme en attente s'applique
+		_arsenal_roll()
+	if timed != null and not over and timed.step(dt):   # v0.33.0 : chrono à 0 : fin de partie
+		time_up = true
+		mode_event.emit("time_up", {})
+		_end_game()
+
+## v0.33.0 : Arsenal aléatoire : tirage et équipement de l'arme de la manche (en attente si l'arme est dans le Pack-a-Punch).
+func _arsenal_roll() -> void:
+	var id := arsenal.roll(arms, maxi(1, round_number)) if not arsenal.pending else arsenal.poll(arms, maxi(1, round_number))
+	if id == "":
+		return
+	var nm := arsenal.weapon_name()
+	announce("ARSENAL : %s" % nm, "Arme imposée pour la manche %d" % maxi(1, round_number))
+	mode_event.emit("arsenal_weapon", {"id": id, "name": nm, "round": maxi(1, round_number)})
 
 ## Évènements du joueur posés par PlayerSim : à terre (les atouts sont perdus), relevé, onde du PHD Flopper, mort à terre.
 func _player_events() -> void:
@@ -431,7 +472,11 @@ func is_boss(z: ZombieSim) -> bool:
 	return z.is_boss
 
 ## Un zombie vient de mourir sous un coup ou une explosion (bonus, essence).
-func on_zombie_killed(z: ZombieSim) -> void:
+func on_zombie_killed(z: ZombieSim, head := false) -> void:
+	if timed != null and not over:   # v0.33.0 : Contre la montre : secondes rendues par mort
+		var sec := timed.on_kill(head)
+		if sec > 0.0:
+			mode_event.emit("time_bonus", {"seconds": sec, "head": head, "round": false})
 	if finale != null:
 		finale.on_kill(z)
 	powerups.on_kill(self, z)
@@ -449,9 +494,15 @@ func escape_zone() -> void:
 	escaped = true
 	_end_game()
 
-## Mode de la partie en cours : "classic" ou "zone".
+## Mode de la partie en cours : "classic", "zone", "timed" ou "arsenal".
 func mode_id() -> String:
-	return gm.id if gm != null else GameMode.CLASSIC
+	if gm != null:
+		return gm.id
+	if timed != null:
+		return GameMode.TIMED
+	if arsenal != null:
+		return GameMode.ARSENAL
+	return GameMode.CLASSIC
 
 # ---------------------------------------------------------------- tir : voir sim/weapon_arms.gd
 
@@ -493,7 +544,7 @@ func hit_zombie(z: ZombieSim, head: bool, dmg: float, head_mult: float, mel: boo
 		zombie_killed.emit(z, head)
 		if z.explodes:
 			_bloat_burst(z)
-		on_zombie_killed(z)
+		on_zombie_killed(z, head)
 	else:
 		var award_hit := (int(K["hit"]) if mel else Rules.POINTS_HIT) * mult
 		points += award_hit

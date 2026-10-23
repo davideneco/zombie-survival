@@ -102,6 +102,10 @@ var _down_sub: Label
 var _down_extra: Label
 var _clock: Label          ## v0.25.0 : heure du jeu et moment de la journée (sous le radar), en cycle Auto
 var _exit_l: Label         ## v0.26.0 : Zone unique : « SORTIE 4 250 / 20 000 » au-dessus des points
+var _timer_l: Label        ## v0.33.0 : Contre la montre : chrono en haut, au milieu
+var _timer_gain: Label     ## v0.33.0 : « +2 s » sous le chrono
+var _timer_gain_t := 0.0
+var _arsenal_l: Label      ## v0.33.0 : Arsenal aléatoire : arme imposée de la manche (au-dessus des points)
 var _toast: PanelContainer
 var _toast_l: Label
 var _announce_t := 0.0
@@ -135,6 +139,7 @@ func _ready() -> void:
 	Game.hit_confirmed.connect(show_hit)
 	Game.powerup_collected.connect(_on_powerup)
 	Game.player_hurt.connect(func(_a: float) -> void: hurt_flash())
+	Game.mode_event.connect(_on_mode_event)
 	Game.settings.changed.connect(func(k: String) -> void:
 		if k == "cinema":
 			_cinema.visible = bool(Game.settings.get_value("cinema")))
@@ -189,6 +194,12 @@ func _build_top() -> void:
 	UiTheme.place(_map_hint, 0.5, 0, -250, 66, 500, 16)
 	_clock = _lbl(root, "", 15, Color("d8dce8"), HORIZONTAL_ALIGNMENT_CENTER)
 	UiTheme.place(_clock, 0, 0, 24, 148, 120, 22)
+	_timer_l = _lbl(root, "", 46, Color("ffd9a0"), HORIZONTAL_ALIGNMENT_CENTER)
+	UiTheme.place(_timer_l, 0.5, 0, -150, 84, 300, 56)
+	_timer_l.visible = false
+	_timer_gain = _lbl(root, "", 20, Color("ff9a3c"), HORIZONTAL_ALIGNMENT_CENTER)
+	UiTheme.place(_timer_gain, 0.5, 0, -150, 138, 300, 26)
+	_timer_gain.visible = false
 
 func _build_left() -> void:
 	var small := _lbl(root, "MANCHE", 16, Color("cccccc"))
@@ -199,6 +210,8 @@ func _build_left() -> void:
 	UiTheme.place(_points, 0, 1, 24, -166, 300, 44)
 	_exit_l = _lbl(root, "", 14, Color("8cffaa"))
 	UiTheme.place(_exit_l, 0, 1, 26, -238, 420, 22)
+	_arsenal_l = _lbl(root, "", 14, Color("e9a6ff"))
+	UiTheme.place(_arsenal_l, 0, 1, 26, -238, 420, 22)
 	_perks_row = HBoxContainer.new()
 	_perks_row.add_theme_constant_override("separation", 6)
 	_perks_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -426,6 +439,20 @@ func toast(text: String, seconds := 4.0) -> void:
 func _on_points(amount: int, cls: String) -> void:
 	popup("+%d" % amount, cls)
 
+## v0.33.0 : secondes rendues au chrono (Contre la montre) : « +2 s » sous le chrono (cumulé tant qu'il est affiché).
+func _on_mode_event(n: String, d: Dictionary) -> void:
+	if n != "time_bonus":
+		return
+	var sec := float(d.get("seconds", 0.0))
+	var prev := 0.0
+	if _timer_gain_t > 0.0 and _timer_gain.text.begins_with("+"):
+		prev = float(_timer_gain.text.substr(1).get_slice(" ", 0).replace(",", "."))
+	var tot := prev + sec
+	_timer_gain.text = ("+%d s" % roundi(tot)) if is_equal_approx(tot, roundf(tot)) else ("+%s s" % ("%.1f" % tot).replace(".", ","))
+	if bool(d.get("round", false)):
+		_timer_gain.text += "  MANCHE FINIE"
+	_timer_gain_t = 1.6
+
 func _on_powerup(type: String) -> void:
 	match type:
 		"fuel":
@@ -525,6 +552,20 @@ func _update_basic(dt: float, p: PlayerSim) -> void:
 		var price := int(Game.gm.exit["price"])
 		_exit_l.text = "SORTIE : %s / %s pts%s" % [HudCalc.points_text(mini(Game.points, price)), HudCalc.points_text(price), "  — achetez-la !" if Game.points >= price else ""]
 	_round_num.text = str(maxi(1, Game.round_number))
+	var tm: TimedMode = Game.timed   # v0.33.0 : chrono
+	_timer_l.visible = tm != null
+	if tm != null:
+		_timer_l.text = TimedMode.clock_text(tm.left)
+		var warn := tm.warning() or tm.expired
+		var blink := 0.55 + 0.45 * absf(sin(Time.get_ticks_msec() / 1000.0 * TAU * 1.2)) if warn else 1.0
+		_timer_l.add_theme_color_override("font_color", Color(1.0, 0.25, 0.2, blink) if warn else Color("ffd9a0"))
+	_timer_gain_t = maxf(0.0, _timer_gain_t - dt)
+	_timer_gain.visible = tm != null and _timer_gain_t > 0.0
+	if _timer_gain.visible:
+		_timer_gain.modulate.a = clampf(_timer_gain_t / 0.5, 0.0, 1.0)
+	_arsenal_l.visible = Game.arsenal != null and Game.arsenal.current != ""
+	if _arsenal_l.visible:
+		_arsenal_l.text = "ARSENAL : %s (manche %d)%s" % [Game.arsenal.weapon_name(), maxi(1, Game.arsenal.round_drawn), "  — changement à la sortie du Pack-a-Punch" if Game.arsenal.pending else ""]
 	var wname := String(w.cfg.get("name", ""))
 	_weapon.text = wname
 	_caliber.text = String(w.cfg.get("caliber", ""))

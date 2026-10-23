@@ -7,15 +7,20 @@ extends RefCounted
 ## v0.26.0 : le mode Zone unique est compté À PART (`by_zone`, une entrée par zone, toutes difficultés confondues) : games, escapes (évasions),
 ## best_round, best_kills, best_points (points GAGNÉS : la porte de sortie vide le compteur), best_time (plus longue survie), fastest (évasion
 ## la plus rapide, s ; 0 : aucune), best_diff (difficulté de la meilleure manche). Les parties Zone unique ne touchent pas `by_diff`.
+## v0.33.0 : Contre la montre et Arsenal aléatoire sont aussi comptés À PART (`by_mode`, une entrée par mode, toutes difficultés confondues) :
+## games, best_round, best_kills, best_points (points GAGNÉS), best_time (plus longue partie), total_time, best_diff. Fichier version 3 (lit 1 et 2).
 
 const DEFAULT_PATH := "user://stats.json"
-const VERSION := 2
+const VERSION := 3
 const FIELDS := ["games", "wins", "best_round", "best_kills", "best_points", "best_time", "total_time", "total_kills"]
 const ZONE_FIELDS := ["games", "escapes", "best_round", "best_kills", "best_points", "best_time", "fastest"]
+const MODE_FIELDS := ["games", "best_round", "best_kills", "best_points", "best_time", "total_time"]
+const MODES := ["timed", "arsenal"]   ## GameMode.TIMED, GameMode.ARSENAL
 
 var path := DEFAULT_PATH
 var by_diff: Dictionary = {}
 var by_zone: Dictionary = {}     ## nom de zone -> entrée (le nom, pas l'indice : stable si la carte change d'ordre)
+var by_mode: Dictionary = {}     ## v0.33.0 : "timed" | "arsenal" -> entrée
 
 func _init(path_ := DEFAULT_PATH) -> void:
 	path = path_
@@ -36,6 +41,7 @@ func entry(diff: String) -> Dictionary:
 func reset() -> void:
 	by_diff = {}
 	by_zone = {}
+	by_mode = {}
 	save()
 
 static func empty_zone_entry() -> Dictionary:
@@ -69,6 +75,42 @@ func record_zone(zone_name: String, diff: String, round_number: int, kills: int,
 				e["best_diff"] = Difficulty.valid(diff)
 	save()
 	return broken
+
+static func empty_mode_entry() -> Dictionary:
+	var e := {}
+	for f in MODE_FIELDS:
+		e[f] = 0.0 if f.ends_with("_time") else 0
+	e["best_diff"] = ""
+	return e
+
+func mode_entry(mode: String) -> Dictionary:
+	if not by_mode.has(mode):
+		by_mode[mode] = empty_mode_entry()
+	return by_mode[mode]
+
+## v0.33.0 : enregistre une partie Contre la montre ou Arsenal aléatoire (points : points GAGNÉS). Renvoie les records battus (« best_* »).
+func record_mode(mode: String, diff: String, round_number: int, kills: int, points: int, seconds: float) -> Array[String]:
+	var broken: Array[String] = []
+	if mode not in MODES:
+		return broken
+	var e := mode_entry(mode)
+	e["games"] = int(e["games"]) + 1
+	e["total_time"] = float(e["total_time"]) + seconds
+	for pair in [["best_round", round_number], ["best_kills", kills], ["best_points", points], ["best_time", seconds]]:
+		var k: String = pair[0]
+		if float(pair[1]) > float(e[k]):
+			e[k] = pair[1]
+			broken.append(k)
+			if k == "best_round":
+				e["best_diff"] = Difficulty.valid(diff)
+	save()
+	return broken
+
+func mode_games() -> int:
+	var n := 0
+	for m in by_mode:
+		n += int(by_mode[m]["games"])
+	return n
 
 func zone_games() -> int:
 	var n := 0
@@ -106,18 +148,19 @@ func overall() -> Dictionary:
 	return o
 
 func total_games() -> int:
-	return int(overall()["games"]) + zone_games()
+	return int(overall()["games"]) + zone_games() + mode_games()
 
 func save() -> bool:
 	var f := FileAccess.open(path, FileAccess.WRITE)
 	if f == null:
 		return false
-	f.store_string(JSON.stringify({"version": VERSION, "difficulties": by_diff, "zones": by_zone}, "\t"))
+	f.store_string(JSON.stringify({"version": VERSION, "difficulties": by_diff, "zones": by_zone, "modes": by_mode}, "\t"))
 	return true
 
 func load_file() -> void:
 	by_diff = {}
 	by_zone = {}
+	by_mode = {}
 	if not FileAccess.file_exists(path):
 		return
 	var data: Variant = JSON.parse_string(FileAccess.get_file_as_string(path))
@@ -144,6 +187,18 @@ func load_file() -> void:
 					e[f] = float(v) if f in ["best_time", "fastest"] else int(v)
 			e["best_diff"] = String(zs[zn].get("best_diff", ""))
 			by_zone[zn] = e
+	var ms: Variant = data.get("modes")   # absent dans un fichier v1 ou v2
+	if typeof(ms) == TYPE_DICTIONARY:
+		for mn: String in ms:
+			if mn not in MODES or typeof(ms[mn]) != TYPE_DICTIONARY:
+				continue
+			var e := empty_mode_entry()
+			for f in MODE_FIELDS:
+				var v: Variant = ms[mn].get(f, 0)
+				if typeof(v) in [TYPE_INT, TYPE_FLOAT]:
+					e[f] = float(v) if f.ends_with("_time") else int(v)
+			e["best_diff"] = String(ms[mn].get("best_diff", ""))
+			by_mode[mn] = e
 
 ## Texte « 12 min 05 s » / « 48 s ».
 static func format_time(s: float) -> String:

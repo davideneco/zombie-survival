@@ -8,15 +8,19 @@ extends RefCounted
 ##               Réanimation rapide si la zone n'a aucun atout, MP5 au mur si elle n'a aucune arme murale : l'Intérieur de la Cathédrale) et une
 ##               PORTE DE SORTIE au milieu de la zone coûte
 ##               `exitPrice` points : l'acheter termine la partie en victoire (« ÉVASION RÉUSSIE »).
-## Les autres entrées de LIST sont des modes prévus (grisés dans le menu, `ready` faux).
+##   v0.33.0 : CONTRE LA MONTRE (sim/timed_mode.gd) et ARSENAL ALÉATOIRE (sim/arsenal_mode.gd) : toute la Grande Île comme le Classique,
+##   sans finale (without_finale), avec leurs règles propres (Game.timed, Game.arsenal ; `gm` reste nul : il ne sert qu'à la Zone unique).
+## Une entrée de LIST avec `ready` faux serait grisée dans le menu (« BIENTÔT »).
 
 const CLASSIC := "classic"
 const ZONE := "zone"
+const TIMED := "timed"
+const ARSENAL := "arsenal"
 const LIST := [
 	{"id": "classic", "name": "CLASSIQUE", "ready": true, "desc": "Toute la Grande Île : portes payantes, véhicules, tram, cathédrale et fin de partie."},
 	{"id": "zone", "name": "ZONE UNIQUE", "ready": true, "desc": "Enfermé dans une seule zone, portes murées. Achetez la porte de sortie pour vous évader."},
-	{"id": "timed", "name": "CONTRE LA MONTRE", "ready": false, "desc": "Bientôt : survivre le plus de manches en un temps limité."},
-	{"id": "arsenal", "name": "ARSENAL ALÉATOIRE", "ready": false, "desc": "Bientôt : une arme imposée qui change à chaque manche."},
+	{"id": "timed", "name": "CONTRE LA MONTRE", "ready": true, "desc": "4 min au chrono, chaque zombie tué rend du temps : le plus de points avant 0:00."},
+	{"id": "arsenal", "name": "ARSENAL ALÉATOIRE", "ready": true, "desc": "Une arme tirée au hasard à chaque manche. Aucune arme à acheter : murs et boîte fermés."},
 ]
 ## Équilibrage du mode Zone unique (Config.at("zoneMode.*"), section propre au port ajoutée par autoload/config.gd).
 ## exitPrice : voir docs/GODOT_PORT.md (v0.26.0) : ~ce que rapportent les manches 1 à 11 moins un équipement modeste (deux atouts, une arme).
@@ -54,6 +58,18 @@ static func name_of(mode: String) -> String:
 		if m["id"] == mode:
 			return String(m["name"])
 	return "CLASSIQUE"
+
+## v0.33.0 : les modes qui se jouent sur toute la carte avec des règles en plus (pas de choix de zone, pas de finale).
+static func full_map_variant(mode: String) -> bool:
+	return mode == TIMED or mode == ARSENAL
+
+## v0.33.0 : machines de la carte sans l'horloge astronomique (pas de finale en Contre la montre ni en Arsenal aléatoire).
+static func without_finale(objs: Array) -> Array:
+	var out: Array = []
+	for m: Dictionary in objs:
+		if String(m["type"]) != "clock":
+			out.append(m)
+	return out
 
 static func exit_price() -> int:
 	return int(Config.at("zoneMode.exitPrice", CONFIG["exitPrice"]))

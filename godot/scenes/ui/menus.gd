@@ -41,6 +41,7 @@ var _zone_btns: Array = []
 var _zone_scroll: ScrollContainer
 var _zone_thumb: TextureRect        ## miniature de la carte (shader : zone choisie en or)
 var _zone_info: RichTextLabel
+var _rules_info: RichTextLabel      ## v0.33.0 : règles et record de Contre la montre / Arsenal aléatoire (panneau Mode)
 var _zone_thread: Thread
 var _zone_tex: ImageTexture
 var _zone_stats: RichTextLabel      ## meilleurs scores Zone unique (panneau MEILLEURS SCORES)
@@ -305,7 +306,7 @@ func _build_mapdiff(col: Control) -> void:
 	for d: Dictionary in Difficulty.LIST:
 		var id: String = d["id"]
 		_diff_cards[id] = _card(drow, "%s\n%s" % [d["name"], d["desc"]], 224, 110, func() -> void: settings.set_value("difficulty", id))
-	_hint(p, "Les statistiques sont comptées par difficulté (Strasbourg seulement). Le mode Zone unique se joue toujours sur Strasbourg.")
+	_hint(p, "Les statistiques sont comptées par difficulté (Strasbourg seulement). Les modes Zone unique, Contre la montre et Arsenal aléatoire se jouent toujours sur Strasbourg.")
 	_btn(p, "RETOUR", func() -> void: _back(), "GoButton", 240)
 
 func _refresh_mapdiff() -> void:
@@ -420,6 +421,19 @@ func _build_mode(col: Control) -> void:
 	_zone_info.add_theme_font_override("bold_font", UiTheme.heading())
 	_zone_info.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	right.add_child(_zone_info)
+	_rules_info = RichTextLabel.new()   # v0.33.0 : règles des modes Contre la montre et Arsenal aléatoire
+	_rules_info.bbcode_enabled = true
+	_rules_info.fit_content = true
+	_rules_info.scroll_active = false
+	_rules_info.custom_minimum_size = Vector2(900, 0)
+	_rules_info.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	_rules_info.add_theme_font_size_override("normal_font_size", 16)
+	_rules_info.add_theme_font_size_override("bold_font_size", 18)
+	_rules_info.add_theme_color_override("default_color", Color("cccccc"))
+	_rules_info.add_theme_font_override("normal_font", UiTheme.body())
+	_rules_info.add_theme_font_override("bold_font", UiTheme.heading())
+	_rules_info.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	p.add_child(_rules_info)
 	_btn(p, "VALIDER", func() -> void: _back(), "GoButton", 240)
 
 static func _thousands(n: int) -> String:
@@ -490,8 +504,11 @@ func _refresh_mode() -> void:
 		return
 	var mode := GameMode.valid(String(settings.get_value("mode")))
 	for id: String in _mode_cards:
-		_style_card(_mode_cards[id], mode == id, UiTheme.GOLD if id == GameMode.CLASSIC else Color("3ddc6a"))
+		_style_card(_mode_cards[id], mode == id, MODE_COLORS.get(id, UiTheme.GOLD))
 	_zone_box.visible = mode == GameMode.ZONE
+	_rules_info.visible = GameMode.full_map_variant(mode)
+	if _rules_info.visible:
+		_rules_info.text = mode_rules_text(mode, Game.stats.by_mode.get(mode, {}))
 	var zi := int(settings.get_value("zone"))
 	for i in _zone_btns.size():
 		var on := i == zi
@@ -523,6 +540,49 @@ func _refresh_mode() -> void:
 	_zone_info.text = "[b]%s[/b]  ·  %s m²  ·  %d porte%s murée%s\n%s%s\n[color=#3ddc6a]Porte de sortie au milieu de la zone : %s points[/color]\n[color=#ffd24a]%s[/color]" % [
 		String(z["name"]).to_upper(), _thousands(roundi(float(z["area"]))), int(z["doors"]), "s" if int(z["doors"]) > 1 else "", "s" if int(z["doors"]) > 1 else "",
 		ZoneCatalog.machines_text(zi), ("\nAjouté pour ce mode : " + add) if add != "" else "", _thousands(GameMode.exit_price()), rec]
+
+const MODE_COLORS := {"classic": Color("ffd24a"), "zone": Color("3ddc6a"), "timed": Color("ff9a3c"), "arsenal": Color("e05cff")}
+
+## v0.33.0 : règles d'un mode (Contre la montre, Arsenal aléatoire) et son record, pour le panneau Mode.
+static func mode_rules_text(mode: String, e: Dictionary) -> String:
+	var rules := ""
+	if mode == GameMode.TIMED:
+		rules = "[b]CONTRE LA MONTRE[/b]  ·  toute la Grande Île, sans fin de partie à la cathédrale\n" + \
+			("Le chrono part de [color=#ffffff][b]%s[/b][/color] et descend pendant le jeu. Chaque zombie tué rend [color=#ff9a3c]%s s[/color] (%s s à la tête), chaque manche finie [color=#ff9a3c]%s s[/color] ; plafond %s.\n" % [
+				TimedMode.clock_text(TimedMode.cfg("start")), _num(TimedMode.cfg("killBonus")), _num(TimedMode.cfg("killBonus") + TimedMode.cfg("headBonus")), _num(TimedMode.cfg("roundBonus")), TimedMode.clock_text(TimedMode.cfg("max"))]) + \
+			"À 0:00 la partie s'arrête (« TEMPS ÉCOULÉ ») ; la mort aussi. Score : les points gagnés."
+	elif mode == GameMode.ARSENAL:
+		rules = "[b]ARSENAL ALÉATOIRE[/b]  ·  toute la Grande Île, sans fin de partie à la cathédrale\n" + \
+			("Une seule arme, tirée au hasard au départ et à chaque manche (jamais deux fois de suite la même), chargeur et réserve pleins. Les armes fortes arrivent avec les manches (Barrett vers la manche 8, pistolet à rayons dès la manche %d).\n" % ArsenalMode.cfg("raygunRound")) + \
+			"Armes murales et boîte mystère fermées ; bornes de munitions, atouts, grenades et Pack-a-Punch restent (l'amélioration passe à l'arme suivante). Score : les points gagnés."
+	var rec := "[color=#888888]Aucune partie dans ce mode.[/color]"
+	if not e.is_empty() and int(e.get("games", 0)) > 0:
+		rec = "[color=#ffd24a]Record : %s points · manche %d · %d tués · partie la plus longue %s · %d partie%s[/color]" % [_thousands(int(e["best_points"])), int(e["best_round"]),
+			int(e["best_kills"]), GameStats.format_time(float(e["best_time"])), int(e["games"]), "s" if int(e["games"]) > 1 else ""]
+	return "[center]%s\n%s[/center]" % [rules, rec]
+
+static func _num(v: float) -> String:
+	return str(int(v)) if is_equal_approx(v, roundf(v)) else ("%.1f" % v).replace(".", ",")
+
+## v0.33.0 : écran de fin de Contre la montre (titre « TEMPS ÉCOULÉ » si le chrono est à 0) et d'Arsenal aléatoire.
+func show_mode_over(mode: String, time_up: bool, seconds: float, round_number: int, kills: int, points: int, entry: Dictionary, history: Array) -> void:
+	stack.close(UiStack.MAP)
+	_over_title.text = "TEMPS ÉCOULÉ" if time_up else "ÉQUIPE ÉLIMINÉE"
+	_over_title.add_theme_color_override("font_color", MODE_COLORS.get(mode, UiTheme.RED) if time_up else UiTheme.RED)
+	var extra := ""
+	if mode == GameMode.ARSENAL and not history.is_empty():
+		var names: Array = []
+		for id: String in history.slice(maxi(0, history.size() - 6)):
+			names.append(String(Config.weapon(id).get("name", id)))
+		extra = "\n[color=#bbbbbb]Dernières armes : %s[/color]" % " · ".join(names)
+	var rec := ""
+	if not entry.is_empty() and int(entry.get("games", 0)) > 0:
+		rec = "\n[color=#999999]Record %s : %s points · manche %d[/color]" % [GameMode.name_of(mode), _thousands(int(entry["best_points"])), int(entry["best_round"])]
+	_over_text.text = "%s · manche [color=#ffffff][b]%d[/b][/color] · %s de jeu\n%d zombies tués  ·  [color=#ffffff][b]%s[/b][/color] points gagnés%s%s" % [
+		GameMode.name_of(mode), round_number, GameStats.format_time(seconds), kills, _thousands(points), extra, rec]
+	stack.clear()
+	stack.push(UiStack.OVER)
+	_sync()
 
 ## v0.26.0 : écran de fin du mode Zone unique (même panneau que « ÉQUIPE ÉLIMINÉE », titre or).
 func show_escape(zone_name: String, seconds: float, round_number: int, kills: int, points: int, entry: Dictionary) -> void:
@@ -695,7 +755,15 @@ func _render_stats() -> void:
 		zl.append("[color=#ffd24a]%s[/color] : %d partie%s, %d évasion%s%s · manche %d · %s pts · %d tués" % [zn, int(e["games"]), "s" if int(e["games"]) > 1 else "",
 			int(e["escapes"]), "s" if int(e["escapes"]) > 1 else "", (" (la plus rapide %s)" % GameStats.format_time(float(e["fastest"]))) if float(e["fastest"]) > 0.0 else "",
 			int(e["best_round"]), _thousands(int(e["best_points"])), int(e["best_kills"])])
-	_zone_stats.text = "[center][b]ZONE UNIQUE[/b] (meilleurs scores par zone)\n%s[/center]" % ("\n".join(zl) if not zl.is_empty() else "[color=#888888]Aucune partie en Zone unique.[/color]")
+	var ml: Array[String] = []   # v0.33.0 : Contre la montre, Arsenal aléatoire
+	for mid: String in GameStats.MODES:
+		var me: Dictionary = st.by_mode.get(mid, {})
+		if me.is_empty() or int(me["games"]) <= 0:
+			ml.append("[color=#ffd24a]%s[/color] : [color=#888888]aucune partie[/color]" % GameMode.name_of(mid))
+			continue
+		ml.append("[color=#ffd24a]%s[/color] : %d partie%s · %s pts · manche %d · %d tués · %s" % [GameMode.name_of(mid), int(me["games"]), "s" if int(me["games"]) > 1 else "",
+			_thousands(int(me["best_points"])), int(me["best_round"]), int(me["best_kills"]), GameStats.format_time(float(me["best_time"]))])
+	_zone_stats.text = "[center][b]ZONE UNIQUE[/b] (meilleurs scores par zone)\n%s\n[b]AUTRES MODES[/b] (meilleurs scores)\n%s[/center]" % [("\n".join(zl) if not zl.is_empty() else "[color=#888888]Aucune partie en Zone unique.[/color]"), "\n".join(ml)]
 	_stats_note.text = "Aucune partie enregistrée pour le moment." if st.total_games() == 0 else "Enregistrées à la fin de chaque partie (mort, victoire, ou retour au menu). Fichier : %s" % ProjectSettings.globalize_path(st.path)
 	_stats_reset.disabled = st.total_games() == 0
 
@@ -1096,7 +1164,7 @@ func _sync() -> void:
 func _refresh_summary() -> void:
 	var m := String(settings.get_value("map"))
 	var mode := GameMode.valid(String(settings.get_value("mode")))
-	var where: String = MAP_NAMES.get(m, m) if mode == GameMode.CLASSIC else "ZONE UNIQUE : %s" % ZoneCatalog.name_of(int(settings.get_value("zone"))).to_upper()
+	var where: String = MAP_NAMES.get(m, m) if mode == GameMode.CLASSIC else ("ZONE UNIQUE : %s" % ZoneCatalog.name_of(int(settings.get_value("zone"))).to_upper() if mode == GameMode.ZONE else GameMode.name_of(mode))
 	_summary.text = "%s  ·  %s  ·  %s" % [String(CharacterDefs.of_slot(int(settings.get_value("char")))["name"]), where, Difficulty.name_of(String(settings.get_value("difficulty")))]
 
 ## Donne le focus clavier / manette au premier contrôle utile du panneau affiché (sauf Touches : la capture d'une touche ne doit pas déclencher un bouton).

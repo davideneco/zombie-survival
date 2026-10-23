@@ -5,7 +5,7 @@ extends Node3D
 ## Arguments (après --) : --bot (pilote automatique), --demo (un zombie lent devant le joueur), --seed=N, --shot=chemin.png --at=S (capture à S secondes de jeu, puis quitte),
 ## --quit-at=S (quitte à S secondes de jeu : pour --write-movie), --horde=N (N zombies variés autour du joueur, sans manches), --sync-flow (champ de flux par tranches, sans fil de travail).
 ## J7 : sans aucun argument, le jeu s'ouvre sur l'écran titre ; avec un argument, la partie démarre tout de suite (outils, captures). --menu force le titre,
-## --ui=title|menu|options|keys|capture|conflict|pause|map|over|victory ouvre un écran (captures), --hud-demo montre les éléments de la finale (barre de boss, bandeau, Fanal),
+## --ui=title|menu|options|keys|capture|conflict|pause|map|over|victory|mode|escape|timeup ouvre un écran (captures), --hud-demo montre les éléments de la finale (barre de boss, bandeau, Fanal),
 ## --settings=chemin utilise un autre fichier de réglages (Game.settings).
 ## v0.14.0 : le menu principal ne charge RIEN de la partie (ni monde, ni zombies, ni vues de jeu : Game.world est nul). NOUVELLE PARTIE (ou tout argument de jeu)
 ## lance `_start_session` : chargement par étapes avec barre de progression (données de la carte sur un fil de travail, construction de la ville répartie sur
@@ -432,7 +432,7 @@ func _connect_perf_events() -> void:
 func _map_choice() -> String:
 	if _map != "":
 		return _map
-	if _mode_choice() == GameMode.ZONE:   # v0.26.0 : la Zone unique se joue toujours sur la carte de Strasbourg
+	if _mode_choice() != GameMode.CLASSIC:   # v0.26.0 / v0.33.0 : Zone unique, Contre la montre, Arsenal : toujours sur la carte de Strasbourg
 		return "strasbourg"
 	return String(Game.settings.get_value("map"))
 
@@ -583,6 +583,10 @@ func _record_stats() -> void:
 		var zb := Game.stats.record_zone(Game.gm.zone_name, Game.difficulty, Game.round_number, Game.kills, Game.points_earned, Game.time, Game.escaped)
 		print("statistiques Zone unique (%s) : manche %d, %d tués, %d points gagnés, %.0f s, évasion %s ; records battus : %s" % [Game.gm.zone_name, Game.round_number, Game.kills, Game.points_earned, Game.time, Game.escaped, zb])
 		return
+	if Game.timed != null or Game.arsenal != null:   # v0.33.0 : Contre la montre, Arsenal aléatoire : à part
+		var mb := Game.stats.record_mode(Game.mode_id(), Game.difficulty, Game.round_number, Game.kills, Game.points_earned, Game.time)
+		print("statistiques %s : manche %d, %d tués, %d points gagnés, %.0f s ; records battus : %s" % [GameMode.name_of(Game.mode_id()), Game.round_number, Game.kills, Game.points_earned, Game.time, mb])
+		return
 	var broken := Game.stats.record(Game.difficulty, Game.round_number, Game.kills, Game.points, Game.time, Game.finale_done)
 	print("statistiques : manche %d, %d tués, %d points, %.0f s, victoire %s ; records battus : %s" % [Game.round_number, Game.kills, Game.points, Game.time, Game.finale_done, broken])
 
@@ -595,6 +599,10 @@ func _soak_end() -> void:
 	for l in _soak.errand_log:
 		print("  bot : ", l)
 	print("SOAK atouts : %s ; effets des nouveaux atouts : %s ; points gagnés %d" % [Game.arms.perks.keys(), Game.pfx.stats, Game.points_earned])
+	if Game.timed != null:   # v0.33.0
+		print("SOAK contre la montre : %.0f s restantes, %.0f s rendues (%.0f perdues au plafond), temps écoulé : %s" % [Game.timed.left, Game.timed.gained, Game.timed.lost, Game.time_up])
+	if Game.arsenal != null:
+		print("SOAK arsenal : armes %s" % [Game.arsenal.history])
 	get_tree().quit()
 
 ## État de la partie (Game.new_game avec les données déjà chargées) et réglages de démonstration des arguments.
@@ -1125,7 +1133,9 @@ func _menu_tick(dt: float) -> void:
 		_click.remove_at(0)
 	if _shot_path != "" and _real_t >= 1.5 + _shot_at and not _shot_done and _click.is_empty() and _flow.state != SessionFlow.LOADING:
 		_shot_done = true
-		await RenderingServer.frame_post_draw
+		# v0.33.0 : frame_post_draw n'arrive plus après la première image du menu sur le poste de dev (Wayland, Intel) : deux images de traitement suffisent
+		await get_tree().process_frame
+		await get_tree().process_frame
 		get_viewport().get_texture().get_image().save_png(_shot_path)
 		print("capture : %s (menu)" % _shot_path)
 		get_tree().quit()
@@ -1341,6 +1351,10 @@ func _on_game_over() -> void:
 	_flow.end_game()
 	if Game.escaped:   # v0.26.0 : Zone unique, porte de sortie achetée
 		_menus.show_escape(Game.gm.zone_name if Game.gm != null else "", Game.time, Game.round_number, Game.kills, Game.points_earned, Game.stats.zone_entry(Game.gm.zone_name) if Game.gm != null else {})
+		return
+	if Game.timed != null or Game.arsenal != null:   # v0.33.0 : écran de fin des modes (points gagnés, record du mode)
+		_menus.show_mode_over(Game.mode_id(), Game.time_up, Game.time, Game.round_number, Game.kills, Game.points_earned, Game.stats.mode_entry(Game.mode_id()),
+			Game.arsenal.history if Game.arsenal != null else [])
 		return
 	_menus.show_over("Vous avez survécu jusqu'à la [color=#ffffff][b]manche %d[/b][/color]\n%d zombies tués  ·  %d points" % [Game.round_number, Game.kills, Game.points])
 
@@ -1561,6 +1575,9 @@ func _open_ui(name: String) -> void:
 		"escape":   # v0.26.0 : écran « ÉVASION RÉUSSIE » (Zone unique)
 			Game.points = 1000000
 			Game.escape_zone()
+		"timeup":   # v0.33.0 : écran « TEMPS ÉCOULÉ » (Contre la montre) : le chrono passe à 0 au pas suivant
+			if Game.timed != null:
+				Game.timed.left = 0.001
 		"mode":
 			_menus.open_title()
 			_menus.open_mode()

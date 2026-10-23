@@ -45,6 +45,8 @@ func prompt() -> String:
 		"pap":
 			return pap.prompt(g)
 		"box":
+			if g.get("arsenal") != null:   # v0.33.0 : Arsenal aléatoire : pas d'achat d'arme
+				return "BOÎTE MYSTÈRE — fermée en Arsenal aléatoire (l'arme change à chaque manche)"
 			return box.prompt(g, m)
 		"clock":   # horloge astronomique de la cathédrale : lance l'Heure du Jugement
 			return g.finale.prompt() if g.finale != null else ""
@@ -80,6 +82,8 @@ func interact() -> bool:
 				pap.buy(g)
 			return true
 		"box":
+			if g.get("arsenal") != null:
+				return true
 			if not box.roll.is_empty() and m == box.active_box():
 				box.take(g)
 			else:

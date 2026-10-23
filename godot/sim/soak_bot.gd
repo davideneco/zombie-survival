@@ -138,6 +138,11 @@ func _start_errand(g: Node) -> void:
 		_log(g, "rien à faire (zone unique)")
 		_end_errand(g)
 		return
+	if g.get("arsenal") != null and kind in ["wall", "box"]:   # v0.33.0 : Arsenal aléatoire : pas d'achat d'arme
+		errand = kind
+		_log(g, "rien à faire (arsenal)")
+		_end_errand(g)
+		return
 	var pts: Array = []
 	match kind:
 		"door":

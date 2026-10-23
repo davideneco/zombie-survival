@@ -21,7 +21,7 @@ Or open the `godot/` folder in the editor and press F5. Settings, key bindings, 
 ## Notes
 
 - **Menu**: Play, game mode, best score / statistics, map choice (Strasbourg or arena) and difficulty (Easy / Normal / Hard), Multiplayer (greyed out).
-- **Game modes** (menu "Mode de jeu", v0.26.0): **Classique** (the whole Grande Île, paid doors, finale; unchanged) and **Zone unique**: pick one of the 27 zones on a map thumbnail; you are locked in it (every door is bricked up for good), zombies spawn from the zone's windows and ground out of your sight, the zone's machines stay (plus a mystery box, Juggernog-like and Quick Revive-like perks and an MP5 when the zone has none), and an **exit door** in the middle of the zone costs 20,000 points: buying it ends the game in victory ("Évasion réussie"). Zone scores are kept per zone, apart from the classic statistics. Two more modes are listed as "coming soon".
+- **Game modes** (menu "Mode de jeu", v0.26.0): **Classique** (the whole Grande Île, paid doors, finale; unchanged) and **Zone unique**: pick one of the 27 zones on a map thumbnail; you are locked in it (every door is bricked up for good), zombies spawn from the zone's windows and ground out of your sight, the zone's machines stay (plus a mystery box, Juggernog-like and Quick Revive-like perks and an MP5 when the zone has none), and an **exit door** in the middle of the zone costs 20,000 points: buying it ends the game in victory ("Évasion réussie"). Zone scores are kept per zone, apart from the classic statistics. **Contre la montre** (v0.33.0): the whole map without the finale, a 4-minute clock that runs down, each kill gives back 2 s (3 s for a headshot), each cleared round 15 s, capped at 10 minutes; "Temps écoulé" at 0:00, the score is the points earned. **Arsenal aléatoire** (v0.33.0): the whole map without the finale, a single weapon drawn at random at the start and at every round (never the same twice in a row, stronger weapons unlocked by round), no weapon buying (wall weapons and mystery box closed), the Pack-a-Punch level carries over to the next weapon. Both modes keep their own best scores.
 - **Perks** (v0.27.0): 16 perks, at most **4 carried** (the Dawn Blessing lifts the limit). Besides the 7 of the browser game, nine new ones inspired by Call of Duty Zombies under original names, each with its own machine on the map: Œil-de-lynx (headshots), Cerise-foudre (shock on reload), Veuve noire (web that slows zombies), Vautour (ammo / point drops), Pierre tombale (get your perks back after going down), Ultime Volonté (survive a lethal hit), Bastion (less damage while holding a spot), Sixième sens (wider radar, critical hits), Cartouchière (more reserve ammo). List in the menu: "ATOUTS"; details in `docs/GODOT_PORT.md` (v0.27.0).
 - **Wall weapons and ammo stations** (v0.28.0): framed plank panels with the real weapon model hung on hooks and its glowing outline, sharp name / state / price plates (BUY, AMMO, PACK-A-PUNCH; price in red when you cannot pay), LED strip and sconce lit at night; ammo stations are olive steel lockers with a lit price screen. The interaction prompt shows an icon and the price apart (red with the missing points). Details: `docs/GODOT_PORT.md` (v0.28.0).
 - **Mystery box** (v0.29.0): an iron-bound chest with brass fittings, padlock and glowing question marks; the lid opens, light and sparks rise, the real 3D models of the 23 weapons cycle more and more slowly, the teddy bear sends it away in smoke and it drops from the sky at its new place. The animation is a pure function of the simulation (`sim/box_anim.gd`, suite `j36`).
@@ -43,7 +43,7 @@ Play 5 to 10 minutes, close the window normally, then send `perf.txt` (the `SPIK
 
 ## Useful launch options
 
-After `--`: `--map=arena` (Strasbourg otherwise), `--mode=classic|zone`, `--zone=N|Name` (Zone unique in that zone), `--difficulty=easy|normal|hard`, `--seed=N`, `--bot` (the bot plays), `--no-music`, `--no-warmup`, `--no-boss-intro`, `--perf-log=F`, `--perf-soak=N`, `--quit-at=S`, `--shot=f.png --at=S` (screenshot), `--god` (health kept full, for performance runs). `--show-collision[=report.json]` draws the collision through the walls, `--eye-y=Y` raises the camera (see `docs/GODOT_PORT.md`, geometry diagnostics). The others (`--do=`, `--horde=`, `--seat=`, `--tram-at=`, `--zoo*`…) are for test captures; they are parsed in `scenes/main.gd`.
+After `--`: `--map=arena` (Strasbourg otherwise), `--mode=classic|zone|timed|arsenal`, `--zone=N|Name` (Zone unique in that zone), `--difficulty=easy|normal|hard`, `--seed=N`, `--bot` (the bot plays), `--no-music`, `--no-warmup`, `--no-boss-intro`, `--perf-log=F`, `--perf-soak=N`, `--quit-at=S`, `--shot=f.png --at=S` (screenshot), `--god` (health kept full, for performance runs). `--show-collision[=report.json]` draws the collision through the walls, `--eye-y=Y` raises the camera (see `docs/GODOT_PORT.md`, geometry diagnostics). The others (`--do=`, `--horde=`, `--seat=`, `--tram-at=`, `--zoo*`…) are for test captures; they are parsed in `scenes/main.gd`.
 
 ## Tests
 
@@ -52,7 +52,7 @@ tools/godot-check.sh          # everything: export config and golden files from 
 tools/godot-check.sh j9       # one suite
 ```
 
-More than 159,000 checks, 0 failures at v0.19.1. The **golden files** are outputs of the JS game (Node or Chrome) that the GDScript must reproduce: config, collision, navigation, weapons, vehicles, prices, tram, bosses. Tests run headless, without rendering; screenshots need a display (or `xvfb-run`).
+More than 162,000 checks, 0 failures at v0.33.0. The **golden files** are outputs of the JS game (Node or Chrome) that the GDScript must reproduce: config, collision, navigation, weapons, vehicles, prices, tram, bosses. Tests run headless, without rendering; screenshots need a display (or `xvfb-run`).
 
 ## Layout
 
@@ -64,7 +64,7 @@ More than 159,000 checks, 0 failures at v0.19.1. The **golden files** are output
 | `shaders/` | Sky, ground, facades, water, foliage, zombies |
 | `data/` | Config and data exported from the JS; `golden/` (tests, never exported) |
 | `assets/` | Weapons (OBJ), zombies (glb), tram, textures, sounds; part of it is regenerated, see below |
-| `tests/` | Suites `test_j0` to `test_j34`, `runner.tscn`, and the `place_perks` tool (writes `data/perk_machines.json`) |
+| `tests/` | Suites `test_j0` to `test_j38`, `runner.tscn`, and the `place_perks` tool (writes `data/perk_machines.json`) |
 
 Model licences: `assets/weapons/LICENSE.txt` (Quaternius, Tabasco) and `assets/zombies/LICENSE.txt` (Quaternius).
 

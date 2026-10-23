@@ -321,6 +321,11 @@ func _connect_signals() -> void:
 	Game.round_started.connect(_on_round_started)
 	Game.round_ended.connect(_on_round_ended)
 	Game.weapon_acquired.connect(func(_id: String) -> void: play("buy"))
+	Game.mode_event.connect(func(n: String, _d: Dictionary) -> void:   # v0.33.0 : arme imposée de l'Arsenal, chrono à 0
+		if n == "arsenal_weapon":
+			play("buy")
+		elif n == "time_up":
+			play("buy", 1.0, Vector3.INF, 0.5))
 	Game.perk_acquired.connect(func(id: String) -> void:
 		play("buy")
 		play("jingle", 0.55, Vector3.INF, PERK_PITCH.get(id, 1.0)))   # v0.27.0 : petit air propre à chaque distributeur

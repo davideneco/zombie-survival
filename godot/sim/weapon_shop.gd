@@ -43,6 +43,8 @@ static func interact(g: Node) -> bool:
 	var ww := near_wall_weapon(g)
 	if ww.is_empty():
 		return false
+	if g.get("arsenal") != null:   # v0.33.0 : Arsenal aléatoire : armes murales fermées (ni achat, ni munitions)
+		return true
 	var id := String(ww["id"])
 	for w in arms.inventory:
 		if w.id == id:

@@ -30,6 +30,8 @@ static func text(g: Node, binds: Keybinds = null) -> String:
 			return _keys(mp, binds)
 	var ww := WeaponShop.near_wall_weapon(g)
 	if not ww.is_empty():
+		if g.get("arsenal") != null:   # v0.33.0
+			return "%s — armes murales fermées en Arsenal aléatoire" % ww["name"]
 		for w: WeaponState in arms.inventory:
 			if w.id == ww["id"]:
 				if w.reserve >= int(w.cfg["maxReserve"]):
@@ -85,6 +87,8 @@ static func info(g: Node, binds: Keybinds = null) -> Dictionary:
 		return out
 	var ww := WeaponShop.near_wall_weapon(g)
 	if not ww.is_empty():
+		if g.get("arsenal") != null:   # v0.33.0 : fermée (Arsenal aléatoire) : invite simple, sans icône d'achat
+			return out
 		out["id"] = String(ww["id"])
 		var st := wall_state(g, String(ww["id"]))
 		out["pap"] = st == "pap"
