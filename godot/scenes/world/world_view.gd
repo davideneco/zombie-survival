@@ -48,7 +48,9 @@ var _cath_stone: ShaderMaterial
 var _cath_roof: ShaderMaterial
 var _cath_rect := Rect2()
 var _cath_inwall: Dictionary = {}   ## indice du matériau cuit -> ShaderMaterial (cath_inwall.gdshader), émission réglée par _apply_lit
-var cath_tris := [0, 0, 0, 0, 0]     ## triangles cuits : gardés, passés en pierre, en toiture, retirés (dans les tuiles qui touchent l'emprise)
+var cath_tris := [0, 0, 0, 0, 0, 0, 0]
+var _cath_extra: Dictionary = {}    ## v0.32.1 : indice du matériau cuit -> plafond de pierre (cath_vault.gdshader)
+var _cath_floor: ShaderMaterial     ## v0.32.1 : dallage (cath_floor.gdshader)     ## triangles cuits : gardés, passés en pierre, en toiture, retirés (dans les tuiles qui touchent l'emprise)
 
 static func _json(path: String) -> Variant:
 	return JSON.parse_string(FileAccess.get_file_as_string(path))
@@ -116,7 +118,7 @@ func build() -> void:
 			set_quality(int(Game.settings.get_value("quality"))))
 	set_quality(int(Game.settings.get_value("quality")))
 	load_ms = Time.get_ticks_msec() - t0
-	print("monde affiché : %d tuiles, %d triangles, %d matériaux, %d ms ; cathédrale (tuiles) : %d gardés, %d en pierre, %d en toiture, %d retirés, %d murs intérieurs à deux faces" % [tile_count, triangle_count, _materials.size(), load_ms, cath_tris[0], cath_tris[1], cath_tris[2], cath_tris[3], cath_tris[4]])
+	print("monde affiché : %d tuiles, %d triangles, %d matériaux, %d ms ; cathédrale (tuiles) : %d gardés, %d en pierre, %d en toiture, %d retirés, %d murs intérieurs à deux faces, %d plafonds, %d dallage" % [tile_count, triangle_count, _materials.size(), load_ms, cath_tris[0], cath_tris[1], cath_tris[2], cath_tris[3], cath_tris[4], cath_tris[5], cath_tris[6]])
 
 func _process(dt: float) -> void:
 	var _pt := PerfLog.t()
@@ -258,6 +260,22 @@ func _load_materials() -> void:
 			sm.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
 		if int(m["side"]) == 2 and not bool(m["vc"]) and int(m["map"]) >= 0 and int(m["emap"]) >= 0 and em != 0 and not bool(m["tr"]):
 			_cath_role[_materials.size()] = "inwall"
+		elif int(m["side"]) == 2 and not bool(m["vc"]) and int(m["map"]) >= 0 and em == 0 and not bool(m["tr"]) and not bool(m["basic"]) and int(m["c"]) == 0xffffff \
+				and float(m["at"]) == 0.0 and _tex(int(m["map"])) != null:
+			# v0.32.1 : plafond peint (fond bleu étoilé) ou dallage de l'intérieur de la cathédrale : reconnus à la couleur moyenne de leur texture
+			var avg := (_tex(int(m["map"])).get_image() as Image)
+			avg = avg.duplicate() as Image
+			avg.clear_mipmaps()
+			if avg.is_compressed():
+				avg.decompress()
+			avg.resize(32, 32, Image.INTERPOLATE_NEAREST)   # 1 024 échantillons répartis (un seul échantillon bilinéaire tombait sur la clé dorée), rapide
+			var ac := Color(0, 0, 0, 0)
+			for py in 32:
+				for px in 32:
+					ac += avg.get_pixel(px, py) / 1024.0
+			_cath_role[_materials.size()] = "vault" if ac.b > maxf(ac.r, ac.g) + 0.04 else "plain"
+			if OS.get_cmdline_user_args().has("--dbg-cathroles"):
+				print("matériau %d : %s (moyenne %s)" % [_materials.size(), _cath_role[_materials.size()], ac])
 		if bool(m["nodw"]):
 			sm.no_depth_test = false
 			sm.disable_receive_shadows = true
@@ -345,7 +363,7 @@ func _add_cath_split(mesh: ArrayMesh, arr: Array, mat: int) -> void:
 	var role: String = _cath_role[mat]
 	var v: PackedVector3Array = arr[Mesh.ARRAY_VERTEX]
 	var idx: PackedInt32Array = arr[Mesh.ARRAY_INDEX]
-	var parts := [PackedInt32Array(), PackedInt32Array(), PackedInt32Array(), PackedInt32Array(), PackedInt32Array()]
+	var parts := [PackedInt32Array(), PackedInt32Array(), PackedInt32Array(), PackedInt32Array(), PackedInt32Array(), PackedInt32Array(), PackedInt32Array()]
 	var t := 0
 	while t + 2 < idx.size():
 		var c := CathedralZone.classify(role, v[idx[t]], v[idx[t + 1]], v[idx[t + 2]])
@@ -364,15 +382,31 @@ func _add_cath_split(mesh: ArrayMesh, arr: Array, mat: int) -> void:
 		im.set_shader_parameter("albedo_tex", src.albedo_texture)
 		im.set_shader_parameter("emis_tex", src.emission_texture)
 		im.set_shader_parameter("emis_color", src.emission)
-		im.set_shader_parameter("emis_energy", src.emission_energy_multiplier * _lit)
+		im.set_shader_parameter("emis_energy", src.emission_energy_multiplier * (0.5 + 0.8 * (1.0 - _lit)))
 		im.set_shader_parameter("roughness", src.roughness)
 		im.set_shader_parameter("stone_a", Surfaces.PBR_STONE_BIG_A)
 		im.set_shader_parameter("stone_m", Surfaces.PBR_STONE_BIG_M)
 		im.set_meta("emis_base", src.emission_energy_multiplier)
 		im.set_shader_parameter("night", _lit)
 		_cath_inwall[mat] = im
-	var mats: Array = [_materials[mat], _cath_stone, _cath_roof, null, _cath_inwall.get(mat)]
-	for k in [0, 1, 2, 4]:
+	if role == "vault" and not _cath_extra.has(mat):
+		var vm := ShaderMaterial.new()
+		vm.shader = preload("res://shaders/cath_vault.gdshader")
+		vm.set_shader_parameter("albedo_tex", (_materials[mat] as StandardMaterial3D).albedo_texture)
+		vm.set_shader_parameter("stone_a", Surfaces.PBR_STONE_BIG_A)
+		vm.set_shader_parameter("stone_m", Surfaces.PBR_STONE_BIG_M)
+		_cath_extra[mat] = vm
+	if role == "plain" and _cath_floor == null:
+		_cath_floor = ShaderMaterial.new()
+		_cath_floor.shader = preload("res://shaders/cath_floor.gdshader")
+		_cath_floor.set_shader_parameter("stone_a", Surfaces.PBR_STONE_BIG_A)
+		_cath_floor.set_shader_parameter("stone_m", Surfaces.PBR_STONE_BIG_M)
+		var o := Cathedral.P(0.0, 0.0)
+		var u := Cathedral.P(1.0, 0.0) - o
+		_cath_floor.set_shader_parameter("origin", Vector3(o.x, 0.0, o.y))
+		_cath_floor.set_shader_parameter("axis_u", Vector3(u.x, 0.0, u.y))
+	var mats: Array = [_materials[mat], _cath_stone, _cath_roof, null, _cath_inwall.get(mat), _cath_extra.get(mat), _cath_floor]
+	for k in [0, 1, 2, 4, 5, 6]:
 		var p: PackedInt32Array = parts[k]
 		if p.is_empty():
 			continue
@@ -502,7 +536,7 @@ func _apply_lit(lit: float) -> void:
 	if _cath_stone != null:   # v0.32.0 : projecteurs de la cathédrale sur la pierre du contour cuit, comme sur la peau procédurale
 		_cath_stone.set_shader_parameter("night", lit)
 	for im: ShaderMaterial in _cath_inwall.values():
-		im.set_shader_parameter("emis_energy", float(im.get_meta("emis_base")) * lit)
+		im.set_shader_parameter("emis_energy", float(im.get_meta("emis_base")) * (0.5 + 0.8 * (1.0 - lit)))   # v0.32.1 : vitraux vus de l'intérieur : vifs de jour (le soleil les traverse), plus sourds la nuit
 		im.set_shader_parameter("night", lit)
 	for m: ShaderMaterial in _kinds.get("facade", []):
 		if m.get_meta("emis_base", -1.0) < 0.0:

@@ -417,7 +417,7 @@ func _cathedral_v32(t: Node, w: World) -> void:
 	var col: Collision = w.collision
 	var xf: Transform3D = load("res://scenes/world/cathedral_nave.gd").frame()
 	var builders: Array = []
-	for path in ["res://scenes/world/cathedral_nave.gd", "res://scenes/world/cathedral_east.gd", "res://scenes/world/cathedral_tower.gd"]:
+	for path in ["res://scenes/world/cathedral_nave.gd", "res://scenes/world/cathedral_east.gd", "res://scenes/world/cathedral_tower.gd", "res://scenes/world/cathedral_interior.gd"]:
 		var b: RefCounted = load(path).new()
 		b.build()
 		for g: String in ["stone", "glass", "roof"]:
@@ -441,6 +441,10 @@ func _cathedral_v32(t: Node, w: World) -> void:
 				var lvl := -1.0
 				if p.y < 2.0:
 					lvl = 0.0
+				elif (p.y >= 14.6 and p.y < 16.4) or (p.y >= 22.6 and p.y < 24.4):
+					var st2 := Cathedral.st_of(p.x, p.z)
+					if st2.x > -37.0 and st2.x < 28.0 and absf(st2.y) > 5.9 and absf(st2.y) < 9.0:
+						lvl = 14.5 if p.y < 20.0 else 22.5   # galeries du triforium et du clair-étage (src/cath/upper.js ring)
 				elif p.y >= 67.6 and p.y < 69.5:
 					var st := Cathedral.st_of(p.x, p.z)
 					if st.x > -51.8 and st.x < -27.2 and absf(st.y) < 25.8 and Vector2(p.x, p.z).distance_to(Cathedral.tower_axis()) > Cathedral.TOWER_R + 0.2:
@@ -451,7 +455,7 @@ func _cathedral_v32(t: Node, w: World) -> void:
 					var q := Vector3(p.x, lvl, p.z)
 					var r := col.resolve(q, 0.25)
 					if Vector2(r.x - q.x, r.z - q.z).length() < 1e-4:
-						var list := bad_ground if lvl == 0.0 else bad_plat
+						var list := bad_ground if lvl < 60.0 else bad_plat
 						if list.size() < 400:
 							list.append("(%.1f, %.1f, %.1f)" % [p.x, p.y, p.z])
 				if p.y > Cathedral.TOWER_TOP + 0.3 and p.y < Cathedral.TOWER_TIP:
@@ -461,7 +465,7 @@ func _cathedral_v32(t: Node, w: World) -> void:
 						bad_ramp.append("(%.1f, %.1f, %.1f) r %.2f" % [p.x, p.y, p.z, rr])
 	print("j30 : cathédrale v0.32.0 : %d points de décor testés ; au sol libre %d, sur la plateforme %d, dans la rampe %d" % [pts, bad_ground.size(), bad_plat.size(), bad_ramp.size()])
 	t.check(pts > 100000, "géométrie de l'extérieur de la cathédrale construite (%d points)" % pts)
-	t.check(bad_ground.is_empty(), "aucun décor ajouté sur le sol praticable : %s" % ", ".join(bad_ground.slice(0, 8)))
+	t.check(bad_ground.is_empty(), "aucun décor ajouté sur le sol praticable (rez-de-chaussée, galeries de la nef) : %s" % ", ".join(bad_ground.slice(0, 8)))
 	t.check(bad_plat.is_empty(), "aucun décor ajouté sur la plateforme à hauteur d'homme : %s" % ", ".join(bad_plat.slice(0, 8)))
 	t.check(bad_ramp.is_empty(), "rien dans le couloir de la rampe de la flèche : %s" % ", ".join(bad_ramp.slice(0, 8)))
 	# (3) retraits du contour cuit

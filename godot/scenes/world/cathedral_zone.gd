@@ -17,6 +17,8 @@ const STONE := 1
 const ROOF := 2
 const DROP := 3
 const INWALL := 4   ## mur intérieur du JS vu aussi du dehors : face extérieure en pierre (shaders/cath_inwall.gdshader)
+const VAULT := 5    ## v0.32.1 : plafond peint (ciel étoilé) -> pierre (shaders/cath_vault.gdshader)
+const FLOOR := 6    ## v0.32.1 : damier -> dallage (shaders/cath_floor.gdshader)
 
 static func inside(st: Vector2) -> bool:
 	for r: Array in RECTS:
@@ -49,6 +51,11 @@ static func classify(role: String, a: Vector3, b: Vector3, c: Vector3) -> int:
 		return KEEP
 	if role == "inwall":
 		return INWALL
+	if role == "vault":
+		return VAULT
+	if role == "plain":
+		var nn := (b - a).cross(c - a)
+		return FLOOR if nn.length_squared() > 1e-12 and absf(nn.normalized().y) > 0.9 and m.y < 0.3 else KEEP
 	var at := absf(st.y)
 	var ymin := minf(a.y, minf(b.y, c.y))
 	var in_nave := st.x > -26.6 and st.x < 28.3

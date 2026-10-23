@@ -390,6 +390,17 @@ func _add_mesh(b: RefCounted, mat: Material, xf: Transform3D, shadows: bool, vis
 	mi.global_transform = xf
 	return mi
 
+## Pierre de l'intérieur : même grès, sans lavis des projecteurs, plus claire (calcaire des voûtes) ; reçoit les ombres mais n'en projette pas (coût).
+func _interior_mat() -> ShaderMaterial:
+	var m := ShaderMaterial.new()
+	m.shader = STONE_SHADER
+	m.set_shader_parameter("stone_a", STONE_A)
+	m.set_shader_parameter("stone_m", STONE_M)
+	m.set_shader_parameter("tint", Color(0.70, 0.56, 0.47))
+	m.set_shader_parameter("flood_energy", 0.0)
+	m.set_shader_parameter("scale", 2.2)
+	return m
+
 func _build_nave() -> void:
 	var nv := CathedralNave.new()
 	nv.build()
@@ -415,6 +426,19 @@ func _build_nave() -> void:
 	_add_mesh(tw.stone, _stone_mat, xf, true, 900.0)
 	_add_mesh(tw.glass, gm, xf, false, 400.0)
 	nave_triangles += tw.stone.triangle_count() + tw.glass.triangle_count()
+	var it := preload("res://scenes/world/cathedral_interior.gd").new()   # v0.32.1 : voûtes, piliers fasciculés, arcades
+	it.build()
+	_add_mesh(it.stone, _interior_mat(), xf, false, 140.0)
+	var fm := ShaderMaterial.new()
+	fm.shader = preload("res://shaders/cath_floor.gdshader")
+	fm.set_shader_parameter("stone_a", STONE_A)
+	fm.set_shader_parameter("stone_m", STONE_M)
+	var o := Cathedral.P(0.0, 0.0)
+	var u := Cathedral.P(1.0, 0.0) - o
+	fm.set_shader_parameter("origin", Vector3(o.x, 0.0, o.y))
+	fm.set_shader_parameter("axis_u", Vector3(u.x, 0.0, u.y))
+	_add_mesh(it.floor, fm, xf, false, 140.0)
+	nave_triangles += it.stone.triangle_count()
 	print("cathédrale (nef, v0.32.0) : %d triangles" % nave_triangles)
 
 ## Nuit / jour : projecteurs allumés la nuit, vitraux éclairés de l'intérieur (graphics_view.gd : groupe « sky_listener »).

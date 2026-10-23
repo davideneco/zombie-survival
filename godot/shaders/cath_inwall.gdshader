@@ -28,9 +28,21 @@ void vertex() {
 void fragment() {
 	bool inner = FRONT_FACING != (flip > 0.5);
 	if (inner) {
-		ALBEDO = texture(albedo_tex, UV).rgb;
-		ROUGHNESS = roughness;
-		EMISSION = emis_color * texture(emis_tex, UV).rgb * emis_energy;
+		// v0.32.1 : hors des vitraux (émission faible), le mur peint prend le détail et le relief du grès (projection plane en mètres)
+		vec3 e = texture(emis_tex, UV).rgb;
+		float glassm = smoothstep(0.08, 0.25, max(e.r, max(e.g, e.b)));
+		vec3 Ni = FRONT_FACING ? normalize(wnrm) : -normalize(wnrm);
+		vec3 Ti = normalize(cross(vec3(0.0, 1.0, 0.0), Ni) + vec3(1e-4, 0.0, 0.0));
+		vec2 uvi = vec2(dot(wpos, Ti), -wpos.y) / scale;
+		vec3 sa = texture(stone_a, uvi).rgb * 2.0;
+		vec4 sm = texture(stone_m, uvi);
+		ALBEDO = texture(albedo_tex, UV).rgb * mix(mix(vec3(1.0), sa, 0.55), vec3(1.0), glassm);
+		ROUGHNESS = mix(clamp(sm.b * 0.9 + 0.1, 0.0, 1.0), roughness, glassm);
+		AO = mix(mix(1.0, sm.a, 0.6), 1.0, glassm);
+		vec2 nxy = (sm.rg * 2.0 - 1.0) * 0.8 * (1.0 - glassm);
+		vec3 nwi = normalize(Ti * nxy.x - vec3(0.0, 1.0, 0.0) * nxy.y + Ni * sqrt(max(0.05, 1.0 - dot(nxy, nxy))));
+		NORMAL = normalize((VIEW_MATRIX * vec4(nwi, 0.0)).xyz);
+		EMISSION = emis_color * e * emis_energy;
 	} else {
 		vec3 N = FRONT_FACING ? normalize(wnrm) : -normalize(wnrm);
 		vec3 an = abs(N);
