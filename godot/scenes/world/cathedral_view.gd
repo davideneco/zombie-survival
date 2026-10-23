@@ -53,6 +53,8 @@ func build() -> void:
 	_build_windows()
 	_build_galleries()
 	_finish()
+	if not OS.get_cmdline_user_args().has("--dbg-cath031"):
+		_build_nave()
 	add_to_group("sky_listener")
 	on_sky_k(0.0)
 	print("cathédrale : %d triangles de pierre, %d de verre, %d statues" % [_stone.triangle_count(), _glass.triangle_count(), _statue_xf.size()])
@@ -362,12 +364,65 @@ func _finish() -> void:
 	statues.visibility_range_end = 160.0
 	add_child(statues)
 
+## v0.32.0 : nef, bas-côtés, arcs-boutants, flancs du massif (scenes/world/cathedral_nave.gd), dans le repère de la nef (nœuds `top_level`).
+const CathedralNave := preload("res://scenes/world/cathedral_nave.gd")
+const ROOF_SHADER := preload("res://shaders/cath_roof.gdshader")
+const SLATE_A := preload("res://assets/pbr/roof_slate/a.png")
+const SLATE_M := preload("res://assets/pbr/roof_slate/m.png")
+var roof_mat: ShaderMaterial
+var nave_triangles := 0
+
+static func make_roof_mat() -> ShaderMaterial:
+	var m := ShaderMaterial.new()
+	m.shader = ROOF_SHADER
+	m.set_shader_parameter("slate_a", SLATE_A)
+	m.set_shader_parameter("slate_m", SLATE_M)
+	return m
+
+func _add_mesh(b: RefCounted, mat: Material, xf: Transform3D, shadows: bool, vis: float) -> MeshInstance3D:
+	var mi := MeshInstance3D.new()
+	mi.mesh = b.build()
+	mi.material_override = mat
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON if shadows else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	mi.visibility_range_end = vis
+	mi.top_level = true
+	add_child(mi)
+	mi.global_transform = xf
+	return mi
+
+func _build_nave() -> void:
+	var nv := CathedralNave.new()
+	nv.build()
+	var xf := CathedralNave.frame()
+	roof_mat = make_roof_mat()
+	var gm := ShaderMaterial.new()
+	gm.shader = GLASS_SHADER
+	gm.set_shader_parameter("world_map", 1.0)
+	gm.set_shader_parameter("cell", 0.42)
+	_glass_mats.append(gm)
+	_add_mesh(nv.stone, _stone_mat, xf, true, 420.0)
+	_add_mesh(nv.glass, gm, xf, false, 300.0)
+	_add_mesh(nv.roof, roof_mat, xf, true, 420.0)
+	nave_triangles = nv.stone.triangle_count() + nv.glass.triangle_count() + nv.roof.triangle_count()
+	var ea := preload("res://scenes/world/cathedral_east.gd").new()
+	ea.build()
+	_add_mesh(ea.stone, _stone_mat, xf, true, 420.0)
+	_add_mesh(ea.glass, gm, xf, false, 300.0)
+	_add_mesh(ea.roof, roof_mat, xf, true, 420.0)
+	nave_triangles += ea.stone.triangle_count() + ea.glass.triangle_count() + ea.roof.triangle_count()
+	var tw := preload("res://scenes/world/cathedral_tower.gd").new()
+	tw.build()
+	_add_mesh(tw.stone, _stone_mat, xf, true, 900.0)
+	_add_mesh(tw.glass, gm, xf, false, 400.0)
+	nave_triangles += tw.stone.triangle_count() + tw.glass.triangle_count()
+	print("cathédrale (nef, v0.32.0) : %d triangles" % nave_triangles)
+
 ## Nuit / jour : projecteurs allumés la nuit, vitraux éclairés de l'intérieur (graphics_view.gd : groupe « sky_listener »).
 func on_sky_k(k: float) -> void:
 	var night := clampf(1.0 - k * 1.6, 0.0, 1.0)
 	_stone_mat.set_shader_parameter("night", night)
 	for m in _glass_mats:
-		m.set_shader_parameter("night", maxf(night, 0.25))
+		m.set_shader_parameter("night", maxf(night, 0.06))
 
 var _gv: Node
 var _last_k := -1.0

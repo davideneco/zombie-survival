@@ -6,11 +6,16 @@ uniform float rose = 0.0;                         // 1 : motif radial
 uniform float night = 1.0;
 uniform float glow = 1.3;
 uniform float cell = 0.55;
+uniform float world_map = 0.0;                    // v0.32.0 : 1 : motif dans le plan de la face en mètres du monde (vitraux de la nef, des tours, de l'intérieur)
 
 varying vec3 lp;
+varying vec3 wp;
+varying vec3 wn;
 
 void vertex() {
 	lp = VERTEX;
+	wp = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
+	wn = normalize(MODEL_NORMAL_MATRIX * NORMAL);
 }
 
 float h21(vec2 p) {
@@ -29,6 +34,11 @@ vec3 palette(float h) {
 
 void fragment() {
 	vec2 p = lp.zy;
+	if (world_map > 0.5) {
+		vec3 T = cross(vec3(0.0, 1.0, 0.0), wn);
+		T = dot(T, T) < 1e-4 ? vec3(1.0, 0.0, 0.0) : normalize(T);
+		p = vec2(dot(wp, T), wp.y);
+	}
 	vec2 c;
 	float lead;
 	if (rose > 0.5) {
@@ -49,7 +59,9 @@ void fragment() {
 	float h = h21(c);
 	vec3 col = palette(h) * (0.55 + 0.8 * h21(c + 7.7));
 	col = mix(col, vec3(0.02), lead);
-	ALBEDO = col * 0.3;
+	// v0.32.0 : vu du dehors en plein jour un vitrail est sombre (le verre coloré ne se lit que par transparence) : albédo presque noir teinté, reflet du ciel par la
+	// faible rugosité ; la nuit, la lumière intérieure le fait briller (EMISSION x night)
+	ALBEDO = mix(vec3(0.025, 0.03, 0.04), col * 0.25, 0.3);
 	ROUGHNESS = 0.12;
 	METALLIC = 0.0;
 	EMISSION = col * (1.0 - lead) * glow * night;

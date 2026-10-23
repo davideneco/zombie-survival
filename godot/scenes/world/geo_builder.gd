@@ -208,3 +208,141 @@ func append(o: RefCounted) -> void:
 	verts.append_array(o.verts)
 	norms.append_array(o.norms)
 	cols.append_array(o.cols)
+
+## v0.32.0 : ajoute le contenu d'un autre constructeur transformé (repère local d'un mur -> repère de l'appelant).
+func append_xf(o: RefCounted, xf: Transform3D) -> void:
+	var nb := xf.basis.inverse().transposed()
+	for i in o.verts.size():
+		verts.append(xf * o.verts[i])
+		norms.append((nb * o.norms[i]).normalized())
+	cols.append_array(o.cols)
+
+## v0.32.0 : travée de mur percée d'une baie en arc brisé, dans le plan (z, y), extrudée de x0 à x1 (le tableau de la baie est dessiné par l'extrusion).
+## Mur de z0 à z1 et de yb à yt ; baie centrée en zc, demi-largeur hw, appui wy0, naissance spring, flèche rise. Deux demi-polygones (gauche / droite) sans trou.
+func wall_bay(z0: float, z1: float, yb: float, yt: float, zc: float, hw: float, wy0: float, spring: float, rise: float, x0: float, x1: float, n: int = 8) -> void:
+	var arch := pointed_arch(zc, spring, hw, rise, n)
+	var left := PackedVector2Array([Vector2(z0, yb), Vector2(zc, yb), Vector2(zc, wy0), Vector2(zc - hw, wy0)])
+	for i in range(n + 1):
+		left.append(arch[i])
+	left.append(Vector2(zc, yt))
+	left.append(Vector2(z0, yt))
+	var right := PackedVector2Array([Vector2(z1, yb), Vector2(z1, yt), Vector2(zc, yt)])
+	for i in range(arch.size() - 1, n - 1, -1):
+		right.append(arch[i])
+	right.append(Vector2(zc + hw, wy0))
+	right.append(Vector2(zc, wy0))
+	right.append(Vector2(zc, yb))
+	extrude(left, x0, x1)
+	extrude(right, x0, x1)
+
+## v0.32.0 : remplage d'une lancette (meneaux, sous-arcs, oculus) dans la baie (zc, hw, wy0, spring, rise), de x0 à x1 ; `lights` jours.
+func tracery(zc: float, hw: float, wy0: float, spring: float, rise: float, x0: float, x1: float, lights: int = 2) -> void:
+	var w := 0.16 + hw * 0.04
+	for k in range(1, lights):
+		var z := zc - hw + 2.0 * hw * k / lights
+		box(Vector3((x0 + x1) * 0.5, (wy0 + spring) * 0.5 + rise * 0.15, z), Vector3(x1 - x0, spring - wy0 + rise * 0.3, w), 63 & ~4 & ~8)
+	if lights >= 2:
+		var sub := hw / lights
+		for k in lights:
+			var z := zc - hw + sub * (2 * k + 1)
+			arch_ring(z, spring, sub - w * 0.5, rise * 0.45, 0.0, w, x0, x1, 6)
+		var oy := spring + rise * 0.55
+		var orad := minf(hw * 0.42, rise * 0.3)
+		annulus_x(zc, oy, orad - w, orad, x0, x1, 14)
+		for a in 4:
+			var ang := TAU * (a + 0.5) / 4.0
+			annulus_x(zc + cos(ang) * orad * 0.45, oy + sin(ang) * orad * 0.45, orad * 0.22, orad * 0.22 + w * 0.6, x0, x1, 8)
+	# barlotières (traverses de fer)
+	for k in range(1, int((spring - wy0) / 1.6) + 1):
+		var y := wy0 + k * 1.6
+		if y < spring - 0.3:
+			box(Vector3((x0 + x1) * 0.5, y, zc), Vector3((x1 - x0) * 0.5, 0.05, hw * 2.0), 63)
+
+## v0.32.0 : pinacle gothique : fût carré (base b, du sol y0 à y1), gâblets, flèche à crochets jusqu'à y2, fleuron.
+func pinnacle(cx: float, cz: float, b: float, y0: float, y1: float, y2: float) -> void:
+	box(Vector3(cx, (y0 + y1) * 0.5, cz), Vector3(b, y1 - y0, b), 63 & ~8)
+	box(Vector3(cx, y1 - 0.15, cz), Vector3(b * 1.18, 0.3, b * 1.18), 63)
+	for a in 4:   # gâblets sur les quatre faces
+		var d := Vector2(cos(a * PI * 0.5), sin(a * PI * 0.5))
+		var px := cx + d.x * b * 0.5
+		var pz := cz + d.y * b * 0.5
+		var side := Vector2(-d.y, d.x) * b * 0.45
+		tri(Vector3(px - side.x, y1, pz - side.y), Vector3(px + side.x, y1, pz + side.y), Vector3(px, y1 + b * 0.9, pz), Vector3(d.x, 0.3, d.y))
+	spire(cx, cz, b * 0.5 * 1.3, y1, y2, 4, PI / 4.0)
+	var h := y2 - y1
+	for k in range(1, 4):
+		var f := float(k) / 4.0
+		var r := b * 0.5 * 1.3 * (1.0 - f) + 0.08
+		for a in 4:
+			var ang := PI / 4.0 + a * PI * 0.5
+			box(Vector3(cx + cos(ang) * r, y1 + h * f, cz + sin(ang) * r), Vector3(0.16, 0.26, 0.16), 63)
+	box(Vector3(cx, y2 + 0.15, cz), Vector3(0.18, 0.4, 0.18), 63)
+	box(Vector3(cx, y2 + 0.2, cz), Vector3(0.42, 0.1, 0.1), 63)
+	box(Vector3(cx, y2 + 0.2, cz), Vector3(0.1, 0.1, 0.42), 63)
+
+## v0.32.0 : gargouille : corps effilé qui sort du mur selon `d` (unitaire, horizontal), tête, gueule (gouttière), ailes repliées. Origine p au mur.
+func gargoyle(p: Vector3, d: Vector3, length: float = 2.2) -> void:
+	var side := Vector3(-d.z, 0.0, d.x)
+	var n := 6
+	var segs := 4
+	for k in segs:
+		var f0 := float(k) / segs
+		var f1 := float(k + 1) / segs
+		var r0 := lerpf(0.42, 0.22, f0)
+		var r1 := lerpf(0.42, 0.22, f1)
+		var c0 := p + d * length * f0 + Vector3.UP * (0.25 * sin(f0 * PI) )
+		var c1 := p + d * length * f1 + Vector3.UP * (0.25 * sin(f1 * PI))
+		for i in n:
+			var a0 := TAU * i / n
+			var a1 := TAU * (i + 1) / n
+			var o0 := side * cos(a0) + Vector3.UP * sin(a0) * 0.8
+			var o1 := side * cos(a1) + Vector3.UP * sin(a1) * 0.8
+			quad(c0 + o0 * r0, c0 + o1 * r0, c1 + o1 * r1, c1 + o0 * r1, (o0 + o1) * 0.5)
+	var head := p + d * (length + 0.15) + Vector3.UP * 0.05
+	box(head, Vector3(0.4, 0.38, 0.4), 63)   # tête (alignée sur les axes : assez proche à distance)
+	var jaw := head + d * 0.3 - Vector3.UP * 0.08
+	box(jaw, Vector3(0.28, 0.12, 0.28), 63)
+	for sd in [-1.0, 1.0]:   # oreilles / cornes
+		box(head + side * 0.16 * sd + Vector3.UP * 0.26, Vector3(0.08, 0.2, 0.08), 63)
+		# ailes repliées le long du corps
+		var w0: Vector3 = p + d * length * 0.25 + side * 0.32 * sd + Vector3.UP * 0.2
+		var w1: Vector3 = p + d * length * 0.75 + side * 0.22 * sd + Vector3.UP * 0.35
+		tri(w0, w1, p + d * length * 0.4 + side * 0.3 * sd + Vector3.UP * 0.75, side * sd)
+		tri(w0, w1, p + d * length * 0.4 + side * 0.3 * sd + Vector3.UP * 0.75, -side * sd)
+	# pattes antérieures
+	for sd in [-1.0, 1.0]:
+		box(p + d * length * 0.7 + side * 0.18 * sd - Vector3.UP * 0.3, Vector3(0.12, 0.35, 0.12), 63)
+
+## v0.32.0 : balustrade ajourée le long d'un segment horizontal (a -> b, mêmes y) : main courante, lisse basse, balustres tous les `step` m.
+func balustrade(a: Vector3, b: Vector3, h: float = 1.0, step: float = 0.55, w: float = 0.32) -> void:
+	var d := b - a
+	var L := d.length()
+	if L < 0.1:
+		return
+	var u := d / L
+	var nrm := Vector3(-u.z, 0.0, u.x)
+	# lisses haute et basse : prismes rectangulaires le long du segment
+	for band in [[h - 0.16, h, w], [0.0, 0.14, w * 1.1]]:
+		var y0: float = a.y + float(band[0])
+		var y1: float = a.y + float(band[1])
+		var ww: float = band[2]
+		var p0 := a - nrm * ww * 0.5
+		var p1 := a + nrm * ww * 0.5
+		var q0 := b - nrm * ww * 0.5
+		var q1 := b + nrm * ww * 0.5
+		quad(Vector3(p0.x, y1, p0.z), Vector3(q0.x, y1, q0.z), Vector3(q1.x, y1, q1.z), Vector3(p1.x, y1, p1.z), Vector3.UP)
+		quad(Vector3(p0.x, y0, p0.z), Vector3(q0.x, y0, q0.z), Vector3(q1.x, y0, q1.z), Vector3(p1.x, y0, p1.z), Vector3.DOWN)
+		quad(Vector3(p0.x, y0, p0.z), Vector3(q0.x, y0, q0.z), Vector3(q0.x, y1, q0.z), Vector3(p0.x, y1, p0.z), -nrm)
+		quad(Vector3(p1.x, y0, p1.z), Vector3(q1.x, y0, q1.z), Vector3(q1.x, y1, q1.z), Vector3(p1.x, y1, p1.z), nrm)
+	var n := maxi(1, int(L / step))
+	for k in range(n + 1):
+		var p := a + u * (L * k / n)
+		var s := w * 0.45
+		# balustre à section carrée tournée de 45 degrés (losange) : lit mieux qu'un poteau carré
+		var c := Vector3(p.x, a.y + 0.14, p.z)
+		var top := a.y + h - 0.16
+		var pts := [c + u * s, c + nrm * s, c - u * s, c - nrm * s]
+		for i in 4:
+			var p0: Vector3 = pts[i]
+			var p1: Vector3 = pts[(i + 1) % 4]
+			quad(p0, p1, Vector3(p1.x, top, p1.z), Vector3(p0.x, top, p0.z), ((p0 + p1) * 0.5 - c).normalized())

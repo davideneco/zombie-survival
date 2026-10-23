@@ -9,10 +9,10 @@ uniform sampler2D stone_m : hint_default_white, repeat_enable, filter_linear_mip
 uniform vec3 tint : source_color = vec3(0.62, 0.43, 0.34);
 uniform float scale = 2.8;            // m par répétition
 uniform float night = 1.0;            // 1 : nuit (projecteurs allumés), 0 : jour
-uniform vec3 flood_color : source_color = vec3(1.0, 0.70, 0.40);
+uniform vec3 flood_color : source_color = vec3(1.0, 0.80, 0.58);
 uniform vec3 flood_dir = vec3(-0.869, 0.0, 0.494);   // sens vers lequel la façade fait face (vers l'extérieur) ; réglé par cathedral_view.gd
 uniform float flood_energy = 0.8;
-uniform float flood_height = 60.0;    // m : le lavis s'éteint avec la hauteur
+uniform float flood_height = 120.0;   // m : le lavis s'éteint avec la hauteur (v0.32.0 : 60 -> 120, la tour et la flèche restent éclairées)
 uniform float normal_k = 0.9;
 
 varying vec3 wpos;
@@ -62,7 +62,8 @@ void fragment() {
 	vec3 nw = normalize(T * nxy.x + B * nxy.y * ((an.y > max(an.x, an.z)) ? 1.0 : -1.0) + N * sqrt(max(0.05, 1.0 - dot(nxy, nxy))));
 	NORMAL = normalize((VIEW_MATRIX * vec4(nw, 0.0)).xyz);
 	// projecteurs : lavis chaud sur les faces tournées vers l'extérieur, de moins en moins haut
-	float face = clamp(dot(N, normalize(flood_dir)) * 0.8 + 0.2, 0.0, 1.0);
+	// v0.32.0 : projecteurs tout autour du monument (le flanc le plus éclairé reste celui de la façade ouest), plus de face noire
+	float face = clamp(dot(N, normalize(flood_dir)) * 0.45 + 0.55, 0.0, 1.0) * mix(1.0, 0.45, max(N.y, 0.0));
 	float wash = face * (1.0 - smoothstep(flood_height * 0.15, flood_height, wpos.y)) * vao;
 	EMISSION = col * flood_color * wash * flood_energy * night;
 }

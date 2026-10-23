@@ -47,6 +47,12 @@ static func P(s: float, t: float) -> Vector2:
 	_load()
 	return _o + _u * s + _v * t
 
+## Inverse de P : (s, t) d'un point (x, z) de la carte (v0.32.0 : zone de l'extérieur refait de la cathédrale).
+static func st_of(x: float, z: float) -> Vector2:
+	_load()
+	var d := Vector2(x, z) - _o
+	return Vector2(d.dot(_u), d.dot(_v))
+
 static func clock_pos() -> Vector2:
 	_load()
 	return _clock

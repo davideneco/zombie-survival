@@ -307,6 +307,7 @@ func run(t: Node) -> void:
 	_sweep(t, w)
 	_stairs(t, w)
 	_facade(t, w)
+	_cathedral_v32(t, w)
 	print("j30 : %d anneaux fermés ; %d murs de sol, %d sans face avant bouchons, %d après ; %d ms" % [rings, ground.size(), bad_before.size(), bad.size(), Time.get_ticks_msec() - t0])
 
 ## Balayage « le joueur ne traverse pas les murs visibles » : un cercle de 0,4 m (le joueur) avance de 1,5 m en deçà à 1,5 m au-delà d'une face verticale visible
@@ -403,3 +404,77 @@ func _facade(t: Node, w: World) -> void:
 		t.check(float(results[tt]) > -45.5, "le grand portail reste franchissable (t = %.1f : s = %.1f)" % [tt, results[tt]])
 	for tt: float in [14.75, -13.0, 8.4, -8.4, 20.8, 26.0]:
 		t.check(float(results[tt]) < -49.0, "la façade bloque à t = %.1f (s = %.1f)" % [tt, results[tt]])
+
+
+## v0.32.0 : extérieur refait de la cathédrale (scenes/world/cathedral_nave.gd, cathedral_east.gd, cathedral_tower.gd, cathedral_zone.gd). Décor seul :
+## (1) aucun point de la géométrie ajoutée à hauteur d'homme ne se trouve sur du sol praticable loin d'un mur (cercle de 0,25 m que la collision ne repousse pas) :
+## au sol (y < 2 m) et sur la plateforme du massif (67,5 à 69,5 m) ; (2) sur la pagode, rien dans le couloir de la rampe ; (3) le contour cuit n'est retiré
+## qu'au-dessus de 11 m (contreforts / arcs-boutants OSM) ou de 31 m (ancien comble) : rien ne disparaît à hauteur d'homme.
+func _cathedral_v32(t: Node, w: World) -> void:
+	w.open_all_doors()
+	var nav := w.nav
+	var main_label := nav.label_of(nav.idx(nav.cx(w.start_pos.x), nav.cz(w.start_pos.z)))
+	var col: Collision = w.collision
+	var xf: Transform3D = load("res://scenes/world/cathedral_nave.gd").frame()
+	var builders: Array = []
+	for path in ["res://scenes/world/cathedral_nave.gd", "res://scenes/world/cathedral_east.gd", "res://scenes/world/cathedral_tower.gd"]:
+		var b: RefCounted = load(path).new()
+		b.build()
+		for g: String in ["stone", "glass", "roof"]:
+			if g in b:
+				builders.append(b.get(g))
+	var pts := 0
+	var bad_ground: PackedStringArray = []
+	var bad_plat: PackedStringArray = []
+	var bad_ramp: PackedStringArray = []
+	var tower := load("res://scenes/world/cathedral_tower.gd")
+	var axis := Cathedral.tower_axis()
+	for gb: RefCounted in builders:
+		var vs: PackedVector3Array = gb.verts
+		var i := 0
+		while i + 2 < vs.size():
+			var cand := [vs[i], vs[i + 1], vs[i + 2], (vs[i] + vs[i + 1] + vs[i + 2]) / 3.0]
+			i += 3
+			for lp: Vector3 in cand:
+				var p: Vector3 = xf * lp
+				pts += 1
+				var lvl := -1.0
+				if p.y < 2.0:
+					lvl = 0.0
+				elif p.y >= 67.6 and p.y < 69.5:
+					var st := Cathedral.st_of(p.x, p.z)
+					if st.x > -51.8 and st.x < -27.2 and absf(st.y) < 25.8 and Vector2(p.x, p.z).distance_to(Cathedral.tower_axis()) > Cathedral.TOWER_R + 0.2:
+						lvl = 67.5   # dalle praticable de la plateforme (src/cath/upper.js stripST(-52, -26, -27, 26)), hors octogone
+				if lvl >= 0.0:
+					if lvl == 0.0 and (not nav.inside(nav.cx(p.x), nav.cz(p.z)) or nav.label_of(nav.idx(nav.cx(p.x), nav.cz(p.z))) != main_label):
+						continue
+					var q := Vector3(p.x, lvl, p.z)
+					var r := col.resolve(q, 0.25)
+					if Vector2(r.x - q.x, r.z - q.z).length() < 1e-4:
+						var list := bad_ground if lvl == 0.0 else bad_plat
+						if list.size() < 400:
+							list.append("(%.1f, %.1f, %.1f)" % [p.x, p.y, p.z])
+				if p.y > Cathedral.TOWER_TOP + 0.3 and p.y < Cathedral.TOWER_TIP:
+					var rr := Vector2(p.x, p.z).distance_to(axis)
+					var rbv: float = tower.rb(p.y)
+					if rr > rbv + 0.12 and rr < rbv + 1.25:
+						bad_ramp.append("(%.1f, %.1f, %.1f) r %.2f" % [p.x, p.y, p.z, rr])
+	print("j30 : cathédrale v0.32.0 : %d points de décor testés ; au sol libre %d, sur la plateforme %d, dans la rampe %d" % [pts, bad_ground.size(), bad_plat.size(), bad_ramp.size()])
+	t.check(pts > 100000, "géométrie de l'extérieur de la cathédrale construite (%d points)" % pts)
+	t.check(bad_ground.is_empty(), "aucun décor ajouté sur le sol praticable : %s" % ", ".join(bad_ground.slice(0, 8)))
+	t.check(bad_plat.is_empty(), "aucun décor ajouté sur la plateforme à hauteur d'homme : %s" % ", ".join(bad_plat.slice(0, 8)))
+	t.check(bad_ramp.is_empty(), "rien dans le couloir de la rampe de la flèche : %s" % ", ".join(bad_ramp.slice(0, 8)))
+	# (3) retraits du contour cuit
+	var Z := load("res://scenes/world/cathedral_zone.gd")
+	var low_drop := 0
+	var probes := 0
+	for s in range(-26, 28, 2):
+		for tt in [-22.0, -19.5, -15.0, -9.6, 9.6, 15.0, 19.5, 22.0]:
+			for y in [0.5, 4.0, 8.0, 10.5]:
+				var c := Cathedral.P(float(s), float(tt))
+				var a := Vector3(c.x, y, c.y)
+				for role in ["flood", "facade", "roof"]:
+					probes += 1
+					if Z.classify(role, a, a + Vector3(0.3, 0.0, 0.0), a + Vector3(0.0, 0.3, 0.0)) == Z.DROP:
+						low_drop += 1
+	t.check(low_drop == 0, "le contour cuit de la cathédrale n'est jamais retiré sous 11 m (%d retraits sur %d sondes)" % [low_drop, probes])

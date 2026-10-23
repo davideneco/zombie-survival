@@ -5,6 +5,7 @@ extends RefCounted
 ## Pierre rose pour la cathédrale, enduit beige ailleurs ; double face, sans texture (le décor cuit n'a pas de matériau uni réutilisable).
 
 const PATH := "res://data/world_patches.json"
+const Surfaces := preload("res://scenes/world/surfaces.gd")
 const STONE := Color(0.80, 0.55, 0.45)
 const PLASTER := Color(0.60, 0.57, 0.50)
 
@@ -47,11 +48,18 @@ static func build() -> MeshInstance3D:
 		arr[Mesh.ARRAY_VERTEX] = vs
 		arr[Mesh.ARRAY_NORMAL] = ns
 		mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arr)
-		var m := StandardMaterial3D.new()
-		m.albedo_color = STONE if stone else PLASTER
-		m.roughness = 0.95
-		m.cull_mode = BaseMaterial3D.CULL_DISABLED
-		mesh.surface_set_material(mesh.get_surface_count() - 1, m)
+		# v0.32.0 : pierre PBR de la cathédrale (même grès que la peau procédurale) ; enduit : détail PBR en projection triplanaire
+		if stone:
+			mesh.surface_set_material(mesh.get_surface_count() - 1, Surfaces.make("stone", {"c": 0xa87c6a, "map": -1}, func(_i: int) -> Texture2D: return null))
+		else:
+			var m := StandardMaterial3D.new()
+			m.albedo_color = PLASTER * 1.6
+			m.albedo_texture = preload("res://assets/pbr/wall_plaster/a.png")
+			m.uv1_triplanar = true
+			m.uv1_world_triplanar = true
+			m.uv1_scale = Vector3(0.6, 0.6, 0.6)
+			m.roughness = 0.95
+			mesh.surface_set_material(mesh.get_surface_count() - 1, m)
 	var mi := MeshInstance3D.new()
 	mi.mesh = mesh
 	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
@@ -67,3 +75,7 @@ static func _quad(vs: PackedVector3Array, ns: PackedVector3Array, a: Vector2, b:
 	vs.append_array([p0, p1, p2, p0, p2, p3])
 	for _i in 6:
 		ns.append(n)
+	# v0.32.0 : l'autre face (les matériaux PBR coupent les faces arrière)
+	vs.append_array([p0, p2, p1, p0, p3, p2])
+	for _i in 6:
+		ns.append(-n)

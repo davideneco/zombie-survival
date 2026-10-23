@@ -41,6 +41,14 @@ var _lit := 1.0                   ## 1 : nuit (tout est allumé), 0 : plein jour
 var _gv: Node
 var _shop_mats: Dictionary = {}   ## v0.28.0 : materials of the JS wall boards and ammo stations (ShopView replaces them) -> surfaces dropped
 var shop_surfaces_dropped := 0
+## v0.32.0 : extérieur refait de la cathédrale (CathedralZone) : rôle des matériaux cuits ("flood", "facade", "roof") et matériaux de remplacement
+const CathedralZone := preload("res://scenes/world/cathedral_zone.gd")
+var _cath_role: Dictionary = {}
+var _cath_stone: ShaderMaterial
+var _cath_roof: ShaderMaterial
+var _cath_rect := Rect2()
+var _cath_inwall: Dictionary = {}   ## indice du matériau cuit -> ShaderMaterial (cath_inwall.gdshader), émission réglée par _apply_lit
+var cath_tris := [0, 0, 0, 0, 0]     ## triangles cuits : gardés, passés en pierre, en toiture, retirés (dans les tuiles qui touchent l'emprise)
 
 static func _json(path: String) -> Variant:
 	return JSON.parse_string(FileAccess.get_file_as_string(path))
@@ -66,6 +74,12 @@ func build() -> void:
 	progress.emit(0.25)
 	_load_materials()
 	await _slice()
+	if not _no_cathedral and not OS.get_cmdline_user_args().has("--dbg-cath031"):   # --dbg-cath031 : extérieur de la v0.31 (comparaisons)
+		_cath_rect = CathedralZone.world_rect().grow(2.0)
+		_cath_stone = Surfaces.make("stone", {"c": 0xa87c6a, "map": -1}, _tex)
+		_cath_stone.set_shader_parameter("flood_energy", 0.7)   # la couleur de sommet du contour cuit (teinte rose ~0,9) sert d'occlusion : lavis un peu moins fort
+		_cath_roof = preload("res://scenes/world/cathedral_view.gd").make_roof_mat()
+		_cath_roof.set_shader_parameter("use_vc", 0.0)
 	var tiles: Dictionary = _json(DIR + "tiles.json")
 	var n_tiles := (tiles["tiles"] as Array).size()
 	var ti := 0
@@ -73,7 +87,9 @@ func build() -> void:
 		ti += 1
 		progress.emit(0.25 + 0.6 * ti / maxf(1.0, n_tiles))
 		await _slice()
-		var mi := _mesh_from_pack(DIR + "tiles/t%s.bin" % t["key"])
+		var kk := String(t["key"]).split("_")
+		var trect := Rect2(float(tiles["x0"]) + float(kk[0]) * float(tiles["tile"]), float(tiles["z0"]) + float(kk[1]) * float(tiles["tile"]), float(tiles["tile"]), float(tiles["tile"]))
+		var mi := _mesh_from_pack(DIR + "tiles/t%s.bin" % t["key"], _cath_rect.size.x > 0.0 and trect.intersects(_cath_rect))
 		if mi != null:
 			mi.visibility_range_end = TILE_VIS_RANGE
 			add_child(mi)
@@ -100,7 +116,7 @@ func build() -> void:
 			set_quality(int(Game.settings.get_value("quality"))))
 	set_quality(int(Game.settings.get_value("quality")))
 	load_ms = Time.get_ticks_msec() - t0
-	print("monde affiché : %d tuiles, %d triangles, %d matériaux, %d ms" % [tile_count, triangle_count, _materials.size(), load_ms])
+	print("monde affiché : %d tuiles, %d triangles, %d matériaux, %d ms ; cathédrale (tuiles) : %d gardés, %d en pierre, %d en toiture, %d retirés, %d murs intérieurs à deux faces" % [tile_count, triangle_count, _materials.size(), load_ms, cath_tris[0], cath_tris[1], cath_tris[2], cath_tris[3], cath_tris[4]])
 
 func _process(dt: float) -> void:
 	var _pt := PerfLog.t()
@@ -186,6 +202,10 @@ func _load_materials() -> void:
 		if not keep_shops and ShopView.baked_shop_material(m):
 			_shop_mats[_materials.size()] = true
 		var k := Surfaces.kind(m, files)
+		if k == "facade":
+			_cath_role[_materials.size()] = "flood" if int(m.get("rank", 0)) == 23 else "facade"
+		elif k == "roof":
+			_cath_role[_materials.size()] = "roof"
 		if k != "":
 			var shm := Surfaces.make(k, m, _tex, _relief_tex)
 			if not _kinds.has(k):
@@ -236,6 +256,8 @@ func _load_materials() -> void:
 			sm.alpha_scissor_threshold = float(m["at"])
 		if bool(m["add"]):
 			sm.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+		if int(m["side"]) == 2 and not bool(m["vc"]) and int(m["map"]) >= 0 and int(m["emap"]) >= 0 and em != 0 and not bool(m["tr"]):
+			_cath_role[_materials.size()] = "inwall"
 		if bool(m["nodw"]):
 			sm.no_depth_test = false
 			sm.disable_receive_shadows = true
@@ -294,7 +316,7 @@ static func _to_v3(f: PackedFloat32Array) -> PackedVector3Array:
 		out[i] = Vector3(f[i * 3], f[i * 3 + 1], f[i * 3 + 2])
 	return out
 
-func _mesh_from_pack(path: String) -> MeshInstance3D:
+func _mesh_from_pack(path: String, cath := false) -> MeshInstance3D:
 	var pk := _open_pack(path, "ZMP1")
 	if pk.is_empty():
 		return null
@@ -304,7 +326,11 @@ func _mesh_from_pack(path: String) -> MeshInstance3D:
 		if _shop_mats.has(int(s["mat"])):
 			shop_surfaces_dropped += 1
 			continue
-		mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, _surface_arrays(s, pk[1], pk[2], true))
+		var arr := _surface_arrays(s, pk[1], pk[2], true)
+		if cath and _cath_role.has(int(s["mat"])):
+			_add_cath_split(mesh, arr, int(s["mat"]))
+			continue
+		mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arr)
 		mesh.surface_set_material(mesh.get_surface_count() - 1, _materials[int(s["mat"])])
 	if mesh.get_surface_count() == 0:
 		return null
@@ -313,6 +339,47 @@ func _mesh_from_pack(path: String) -> MeshInstance3D:
 	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	mi.set_meta("tile", true)   # set_quality règle les ombres portées (la lune)
 	return mi
+
+## v0.32.0 : répartit les triangles d'une surface cuite entre son matériau, la pierre et la toiture de la cathédrale (ou les retire), voir CathedralZone.
+func _add_cath_split(mesh: ArrayMesh, arr: Array, mat: int) -> void:
+	var role: String = _cath_role[mat]
+	var v: PackedVector3Array = arr[Mesh.ARRAY_VERTEX]
+	var idx: PackedInt32Array = arr[Mesh.ARRAY_INDEX]
+	var parts := [PackedInt32Array(), PackedInt32Array(), PackedInt32Array(), PackedInt32Array(), PackedInt32Array()]
+	var t := 0
+	while t + 2 < idx.size():
+		var c := CathedralZone.classify(role, v[idx[t]], v[idx[t + 1]], v[idx[t + 2]])
+		cath_tris[c] += 1
+		if c != CathedralZone.DROP:
+			var p: PackedInt32Array = parts[c]
+			p.append(idx[t])
+			p.append(idx[t + 1])
+			p.append(idx[t + 2])
+			parts[c] = p
+		t += 3
+	if role == "inwall" and not _cath_inwall.has(mat):
+		var src: StandardMaterial3D = _materials[mat]
+		var im := ShaderMaterial.new()
+		im.shader = preload("res://shaders/cath_inwall.gdshader")
+		im.set_shader_parameter("albedo_tex", src.albedo_texture)
+		im.set_shader_parameter("emis_tex", src.emission_texture)
+		im.set_shader_parameter("emis_color", src.emission)
+		im.set_shader_parameter("emis_energy", src.emission_energy_multiplier * _lit)
+		im.set_shader_parameter("roughness", src.roughness)
+		im.set_shader_parameter("stone_a", Surfaces.PBR_STONE_BIG_A)
+		im.set_shader_parameter("stone_m", Surfaces.PBR_STONE_BIG_M)
+		im.set_meta("emis_base", src.emission_energy_multiplier)
+		im.set_shader_parameter("night", _lit)
+		_cath_inwall[mat] = im
+	var mats: Array = [_materials[mat], _cath_stone, _cath_roof, null, _cath_inwall.get(mat)]
+	for k in [0, 1, 2, 4]:
+		var p: PackedInt32Array = parts[k]
+		if p.is_empty():
+			continue
+		var a2 := arr.duplicate()
+		a2[Mesh.ARRAY_INDEX] = p
+		mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, a2)
+		mesh.surface_set_material(mesh.get_surface_count() - 1, mats[k])
 
 func _load_doors() -> void:
 	for d: Dictionary in Game.world.doors:
@@ -432,6 +499,11 @@ func _apply_lit(lit: float) -> void:
 	if absf(lit - _lit) < 0.01 and not (lit <= 0.0 and _lit > 0.0) and not (lit >= 1.0 and _lit < 1.0):
 		return
 	_lit = lit
+	if _cath_stone != null:   # v0.32.0 : projecteurs de la cathédrale sur la pierre du contour cuit, comme sur la peau procédurale
+		_cath_stone.set_shader_parameter("night", lit)
+	for im: ShaderMaterial in _cath_inwall.values():
+		im.set_shader_parameter("emis_energy", float(im.get_meta("emis_base")) * lit)
+		im.set_shader_parameter("night", lit)
 	for m: ShaderMaterial in _kinds.get("facade", []):
 		if m.get_meta("emis_base", -1.0) < 0.0:
 			m.set_meta("emis_base", float(m.get_shader_parameter("emission_energy")))

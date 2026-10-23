@@ -101,6 +101,7 @@ var _fps_phys := 0.0
 var _fps_step_us := 0
 var _fps_steps := 0
 var _fps_n := 0
+var _no_weapon := false         ## --no-weapon : la caméra ne dessine pas la couche de la vue d'arme (captures du décor)
 var _no_hud := false            ## --no-hud : sans HUD ni menus (comparaisons de rendu avec le JS)
 var _open_all := false
 var _show_collision := false     ## --show-collision[=rapport.json] : collision en surimpression (scenes/world/collision_view.gd)
@@ -242,6 +243,8 @@ func _ready() -> void:
 			_spin_rate = deg_to_rad(float(a.substr(12)))
 		elif a == "--no-hud":
 			_no_hud = true
+		elif a == "--no-weapon":   # v0.32.0 : captures du décor sans l'arme ni les mains (couche de la vue d'arme masquée)
+			_no_weapon = true
 		elif a.begins_with("--horde="):
 			_horde = int(a.substr(8))
 		elif a == "--horde-near":
@@ -617,6 +620,8 @@ func _build_scene_nodes(map: String) -> void:
 	_camera.fov = float(Game.settings.get_value("fov"))
 	_camera.near = 0.05
 	_camera.far = 180.0               # le JS s'arrête à 170 m : au-delà le brouillard cache tout
+	if _no_weapon:
+		_camera.cull_mask &= ~(1 << 19)   # WeaponModels.VIEW_LAYER
 	add_child(_camera)
 	_graphics = GraphicsView.new()
 	add_child(_graphics)

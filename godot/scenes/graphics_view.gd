@@ -26,6 +26,8 @@ const THREE_TO_GODOT := 1.0 / PI
 const TONE_K := 1.0
 const GRADE_CONTRAST := 1.07
 const GRADE_SATURATION := 1.12
+const DAY_FOG_K := 0.62          ## v0.32.0 : densité du brouillard de plein jour / densité du JS
+const DAY_AERIAL := 0.6          ## v0.32.0 : perspective aérienne de jour
 var _fog_base := FOG_DENSITY
 var _dbg_fogday := OS.get_cmdline_user_args().has("--dbg-fogday")
 var _dbg_nograde := OS.get_cmdline_user_args().has("--dbg-nograde")
@@ -165,7 +167,9 @@ func _build_environment() -> void:
 ## Dosage de la perspective aérienne selon le ciel (k : 0 nuit, 1 jour) : de jour le brouillard est déjà dense et clair, il n'en reçoit pas.
 func _set_atmosphere(k: float) -> void:
 	var f := 0.0 if dbg_noatmo else 1.0 - clampf(k * 3.0, 0.0, 1.0)
-	env.fog_aerial_perspective = 0.22 * f
+	var day := 0.0 if dbg_noatmo else _sm(clampf((k - 0.3) / 0.5, 0.0, 1.0))
+	# v0.32.0 : de jour la brume prend la couleur du ciel dans la direction du regard (perspective aérienne) : l'horizon et le lointain se fondent dans le ciel
+	env.fog_aerial_perspective = maxf(0.22 * f, DAY_AERIAL * day)
 	env.fog_sun_scatter = 0.15 * f
 	env.fog_height_density = 0.1 * f
 
@@ -401,10 +405,11 @@ func set_sky_k(k: float, hour := -1.0) -> void:
 	_hemi_k = _pick_n(SKY_HEMI, k)
 	_last_brightness = -1.0   # relance le calcul de l'ambiance avec la nouvelle intensité
 	env.fog_light_color = _pick_c(SKY_FOG, k)
-	if not _dbg_fogday:   # v0.24.5 : de jour le brouillard (celui de la nuit du JS) est ramené à 40 % : l'aube et le jour ne sont plus laiteux
-		_set_fog(_fog_base * (1.0 - 0.6 * _sm(clampf((k - 0.2) / 0.5, 0.0, 1.0))))
 	_set_atmosphere(k)
-	_set_fog(_pick_n(SKY_DENSITY, k) * (1.15 if arena else 1.0))
+	# v0.32.0 : de jour le brouillard du JS (0,011 : opaque à 150 m, image laiteuse) est ramené à DAY_FOG_K : brume légère, la ville reste lisible jusqu'au bout de la portée
+	# des tuiles (180 m, plan lointain de la caméra : ~85 % de brume, la coupure se fond dans le ciel). (La réduction de v0.24.5 était écrasée par l'appel suivant : elle n'a jamais agi.) Nuit inchangée.
+	var day_cut := 0.0 if _dbg_fogday else (1.0 - DAY_FOG_K) * _sm(clampf((k - 0.2) / 0.5, 0.0, 1.0))
+	_set_fog(_pick_n(SKY_DENSITY, k) * (1.15 if arena else 1.0) * (1.0 - day_cut))
 	if cycle:
 		# une seule lumière directionnelle : le soleil au-dessus de l'horizon, la lune dessous ; chacune s'éteint en s'approchant de l'horizon (le relais se fait à énergie nulle,
 		# l'ambiance du ciel porte le crépuscule)
