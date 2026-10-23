@@ -159,6 +159,7 @@ func set_quality(q: int) -> void:
 		m.set_shader_parameter("pbr_k", 0.0 if q == 0 else 1.0)
 	for m: ShaderMaterial in _kinds.get("foliage", []):
 		m.set_shader_parameter("wind_on", 0.0 if q == 0 else 1.0)
+		m.set_shader_parameter("vary", 0.0 if q == 0 else 1.0)
 	for mm in _tree_cards:
 		mm.visibility_range_end = float(TREE_CARD_RANGE[clampi(q, 0, 2)]) + (INSTANCE_CELL * 0.5 if q > 0 else 0.0)
 	_glow_pools = q >= 1
@@ -482,9 +483,12 @@ func _load_instances() -> void:
 		return
 	var bytes: PackedByteArray = pk[1]
 	var base: int = pk[2]
+	var car_sig := _car_signature(pk[0]["meshes"], bytes, base)   # v0.32.4 : voitures du JS remplacées par CarsView
 	for m: Dictionary in pk[0]["meshes"]:
 		var n := int(m["count"])
 		if n <= 0:
+			continue
+		if not car_sig.is_empty() and n == int(car_sig["n"]) and bytes.slice(base + int(m["xf"]), base + int(m["xf"]) + 48) == car_sig["sig"]:
 			continue
 		var xf := bytes.slice(base + int(m["xf"]), base + int(m["xf"]) + n * 48).to_float32_array()
 		var cols := PackedFloat32Array()
@@ -540,9 +544,45 @@ func _load_instances() -> void:
 					_tree_cards.append(mmi)
 				add_child(mmi)
 
+## v0.32.4 : repère la caisse des voitures garées du JS (instances colorées d'environ 4,4 x 1,2 x 1,7 m) ; construit CarsView avec leurs transformations et couleurs
+## et renvoie la signature (nombre, première transformation) qui désigne toutes leurs pièces (caisse, vitres, roues, pare-chocs, feux), écartées du décor cuit.
+const CarsView := preload("res://scenes/world/cars_view.gd")
+var cars: Node3D
+func _car_signature(meshes: Array, bytes: PackedByteArray, base: int) -> Dictionary:
+	if "--dbg-oldcars" in OS.get_cmdline_user_args():
+		return {}
+	for m: Dictionary in meshes:
+		var n := int(m["count"])
+		if n <= 0 or m["colors"] == null or (m["surfaces"] as Array).is_empty():
+			continue
+		var sf: Dictionary = m["surfaces"][0]
+		var pos := bytes.slice(base + int(sf["pos"]), base + int(sf["pos"]) + int(sf["nv"]) * 12).to_float32_array()
+		var lo := Vector3(INF, INF, INF)
+		var hi := -lo
+		for i in int(sf["nv"]):
+			var v := Vector3(pos[i * 3], pos[i * 3 + 1], pos[i * 3 + 2])
+			lo = lo.min(v)
+			hi = hi.max(v)
+		var e := hi - lo
+		if e.x > 4.0 and e.x < 4.8 and e.y > 1.0 and e.y < 1.6 and e.z > 1.5 and e.z < 2.0:
+			var xf := bytes.slice(base + int(m["xf"]), base + int(m["xf"]) + n * 48).to_float32_array()
+			var cols := bytes.slice(base + int(m["colors"]), base + int(m["colors"]) + n * 12).to_float32_array()
+			var xfs: Array = []
+			var cc: Array = []
+			for i in n:
+				var o := i * 12
+				xfs.append(Transform3D(Basis(Vector3(xf[o], xf[o + 4], xf[o + 8]), Vector3(xf[o + 1], xf[o + 5], xf[o + 9]), Vector3(xf[o + 2], xf[o + 6], xf[o + 10])), Vector3(xf[o + 3], xf[o + 7], xf[o + 11])))
+				cc.append(Color(cols[i * 3], cols[i * 3 + 1], cols[i * 3 + 2]))
+			cars = CarsView.new()
+			add_child(cars)
+			cars.build(xfs, cc)
+			return {"n": n, "sig": bytes.slice(base + int(m["xf"]), base + int(m["xf"]) + 48)}
+	return {}
+
 ## v0.32.3 : masque des pelouses (R : densité d'arbres) et des fosses d'arbres (G), 1 m par texel sur l'emprise du champ de distance du sol ; lu par ground.gdshader.
 var _tree_pos: PackedVector2Array = []
 var grass_texture: ImageTexture
+var vegetation: Node3D
 func _grass_mask() -> void:
 	var meta := GfxAssets.meta()
 	if meta.is_empty() or _tree_pos.is_empty() or "--dbg-nograss" in OS.get_cmdline_user_args():
@@ -574,6 +614,13 @@ func _grass_mask() -> void:
 		data[i * 2 + 1] = pit[i]
 	var img := Image.create_from_data(w, h, false, Image.FORMAT_RG8, data)
 	grass_texture = ImageTexture.create_from_image(img)
+	# v0.32.4 : touffes d'herbe et grilles d'arbres (même masque)
+	if not "--dbg-novege" in OS.get_cmdline_user_args():
+		var sdf_t := GfxAssets.texture("ground_sdf.png", false)
+		var sdf_img: Image = sdf_t.get_image() if sdf_t != null else null
+		vegetation = preload("res://scenes/world/vegetation_view.gd").new()
+		add_child(vegetation)
+		vegetation.build(_tree_pos, data, w, h, Vector2(float(o[0]), float(o[1])), sdf_img, float(meta["sdf_min"]), float(meta["sdf_range"]))
 	for m: ShaderMaterial in _kinds.get("ground", []):
 		m.set_shader_parameter("grass_mask", grass_texture)
 		m.set_shader_parameter("grass_a", preload("res://assets/pbr/ground_grass/a.png"))
