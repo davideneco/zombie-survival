@@ -109,7 +109,7 @@ Drop `theme.mp3` (or `.ogg`, `.m4a`, `.wav`) in `public/music/` to replace the s
 
 ## Repository layout
 
-| Folder | Contents |
+| Folder / File | Contents |
 |---|---|
 | `src/` | The game (ES modules); balance in `src/config.js` |
 | `server/` | Multiplayer relay (`rooms.mjs`) and production server (`prod.mjs`) |
@@ -117,6 +117,8 @@ Drop `theme.mp3` (or `.ogg`, `.m4a`, `.wav`) in `public/music/` to replace the s
 | `tools/` | OSM extraction, doc generation, stuck detection, baking and golden files for the Godot port |
 | `docs/` | Reference, annotated map, CSV; `GODOT_PORT.md` (plan and log of the port, French) |
 | `godot/` | Godot port (`godot-port` branch) |
+| `.agents/` | Agent skills & roles (`explorer`, `game-designer`, `gameplay-coder`, `gui-test-debugger`, `playtest-bug-hunter`) |
+| `GEMINI.md` / `AGENTS.md` | Development rules and guidelines for AI pair programmers |
 
 To check a change: `npx vite build`, then play a game with `?debug` in the URL.
 
