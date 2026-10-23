@@ -43,6 +43,8 @@ var _shop_mats: Dictionary = {}   ## v0.28.0 : materials of the JS wall boards a
 var shop_surfaces_dropped := 0
 ## v0.32.0 : extérieur refait de la cathédrale (CathedralZone) : rôle des matériaux cuits ("flood", "facade", "roof") et matériaux de remplacement
 const CathedralZone := preload("res://scenes/world/cathedral_zone.gd")
+const CityDetails := preload("res://scenes/world/city_details_view.gd")
+var details: Node3D
 var _cath_role: Dictionary = {}
 var _cath_stone: ShaderMaterial
 var _cath_roof: ShaderMaterial
@@ -75,6 +77,7 @@ func build() -> void:
 	await _load_textures()
 	progress.emit(0.25)
 	_load_materials()
+	_plank_materials()
 	await _slice()
 	if not _no_cathedral and not OS.get_cmdline_user_args().has("--dbg-cath031"):   # --dbg-cath031 : extérieur de la v0.31 (comparaisons)
 		_cath_rect = CathedralZone.world_rect().grow(2.0)
@@ -103,6 +106,10 @@ func build() -> void:
 		add_child(patches)
 	_load_doors()
 	await _slice()
+	if CityDetails.exists() and not OS.get_cmdline_user_args().has("--dbg-nodetails"):   # v0.32.2 : fenêtres, volets, balcons, gouttières, cheminées en 3D
+		details = CityDetails.new()
+		add_child(details)
+		await details.build(_slice)
 	if not _no_cathedral:
 		var cv := preload("res://scenes/world/cathedral_view.gd").new()
 		add_child(cv)
@@ -145,6 +152,7 @@ func set_quality(q: int) -> void:
 		if m.get_shader_parameter("bump_tex") != null:   # v0.24.1 : Rapide = ancien rendu ; Normale = PBR + relief ; Haute = + bois PBR des colombages
 			m.set_shader_parameter("pbr_k", 0.0 if q == 0 else 1.0)
 			m.set_shader_parameter("pbr_hi", 1.0 if q >= 2 else 0.0)
+			m.set_shader_parameter("recess", 0.0 if "--dbg-norecess" in OS.get_cmdline_user_args() else 0.16)   # v0.32.2 : vitres en retrait (parallaxe)
 	for m: ShaderMaterial in _kinds.get("roof", []):   # v0.24.4 : toits PBR en Normale et Haute
 		m.set_shader_parameter("pbr_k", 0.0 if q == 0 else 1.0)
 	for m: ShaderMaterial in _kinds.get("foliage", []):
@@ -280,6 +288,42 @@ func _load_materials() -> void:
 			sm.no_depth_test = false
 			sm.disable_receive_shadows = true
 		_materials.append(sm)
+
+## v0.32.2 : bois PBR « wood_door » sur les planches des portes barricadées : le matériau texturé le plus employé par les portes cuites (et les mêmes
+## planches ailleurs : fenêtres condamnées, instances) devient shaders/planks.gdshader.
+var planks_material := -1
+func _plank_materials() -> void:
+	if "--dbg-noplanks" in OS.get_cmdline_user_args() or Game.world == null:
+		return
+	var use := {}
+	for d: Dictionary in Game.world.doors:
+		var path := DIR + "doors/d%d.bin" % int(d["id"])
+		var f := FileAccess.open(path, FileAccess.READ)
+		if f == null or f.get_length() < 8:
+			continue
+		if f.get_buffer(4).get_string_from_ascii() != "ZMP1":
+			continue
+		var hlen := f.get_32()
+		var head: Dictionary = JSON.parse_string(f.get_buffer(hlen).get_string_from_utf8())
+		for sf: Dictionary in head["surfaces"]:
+			var mi := int(sf["mat"])
+			if _materials[mi] is StandardMaterial3D and (_materials[mi] as StandardMaterial3D).albedo_texture != null:
+				use[mi] = int(use.get(mi, 0)) + int(sf["ni"])
+	var best := -1
+	for mi: int in use:
+		if best < 0 or int(use[mi]) > int(use[best]):
+			best = mi
+	if best < 0:
+		return
+	var src: StandardMaterial3D = _materials[best]
+	var pm := ShaderMaterial.new()
+	pm.shader = preload("res://shaders/planks.gdshader")
+	pm.set_shader_parameter("albedo_tex", src.albedo_texture)
+	pm.set_shader_parameter("wood_a", preload("res://assets/pbr/wood_door/a.png"))
+	pm.set_shader_parameter("wood_m", preload("res://assets/pbr/wood_door/m.png"))
+	pm.set_shader_parameter("uv_scale", Vector2(src.uv1_scale.x, src.uv1_scale.y))
+	_materials[best] = pm
+	planks_material = best
 
 # ---------------------------------------------------------------- paquets de surfaces
 ## Lit l'en-tête d'un paquet : « ZMP1 » ou « ZMI1 », u32 longueur du JSON, JSON, blobs. Renvoie [en-tête, octets, début des blobs].

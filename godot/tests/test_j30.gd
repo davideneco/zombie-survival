@@ -308,6 +308,7 @@ func run(t: Node) -> void:
 	_stairs(t, w)
 	_facade(t, w)
 	_cathedral_v32(t, w)
+	_city_details(t, w)
 	print("j30 : %d anneaux fermés ; %d murs de sol, %d sans face avant bouchons, %d après ; %d ms" % [rings, ground.size(), bad_before.size(), bad.size(), Time.get_ticks_msec() - t0])
 
 ## Balayage « le joueur ne traverse pas les murs visibles » : un cercle de 0,4 m (le joueur) avance de 1,5 m en deçà à 1,5 m au-delà d'une face verticale visible
@@ -482,3 +483,46 @@ func _cathedral_v32(t: Node, w: World) -> void:
 					if Z.classify(role, a, a + Vector3(0.3, 0.0, 0.0), a + Vector3(0.0, 0.3, 0.0)) == Z.DROP:
 						low_drop += 1
 	t.check(low_drop == 0, "le contour cuit de la cathédrale n'est jamais retiré sous 11 m (%d retraits sur %d sondes)" % [low_drop, probes])
+
+
+## v0.32.2 : détails 3D de la ville (data/city_details.bin, tools/build-city-details.py) : fichier lisible et complet, et rien de ce qui descend à hauteur
+## d'homme (descentes d'eau pluviale ; volets, jardinières, balcons et encadrements des baies basses) n'est posé sur du sol praticable loin d'un mur.
+func _city_details(t: Node, w: World) -> void:
+	var path := "res://data/city_details.bin"
+	if not FileAccess.file_exists(path):
+		print("j30 : data/city_details.bin absent (python3 tools/build-city-details.py) : contrôles des détails sautés")
+		t.check(true, "détails de la ville absents : sautés")
+		return
+	var bytes := FileAccess.get_file_as_bytes(path)
+	t.check(bytes.slice(0, 4).get_string_from_ascii() == "ZCD1", "city_details.bin : en-tête ZCD1")
+	var hlen := bytes.decode_u32(4)
+	var head: Dictionary = JSON.parse_string(bytes.slice(8, 8 + hlen).get_string_from_utf8())
+	var expect := 8 + hlen + 4 * (int(head["windows"]) * 10 + int(head["gutters"]) * 7 + int(head["pipes"]) * 6 + int(head["chimneys"]) * 6 + int(head["ridges"]) * 6)
+	t.check(bytes.size() == expect, "city_details.bin : taille cohérente avec l'en-tête (%d / %d octets)" % [bytes.size(), expect])
+	t.check(int(head["windows"]) > 50000 and int(head["chimneys"]) > 500 and int(head["gutters"]) > 2000, "détails : %d fenêtres, %d gouttières, %d descentes, %d cheminées" % [head["windows"], head["gutters"], head["pipes"], head["chimneys"]])
+	w.open_all_doors()
+	var nav := w.nav
+	var main_label := nav.label_of(nav.idx(nav.cx(w.start_pos.x), nav.cz(w.start_pos.z)))
+	var col: Collision = w.collision
+	var off := 8 + hlen
+	var W := bytes.slice(off, off + int(head["windows"]) * 40).to_float32_array()
+	off += int(head["windows"]) * 40 + int(head["gutters"]) * 28
+	var P := bytes.slice(off, off + int(head["pipes"]) * 24).to_float32_array()
+	var bad: PackedStringArray = []
+	var tested := [0]
+	var probe := func(x: float, z: float) -> void:
+		if not nav.inside(nav.cx(x), nav.cz(z)) or nav.label_of(nav.idx(nav.cx(x), nav.cz(z))) != main_label:
+			return
+		tested[0] += 1
+		var q := Vector3(x, 0.0, z)
+		var r := col.resolve(q, 0.35)
+		if Vector2(r.x - q.x, r.z - q.z).length() < 1e-4 and bad.size() < 200:
+			bad.append("(%.1f, %.1f)" % [x, z])
+	for i in P.size() / 6:
+		probe.call(P[i * 6], P[i * 6 + 1])
+	for i in W.size() / 10:
+		var o := i * 10
+		if W[o + 1] < 2.0:
+			probe.call(W[o] + W[o + 3] * 0.2, W[o + 2] + W[o + 4] * 0.2)
+	print("j30 : détails de la ville : %d points bas sur sol praticable testés, %d loin d'un mur" % [tested[0], bad.size()])
+	t.check(bad.is_empty(), "descentes d'eau et baies basses contre un mur (à moins de 0,35 m d'une collision) : %s" % ", ".join(bad.slice(0, 8)))

@@ -39,6 +39,7 @@ uniform float wood_scale = 1.8;
 uniform float trim_wood = 0.0;       // 1 : les saillies sont du bois (colombages)
 uniform float relief_k = 1.0;        // force de la normale de relief
 uniform float glass_k = 1.0;         // reflet des vitres
+uniform float recess = 0.16;         // v0.32.2 : profondeur (m) des vitres derrière le nu du mur (parallaxe ; 0 : à plat)
 
 varying vec3 wpos;
 varying vec3 wnrm;
@@ -61,10 +62,40 @@ void fragment() {
 	float ao = 1.0;
 	float glass = 0.0;
 	vec3 sky_refl = vec3(0.0);
+	vec2 uv_em = uv;
 	if (pbr_k > 0.5) {
 		float side = FRONT_FACING ? 1.0 : -1.0;
 		vec3 N = normalize(wnrm) * side;
 		float b = texture(bump_tex, uv).r;
+		// v0.32.2 : vitre en retrait (parallaxe) : le rayon de vue qui passe par ce point du nu du mur touche la vitre `recess` m plus loin ; s'il tombe
+		// hors de la vitre, on voit le tableau de la baie (pierre dans l'ombre). Jacobien (u, v) / (abscisse, hauteur) tiré des dérivées d'écran.
+		if (recess > 0.0 && b < 0.3) {
+			vec3 Tw = normalize(vec3(-N.z, 0.0, N.x) + vec3(1e-4, 0.0, 0.0));
+			vec3 vd = normalize((INV_VIEW_MATRIX * vec4(VIEW, 0.0)).xyz);
+			float vn = max(dot(vd, N), 0.25);
+			vec2 off = -vec2(dot(vd, Tw), vd.y) / vn * recess;
+			vec2 dA = vec2(dFdx(dot(wpos, Tw)), dFdy(dot(wpos, Tw)));
+			vec2 dY = vec2(dFdx(wpos.y), dFdy(wpos.y));
+			float det = dA.x * dY.y - dA.y * dY.x;
+			if (abs(det) > 1e-10) {
+				vec2 dU = vec2(dFdx(uv.x), dFdy(uv.x));
+				vec2 dV = vec2(dFdx(uv.y), dFdy(uv.y));
+				// J = [dU; dV] x inverse([dA; dY])
+				mat2 inv = mat2(vec2(dY.y, -dA.y), vec2(-dY.x, dA.x)) / det;   // colonnes
+				vec2 ju = inv * dU;   // (du/da, du/dy)
+				vec2 jv = inv * dV;
+				vec2 uvp = uv + vec2(dot(ju, off), dot(jv, off));
+				float bp = textureLod(bump_tex, uvp, 0.0).r;
+				if (bp < 0.3) {
+					col = texture(albedo_tex, uvp).rgb * albedo.rgb * COLOR.rgb;
+					uv_em = uvp;
+				} else {
+					col = texture(albedo_tex, uv).rgb * 0.0 + vec3(0.30, 0.27, 0.24) * COLOR.rgb;   // tableau de la baie, dans l'ombre
+					uv_em = vec2(-10.0);
+					b = 0.5;
+				}
+			}
+		}
 		float wall = smoothstep(0.30, 0.38, b) * (1.0 - smoothstep(0.62, 0.72, b));
 		float trim = smoothstep(0.62, 0.72, b);
 		glass = 1.0 - smoothstep(0.20, 0.30, b);
@@ -123,7 +154,7 @@ void fragment() {
 	METALLIC = metallic;
 	AO = ao;
 	AO_LIGHT_AFFECT = 0.5;
-	vec3 em = texture(emission_tex, uv).rgb;
+	vec3 em = uv_em.x < -5.0 ? vec3(0.0) : texture(emission_tex, uv_em).rgb;
 	// halo : la même carte lue en niveau de détail grossier (flou) : la lueur des fenêtres déborde sur le mur autour, comme un bloom, sans passe d'écran ni bruit
 	if (glow_k > 0.0) {
 		em += textureLod(emission_tex, uv, glow_lod).rgb * glow_k;

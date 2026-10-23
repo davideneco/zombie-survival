@@ -7,6 +7,7 @@ var verts := PackedVector3Array()
 var norms := PackedVector3Array()
 var cols := PackedColorArray()
 var ao := 1.0   ## occlusion ambiante des sommets ajoutés ensuite (1 : exposé, 0,3 : creux)
+var paint := Color(-1.0, 0.0, 0.0)   ## v0.32.2 : si paint.r >= 0, couleur de sommet imposée (au lieu du gris d'occlusion)
 
 func tri(a: Vector3, b: Vector3, c: Vector3, hint: Vector3) -> void:
 	var n := (b - a).cross(c - a)
@@ -20,7 +21,7 @@ func tri(a: Vector3, b: Vector3, c: Vector3, hint: Vector3) -> void:
 	n = -(b - a).cross(c - a).normalized()   # sortante : le produit vectoriel d'un triangle horaire pointe vers l'arrière
 	verts.append_array([a, b, c])
 	norms.append_array([n, n, n])
-	var col := Color(ao, ao, ao, 1.0)
+	var col := Color(ao, ao, ao, 1.0) if paint.r < 0.0 else paint
 	cols.append_array([col, col, col])
 
 func quad(a: Vector3, b: Vector3, c: Vector3, d: Vector3, hint: Vector3) -> void:

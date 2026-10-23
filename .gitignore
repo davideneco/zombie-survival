@@ -25,3 +25,4 @@ tools/__pycache__/
 godot/assets/pbr_src/
 godot/assets/pbr/*/*.png
 tools/charlib/__pycache__/
+godot/data/city_details.bin

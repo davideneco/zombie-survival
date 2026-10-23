@@ -25,8 +25,8 @@ const SHAFT_R := 0.62
 var stone := GeoBuilder.new()
 var floor := GeoBuilder.new()   ## dallage posé à 1,2 cm au-dessus du sol (le pavé de la ville passait sous la cathédrale et l'emportait sur le damier du JS)
 
-## Volumes de plain-pied (src/cath/plan2.js BLOCKS, sans le chœur surélevé ni ses chapelles) et trémies des escaliers de la crypte.
-const FLOOR_RECTS := [[-46.0, -23.5, -37.0, 23.5], [-37.0, -18.5, 28.0, 19.0], [9.0, -29.8, 28.0, -18.5], [9.0, 19.0, 28.0, 27.4], [28.0, -29.3, 46.0, 28.3]]
+## Volumes de plain-pied (src/cath/plan2.js BLOCKS ; le chœur est au niveau 0 dans le jeu, la crypte dessous) et trémies des escaliers de la crypte.
+const FLOOR_RECTS := [[-46.0, -23.5, -37.0, 23.5], [-37.0, -18.5, 28.0, 19.0], [9.0, -29.8, 28.0, -18.5], [9.0, 19.0, 28.0, 27.4], [28.0, -29.3, 46.0, 28.3], [46.0, -19.3, 57.6, 19.3]]
 const FLOOR_HOLES := [[35.5, -7.9, 44.2, -5.5], [35.5, 5.5, 44.2, 7.9]]
 
 func build() -> void:
