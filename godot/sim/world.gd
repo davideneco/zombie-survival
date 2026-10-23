@@ -25,6 +25,10 @@ var start_zone := 0
 var half_x := 820.0
 var half_z := 560.0
 var extra_first := 0                      ## indice du premier segment ajouté (data/world_collision_extra.json)
+var furniture: Array = []                 ## v0.33.1 : mobilier urbain ajouté (StreetFurniture) : objets
+var furniture_col: Array = []             ## ... et leurs éléments de collision (segments et cercles), coupés avec les autres ajouts par set_extras
+var js_circles := 0                       ## v0.33.1 : nombre de cercles du JS (les cercles du mobilier viennent après)
+var furniture_on := true                  ## faux après set_extras(false) (golden J2) : le mobilier ne compte plus (collision, apparitions au sol)
 var seg_list: Array[Dictionary] = []     ## segments de collision dans l'ordre du fichier (les portes les désignent par indice)
 var windows := PackedFloat64Array()
 var window_busy := PackedFloat64Array()  ## busyUntil de chaque fenêtre
@@ -60,6 +64,7 @@ func _load() -> void:
 		var c := {"x": cd[o], "z": cd[o + 1], "r": cd[o + 2], "h": cd[o + 3], "y0": cd[o + 4], "kind": "prop" if cd[o + 5] > 0.5 else "wall", "vid": int(cd[o + 6]), "off": cd[o + 7] > 0.5, "stamp": 0}
 		collision.circles.append(c)
 		circ_list.append(c)
+	js_circles = collision.circles.size()
 	for v: Dictionary in _json(DIR + "collision/vaults.json"):
 		if v.has("circle"):
 			collision.vaults.append({"id": int(v["id"]), "h": float(v["h"]), "circle": circ_list[int(v["circle"])]})
@@ -85,6 +90,11 @@ func _load() -> void:
 			var es := collision.add_segment(e[0], e[1], e[2], e[3], PerkPlaces.HEIGHT, -INF, "prop", 0)
 			es["off"] = false
 			seg_list.append(es)
+	furniture = StreetFurniture.list()   # v0.33.1 : mobilier urbain ajouté (data/street_furniture.json) : après le JS, comme les autres ajouts
+	furniture_col = StreetFurniture.add_collision(collision, furniture)
+	for it: Dictionary in furniture_col:
+		if not it.has("r"):
+			seg_list.append(it)
 	for f: Dictionary in _json(DIR + "collision/floors.json"):
 		collision.add_floor(float(f["y"]), f["tris"])
 	collision.build()
@@ -185,6 +195,8 @@ func pick_ground(px: float, pz: float, min_d: float, max_d: float, rng: RandomNu
 			continue
 		if not clearance(ix, iz, Rules.GROUND_CLEARANCE):
 			continue
+		if furniture_on and not furniture.is_empty() and StreetFurniture.blocks_spawn(x, z):   # v0.33.1 : pas dans un banc ni un kiosque
+			continue
 		return Vector3(x, 0.0, z)
 	return Vector3.INF
 
@@ -247,6 +259,9 @@ func open_door(id: int) -> bool:
 func set_extras(on: bool) -> void:
 	for i in range(extra_first, seg_list.size()):
 		seg_list[i]["off"] = not on
+	for it: Dictionary in furniture_col:   # v0.33.1 : les cercles du mobilier (ses segments sont aussi dans seg_list)
+		it["off"] = not on
+	furniture_on = on
 
 func open_all_doors() -> void:
 	for d: Dictionary in doors:

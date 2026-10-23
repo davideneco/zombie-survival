@@ -7,6 +7,7 @@ extends RefCounted
 
 const DIR := "res://data/world/"
 const PatchView := preload("res://scenes/world/patch_view.gd")
+const FurnitureCheck := preload("res://tests/furniture_check.gd")
 const TOL := 0.5          ## m : distance d'une face verticale à un échantillon de mur (les bouchons commencent à 0,5 m)
 const RUN_MAX := 1.5      ## m : portion continue sans face tolérée
 const STEP := 0.5
@@ -147,6 +148,8 @@ static func _in_poly(x: float, z: float, p: PackedVector2Array) -> bool:
 	return c
 
 func run(t: Node) -> void:
+	if FileAccess.file_exists(DIR + "objects.json"):
+		FurnitureCheck.new().run(t)   # v0.33.1 : mobilier urbain ajouté (tests/furniture_check.gd)
 	if not FileAccess.file_exists(DIR + "tiles/t5_3.bin"):
 		print("géométrie cuite absente (non versionnée) : suite j30 sautée (node tools/bake-world.mjs la régénère)")
 		t.check(true, "géométrie cuite absente : sautée")

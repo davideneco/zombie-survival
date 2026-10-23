@@ -48,7 +48,11 @@ func _manifest(t: Node) -> void:
 func _counts(t: Node, w: World, g: Dictionary, n_js: int) -> void:
 	var c: Dictionary = g["counts"]
 	t.check(n_js == int(c["segs"]), "segments du JS %d != %d" % [n_js, c["segs"]])
-	t.check(w.collision.circles.size() == int(c["circles"]), "cercles")
+	t.check(w.js_circles == int(c["circles"]), "cercles du JS %d != %d" % [w.js_circles, c["circles"]])   # v0.33.1 : les cercles du mobilier ajouté viennent après
+	var n_furn := 0
+	for e: Dictionary in w.furniture_col:
+		n_furn += 1 if e.has("r") else 0
+	t.check(w.collision.circles.size() == w.js_circles + n_furn, "cercles : JS + mobilier ajouté (%d)" % n_furn)
 	t.check(w.collision.vaults.size() == int(c["vaults"]), "obstacles enjambables")
 	t.check(w.collision.floors.size() == int(c["floors"]), "dalles")
 	t.check(w.levels.tris.size() == int(c["levelTris"]), "triangles d'étage %d != %d" % [w.levels.tris.size(), c["levelTris"]])

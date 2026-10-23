@@ -104,6 +104,10 @@ func _confinement(t: Node, zi: int) -> void:
 	if gm == null:
 		return
 	t.check(w.zone_of(Game.player.pos.x, Game.player.pos.z) == zi, "zone %d : le joueur commence dans la zone" % zi)
+	# v0.33.1 : le joueur ne meurt pas pendant la tournée des passages (≈ 2 min de jeu à Place Kléber : les zombies de la manche 1 finissaient
+	# par l'atteindre selon le tirage des apparitions, ce qui vidait l'invite)
+	Game.player.max_health = 1.0e9
+	Game.player.health = 1.0e9
 	# portes murées : ni invite d'achat, ni achat, ni ouverture
 	Game.points = 1000000
 	var sealed := 0

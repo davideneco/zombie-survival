@@ -126,7 +126,7 @@ func setup(w: World) -> bool:
 		busy.append(Vector2(float(m["pos"]["x"]), float(m["pos"]["z"])))
 	var g2 := PackedVector2Array()
 	for q in layout.ground:
-		if ZoneLayout._far_from(q, busy, 2.6):
+		if ZoneLayout._far_from(q, busy, 2.6) and not (w.furniture_on and StreetFurniture.blocks_spawn(q.x, q.y, 1.0)):   # v0.33.1 : ni dans le mobilier
 			g2.append(q)
 	layout.ground = g2
 	return true

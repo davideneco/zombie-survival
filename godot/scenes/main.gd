@@ -24,6 +24,7 @@ const RidesView := preload("res://scenes/world/rides_view.gd")
 const MachinesView := preload("res://scenes/world/machines_view.gd")
 const ZoneModeView := preload("res://scenes/world/zone_mode_view.gd")
 const PerkFxView := preload("res://scenes/perk_fx_view.gd")
+const FurnitureView := preload("res://scenes/world/furniture_view.gd")
 const GraphicsView := preload("res://scenes/graphics_view.gd")
 const FxView := preload("res://scenes/fx_view.gd")
 const FinaleView := preload("res://scenes/finale_view.gd")   # J10
@@ -140,6 +141,7 @@ var _machines_view: Node3D
 var _zone_view: Node3D            # v0.26.0 : murs des portes en Zone unique
 var _perk_view: Node3D            # v0.27.0 : effets des nouveaux atouts
 var _shop_view: Node3D            # v0.28.0 : wall weapon panels and ammo stations
+var _furniture_view: Node3D       # v0.33.1 : mobilier urbain ajouté (StreetFurniture)
 var _graphics: Node               # J9 : environnement, ciel, ombres, qualité (graphics_view.gd)
 var _fx: Node3D                   # J9 : particules et taches de sang (fx_view.gd)
 var _finale_view: Node3D          # J10 : effets des boss, faisceau, Fanal (finale_view.gd)
@@ -218,6 +220,8 @@ func _ready() -> void:
 		elif a.begins_with("--day-minutes="):
 			Game.settings.autosave = false
 			Game.settings.values["day_minutes"] = clampi(int(a.substr(14)), 2, 120)
+		elif a == "--no-furniture":   # v0.33.1 : sans le mobilier urbain ajouté (collision et dessin : comparaisons)
+			StreetFurniture.enabled = false
 		elif a.begins_with("--pos="):
 			var f := a.substr(6).split(",")
 			_at_pos = Vector3(float(f[0]), 0.0, float(f[1]))
@@ -537,11 +541,12 @@ func _unload_session() -> void:
 		_drop(t[0])
 	_tracers.clear()
 	_shot_queue.clear()
-	for n in [_arena_node, _rides_view, _machines_view, _zone_view, _perk_view, _shop_view, _weapon_view, _finale_view, _fx, _graphics, _hud, _intro, _camera]:
+	for n in [_arena_node, _rides_view, _machines_view, _zone_view, _perk_view, _shop_view, _furniture_view, _weapon_view, _finale_view, _fx, _graphics, _hud, _intro, _camera]:
 		_drop(n)
 	_zone_view = null
 	_perk_view = null
 	_shop_view = null
+	_furniture_view = null
 	_intro = null
 	_arena_node = null
 	_rides_view = null
@@ -686,6 +691,11 @@ func _finish_scene(_map_name: String) -> void:
 	_shop_view = ShopView.new()   # v0.28.0 : wall weapon panels and ammo stations (the JS ones are dropped from the baked tiles)
 	add_child(_shop_view)
 	_shop_view.setup()
+	if Game.world != null and not Game.world.furniture.is_empty() and "--dbg-nofurniture" not in OS.get_cmdline_user_args():
+		_furniture_view = FurnitureView.new()   # v0.33.1 : bancs, lampadaires, corbeilles, bornes, barrières, kiosques, colonnes
+		add_child(_furniture_view)
+		_furniture_view.setup(Game.world.furniture)
+		print("mobilier urbain : %s (triangles par modèle %s)" % [_furniture_view.counts, _furniture_view.triangles])
 	_perk_view = Node3D.new()   # v0.27.0 : gouttes, tombe, décharges, toiles
 	_perk_view.set_script(PerkFxView)
 	add_child(_perk_view)
