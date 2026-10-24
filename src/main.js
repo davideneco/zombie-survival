@@ -412,30 +412,79 @@ const game = {
   // force : appel du menu debug (U), sans attendre la seconde de recharge et avec des seuils plus bas ; renvoie le nombre de zombies déplacés.
   relocateZombies(dt, targets, force = false) {
     if (!force) {
-      this.relocateTimer -= dt;
+      this.relocateTimer = (this.relocateTimer ?? 0) - dt;
       if (this.relocateTimer > 0 || !targets.length || !world.pickGround) return 0;
-      this.relocateTimer = 0.8;
+      this.relocateTimer = 0.5; // vérification 2 fois par seconde
     } else if (!targets.length || !world.pickGround) return 0;
     const groundTargets = targets.filter((t) => !t.tregion);
     if (!groundTargets.length) return 0;
     targets = groundTargets;
     let moved = 0;
+    const now = this.time || performance.now() / 1000;
+
     for (const z of this.zombies) {
       if (z.dead || z.spawnT > 0 || z.region || z.link || (z.isBoss && !z.mini)) continue;
       let near = Infinity;
       for (const t of targets) near = Math.min(near, Math.hypot(t.pos.x - z.pos.x, t.pos.z - z.pos.z));
-      if (!force) z.farT = near > 50 ? (z.farT || 0) + 1 : 0;
-      const stuck = z.noProgress > (force ? 1.0 : 2.5) && near > (force ? 4 : 8);
-      if (!stuck && !(force && near > 45) && (force || z.farT < 3)) continue;
+
+      // Gestion du timer d'éloignement (secondes réelles cumulées)
+      if (!force) {
+        if (near > 40) {
+          z.farTimer = (z.farTimer || 0) + 0.5;
+        } else {
+          z.farTimer = Math.max(0, (z.farTimer || 0) - 1.0);
+        }
+      }
+
+      // Critères de relocalisation :
+      // 1) Coincé contre un mur / porte fermée depuis > 2s sans avancer (noProgress)
+      const stuck = z.noProgress > (force ? 0.8 : 2.0) && near > (force ? 4 : 7);
+      // 2) Très loin (> 100m, ex. resté au spawn quand le joueur est à Kléber) : relocalisation rapide
+      const veryFar = near > (force ? 35 : 100) && (force || (z.farTimer || 0) >= 0.5);
+      // 3) Loin (> 60m) : relocalisation au bout de 1.5s
+      const midFar = near > (force ? 25 : 60) && (force || (z.farTimer || 0) >= 1.5);
+      // 4) À distance modérée (> 40m) : relocalisation après 3.5s si le zombie ne se rapproche pas
+      const far = near > 40 && (z.farTimer || 0) >= 3.5;
+
+      if (!stuck && !veryFar && !midFar && !far) continue;
+
+      // Choisir un joueur cible (le plus proche ou au hasard)
       const t = targets[Math.floor(Math.random() * targets.length)];
-      let g = world.pickGround(t.pos.x, t.pos.z, 18, 38);
-      if (!g) g = world.pickGround(t.pos.x, t.pos.z, 12, 50);
-      if (!g) continue;
-      z.startSpawn({ type: 'ground', pos: g });
-      z.noProgress = 0; z.farT = 0;
+
+      // Périmètre d'apparition autour du joueur : 16m à 35m (idéal visuel et gameplay)
+      let sp = null;
+      if (world.pickWindow && Math.random() < 0.45) {
+        sp = world.pickWindow(t.pos.x, t.pos.z, 14, 38, now);
+      }
+      if (!sp && world.pickGround) {
+        const g = world.pickGround(t.pos.x, t.pos.z, 16, 34);
+        if (g) sp = { type: 'ground', pos: g };
+      }
+      if (!sp && world.pickWindow) {
+        sp = world.pickWindow(t.pos.x, t.pos.z, 10, 50, now, true);
+      }
+      if (!sp && world.pickGround) {
+        const g = world.pickGround(t.pos.x, t.pos.z, 14, 45, true);
+        if (g) sp = { type: 'ground', pos: g };
+      }
+      if (!sp) {
+        const ang = Math.random() * Math.PI * 2;
+        const dist = 16 + Math.random() * 14;
+        const safePos = new THREE.Vector3(t.pos.x + Math.cos(ang) * dist, 0, t.pos.z + Math.sin(ang) * dist);
+        world.collide?.(safePos, 0.8);
+        sp = { type: 'ground', pos: safePos };
+      }
+
+      z.startSpawn(sp);
+      z.noProgress = 0;
+      z.farTimer = 0;
+      z.farT = 0;
       moved++;
+
+      const destX = sp.type === 'window' ? sp.inside.x : sp.pos.x;
+      const destZ = sp.type === 'window' ? sp.inside.z : sp.pos.z;
       if (this.isMultiplayer) {
-        this.net?.send({ t: 'z_reloc', id: z.id, x: g.x, z: g.z });
+        this.net?.send({ t: 'z_reloc', id: z.id, x: destX, z: destZ });
       }
     }
     return moved;
@@ -988,26 +1037,34 @@ const game = {
     const pp = this.spawnTarget(pool).pos;
     if (world.pickWindow) {
       if (Math.random() < 0.65) {
-        const w = world.pickWindow(pp.x, pp.z, 11, 60, this.time);
+        const w = world.pickWindow(pp.x, pp.z, 12, 48, this.time);
         if (w) { w.busyUntil = this.time + 4; return w; }
       }
-      let g = world.pickGround(pp.x, pp.z, 18, 50);
+      let g = world.pickGround(pp.x, pp.z, 16, 40);
       if (g) return { type: 'ground', pos: g };
-      const w = world.pickWindow(pp.x, pp.z, 6, 80, this.time);
+      const w = world.pickWindow(pp.x, pp.z, 10, 60, this.time, true);
       if (w) { w.busyUntil = this.time + 4; return w; }
-      g = world.pickGround(pp.x, pp.z, 12, 65);
+      g = world.pickGround(pp.x, pp.z, 14, 50, true);
       if (g) return { type: 'ground', pos: g };
-      // Fallback sécurisé : case dégagée dans une zone ouverte
-      if (world.zoneCenters) {
+
+      // Secours : case dégagée dans la zone ouverte la plus PROCHE du joueur (et non l'index 0 !)
+      if (world.zoneCenters && world.zoneCenters.length) {
+        const sortedZones = [];
         for (let zi = 0; zi < world.zoneCenters.length; zi++) {
           if (world.isZoneOpen?.(zi) && world.zoneCenters[zi]) {
             const zc = world.zoneCenters[zi];
-            const zg = world.pickGround(zc[0], zc[1], 1, 20);
-            if (zg) return { type: 'ground', pos: zg };
+            sortedZones.push({ zi, zc, dist: Math.hypot(zc[0] - pp.x, zc[1] - pp.z) });
           }
         }
+        sortedZones.sort((a, b) => a.dist - b.dist);
+        for (const sz of sortedZones) {
+          const zg = world.pickGround(sz.zc[0], sz.zc[1], 1, 24);
+          if (zg) return { type: 'ground', pos: zg };
+        }
       }
-      const safePos = new THREE.Vector3(pp.x + (Math.random() - 0.5) * 8, 0, pp.z + (Math.random() - 0.5) * 8);
+      const ang = Math.random() * Math.PI * 2;
+      const d = 16 + Math.random() * 12;
+      const safePos = new THREE.Vector3(pp.x + Math.cos(ang) * d, 0, pp.z + Math.sin(ang) * d);
       world.collide?.(safePos, 0.8);
       return { type: 'ground', pos: safePos };
     }
