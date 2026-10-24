@@ -172,15 +172,6 @@ export function makePerkMachine(id, perk, price) {
   const coinBezel = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.14, 0.06), chrome);
   coinBezel.position.set(0.24, 0.95, D / 2 + 0.02); g.add(coinBezel);
 
-  // PointLight locale : lueur bleue éclatante pour Quick Revive, lueur d'ambiance pour les autres atouts
-  // Éclaire le sol, la façade du distributeur et les surfaces avoisinantes avec atténuation réaliste (decay: 2)
-  const lightColor = isQR ? 0x3aa6ff : col.getHex();
-  const lightIntensity = isQR ? 22 : 12;
-  const lightDist = isQR ? 10 : 7;
-  const pLight = new THREE.PointLight(lightColor, lightIntensity, lightDist, 2);
-  pLight.position.set(0, H * 0.55, D / 2 + 0.35);
-  g.add(pLight);
-
   g.userData.size = [W + 0.1, D + 0.1, H + 0.6];
   return g;
 }
@@ -242,11 +233,6 @@ export function makeAmmoStation() {
   g.add(shells);
   const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.07, 10, 8), new THREE.MeshStandardMaterial({ color: 0x4dff7a, emissive: 0x38d960, emissiveIntensity: 2.5 }));
   lamp.position.set(W / 2 - 0.12, H + 0.06, D / 2 - 0.1); g.add(lamp);
-  
-  // PointLight locale verte/ambre pour éclairer le poste de ravitaillement
-  const ammoLight = new THREE.PointLight(0x4dff7a, 10, 6.5, 2);
-  ammoLight.position.set(0, H * 0.65, D / 2 + 0.35);
-  g.add(ammoLight);
 
   g.userData.size = [W, D, H + 0.3];
   return g;
@@ -377,11 +363,6 @@ export function makeMysteryBox() {
   // faisceau de lumière bleue (repère de loin)
   const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.32, 30, 14, 1, true), new THREE.MeshStandardMaterial({ color: 0x5fb8ff, emissive: 0x4aa0ff, emissiveIntensity: 1.8, transparent: true, opacity: 0.12, depthWrite: false, side: THREE.DoubleSide }));
   beam.position.y = 15; g.add(beam);
-  
-  // PointLight locale bleue surnaturelle qui illumine la boîte et le sol alentour
-  const boxLight = new THREE.PointLight(0x4aa0ff, 14, 8, 2);
-  boxLight.position.set(0, H + 0.25, 0);
-  g.add(boxLight);
 
   g.userData.lid = lid;
   g.userData.size = [W, D, H + 0.4];
@@ -437,10 +418,6 @@ export function makePackAPunch() {
   put(new THREE.BoxGeometry(1.14, 0.2, 0.06), hole, 0, SY, D / 2 + 0.035);
   const slotDoor = new THREE.Mesh(new THREE.BoxGeometry(1.16, 0.22, 0.05), metal); slotDoor.position.set(0, SY, D / 2 + 0.07); g.add(slotDoor);
 
-  // PointLight mystique violette illuminant le Pack-a-Punch et le sol
-  const papLight = new THREE.PointLight(0xa838ff, 18, 9, 2);
-  papLight.position.set(0, SY + 0.35, D / 2 + 0.4);
-  g.add(papLight);
   // engrenages sur les flancs (tournent pendant l'amélioration)
   const gears = [];
   for (const sx of [-1, 1]) {

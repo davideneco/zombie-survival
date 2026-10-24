@@ -2067,11 +2067,11 @@ export async function buildRealWorld(scene, renderer) {
     return true;
   }
 
-  // Lumières mobiles : PointLight locales redistribuées dynamiquement sur les sources les plus proches
-  const LIGHTS = 18;
+  // Lumières mobiles : un petit nombre de PointLight redistribuées sur les sources les plus proches
+  const LIGHTS = 8;
   const lightPool = [];
   for (let i = 0; i < LIGHTS; i++) {
-    const l = new THREE.PointLight(0xffffff, 0, 12, 2);
+    const l = new THREE.PointLight(0xffffff, 0, 10, 2);
     scene.add(l);
     lightPool.push(l);
   }

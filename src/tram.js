@@ -67,20 +67,6 @@ export class Tram {
     this.interior = interiorOf(this); // sièges, pupitres, parois : collision locale du joueur debout (v0.40.0)
     this.doors = { open: false, f: 0 };
     this.engine = null; this.sound = { gong: 0, chime: 0, alarm: 0, squeal: 0 };
-
-    // Projecteurs de phare sur les voies pour ambiance nocturne réaliste (COD Zombies)
-    const mkLight = (parent, zDir) => {
-      const sl = new THREE.SpotLight(0xfff5e0, 0, 50, 0.65, 0.8, 1.8);
-      sl.position.set(0, 1.2, zDir * 2.2);
-      const tgt = new THREE.Object3D();
-      tgt.position.set(0, 0.4, zDir * 26);
-      parent.add(sl, tgt);
-      sl.target = tgt;
-      return sl;
-    };
-    this.frontLight = mkLight(this.mods[this.n - 1].g, -1);
-    this.rearLight = mkLight(this.mods[0].g, 1);
-
     this.reset();
   }
 
@@ -90,8 +76,6 @@ export class Tram {
     this.hp = this.def.hp; this.state = 'ok'; this.hpDirty = false; this.hpSendT = 0; this.respawnRound = 0; this.respawnPending = false; this.respawnRetry = 0;
     this.seats.fill(null); this.sendT = 0; this.hitCd = new Map(); this.limitMsg = 0; this.autoMsg = 0; this.fxAcc = 0;
     this.doors.open = false; this.doors.f = 0; this.gongCd = 0;
-    if (this.frontLight) this.frontLight.intensity = 0;
-    if (this.rearLight) this.rearLight.intensity = 0;
     this.stopEngine();
     this.syncNet();
     this.apply(0, true);
@@ -181,9 +165,6 @@ export class Tram {
     if (this.doors.f < target) this.doors.f = Math.min(target, this.doors.f + rate); else if (this.doors.f > target) this.doors.f = Math.max(target, this.doors.f - rate);
     this.speed = this.v;
     this.apply(dt);
-    const lit = this.usable && (this.hasDriver || Math.abs(this.v) > 0.1);
-    if (this.frontLight) this.frontLight.intensity = lit && this.v >= -0.5 ? 45 : 0;
-    if (this.rearLight) this.rearLight.intensity = lit && this.v < -0.5 ? 45 : 0;
     { const c = g.player.camera.position; this.group.visible = Math.hypot(c.x - this.pos.x, c.z - this.pos.z) < 260; } // loin (au-delà du brouillard) : les 10 maillages des modules ne sont pas envoyés au rendu (v0.41.0)
     this.updateEngine(dt, local);
     this.updateFx(dt);
