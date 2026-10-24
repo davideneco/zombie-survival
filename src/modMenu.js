@@ -344,11 +344,17 @@ export function installModMenu(game, { world, hud, sfx }) {
     } else if (type === 'gare_parvis') {
       target = { x: 75, y: 0, z: 12 }; label = 'Place de la Gare';
     } else if (type === 'gare_verriere') {
-      target = { x: 18, y: 0, z: 6 }; label = 'Verrière Moderne';
+      target = { x: 31, y: 0, z: 0 }; label = 'Verrière Moderne';
     } else if (type === 'gare_hall') {
-      target = { x: 2, y: 0, z: 6 }; label = 'Grand Hall Historique';
+      target = { x: 2, y: 0, z: 0 }; label = 'Hall Central (Piano, Paul, Relay)';
+    } else if (type === 'gare_hall_nord') {
+      target = { x: 2, y: 0, z: -38 }; label = 'Hall Nord (Billetterie & Guichets)';
+    } else if (type === 'gare_hall_sud') {
+      target = { x: 2, y: 0, z: 38 }; label = 'Hall Sud (Consignes & Services)';
     } else if (type === 'gare_quais') {
-      target = { x: -22, y: 0, z: 6 }; label = 'Quais & Train TER';
+      target = { x: -18, y: 0, z: 0 }; label = 'Quai 1 (Voie 1)';
+    } else if (type === 'gare_ter') {
+      target = { x: -39.5, y: 0.5, z: 0 }; label = 'Intérieur Rame TER';
     } else if (type === 'cathedral_front') {
       const c = world.zoneCenters?.[7];
       if (c) { target = { x: c.x, y: 0, z: c.z }; label = 'Parvis de la Cathédrale'; }
@@ -857,20 +863,32 @@ export function installModMenu(game, { world, hud, sfx }) {
             </button>
             ${CONFIG.map === 'gare' ? `
               <button class="mod-btn mod-btn-sub" data-tp-poi="gare_verriere">
-                <b>🪟 LA VERRIÈRE MODERNE</b>
-                <small>Entrée de la gare (arche de verre)</small>
+                <b>🪟 LA VERRIÈRE (BULLE 2007)</b>
+                <small>Arche vitrée & façade historique</small>
               </button>
               <button class="mod-btn mod-btn-sub" data-tp-poi="gare_hall">
-                <b>🏛️ GRAND HALL HISTORIQUE</b>
-                <small>Hall central de 1883 & guichets</small>
+                <b>🎹 HALL CENTRAL (PIANO & PAUL)</b>
+                <small>Piano SNCF, boulangerie Paul, Relay</small>
+              </button>
+              <button class="mod-btn mod-btn-sub" data-tp-poi="gare_hall_nord">
+                <b>🎟️ HALL NORD (BILLETTERIE)</b>
+                <small>Espace vente & bornes TER Fluo</small>
+              </button>
+              <button class="mod-btn mod-btn-sub" data-tp-poi="gare_hall_sud">
+                <b>🛅 HALL SUD (CONSIGNES)</b>
+                <small>Consignes bagages & commodités</small>
               </button>
               <button class="mod-btn mod-btn-sub" data-tp-poi="gare_quais">
-                <b>🚆 QUAIS & TRAIN TER</b>
-                <small>Quais de départ & voies ferrées</small>
+                <b>🚆 QUAI 1 & MARQUISE</b>
+                <small>Quai voyageurs & voies ferrées</small>
+              </button>
+              <button class="mod-btn mod-btn-sub" data-tp-poi="gare_ter">
+                <b>🚄 INTÉRIEUR DU TRAIN TER</b>
+                <small>Dans la voiture voyageur du train</small>
               </button>
               <button class="mod-btn mod-btn-sub" data-tp-poi="gare_parvis">
                 <b>🏙️ PLACE DE LA GARE</b>
-                <small>Parvis extérieur & tramway</small>
+                <small>Parvis extérieur & tramway CTS</small>
               </button>
             ` : `
               <button class="mod-btn mod-btn-sub" data-tp-poi="cathedral_inside">

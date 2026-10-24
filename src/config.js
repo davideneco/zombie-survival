@@ -48,25 +48,25 @@ export const GARE_SECTOR = {
     },
     {
       name: 'Verrière Moderne',
-      seed: { x: 32, z: 12 },
+      seed: { x: 31, z: 0 },
       doorPrice: 750,
       items: ['station', 'wall:mp5', 'wall:arex', 'perk:staminup', 'box']
     },
     {
       name: 'Grand Hall Historique',
-      seed: { x: 2, z: 12 },
+      seed: { x: 2, z: 0 },
       doorPrice: 1000,
       items: ['station', 'wall:ak47', 'wall:p90', 'perk:juggernog', 'box']
     },
     {
       name: 'Quais & Voies',
-      seed: { x: -38, z: 12 },
+      seed: { x: -32, z: 0 },
       doorPrice: 1250,
       items: ['station', 'wall:famas', 'wall:lmg', 'perk:speedcola', 'box']
     },
     {
       name: 'Plateforme TGV',
-      seed: { x: -25, z: -35 },
+      seed: { x: -18, z: -35 },
       doorPrice: 1500,
       items: ['pap', 'station', 'wall:barrett', 'wall:crossbow', 'perk:doubletap', 'box']
     },
