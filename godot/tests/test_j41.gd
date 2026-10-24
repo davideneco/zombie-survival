@@ -9,6 +9,7 @@ func run(t: Node) -> void:
 	_navs(t)
 	_city(t)
 	_ui_scale(t)
+	_menu_scripts(t)
 
 func _prefetch(t: Node) -> void:
 	t.check(LoadPrefetch.paths_for("arena").is_empty(), "prefetch: nothing for the arena")
@@ -74,3 +75,20 @@ func _ui_scale(t: Node) -> void:
 	t.check(w.content_scale_mode == Window.CONTENT_SCALE_MODE_CANVAS_ITEMS and w.content_scale_aspect == Window.CONTENT_SCALE_ASPECT_EXPAND and w.content_scale_size == Vector2i(1280, 720),
 		"UI scale: canvas items, expand, 1280 x 720 base")
 	w.free()
+
+## v0.34.8 : main.gd ne précharge plus les vues du jeu (compilées au début du chargement d'une partie, pas avant le menu).
+func _menu_scripts(t: Node) -> void:
+	var src := FileAccess.get_file_as_string("res://scenes/main.gd")
+	var head := src.substr(0, src.find("func _ready()"))
+	var pre := RegEx.create_from_string("preload\\(\"([^\"]+)\"\\)").search_all(head)
+	var names: Array[String] = []
+	for m in pre:
+		names.append(m.get_string(1))
+	t.check(names == ["res://scenes/ui/menus.gd"], "main.gd: only the menus are preloaded with the main scene (%s)" % ", ".join(names))
+	var MainScript: GDScript = load("res://scenes/main.gd")
+	var paths: Dictionary = MainScript.get_script_constant_map()["VIEW_PATHS"]
+	var missing := 0
+	for p: String in paths.values():
+		if not ResourceLoader.exists(p):
+			missing += 1
+	t.check(paths.size() == 16 and missing == 0, "main.gd: %d game views loaded at the start of a game, %d missing" % [paths.size(), missing])

@@ -38,9 +38,16 @@ static func paths_for(map: String) -> PackedStringArray:
 			out.append(PBR_DIR + name + "/" + f)
 	return out
 
-static func start(map: String) -> void:
+## `extra` : autres chemins (v0.34.8 : scripts des vues de jeu de main.gd, compilés sur les fils du chargeur).
+static func start(map: String, extra: Array = []) -> void:
 	finish()
+	var all := PackedStringArray()   # les chemins en plus d'abord (scripts des vues : attendus les premiers)
+	for e in extra:
+		all.append(String(e))
 	for p in paths_for(map):
+		if not all.has(p):
+			all.append(p)
+	for p in all:
 		if ResourceLoader.has_cached(p) or not ResourceLoader.exists(p):
 			continue
 		if ResourceLoader.load_threaded_request(p, "", true) == OK:

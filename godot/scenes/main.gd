@@ -13,23 +13,71 @@ extends Node3D
 ## (statistiques), --click=TEXTE[,TEXTE] (appuie sur des boutons du menu, captures), --load-shot=chemin,fraction (capture de l'écran de chargement), --probe-title
 ## (imprime l'état de la mémoire au titre puis quitte : tests).
 
-const ZombieView := preload("res://scenes/zombie_view.gd")
-const ZombieModelView := preload("res://scenes/zombie_model_view.gd")
-const ARENA := preload("res://scenes/world/arena.tscn")
-const WORLD := preload("res://scenes/world/world.tscn")
-const AlpineView := preload("res://scenes/world/alpine_view.gd")   # v0.34.0 : Station des Aiguilles
-const HUD := preload("res://scenes/ui/hud.tscn")
+## v0.34.8 : les vues du jeu ne sont plus préchargées avec la scène principale (leur compilation, ~0,4 s, retardait le premier affichage du menu) :
+## elles sont demandées aux fils du chargeur au début du chargement d'une partie (LoadPrefetch) et gardées ensuite pour toute la durée du jeu
+## (comme un preload : pas de recompilation en pleine partie).
+const VIEW_PATHS := {
+	"ZombieView": "res://scenes/zombie_view.gd",
+	"ZombieModelView": "res://scenes/zombie_model_view.gd",
+	"ARENA": "res://scenes/world/arena.tscn",
+	"WORLD": "res://scenes/world/world.tscn",
+	"AlpineView": "res://scenes/world/alpine_view.gd",
+	"HUD": "res://scenes/ui/hud.tscn",
+	"WeaponView": "res://scenes/weapon_view.gd",
+	"RidesView": "res://scenes/world/rides_view.gd",
+	"MachinesView": "res://scenes/world/machines_view.gd",
+	"ZoneModeView": "res://scenes/world/zone_mode_view.gd",
+	"PerkFxView": "res://scenes/perk_fx_view.gd",
+	"FurnitureView": "res://scenes/world/furniture_view.gd",
+	"GraphicsView": "res://scenes/graphics_view.gd",
+	"FxView": "res://scenes/fx_view.gd",
+	"FinaleView": "res://scenes/finale_view.gd",
+	"AngelView": "res://scenes/angel_view.gd",
+}
+static var _views_res: Dictionary = {}
+static func _view_res(name: String) -> Resource:
+	if not _views_res.has(name):
+		_views_res[name] = load(VIEW_PATHS[name])
+	return _views_res[name]
+
+## Toutes les vues chargées et gardées (début du chargement d'une partie, après la demande aux fils du chargeur).
+static func _hold_views() -> void:
+	for n: String in VIEW_PATHS:
+		_view_res(n)
+
+static var ZombieView: GDScript:
+	get: return _view_res("ZombieView")
+static var ZombieModelView: GDScript:
+	get: return _view_res("ZombieModelView")
+static var ARENA: PackedScene:
+	get: return _view_res("ARENA")
+static var WORLD: PackedScene:
+	get: return _view_res("WORLD")
+static var AlpineView: GDScript:   # v0.34.0 : Station des Aiguilles
+	get: return _view_res("AlpineView")
+static var HUD: PackedScene:
+	get: return _view_res("HUD")
 const Menus := preload("res://scenes/ui/menus.gd")
-const WeaponView := preload("res://scenes/weapon_view.gd")
-const RidesView := preload("res://scenes/world/rides_view.gd")
-const MachinesView := preload("res://scenes/world/machines_view.gd")
-const ZoneModeView := preload("res://scenes/world/zone_mode_view.gd")
-const PerkFxView := preload("res://scenes/perk_fx_view.gd")
-const FurnitureView := preload("res://scenes/world/furniture_view.gd")
-const GraphicsView := preload("res://scenes/graphics_view.gd")
-const FxView := preload("res://scenes/fx_view.gd")
-const FinaleView := preload("res://scenes/finale_view.gd")   # J10
-const AngelView := preload("res://scenes/angel_view.gd")
+static var WeaponView: GDScript:
+	get: return _view_res("WeaponView")
+static var RidesView: GDScript:
+	get: return _view_res("RidesView")
+static var MachinesView: GDScript:
+	get: return _view_res("MachinesView")
+static var ZoneModeView: GDScript:
+	get: return _view_res("ZoneModeView")
+static var PerkFxView: GDScript:
+	get: return _view_res("PerkFxView")
+static var FurnitureView: GDScript:
+	get: return _view_res("FurnitureView")
+static var GraphicsView: GDScript:
+	get: return _view_res("GraphicsView")
+static var FxView: GDScript:
+	get: return _view_res("FxView")
+static var FinaleView: GDScript:   # J10
+	get: return _view_res("FinaleView")
+static var AngelView: GDScript:
+	get: return _view_res("AngelView")
 const PERF_ARGS := ["--perf-log="]   ## v0.19.0 : n'ouvre pas la partie (le menu s'affiche quand c'est le seul argument)
 const TRACER_COLOR := Color("ffd27a")
 const TRACER_TIME := 0.06
@@ -489,6 +537,10 @@ func _start_session() -> void:
 	Game.mode = _mode_choice()
 	Game.zone_pick = clampi(_zone_arg if _zone_arg >= 0 else int(Game.settings.get_value("zone")), 0, Settings.ZONE_COUNT - 1)
 	var map := _map_choice()
+	var t_pf := StartupLog.t()
+	# v0.34.6 : modèles, shaders et textures du jeu lus par les fils du chargeur ; v0.34.8 : et les scripts des vues (compilés pendant les données de la carte)
+	LoadPrefetch.start(map, VIEW_PATHS.values())
+	StartupLog.span("game loading: %d resources requested from loader threads" % LoadPrefetch.requested, t_pf)
 	await _step(0.0)
 	# 1. données de la carte sur un fil de travail (l'interface continue d'animer fond et barre)
 	var th := Thread.new()
@@ -498,11 +550,11 @@ func _start_session() -> void:
 		await _progress(_flow.step_text(), 1.0 - exp(-(Time.get_ticks_msec() - tw) / 700.0))
 		await get_tree().process_frame
 	var data: Object = th.wait_to_finish()
-	var t_pf := StartupLog.t()
-	LoadPrefetch.start(map)   # v0.34.6 : modèles, shaders et textures du jeu lus par les fils du chargeur pendant la construction des vues et de la ville
-	StartupLog.span("game loading: %d resources requested from loader threads" % LoadPrefetch.requested, t_pf)
 	var t_data := Time.get_ticks_msec() - t0
 	StartupLog.mark("game loading: map data read (thread)")
+	var t_views := StartupLog.t()
+	_hold_views()   # v0.34.8 : scripts des vues compilés par les fils du chargeur (attente de la fin si besoin)
+	StartupLog.span("game view scripts ready", t_views)
 	# 2. état de la partie (rapide : les données sont déjà là)
 	_flow.next_step()
 	await _step(0.0)
@@ -785,7 +837,7 @@ func _finish_scene(_map_name: String) -> void:
 			Game.gm.extra.size(), Game.gm.layout.windows.size(), Game.gm.layout.ground.size(), Game.gm.layout.area])
 	if _show_collision and Game.world != null:
 		var cv := Node3D.new()
-		cv.set_script(preload("res://scenes/world/collision_view.gd"))
+		cv.set_script(load("res://scenes/world/collision_view.gd"))   # v0.34.8 : load (un preload serait compilé avec la scène principale)
 		add_child(cv)
 		cv.setup(_collision_report, _collision_floor)
 	_debug_do()
