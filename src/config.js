@@ -665,11 +665,13 @@ CONFIG.fixedKeys = [
   ['Clic droit', 'Viser à la mire'],
   ['Molette', 'Changer d\'arme'],
   ['Clic molette', 'Lance-grenades (fusil d\'assaut PaP III)'],
+  ['Tab', 'Statistiques de partie & salon multijoueur (maintenir)'],
   ['Échap', 'Pause · fermer la carte ou un menu'],
   ['F9', 'Menu Mods & Triche (Admin, téléportation, armes, atouts, etc.)'],
 ];
 // Touches réservées : refusées à la capture (le navigateur ou le jeu s'en sert)
 CONFIG.reservedKeys = {
+  Tab: 'Tab affiche le tableau des statistiques',
   Escape: 'Échap annule la capture', F9: 'F9 ouvre le menu mods & triche', F5: 'F5 recharge la page', F11: 'F11 gère le plein écran', F12: 'F12 ouvre les outils du navigateur',
   MetaLeft: 'cette touche appartient au système', MetaRight: 'cette touche appartient au système', ContextMenu: 'cette touche appartient au système',
 };

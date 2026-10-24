@@ -71,6 +71,11 @@ export class RemotePlayer {
     this.yaw = 0; this.tyaw = 0; this.pitch = 0;
     this.health = 100;
     this.points = 0;
+    this.kills = 0;
+    this.headshots = 0;
+    this.downs = 0;
+    this.revs = 0;
+    this.ping = 0;
     this.dead = false;
     this.weapon = 'rifle';
     this.pap = 0;
@@ -118,6 +123,11 @@ export class RemotePlayer {
     this.pitch = s.pitch;
     this.health = s.hp;
     this.points = s.pts;
+    if (s.kills != null) this.kills = s.kills | 0;
+    if (s.hs != null) this.headshots = s.hs | 0;
+    if (s.downs != null) this.downs = s.downs | 0;
+    if (s.revs != null) this.revs = s.revs | 0;
+    if (s.ping != null) this.ping = s.ping | 0;
     this.weapon = s.w;
     this.pap = s.pap | 0; // niveau du Pack-a-Punch (0 à 3)
     this.reloading = !!s.rl;

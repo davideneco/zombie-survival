@@ -51,7 +51,8 @@ export function installUi(game, { hud, canvas, lockAndPlay }) {
       hud.toggleMap(on);
       if (on) this.open('map'); else this.close('map');
     },
-    closeOverlays() { // carte, menu debug, mod menu, saisie du chat
+    closeOverlays() { // carte, menu debug, mod menu, saisie du chat, scoreboard
+      game.scoreboard?.hide();
       game.chat?.close({ send: false, relock: false });
       if (hud.mapOpen) hud.toggleMap(false);
       game.debugMenu?.close({ relock: false });
@@ -171,10 +172,22 @@ export function installUi(game, { hud, canvas, lockAndPlay }) {
   game.ui = ui;
 
   window.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' || e.code === 'Escape') {
+    if (e.code === 'Tab') {
+      e.preventDefault();
+      if (!e.repeat && game.started && game.playing && !game.chat?.open) game.scoreboard?.show();
+    } else if (e.key === 'Escape' || e.code === 'Escape') {
       e.preventDefault();
       if (!e.repeat) ui.escape();
     } else if (!e.repeat && game.binds.is('map', e) && game.started && game.playing && !game.chat?.open && !(document.activeElement && /^(INPUT|TEXTAREA)$/.test(document.activeElement.tagName))) ui.toggleMap(); // liaison « carte » : par défaut la lettre tapée (e.key), la touche M n'est pas au même endroit en AZERTY
+  });
+  window.addEventListener('keyup', (e) => {
+    if (e.code === 'Tab') {
+      e.preventDefault();
+      game.scoreboard?.hide();
+    }
+  });
+  window.addEventListener('blur', () => {
+    game.scoreboard?.hide();
   });
   document.addEventListener('pointerlockerror', () => { if (!game.playing) ui.resumeBlocked(); });
   document.addEventListener('fullscreenchange', () => {

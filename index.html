@@ -428,6 +428,247 @@
     #lobbyBox { background: rgba(0,0,0,0.5); border: 1px solid #444; border-radius: 6px; padding: 12px 20px; width: 100%; }
     #lobbyStatus { font-size: 20px; color: #ffd24a; letter-spacing: 1px; }
     #lobbyPlayers { margin-top: 8px; font-family: Arial, sans-serif; font-size: 14px; line-height: 1.6; color: #ddd; }
+
+    /* Tableau des scores [TAB] */
+    #scoreboard {
+      position: fixed;
+      left: 0;
+      top: 0;
+      width: 100vw;
+      height: 100vh;
+      z-index: 15;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      pointer-events: none;
+      background: rgba(0, 0, 0, 0.45);
+      transition: opacity 0.15s ease;
+    }
+    #scoreboard.hidden {
+      display: none !important;
+      opacity: 0;
+    }
+    .sb-wrap {
+      width: 94%;
+      max-width: 980px;
+      background: rgba(10, 16, 24, 0.88);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(80, 140, 200, 0.3);
+      box-shadow: 0 16px 48px rgba(0, 0, 0, 0.7), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+      border-radius: 8px;
+      padding: 18px 24px;
+      color: #fff;
+      font-family: Arial, sans-serif;
+      user-select: none;
+    }
+    .sb-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+      padding-bottom: 14px;
+      margin-bottom: 14px;
+    }
+    .sb-title {
+      font-family: 'Arial Black', Impact, sans-serif;
+      font-size: 20px;
+      letter-spacing: 1.5px;
+      color: #fff;
+      text-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
+    }
+    .sb-mode {
+      font-size: 13px;
+      color: #7cb9ff;
+      letter-spacing: 1px;
+      margin-top: 3px;
+    }
+    .sb-meta {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+    .sb-badge-round {
+      background: linear-gradient(135deg, #b01818, #6d0a0a);
+      color: #fff;
+      font-weight: bold;
+      font-size: 15px;
+      letter-spacing: 1.5px;
+      padding: 6px 14px;
+      border-radius: 4px;
+      box-shadow: 0 0 12px rgba(176, 24, 24, 0.5);
+      border: 1px solid rgba(255, 100, 100, 0.4);
+    }
+    .sb-meta-item {
+      text-align: right;
+    }
+    .sb-meta-item span {
+      display: block;
+      font-size: 11px;
+      color: #94a3b8;
+      letter-spacing: 0.5px;
+    }
+    .sb-meta-item b {
+      display: block;
+      font-size: 16px;
+      color: #ffd24a;
+    }
+    .sb-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+    .sb-table th {
+      text-align: center;
+      padding: 8px 10px;
+      color: #94a3b8;
+      font-weight: 600;
+      font-size: 11px;
+      letter-spacing: 1px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    .sb-table th.sb-th-player {
+      text-align: left;
+    }
+    .sb-table td {
+      padding: 10px 10px;
+      text-align: center;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    }
+    .sb-row {
+      transition: background 0.12s;
+    }
+    .sb-row:hover {
+      background: rgba(255, 255, 255, 0.03);
+    }
+    .sb-row-me {
+      background: rgba(56, 189, 248, 0.08);
+      border-left: 3px solid #38bdf8;
+    }
+    .sb-player-cell {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      text-align: left;
+    }
+    .sb-slot-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      box-shadow: 0 0 8px currentColor;
+      flex-shrink: 0;
+    }
+    .sb-pname {
+      font-weight: bold;
+      color: #fff;
+      font-size: 14px;
+    }
+    .sb-badge-me {
+      font-size: 10px;
+      padding: 1px 5px;
+      border-radius: 3px;
+      background: #0284c7;
+      color: #fff;
+      margin-left: 6px;
+      font-weight: normal;
+    }
+    .sb-status-alive {
+      color: #4ade80;
+      font-weight: bold;
+      font-size: 12px;
+    }
+    .sb-status-down {
+      color: #f87171;
+      font-weight: bold;
+      font-size: 12px;
+      animation: pulse 0.8s infinite alternate;
+    }
+    .sb-status-dead {
+      color: #94a3b8;
+      font-size: 12px;
+    }
+    .sb-pts {
+      color: #ffd24a;
+      font-weight: bold;
+      font-size: 15px;
+      font-family: monospace;
+    }
+    .sb-kills {
+      font-weight: bold;
+      color: #f1f5f9;
+      font-size: 14px;
+    }
+    .sb-hs, .sb-revs, .sb-downs {
+      color: #cbd5e1;
+    }
+    .sb-wep {
+      color: #e2e8f0;
+      font-size: 12px;
+    }
+    .sb-hp-box {
+      display: inline-flex;
+      flex-direction: column;
+      gap: 3px;
+      width: 70px;
+    }
+    .sb-hp-bar {
+      width: 100%;
+      height: 4px;
+      background: rgba(0, 0, 0, 0.5);
+      border-radius: 2px;
+      overflow: hidden;
+    }
+    .sb-hp-fill {
+      height: 100%;
+      background: #22c55e;
+    }
+    .sb-hp-txt {
+      font-size: 10px;
+      color: #94a3b8;
+    }
+    .sb-ping {
+      color: #94a3b8;
+      font-size: 12px;
+      font-family: monospace;
+    }
+    .sb-footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+      padding-top: 12px;
+      margin-top: 14px;
+    }
+    .sb-perks {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+    .sb-perk-pill {
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: bold;
+      color: #fff;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
+    }
+    .sb-hint {
+      font-size: 12px;
+      color: #94a3b8;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .sb-key {
+      background: rgba(255, 255, 255, 0.15);
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      border-radius: 3px;
+      padding: 2px 6px;
+      font-family: monospace;
+      font-size: 11px;
+      color: #fff;
+    }
   </style>
 </head>
 <body>
@@ -481,6 +722,47 @@
   </div>
 
   <div id="mapOverlay"><canvas id="mapCanvas"></canvas></div>
+  <div id="scoreboard" class="hidden">
+    <div class="sb-wrap">
+      <div class="sb-header">
+        <div class="sb-title-box">
+          <div class="sb-title">STRASBOURG · PLACE DE L'HOMME DE FER</div>
+          <div class="sb-mode" id="sbMode">PARTIE SOLO</div>
+        </div>
+        <div class="sb-meta">
+          <div class="sb-badge-round" id="sbRound">MANCHE 1</div>
+          <div class="sb-meta-item"><span>TEMPS</span><b id="sbTime">00:00</b></div>
+          <div class="sb-meta-item"><span>ZOMBIES TUÉS</span><b id="sbTotalKills">0</b></div>
+        </div>
+      </div>
+      <div class="sb-body">
+        <table class="sb-table">
+          <thead>
+            <tr>
+              <th class="sb-th-player">JOUEUR</th>
+              <th class="sb-th-status">STATUT</th>
+              <th class="sb-th-score">SCORE</th>
+              <th class="sb-th-kills">ÉLIM. (💀)</th>
+              <th class="sb-th-head">TÊTE (🎯)</th>
+              <th class="sb-th-revs">RÉAN. (➕)</th>
+              <th class="sb-th-downs">À TERRE (🛡️)</th>
+              <th class="sb-th-wep">ARME ACTIVE</th>
+              <th class="sb-th-hp">SANTÉ</th>
+              <th class="sb-th-ping">PING</th>
+            </tr>
+          </thead>
+          <tbody id="sbList">
+          </tbody>
+        </table>
+      </div>
+      <div class="sb-footer">
+        <div class="sb-perks" id="sbPerks"></div>
+        <div class="sb-hint">
+          <span class="sb-key">[TAB]</span> Maintenir pour afficher les statistiques · Le jeu continue en temps réel
+        </div>
+      </div>
+    </div>
+  </div>
   <div id="resumeBanner" class="hidden">CLIQUEZ POUR REPRENDRE<small>Échap : pause</small></div>
   <div id="modMenu" class="hidden"></div>
   <div id="dbgMenu" class="hidden"></div>

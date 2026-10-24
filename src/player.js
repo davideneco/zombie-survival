@@ -77,6 +77,7 @@ export class Player {
     this.health = this.maxHealth;
     this.downed = false;
     this.dead = false;
+    this.statDowns = 0;
     this.bleedout = 0;
     this.selfRevive = 0;
     this.grenades = CONFIG.grenade.start;
@@ -228,6 +229,13 @@ export class Player {
     // (e.code : ZQSD en AZERTY = WASD en QWERTY), actions sur la lettre réellement tapée (e.key) pour que R, E, F, G, M marchent sur tout clavier.
     const letter = (e) => (e.key && e.key.length === 1 ? e.key.toLowerCase() : '');
     window.addEventListener('keydown', (e) => {
+      if (e.code === 'Tab') {
+        e.preventDefault();
+        if (this.game.playing && !this.game.chat?.open && !this.game.ui?.paused) {
+          this.game.scoreboard?.show();
+        }
+        return;
+      }
       if (this.game.chat?.open) return; // saisie du chat : le jeu ne voit aucune touche (chat.js arrête déjà celles du champ)
       this.keys[e.code] = true;
       const k = letter(e);
@@ -255,6 +263,11 @@ export class Player {
       if (B.is('weapon3', e)) this.switchWeapon(2);
     });
     window.addEventListener('keyup', (e) => {
+      if (e.code === 'Tab') {
+        e.preventDefault();
+        this.game.scoreboard?.hide();
+        return;
+      }
       this.keys[e.code] = false;
       const k = letter(e);
       if (k) this.keys['letter:' + k] = false;
@@ -923,6 +936,7 @@ export class Player {
   }
 
   down() {
+    this.statDowns = (this.statDowns || 0) + 1;
     const solo = !this.game.isMultiplayer;
     const hadQR = !!this.perks.quickrevive;
     this.downed = true;

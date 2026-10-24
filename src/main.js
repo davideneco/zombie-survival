@@ -10,6 +10,7 @@ import { Angel } from './angel.js';
 import { installSummit } from './summit.js';
 import { installFinale } from './finale.js';
 import { Hud } from './hud.js';
+import { Scoreboard } from './scoreboard.js';
 import { Sfx } from './audio.js';
 import { fx } from './fx.js';
 import { Net } from './net.js';
@@ -117,6 +118,10 @@ const game = {
   time: 0,
   points: 0,
   kills: 0,
+  headshots: 0,
+  statRevives: 0,
+  netPing: 0,
+  pingTimer: 0,
   round: 0,
   toSpawn: 0,
   spawnTimer: 0,
@@ -249,6 +254,7 @@ const game = {
       // Récompense pour l'hôte
       if (killed) {
         this.kills++;
+        if (head) this.headshots = (this.headshots || 0) + 1;
         sfx.kill();
         this.addPoints(award, head ? 'head' : '');
       } else {
@@ -1071,6 +1077,11 @@ const game = {
       downed: p.downed,
       dead: p.dead,
       pts: this.points,
+      kills: this.kills,
+      hs: this.headshots || 0,
+      downs: p.statDowns || 0,
+      revs: this.statRevives || 0,
+      ping: this.netPing || 0,
       w: p.curW.id,
       pap: p.curW.pap | 0,                                           // niveau du Pack-a-Punch (0 à 3) : couleur et accessoires chez les coéquipiers
       rl: p.curW.reloading ? 1 : 0,
@@ -1109,6 +1120,9 @@ const game = {
     if (resetStats) {
       this.points = CONFIG.player.startPoints;
       this.kills = 0;
+      this.headshots = 0;
+      this.statRevives = 0;
+      if (this.player) this.player.statDowns = 0;
       this.round = 0;
     }
     this.intermission = (this.isHost || !this.isMultiplayer) ? 2 : 0;
@@ -1290,6 +1304,7 @@ const game = {
       if (this.reviveTimer >= this.reviveTime()) {
         this.reviveTimer = 0;
         this.reviveTarget = null;
+        this.statRevives = (this.statRevives || 0) + 1;
         this.addPoints(250, 'bonus');
         hud.announce('RÉANIMATION !', '+250 points', 2000);
         if (this.isHost) {
@@ -1330,6 +1345,17 @@ const game = {
             ]);
           }
           this.net?.send({ t: 'z_tick', z: zdata });
+        }
+      }
+
+      // Mesure du ping (toutes les 2 secondes en multijoueur)
+      this.pingTimer = (this.pingTimer || 0) - dt;
+      if (this.pingTimer <= 0) {
+        this.pingTimer = 2.0;
+        if (this.net.isHost) {
+          this.netPing = 0;
+        } else {
+          this.net.send({ t: 'ping', t0: performance.now() }, this.net.id);
         }
       }
     }
@@ -1611,7 +1637,16 @@ function setupNetworkHandlers(net) {
   // Points reçus (client)
   net.onHost('pts', (m) => {
     game.addPoints(m.pts, m.head ? 'head' : '');
-    if (m.kill) { game.kills += m.kills || 1; sfx.kill(); }
+    if (m.kill) {
+      game.kills += m.kills || 1;
+      if (m.head) game.headshots = (game.headshots || 0) + 1;
+      sfx.kill();
+    }
+  });
+
+  // Écho de ping (mesure de la latence aller-retour vers le relais)
+  net.on('ping', (m) => {
+    if (m.t0 != null) game.netPing = Math.max(1, Math.round(performance.now() - m.t0));
   });
 
   // Zombies (spécifique client)
@@ -1876,6 +1911,7 @@ function lockAndPlay() {
 installUi(game, { hud, canvas, lockAndPlay }); // pile de couches, Échap, carte, plein écran
 installKeysMenu(game, { hud }); // Options > Touches
 installChat(game, { hud, sfx, canvas }); // chat écrit (multijoueur)
+game.scoreboard = new Scoreboard(game); // tableau des scores [TAB]
 
 // Clic direct sur le canvas en cours de partie pour reprendre le contrôle
 canvas.addEventListener('click', () => {
@@ -2194,6 +2230,7 @@ function frame() {
   if (game.started && !game.over && !frozen) game.update(dt);
   else if (frozen) game.summitFx?.step(dt); // le ciel de l'Aube continue pendant la pause du solo
   hud.update(dt);
+  game.scoreboard?.update(dt);
   game.chat?.update(dt);
   updateMusicMood();
   // ombres de la lune : recalculées une image sur deux (à chaque image en qualité haute) : ~20 % de rendu en moins
