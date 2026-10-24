@@ -23,6 +23,7 @@ var _wreck_look := false
 var _prev := Vector3.ZERO     ## x, z, yaw au pas précédent (interpolation)
 var _cur := Vector3.ZERO
 var _lean_prev := 0.0
+var _sled := false            ## v0.34.0 : motoneige (penche moins qu'une moto)
 
 static func mat(color: Color, rough := 0.6, metal := 0.2, emissive := 0.0) -> StandardMaterial3D:
 	var key := "%s|%.2f|%.2f|%.2f" % [color.to_html(), rough, metal, emissive]
@@ -43,6 +44,18 @@ func setup(s: VehicleSim) -> void:
 	sim = s
 	_root = Node3D.new()
 	add_child(_root)
+	_sled = String(s.def.get("model", "")) == "motoneige"
+	if _sled:   # v0.34.0 : motoneige de la Station des Aiguilles (physique de la grosse moto)
+		_build_snowmobile()
+	else:
+		_build_type(s)
+	if bool(s.def.get("fx", true)):
+		_make_fx()
+	remember()
+	_cur = _prev
+	apply(1.0)
+
+func _build_type(s: VehicleSim) -> void:
 	match s.type:
 		"moto":
 			_build_moto()
@@ -50,11 +63,6 @@ func setup(s: VehicleSim) -> void:
 			_build_grosse_moto()
 		_:
 			_build_velo(s.variant)
-	if bool(s.def.get("fx", true)):
-		_make_fx()
-	remember()
-	_cur = _prev
-	apply(1.0)
 
 # ------------------------------------------------------------------ primitives
 func _box(parent: Node3D, size: Vector3, m: Material, pos := Vector3.ZERO, rot := Vector3.ZERO) -> MeshInstance3D:
@@ -185,6 +193,43 @@ func _build_moto() -> void:
 	_ball(_steer, Vector3(0.12, 0.12, 0.1), black, Vector3(0, 0.02, -0.12))
 	_lamp = _ball(_steer, Vector3(0.085, 0.085, 0.05), mat(Color("fff1c9"), 0.3, 0.0, 2.2), Vector3(0, 0.02, -0.2))
 	_box(_steer, Vector3(0.2, 0.2, 0.03), paint, Vector3(0, 0.2, -0.1), Vector3(-0.5, 0, 0))
+
+## v0.34.0 : motoneige (avant vers -Z) : capot et carénage rouges, pare-brise, selle biplace, chenille sous le tunnel, deux skis et le guidon
+## qui braquent (_steer), phare et feu arrière. Mêmes places que la grosse moto.
+func _build_snowmobile() -> void:
+	var paint := mat(Color("b3201b"), 0.45, 0.3)
+	var black := mat(Color("15161a"), 0.6, 0.3)
+	var rubber := mat(Color("0c0c0e"), 0.92, 0.0)
+	var chrome := mat(Color("c4c9d1"), 0.25, 0.85)
+	var seat := mat(Color("1a1a1c"), 0.85, 0.05)
+	var glass := mat(Color(0.25, 0.3, 0.35), 0.1, 0.4)
+	_box(_root, Vector3(0.95, 0.32, 2.3), paint, Vector3(0, 0.5, 0.25))                     # tunnel
+	_box(_root, Vector3(0.6, 0.34, 1.9), rubber, Vector3(0, 0.22, 0.4))                    # chenille
+	for k in 3:
+		var w := _wheel(0.17, 0.05, 0.5, chrome, 4)
+		w.position = Vector3(0, 0.2, -0.35 + k * 0.75)
+		_root.add_child(w)
+		_wheels.append(w)
+	_ball(_root, Vector3(0.5, 0.3, 0.72), paint, Vector3(0, 0.68, -0.72))                   # capot
+	_box(_root, Vector3(0.9, 0.12, 0.5), black, Vector3(0, 0.42, -1.05))                    # pare-chocs
+	_box(_root, Vector3(0.62, 0.38, 0.03), glass, Vector3(0, 1.02, -0.6), Vector3(-0.55, 0, 0))   # pare-brise
+	_box(_root, Vector3(0.42, 0.16, 1.15), seat, Vector3(0, 0.78, 0.48))                     # selle
+	_box(_root, Vector3(0.5, 0.06, 0.4), black, Vector3(0, 0.72, 1.25))                      # porte-bagages
+	for sx in [-1.0, 1.0]:
+		_box(_root, Vector3(0.22, 0.04, 0.9), black, Vector3(sx * 0.55, 0.36, 0.35))         # marchepieds
+	_tail = _box(_root, Vector3(0.3, 0.06, 0.04), mat(Color("661111"), 0.4, 0.0, 1.6), Vector3(0, 0.72, 1.46))
+	_steer = Node3D.new()
+	_steer.position = Vector3(0, 0, -0.75)
+	_root.add_child(_steer)
+	for sx in [-1.0, 1.0]:
+		_box(_steer, Vector3(0.11, 0.05, 1.2), black, Vector3(sx * 0.48, 0.04, -0.25))      # skis
+		_box(_steer, Vector3(0.11, 0.05, 0.25), black, Vector3(sx * 0.48, 0.12, -0.9), Vector3(0.6, 0, 0))   # spatules relevées
+		_tube(_steer, Vector3(sx * 0.48, 0.08, -0.2), Vector3(sx * 0.3, 0.45, 0.0), 0.025, chrome)   # bras de suspension
+	_tube(_steer, Vector3(0, 0.75, 0.25), Vector3(0, 0.98, 0.3), 0.03, chrome)               # colonne
+	_tube(_steer, Vector3(-0.35, 1.0, 0.32), Vector3(0.35, 1.0, 0.32), 0.022, chrome)        # guidon
+	for sx in [-1.0, 1.0]:
+		_box(_steer, Vector3(0.1, 0.05, 0.05), rubber, Vector3(sx * 0.33, 1.0, 0.32))
+	_lamp = _ball(_root, Vector3(0.12, 0.07, 0.04), mat(Color("fff1c9"), 0.3, 0.0, 2.2), Vector3(0, 0.74, -1.12))
 
 func _build_grosse_moto() -> void:
 	var steel := mat(Color("1d2025"), 0.6, 0.4)
@@ -383,7 +428,7 @@ func apply(f: float) -> void:
 	else:
 		_wreck(false)
 		position = Vector3(x, 0, z)
-		rotation = Vector3(0, yaw, sim.lean)
+		rotation = Vector3(0, yaw, sim.lean * (0.25 if _sled else 1.0))
 		if _steer != null:
 			_steer.rotation.y = -sim.steer_angle
 		for w in _wheels:

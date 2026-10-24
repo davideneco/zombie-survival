@@ -69,7 +69,7 @@ void fragment() {
 	cover += snow_side * smoothstep(0.25, 0.85, vnoise(w_pos.xz * 1.7 + w_pos.y * 2.3)) * (1.0 - a.y) * 0.55;
 	cover = clamp(cover, 0.0, 1.0);
 	vec2 suv = (a.y > 0.5 ? w_pos.xz : uv) * 0.32;
-	vec3 salb = mix(vec3(1.0), texture(snow_tex, suv).rgb * 2.0, use_snow_tex) * vec3(0.9, 0.93, 0.98);
+	vec3 salb = mix(vec3(1.0), texture(snow_tex, suv).rgb * 2.0, use_snow_tex) * vec3(0.8, 0.83, 0.88);
 	vec4 sm = mix(vec4(0.5, 0.5, 0.7, 1.0), texture(snow_mat, suv), use_snow_tex);
 	vec2 sxy = (sm.rg * 2.0 - 1.0) * 0.6;
 	vec3 sn = normalize(T * sxy.x + B * sxy.y + n * sqrt(max(0.0, 1.0 - dot(sxy, sxy))));

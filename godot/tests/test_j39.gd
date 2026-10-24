@@ -12,6 +12,7 @@ extends RefCounted
 ##   - finale : la cloche (manche 10, toutes les zones), le Bourreau des neiges passe ses quatre phases au sol (sans saut vers une tour), victoire ;
 ##   - Contre la montre et Arsenal aléatoire sur la carte ; Strasbourg inchangée (réglage de carte, carte par défaut).
 
+const AlpineView := preload("res://scenes/world/alpine_view.gd")
 const DT := 1.0 / 60.0
 const IDLE := {"mx": 0.0, "mz": 0.0}
 
@@ -29,6 +30,7 @@ func run(t: Node) -> void:
 	_rides(t)
 	_finale(t)
 	_modes(t)
+	await _view(t)
 	Game.mode = GameMode.CLASSIC
 
 # ------------------------------------------------------------------ plan
@@ -400,3 +402,35 @@ func _modes(t: Node) -> void:
 	t.check(Game.arsenal != null and Game.arms.inventory.size() == 1, "Arsenal aléatoire sur la station")
 	_new(9, GameMode.ZONE)
 	t.check(Game.gm == null and Game.world.map_id == "alpine", "Zone unique : réservée à Strasbourg (partie classique sur la station)")
+
+# ------------------------------------------------------------------ vue (construite sans rendu)
+func _view(t: Node) -> void:
+	_new(13)
+	var v: Node3D = load("res://scenes/world/alpine_view.gd").new()
+	t.add_child(v)
+	await v.build()
+	print("j39 : vue de la station : %d triangles" % v.triangle_count)
+	t.check(v.built and v.triangle_count > 50000, "vue construite (%d triangles)" % v.triangle_count)
+	t.check(v._door_nodes.size() == 7, "7 barricades de portes dessinées")
+	Game.points = 100000
+	var d: Dictionary = Game.world.doors[0]
+	Game.player.pos = Vector3(float(d["points"][1][0]) + 1.0, 0, float(d["points"][1][1]))
+	var id := Game.use_door()
+	if id < 0:
+		Game.world.open_door(0)
+		Game.door_opened.emit(0)
+		id = 0
+	t.check(not (v._door_nodes[id] as Node3D).visible, "porte achetée : la barricade disparaît")
+	t.check(v._snow != null and v._snow.amount >= 2500, "neige qui tombe (%d flocons)" % (v._snow.amount if v._snow != null else 0))
+	t.check(v.height_at(0.0, 0.0) == 0.0 and v.height_at(149.0, 0.0) == 0.0 and v.height_at(0.0, -300.0) > 40.0, "sol plat dans la zone jouable, relief au-delà (%.0f m au nord)" % v.height_at(0.0, -300.0))
+	var s_calm := AlpineView.storm_at(10.0, false)
+	var s_peak := AlpineView.storm_at(170.0, false)
+	t.check(s_calm < 0.3 and s_peak > 0.95 and AlpineView.storm_at(10.0, true) == 1.0, "tempête : calme %.2f, blizzard %.2f, pendant la Nuit blanche 1" % [s_calm, s_peak])
+	var wav := Sfx.wind_stream()
+	t.check(wav.loop_mode == AudioStreamWAV.LOOP_FORWARD and wav.data.size() == int(Sfx.WIND_RATE * Sfx.WIND_LEN) * 2, "vent : boucle synthétisée de 8 s")
+	Sfx.set_wind(0.8)
+	t.check(Sfx.wind_playing(), "vent : joué pendant la partie")
+	Sfx.set_wind(0.0)
+	t.check(not Sfx.wind_playing(), "vent : coupé")
+	t.remove_child(v)
+	v.queue_free()

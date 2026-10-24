@@ -4,7 +4,7 @@ import gzip, json, os, struct
 import numpy as np
 
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
-W = os.path.join(ROOT, 'godot', 'data', 'world')
+W = os.environ.get('ZS_WORLD_DIR') or os.path.join(ROOT, 'godot', 'data', 'world')   # v0.34.0 : ZS_WORLD_DIR : export de la station alpine (--export-geom)
 
 
 def jload(name):
@@ -50,7 +50,7 @@ def load_world_tris(with_instances=True, with_doors=True):
             if os.path.exists(p):
                 A, B, C, M = load_pack_tris(p, 'door')
                 parts.append((A, B, C, M, np.ones(len(M), np.int32), np.full(len(M), d['id'], np.int32)))
-    if with_instances:
+    if with_instances and os.path.exists(os.path.join(W, 'instances.bin')):
         head, b, base = open_pack(os.path.join(W, 'instances.bin'), b'ZMI1')
         for mi, m in enumerate(head['meshes']):
             n = m['count']

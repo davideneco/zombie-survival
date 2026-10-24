@@ -91,7 +91,7 @@ def wall_weapon(wid, face_x, face_z, nx, nz):
 
 # ------------------------------------------------------------------ murs de zones
 PAL_T, PAL_H = 0.4, 2.6
-STONE_T, STONE_H = 0.7, 2.2
+STONE_T, STONE_H = 0.5, 2.2
 # nord : muret de pierre z = -55 (portes vers la gare : depuis l'église x = -100, depuis l'hôtel x = 110)
 wall_gaps(-EDGE, -55, EDGE, -55, STONE_T, STONE_H, 'stone', [(-100, 3.0), (110, 3.0)])
 # sud : palissade z = 45 (portes : lac depuis l'église x = -95, parking depuis la place x = 15)
@@ -183,7 +183,7 @@ for i in range(6):
         prop(-93.0 + i * 2.6, side * 3.8, 0.6, 3.6, 0.95, 'pew')
 prop(-97.2, 0.0, 1.2, 2.6, 1.1, 'altar')
 machine('clock', None, -96.6, -5.0, FACE_E)                                    # la cloche : lance la finale
-windows.extend([[-92.0, CZ0, 0, 1], [-82.0, CZ0, 0, 1], [-95.0, CZ1, 0, -1], [-80.0, CZ1, 0, -1]])
+windows.extend([[-92.0, CZ0 + CT / 2, 0, 1], [-82.0, CZ0 + CT / 2, 0, 1], [-95.0, CZ1 - CT / 2, 0, -1], [-80.0, CZ1 - CT / 2, 0, -1]])   # mur épais : centre sur la face intérieure
 # cimetière (au sud de l'église)
 for i in range(4):
     for j in range(4):
@@ -227,7 +227,7 @@ machine('perk', 'mulekick', 84.0, -70.0, FACE_S)
 machine('box', None, 40.0, -130.0, FACE_N)
 wall_weapon('barrett', 62.0, -76.5, 0, 1)                 # poste des pisteurs, face sud
 stations.append([-24.0, -88.0])
-lamps += [[3.0, -86.0], [-30.0, -70.0], [40.0, -70.0], [110.0, -70.0], [-100.0, -70.0]]
+lamps += [[-7.0, -86.0], [-30.0, -70.0], [40.0, -70.0], [110.0, -70.0], [-100.0, -70.0]]
 
 # ------------------------------------------------------------------ 4. Parking du Col
 decor.append({'k': 'lot', 'x0': 12, 'z0': 64, 'x1': 96, 'z1': 124})
@@ -251,7 +251,7 @@ circle(140.0, 130.0, 5.5, 6.0, 'avalanche')               # coulée de neige : l
 solid(-12, 82, 10, 8, 8.0, 'cafe')                        # café du Col
 solid(128, 96, 10, 9, 8.5, 'chalet')
 solid(60, 140, 9, 7, 7.0, 'chalet')
-prop(40.0, 52.5, 4.0, 1.6, 2.6, 'shelter')                # abribus
+prop(40.0, 51.85, 4.0, 0.3, 2.6, 'shelter')               # abribus (collision : la paroi du fond ; toit au-dessus des têtes)
 machine('perk', 'deadshot', 80.0, 134.0, FACE_W)
 machine('box', None, 120.0, 112.0, FACE_W)
 wall_weapon('smg', GX0 - 0.15, 59.0, -1, 0)               # remise, face ouest

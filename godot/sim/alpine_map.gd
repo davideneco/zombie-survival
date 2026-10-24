@@ -11,6 +11,7 @@ const PATH := "res://data/alpine.json"
 const NAV_CELL := 0.75
 const NAV_MARGIN := 0.5
 const ZONE_WIDEN := 6            ## realworld.js widen : cases bloquées voisines rattachées à la zone (joueur collé à un mur)
+const THICK := 0.55              ## m : au-delà, un mur a une collision sur ses faces (sinon on rentrerait dans sa moitié d'épaisseur)
 const DOOR_H := 2.8              ## hauteur de collision d'une porte fermée (barricade)
 const DOOR_SIDE := 2.5           ## m : points de part et d'autre d'une porte pour trouver ses deux zones
 ## Emprise de collision des machines : largeur (x local), profondeur (z local, la face regarde +z), hauteur.
@@ -54,8 +55,19 @@ static func load_map() -> World:
 	var e := float(D["edge"])
 	for s: Array in [[-e, -e, e, -e], [e, -e, e, e], [e, e, -e, e], [-e, e, -e, -e]]:   # falaises du pourtour
 		_seg(w, s[0], s[1], s[2], s[3], INF, "wall")
-	for wl: Dictionary in D["walls"]:
-		_seg(w, wl["a"][0], wl["a"][1], wl["b"][0], wl["b"][1], _h(float(wl["h"])), "wall")
+	for wl: Dictionary in D["walls"]:   # mur épais (muret, église) : ses deux faces et ses bouts ; mince : son axe
+		var t := float(wl["t"])
+		if t > THICK:
+			var a := Vector2(wl["a"][0], wl["a"][1])
+			var b := Vector2(wl["b"][0], wl["b"][1])
+			var n := (b - a).normalized().orthogonal() * t / 2.0
+			var h := _h(float(wl["h"]))
+			_seg(w, a.x + n.x, a.y + n.y, b.x + n.x, b.y + n.y, h, "wall")
+			_seg(w, b.x - n.x, b.y - n.y, a.x - n.x, a.y - n.y, h, "wall")
+			_seg(w, a.x - n.x, a.y - n.y, a.x + n.x, a.y + n.y, h, "wall")
+			_seg(w, b.x + n.x, b.y + n.y, b.x - n.x, b.y - n.y, h, "wall")
+		else:
+			_seg(w, wl["a"][0], wl["a"][1], wl["b"][0], wl["b"][1], _h(float(wl["h"])), "wall")
 	for so: Dictionary in D["solids"]:
 		var x0 := float(so["x"]) - float(so["w"]) / 2.0
 		var x1 := float(so["x"]) + float(so["w"]) / 2.0

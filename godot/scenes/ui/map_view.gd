@@ -113,7 +113,7 @@ func _draw() -> void:
 		var p: Vector2 = P.call(float(c["x"]), float(c["z"]))
 		var fs := HudCalc.zone_font_size(float(z.get("area", 0.0)), i == here)
 		var col := UiTheme.GOLD if i == here else (Color(1, 1, 1, 0.92) if w.is_zone_open(i) else Color(1, 1, 1, 0.62))
-		UiTheme.draw_outlined(self, font, p, String(c["name"]).to_upper(), fs, col, HORIZONTAL_ALIGNMENT_CENTER, 400)
+		UiTheme.draw_outlined(self, font, p - Vector2(200, 0), String(c["name"]).to_upper(), fs, col, HORIZONTAL_ALIGNMENT_CENTER, 400)   # v0.34.0 : centré sur la zone (la boîte de 400 px commençait au centre)
 	# portes
 	for d: Dictionary in w.doors:
 		var open: bool = d["open"]

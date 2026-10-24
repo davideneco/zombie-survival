@@ -107,7 +107,7 @@ def main():
         for ix in range(int(np.floor((c[0] - c[2] - TOL) / C4)), int(np.floor((c[0] + c[2] + TOL) / C4)) + 1):
             for iz in range(int(np.floor((c[1] - c[2] - TOL) / C4)), int(np.floor((c[1] + c[2] + TOL) / C4)) + 1):
                 cgrid.setdefault((ix, iz), []).append(k)
-    nav = g.Nav(); nav.open_doors(); reach = nav.main_component(-0.625, -30.875)
+    nav = g.Nav(); nav.open_doors(); st = g.jload('objects.json')['start']; reach = nav.main_component(st['x'], st['z'])
     bad = np.zeros(len(pts), bool)
     cx = np.floor(pts[:, 0] / C4).astype(int); cz = np.floor(pts[:, 2] / C4).astype(int)
     cells = {}

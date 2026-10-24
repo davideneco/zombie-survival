@@ -44,8 +44,9 @@ var arena := false
 ## renforcé par la tempête de neige (`storm` 0..1, posé chaque image par alpine_view.gd).
 var alpine := false
 var storm := 0.0
-const ALP_FOG := ["16202e", "c9aaa0", "dfe6ee"]
-const ALP_DENSITY := [0.0105, 0.0075, 0.0042]
+const ALP_FOG := ["16202e", "b9a09c", "b4c3d3"]
+const ALP_DENSITY := [0.0105, 0.0065, 0.0028]
+const ALP_DAY_EXPOSURE := 0.55
 const ALP_STORM_FOG := Color("aeb8c4")
 var _alp_fog_d := 0.0105
 var _alp_fog_c := Color("16202e")
@@ -192,7 +193,9 @@ func _set_atmosphere(k: float) -> void:
 func _apply_storm() -> void:
 	var s := clampf(storm, 0.0, 1.0)
 	env.fog_light_color = _alp_fog_c.lerp(ALP_STORM_FOG.darkened(0.75 * (1.0 - sky_k)), s * 0.7)
-	_set_fog(_alp_fog_d * (1.0 + 3.2 * s))
+	_set_fog(_alp_fog_d * (1.0 + 1.8 * s))
+	env.fog_sky_affect = 0.85 * s   # le blizzard voile aussi le ciel
+	env.fog_aerial_perspective = minf(env.fog_aerial_perspective, 0.25)   # le ciel du rayonnement est plus bleu que le fond : sommets bleutés sinon
 
 func _set_fog(density: float) -> void:
 	env.fog_density = 1.0
@@ -340,6 +343,8 @@ func _apply_glow(on: bool) -> void:
 func apply_exposure() -> void:
 	var b := float(Game.settings.get_value("brightness"))
 	env.tonemap_exposure = GraphicsRules.exposure(b, float(zone_k["exposure"])) * TONE_K
+	if alpine:   # v0.34.0 : la neige renvoie presque toute la lumière : exposition réduite de jour (la nuit inchangée)
+		env.tonemap_exposure *= lerpf(1.0, ALP_DAY_EXPOSURE, _sm(clampf(sky_k, 0.0, 1.0)))
 	env.ambient_light_energy = 1.0
 	if not is_equal_approx(b, _last_brightness) or dbg_noamb != _last_noamb:   # (chaque changement relance le calcul du rayonnement du ciel : pas à chaque image)
 		_last_brightness = b

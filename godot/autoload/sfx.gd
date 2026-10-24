@@ -800,4 +800,73 @@ func reset() -> void:
 	stop_all()
 	if _engine != null:
 		_engine.stop()
+	set_wind(0.0)
 	_refresh_music()
+
+# ---------------------------------------------------------------- v0.34.0 : vent de la Station des Aiguilles
+## Boucle de vent synthétisée une fois (bruit filtré passe-bas, rafales périodiques sur la boucle de 8 s, raccord en fondu) : aucun fichier.
+## level 0..1 (0 : coupé) ; la vue de la station le règle chaque image selon la tempête.
+var _wind: AudioStreamPlayer
+static var _wind_wav: AudioStreamWAV
+const WIND_RATE := 22050
+const WIND_LEN := 8.0
+
+static func wind_stream() -> AudioStreamWAV:
+	if _wind_wav != null:
+		return _wind_wav
+	var n := int(WIND_RATE * WIND_LEN)
+	var fade := WIND_RATE / 2
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 3402
+	var raw := PackedFloat32Array()
+	raw.resize(n + fade)
+	var l1 := 0.0
+	var l2 := 0.0
+	var hp := 0.0
+	for i in n + fade:
+		var t := float(i % n) / WIND_RATE
+		var gust := 0.55 + 0.3 * sin(TAU * t / WIND_LEN) + 0.15 * sin(TAU * t * 3.0 / WIND_LEN + 1.3)   # périodique sur la boucle
+		var cut := 0.035 + 0.05 * gust   # le souffle siffle un peu plus fort dans les rafales
+		l1 += (rng.randf_range(-1.0, 1.0) - l1) * cut
+		l2 += (l1 - l2) * cut
+		hp += (l2 - hp) * 0.002
+		raw[i] = (l2 - hp) * gust * 9.0
+	var data := PackedByteArray()
+	data.resize(n * 2)
+	for i in n:
+		var v := raw[i]
+		if i < fade:   # raccord : le début se fond dans la suite de la fin
+			var k := float(i) / fade
+			v = raw[i] * k + raw[n + i] * (1.0 - k)
+		data.encode_s16(i * 2, clampi(int(v * 32767.0), -32767, 32767))
+	var w := AudioStreamWAV.new()
+	w.format = AudioStreamWAV.FORMAT_16_BITS
+	w.mix_rate = WIND_RATE
+	w.stereo = false
+	w.data = data
+	w.loop_mode = AudioStreamWAV.LOOP_FORWARD
+	w.loop_begin = 0
+	w.loop_end = n
+	_wind_wav = w
+	return w
+
+func set_wind(level: float) -> void:
+	if _wind == null:
+		if level <= 0.0:
+			return
+		_wind = AudioStreamPlayer.new()
+		_wind.bus = BUS_EFFECTS
+		_wind.stream = wind_stream()
+		_wind.volume_db = -80.0
+		add_child(_wind)
+	if level <= 0.001:
+		if _wind.playing:
+			_wind.stop()
+		return
+	if not _wind.playing:
+		_wind.play()
+	_wind.volume_db = linear_to_db(clampf(level, 0.0, 1.0)) - 9.0
+	_wind.pitch_scale = 0.8 + 0.45 * clampf(level, 0.0, 1.0)
+
+func wind_playing() -> bool:
+	return _wind != null and _wind.playing

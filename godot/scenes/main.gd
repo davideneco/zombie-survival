@@ -500,6 +500,11 @@ func _start_session() -> void:
 		await _arena_node.build()
 	await _step(1.0)
 	var t_city := Time.get_ticks_msec() - t0
+	for a in OS.get_cmdline_user_args():   # v0.34.0 : --export-geom=DIR (station alpine) : géométrie pour les scans, puis quitte
+		if a.begins_with("--export-geom=") and _arena_node != null and _arena_node.has_method("export_geometry"):
+			_arena_node.export_geometry(a.substr(14))
+			get_tree().quit(0)
+			return
 	# 5. préchauffage sous le voile du chargement (pipelines, sons, pools : v0.19.0), puis derniers réglages
 	_flow.next_step()
 	await _step(0.0)
@@ -1463,6 +1468,12 @@ func _debug_finale() -> void:
 	for id: String in Config.at("perks"):
 		Game.add_perk(id)
 	var lv: Levels = Game.world.levels
+	if Game.world.map_id == "alpine":   # v0.34.0 : station alpine : --finale=boss1 (le Bourreau des neiges devant le joueur placé par --pos)
+		if _finale_arg == "boss1":
+			F.start()
+			F.start_boss1()
+			F.f["t"] = 2.5
+		return
 	match _finale_arg:
 		"clock":
 			var c := Cathedral.clock_pos()
