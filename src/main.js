@@ -1893,8 +1893,14 @@ function setupNetworkHandlers(net) {
 // --------------------------------------------- Menu / Pointer lock
 const canvas = renderer.domElement;
 
-// Le navigateur n'autorise le son qu'après une interaction : on démarre l'audio (et la musique du menu) au premier clic
-for (const ev of ['pointerdown', 'keydown']) window.addEventListener(ev, () => sfx.init(), { once: true });
+// Le navigateur n'autorise le son qu'après une interaction : on initialise et réveille l'AudioContext
+const wakeAudio = () => {
+  sfx.init();
+  if (sfx.ctx && sfx.ctx.state === 'suspended') {
+    sfx.ctx.resume();
+  }
+};
+for (const ev of ['pointerdown', 'keydown', 'click']) window.addEventListener(ev, wakeAudio);
 
 function lockAndPlay() {
   sfx.init();

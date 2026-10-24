@@ -215,6 +215,9 @@ export class Music {
     if (!track) return;
 
     const c = this.ctx;
+    if (c.state === 'suspended') {
+      c.resume();
+    }
     const t = c.currentTime;
 
     // Fondu sortant propre de la piste précédente
@@ -224,14 +227,14 @@ export class Music {
       oldSrc.onended = null;
       try {
         oldGain.gain.setValueAtTime(oldGain.gain.value, t);
-        oldGain.gain.linearRampToValueAtTime(0.0001, t + 1.2);
+        oldGain.gain.linearRampToValueAtTime(0.0001, t + 0.8);
         setTimeout(() => {
           try {
             oldSrc.stop();
             oldSrc.disconnect();
             oldGain.disconnect();
           } catch {}
-        }, 1300);
+        }, 900);
       } catch {
         try { oldSrc.stop(); } catch {}
       }
@@ -240,16 +243,17 @@ export class Music {
     const buf = track.buffer || track.buf;
     if (!buf) return;
 
-    // Normalisation RMS pour équilibrer le volume
+    // Normalisation RMS pour un volume riche et bien audible
     const d = buf.getChannelData(0);
     let sum = 0, n = 0;
     for (let i = 0; i < d.length; i += 4) { sum += d[i] * d[i]; n++; }
     const rms = Math.sqrt(sum / Math.max(1, n));
-    const targetGain = rms > 1e-4 ? Math.min(6, Math.max(0.3, 0.56 / rms)) : 1;
+    // Niveau sonore optimal avant passage par le filtre et le contrôle de volume
+    const targetGain = rms > 1e-4 ? Math.min(4, Math.max(0.6, 0.75 / rms)) : 1.2;
 
     const g = c.createGain();
-    g.gain.setValueAtTime(0.0001, t);
-    g.gain.linearRampToValueAtTime(targetGain, t + 1.5);
+    g.gain.setValueAtTime(0.01, t);
+    g.gain.setTargetAtTime(targetGain, t, 0.35);
 
     const src = c.createBufferSource();
     src.buffer = buf;
@@ -264,13 +268,16 @@ export class Music {
       };
     }
 
-    src.connect(g).connect(this.out);
+    // Connecte directement au filtre passe-bas lp (étouffé en pause/menu, clair en jeu)
+    // sans subir l'atténuation 0.5 de this.out réservée au rock synthétisé
+    src.connect(g).connect(this.lp);
     src.start();
 
     this.currentSource = src;
     this.currentGain = g;
     this.track = src; // compatibilité
     this.currentTrack = track;
+    console.log(`[AUDIO] Lecture démarrée : ${track.name} (volume x${targetGain.toFixed(2)}, état audio: ${c.state})`);
 
     if (typeof this.onTrackChange === 'function') {
       try {

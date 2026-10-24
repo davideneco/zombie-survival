@@ -42,8 +42,11 @@ const TRACK_DEFINITIONS = [
   {
     name: 'Jeaux Davide',
     urls: [
+      'music/jeaux_davide.ogg',
       '/music/jeaux_davide.ogg',
+      'music/jeaux_davide.mp3',
       '/music/jeaux_davide.mp3',
+      'music/jeaux_davide.wav',
       '/music/jeaux_davide.wav',
       '/music/jeaux davide.wav',
     ],
@@ -51,8 +54,11 @@ const TRACK_DEFINITIONS = [
   {
     name: 'Midnight Lurch',
     urls: [
+      'music/midnight_lurch.ogg',
       '/music/midnight_lurch.ogg',
+      'music/midnight_lurch.mp3',
       '/music/midnight_lurch.mp3',
+      'music/midnight_lurch.wav',
       '/music/midnight_lurch.wav',
       '/music/Midnight Lurch.wav',
     ],
@@ -60,9 +66,13 @@ const TRACK_DEFINITIONS = [
   {
     name: 'Thème',
     urls: [
+      'music/theme.ogg',
       '/music/theme.ogg',
+      'music/theme.mp3',
       '/music/theme.mp3',
+      'music/theme.m4a',
       '/music/theme.m4a',
+      'music/theme.wav',
       '/music/theme.wav',
     ],
   },
@@ -106,11 +116,20 @@ export class Sfx {
 
   // À appeler après une interaction utilisateur (clic).
   init() {
-    if (this.ctx) { this.ctx.resume(); return; }
+    if (this.ctx) {
+      if (this.ctx.state === 'suspended') this.ctx.resume();
+      return;
+    }
     const c = this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+    if (c.state === 'suspended') {
+      c.resume();
+    }
     this._build(c);
     // des morceaux déposés dans public/music/ remplacent le rock synthétisé (s'il n'y en a pas, on lance le rock)
-    this._loadTracks().catch(() => this.music.start());
+    this._loadTracks().catch((err) => {
+      console.warn('[AUDIO] Échec chargement morceaux, lancement du rock synthétisé :', err);
+      this.music?.start();
+    });
     // onglet en arrière-plan : plus de son (et le séquenceur de la musique s'arrête avec l'horloge audio)
     document.addEventListener('visibilitychange', () => {
       if (document.hidden) c.suspend(); else c.resume();
@@ -127,6 +146,7 @@ export class Sfx {
           if (!res.ok || /text\/html/.test(res.headers.get('content-type') || '')) continue;
           const ab = await res.arrayBuffer();
           const buffer = await this.ctx.decodeAudioData(ab);
+          console.log(`[AUDIO] Morceau prêt : ${entry.name} (${Math.round(buffer.duration)}s) depuis ${url}`);
           return { name: entry.name, buffer };
         } catch { /* pas de morceau ou format illisible : on passe au suivant */ }
       }
@@ -146,6 +166,7 @@ export class Sfx {
     }
 
     if (loaded.length === 0) {
+      console.log('[AUDIO] Aucun morceau personnalisé trouvé, lancement du rock synthétisé.');
       this.music.start();
       return false;
     }
