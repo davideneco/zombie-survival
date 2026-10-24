@@ -32,6 +32,7 @@ static var _clicks: Array = []     ## [name, handler_ms, first_frame_ms, worst_f
 static var _slow := 0
 static var _session := false       ## a game is running: menu probes stop (PerfLog covers the game)
 static var _finished := false
+static var _prev_kinds := PackedInt64Array()   ## pipeline counters at the previous frame (SLOW lines: what this frame compiled)
 
 # ---------------------------------------------------------------- start
 ## Reads the command line once, at the first probe (an autoload's `mark`, before main.gd exists), and opens the file.
@@ -204,6 +205,9 @@ func _on_post_draw() -> void:
 	_frames += 1
 	if _session:
 		return
+	var kinds := _pipe_counts()
+	var frame_pipes := pipe_text(_prev_kinds, kinds) if not _prev_kinds.is_empty() else ""
+	_prev_kinds = kinds
 	var cpu := RenderingServer.viewport_get_measured_render_time_cpu(_vp) + RenderingServer.get_frame_setup_time_cpu()
 	var gpu := RenderingServer.viewport_get_measured_render_time_gpu(_vp)
 	if _frames <= FIRST_FRAMES:
@@ -222,7 +226,8 @@ func _on_post_draw() -> void:
 		return
 	if _frames > FIRST_FRAMES and is_slow(ms):
 		_slow += 1
-		_put("SLOW frame at %8.1f ms : %.1f ms on %s (last click « %s »), render CPU %.1f / GPU %.1f ms, pipelines so far %d" % [now / 1000.0, ms, screen, _last_click, cpu, gpu, _pipes()])
+		_put("SLOW frame at %8.1f ms : %.1f ms on %s (last click « %s »), render CPU %.1f / GPU %.1f ms, pipelines so far %d%s" % [now / 1000.0, ms, screen, _last_click, cpu, gpu, _pipes(),
+			(", this frame" + frame_pipes) if frame_pipes != "" else ""])
 
 ## Summary at exit (idempotent).
 static func finish() -> void:

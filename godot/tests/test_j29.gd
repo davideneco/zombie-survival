@@ -167,7 +167,27 @@ func run_preview(t: Node) -> void:
 	t.check(pv.show_character("karim", Color("ff8a3d")), "aperçu : karim affiché")
 	t.check(pv.model() != null and pv.model().id == "karim" and pv.model().current == "Idle", "aperçu : modèle karim en Idle")
 	t.check(CharacterModel.loaded_count() == 1, "aperçu : un seul modèle chargé")
-	t.check(pv.show_character("harry", Color("e0b040")) and CharacterModel.loaded_count() == 1 and CharacterModel.is_loaded("harry"), "aperçu : changer de survivant libère l'ancien modèle")
+	# v0.34.4 : les modèles vus au menu restent (changer de survivant ne relit rien) ; un seul est visible ; trim ne garde que le choisi
+	t.check(pv.show_character("harry", Color("e0b040")) and pv.model().id == "harry" and CharacterModel.loaded_count() == 2 and pv.has_instance("karim"), "aperçu : changer de survivant garde l'ancien modèle en mémoire")
+	var shown := 0
+	for c in pv.get_child(0).get_children():
+		for m in c.get_children():
+			if m is CharacterModel and (m as CharacterModel).visible:
+				shown += 1
+	t.check(shown == 1, "aperçu : un seul modèle visible (%d)" % shown)
+	t.check(pv.show_character("karim", Color("ff8a3d")) and pv.model().id == "karim" and CharacterModel.loaded_count() == 2, "aperçu : revenir à un survivant déjà vu, sans relecture")
+	# lecture sur un fil (menu) : l'ancien reste affiché jusqu'à l'arrivée du nouveau
+	t.check(pv.show_character("lea", Color("4fc3f7"), false) and pv.model().id == "karim" and CharacterModel.is_pending("lea"), "aperçu : survivant demandé à un fil, l'ancien reste affiché")
+	var t0 := Time.get_ticks_msec()
+	while not CharacterModel.is_ready("lea") and Time.get_ticks_msec() - t0 < 20000:
+		OS.delay_msec(10)
+	pv._process(0.016)
+	t.check(pv.model() != null and pv.model().id == "lea", "aperçu : le survivant lu sur un fil s'affiche à son arrivée")
+	pv.trim("lea")
+	t.check(CharacterModel.loaded_count() == 1 and CharacterModel.is_loaded("lea") and not pv.has_instance("karim") and pv.model().id == "lea", "aperçu : trim ne garde que le survivant choisi")
+	CharacterModel.request("marc")
+	CharacterModel.purge_except("lea")
+	t.check(not CharacterModel.is_pending("marc") and CharacterModel.loaded_count() == 1, "purge : un chargement en cours sur un fil est attendu puis jeté")
 	t.check(not pv.show_character("inconnu", Color.WHITE) and not pv.visible, "aperçu : modèle absent = conteneur masqué (repli sur les portraits)")
 	for cid in CharacterModel.IDS:
 		t.check(ResourceLoader.exists("res://assets/characters/portrait_%s.png" % cid) or ResourceLoader.exists("res://assets/portraits/%s.png" % cid), "%s : un portrait pour la carte du menu" % cid)

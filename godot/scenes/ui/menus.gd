@@ -69,6 +69,8 @@ var _pending: Dictionary = {}     ## { id, binding, other, reset } : question d'
 var _msg := {}                    ## { text, kind }
 var _swallow_up := ""
 var _options_back := UiStack.TITLE
+var _char_queue: Array = []        ## v0.34.4 : survivants à lire et préchauffer en arrière-plan au titre (le choisi d'abord)
+var _last_input_t := 0.0
 
 func _ready() -> void:
 	layer = 20
@@ -268,6 +270,9 @@ func _card(parent: Node, text: String, w: float, h: float, cb: Callable) -> Butt
 	return c
 
 func _style_card(b: Button, on: bool, accent: Color) -> void:
+	if b.has_meta(&"style") and b.get_meta(&"style") == [on, accent]:   # v0.34.4 : pas de nouveaux styles si rien ne change (chaque réglage restylait toutes les cartes)
+		return
+	b.set_meta(&"style", [on, accent])
 	b.add_theme_stylebox_override("disabled", UiTheme.box(Color(0.1, 0.1, 0.1, 0.55), Color("333333"), 1, 6, 8))   # v0.26.0 : modes à venir
 	b.add_theme_color_override("font_disabled_color", Color("777777"))
 	for st in ["normal", "hover", "pressed", "focus"]:
@@ -489,9 +494,11 @@ func _poll_zone_thumb() -> void:
 	sm.set_shader_parameter("zone_tex", _zone_tex)
 	sm.set_shader_parameter("texel", Vector2(1.0 / img.get_width(), 1.0 / img.get_height()))
 
-func _process(_dt: float) -> void:
+func _process(dt: float) -> void:
 	if _zone_thread != null:
 		_poll_zone_thumb()
+	if _preview != null:
+		_step_char_queue(dt)
 
 func _exit_tree() -> void:
 	if _zone_thread != null:
@@ -512,6 +519,9 @@ func _refresh_mode() -> void:
 	for i in _zone_btns.size():
 		var on := i == zi
 		var b: Button = _zone_btns[i]
+		if b.has_meta(&"style") and b.get_meta(&"style") == on:
+			continue
+		b.set_meta(&"style", on)
 		for st in ["normal", "hover", "pressed", "focus"]:
 			var sb := UiTheme.box(Color(0.25, 0.2, 0.05, 0.85) if on else (Color(0.12, 0.12, 0.12, 0.85) if st == "hover" else Color(0, 0, 0, 0.5)), UiTheme.GOLD if on else (UiTheme.GOLD if st == "focus" else Color("3a3a3a")), 2 if on or st == "focus" else 1, 4, 4)
 			b.add_theme_stylebox_override(st, sb)
@@ -662,7 +672,8 @@ func _render_perks() -> void:
 
 func open_perks() -> void:
 	stack.push(UiStack.PERKS)
-	_render_perks()
+	if _perk_grid.get_child_count() == 0:   # v0.34.4 : contenu fixe, construit à la première ouverture seulement (relisait objects.json à chaque fois)
+		_render_perks()
 	_sync()
 
 func _build_stats(col: Control) -> void:
@@ -994,6 +1005,45 @@ func open_title() -> void:
 	stack.clear()
 	stack.push(UiStack.TITLE)
 	_sync()
+	if _preview != null:   # v0.34.4 : les 8 survivants se lisent sur un fil et se préchauffent pendant que le joueur regarde le titre
+		var sel := String(CharacterDefs.of_slot(int(settings.get_value("char")))["id"])
+		_char_queue = [sel] + CharacterModel.IDS.filter(func(c: String) -> bool: return c != sel)
+		_preview.show_character(sel, Color(String(CharacterDefs.of_slot(int(settings.get_value("char")))["accent"])), false)   # lu sur un fil dès maintenant
+
+## v0.34.4 : début d'une partie : on arrête la lecture des survivants et on ne garde que le choisi (mémoire du jeu).
+func trim_characters() -> void:
+	_char_queue.clear()
+	if _preview != null:
+		_preview.trim(String(CharacterDefs.of_slot(int(settings.get_value("char")))["id"]))
+
+## Un pas de la file. Au titre, seul le survivant choisi est lu (sur un fil, dès l'ouverture) puis dessiné une fois, caché (`warm` : ses pipelines, ~0,33 s ici
+## caches chauds, ~0,73 s au premier lancement), après 0,5 s sans action du joueur : l'écran SURVIVANT s'ouvre ensuite sans gel. Les 7 autres ne sont lus que
+## panneau SURVIVANT ouvert, un par un (la fin d'une lecture coûte une image de 50 à 200 ms : envoi des textures ; plusieurs ensemble, 0,3 s), et affichés au
+## clic sans relecture. Rien de tout cela au titre : ses clics restent nets.
+func _step_char_queue(_dt: float) -> void:
+	if _char_queue.is_empty() or in_game or stack.has(UiStack.LOADING):
+		return
+	var cid: String = _char_queue[0]
+	if _preview.is_warmed(cid) or not CharacterModel.exists(cid):
+		_char_queue.pop_front()
+		return
+	var panel := _preview.is_visible_in_tree()
+	var selected := cid == _preview.current_id()
+	if not panel and not selected:
+		return
+	if not CharacterModel.is_pending(cid) and not CharacterModel.is_ready(cid):
+		CharacterModel.request(cid)
+		return
+	if not CharacterModel.is_ready(cid) or _preview.is_warming():
+		return
+	if panel:   # panneau ouvert : modèle prêt, affiché au clic (sans préchauffage)
+		_char_queue.pop_front()
+		_preview.preload_instance(cid)
+		return
+	if Time.get_ticks_msec() / 1000.0 - _last_input_t < 0.5:
+		return
+	_char_queue.pop_front()
+	_preview.warm(cid)
 
 func open_menu() -> void:
 	stack.push(UiStack.MENU)
@@ -1208,9 +1258,11 @@ func _on_setting(key: String) -> void:
 		_sync_options()
 	if key == "char":
 		_refresh_cards()
-	if key in ["char", "map", "difficulty", "mode", "zone"]:
+	if key in ["char", "map", "difficulty", "mode", "zone"]:   # v0.34.4 : seulement ce qui dépend du réglage
 		_refresh_summary()
+	if key in ["map", "difficulty"]:
 		_refresh_mapdiff()
+	if key in ["mode", "zone"]:
 		_refresh_mode()
 
 func _refresh_cards() -> void:
@@ -1218,7 +1270,7 @@ func _refresh_cards() -> void:
 	if _preview != null:
 		var cd: Dictionary = CharacterDefs.of_slot(sel)
 		if _preview.current_id() != String(cd["id"]):
-			_preview.show_character(String(cd["id"]), Color(String(cd["accent"])))
+			_preview.show_character(String(cd["id"]), Color(String(cd["accent"])), false)   # v0.34.4 : jamais de lecture bloquante au clic
 		_preview_name.text = "%s · %s" % [cd["name"], cd["role"]]
 		_preview_name.add_theme_color_override("font_color", Color(String(cd["accent"])))
 	for i in _cards.size():
@@ -1226,6 +1278,9 @@ func _refresh_cards() -> void:
 		var accent := Color(String(c["accent"]))
 		var on := i == sel
 		var b: Button = _cards[i]
+		if b.has_meta(&"style") and b.get_meta(&"style") == on:
+			continue
+		b.set_meta(&"style", on)
 		for st in ["normal", "hover", "pressed", "focus"]:
 			var sb := UiTheme.box(Color(0, 0, 0, 0.55), accent if on else Color("444444"), 3 if on else 2, 6, 6)
 			if st == "hover":
@@ -1457,6 +1512,8 @@ func _do_swap() -> void:
 
 # ---------------------------------------------------------------- entrées
 func _input(event: InputEvent) -> void:
+	if event is InputEventMouseButton or event is InputEventKey or event is InputEventJoypadButton:
+		_last_input_t = Time.get_ticks_msec() / 1000.0
 	if StartupLog.on and ((event is InputEventMouseButton and not event.pressed) or (event is InputEventKey and event.pressed and not event.echo) or event is InputEventJoypadButton):
 		StartupLog.input_seen()
 	if event is InputEventJoypadButton and event.is_action_pressed("ui_cancel") and stack.blocks_game():   # manette : B = retour

@@ -5,8 +5,9 @@ extends Node3D
 ## Repère du modèle : pieds à y = 0, face vers +Z (comme les zombies). Pour une moto ou une rame (avant = -Z), tourner le noeud de PI.
 ## Un même noeud sert au menu (aperçu qui tourne), à la vue externe du joueur (moto, vélo, rame) et, plus tard, à l'affichage d'un coéquipier (multijoueur) :
 ##   var m := CharacterModel.create("lea"); parent.add_child(m); m.play("Walk")
-## Le chargement est paresseux : un .glb n'est lu qu'à la première demande de ce personnage (aucun n'est chargé au titre, hors aperçu du menu) ; `purge_except`
-## libère les autres. Aucune lecture de la simulation.
+## Le chargement est paresseux : un .glb n'est lu qu'à la première demande de ce personnage ; `purge_except` libère les autres. Aucune lecture de la simulation.
+## v0.34.4 : `request` le lit sur un fil de travail (le menu charge ainsi les 8 survivants en arrière-plan, l'écran SURVIVANT ne gèle plus), `is_ready` dit s'il est
+## arrivé ; le début d'une partie ne garde que le survivant choisi (`purge_except`).
 
 const DIR := "res://assets/characters/"
 const IDS := ["marc", "lea", "karim", "chloe", "lucian", "picsou", "klukai", "harry"]
@@ -41,6 +42,7 @@ const OUTFIT := {
 
 static var _scenes: Dictionary = {}     ## id -> PackedScene
 static var _prepped: Dictionary = {}    ## id -> true (boucles posées)
+static var _pending: Dictionary = {}    ## v0.34.4 : id -> true : chargement demandé à un fil de travail (request), pas encore récupéré
 
 var id := ""
 var skeleton: Skeleton3D
@@ -67,11 +69,46 @@ static func loaded_count() -> int:
 
 static func scene_of(cid: String) -> PackedScene:
 	if not _scenes.has(cid):
-		_scenes[cid] = load(path_of(cid)) as PackedScene
+		if _pending.has(cid):   # demandé à un fil : on attend sa fin (rare : le menu n'appelle create() qu'une fois le fil fini)
+			_pending.erase(cid)
+			_scenes[cid] = ResourceLoader.load_threaded_get(path_of(cid)) as PackedScene
+		if _scenes.get(cid) == null:
+			_scenes[cid] = load(path_of(cid)) as PackedScene
 	return _scenes[cid]
 
-## Libère les modèles chargés sauf `keep` ("" : tous).
+## v0.34.4 : lance la lecture du modèle `cid` sur un fil de travail (le menu reste fluide pendant les ~0,4 s de lecture du .gltf et de ses textures 2048).
+## Sans effet s'il est déjà chargé ou demandé.
+static func request(cid: String) -> void:
+	if _scenes.has(cid) or _pending.has(cid) or not exists(cid):
+		return
+	if ResourceLoader.load_threaded_request(path_of(cid)) == OK:
+		_pending[cid] = true
+
+## v0.34.4 : vrai si `create(cid)` ne bloquera pas : modèle chargé, ou fil terminé (le résultat est récupéré ici). Un fil en échec : faux, create() relira le fichier.
+static func is_ready(cid: String) -> bool:
+	if _scenes.has(cid):
+		return true
+	if not _pending.has(cid):
+		return false
+	var st := ResourceLoader.load_threaded_get_status(path_of(cid))
+	if st == ResourceLoader.THREAD_LOAD_IN_PROGRESS:
+		return false
+	_pending.erase(cid)
+	if st == ResourceLoader.THREAD_LOAD_LOADED:
+		var ps := ResourceLoader.load_threaded_get(path_of(cid)) as PackedScene
+		if ps != null:
+			_scenes[cid] = ps
+	return _scenes.has(cid)
+
+static func is_pending(cid: String) -> bool:
+	return _pending.has(cid)
+
+## Libère les modèles chargés sauf `keep` ("" : tous). Un chargement encore en cours sur un fil est attendu puis jeté (sinon le chargeur le garderait).
 static func purge_except(keep: String) -> void:
+	for k in _pending.keys():
+		if k != keep:
+			_pending.erase(k)
+			ResourceLoader.load_threaded_get(path_of(k))
 	for k in _scenes.keys():
 		if k != keep:
 			_scenes.erase(k)

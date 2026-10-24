@@ -474,6 +474,7 @@ func _start_session() -> void:
 		return
 	var t0 := Time.get_ticks_msec()
 	StartupLog.mark("game loading: start")
+	_menus.trim_characters()   # v0.34.4 : seuls les modèles du survivant choisi restent (ceux lus au menu sont libérés)
 	PerfLog.phase = PerfLog.PHASE_LOADING
 	_unload_session()
 	_load_max_dt = 0.0
@@ -1414,7 +1415,9 @@ func _apply_layers() -> void:
 	_pending.clear()
 	if DisplayServer.get_name() == "headless" or _bot:
 		return
-	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED if (Game.playing and not Game.over) else Input.MOUSE_MODE_VISIBLE
+	var mm := Input.MOUSE_MODE_CAPTURED if (Game.playing and not Game.over) else Input.MOUSE_MODE_VISIBLE
+	if Input.mouse_mode != mm:   # v0.34.4 : chaque clic du menu passe ici ; on ne touche pas au système quand rien ne change
+		Input.mouse_mode = mm
 
 ## v0.25.0 : cycle jour / nuit : réglages du joueur (Options) vers Game.daynight ; au début de la partie, heure de départ du mode (ou --hour).
 func _apply_daynight(start: bool) -> void:
