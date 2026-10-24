@@ -263,6 +263,7 @@ const YC = 1.85; // centre vertical du profil (pour réduire le nez)
 // profil du côté +z, du bas (plancher) au sommet du toit, puis symétrique : [y, z]
 const HALF = [[0.32, 1.2], [0.65, 1.2], [1.1, 1.2], [1.6, 1.2], [2.1, 1.2], [2.55, 1.2], [2.95, 1.2], [3.14, 1.03], [3.29, 0.62], [3.37, 0.0]];
 const RING = [...HALF, ...HALF.slice(0, -1).reverse().map(([y, z]) => [y, -z])];
+const ROOF_RING = RING.slice(5, 14); // toiture au-dessus des portes (y >= 2.55)
 const WALL_TOP = 2.95;
 const LIVERY_M = 33; // longueur (m) couverte par la largeur de la livrée
 
@@ -270,10 +271,10 @@ const tClamp = (y) => (y > WALL_TOP + 0.001 ? 0.985 : 0.02 + ((y - 0.32) / (WALL
 // canvas : ordonnée de la livrée (haut du canvas = toit) pour une hauteur y (m)
 const liveryY = (y) => 256 - tClamp(y) * 256;
 
-function sweep(stations, uvFn, colorHex = null) {
+function sweepProfile(ring, stations, uvFn, colorHex = null) {
   const pos = [], uv = [], idx = [];
-  const n = RING.length;
-  for (const st of stations) for (const [y, z] of RING) {
+  const n = ring.length;
+  for (const st of stations) for (const [y, z] of ring) {
     const yy = YC + (y - YC) * st.s, zz = z * st.s;
     pos.push(st.x, yy, zz);
     uv.push(...uvFn(st.x, yy, zz, st));
@@ -288,6 +289,95 @@ function sweep(stations, uvFn, colorHex = null) {
   g.setIndex(idx);
   g.computeVertexNormals();
   return colorHex == null ? g : colorize(g, colorHex);
+}
+
+function sweep(stations, uvFn, colorHex = null) {
+  return sweepProfile(RING, stations, uvFn, colorHex);
+}
+
+// Fermeture étanche du dessous et des flancs inférieurs du nez (évite le trou sous y = 1.85)
+function makeNoseBottom(dir, xs, NOSE, SEG) {
+  const bPos = [], bIdx = [];
+  for (let k = 0; k <= SEG; k++) {
+    const t = k / SEG;
+    const x = xs + dir * NOSE * t;
+    const w = 1.2 * Math.sqrt(Math.max(0, 1 - t * t));
+    bPos.push(x, 0.28, -w);
+    bPos.push(x, 0.28, +w);
+  }
+  for (let k = 0; k < SEG; k++) {
+    const a = k * 2, b = a + 1, c = (k + 1) * 2 + 1, d = (k + 1) * 2;
+    bIdx.push(a, b, c, a, c, d);
+    bIdx.push(a, c, b, a, d, c);
+  }
+  const bg = new THREE.BufferGeometry();
+  bg.setAttribute('position', new THREE.Float32BufferAttribute(bPos, 3));
+  bg.setIndex(bIdx);
+  bg.computeVertexNormals();
+
+  const sPos = [], sIdx = [];
+  for (let k = 0; k <= SEG; k++) {
+    const t = k / SEG;
+    const s = Math.sqrt(Math.max(0, 1 - t * t));
+    const x = xs + dir * NOSE * t;
+    const yLow = YC + (0.32 - YC) * s;
+    const w = 1.2 * s;
+    sPos.push(x, 0.28, w);
+    sPos.push(x, yLow, w);
+    sPos.push(x, 0.28, -w);
+    sPos.push(x, yLow, -w);
+  }
+  for (let k = 0; k < SEG; k++) {
+    const r0 = k * 4, r1 = r0 + 1, r2 = (k + 1) * 4 + 1, r3 = (k + 1) * 4;
+    sIdx.push(r0, r1, r2, r0, r2, r3);
+    sIdx.push(r0, r2, r1, r0, r3, r2);
+    const l0 = k * 4 + 2, l1 = l0 + 1, l2 = (k + 1) * 4 + 3, l3 = (k + 1) * 4 + 2;
+    sIdx.push(l0, l1, l2, l0, l2, l3);
+    sIdx.push(l0, l2, l1, l0, l3, l2);
+  }
+  const sg = new THREE.BufferGeometry();
+  sg.setAttribute('position', new THREE.Float32BufferAttribute(sPos, 3));
+  sg.setIndex(sIdx);
+  sg.computeVertexNormals();
+
+  return [bg, sg];
+}
+
+// Pare-brise panoramique galbé transparent
+function makePanoramicWindshield(dir, xs, NOSE) {
+  const pos = [], uv = [], idx = [];
+  const W_SEGS = 8, H_SEGS = 4;
+  for (let hi = 0; hi <= H_SEGS; hi++) {
+    const v = hi / H_SEGS;
+    const y = 1.30 + v * (2.78 - 1.30);
+    for (let wi = 0; wi <= W_SEGS; wi++) {
+      const u = wi / W_SEGS;
+      const angle = (u - 0.5) * Math.PI * 0.74;
+      const sinA = Math.sin(angle), cosA = Math.cos(angle);
+      const halfW = 1.06 * (1.0 - v * 0.12);
+      const z = sinA * halfW;
+      const xFwd = cosA * 0.52;
+      const x = xs + dir * (NOSE * 0.60 + xFwd);
+      pos.push(x, y, z);
+      uv.push(u, v);
+    }
+  }
+  for (let hi = 0; hi < H_SEGS; hi++) {
+    for (let wi = 0; wi < W_SEGS; wi++) {
+      const a = hi * (W_SEGS + 1) + wi;
+      const b = a + 1;
+      const c = (hi + 1) * (W_SEGS + 1) + wi + 1;
+      const d = (hi + 1) * (W_SEGS + 1) + wi;
+      idx.push(a, b, c, a, c, d);
+      idx.push(a, c, b, a, d, c);
+    }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  g.setIndex(idx);
+  g.computeVertexNormals();
+  return colorize(g, 0xa8d0ea);
 }
 
 // Un cylindre entre deux points (pantographe)
@@ -313,12 +403,18 @@ function tramGeometries(n) {
     if (i === 0) { // nez arrière
       const xs = x0 + NOSE, st = [];
       for (let k = SEG; k >= 0; k--) { const t = k / SEG; st.push({ x: xs - NOSE * t, s: Math.sqrt(Math.max(0, 1 - t * t)) }); }
-      body.push(sweep(st, noseUV(1))); x0 = xs;
+      body.push(sweep(st, noseUV(1)));
+      const [nb, ns] = makeNoseBottom(-1, xs, NOSE, SEG);
+      dark.push(colorize(nb, 0x14161a), colorize(ns, 0x282c32));
+      x0 = xs;
     }
     if (i === n - 1) { // nez avant
       const xs = x1 - NOSE, st = [];
       for (let k = 0; k <= SEG; k++) { const t = k / SEG; st.push({ x: xs + NOSE * t, s: Math.sqrt(Math.max(0, 1 - t * t)) }); }
-      body.push(sweep(st, noseUV(-1))); x1 = xs;
+      body.push(sweep(st, noseUV(-1)));
+      const [nb, ns] = makeNoseBottom(1, xs, NOSE, SEG);
+      dark.push(colorize(nb, 0x14161a), colorize(ns, 0x282c32));
+      x1 = xs;
     }
     body.push(sweep([{ x: x0, s: 1 }, { x: x1, s: 1 }], sideUV));
     // soufflet vers le module suivant
@@ -356,7 +452,7 @@ export function carGeometries() {
   const SIT = 0.77; // dessus de l'assise
   for (let i = 0; i < n; i++) {
     const c = -L / 2 + M / 2 + i * M;
-    const body = [], dark = [], leafParts = [], inter = [], leaves = [];
+    const body = [], dark = [], leafParts = [], glassLeafParts = [], glassParts = [], inter = [], leaves = [], glassLeaves = [];
     const tr = (g) => g.translate(-c, 0, 0);
     // l'intérieur s'arrête juste dans le nez des modules d'extrémité (au-delà, la caisse se resserre : le plancher et le plafond en sortiraient)
     const lo = i === 0 ? c - half + NOSE - 0.3 : c - M / 2 + 0.08, hi = i === n - 1 ? c + half - NOSE + 0.3 : c + M / 2 - 0.08;
@@ -365,14 +461,35 @@ export function carGeometries() {
     if (i === 0) {
       const xs = x0 + NOSE, st = [];
       for (let k = SEG; k >= 0; k--) { const t = k / SEG; st.push({ x: xs - NOSE * t, s: Math.sqrt(Math.max(0, 1 - t * t)) }); }
-      body.push(tr(sweep(st, noseUV(1)))); x0 = xs;
+      body.push(tr(sweep(st, noseUV(1))));
+      const [nb, ns] = makeNoseBottom(-1, xs, NOSE, SEG);
+      dark.push(tr(colorize(nb, 0x16191d)), tr(colorize(ns, 0x282c32)));
+      glassParts.push(tr(makePanoramicWindshield(-1, xs, NOSE)));
+      x0 = xs;
     }
     if (i === n - 1) {
       const xs = x1 - NOSE, st = [];
       for (let k = 0; k <= SEG; k++) { const t = k / SEG; st.push({ x: xs + NOSE * t, s: Math.sqrt(Math.max(0, 1 - t * t)) }); }
-      body.push(tr(sweep(st, noseUV(-1)))); x1 = xs;
+      body.push(tr(sweep(st, noseUV(-1))));
+      const [nb, ns] = makeNoseBottom(1, xs, NOSE, SEG);
+      dark.push(tr(colorize(nb, 0x16191d)), tr(colorize(ns, 0x282c32)));
+      glassParts.push(tr(makePanoramicWindshield(1, xs, NOSE)));
+      x1 = xs;
     }
-    body.push(tr(sweep([{ x: x0, s: 1 }, { x: x1, s: 1 }], sideUV)));
+    const doorSpans = doors.map((d) => [d - L / 2, d - L / 2 + C.doorWidth]); // repère de la rame
+    const modDoors = doorSpans.filter(([d0, d1]) => (d0 + d1) / 2 >= lo && (d0 + d1) / 2 <= hi);
+    if (modDoors.length === 0) {
+      body.push(tr(sweep([{ x: x0, s: 1 }, { x: x1, s: 1 }], sideUV)));
+    } else {
+      const [d0, d1] = modDoors[0];
+      if (d0 > x0 + 0.02) body.push(tr(sweepProfile(RING, [{ x: x0, s: 1 }, { x: d0, s: 1 }], sideUV)));
+      body.push(tr(sweepProfile(ROOF_RING, [{ x: d0, s: 1 }, { x: d1, s: 1 }], sideUV)));
+      for (const side of [-1, 1]) {
+        dark.push(tr(boxAt(d1 - d0, 0.16, 0.08, (d0 + d1) / 2, 0.40, side * 1.18, 0x383c42)));
+        dark.push(tr(boxAt(d1 - d0, 0.03, 0.12, (d0 + d1) / 2, 0.48, side * 1.18, 0xe8c04a)));
+      }
+      if (x1 > d1 + 0.02) body.push(tr(sweepProfile(RING, [{ x: d1, s: 1 }, { x: x1, s: 1 }], sideUV)));
+    }
     if (i < n - 1) dark.push(tr(sweep([{ x: c + half - 0.02, s: 0.97 }, { x: c + M / 2, s: 0.92 }, { x: c + M - half + 0.02, s: 0.97 }], () => [0, 0], 0x14161a)));
     for (const k of [-1, 1]) dark.push(tr(boxAt(1.3, 0.3, 1.9, c + k * 1.3, 0.2, 0, 0x1e2125))); // bogies
     { const u0 = i === 0 ? c - 0.5 : c - M / 2 + 0.3, u1 = i === n - 1 ? c + 0.5 : c + M / 2 - 0.3; // dessous (il s'arrête avant le nez, qui se resserre)
@@ -382,8 +499,14 @@ export function carGeometries() {
       for (const sx of [-1, 1]) dark.push(tr(strut([c + sx * 0.7, 3.46, 0], [c, 4.1, 0], 0.03, 0x2a2d31)));
       dark.push(tr(boxAt(0.1, 0.06, 1.9, c, 4.12, 0, 0x2a2d31)));
     }
+    // ---- vitres latérales des modules
+    for (const w of wins) {
+      const wx = w - L / 2;
+      if (wx > lo && wx < hi) {
+        for (const side of [-1, 1]) glassParts.push(tr(boxAt(1.05, 1.25, 0.015, wx + 0.525, 1.77, side * 1.20, 0xa8d0ea)));
+      }
+    }
     // ---- intérieur : plancher, plafond, bas et haut des parois (les fenêtres restent ouvertes : vue de l'intérieur, la caisse n'a qu'une face), montants, mains courantes
-    const doorSpans = doors.map((d) => [d - L / 2, d - L / 2 + C.doorWidth]); // repère de la rame
     inter.push(tr(boxAt(hi - lo, 0.03, 2.3, (lo + hi) / 2, 0.335, 0, 0x30343a)));
     inter.push(tr(boxAt(hi - lo, 0.04, 2.1, (lo + hi) / 2, 2.97, 0, 0xd5d9dc)));
     for (const side of [-1, 1]) {
@@ -418,6 +541,25 @@ export function carGeometries() {
     // ---- cabines (module 0 : arrière, module n - 1 : avant) : pupitre, siège du conducteur, montants de pare-brise
     if (i === 0 || i === n - 1) {
       const dir = i === 0 ? -1 : 1, Xc = dir * (L / 2 - 2.45), Xd = dir * (L / 2 - 1.95);
+      // Prolongement du plancher de cabine vers l'avant (supprime le trou sous les pieds du conducteur)
+      inter.push(tr(boxAt(0.85, 0.03, 1.80, Xd + dir * 0.35, 0.335, 0, 0x30343a)));
+      // Bouclier / pare-chocs inférieur avant/arrière
+      dark.push(tr(boxAt(0.35, 0.42, 1.80, Xd + dir * 1.05, 0.52, 0, 0x22262c)));
+      dark.push(tr(boxAt(0.30, 0.50, 1.60, Xd + dir * 1.15, 0.98, 0, 0x7a828a)));
+      // Calandre centrale & blason CTS
+      dark.push(tr(boxAt(0.20, 0.14, 0.70, Xd + dir * 1.12, 0.45, 0, 0x111316)));
+      dark.push(tr(boxAt(0.05, 0.12, 0.20, Xd + dir * 1.22, 0.95, 0, 0x0f2b48)));
+      // Phares / feux
+      for (const side of [-1, 1]) {
+        dark.push(tr(boxAt(0.15, 0.12, 0.24, Xd + dir * 1.08, 0.72, side * 0.70, 0x1a1d22)));
+        const lightCol = dir === 1 ? 0xffffff : 0xdd2222;
+        dark.push(tr(boxAt(0.04, 0.08, 0.14, Xd + dir * 1.18, 0.72, side * 0.70, lightCol)));
+        dark.push(tr(boxAt(0.04, 0.08, 0.06, Xd + dir * 1.18, 0.72, side * 0.82, 0xf59e0b)));
+      }
+      // Girouette HOMME DE FER
+      dark.push(tr(boxAt(0.20, 0.28, 1.30, Xd + dir * 0.60, 3.05, 0, 0x14161a)));
+      dark.push(tr(boxAt(0.02, 0.20, 1.15, Xd + dir * 0.70, 3.05, 0, 0xf59e0b)));
+
       inter.push(tr(boxAt(0.5, 0.55, 1.9, Xd, 0.95, 0, 0x2a2f36)));                          // pupitre
       inter.push(tr(boxAt(0.46, 0.04, 1.7, Xd - dir * 0.04, 1.26, 0, 0x171b21)));            // dessus incliné (plat)
       inter.push(tr(boxAt(0.05, 0.18, 0.5, Xd - dir * 0.2, 1.36, 0, 0x172a3a)));              // écran (bas : il ne doit pas boucher la vue du conducteur, dont l'œil est à 1,56 m)
@@ -429,7 +571,8 @@ export function carGeometries() {
       for (const side of [-1, 1]) inter.push(tr(boxAt(0.1, 1.6, 0.1, Xd - dir * 0.35, 1.7, side * 1.05, 0x3c424a))); // montants de pare-brise
       seats.push({ module: i, x: Xc - c, y: 0.84, z: 0, eyeUp: 0.72, face: i === 0 ? Math.PI : 0, driver: true, side: 0 });
     }
-    // ---- vantaux des portes : deux par porte et par côté, collés à l'extérieur de la caisse
+    // ---- vantaux des portes : cadre aluminium et vitre transparente
+    const wLeaf = C.doorWidth / 2 - 0.02;
     for (let d = 0; d < doors.length; d++) {
       const [d0, d1] = doorSpans[d], dc = (d0 + d1) / 2;
       if (dc < lo || dc > hi) continue;
@@ -437,17 +580,51 @@ export function carGeometries() {
         doorsAt.push({ module: i, x: dc - c, side });
         for (const dir of [-1, 1]) {
           const lx = dc + dir * (C.doorWidth / 4);
-          const fr = tr(boxAt(C.doorWidth / 2 - 0.02, 2.0, 0.05, lx, 1.4, side * 1.24, 0x7e868e)), gl = tr(boxAt(C.doorWidth / 2 - 0.2, 1.15, 0.03, lx, 1.75, side * 1.27, 0x16212c));
-          leafParts.push(fr, gl);
-          leaves.push({ k: leafParts.length - 2, dir, side });
+          // Cadre métallique de vantail
+          const fBottom = boxAt(wLeaf, 0.38, 0.04, lx, 0.67, side * 1.22, 0x50565e);
+          const fTop = boxAt(wLeaf, 0.14, 0.04, lx, 2.45, side * 1.22, 0x50565e);
+          const fLeft = boxAt(0.05, 1.44, 0.04, lx - wLeaf / 2 + 0.025, 1.56, side * 1.22, 0x50565e);
+          const fRight = boxAt(0.05, 1.44, 0.04, lx + wLeaf / 2 - 0.025, 1.56, side * 1.22, 0x50565e);
+          const fSeal = boxAt(0.02, 1.94, 0.045, lx + dir * (wLeaf / 2 - 0.01), 1.50, side * 1.22, 0x14161a);
+          const fBar = boxAt(wLeaf - 0.08, 0.03, 0.02, lx, 1.05, side * 1.18, 0xe8c04a);
+          const frameGeom = tr(mergeParts([fBottom, fTop, fLeft, fRight, fSeal, fBar]));
+          leafParts.push(frameGeom);
+          leaves.push({ k: leafParts.length - 1, dir, side });
+
+          // Vitre transparente de vantail
+          const pane = tr(boxAt(wLeaf - 0.08, 1.42, 0.012, lx, 1.56, side * 1.22, 0xa8d0ea));
+          glassLeafParts.push(pane);
+          glassLeaves.push({ k: glassLeafParts.length - 1, dir, side });
         }
       }
     }
     // fusion : [dark..., leaves..., interior...] ; les vantaux sont repérés par leur rang dans le tableau
     const parts = [...dark, ...leafParts, ...inter], counts = parts.map(vc);
     const leafFirst = dark.length;
-    const leafRanges = leaves.map((lf) => { const k = leafFirst + lf.k; let v0 = 0; for (let j = 0; j < k; j++) v0 += counts[j]; return { v0, n: counts[k] + counts[k + 1], dir: lf.dir, side: lf.side }; });
-    modules.push({ body: mergeParts(body), dark: mergeParts(parts), leaves: leafRanges, c });
+    const leafRanges = leaves.map((lf) => {
+      const k = leafFirst + lf.k;
+      let v0 = 0;
+      for (let j = 0; j < k; j++) v0 += counts[j];
+      return { v0, n: counts[k], dir: lf.dir, side: lf.side };
+    });
+
+    const allGlass = [...glassLeafParts, ...glassParts];
+    const gCounts = allGlass.map(vc);
+    const glassLeafRanges = glassLeaves.map((lf) => {
+      const k = lf.k;
+      let v0 = 0;
+      for (let j = 0; j < k; j++) v0 += gCounts[j];
+      return { v0, n: gCounts[k], dir: lf.dir, side: lf.side };
+    });
+
+    modules.push({
+      body: mergeParts(body),
+      dark: mergeParts(parts),
+      glass: allGlass.length ? mergeParts(allGlass) : new THREE.BufferGeometry(),
+      leaves: leafRanges,
+      glassLeaves: glassLeafRanges,
+      c,
+    });
   }
   // sièges : repère du module -> position dans le repère « groupe » (x : droite, z : arrière) du module ; le cap est l'angle de rotation du siège
   const seatOut = seats.map((s) => ({ module: s.module, hip: [s.z, s.y, -s.x], eye: [s.z, s.y + s.eyeUp, -s.x], ry: s.face, driver: s.driver, side: s.side }));

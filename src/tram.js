@@ -28,6 +28,7 @@ let MATS = null;
 const mats = () => MATS || (MATS = {
   body: atlas('car').mat,
   dark: new THREE.MeshStandardMaterial({ color: 0xffffff, vertexColors: true, metalness: 0.3, roughness: 0.6, emissive: 0x16191d }), // un peu d'émission : l'intérieur n'a aucune lumière
+  glass: new THREE.MeshStandardMaterial({ color: 0xa8d0ea, transparent: true, opacity: 0.38, roughness: 0.08, metalness: 0.12, depthWrite: false, side: THREE.DoubleSide }),
 });
 
 export class Tram {
@@ -50,11 +51,13 @@ export class Tram {
     this.group = new THREE.Group(); this.group.rotation.order = 'YXZ'; scene.add(this.group);
     this.mods = CAR.modules.map((m, i) => {
       const g = new THREE.Group(), inner = new THREE.Group(); inner.rotation.y = Math.PI / 2; g.add(inner); this.group.add(g);
-      const body = new THREE.Mesh(m.body.clone(), M.body), dark = new THREE.Mesh(m.dark.clone(), M.dark);
-      for (const o of [body, dark]) { o.castShadow = false; o.receiveShadow = true; o.frustumCulled = false; inner.add(o); }
+      const body = new THREE.Mesh(m.body.clone(), M.body), dark = new THREE.Mesh(m.dark.clone(), M.dark), glass = new THREE.Mesh(m.glass.clone(), M.glass);
+      for (const o of [body, dark, glass]) { o.castShadow = false; o.receiveShadow = true; o.frustumCulled = false; inner.add(o); }
       const pos = dark.geometry.attributes.position, base = new Float32Array(m.leaves.reduce((a, l) => a + l.n, 0)); // abscisses de repos des vantaux
       let k = 0; for (const l of m.leaves) for (let v = 0; v < l.n; v++) base[k++] = pos.getX(l.v0 + v);
-      return { g, inner, body, dark, leaves: m.leaves, leafBase: base, pose: { x: 0, z: 0, yaw: 0, tx: 1, tz: 0, dyaw: 0 }, openF: -1 };
+      const posG = glass.geometry.attributes.position, baseG = new Float32Array((m.glassLeaves || []).reduce((a, l) => a + l.n, 0));
+      let kg = 0; for (const l of m.glassLeaves || []) for (let v = 0; v < l.n; v++) baseG[kg++] = posG.getX(l.v0 + v);
+      return { g, inner, body, dark, glass, leaves: m.leaves, leafBase: base, glassLeaves: m.glassLeaves || [], glassLeafBase: baseG, pose: { x: 0, z: 0, yaw: 0, tx: 1, tz: 0, dyaw: 0 }, openF: -1 };
     });
     // places : 0 conducteur avant, 1 conducteur arrière, puis les passagers (rangés par module, côté gauche puis droit)
     const sd = CAR.seats, front = sd.find((s) => s.driver && s.module === this.n - 1), rear = sd.find((s) => s.driver && s.module === 0);
@@ -138,6 +141,11 @@ export class Tram {
       const pos = m.dark.geometry.attributes.position; let k = 0;
       for (const l of m.leaves) { for (let v = 0; v < l.n; v++) pos.setX(l.v0 + v, m.leafBase[k++] + l.dir * f * 0.62); }
       pos.needsUpdate = true;
+      if (m.glassLeaves && m.glassLeaves.length) {
+        const posG = m.glass.geometry.attributes.position; let kg = 0;
+        for (const l of m.glassLeaves) { for (let v = 0; v < l.n; v++) posG.setX(l.v0 + v, m.glassLeafBase[kg++] + l.dir * f * 0.62); }
+        posG.needsUpdate = true;
+      }
     }
     // obstacles dynamiques : une boîte par module
     if (this.state !== 'gone') this.game.world.collision?.setDynamic?.('tram' + this.id, this.mods.map((m) => ({ x: m.pose.x, z: m.pose.z, w: HDF.tram.body, d: HDF.tram.width, rot: Math.atan2(m.pose.tz, m.pose.tx), h: HDF.tram.height })));
