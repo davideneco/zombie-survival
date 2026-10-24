@@ -1,11 +1,11 @@
-﻿Réglage;MOTO;GROSSE MOTO;VOITURE;Unité
+﻿Réglage;MOTO;GROSSE MOTO;VOITURE GT;Unité
 Places;1;2;2;
-Points de vie;300;500;1200;PV
-Vitesse max;76;61;83;km/h
-Réservoir;6;10;30;L
-Autonomie à fond;3;4;8,9;min
+Points de vie;300;500;1400;PV
+Vitesse max;76;61;101;km/h
+Réservoir;6;10;35;L
+Autonomie à fond;3;4;11,7;min
 Seuil d'écrasement;32;25;14;km/h (en dessous : aucun dégât, un zombie arrête la moto)
-Dégâts d'écrasement au seuil / à la vitesse max;58 / 336;67 / 408;77 / 1104;PV de zombie
+Dégâts d'écrasement au seuil / à la vitesse max;58 / 336;67 / 408;83 / 1456;PV de zombie
 Usure par écrasement;5 (zombie tué) / 12 (survivant);idem;idem;PV de la moto
 Choc contre un objet physique (voiture, mobilier, arbre, machine…);(vitesse perdue - 6) x 5;idem;idem;PV de la moto
 Choc contre un mur (façade, quai, parapet, porte, marche, bord de l'île);aucun dégât pour la moto;idem;idem;le pilote se blesse comme pour un objet

@@ -1,7 +1,8 @@
 import * as THREE from 'three';
-import { CONFIG, papAmmoMult } from './config.js';
+import { CONFIG, papAmmoMult, setMap } from './config.js';
 import { buildWorld } from './world.js';
 import { buildRealWorld } from './realworld.js';
+import { buildCircuitWorld } from './circuit.js';
 import { Player } from './player.js';
 import { Zombie, zombieTextures } from './zombie.js';
 import { Boss } from './boss.js';
@@ -98,7 +99,11 @@ window.addEventListener('resize', () => {
 fx.init(scene);
 const hud = new Hud();
 const sfx = new Sfx();
-const world = CONFIG.map === 'arena' ? buildWorld(scene) : await buildRealWorld(scene, renderer);
+const world = CONFIG.map === 'arena'
+  ? buildWorld(scene)
+  : CONFIG.map === 'circuit'
+    ? await buildCircuitWorld(scene, renderer)
+    : await buildRealWorld(scene, renderer);
 
 let nextPuId = 1;
 
@@ -2246,6 +2251,30 @@ hud.el.optionsPanel.addEventListener('click', (e) => e.stopPropagation());
 document.getElementById('btnPlay').addEventListener('click', () => hud.showPanel('menuPanel'));
 document.getElementById('btnOptions').addEventListener('click', () => openOptions('titlePanel'));
 document.getElementById('btnPauseOptions').addEventListener('click', () => openOptions('pausePanel'));
+const syncMapBtns = () => {
+  const isCircuit = CONFIG.map === 'circuit';
+  const menuBtn = document.getElementById('btnSelectMap');
+  if (menuBtn) {
+    menuBtn.textContent = isCircuit
+      ? '🏁 CARTE : CIRCUIT D\'ESSAIS VÉHICULES (CHANGER)'
+      : '🗺️ CARTE : GRANDE ÎLE DE STRASBOURG (CHANGER)';
+  }
+  const pauseBtn = document.getElementById('btnPauseMap');
+  if (pauseBtn) {
+    pauseBtn.textContent = isCircuit
+      ? '🗺️ ALLER SUR : GRANDE ÎLE DE STRASBOURG'
+      : '🏁 ALLER SUR : CIRCUIT D\'ESSAIS VÉHICULES';
+  }
+};
+syncMapBtns();
+document.getElementById('btnSelectMap')?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  setMap(CONFIG.map === 'circuit' ? 'strasbourg' : 'circuit');
+});
+document.getElementById('btnPauseMap')?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  setMap(CONFIG.map === 'circuit' ? 'strasbourg' : 'circuit');
+});
 document.getElementById('btnModMenu')?.addEventListener('click', () => {
   if (game.isMultiplayer && !game.isHost) {
     hud.popup("Menu Mods réservé à l'hôte", 'warning');
@@ -2388,6 +2417,7 @@ let shadowFrame = 0;
 frame();
 
 window.game = game;
+window.__game = game;
 game.scene = scene; // accès console / outils de test (tools/make-docs.mjs)
 game.fx = fx;
 game.THREE = THREE;

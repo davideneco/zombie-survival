@@ -12,8 +12,25 @@ export const PAP_LEVELS = [
   { roman: 'III', price: 20000, color: 0xff6a10, tracer: 0xff8a30, flash: 0xffb060, dmg: 5, ray: 3, head: 1.4, pierce: 4, mag: 1.5, magX: 1.33, reserve: 2.5, reload: 0.75, spread: 0.7, ammo: 5, pulseHz: 2 },
 ];
 
-if (typeof window !== 'undefined') {
-  try { localStorage.removeItem('zombie_map'); } catch (_) {}
+function getInitialMap() {
+  if (typeof window === 'undefined') return 'strasbourg';
+  const q = new URLSearchParams(window.location.search).get('map');
+  if (q === 'circuit' || q === 'strasbourg' || q === 'arena') return q;
+  try {
+    const saved = localStorage.getItem('zombie_map');
+    if (saved === 'circuit' || saved === 'strasbourg') return saved;
+  } catch (_) {}
+  return 'strasbourg';
+}
+
+export const CURRENT_MAP = getInitialMap();
+
+export function setMap(mapName) {
+  try { localStorage.setItem('zombie_map', mapName); } catch (_) {}
+  const url = new URL(window.location.href);
+  if (mapName === 'strasbourg') url.searchParams.delete('map');
+  else url.searchParams.set('map', mapName);
+  window.location.href = url.toString();
 }
 
 export const STRASBOURG_SECTOR = {
@@ -65,9 +82,9 @@ export const STRASBOURG_SECTOR = {
 };
 
 export const CONFIG = {
-  map: 'strasbourg', // 'strasbourg' (Grande Île) ou 'arena'
-  startHint: { x: 4.3, z: -35.7 },
-  cityHint: { x: -199, z: -145 },
+  map: CURRENT_MAP, // 'strasbourg' (Grande Île), 'circuit' (Circuit d'Essais Véhicules) ou 'arena'
+  startHint: CURRENT_MAP === 'circuit' ? { x: -88, z: -18 } : { x: 4.3, z: -35.7 },
+  cityHint: CURRENT_MAP === 'circuit' ? { x: 0, z: 0 } : { x: -199, z: -145 },
   breaches: 3,
   sector: STRASBOURG_SECTOR,
 
@@ -443,9 +460,9 @@ export const CONFIG = {
         wheelbase: 1.75, maxSteer: 0.5, grip: 11, radius: 0.7, bikeRadius: 0.55, roadkill: { K: 24, vmin: 7, slowdown: 0.90 },
       },
       voiture: {
-        name: 'VOITURE', hudName: 'VOITURE', det: 'la', isCar: true, seats: 2, camArm: 5.6, hp: 1200, tank: 30, idle: 0.006, gas: 0.022, perSpeed: 0.028, maxSpeed: 23, accel: 10, brake: 32, reverseSpeed: 5.5, drag: 0.16,
-        wheelbase: 2.65, maxSteer: 0.56, grip: 16, radius: 1.15, bikeRadius: 1.15, roadkill: { K: 48, vmin: 4, slowdown: 0.94 },
-        leanK: -0.015, crash: { minSpeed: 12, damagePerMs: 2.5, maxDamage: 35 }, wreckLift: 0.75,
+        name: 'VOITURE GT', hudName: 'VOITURE GT', det: 'la', isCar: true, seats: 2, camArm: 5.8, hp: 1400, tank: 35, idle: 0.005, gas: 0.020, perSpeed: 0.025, maxSpeed: 28, accel: 12.5, brake: 35, reverseSpeed: 6.5, drag: 0.14,
+        wheelbase: 2.68, maxSteer: 0.58, grip: 18, radius: 1.15, bikeRadius: 1.15, roadkill: { K: 52, vmin: 4, slowdown: 0.95 },
+        leanK: -0.018, crash: { minSpeed: 13, damagePerMs: 2.2, maxDamage: 35 }, wreckLift: 0.75,
       },
       // Vélo (v0.43.0) : gratuit, réparti par stations (bikeStations), une place, pas de réservoir (tank 0 : aucune jauge, aucune panne sèche, aucun bidon),
       // jamais d'écrasement (roadkill.vmin 99 : un zombie au contact arrête le vélo net, comme une moto lente), le cycliste ne tire pas (conducteur).

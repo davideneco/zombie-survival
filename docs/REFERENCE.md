@@ -1,6 +1,6 @@
 # Zombie Survival — fiche de référence
 
-Version du jeu : **v0.62.0** (package 0.62.0). Générée automatiquement par `node tools/make-docs.mjs` à partir de `src/config.js` et du jeu.
+Version du jeu : **v0.63.0** (package 0.63.0). Générée automatiquement par `node tools/make-docs.mjs` à partir de `src/config.js` et du jeu.
 Carte annotée : [carte.png](carte.png). Armes de profil : [armes.png](armes.png). Les mêmes tableaux en tableur : dossier [csv/](csv/).
 
 Pour demander une modification, citez la ligne (ex. « Mitrailleuse RPK : chargeur 100 », « Mastodonte à 3000 pts », « porte P3 à 500 pts », « mettre la boîte mystère dans la zone Temple-Neuf »).
@@ -556,15 +556,15 @@ Prix d'une porte : le plus cher des deux prix de zone (colonne « Prix de la por
 
 ## Motos (deux parkings au panneau bleu « P », avec chacun une borne plein + réparation : place Gutenberg, 2 motos ; place Broglie, 1 moto)
 
-| Réglage | MOTO | GROSSE MOTO | VOITURE | Unité |
+| Réglage | MOTO | GROSSE MOTO | VOITURE GT | Unité |
 |---|---|---|---|---|
 | Places | 1 | 2 | 2 |  |
-| Points de vie | 300 | 500 | 1200 | PV |
-| Vitesse max | 76 | 61 | 83 | km/h |
-| Réservoir | 6 | 10 | 30 | L |
-| Autonomie à fond | 3 | 4 | 8,9 | min |
+| Points de vie | 300 | 500 | 1400 | PV |
+| Vitesse max | 76 | 61 | 101 | km/h |
+| Réservoir | 6 | 10 | 35 | L |
+| Autonomie à fond | 3 | 4 | 11,7 | min |
 | Seuil d'écrasement | 32 | 25 | 14 | km/h (en dessous : aucun dégât, un zombie arrête la moto) |
-| Dégâts d'écrasement au seuil / à la vitesse max | 58 / 336 | 67 / 408 | 77 / 1104 | PV de zombie |
+| Dégâts d'écrasement au seuil / à la vitesse max | 58 / 336 | 67 / 408 | 83 / 1456 | PV de zombie |
 | Usure par écrasement | 5 (zombie tué) / 12 (survivant) | idem | idem | PV de la moto |
 | Choc contre un objet physique (voiture, mobilier, arbre, machine…) | (vitesse perdue - 6) x 5 | idem | idem | PV de la moto |
 | Choc contre un mur (façade, quai, parapet, porte, marche, bord de l'île) | aucun dégât pour la moto | idem | idem | le pilote se blesse comme pour un objet |

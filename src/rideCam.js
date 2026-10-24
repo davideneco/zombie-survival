@@ -80,12 +80,17 @@ export class RideCam {
     const sy = Math.sin(yaw), cy = Math.cos(yaw), sp = Math.sin(pitch), cp = Math.cos(pitch);
     const d = this.d.set(-sy * cp, sp, -cy * cp);
 
-    // pivot : œil du pilote + 0,35 m (passager : + 0,35 m à droite), lissé
+    // pivot : œil du pilote + 0,35 m (passager : + 0,35 m à droite), ou centré sur le toit pour la voiture en vue externe
     const t = this.tmp;
     if (veh) {
-      veh.v.eyeWorld(veh.seat, t);
-      t.y += C.pivotUp;
-      if (!veh.v.isDriver(veh.seat)) { t.x += cy * C.pivotRight; t.z -= sy * C.pivotRight; } // passager : épaule droite
+      if (veh.v.def.isCar && this.k > 0.25) {
+        veh.v.toWorld([0, 1.32, 0.25], t);
+        t.y += C.pivotUp;
+      } else {
+        veh.v.eyeWorld(veh.seat, t);
+        t.y += C.pivotUp;
+        if (!veh.v.isDriver(veh.seat)) { t.x += cy * C.pivotRight; t.z -= sy * C.pivotRight; } // passager : épaule droite
+      }
     } else t.set(foot.x, foot.y, foot.z); // sortie de moto : le pivot rejoint l'œil du joueur à pied
     if (!this.hasPivot) { this.pivot.copy(t); this.hasPivot = true; }
     else this.pivot.lerp(t, 1 - Math.exp(-C.follow * dt));

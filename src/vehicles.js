@@ -43,7 +43,9 @@ export class Vehicle {
     const s = this.spawn;
     this.pos.set(s.x, 0, s.z);
     this.yaw = s.yaw; this.dyaw = 0;
-    this.speed = 0; this.steer = 0; this.steerAngle = 0; this.lean = 0; this.wheelRot = 0; this.throttle = 0;
+    this.speed = 0; this.vLat = 0; this.steer = 0; this.steerAngle = 0;
+    this.lean = 0; this.rollVel = 0; this.pitch = 0; this.pitchVel = 0; this.suspY = 0; this.suspVel = 0;
+    this.wheelRot = 0; this.throttle = 0; this.braking = false; this.gear = 1;
     this.crashT = 0; this.sendT = 0; this.hitT = 0;
     this.hp = this.def.hp; this.state = 'ok'; this.burnT = 0; this.wreckT = 0; this.hpDirty = false; this.hpSendT = 0;
     this.respawnRound = 0; this.respawnPending = false; this.respawnRetry = 0; this.fxAcc = 0; this.alarmT = 0;
@@ -151,20 +153,31 @@ export class Vehicle {
     }
   }
 
-  // Pose du modèle : position, cap, inclinaison, guidon, roues
+  // Pose du modèle : position, cap, inclinaison de caisse suspendue, braquage Ackermann, roues et optiques
   apply(dt = 0) {
     const m = this.model;
     this.group.position.copy(this.pos);
     if (this.state === 'wreck') { // couchée sur le flanc (côté fixé par le numéro), à plat sur le sol
+      if (m.body) { m.body.rotation.set(0, 0, 0); m.body.position.y = 0; }
       this.group.rotation.set(0, this.yaw, (this.id % 2 ? 1 : -1) * 1.5);
       this.group.position.y += this.def.wreckLift ?? 0.45;
       return;
     }
-    this.group.rotation.set(this.pitch || 0, this.yaw, this.lean);
+    if (m.body) {
+      // Les 4 roues restent plaquées à plat sur l'asphalte tandis que la carrosserie suspendue tangue, roule et rebondit
+      this.group.rotation.set(0, this.yaw, 0);
+      m.body.rotation.set(this.pitch || 0, 0, this.lean || 0);
+      m.body.position.y = this.suspY || 0;
+    } else {
+      this.group.rotation.set(this.pitch || 0, this.yaw, this.lean);
+    }
+
     if (m.steerLeft && m.steerRight) {
-      m.steerLeft.rotation.y = -this.steerAngle;
-      m.steerRight.rotation.y = -this.steerAngle;
-      if (m.volant) m.volant.rotation.z = this.steerAngle * 3.8;
+      // Géométrie de direction Ackermann : la roue intérieure braque davantage que la roue extérieure
+      const sa = this.steerAngle;
+      m.steerLeft.rotation.y = -(sa < 0 ? sa * 1.14 : sa * 0.88);
+      m.steerRight.rotation.y = -(sa > 0 ? sa * 1.14 : sa * 0.88);
+      if (m.volant) m.volant.rotation.z = sa * 4.2;
     } else if (m.steer) {
       m.steer.rotation.y = -this.steerAngle;
     }
@@ -172,10 +185,16 @@ export class Vehicle {
     for (const w of m.wheels) w.rotation.x = -this.wheelRot;
     if (m.crank) m.crank.rotation.x = -this.wheelRot * m.crankRatio; // le pédalier tourne avec les roues
 
-    // Phares avant automatiques si conducteur présent
+    // Phares avant, feux stop dynamiques et feux de recul
     if (m.headlights) {
       const lightsOn = this.hasDriver && this.state === 'ok';
       for (const h of m.headlights) h.visible = lightsOn;
+    }
+    if (m.brakeMat) {
+      m.brakeMat.emissiveIntensity = (this.hasDriver && this.braking) ? 5.2 : 1.5;
+    }
+    if (m.revMat) {
+      m.revMat.emissiveIntensity = (this.hasDriver && this.speed < -0.25) ? 3.8 : 0;
     }
   }
 
@@ -191,6 +210,7 @@ export class Vehicle {
     this.lean += (n.lean - this.lean) * k;
     this.steerAngle = this.steer * this.def.maxSteer / (1 + Math.abs(this.speed) * 0.12);
     this.throttle = 0;
+    this.braking = false;
   }
 
   // ------------------------------------------------------------------ conduite (client du conducteur)
@@ -200,6 +220,7 @@ export class Vehicle {
     const B = g.binds;
     const fwdKey = on && B.down('forward', K), backKey = on && B.down('back', K), hb = on && B.down('jump', K);
     const steerIn = on ? (B.down('right', K) ? 1 : 0) - (B.down('left', K) ? 1 : 0) : 0;
+    const prevSp = this.speed;
     let sp = this.speed;
 
     // essence : réserve (bips), ratés sous missBelow, panne sèche (poussée au pas) ; un vélo (sans réservoir) n'a rien de tout cela
@@ -212,57 +233,126 @@ export class Vehicle {
       miss = this.missT > 0;
     } else this.missT = 0;
     if (tank && on && !dry && frac < FU.lowBelow) { this.beepT -= dt; if (this.beepT <= 0) { this.beepT = FU.lowBeep; g.sfx.beep?.(); } } else this.beepT = 0;
-    if (dry && !this.dryNoted) { this.dryNoted = true; g.sfx.cough?.(1); g.hud.announce('PANNE SÈCHE', 'Plus d\'essence : la moto n\'avance plus qu\'au pas', 3500); }
+    if (dry && !this.dryNoted) { this.dryNoted = true; g.sfx.cough?.(1); g.hud.announce('PANNE SÈCHE', `Plus d'essence : ${D.det || 'la'} ${(D.hudName || 'moto').toLowerCase()} n'avance plus qu'au pas`, 3500); }
     if (!dry && this.fuel > 0) this.dryNoted = false;
 
-    // vitesse : accélération qui faiblit près du maximum, freinage, marche arrière, résistance
-    const coast = () => { const drag = (D.drag * Math.abs(sp) + 0.8) * dt; sp = Math.abs(sp) <= drag ? 0 : sp - Math.sign(sp) * drag; };
+    // vitesse : courbe de couple par rapport, freinage dégressif, marche arrière, résistance aérodynamique quadratique
+    const aeroDrag = D.isCar ? (0.012 * sp * Math.abs(sp) + D.drag * Math.abs(sp) + 0.55) : (D.drag * Math.abs(sp) + 0.8);
+    const coast = () => { const drag = aeroDrag * dt; sp = Math.abs(sp) <= drag ? 0 : sp - Math.sign(sp) * drag; };
     this.throttle = 0;
+    this.braking = false;
     if (fwdKey && !backKey) {
       this.throttle = 1;
-      if (sp < 0) sp += D.brake * dt;
+      if (sp < -0.1) { sp += D.brake * dt; this.braking = true; }
       else if (dry) { if (sp < FU.pushSpeed) sp = Math.min(FU.pushSpeed, sp + FU.pushAccel * dt); else coast(); }
       else if (miss) { this.throttle = 0; coast(); }
-      else sp += D.accel * Math.max(0.1, 1 - sp / D.maxSpeed) * dt;
+      else {
+        // Courbe de poussée sportive : fort couple à bas/moyen régime
+        const ratio = Math.abs(sp) / D.maxSpeed;
+        const torqueCurve = D.isCar ? Math.max(0.18, 1.08 - 0.88 * (ratio ** 1.35)) : Math.max(0.1, 1 - ratio);
+        sp += D.accel * torqueCurve * dt;
+      }
     } else if (backKey && !fwdKey) {
       this.throttle = -1;
-      sp = sp > 0.3 ? sp - D.brake * dt : Math.max(-(dry ? Math.min(D.reverseSpeed, FU.pushSpeed) : D.reverseSpeed), sp - (dry ? FU.pushAccel : D.accel * 0.5) * dt);
+      if (sp > 0.25) {
+        sp -= D.brake * dt;
+        this.braking = true;
+      } else {
+        sp = Math.max(-(dry ? Math.min(D.reverseSpeed, FU.pushSpeed) : D.reverseSpeed), sp - (dry ? FU.pushAccel : D.accel * 0.55) * dt);
+      }
     } else coast();
+
     if (hb) {
-      const b = D.brake * 1.1 * dt;
+      this.braking = true;
+      // Sur voiture, le frein à main bloque surtout le train arrière (déclenche la glisse sans stopper net l'élan)
+      const b = D.brake * (D.isCar ? 0.52 : 1.1) * dt;
       sp = Math.abs(sp) <= b ? 0 : sp - Math.sign(sp) * b;
     }
     sp = clamp(sp, -D.reverseSpeed, D.maxSpeed);
+
     // consommation : ralenti + gaz (marche arrière x 0,6) ; moteur coupé (en feu) ou réservoir vide : rien
     if (tank && on && this.fuel > 0) {
       const gas = this.throttle === 0 ? 0 : (D.gas + D.perSpeed * Math.abs(sp) / D.maxSpeed) * (this.throttle < 0 ? 0.6 : 1);
       this.fuel = Math.max(0, this.fuel - (D.idle + gas) * dt);
     }
 
-    // direction : angle de braquage qui diminue avec la vitesse, modèle « bicyclette » ; le frein à main donne du dérapage
-    this.steer += (steerIn - this.steer) * Math.min(1, dt * 7);
-    this.steerAngle = this.steer * D.maxSteer / (1 + Math.abs(sp) * 0.12);
-    let yawRate = -(sp / D.wheelbase) * Math.tan(this.steerAngle) * (hb ? (D.isCar ? 2.2 : 1.5) : 1);
-    const maxYaw = (D.grip * (hb ? (D.isCar ? 2.0 : 1.6) : 1)) / Math.max(3, Math.abs(sp)); // limite d'adhérence : à haute vitesse, on ne tourne plus sec
+    // Direction et physique de dérive latérale (Slip angle + transfert de masse pour la voiture)
+    const steerRate = D.isCar ? (steerIn !== 0 ? 8.5 : 11.0) : 7.0;
+    this.steer += (steerIn - this.steer) * Math.min(1, dt * steerRate);
+    const speedFactor = D.isCar ? 0.085 : 0.12;
+    this.steerAngle = this.steer * D.maxSteer / (1 + Math.abs(sp) * speedFactor);
+
+    let yawRate = -(sp / D.wheelbase) * Math.tan(this.steerAngle) * (hb ? (D.isCar ? 1.85 : 1.5) : 1);
+    const maxYaw = (D.grip * (hb ? (D.isCar ? 1.75 : 1.6) : 1)) / Math.max(3, Math.abs(sp));
     yawRate = clamp(yawRate, -maxYaw, maxYaw);
+
+    if (D.isCar) {
+      // Vitesse latérale réelle (dérive / survirage au frein à main ou à haute vitesse)
+      const vLat = this.vLat || 0;
+      // Force centrifuge projetée sur l'axe latéral droit (+x local) : quand yawRate > 0 (tourne à gauche), la caisse dérive vers la droite (+vLat)
+      const centrif = yawRate * sp * (hb ? 0.92 : 0.38);
+      // Adhérence latérale des pneus (réduite si frein à main tiré ou forte glisse)
+      const latGrip = hb ? 2.6 : (Math.abs(vLat) > 3.5 ? 6.5 : 11.5);
+      const nextVLat = (vLat + centrif * dt) * Math.max(0, 1 - latGrip * dt);
+      this.vLat = clamp(nextVLat, -12, 12);
+      // En drift, la dérive fait pivoter l'arrière (survirage contrôlable au contre-braquage)
+      if (hb && Math.abs(sp) > 4) {
+        yawRate += -this.steer * 0.65 * Math.sign(sp);
+      }
+      // Légère perte de vitesse longitudinale proportionnelle à l'angle de dérive (frottement des pneus en travers)
+      if (Math.abs(this.vLat) > 0.8) {
+        sp *= Math.max(0.92, 1 - 0.018 * Math.abs(this.vLat) * dt);
+      }
+    } else {
+      this.vLat = 0;
+    }
+
     this.yaw += yawRate * dt;
-    this.lean += (clamp(yawRate * Math.abs(sp) * (D.leanK ?? 0.035), -0.55, 0.55) - this.lean) * Math.min(1, dt * 6);
 
-    // Tangage de suspension (accélération et freinage réalistes)
-    const targetPitch = D.isCar ? (this.throttle > 0 ? -0.016 : this.throttle < 0 ? 0.032 : hb ? 0.038 : 0) : 0;
-    this.pitch = (this.pitch || 0) + (targetPitch - (this.pitch || 0)) * Math.min(1, dt * 6);
+    // Suspension 3D à ressort-amortisseur (Roulis, Tangage, Rebond vertical sur vibreurs)
+    if (D.isCar) {
+      const accelLon = dt > 1e-4 ? clamp((sp - prevSp) / dt, -35, 25) : 0;
+      const accelLat = yawRate * sp + (this.vLat || 0) * 1.8;
 
-    // Dérapage et fumée de pneus arrière au frein à main
-    if (D.isCar && hb && Math.abs(sp) > 3) {
+      // Tangage (Pitch) : cabrage à l'accélération (< 0), plongée au freinage (> 0)
+      const targetPitch = clamp(-accelLon * 0.0024 + (this.braking && sp > 1 ? 0.028 : 0), -0.065, 0.075);
+      const pitchK = 65, pitchDamp = 11;
+      this.pitchVel = ((this.pitchVel || 0) + (targetPitch - (this.pitch || 0)) * pitchK * dt) * Math.max(0, 1 - pitchDamp * dt);
+      this.pitch = clamp((this.pitch || 0) + this.pitchVel * dt, -0.09, 0.09);
+
+      // Roulis (Roll / Lean) : inclinaison extérieure en virage sous l'effet de la force centrifuge
+      const targetRoll = clamp(accelLat * (D.leanK ?? -0.014), -0.11, 0.11);
+      const rollK = 58, rollDamp = 10;
+      this.rollVel = ((this.rollVel || 0) + (targetRoll - (this.lean || 0)) * rollK * dt) * Math.max(0, 1 - rollDamp * dt);
+      this.lean = clamp((this.lean || 0) + this.rollVel * dt, -0.14, 0.14);
+
+      // Excitation verticale de la suspension (vibreurs du circuit + irrégularités à haute vitesse)
+      const kerb = g.world.kerbAt?.(this.pos.x, this.pos.z) || 0;
+      const vibe = kerb > 0 && Math.abs(sp) > 1 ? Math.sin(this.wheelRot * 3.5) * 0.028 * kerb : 0;
+      const bump = Math.abs(sp) > 5 ? Math.sin(this.wheelRot * 1.7) * 0.004 * (Math.abs(sp) / D.maxSpeed) : 0;
+      const targetY = vibe + bump;
+      this.suspVel = ((this.suspVel || 0) + (targetY - (this.suspY || 0)) * 90 * dt) * Math.max(0, 1 - 14 * dt);
+      this.suspY = clamp((this.suspY || 0) + this.suspVel * dt, -0.06, 0.06);
+    } else {
+      this.lean += (clamp(yawRate * Math.abs(sp) * (D.leanK ?? 0.035), -0.55, 0.55) - this.lean) * Math.min(1, dt * 6);
+    }
+
+    // Fumée de pneus arrière et traces de gomme en dérapage (frein à main ou forte dérive latérale)
+    const isDrifting = D.isCar && ((hb && Math.abs(sp) > 3) || Math.abs(this.vLat || 0) > 2.2);
+    if (isDrifting) {
       this.driftFxT = (this.driftFxT || 0) + dt;
-      if (this.driftFxT > 0.06) {
+      if (this.driftFxT > 0.045) {
         this.driftFxT = 0;
         const cy = Math.cos(this.yaw), sy = Math.sin(this.yaw);
         for (const sx of [-0.82, 0.82]) {
-          const wx = this.pos.x + cy * sx + sy * 1.3;
-          const wz = this.pos.z - sy * sx + cy * 1.3;
-          fx.emit(wx, this.pos.y + 0.1, wz, {
-            count: 2, color: [0xd8d8d8, 0xb8b8b8], speed: 0.8, up: 0.4, size: 0.22, life: 0.6, grav: -0.2, spread: 0.3
+          const wx = this.pos.x + cy * sx + sy * 1.34;
+          const wz = this.pos.z - sy * sx + cy * 1.34;
+          fx.emit(wx, this.pos.y + 0.08, wz, {
+            count: 2, color: [0xe2e4e8, 0xc0c4cc, 0x9ea2a8], speed: 1.1, up: 0.45, size: 0.26, life: 0.65, grav: -0.15, spread: 0.35,
+          });
+          // Gomme noire projetée sur l'asphalte
+          fx.emit(wx, this.pos.y + 0.03, wz, {
+            count: 1, color: [0x151618, 0x222428], speed: 0.2, up: 0.02, size: 0.16, life: 1.8, grav: 0, spread: 0.08,
           });
         }
       }
@@ -275,24 +365,30 @@ export class Vehicle {
     }
     if (this.hornT > 0) this.hornT -= dt;
 
-    // déplacement + collisions (murs, voitures, mobilier) ; on ne monte pas d'escalier ni ne descend de trou
-    const fx = -Math.sin(this.yaw), fz = -Math.cos(this.yaw);
+    // déplacement 2D (longitudinal + dérive latérale) + collisions (murs, voitures, mobilier)
+    const fwdX = -Math.sin(this.yaw), fwdZ = -Math.cos(this.yaw);
+    const rx = Math.cos(this.yaw), rz = -Math.sin(this.yaw);
+    const vLat = this.vLat || 0;
+    const vx = fwdX * sp + rx * vLat, vz = fwdZ * sp + rz * vLat;
     const ox = this.pos.x, oz = this.pos.z;
-    const p = { x: ox + fx * sp * dt, y: 0.1, z: oz + fz * sp * dt };
+    const p = { x: ox + vx * dt, y: 0.1, z: oz + vz * dt };
     colOut.kind = null; colOut.push = 0;
     g.world.collide(p, D.radius, colOut);
-    const cx = p.x - (ox + fx * sp * dt), cz = p.z - (oz + fz * sp * dt), cl = Math.hypot(cx, cz);
+    const cx = p.x - (ox + vx * dt), cz = p.z - (oz + vz * dt), cl = Math.hypot(cx, cz);
     g.world.floorAt?.(p.x, p.z, 0.1, fl);
     if (g.world.floorAt && (fl.region !== 0 || Math.abs(fl.y) > 0.25)) { // marche, trou : on ne passe pas
       this.crash(Math.abs(sp), 'wall'); // marche, trou : de l'architecture
       sp = -sp * 0.15;
+      this.vLat = 0;
     } else {
       this.pos.x = p.x; this.pos.z = p.z;
       if (cl > 1e-4) { // poussée du mur : plus on fonce dedans de face, plus on perd de vitesse
-        const into = clamp(-(fx * cx + fz * cz) / cl * Math.sign(sp), 0, 1);
+        const into = clamp(-(fwdX * cx + fwdZ * cz) / cl * Math.sign(sp || 1), 0, 1);
+        this.vLat *= 0.35;
         if (into > 0.05) {
           this.crash(Math.abs(sp) * into, colOut.kind || 'wall');
           sp *= 1 - 0.92 * into * into;
+          this.pitchVel = (this.pitchVel || 0) + Math.min(0.6, Math.abs(sp) * 0.04);
         }
       }
     }
@@ -407,15 +503,27 @@ export class Vehicle {
     });
   }
 
-  // ------------------------------------------------------------------ son du moteur
+  // ------------------------------------------------------------------ son du moteur & boîte 6 rapports + retour de flamme
   updateEngine(dt, local) {
     const g = this.game;
     const running = this.hasTank && this.seats[0] != null && this.state === 'ok' && this.fuel > 0; // pas de conducteur, en feu ou à sec : moteur arrêté (un vélo n'a pas de moteur)
     if (running && !this.engine) this.engine = g.sfx.createEngine?.(this.type) || null;
     if (!running && this.engine) this.stopEngine();
+    // 6 rapports pour la voiture GT (4 pour les motos) : le régime retombe à chaque passage de vitesse avec retour de flamme à l'échappement
+    const gears = this.def.isCar ? 6 : 4;
+    const ratio = clamp(Math.abs(this.speed) / this.def.maxSpeed, 0, 1), gear = Math.min(gears - 1, Math.floor(ratio * gears));
+    if (this.def.isCar && gear !== this.gear) {
+      if (gear > this.gear && this.throttle > 0 && ratio > 0.22) {
+        const pts = this.model.exhaustPoints || [[0, 0.3, 2.15]];
+        for (const ep of pts) {
+          this.toWorld(ep, tmpV);
+          fx.emit(tmpV.x, tmpV.y, tmpV.z, { count: 3, color: [0xff7a18, 0xffb040, 0x66ccff], speed: 1.8, up: 0.2, size: 0.18, life: 0.22, grav: 0, spread: 0.25 });
+        }
+        this.pitchVel = (this.pitchVel || 0) - 0.35; // léger à-coup de passage de rapport
+      }
+      this.gear = gear;
+    }
     if (!this.engine) return;
-    // 4 rapports : le régime retombe à chaque passage de vitesse
-    const ratio = clamp(Math.abs(this.speed) / this.def.maxSpeed, 0, 1), gears = 4, gear = Math.min(gears - 1, Math.floor(ratio * gears));
     const rpm = clamp(0.22 + 0.68 * (ratio * gears - gear) + Math.max(0, this.throttle) * 0.08, 0.15, 1);
     const d = g.player.camera.position.distanceTo(this.group.position);
     this.engine.set(rpm, this.throttle, ratio, local ? 1 : clamp(1 - d / 55, 0, 1) ** 2);

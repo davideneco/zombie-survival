@@ -10,7 +10,7 @@
 // - Monde & Zombies : ouvrir toutes les portes de Strasbourg, nuke / tuer tous les zombies actifs,
 //   changer de manche, faire apparaître des bonus (Max Ammo, Insta-kill, Nuke, Double Points).
 
-import { CONFIG, PAP_LEVELS } from './config.js';
+import { CONFIG, PAP_LEVELS, setMap } from './config.js';
 
 const RINGS = [1.5, 2.5, 3.5, 5.0];
 const ANGLES = 12;
@@ -353,6 +353,14 @@ export function installModMenu(game, { world, hud, sfx }) {
     } else if (type === 'petite_france') {
       const c = world.zoneCenters?.[26];
       if (c) { target = { x: c.x, y: 0, z: c.z }; label = 'Petite France'; }
+    } else if (type === 'circuit_grid') {
+      target = { x: -4, y: 0, z: -115 }; label = 'Grille de Départ (Circuit)';
+    } else if (type === 'circuit_paddock') {
+      target = { x: -75, y: 0, z: -66 }; label = 'Paddock Véhicules (Circuit)';
+    } else if (type === 'circuit_drift') {
+      target = { x: 16, y: 0, z: -12 }; label = 'Aire de Drift / Skidpad';
+    } else if (type === 'circuit_bumps') {
+      target = { x: -86, y: 0, z: 28 }; label = 'Banc d\'Essai Suspension';
     } else if (type === 'tram') {
       const tr = game.tramRides?.[0] || game.trams?.[0];
       if (tr) {
@@ -831,14 +839,33 @@ export function installModMenu(game, { world, hud, sfx }) {
               <b>🔧 MACHINE PACK-A-PUNCH</b>
               <small>Atelier d'amélioration</small>
             </button>
-            <button class="mod-btn mod-btn-sub" data-tp-poi="cathedral_inside">
-              <b>🏛️ INTÉRIEUR CATHÉDRALE</b>
-              <small>Entrer dans la nef de la cathédrale</small>
-            </button>
-            <button class="mod-btn mod-btn-sub" data-tp-poi="tram">
-              <b>🚋 INTÉRIEUR DU TRAMWAY</b>
-              <small>Monter dans la rame de tramway en circulation</small>
-            </button>
+            ${CONFIG.map === 'circuit' ? `
+              <button class="mod-btn mod-btn-primary" data-tp-poi="circuit_grid">
+                <b>🏁 GRILLE DE DÉPART</b>
+                <small>Ligne de départ/arrivée & chrono</small>
+              </button>
+              <button class="mod-btn mod-btn-sub" data-tp-poi="circuit_paddock">
+                <b>🏎️ PADDOCK & GARAGES</b>
+                <small>Toutes les voitures GT, motos & bornes</small>
+              </button>
+              <button class="mod-btn mod-btn-sub" data-tp-poi="circuit_drift">
+                <b>🍩 AIRE DE DRIFT (SKIDPAD)</b>
+                <small>Cercle d'essai de glisse et contre-braquage</small>
+              </button>
+              <button class="mod-btn mod-btn-sub" data-tp-poi="circuit_bumps">
+                <b>〰️ BANC DE SUSPENSION</b>
+                <small>Vibreurs rapprochés pour tester les amortisseurs</small>
+              </button>
+            ` : `
+              <button class="mod-btn mod-btn-sub" data-tp-poi="cathedral_inside">
+                <b>🏛️ INTÉRIEUR CATHÉDRALE</b>
+                <small>Entrer dans la nef de la cathédrale</small>
+              </button>
+              <button class="mod-btn mod-btn-sub" data-tp-poi="tram">
+                <b>🚋 INTÉRIEUR DU TRAMWAY</b>
+                <small>Monter dans la rame de tramway en circulation</small>
+              </button>
+            `}
           </div>
         </div>
 
@@ -893,15 +920,29 @@ export function installModMenu(game, { world, hud, sfx }) {
         </div>
 
         <div class="mod-card">
-          <div class="mod-card-title">🚗 VÉHICULES JOUABLES (STRASBOURG)</div>
+          <div class="mod-card-title">🗺️ CHANGER DE CARTE</div>
+          <div class="mod-grid">
+            <button class="mod-btn ${CONFIG.map !== 'circuit' ? 'mod-btn-active' : 'mod-btn-sub'}" id="modMapStrasbourg">
+              <b>🏰 GRANDE ÎLE DE STRASBOURG</b>
+              <small>Carte principale (27 quartiers, tramway, cathédrale)</small>
+            </button>
+            <button class="mod-btn ${CONFIG.map === 'circuit' ? 'mod-btn-active' : 'mod-btn-primary'}" id="modMapCircuit">
+              <b>🏁 CIRCUIT D'ESSAIS VÉHICULES</b>
+              <small>Strasbourg Ring : piste GP, aire de drift, vibreurs & paddock</small>
+            </button>
+          </div>
+        </div>
+
+        <div class="mod-card">
+          <div class="mod-card-title">🚗 VÉHICULES JOUABLES</div>
           <div class="mod-grid">
             <button class="mod-btn mod-btn-primary" id="modSpawnCarBtn">
-              <b>🚗 FAIRE APPARAÎTRE UNE VOITURE</b>
-              <small>Fait apparaître une voiture pilotable avec physique devant vous</small>
+              <b>🏎️ FAIRE APPARAÎTRE UNE VOITURE GT</b>
+              <small>Coupé GT avec suspension 3D, drift et boîte 6 rapports</small>
             </button>
             <button class="mod-btn mod-btn-sub" id="modSpawnMotoBtn">
               <b>🏍️ FAIRE APPARAÎTRE UNE MOTO</b>
-              <small>Fait apparaître une moto de parking devant vous</small>
+              <small>Fait apparaître une moto devant vous</small>
             </button>
           </div>
         </div>
@@ -1200,7 +1241,13 @@ export function installModMenu(game, { world, hud, sfx }) {
     document.getElementById('modVol75')?.addEventListener('click', () => setModVol(0.75));
     document.getElementById('modVol100')?.addEventListener('click', () => setModVol(1.0));
 
-    // Véhicules
+    // Véhicules & Cartes
+    document.getElementById('modMapStrasbourg')?.addEventListener('click', () => {
+      if (CONFIG.map !== 'strasbourg') setMap('strasbourg');
+    });
+    document.getElementById('modMapCircuit')?.addEventListener('click', () => {
+      if (CONFIG.map !== 'circuit') setMap('circuit');
+    });
     document.getElementById('modSpawnCarBtn')?.addEventListener('click', () => {
       game.spawnVehicle('voiture');
       hud.announce('VÉHICULE APPARU', 'Voiture sportive prête à rouler !', 2500);
