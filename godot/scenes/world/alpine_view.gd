@@ -915,7 +915,7 @@ func _lamps() -> void:
 		ol.omni_range = LAMP_RANGE
 		ol.omni_attenuation = 1.4
 		ol.light_energy = 0.0
-		ol.shadow_enabled = i < 2
+		ol.shadow_enabled = false   # (ombres des lampadaires : tout le décor redessiné par lampe, -50 % d images la nuit)
 		ol.visible = false
 		add_child(ol)
 		_lamp_lights.append(ol)

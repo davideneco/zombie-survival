@@ -56,7 +56,7 @@ tools/godot-check.sh          # everything: export config and golden files from 
 tools/godot-check.sh j9       # one suite
 ```
 
-More than 162,000 checks, 0 failures at v0.33.2. The **golden files** are outputs of the JS game (Node or Chrome) that the GDScript must reproduce: config, collision, navigation, weapons, vehicles, prices, tram, bosses. Tests run headless, without rendering; screenshots need a display (or `xvfb-run`).
+More than 162,000 checks, 0 failures at v0.34.2. The **golden files** are outputs of the JS game (Node or Chrome) that the GDScript must reproduce: config, collision, navigation, weapons, vehicles, prices, tram, bosses. Tests run headless, without rendering; screenshots need a display (or `xvfb-run`).
 
 ## Layout
 
