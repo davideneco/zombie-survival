@@ -954,6 +954,20 @@ export function installModMenu(game, { world, hud, sfx }) {
         </div>
 
         <div class="mod-card">
+          <div class="mod-card-title">🚗 VÉHICULES JOUABLES (STRASBOURG)</div>
+          <div class="mod-grid">
+            <button class="mod-btn mod-btn-primary" id="modSpawnCarBtn">
+              <b>🚗 FAIRE APPARAÎTRE UNE VOITURE</b>
+              <small>Fait apparaître une voiture pilotable avec physique devant vous</small>
+            </button>
+            <button class="mod-btn mod-btn-sub" id="modSpawnMotoBtn">
+              <b>🏍️ FAIRE APPARAÎTRE UNE MOTO</b>
+              <small>Fait apparaître une moto de parking devant vous</small>
+            </button>
+          </div>
+        </div>
+
+        <div class="mod-card">
           <div class="mod-card-title">🚪 PORTES & EXPLORATION</div>
           <button class="mod-btn mod-btn-gold" id="modOpenAllDoorsBtn" style="width: 100%; font-size: 15px;">
             🔓 OUVRIR TOUTES LES PORTES DE STRASBOURG
@@ -1254,6 +1268,21 @@ export function installModMenu(game, { world, hud, sfx }) {
     document.getElementById('modVol50')?.addEventListener('click', () => setModVol(0.5));
     document.getElementById('modVol75')?.addEventListener('click', () => setModVol(0.75));
     document.getElementById('modVol100')?.addEventListener('click', () => setModVol(1.0));
+
+    // Véhicules
+    document.getElementById('modSpawnCarBtn')?.addEventListener('click', () => {
+      game.spawnVehicle('voiture');
+      hud.announce('VÉHICULE APPARU', 'Voiture sportive prête à rouler !', 2500);
+      sfx.horn?.();
+      say('Voiture apparue devant vous');
+      mod.close();
+    });
+    document.getElementById('modSpawnMotoBtn')?.addEventListener('click', () => {
+      game.spawnVehicle('grosseMoto');
+      hud.announce('VÉHICULE APPARU', 'Moto prête à rouler !', 2500);
+      say('Moto apparue devant vous');
+      mod.close();
+    });
 
     // Monde & Zombies
     document.getElementById('modOpenAllDoorsBtn')?.addEventListener('click', () => mod.openAllDoors());

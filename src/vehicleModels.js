@@ -259,4 +259,170 @@ export function buildVelo(variant = 0) {
   };
 }
 
-export const BUILDERS = { moto: buildMoto, grosseMoto: buildGrosseMoto, velo: buildVelo };
+// ---------------------------------------------------------------- VOITURE : berline sportive 4 roues, 2 places, carrosserie peinte
+const CAR_PAINTS = [
+  0xb71c1c, // Rouge sport (GTI)
+  0x1565c0, // Bleu électrique
+  0x212121, // Noir onyx
+  0xf5f5f5, // Blanc glacier
+  0x546e7a, // Gris nardo / acier
+  0xf57f17, // Jaune racing
+];
+
+export function buildVoiture(variant = 0) {
+  const M = mats();
+  const cHex = CAR_PAINTS[Math.abs(variant | 0) % CAR_PAINTS.length];
+  const paint = reflective(std(cHex, 0.42, 0.52), 1.1);
+  const darkPaint = std(0x181a1e, 0.6, 0.3);
+  const root = new THREE.Group();
+
+  const R = 0.35, wb = 2.65, tw = 1.62; // Empattement 2.65 m, voie 1.62 m
+  const halfWb = wb / 2, halfTw = tw / 2;
+
+  // 1. Châssis & Bas de caisse
+  box(root, 1.74, 0.22, 4.2, darkPaint, 0, 0.28, 0);
+
+  // 2. Bouclier avant & Pare-chocs
+  box(root, 1.82, 0.44, 0.7, paint, 0, 0.38, -1.95);
+  box(root, 1.15, 0.24, 0.06, M.black, 0, 0.36, -2.31); // Calandre centrale
+  box(root, 1.76, 0.06, 0.35, M.black, 0, 0.16, -2.12); // Lame splitter avant
+
+  // 3. Capot moteur nervuré
+  box(root, 1.68, 0.1, 1.35, paint, 0, 0.74, -1.45, 0.1, 0, 0);
+  box(root, 0.5, 0.04, 0.8, darkPaint, 0, 0.81, -1.4, 0.1, 0, 0); // Écope de capot
+
+  // 4. Ailes avant et passages de roues
+  for (const sx of [-1, 1]) {
+    box(root, 0.12, 0.48, 1.3, paint, sx * 0.85, 0.58, -1.4);
+    box(root, 0.14, 0.52, 1.9, paint, sx * 0.84, 0.62, 0.15); // Flancs de portières
+    box(root, 0.12, 0.48, 1.1, paint, sx * 0.85, 0.58, 1.65); // Ailes arrière
+    // Rétroviseurs extérieurs
+    box(root, 0.16, 0.09, 0.12, paint, sx * 0.94, 0.95, -0.72);
+    box(root, 0.02, 0.07, 0.09, M.chrome, sx * 1.01, 0.95, -0.72); // Miroir
+    // Poignées de portes
+    box(root, 0.03, 0.025, 0.14, M.chrome, sx * 0.92, 0.75, -0.15);
+  }
+
+  // 5. Pavillon (toit) et montants
+  box(root, 1.46, 0.08, 1.95, paint, 0, 1.42, 0.15); // Toit
+  // Pare-brise avant incliné
+  box(root, 1.42, 0.04, 0.95, M.screen, 0, 1.16, -0.62, 0.62, 0, 0);
+  // Lunette arrière inclinée
+  box(root, 1.42, 0.04, 0.85, M.screen, 0, 1.18, 0.92, -0.58, 0, 0);
+  // Vitres latérales teintées
+  for (const sx of [-1, 1]) {
+    box(root, 0.03, 0.42, 1.6, M.screen, sx * 0.74, 1.16, 0.15);
+    // Piliers A (avant), B (centre), C (arrière)
+    tube(root, [sx * 0.72, 0.82, -0.85], [sx * 0.68, 1.4, -0.38], 0.032, M.black);
+    tube(root, [sx * 0.75, 0.78, 0.12], [sx * 0.72, 1.4, 0.12], 0.036, M.black);
+    tube(root, [sx * 0.72, 0.85, 1.15], [sx * 0.68, 1.4, 0.72], 0.04, M.black);
+  }
+
+  // 6. Coffre & Bouclier arrière
+  box(root, 1.62, 0.15, 0.75, paint, 0, 0.82, 1.72); // Malle de coffre
+  box(root, 1.82, 0.44, 0.65, paint, 0, 0.42, 1.95); // Pare-chocs arrière
+  box(root, 1.4, 0.18, 0.25, M.black, 0, 0.22, 2.22); // Diffuseur arrière
+  // Double sortie d'échappement inox
+  tube(root, [-0.45, 0.2, 2.0], [-0.45, 0.2, 2.32], 0.05, M.chrome);
+  tube(root, [0.45, 0.2, 2.0], [0.45, 0.2, 2.32], 0.05, M.chrome);
+  // Aileron sport noir
+  box(root, 1.52, 0.05, 0.28, M.black, 0, 1.05, 2.08);
+  tube(root, [-0.5, 0.88, 2.0], [-0.5, 1.03, 2.05], 0.024, M.black);
+  tube(root, [0.5, 0.88, 2.0], [0.5, 1.03, 2.05], 0.024, M.black);
+
+  // 7. Habitacle intérieur & Sièges
+  // Planche de bord
+  box(root, 1.45, 0.28, 0.55, M.seat, 0, 0.82, -0.58);
+  box(root, 0.38, 0.12, 0.02, M.tail, -0.42, 0.9, -0.42); // Compteurs éclairés
+  // Console centrale et levier de vitesses
+  box(root, 0.22, 0.28, 1.0, M.black, 0, 0.48, 0.15);
+  tube(root, [0, 0.58, 0.05], [0, 0.72, 0.02], 0.018, M.chrome);
+  ball(root, 0.035, 0.035, 0.035, M.seat, 0, 0.73, 0.02);
+
+  // Sièges baquets avant gauche (conducteur) et droite (passager)
+  for (const sx of [-0.42, 0.42]) {
+    box(root, 0.52, 0.16, 0.55, M.seat, sx, 0.42, 0.15); // Assise
+    box(root, 0.48, 0.65, 0.14, M.seat, sx, 0.8, 0.42, -0.2); // Dossier
+    box(root, 0.28, 0.18, 0.12, M.seat, sx, 1.2, 0.5); // Appuie-tête
+  }
+
+  // Volant sport (qui tournera avec la direction)
+  const volantG = new THREE.Group();
+  volantG.position.set(-0.42, 0.86, -0.34);
+  volantG.rotation.x = -0.42;
+  root.add(volantG);
+  const cerceau = new THREE.Mesh(new THREE.TorusGeometry(0.18, 0.02, 8, 24), M.rubber);
+  volantG.add(cerceau);
+  for (let k = 0; k < 3; k++) {
+    box(volantG, 0.02, 0.16, 0.015, M.steel, 0, 0, 0, 0, 0, (k * Math.PI * 2) / 3);
+  }
+  ball(volantG, 0.05, 0.05, 0.02, M.seat, 0, 0, 0);
+
+  // 8. Éclairage : Phares avant et Feux arrière
+  const lampL = box(root, 0.32, 0.14, 0.06, M.lamp, -0.65, 0.66, -2.26, 0, 0.12, 0);
+  const lampR = box(root, 0.32, 0.14, 0.06, M.lamp, 0.65, 0.66, -2.26, 0, -0.12, 0);
+  const tailL = box(root, 0.36, 0.12, 0.05, M.tail, -0.66, 0.76, 2.25, 0, -0.08, 0);
+  const tailR = box(root, 0.36, 0.12, 0.05, M.tail, 0.66, 0.76, 2.25, 0, 0.08, 0);
+
+  // Projecteurs lumineux avant réels (SpotLights pointant vers l'avant de la voiture)
+  const spotL = new THREE.SpotLight(0xfff6dd, 25, 55, 0.55, 0.6, 1.2);
+  spotL.position.set(-0.65, 0.68, -2.3);
+  spotL.target.position.set(-0.65, 0.2, -25);
+  root.add(spotL, spotL.target);
+
+  const spotR = new THREE.SpotLight(0xfff6dd, 25, 55, 0.55, 0.6, 1.2);
+  spotR.position.set(0.65, 0.68, -2.3);
+  spotR.target.position.set(0.65, 0.2, -25);
+  root.add(spotR, spotR.target);
+
+  // 9. Les 4 roues & Direction
+  // Roues arrière fixes
+  const wRL = wheel(R, 0.08, 0.24, M.chrome);
+  wRL.position.set(-halfTw, R, halfWb);
+  root.add(wRL);
+  const wRR = wheel(R, 0.08, 0.24, M.chrome);
+  wRR.position.set(halfTw, R, halfWb);
+  root.add(wRR);
+
+  // Pivots de direction avant gauche et avant droite (tournent autour de Y)
+  const steerLeft = new THREE.Group();
+  steerLeft.position.set(-halfTw, R, -halfWb);
+  root.add(steerLeft);
+  const wFL = wheel(R, 0.08, 0.22, M.chrome);
+  steerLeft.add(wFL);
+
+  const steerRight = new THREE.Group();
+  steerRight.position.set(halfTw, R, -halfWb);
+  root.add(steerRight);
+  const wFR = wheel(R, 0.08, 0.22, M.chrome);
+  steerRight.add(wFR);
+
+  // Étriers de frein rouges sportifs sur chaque roue
+  const calMat = std(0xd32f2f, 0.3, 0.6);
+  box(steerLeft, 0.06, 0.1, 0.12, calMat, -0.09, 0.08, 0);
+  box(steerRight, 0.06, 0.1, 0.12, calMat, 0.09, 0.08, 0);
+  box(root, 0.06, 0.1, 0.12, calMat, -halfTw - 0.09, R + 0.08, halfWb);
+  box(root, 0.06, 0.1, 0.12, calMat, halfTw + 0.09, R + 0.08, halfWb);
+
+  return {
+    group: finish(root),
+    steerLeft,
+    steerRight,
+    volant: volantG,
+    steer: steerLeft, // fallback pour les vérifications génériques
+    wheels: [wFL, wFR, wRL, wRR],
+    wheelRadius: R,
+    length: 4.3,
+    width: 1.85,
+    tail: tailL,
+    lamp: lampL,
+    headlights: [spotL, spotR],
+    exhaustPoints: [[-0.45, 0.2, 2.3], [0.45, 0.2, 2.3]],
+    seats: [
+      { hip: [-0.42, 0.52, 0.15], eye: [-0.42, 1.15, 0.15] }, // Conducteur (gauche)
+      { hip: [0.42, 0.52, 0.15], eye: [0.42, 1.15, 0.15] },  // Passager (droite)
+    ],
+  };
+}
+
+export const BUILDERS = { moto: buildMoto, grosseMoto: buildGrosseMoto, velo: buildVelo, voiture: buildVoiture };

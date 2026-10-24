@@ -398,20 +398,28 @@ export const CONFIG = {
     // (au moins 8 m des portes : leur invite [E] ne doit pas être masquée). Un parking dont le rectangle est invalide est ignoré
     // (avertissement en ?debug) ; si aucun ne l'est, les motos retombent sur `spawns` (ancien tirage).
     parkings: [
-      // place Gutenberg, à côté de l'entrée du parking souterrain : 2 motos
+      // place Gutenberg, à côté de l'entrée du parking souterrain : 1 voiture et 2 motos
       {
         zone: 'Place Gutenberg', x: -22, z: 70, yaw: 0,
-        bays: [{ type: 'moto', dx: -1.2 }, { type: 'grosseMoto', dx: 1.2 }],
-        slots: [-3.6, -1.2, 1.2, 3.6], // emplacements peints au sol (dx) ; 1,6 x 2,6 m ; les motos occupent les deux du milieu
+        bays: [{ type: 'moto', dx: -2.2 }, { type: 'voiture', dx: 0 }, { type: 'grosseMoto', dx: 2.2 }],
+        slots: [-4.0, -2.0, 0, 2.0, 4.0],
         pump: { dx: -6.5, dz: 0 }, sign: { dx: 0, dz: 5.5 },
-        rect: { w: 10, d: 12 },
+        rect: { w: 12, d: 12 },
       },
-      // place Broglie (v0.29.0) : 1 moto et sa borne, pour la partie nord-est de l'île
+      // place Broglie (v0.29.0) : 1 voiture et 1 moto
       {
         zone: 'Place Broglie', x: 169.5, z: -340.5, yaw: 0,
-        bays: [{ type: 'moto', dx: 0 }],
+        bays: [{ type: 'voiture', dx: -1.4 }, { type: 'moto', dx: 1.4 }],
+        slots: [-2.0, 2.0],
+        pump: { dx: -4.5, dz: 0.5 }, sign: { dx: 4.5, dz: 3.5 },
+        rect: { w: 12, d: 12 },
+      },
+      // place Kléber : 1 voiture
+      {
+        zone: 'Place Kléber', x: -200, z: -145, yaw: 0,
+        bays: [{ type: 'voiture', dx: 0 }],
         slots: [0],
-        pump: { dx: -3.6, dz: 0.5 }, sign: { dx: 3.6, dz: 3.5 },
+        pump: { dx: -3.6, dz: 0 }, sign: { dx: 3.6, dz: 3.5 },
         rect: { w: 10, d: 12 },
       },
     ],
@@ -445,10 +453,12 @@ export const CONFIG = {
     // vérifiée (profondeur d, pas de la grille), doorGap / tramGap / usedGap / itemGap / stationGap = distances minimales aux portes, aux rails, aux objets posés, aux bornes, atouts et armes
     // murales (leur invite [E] masquerait « monter ») et à une autre station (m), probeR = rayon du test de collision ; cullDist = au-delà, la station et ses vélos garés ne sont pas dessinés
     bikeStation: { spacing: 1.0, signOffset: 0.9, rect: { d: 2.6, step: 0.9 }, doorGap: 8, tramGap: 5, usedGap: 1.8, itemGap: 6, stationGap: 12, probeR: 0.3, cullDist: 90 },
-    // Repli (voir parkings) : une ligne par moto, posée dans la zone nommée sur un emplacement dégagé
+    // Repli (voir parkings) : une ligne par véhicule, posée dans la zone nommée sur un emplacement dégagé
     spawns: [
-      { type: 'moto', zone: 'Marché-Neuf' },
-      { type: 'grosseMoto', zone: 'Marché-Neuf' },
+      { type: 'voiture', zone: 'Marché-Neuf' },
+      { type: 'moto', zone: 'Place Gutenberg' },
+      { type: 'grosseMoto', zone: 'Place Broglie' },
+      { type: 'voiture', zone: 'Place Kléber' },
     ],
     // Écraser un zombie (propre à chaque moto, voir `roadkill` des types) : sous la vitesse vmin, aucun dégât et la moto est stoppée
     // par le zombie (vitesse plafonnée à stopSpeed, arrêt net au contact) ; au-dessus, dégâts = K x v x r avec
@@ -502,6 +512,11 @@ export const CONFIG = {
       grosseMoto: {
         name: 'GROSSE MOTO', seats: 2, camArm: 4.0, hp: 500, tank: 10, idle: 0.005, gas: 0.016, perSpeed: 0.021, maxSpeed: 17, accel: 8, brake: 24, reverseSpeed: 3, drag: 0.12,
         wheelbase: 1.75, maxSteer: 0.5, grip: 11, radius: 0.7, bikeRadius: 0.55, roadkill: { K: 24, vmin: 7, slowdown: 0.90 },
+      },
+      voiture: {
+        name: 'VOITURE', hudName: 'VOITURE', det: 'la', isCar: true, seats: 2, camArm: 5.6, hp: 1200, tank: 30, idle: 0.006, gas: 0.022, perSpeed: 0.028, maxSpeed: 23, accel: 10, brake: 32, reverseSpeed: 5.5, drag: 0.16,
+        wheelbase: 2.65, maxSteer: 0.56, grip: 16, radius: 1.15, bikeRadius: 1.15, roadkill: { K: 48, vmin: 4, slowdown: 0.94 },
+        leanK: -0.015, crash: { minSpeed: 12, damagePerMs: 2.5, maxDamage: 35 }, wreckLift: 0.75,
       },
       // Vélo (v0.43.0) : gratuit, réparti par stations (bikeStations), une place, pas de réservoir (tank 0 : aucune jauge, aucune panne sèche, aucun bidon),
       // jamais d'écrasement (roadkill.vmin 99 : un zombie au contact arrête le vélo net, comme une moto lente), le cycliste ne tire pas (conducteur).

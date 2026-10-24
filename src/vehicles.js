@@ -160,11 +160,23 @@ export class Vehicle {
       this.group.position.y += this.def.wreckLift ?? 0.45;
       return;
     }
-    this.group.rotation.set(0, this.yaw, this.lean);
-    m.steer.rotation.y = -this.steerAngle;
+    this.group.rotation.set(this.pitch || 0, this.yaw, this.lean);
+    if (m.steerLeft && m.steerRight) {
+      m.steerLeft.rotation.y = -this.steerAngle;
+      m.steerRight.rotation.y = -this.steerAngle;
+      if (m.volant) m.volant.rotation.z = this.steerAngle * 3.8;
+    } else if (m.steer) {
+      m.steer.rotation.y = -this.steerAngle;
+    }
     this.wheelRot += (this.speed / m.wheelRadius) * dt;
     for (const w of m.wheels) w.rotation.x = -this.wheelRot;
     if (m.crank) m.crank.rotation.x = -this.wheelRot * m.crankRatio; // le pédalier tourne avec les roues
+
+    // Phares avant automatiques si conducteur présent
+    if (m.headlights) {
+      const lightsOn = this.hasDriver && this.state === 'ok';
+      for (const h of m.headlights) h.visible = lightsOn;
+    }
   }
 
   // Moto d'un autre joueur (ou garée) : on rejoint doucement le dernier état reçu
@@ -230,11 +242,38 @@ export class Vehicle {
     // direction : angle de braquage qui diminue avec la vitesse, modèle « bicyclette » ; le frein à main donne du dérapage
     this.steer += (steerIn - this.steer) * Math.min(1, dt * 7);
     this.steerAngle = this.steer * D.maxSteer / (1 + Math.abs(sp) * 0.12);
-    let yawRate = -(sp / D.wheelbase) * Math.tan(this.steerAngle) * (hb ? 1.5 : 1);
-    const maxYaw = (D.grip * (hb ? 1.6 : 1)) / Math.max(3, Math.abs(sp)); // limite d'adhérence : à haute vitesse, on ne tourne plus sec
+    let yawRate = -(sp / D.wheelbase) * Math.tan(this.steerAngle) * (hb ? (D.isCar ? 2.2 : 1.5) : 1);
+    const maxYaw = (D.grip * (hb ? (D.isCar ? 2.0 : 1.6) : 1)) / Math.max(3, Math.abs(sp)); // limite d'adhérence : à haute vitesse, on ne tourne plus sec
     yawRate = clamp(yawRate, -maxYaw, maxYaw);
     this.yaw += yawRate * dt;
     this.lean += (clamp(yawRate * Math.abs(sp) * (D.leanK ?? 0.035), -0.55, 0.55) - this.lean) * Math.min(1, dt * 6);
+
+    // Tangage de suspension (accélération et freinage réalistes)
+    const targetPitch = D.isCar ? (this.throttle > 0 ? -0.016 : this.throttle < 0 ? 0.032 : hb ? 0.038 : 0) : 0;
+    this.pitch = (this.pitch || 0) + (targetPitch - (this.pitch || 0)) * Math.min(1, dt * 6);
+
+    // Dérapage et fumée de pneus arrière au frein à main
+    if (D.isCar && hb && Math.abs(sp) > 3) {
+      this.driftFxT = (this.driftFxT || 0) + dt;
+      if (this.driftFxT > 0.06) {
+        this.driftFxT = 0;
+        const cy = Math.cos(this.yaw), sy = Math.sin(this.yaw);
+        for (const sx of [-0.82, 0.82]) {
+          const wx = this.pos.x + cy * sx + sy * 1.3;
+          const wz = this.pos.z - sy * sx + cy * 1.3;
+          fx.emit(wx, this.pos.y + 0.1, wz, {
+            count: 2, color: [0xd8d8d8, 0xb8b8b8], speed: 0.8, up: 0.4, size: 0.22, life: 0.6, grav: -0.2, spread: 0.3
+          });
+        }
+      }
+    }
+
+    // Klaxon de voiture (clic gauche ou touche H du conducteur)
+    if (D.isCar && (g.player.keys.click || K['KeyH']) && (!this.hornT || this.hornT <= 0)) {
+      this.hornT = 0.35;
+      g.sfx.horn?.();
+    }
+    if (this.hornT > 0) this.hornT -= dt;
 
     // déplacement + collisions (murs, voitures, mobilier) ; on ne monte pas d'escalier ni ne descend de trou
     const fx = -Math.sin(this.yaw), fz = -Math.cos(this.yaw);
@@ -400,6 +439,17 @@ export function installVehicles(game, { world, hud, sfx, scene }) {
       world.vehicles = this.vehicles; // pour la carte
     },
 
+    spawnVehicle(type = 'voiture', x, z, yaw) {
+      const p = this.player;
+      const px = x != null ? x : (p.pos.x - Math.sin(p.yaw) * 4);
+      const pz = z != null ? z : (p.pos.z - Math.cos(p.yaw) * 4);
+      const pyaw = yaw != null ? yaw : p.yaw;
+      const id = this.vehicles.length;
+      const v = new Vehicle(this, scene, id, type, { x: px, z: pz, yaw: pyaw });
+      this.vehicles.push(v);
+      return v;
+    },
+
     resetVehicles() {
       for (const v of this.vehicles) v.reset();
       this.resetTrams?.();
@@ -453,7 +503,8 @@ export function installVehicles(game, { world, hud, sfx, scene }) {
       if (nv.v.isTram) return this.tramPrompt(nv);
       const v = nv.v, role = v.def.seats > 1 ? (nv.seat === 0 ? ' — conducteur' : ' — passager') : '';
       const fuel = v.hasTank ? ` · essence ${Math.round(v.fuelFrac * 100)} %` : ''; // un vélo n'a pas de réservoir
-      return `${game.binds.tag('interact')} Monter sur ${v.def.det || 'la'} ${v.def.name.toLowerCase()}${role} (PV ${Math.round(v.hpFrac * 100)} %${fuel})`;
+      const verb = v.def.isCar ? 'Monter dans' : 'Monter sur';
+      return `${game.binds.tag('interact')} ${verb} ${v.def.det || 'la'} ${v.def.name.toLowerCase()}${role} (PV ${Math.round(v.hpFrac * 100)} %${fuel})`;
     },
 
     // ----------------------------------------------------------- points de vie (écrits par l'hôte seul)

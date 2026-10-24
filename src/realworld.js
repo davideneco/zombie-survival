@@ -1588,6 +1588,10 @@ export async function buildRealWorld(scene, renderer) {
         vehicleSpawns.push({ type: sp.type, x: spot[0], z: spot[1], yaw: Math.atan2(-Math.cos(t), -Math.sin(t)) });
       }
     }
+    if (isGare) {
+      // Voiture jouable garée sur la Place de la Gare (Parvis)
+      vehicleSpawns.push({ type: 'voiture', x: 74, z: 24, yaw: -Math.PI / 2 });
+    }
   }
   if (!stations.length) stations.push(new THREE.Vector3(startPos.x + 6, 0, startPos.z));
 
