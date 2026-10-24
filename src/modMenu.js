@@ -868,6 +868,17 @@ export function installModMenu(game, { world, hud, sfx }) {
     else if (mod.tab === 'world') {
       h += `
         <div class="mod-card">
+          <div class="mod-card-title">🎵 AMBIANCE & PISTES AUDIO (${sfx?.getCurrentTrack?.().name || 'Musique'})</div>
+          <div class="mod-btn-row">
+            <button class="mod-btn mod-btn-sub" id="modPrevTrackBtn">⏮️ Morceau précédent</button>
+            <button class="mod-btn mod-btn-primary" id="modNextTrackBtn">⏭️ Morceau suivant</button>
+          </div>
+          <small style="color: #94a3b8; display: block; margin-top: 4px;">
+            Enchaînement automatique des morceaux (Jeaux Davide & Midnight Lurch). Raccourci en jeu : touche <b>N</b>.
+          </small>
+        </div>
+
+        <div class="mod-card">
           <div class="mod-card-title">🚪 PORTES & EXPLORATION</div>
           <button class="mod-btn mod-btn-gold" id="modOpenAllDoorsBtn" style="width: 100%; font-size: 15px;">
             🔓 OUVRIR TOUTES LES PORTES DE STRASBOURG
@@ -1058,6 +1069,16 @@ export function installModMenu(game, { world, hud, sfx }) {
     });
     box.querySelectorAll('[data-revive-player]').forEach((btn) => {
       btn.addEventListener('click', () => mod.reviveRemote(+btn.dataset.revivePlayer));
+    });
+
+    // Musique & Ambiance
+    document.getElementById('modPrevTrackBtn')?.addEventListener('click', () => {
+      sfx?.prevTrack?.();
+      mod.render();
+    });
+    document.getElementById('modNextTrackBtn')?.addEventListener('click', () => {
+      sfx?.nextTrack?.();
+      mod.render();
     });
 
     // Monde & Zombies

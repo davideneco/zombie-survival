@@ -38,7 +38,36 @@ const GUNS = {
   m79:      { cf: 900,  cd: 0.04,  cv: 0.4,  bf: 500,  bd: 0.12, bv: 0.5,  tf: 70,  td: 0.18, tv: 0.9,  gf: 120, gd: 0.06, gv: 0.1,  rv: 0.2,  ec: 0.1,  ed: 0.18 },
 };
 // Morceau personnalisé : déposer un de ces fichiers dans public/music/ (voir le LISEZMOI de ce dossier)
-const CUSTOM_TRACKS = ['/music/theme.mp3', '/music/theme.ogg', '/music/theme.m4a', '/music/theme.wav'];
+const TRACK_DEFINITIONS = [
+  {
+    name: 'Jeaux Davide',
+    urls: [
+      '/music/jeaux_davide.ogg',
+      '/music/jeaux_davide.mp3',
+      '/music/jeaux_davide.wav',
+      '/music/jeaux davide.wav',
+    ],
+  },
+  {
+    name: 'Midnight Lurch',
+    urls: [
+      '/music/midnight_lurch.ogg',
+      '/music/midnight_lurch.mp3',
+      '/music/midnight_lurch.wav',
+      '/music/Midnight Lurch.wav',
+    ],
+  },
+  {
+    name: 'Thème',
+    urls: [
+      '/music/theme.ogg',
+      '/music/theme.mp3',
+      '/music/theme.m4a',
+      '/music/theme.wav',
+    ],
+  },
+];
+const CUSTOM_TRACKS = TRACK_DEFINITIONS[2].urls;
 // Armes sans profil propre
 const GUN_FALLBACK = { pistol: 'm1911', ar: 'rifle', smg: 'mp5', mg: 'm249', sniper: 'sniper' };
 
@@ -51,6 +80,7 @@ export class Sfx {
     this.volume = 1;
     this.musicVolume = 0.5;
     this.mood = { intensity: 0.3, muffled: true };
+    this.onTrackChange = null;
   }
 
   setVolume(v) {
@@ -62,6 +92,10 @@ export class Sfx {
     this.musicVolume = v;
     this.music?.setVolume(v);
   }
+
+  nextTrack() { return this.music?.nextTrack(); }
+  prevTrack() { return this.music?.prevTrack(); }
+  getCurrentTrack() { return this.music?.getCurrentTrack() || { name: 'Aucun', index: 0, total: 0, isCustom: false }; }
 
   // L'ambiance musicale suit le jeu : intensité 0..1 (manche, finale), étouffée dans les menus et en pause
   setMood(intensity, muffled) {
@@ -75,25 +109,51 @@ export class Sfx {
     if (this.ctx) { this.ctx.resume(); return; }
     const c = this.ctx = new (window.AudioContext || window.webkitAudioContext)();
     this._build(c);
-    // un morceau déposé dans public/music/ remplace le rock synthétisé (s'il n'y en a pas, on lance le rock)
-    this._loadTrack().then((ok) => { if (!ok) this.music.start(); });
+    // des morceaux déposés dans public/music/ remplacent le rock synthétisé (s'il n'y en a pas, on lance le rock)
+    this._loadTracks().catch(() => this.music.start());
     // onglet en arrière-plan : plus de son (et le séquenceur de la musique s'arrête avec l'horloge audio)
     document.addEventListener('visibilitychange', () => {
       if (document.hidden) c.suspend(); else c.resume();
     });
   }
 
-  async _loadTrack() {
-    for (const url of CUSTOM_TRACKS) {
-      try {
-        const res = await fetch(url);
-        // un fichier absent renvoie souvent la page d'accueil (SPA) : decodeAudioData la refusera
-        if (!res.ok || /text\/html/.test(res.headers.get('content-type') || '')) continue;
-        this.music.playTrack(await this.ctx.decodeAudioData(await res.arrayBuffer()));
-        return true;
-      } catch { /* pas de morceau, ou format illisible : on passe au suivant */ }
+  async _loadTracks() {
+    const loaded = [];
+
+    const fetchCandidate = async (entry) => {
+      for (const url of entry.urls) {
+        try {
+          const res = await fetch(url);
+          if (!res.ok || /text\/html/.test(res.headers.get('content-type') || '')) continue;
+          const ab = await res.arrayBuffer();
+          const buffer = await this.ctx.decodeAudioData(ab);
+          return { name: entry.name, buffer };
+        } catch { /* pas de morceau ou format illisible : on passe au suivant */ }
+      }
+      return null;
+    };
+
+    for (const entry of TRACK_DEFINITIONS) {
+      const track = await fetchCandidate(entry);
+      if (track) {
+        loaded.push(track);
+        if (loaded.length === 1) {
+          this.music.setPlaylist([track], true);
+        } else {
+          this.music.addTrack(track);
+        }
+      }
     }
-    return false;
+
+    if (loaded.length === 0) {
+      this.music.start();
+      return false;
+    }
+    return true;
+  }
+
+  async _loadTrack() {
+    return this._loadTracks();
   }
 
   // Chaîne audio : sons -> bus -> compresseur -> volume général ; réverbération partagée ; musique sur le même bus
@@ -133,6 +193,9 @@ export class Sfx {
     this.music.setVolume(this.musicVolume);
     this.music.setIntensity(this.mood.intensity);
     this.music.setMuffled(this.mood.muffled);
+    this.music.onTrackChange = (info) => {
+      this.onTrackChange?.(info);
+    };
   }
 
   // ------------------------------------------------------------ Briques de base

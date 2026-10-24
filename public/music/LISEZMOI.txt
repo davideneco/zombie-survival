@@ -1,14 +1,20 @@
-Musique de fond personnalisée
-=============================
+Musique de fond & Playlist personnalisée
+=========================================
 
-Dépose ici un fichier nommé  theme.mp3  (ou theme.ogg, theme.m4a, theme.wav) :
-le jeu le joue en boucle à la place du rock synthétisé. Sans fichier, c'est le rock intégré qui joue.
+Tu peux déposer tes morceaux de musique dans ce dossier (.ogg, .mp3, .wav, .m4a) :
+- `jeaux_davide.*` (piste 1 : Jeaux Davide)
+- `midnight_lurch.*` (piste 2 : Midnight Lurch)
+- `theme.*` (thème principal personnalisé)
 
-- Le curseur « Musique » des options règle son volume ; la musique est étouffée dans les menus et en pause.
-- Le niveau est ajusté automatiquement : inutile de normaliser le fichier.
-- Le morceau entre en fondu (2 s) une fois chargé.
+Fonctionnalités :
+- Enchaînement automatique : à la fin d'un morceau, la piste suivante se lance en fondu sonore enchaîné.
+- Changement de morceau en jeu :
+  * Appuie sur la touche  N  pour passer au morceau suivant à tout moment.
+  * Dans Options : bouton « PISTE : ... » pour changer de piste d'un clic.
+  * Dans le menu Mods & Triche (F9) > onglet « MONDE & ZOMBIES » : boutons piste suivante/précédente.
+- Sans fichier audio présent, le rock procédural synthétisé prend automatiquement le relais.
+- Le curseur « Musique » des options règle le volume ; la musique est filtrée (étouffée) dans les menus et en pause.
+- Le niveau sonore (RMS) est normalisé automatiquement.
 
-Droits d'auteur
-- theme.* est dans le .gitignore : le fichier reste sur ton ordinateur et n'est PAS envoyé sur GitHub.
-- Si tu héberges le jeu en ligne, le fichier doit être présent sur le serveur. Ne le fais que si tu en as les droits
-  (ou prends une musique libre de droits), puis retire la ligne « public/music/theme.* » du .gitignore.
+Droits d'auteur & Git :
+- Les fichiers audio (*.mp3, *.ogg, *.wav, *.m4a) sont ignorés dans le .gitignore : ils ne sont JAMAIS envoyés sur GitHub.

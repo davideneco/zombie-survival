@@ -81,6 +81,15 @@ export class Music {
     this.chord = CH.Em;
     this.timer = null;
 
+    // Morceaux personnalisés & Playlist
+    this.playlist = [];
+    this.trackIndex = 0;
+    this.currentTrack = null;
+    this.currentSource = null;
+    this.currentGain = null;
+    this.onTrackChange = null;
+    this.isCustom = false;
+
     const c = ctx;
     const gain = (v, to) => { const g = c.createGain(); g.gain.value = v; if (to) g.connect(to); return g; };
     // sortie : bus -> filtre d'étouffement -> baisse (menu / pause) -> volume réglé par le joueur
@@ -167,34 +176,170 @@ export class Music {
     this.duck.gain.setTargetAtTime(on ? 0.55 : 1, t, 0.2);
   }
 
-  // Joue un morceau fourni (AudioBuffer) en boucle à la place du rock synthétisé. Le niveau est ramené à celui de
-  // la musique intégrée pour que le curseur « Musique » ait le même effet quel que soit le fichier.
-  playTrack(buf) {
-    this.stop();
+  // ---------------------------------------------------------------- Morceaux personnalisés & Playlist
+  setPlaylist(tracks, autoStart = true) {
+    this.playlist = Array.isArray(tracks) ? [...tracks] : [];
+    this.trackIndex = 0;
+    if (this.playlist.length > 0) {
+      this.isCustom = true;
+      if (autoStart) this.playTrackIndex(0);
+    } else {
+      this.isCustom = false;
+      this.start();
+    }
+  }
+
+  addTrack(track) {
+    if (!track) return;
+    this.playlist.push(track);
+    this.isCustom = true;
+    if (this.currentSource) {
+      // Si la première piste tournait en boucle seule, on l'autorise à enchaîner
+      if (this.playlist.length > 1) {
+        this.currentSource.loop = false;
+        const src = this.currentSource;
+        this.currentSource.onended = () => {
+          if (this.currentSource === src) this.nextTrack();
+        };
+      }
+    } else if (!this.timer) {
+      this.playTrackIndex(this.playlist.length - 1);
+    }
+  }
+
+  playTrackIndex(index) {
+    if (!this.playlist.length) return;
+    this.stopSynth();
+    this.trackIndex = ((index % this.playlist.length) + this.playlist.length) % this.playlist.length;
+    const track = this.playlist[this.trackIndex];
+    if (!track) return;
+
+    const c = this.ctx;
+    const t = c.currentTime;
+
+    // Fondu sortant propre de la piste précédente
+    if (this.currentGain && this.currentSource) {
+      const oldGain = this.currentGain;
+      const oldSrc = this.currentSource;
+      oldSrc.onended = null;
+      try {
+        oldGain.gain.setValueAtTime(oldGain.gain.value, t);
+        oldGain.gain.linearRampToValueAtTime(0.0001, t + 1.2);
+        setTimeout(() => {
+          try {
+            oldSrc.stop();
+            oldSrc.disconnect();
+            oldGain.disconnect();
+          } catch {}
+        }, 1300);
+      } catch {
+        try { oldSrc.stop(); } catch {}
+      }
+    }
+
+    const buf = track.buffer || track.buf;
+    if (!buf) return;
+
+    // Normalisation RMS pour équilibrer le volume
     const d = buf.getChannelData(0);
     let sum = 0, n = 0;
     for (let i = 0; i < d.length; i += 4) { sum += d[i] * d[i]; n++; }
     const rms = Math.sqrt(sum / Math.max(1, n));
-    const g = this.ctx.createGain();
-    const t = this.ctx.currentTime;
-    g.gain.setValueAtTime(0, t); // entrée en fondu : le décodage d'un long morceau finit à un moment imprévisible
-    g.gain.linearRampToValueAtTime(rms > 1e-4 ? Math.min(6, Math.max(0.3, 0.56 / rms)) : 1, t + 2); // vise un RMS de -5 dB avant le bus
-    const src = this.ctx.createBufferSource();
+    const targetGain = rms > 1e-4 ? Math.min(6, Math.max(0.3, 0.56 / rms)) : 1;
+
+    const g = c.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(targetGain, t + 1.5);
+
+    const src = c.createBufferSource();
     src.buffer = buf;
-    src.loop = true;
+    if (this.playlist.length === 1) {
+      src.loop = true;
+    } else {
+      src.loop = false;
+      src.onended = () => {
+        if (this.currentSource === src) {
+          this.nextTrack();
+        }
+      };
+    }
+
     src.connect(g).connect(this.out);
     src.start();
-    this.track = src;
+
+    this.currentSource = src;
+    this.currentGain = g;
+    this.track = src; // compatibilité
+    this.currentTrack = track;
+
+    if (typeof this.onTrackChange === 'function') {
+      try {
+        this.onTrackChange(this.getCurrentTrack());
+      } catch (err) {
+        console.error('onTrackChange error:', err);
+      }
+    }
+  }
+
+  nextTrack() {
+    if (!this.playlist.length) return;
+    this.playTrackIndex(this.trackIndex + 1);
+  }
+
+  prevTrack() {
+    if (!this.playlist.length) return;
+    this.playTrackIndex(this.trackIndex - 1);
+  }
+
+  getCurrentTrack() {
+    if (!this.isCustom || !this.playlist.length) {
+      return { name: 'Rock synthétisé', index: 0, total: 1, isCustom: false };
+    }
+    const track = this.playlist[this.trackIndex];
+    return {
+      name: track?.name || `Morceau ${this.trackIndex + 1}`,
+      index: this.trackIndex,
+      total: this.playlist.length,
+      isCustom: true,
+    };
+  }
+
+  // Joue un morceau fourni (AudioBuffer) en boucle (compatibilité)
+  playTrack(buf, name = 'Morceau personnalisé') {
+    this.setPlaylist([{ name, buffer: buf }], true);
+  }
+
+  stopSynth() {
+    if (this.timer) {
+      clearInterval(this.timer);
+      this.timer = null;
+    }
   }
 
   start() {
+    if (this.isCustom && this.playlist.length > 0) {
+      if (!this.currentSource) this.playTrackIndex(this.trackIndex);
+      return;
+    }
     if (this.timer) return;
     this.nextTime = this.ctx.currentTime + 0.1;
     this.timer = setInterval(() => this._tick(), TICK);
   }
+
   stop() {
-    clearInterval(this.timer);
-    this.timer = null;
+    this.stopSynth();
+    if (this.currentSource) {
+      try {
+        this.currentSource.onended = null;
+        this.currentSource.stop();
+        this.currentSource.disconnect();
+      } catch {}
+      this.currentSource = null;
+    }
+    if (this.currentGain) {
+      try { this.currentGain.disconnect(); } catch {}
+      this.currentGain = null;
+    }
   }
   _tick() {
     const now = this.ctx.currentTime;

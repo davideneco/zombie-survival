@@ -2090,6 +2090,41 @@ for (const [key, input] of Object.entries(optInputs)) {
   });
 }
 
+// Contrôle des morceaux de musique (Jeaux Davide, Midnight Lurch, etc.)
+const btnNextMusic = document.getElementById('btnNextMusic');
+const syncMusicTrackBtn = (info) => {
+  if (!btnNextMusic) return;
+  const t = info || sfx.getCurrentTrack();
+  if (t && t.total > 1) {
+    btnNextMusic.textContent = `PISTE : ${t.name.toUpperCase()} (${t.index + 1}/${t.total}) ▶`;
+  } else if (t && t.name) {
+    btnNextMusic.textContent = `PISTE : ${t.name.toUpperCase()}`;
+  } else {
+    btnNextMusic.textContent = 'PISTE : ROCK INTÉGRÉ';
+  }
+};
+if (btnNextMusic) {
+  btnNextMusic.addEventListener('click', () => {
+    sfx.nextTrack();
+    syncMusicTrackBtn();
+  });
+}
+sfx.onTrackChange = (info) => {
+  syncMusicTrackBtn(info);
+  if (game.started && !game.over && info?.name) {
+    hud.popup(`♫ ${info.name}`, 'bonus');
+    game.chat?.system?.(`♫ Piste audio : ${info.name} (${info.index + 1}/${info.total})`);
+  }
+};
+syncMusicTrackBtn();
+
+window.addEventListener('keydown', (e) => {
+  if (game.chat?.open || e.target?.tagName === 'INPUT' || e.target?.tagName === 'TEXTAREA') return;
+  if (e.code === 'KeyN' && !e.repeat && !e.ctrlKey && !e.altKey && !e.metaKey) {
+    sfx.nextTrack();
+  }
+});
+
 // « Effets cinéma » : vignette et grain (CSS) et, en qualité Haute, la table de couleurs
 const btnCinema = document.getElementById('btnCinema');
 const syncCinema = () => { btnCinema.textContent = `EFFETS CINÉMA : ${settings.cinema !== false ? 'OUI' : 'NON'}`; };

@@ -667,6 +667,7 @@ CONFIG.fixedKeys = [
   ['Clic molette', 'Lance-grenades (fusil d\'assaut PaP III)'],
   ['Tab', 'Statistiques de partie & salon multijoueur (maintenir)'],
   ['Échap', 'Pause · fermer la carte ou un menu'],
+  ['N', 'Changer de piste audio (Jeaux Davide / Midnight Lurch)'],
   ['F9', 'Menu Mods & Triche (Admin, téléportation, armes, atouts, etc.)'],
 ];
 // Touches réservées : refusées à la capture (le navigateur ou le jeu s'en sert)
