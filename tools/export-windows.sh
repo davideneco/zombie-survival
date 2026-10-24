@@ -56,7 +56,23 @@ command -v node >/dev/null && node tools/export-config.mjs   # godot/data/config
 rm -rf "$APP" "$OUT"/ZombieSurvival-windows-v*.zip
 mkdir -p "$APP"
 godot --headless --path "$PROJ" --import >/dev/null 2>&1
-godot --headless --path "$PROJ" --export-release "Windows Desktop" "$APP/Zombie.exe" >"$SCRATCH/export.log" 2>&1 || { tail -20 "$SCRATCH/export.log" >&2; fail "l'export a échoué"; }
+# v0.34.5 : « Shader Baker » (export_presets.cfg : shader_baker/enabled=true) : les shaders du moteur et des matériaux connus sont compilés ici (SPIR-V
+# pour Vulkan) et rangés dans le .pck : au premier lancement chez le joueur, ils ne sont plus compilés (mesuré : -0,3 s avant le menu, voir la doc).
+# Le pré-calcul demande un vrai moteur de rendu : sans --headless, donc un écran (une fenêtre de l'éditeur s'ouvre le temps de l'export). Ce mode réécrit
+# godot/project.godot (valeurs par défaut retirées, commentaire perdu) : on le sauvegarde et on le remet.
+cp "$PROJ/project.godot" "$SCRATCH/project.godot.keep"
+if [ -n "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ] && [ -z "${ZS_EXPORT_HEADLESS:-}" ]; then
+	EXPORT_MODE=()
+else
+	EXPORT_MODE=(--headless)
+	echo "export-windows : pas d'écran (ou ZS_EXPORT_HEADLESS) : export sans pré-calcul des shaders (premier lancement plus lent chez le joueur)" >&2
+fi
+godot "${EXPORT_MODE[@]}" --path "$PROJ" --export-release "Windows Desktop" "$APP/Zombie.exe" >"$SCRATCH/export.log" 2>&1 || { cp "$SCRATCH/project.godot.keep" "$PROJ/project.godot"; tail -20 "$SCRATCH/export.log" >&2; fail "l'export a échoué"; }
+if ! cmp -s "$SCRATCH/project.godot.keep" "$PROJ/project.godot"; then
+	cp "$SCRATCH/project.godot.keep" "$PROJ/project.godot"
+	echo "export-windows : godot/project.godot réécrit par l'éditeur pendant l'export : remis tel quel" >&2
+fi
+[ "$(wc -l <"$PROJ/project.godot")" = 28 ] && grep -q '^run/main_scene="res://scenes/main.tscn"' "$PROJ/project.godot" || fail "godot/project.godot abîmé : git checkout godot/project.godot"
 grep -E '^(ERROR|SCRIPT ERROR)' "$SCRATCH/export.log" >&2 && fail "erreurs pendant l'export (voir ci-dessus)"
 [ -f "$APP/Zombie.exe" ] && [ -f "$APP/Zombie.pck" ] || fail "Zombie.exe / Zombie.pck non produits"
 
@@ -79,6 +95,9 @@ for f in project.binary data/config.json data/arena.json data/cathedral.json dat
 	grep -q "	$f\$" "$SCRATCH/pck.txt" || fail "absent du .pck : $f"
 done
 [ "$(grep -c "\.godot/imported/a.png-.*bptc.ctex" "$SCRATCH/pck.txt")" -ge 10 ] || fail "textures PBR (ctex) absentes du .pck"
+if [ "${#EXPORT_MODE[@]}" = 0 ]; then
+	[ "$(grep -c '	\.godot/shader_cache/.*\.vulkan\.cache$' "$SCRATCH/pck.txt")" -ge 50 ] || fail "shaders pré-calculés absents du .pck (Shader Baker)"
+fi
 [ "$(grep -c '	data/world/tiles/' "$SCRATCH/pck.txt")" = "$(ls "$PROJ/data/world/tiles" | wc -l)" ] || fail "tuiles du monde manquantes dans le .pck"
 file "$APP/Zombie.exe" | grep -q 'PE32+ executable.*x86-64' || fail "Zombie.exe n'est pas un PE x86-64"
 
@@ -114,6 +133,14 @@ TOUCHES PAR DÉFAUT (modifiables : Options > Touches, clavier AZERTY ou QWERTY)
   G : grenade     V : couteau      F : lampe torche      E : interagir (acheter, ouvrir, monter)      M : carte
   K (maintenir) : se débloquer      Échap : pause et menus
 
+DIAGNOSTIC DU DÉMARRAGE ET DU MENU (lenteurs au lancement, menu qui rame)
+  Double-clique sur diagnostic-demarrage.bat : le jeu se lance normalement (avec la fenêtre de texte) et écrit, dans ce dossier,
+  demarrage.txt : temps de chargement étape par étape, temps de réaction de chaque bouton du menu cliqué, images lentes du menu.
+  Joue normalement (ouvre quelques écrans du menu, lance une partie si tu veux), quitte le jeu, puis envoie demarrage.txt.
+  Si ce dossier est protégé en écriture, le fichier est écrit dans le dossier des données (voir plus bas), sous le nom startup-log.txt.
+  En ligne de commande : Zombie.console.exe -- --startup-log=C:\chemin\demarrage.txt
+  (pour les images lentes pendant une partie : -- --perf-log=C:\chemin\perf.txt)
+
 DONNÉES ENREGISTRÉES
   Réglages, touches, meilleurs scores et statistiques sont écrits dans :
     %APPDATA%\\Godot\\app_userdata\\Zombie Survival
@@ -130,6 +157,18 @@ LICENCES ET CRÉDITS
   Plan et bâtiments de Strasbourg : données OpenStreetMap (c) les contributeurs d'OpenStreetMap, licence ODbL.
 EOF
 sed -i 's/$/\r/' "$APP/LISEZMOI.txt"   # fins de ligne Windows (Bloc-notes)
+# v0.34.3 : lanceur du journal de démarrage (StartupLog) : écrit demarrage.txt à côté de l'exe
+cat >"$APP/diagnostic-demarrage.bat" <<'EOF2'
+@echo off
+cd /d "%~dp0"
+echo Zombie Survival : journal de demarrage dans "%~dp0demarrage.txt"
+echo Joue normalement, quitte le jeu, puis envoie demarrage.txt.
+Zombie.console.exe -- "--startup-log=%~dp0demarrage.txt"
+echo.
+echo Termine. Fichier : "%~dp0demarrage.txt"
+pause
+EOF2
+sed -i 's/$/\r/' "$APP/diagnostic-demarrage.bat"
 
 # --- 6. archive -----------------------------------------------------------------------------------------------------------------------
 ZIP="$OUT/ZombieSurvival-windows-v$VERSION.zip"
