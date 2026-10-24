@@ -414,7 +414,7 @@ const game = {
     if (!force) {
       this.relocateTimer -= dt;
       if (this.relocateTimer > 0 || !targets.length || !world.pickGround) return 0;
-      this.relocateTimer = 1;
+      this.relocateTimer = 0.8;
     } else if (!targets.length || !world.pickGround) return 0;
     const groundTargets = targets.filter((t) => !t.tregion);
     if (!groundTargets.length) return 0;
@@ -424,15 +424,19 @@ const game = {
       if (z.dead || z.spawnT > 0 || z.region || z.link || (z.isBoss && !z.mini)) continue;
       let near = Infinity;
       for (const t of targets) near = Math.min(near, Math.hypot(t.pos.x - z.pos.x, t.pos.z - z.pos.z));
-      if (!force) z.farT = near > 90 ? (z.farT || 0) + 1 : 0;
-      const stuck = z.noProgress > (force ? 1.5 : 5) && near > (force ? 5 : 12);
-      if (!stuck && !(force && near > 70) && (force || z.farT < 4)) continue;
+      if (!force) z.farT = near > 50 ? (z.farT || 0) + 1 : 0;
+      const stuck = z.noProgress > (force ? 1.0 : 2.5) && near > (force ? 4 : 8);
+      if (!stuck && !(force && near > 45) && (force || z.farT < 3)) continue;
       const t = targets[Math.floor(Math.random() * targets.length)];
-      const g = world.pickGround(t.pos.x, t.pos.z, 22, 45);
+      let g = world.pickGround(t.pos.x, t.pos.z, 18, 38);
+      if (!g) g = world.pickGround(t.pos.x, t.pos.z, 12, 50);
       if (!g) continue;
-      z.pos.set(g.x, 0, g.z);
+      z.startSpawn({ type: 'ground', pos: g });
       z.noProgress = 0; z.farT = 0;
       moved++;
+      if (this.isMultiplayer) {
+        this.net?.send({ t: 'z_reloc', id: z.id, x: g.x, z: g.z });
+      }
     }
     return moved;
   },
@@ -987,11 +991,25 @@ const game = {
         const w = world.pickWindow(pp.x, pp.z, 11, 60, this.time);
         if (w) { w.busyUntil = this.time + 4; return w; }
       }
-      const g = world.pickGround(pp.x, pp.z, 18, 50);
+      let g = world.pickGround(pp.x, pp.z, 18, 50);
       if (g) return { type: 'ground', pos: g };
       const w = world.pickWindow(pp.x, pp.z, 6, 80, this.time);
       if (w) { w.busyUntil = this.time + 4; return w; }
-      return { type: 'ground', pos: new THREE.Vector3(pp.x + 15, 0, pp.z) };
+      g = world.pickGround(pp.x, pp.z, 12, 65);
+      if (g) return { type: 'ground', pos: g };
+      // Fallback sécurisé : case dégagée dans une zone ouverte
+      if (world.zoneCenters) {
+        for (let zi = 0; zi < world.zoneCenters.length; zi++) {
+          if (world.isZoneOpen?.(zi) && world.zoneCenters[zi]) {
+            const zc = world.zoneCenters[zi];
+            const zg = world.pickGround(zc[0], zc[1], 1, 20);
+            if (zg) return { type: 'ground', pos: zg };
+          }
+        }
+      }
+      const safePos = new THREE.Vector3(pp.x + (Math.random() - 0.5) * 8, 0, pp.z + (Math.random() - 0.5) * 8);
+      world.collide?.(safePos, 0.8);
+      return { type: 'ground', pos: safePos };
     }
     const wins = world.windowSpawns;
     if (wins && wins.length && Math.random() < 0.65) {
@@ -1672,6 +1690,14 @@ function setupNetworkHandlers(net) {
     z.net = { x: m.x, z: m.z, y: m.y || 0, yaw: 0, atk: false, bs: m.angel ? 25 : m.boss && !m.tanner ? 9 : 0 };
     if (m.angel) z.region = m.region || 0;
     game.zombies.push(z);
+  });
+
+  net.onHost('z_reloc', (m) => {
+    const z = game.zombies.find((zb) => zb.id === m.id);
+    if (z && !z.dead) {
+      z.startSpawn({ type: 'ground', pos: new THREE.Vector3(m.x, 0, m.z) });
+      if (z.net) { z.net.x = m.x; z.net.z = m.z; z.net.y = 0; }
+    }
   });
 
   net.onHost('z_tick', (m) => {

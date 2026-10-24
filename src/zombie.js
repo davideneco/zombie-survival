@@ -149,15 +149,32 @@ export class Zombie {
     this.hitBody = hitBody;
 
     // ---- Apparition ----
-    this.pos = this.group.position;
+    this.scene = scene;
+    scene.add(this.group);
+    this.startSpawn(spawn);
+    if (opts.crawler) this.makeCrawler();
+    if (opts.boss) this.makeBoss(opts.bossDamage || 45);
+    if (opts.kind) this.makeKind(opts.kind);
+  }
+
+  // Initialise ou réinitialise l'apparition du zombie (à la création ou lors d'une relocalisation)
+  startSpawn(spawn) {
+    if (this.mound) {
+      this.scene.remove(this.mound);
+      if (this.mound.geometry) this.mound.geometry.dispose();
+      if (this.mound.material) this.mound.material.dispose();
+      this.mound = null;
+    }
+    this.spawn = spawn;
     this.spawnElapsed = 0;
+    this.pos = this.group.position;
     if (spawn.type === 'window') {
       this.spawnType = 'window';
       this.total = WIN_WARN + WIN_CLIMB;
       this.pos.copy(spawn.inside);
       this.yaw = spawn.yaw;
       this.group.visible = false;
-      this.quad = spawn.getQuad();
+      this.quad = spawn.getQuad ? spawn.getQuad() : null;
       this._knocks = 0;
       this._broke = false;
     } else {
@@ -174,16 +191,20 @@ export class Zombie {
       this.mound.position.set(spawn.pos.x, 0, spawn.pos.z);
       this.mound.scale.set(0.2, 0.05, 0.2);
       this.mound.receiveShadow = true;
-      scene.add(this.mound);
+      this.scene.add(this.mound);
       this.moundT = 0;
-      this._rumbled = false; this._emerged = false;
+      this._rumbled = false;
+      this._emerged = false;
     }
     this.spawnT = this.total;
-    this.group.rotation.y = this.yaw;
-    scene.add(this.group);
-    if (opts.crawler) this.makeCrawler();
-    if (opts.boss) this.makeBoss(opts.bossDamage || 45);
-    if (opts.kind) this.makeKind(opts.kind);
+    this.group.rotation.set(0, this.yaw, 0);
+    this.stuckT = 0;
+    this.sidestepT = 0;
+    this.noProgress = 0;
+    this.farT = 0;
+    const px = spawn.pos ? spawn.pos.x : spawn.inside.x;
+    const pz = spawn.pos ? spawn.pos.z : spawn.inside.z;
+    this.anchorPos = { x: px, z: pz, t: 0 };
   }
 
   // Le Bourreau : géant, yeux rouges, frappe fort (fin de partie)
@@ -442,7 +463,8 @@ export class Zombie {
     m.scale.set(1.1 + t * 0.2, 0.37 * (1 - t * 0.6), 1.1 + t * 0.2);
     this.walkT += dt * 1.6;
     // les bras sortent en premier, tendus vers le haut puis vers l'avant
-    this._pose(this.walkT, 0.15, 1.7 - t * 0.7, 0.2 + 0.25 * (1 - t), 0.3 - t * 0.1);
+    if (this.crawler) this._poseCrawl(this.walkT, false);
+    else this._pose(this.walkT, 0.15, 1.7 - t * 0.7, 0.2 + 0.25 * (1 - t), 0.3 - t * 0.1);
     if (this.spawnT <= 0) { this.pos.y = 0; this.group.rotation.x = 0; }
   }
 
@@ -578,7 +600,12 @@ export class Zombie {
       visible = dist < 1.5 || nav.los(this.pos.x, this.pos.z, gx, gz);
       if (!visible) {
         const s = nav.steer(this.pos.x, this.pos.z, this._steer);
-        if (s) { dirx = s.x; dirz = s.z; }
+        if (s) {
+          dirx = s.x; dirz = s.z;
+        } else {
+          const esc = nav.findEscapeSteer?.(this.pos.x, this.pos.z, this._steer);
+          if (esc) { dirx = esc.x; dirz = esc.z; }
+        }
       }
     }
 
@@ -617,20 +644,50 @@ export class Zombie {
           this.pos.z += (oz / d) * push;
         }
       }
-      world.collide(this.pos, Z.radius);
+      const colOut = this._colOut || (this._colOut = { push: 0, kind: null, nx: 0, nz: 0 });
+      colOut.push = 0;
+      world.collide(this.pos, Z.radius, colOut);
+      if (colOut.push > 0.02 && (colOut.nx || colOut.nz)) {
+        const dot = dirx * colOut.nx + dirz * colOut.nz;
+        if (dot < 0) {
+          const tx = dirx - dot * colOut.nx, tz = dirz - dot * colOut.nz;
+          const tl = Math.hypot(tx, tz);
+          if (tl > 0.05) {
+            const ty = Math.atan2(tx / tl, tz / tl);
+            let dYaw = ty - this.yaw;
+            dYaw = Math.atan2(Math.sin(dYaw), Math.cos(dYaw));
+            this.yaw += dYaw * Math.min(1, dt * 10);
+            this.group.rotation.set(0, this.yaw, 0);
+          }
+        }
+        if (colOut.push > 0.15) {
+          this.pos.x += colOut.nx * (colOut.push * 0.5);
+          this.pos.z += colOut.nz * (colOut.push * 0.5);
+        }
+      }
 
       const moved = Math.hypot(this.pos.x - bx, this.pos.z - bz);
-      if (moved < sp * dt * 0.25) this.noProgress += dt;
-      else this.noProgress = Math.max(0, this.noProgress - dt * 2);
-      if (moved < sp * dt * 0.4) {
+      if (!this.anchorPos) this.anchorPos = { x: this.pos.x, z: this.pos.z, t: 0 };
+      this.anchorPos.t += dt;
+      const dAnchor = Math.hypot(this.pos.x - this.anchorPos.x, this.pos.z - this.anchorPos.z);
+      if (dAnchor > 2.0) {
+        this.anchorPos.x = this.pos.x;
+        this.anchorPos.z = this.pos.z;
+        this.anchorPos.t = 0;
+        this.noProgress = Math.max(0, this.noProgress - dt * 2);
+      } else if (this.anchorPos.t > 2.0) {
+        this.noProgress += dt;
+      }
+
+      if (moved < sp * dt * 0.35) {
         this.stuckT += dt;
-        if (this.stuckT > 0.4 && this.sidestepT <= 0) {
-          this.sidestepT = 1.2;
+        if (this.stuckT > 0.35 && this.sidestepT <= 0) {
+          this.sidestepT = 1.0;
           this.sidestepDir = Math.random() < 0.5 ? -1 : 1;
           this.stuckT = 0;
         }
       } else {
-        this.stuckT = 0;
+        this.stuckT = Math.max(0, this.stuckT - dt);
       }
       this.walkT += dt * sp * (this.runner ? 2.6 : 3.2);
     } else {

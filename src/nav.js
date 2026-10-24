@@ -293,10 +293,46 @@ export class NavGrid {
     return true;
   }
 
+  // Recherche de secours quand steer échoue (ex: zombie coincé dans la marge d'un mur ou cellule bloquée)
+  findEscapeSteer(x, z, out) {
+    let ix = this.cx(x), iz = this.cz(z);
+    const { nx, nz, dist, blocked } = this;
+    ix = Math.max(0, Math.min(nx - 1, ix));
+    iz = Math.max(0, Math.min(nz - 1, iz));
+    let bestScore = Infinity, bx = -1, bz = -1;
+    const maxR = Math.max(4, Math.round(3.5 / this.cell));
+    for (let r = 1; r <= maxR; r++) {
+      for (let dz = -r; dz <= r; dz++) {
+        for (let dx = -r; dx <= r; dx++) {
+          if (Math.max(Math.abs(dx), Math.abs(dz)) !== r) continue;
+          const jx = ix + dx, jz = iz + dz;
+          if (jx < 0 || jz < 0 || jx >= nx || jz >= nz) continue;
+          const j = jz * nx + jx;
+          if (blocked[j] !== 0) continue;
+          const d = dist[j];
+          if (d >= INF) continue;
+          const wx = this.worldX(jx), wz = this.worldZ(jz);
+          const score = d + Math.hypot(wx - x, wz - z) * (10 / this.cell);
+          if (score < bestScore) {
+            bestScore = score;
+            bx = jx;
+            bz = jz;
+          }
+        }
+      }
+      if (bx >= 0) break;
+    }
+    if (bx < 0) return null;
+    const vx = this.worldX(bx) - x, vz = this.worldZ(bz) - z;
+    const l = Math.hypot(vx, vz) || 1;
+    out.x = vx / l; out.z = vz / l;
+    return out;
+  }
+
   // Direction (x,z normalisée) à suivre pour rejoindre le joueur ; null = chemin inconnu.
   steer(x, z, out) {
     const ix = this.cx(x), iz = this.cz(z);
-    if (!this.inside(ix, iz)) return null;
+    if (!this.inside(ix, iz)) return this.findEscapeSteer(x, z, out);
     const { nx, nz, dist, blocked } = this;
     let best = dist[this.idx(ix, iz)], bx = ix, bz = iz;
     // dans la marge d'un mur (case bloquée) : seuls les voisins immédiats sont sûrs, sinon on viserait à travers le mur
@@ -313,7 +349,7 @@ export class NavGrid {
         best = d; bx = jx; bz = jz;
       }
     }
-    if (best >= INF || (bx === ix && bz === iz)) return null;
+    if (best >= INF || (bx === ix && bz === iz)) return this.findEscapeSteer(x, z, out);
     const vx = this.worldX(bx) - x, vz = this.worldZ(bz) - z;
     const l = Math.hypot(vx, vz) || 1;
     out.x = vx / l; out.z = vz / l;

@@ -1081,15 +1081,36 @@ export async function buildRealWorld(scene, renderer) {
     return ok.length ? ok[Math.floor(Math.random() * ok.length)] : null;
   };
 
-  // Point d'apparition au sol : case accessible, dans une zone ouverte, hors de vue immédiate
+  // Point d'apparition au sol : case accessible, dans une zone ouverte, hors de vue immédiate et sans collision dans les murs
+  const groundProbe = { x: 0, y: 0.1, z: 0 };
+  const groundProbeOut = { push: 0, kind: null, nx: 0, nz: 0 };
   const pickGround = (px, pz, minD, maxD) => {
-    for (let t = 0; t < 80; t++) {
+    // 1ère passe : dans la couronne demandée avec vérification clearance + collision physique
+    for (let t = 0; t < 120; t++) {
       const a = Math.random() * Math.PI * 2, d = minD + Math.random() * (maxD - minD);
       const x = px + Math.cos(a) * d, z = pz + Math.sin(a) * d;
       const ix = nav.cx(x), iz = nav.cz(z);
       if (!nav.inside(ix, iz) || !reach[nav.idx(ix, iz)] || !zoneOpen[zoneOf(x, z)]) continue;
       if (!clearance(ix, iz, 1)) continue;
+      groundProbe.x = x; groundProbe.y = 0.1; groundProbe.z = z;
+      groundProbeOut.push = 0;
+      collision.resolve(groundProbe, 0.45, groundProbeOut);
+      if (groundProbeOut.push > 0.01) continue;
       return new THREE.Vector3(x, 0, z);
+    }
+    // 2ème passe : secours avec rayon élargi si l'environnement immédiat est trop encombré
+    const minD2 = Math.max(8, minD * 0.6), maxD2 = maxD * 1.35;
+    for (let t = 0; t < 80; t++) {
+      const a = Math.random() * Math.PI * 2, d = minD2 + Math.random() * (maxD2 - minD2);
+      const x = px + Math.cos(a) * d, z = pz + Math.sin(a) * d;
+      const ix = nav.cx(x), iz = nav.cz(z);
+      if (!nav.inside(ix, iz) || !reach[nav.idx(ix, iz)] || !zoneOpen[zoneOf(x, z)]) continue;
+      if (!clearance(ix, iz, 1)) continue;
+      groundProbe.x = x; groundProbe.y = 0.1; groundProbe.z = z;
+      groundProbeOut.push = 0;
+      collision.resolve(groundProbe, 0.4, groundProbeOut);
+      if (groundProbeOut.push > 0.04) continue;
+      return new THREE.Vector3(groundProbe.x, 0, groundProbe.z);
     }
     return null;
   };
