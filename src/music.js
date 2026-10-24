@@ -62,11 +62,12 @@ const RUN = [55, 52, 50, 47]; // dernière mesure d'une section : petite descent
 const PLUCK = [0, 1, 2, 3, 2, 1, 2, 1]; // arpège de guitare claire (niveau calme)
 
 export class Music {
-  // noise : buffer de bruit partagé ; reverb : entrée du convolueur partagé (facultatif)
-  constructor(ctx, dest, { noise, reverb = null } = {}) {
+  // noise : buffer de bruit partagé ; reverb : entrée du convolueur partagé (facultatif) ; master : sortie principale
+  constructor(ctx, dest, { noise, reverb = null, master = null } = {}) {
     this.ctx = ctx;
     this.noise = noise;
     this.reverb = reverb;
+    this.masterDest = master;
     this.intensity = 0.3; // 0..1, fixé par le jeu
     this.lull = false;    // accalmie (entre deux manches)
     this.level = 1;
@@ -92,7 +93,7 @@ export class Music {
 
     const c = ctx;
     const gain = (v, to) => { const g = c.createGain(); g.gain.value = v; if (to) g.connect(to); return g; };
-    // sortie : bus -> filtre d'étouffement -> baisse (menu / pause) -> volume réglé par le joueur
+    // sortie rock synthétisé : bus -> filtre d'étouffement -> baisse (menu / pause) -> volume réglé par le joueur
     this.vol = gain(0.5, dest);
     this.duck = gain(1, this.vol);
     this.lp = c.createBiquadFilter();
@@ -100,6 +101,17 @@ export class Music {
     this.lp.frequency.value = 20000;
     this.lp.connect(this.duck);
     this.out = gain(0.5, this.lp);
+
+    // Sortie dédiée pour morceaux personnalisés pré-masterisés (Jeaux Davide, Midnight Lurch) :
+    // connecte directement au master (ou dest) pour un son stéréo riche, puissant et non écrasé par les tirs
+    this.customMaster = master || dest;
+    this.customVol = gain(0.85, this.customMaster);
+    this.customDuck = gain(1, this.customVol);
+    this.customLp = c.createBiquadFilter();
+    this.customLp.type = 'lowpass';
+    this.customLp.frequency.value = 20000;
+    this.customLp.connect(this.customDuck);
+    this.customBus = this.customLp;
 
     this.drums = gain(0.85, this.out);
     this.bassBus = gain(0.5, null);
@@ -167,13 +179,21 @@ export class Music {
   }
 
   // ---------------------------------------------------------------- Contrôle
-  setVolume(v) { this.vol.gain.setTargetAtTime(v, this.ctx.currentTime, 0.05); }
+  setVolume(v) {
+    const t = this.ctx.currentTime;
+    this.vol.gain.setTargetAtTime(v, t, 0.05);
+    if (this.customVol) this.customVol.gain.setTargetAtTime(v * 0.9, t, 0.05);
+  }
   setIntensity(x) { this.intensity = x; }
   setLull(on) { this.lull = on; }
-  setMuffled(on) { // menu, pause, fin de partie : on entend la musique « à travers un mur »
+  setMuffled(on) { // pause active : adoucissement musical
     const t = this.ctx.currentTime;
     this.lp.frequency.setTargetAtTime(on ? 650 : 20000, t, 0.15);
     this.duck.gain.setTargetAtTime(on ? 0.55 : 1, t, 0.2);
+    if (this.customLp) {
+      this.customLp.frequency.setTargetAtTime(on ? 1800 : 20000, t, 0.15);
+      this.customDuck.gain.setTargetAtTime(on ? 0.75 : 1, t, 0.2);
+    }
   }
 
   // ---------------------------------------------------------------- Morceaux personnalisés & Playlist
@@ -268,9 +288,8 @@ export class Music {
       };
     }
 
-    // Connecte directement au filtre passe-bas lp (étouffé en pause/menu, clair en jeu)
-    // sans subir l'atténuation 0.5 de this.out réservée au rock synthétisé
-    src.connect(g).connect(this.lp);
+    // Connecte directement au bus dédié musique personnalisée pour une clarté et un volume parfaits
+    src.connect(g).connect(this.customBus || this.lp);
     src.start();
 
     this.currentSource = src;
@@ -283,8 +302,46 @@ export class Music {
       try {
         this.onTrackChange(this.getCurrentTrack());
       } catch (err) {
-        console.error('onTrackChange error:', err);
+        console.warn('[AUDIO] Erreur callback onTrackChange :', err);
       }
+    }
+  }
+
+  playOriginalRock() {
+    // Stoppe la piste personnalisée actuelle et relance le rock synthétisé d'origine
+    if (this.currentGain && this.currentSource) {
+      try {
+        const t = this.ctx.currentTime;
+        this.currentGain.gain.setValueAtTime(this.currentGain.gain.value, t);
+        this.currentGain.gain.linearRampToValueAtTime(0.0001, t + 0.4);
+        setTimeout(() => {
+          try {
+            this.currentSource?.stop();
+            this.currentSource?.disconnect();
+            this.currentGain?.disconnect();
+          } catch {}
+        }, 450);
+      } catch {}
+      this.currentSource = null;
+      this.currentGain = null;
+    }
+    this.isCustom = false;
+    this.currentTrack = { name: 'Rock synthétisé', isCustom: false };
+    this.start();
+    if (typeof this.onTrackChange === 'function') {
+      this.onTrackChange(this.getCurrentTrack());
+    }
+  }
+
+  playTrackNamed(name) {
+    if (!name) return;
+    if (/rock/i.test(name)) {
+      this.playOriginalRock();
+      return;
+    }
+    const idx = this.playlist.findIndex((t) => t.name.toLowerCase().includes(name.toLowerCase()));
+    if (idx !== -1) {
+      this.playTrackIndex(idx);
     }
   }
 

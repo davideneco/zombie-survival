@@ -1893,14 +1893,16 @@ function setupNetworkHandlers(net) {
 // --------------------------------------------- Menu / Pointer lock
 const canvas = renderer.domElement;
 
-// Le navigateur n'autorise le son qu'après une interaction : on initialise et réveille l'AudioContext
+// Le navigateur n'autorise le son qu'après une interaction : on initialise et réveille l'AudioContext dès le 1er geste
 const wakeAudio = () => {
   sfx.init();
   if (sfx.ctx && sfx.ctx.state === 'suspended') {
-    sfx.ctx.resume();
+    sfx.ctx.resume().catch(() => {});
   }
 };
-for (const ev of ['pointerdown', 'keydown', 'click']) window.addEventListener(ev, wakeAudio);
+for (const ev of ['pointerdown', 'keydown', 'click']) {
+  window.addEventListener(ev, wakeAudio, { capture: true, passive: true });
+}
 
 function lockAndPlay() {
   sfx.init();
@@ -2095,28 +2097,40 @@ for (const [key, input] of Object.entries(optInputs)) {
 
 // Contrôle des morceaux de musique (Jeaux Davide, Midnight Lurch, etc.)
 const btnNextMusic = document.getElementById('btnNextMusic');
+const btnTitleMusic = document.getElementById('btnTitleMusic');
+const btnPauseMusic = document.getElementById('btnPauseMusic');
+
 const syncMusicTrackBtn = (info) => {
-  if (!btnNextMusic) return;
   const t = info || sfx.getCurrentTrack();
-  if (t && t.total > 1) {
-    btnNextMusic.textContent = `PISTE : ${t.name.toUpperCase()} (${t.index + 1}/${t.total}) ▶`;
+  let label = '♫ MUSIQUE : ROCK INTÉGRÉ';
+  if (t && t.isCustom && t.total > 1) {
+    label = `♫ MUSIQUE : ${t.name.toUpperCase()} (${t.index + 1}/${t.total}) ▶`;
   } else if (t && t.name) {
-    btnNextMusic.textContent = `PISTE : ${t.name.toUpperCase()}`;
-  } else {
-    btnNextMusic.textContent = 'PISTE : ROCK INTÉGRÉ';
+    label = `♫ MUSIQUE : ${t.name.toUpperCase()} ▶`;
+  }
+  for (const b of [btnNextMusic, btnTitleMusic, btnPauseMusic]) {
+    if (b) b.textContent = label;
   }
 };
-if (btnNextMusic) {
-  btnNextMusic.addEventListener('click', () => {
-    sfx.nextTrack();
-    syncMusicTrackBtn();
-  });
+
+for (const b of [btnNextMusic, btnTitleMusic, btnPauseMusic]) {
+  if (b) {
+    b.addEventListener('click', (e) => {
+      e.stopPropagation();
+      wakeAudio();
+      sfx.nextTrack();
+      syncMusicTrackBtn();
+    });
+  }
 }
+
 sfx.onTrackChange = (info) => {
   syncMusicTrackBtn(info);
-  if (game.started && !game.over && info?.name) {
-    hud.popup(`♫ ${info.name}`, 'bonus');
-    game.chat?.system?.(`♫ Piste audio : ${info.name} (${info.index + 1}/${info.total})`);
+  if (info?.name) {
+    if (game.started && !game.over) {
+      hud.popup(`♫ ${info.name}`, 'bonus');
+      game.chat?.system?.(`♫ Piste audio : ${info.name} (${info.index + 1}/${info.total})`);
+    }
   }
 };
 syncMusicTrackBtn();
@@ -2124,7 +2138,9 @@ syncMusicTrackBtn();
 window.addEventListener('keydown', (e) => {
   if (game.chat?.open || e.target?.tagName === 'INPUT' || e.target?.tagName === 'TEXTAREA') return;
   if (e.code === 'KeyN' && !e.repeat && !e.ctrlKey && !e.altKey && !e.metaKey) {
+    wakeAudio();
     sfx.nextTrack();
+    syncMusicTrackBtn();
   }
 });
 
@@ -2259,7 +2275,8 @@ function updateMusicMood() {
   const inGame = game.started && !game.over;
   const intensity = !inGame ? 0.3 : game.finale ? 1 : Math.min(0.85, 0.3 + game.round * 0.05);
   const paused = !game.isMultiplayer && !game.playing;
-  sfx.setMood(intensity, !inGame || paused);
+  // Muffled uniquement si le joueur est en pause d'une partie active (jamais sur l'écran titre ou les menus)
+  sfx.setMood(intensity, inGame && paused);
 }
 
 const clock = new THREE.Clock();

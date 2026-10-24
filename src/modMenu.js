@@ -572,6 +572,7 @@ export function installModMenu(game, { world, hud, sfx }) {
         <button class="mod-tab-btn ${mod.tab === 'perks' ? 'active' : ''}" data-tab="perks">⚡ ATOUTS</button>
         <button class="mod-tab-btn ${mod.tab === 'teleport' ? 'active' : ''}" data-tab="teleport">📍 TÉLÉPORTATION</button>
         <button class="mod-tab-btn ${mod.tab === 'world' ? 'active' : ''}" data-tab="world">🧟 MONDE & ZOMBIES</button>
+        <button class="mod-tab-btn ${mod.tab === 'audio' ? 'active' : ''}" data-tab="audio">🎵 MUSIQUE</button>
         <button class="mod-tab-btn ${mod.tab === 'team' ? 'active' : ''}" data-tab="team">📜 JOURNAL & ÉQUIPE</button>
       </div>
 
@@ -964,6 +965,56 @@ export function installModMenu(game, { world, hud, sfx }) {
       `;
     }
 
+    // -------------------------------- TAB : MUSIQUE --------------------------------
+    else if (mod.tab === 'audio') {
+      const cur = sfx.getCurrentTrack();
+      const volPct = Math.round((sfx.musicVolume || 0.5) * 100);
+      const audioState = sfx.ctx ? sfx.ctx.state : 'inactif';
+
+      h += `
+        <div class="mod-card">
+          <div class="mod-card-title">🎵 LECTEUR AUDIO & PISTES MUSICALES</div>
+          <div style="background:#131d27; border:1px solid #1f364d; border-radius:6px; padding:12px; margin-bottom:12px;">
+            <div style="font-size:16px; font-weight:bold; color:#4affd2;">♫ EN COURS : ${esc(cur.name.toUpperCase())}</div>
+            <div style="font-size:13px; color:#aaa; margin-top:4px;">
+              Type : ${cur.isCustom ? 'Morceau personnalisé OGG' : 'Synthétiseur WebAudio'} · Piste : ${cur.index + 1}/${cur.total} · Volume : ${volPct}% · État AudioContext : <b style="color:${audioState === 'running' ? '#4ade80' : '#ffd24a'}">${audioState}</b>
+            </div>
+          </div>
+
+          <div class="mod-btn-row" style="margin-bottom:12px;">
+            <button class="mod-btn primary" id="modMusicNext">▶ PISTE SUIVANTE [N]</button>
+            <button class="mod-btn" id="modMusicPrev">◀ PISTE PRÉCÉDENTE</button>
+            <button class="mod-btn" id="modMusicRestart">🔄 RELANCER LE MORCEAU</button>
+          </div>
+        </div>
+
+        <div class="mod-card">
+          <div class="mod-card-title">📂 SÉLECTION DIRECTE DES MORCEAUX</div>
+          <div style="display:flex; flex-direction:column; gap:8px;">
+            <button class="mod-btn ${cur.name === 'Jeaux Davide' ? 'primary' : ''}" id="modPlayJeaux" style="text-align:left; font-size:15px; padding:10px 14px;">
+              ${cur.name === 'Jeaux Davide' ? '▶' : '♫'} <b>Jeaux Davide</b> (Piste personnalisée 1)
+            </button>
+            <button class="mod-btn ${cur.name === 'Midnight Lurch' ? 'primary' : ''}" id="modPlayMidnight" style="text-align:left; font-size:15px; padding:10px 14px;">
+              ${cur.name === 'Midnight Lurch' ? '▶' : '♫'} <b>Midnight Lurch</b> (Piste personnalisée 2)
+            </button>
+            <button class="mod-btn ${!cur.isCustom ? 'primary' : ''}" id="modPlaySynth" style="text-align:left; font-size:15px; padding:10px 14px;">
+              ${!cur.isCustom ? '▶' : '♫'} <b>Rock synthétisé original</b> (Guitare & batterie WebAudio)
+            </button>
+          </div>
+        </div>
+
+        <div class="mod-card">
+          <div class="mod-card-title">🔊 RÉGLAGE DU VOLUME MUSIQUE</div>
+          <div class="mod-btn-row">
+            <button class="mod-btn ${volPct === 25 ? 'primary' : ''}" id="modVol25">25%</button>
+            <button class="mod-btn ${volPct === 50 ? 'primary' : ''}" id="modVol50">50%</button>
+            <button class="mod-btn ${volPct === 75 ? 'primary' : ''}" id="modVol75">75%</button>
+            <button class="mod-btn ${volPct === 100 ? 'primary' : ''}" id="modVol100">100% (Plein volume)</button>
+          </div>
+        </div>
+      `;
+    }
+
     h += `</div>`; // fin mod-body
     box.innerHTML = h;
 
@@ -1072,14 +1123,55 @@ export function installModMenu(game, { world, hud, sfx }) {
     });
 
     // Musique & Ambiance
-    document.getElementById('modPrevTrackBtn')?.addEventListener('click', () => {
-      sfx?.prevTrack?.();
+    document.getElementById('modMusicNext')?.addEventListener('click', () => {
+      sfx.init();
+      sfx.nextTrack();
       mod.render();
     });
-    document.getElementById('modNextTrackBtn')?.addEventListener('click', () => {
-      sfx?.nextTrack?.();
+    document.getElementById('modMusicPrev')?.addEventListener('click', () => {
+      sfx.init();
+      sfx.prevTrack();
       mod.render();
     });
+    document.getElementById('modMusicRestart')?.addEventListener('click', () => {
+      sfx.init();
+      sfx.selectTrack(sfx.getCurrentTrack().index);
+      mod.render();
+    });
+    document.getElementById('modPlayJeaux')?.addEventListener('click', () => {
+      sfx.init();
+      sfx.playTrackNamed('jeaux');
+      mod.render();
+    });
+    document.getElementById('modPlayMidnight')?.addEventListener('click', () => {
+      sfx.init();
+      sfx.playTrackNamed('midnight');
+      mod.render();
+    });
+    document.getElementById('modPlaySynth')?.addEventListener('click', () => {
+      sfx.init();
+      sfx.playTrackNamed('rock');
+      mod.render();
+    });
+
+    const setModVol = (v) => {
+      sfx.init();
+      sfx.setMusicVolume(v);
+      if (game.settings) {
+        game.settings.music = v;
+        game.saveSettings();
+      }
+      const opt = document.getElementById('optMusic');
+      if (opt) {
+        opt.value = v;
+        if (opt.nextElementSibling) opt.nextElementSibling.textContent = `${Math.round(v * 100)}%`;
+      }
+      mod.render();
+    };
+    document.getElementById('modVol25')?.addEventListener('click', () => setModVol(0.25));
+    document.getElementById('modVol50')?.addEventListener('click', () => setModVol(0.5));
+    document.getElementById('modVol75')?.addEventListener('click', () => setModVol(0.75));
+    document.getElementById('modVol100')?.addEventListener('click', () => setModVol(1.0));
 
     // Monde & Zombies
     document.getElementById('modOpenAllDoorsBtn')?.addEventListener('click', () => mod.openAllDoors());

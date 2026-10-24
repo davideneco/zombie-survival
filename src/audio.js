@@ -89,8 +89,29 @@ export class Sfx {
     this.music = null;
     this.volume = 1;
     this.musicVolume = 0.5;
-    this.mood = { intensity: 0.3, muffled: true };
+    this.mood = { intensity: 0.3, muffled: false };
     this.onTrackChange = null;
+    this._userInteracted = false;
+    this._loadStarted = false;
+
+    // Démarre le contexte et le téléchargement/décodage des morceaux dès le chargement de la page
+    // (le navigateur le laisse en 'suspended' sans erreur jusqu'au premier clic où le son se libère instantanément)
+    try {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (AudioCtx) {
+        const c = this.ctx = new AudioCtx();
+        this._build(c);
+        this._loadTracks().catch((err) => {
+          console.warn('[AUDIO] Échec préchargement morceaux, lancement du rock synthétisé :', err);
+          this.music?.start();
+        });
+        document.addEventListener('visibilitychange', () => {
+          if (document.hidden) c.suspend(); else if (this._userInteracted) c.resume();
+        });
+      }
+    } catch (e) {
+      console.warn('[AUDIO] Pré-initialisation AudioContext différée :', e);
+    }
   }
 
   setVolume(v) {
@@ -105,38 +126,46 @@ export class Sfx {
 
   nextTrack() { return this.music?.nextTrack(); }
   prevTrack() { return this.music?.prevTrack(); }
+  selectTrack(index) { return this.music?.playTrackIndex(index); }
+  playTrackNamed(name) { return this.music?.playTrackNamed(name); }
+  getTracks() { return this.music?.playlist || []; }
   getCurrentTrack() { return this.music?.getCurrentTrack() || { name: 'Aucun', index: 0, total: 0, isCustom: false }; }
 
-  // L'ambiance musicale suit le jeu : intensité 0..1 (manche, finale), étouffée dans les menus et en pause
+  // L'ambiance musicale suit le jeu : intensité 0..1 (manche, finale), étouffée uniquement en pause
   setMood(intensity, muffled) {
     const m = this.mood;
     if (m.intensity !== intensity) { m.intensity = intensity; this.music?.setIntensity(intensity); }
     if (m.muffled !== muffled) { m.muffled = muffled; this.music?.setMuffled(muffled); }
   }
 
-  // À appeler après une interaction utilisateur (clic).
+  // À appeler après une interaction utilisateur (clic, touche).
   init() {
+    this._userInteracted = true;
     if (this.ctx) {
-      if (this.ctx.state === 'suspended') this.ctx.resume();
+      if (this.ctx.state === 'suspended') {
+        this.ctx.resume().catch(() => {});
+      }
       return;
     }
     const c = this.ctx = new (window.AudioContext || window.webkitAudioContext)();
     if (c.state === 'suspended') {
-      c.resume();
+      c.resume().catch(() => {});
     }
     this._build(c);
-    // des morceaux déposés dans public/music/ remplacent le rock synthétisé (s'il n'y en a pas, on lance le rock)
-    this._loadTracks().catch((err) => {
-      console.warn('[AUDIO] Échec chargement morceaux, lancement du rock synthétisé :', err);
-      this.music?.start();
-    });
-    // onglet en arrière-plan : plus de son (et le séquenceur de la musique s'arrête avec l'horloge audio)
+    if (!this._loadStarted) {
+      this._loadTracks().catch((err) => {
+        console.warn('[AUDIO] Échec chargement morceaux, lancement du rock synthétisé :', err);
+        this.music?.start();
+      });
+    }
     document.addEventListener('visibilitychange', () => {
       if (document.hidden) c.suspend(); else c.resume();
     });
   }
 
   async _loadTracks() {
+    if (this._loadStarted) return;
+    this._loadStarted = true;
     const loaded = [];
 
     const fetchCandidate = async (entry) => {
@@ -148,7 +177,7 @@ export class Sfx {
           const buffer = await this.ctx.decodeAudioData(ab);
           console.log(`[AUDIO] Morceau prêt : ${entry.name} (${Math.round(buffer.duration)}s) depuis ${url}`);
           return { name: entry.name, buffer };
-        } catch { /* pas de morceau ou format illisible : on passe au suivant */ }
+        } catch { /* format non trouvé ou illisible : on passe au format/chemin suivant */ }
       }
       return null;
     };
@@ -178,7 +207,6 @@ export class Sfx {
   }
 
   // Chaîne audio : sons -> bus -> compresseur -> volume général ; réverbération partagée ; musique sur le même bus
-  // (le compresseur baisse naturellement la musique à chaque gros bruit)
   _build(c) {
     this.master = c.createGain();
     this.master.gain.value = this.volume;
@@ -210,7 +238,7 @@ export class Sfx {
     this.dist = c.createWaveShaper(); // pour les sons « mordants »
     this.dist.curve = satCurve(4);
     this.dist.connect(this.bus);
-    this.music = new Music(c, this.bus, { noise: this.noiseBuf, reverb: this.verbIn });
+    this.music = new Music(c, this.bus, { noise: this.noiseBuf, reverb: this.verbIn, master: this.master });
     this.music.setVolume(this.musicVolume);
     this.music.setIntensity(this.mood.intensity);
     this.music.setMuffled(this.mood.muffled);
