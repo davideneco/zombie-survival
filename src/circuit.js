@@ -1,13 +1,9 @@
 import * as THREE from 'three';
-import { CONFIG } from './config.js';
 import { Collision } from './collision.js';
 import { NavGrid } from './nav.js';
 import { Levels } from './levels.js';
-import { makeAmmoStation, makePerkMachine, makePackAPunch, makeMysteryBox, makeWallBuy, addPosts } from './machines.js';
 import { parkingLayout, buildParkingDecor } from './parking.js';
 import { makeSkyDome } from './sky.js';
-
-const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
 function canvasTex(w, h, draw, repeatX = 1, repeatY = 1) {
   const c = document.createElement('canvas');
@@ -33,7 +29,11 @@ export async function buildCircuitWorld(scene, renderer, gameRef = null) {
   const sky = new THREE.Group();
   const dome = makeSkyDome(300);
   sky.add(dome.mesh);
-  const skyApi = { group: sky, dome: dome.mesh, setGradient: dome.setGradient, setK: dome.setK, setCloud: dome.setCloud, update: dome.update, stars: null };
+  const skyApi = {
+    group: sky, dome: dome.mesh,
+    setGradient: dome.setGradient, setK: dome.setK, setCloud: dome.setCloud,
+    update: dome.update, stars: null,
+  };
   scene.add(sky);
 
   // ------------------------------------------------------------------ Sol de base (pelouse du circuit)
@@ -123,7 +123,7 @@ export async function buildCircuitWorld(scene, renderer, gameRef = null) {
   ];
   const trackCurve = new THREE.CatmullRomCurve3(trackControlPts, true, 'catmullrom', 0.45);
   const TRACK_SAMPLES = 360;
-  const TRACK_WIDTH = 14.5;
+  const TRACK_WIDTH = 16.0;
   const TRACK_HALF = TRACK_WIDTH * 0.5;
   const samplePts = trackCurve.getSpacedPoints(TRACK_SAMPLES);
   const trackFrames = [];
@@ -135,13 +135,14 @@ export async function buildCircuitWorld(scene, renderer, gameRef = null) {
     const tx = next.x - prev.x, tz = next.z - prev.z;
     const len = Math.hypot(tx, tz) || 1;
     const ux = tx / len, uz = tz / len;
-    // Normale vers la droite de la piste
-    const nx = -uz, nz = ux;
-    // Courbure signée pour placer les vibreurs
+    // Normale vers l'INTÉRIEUR du circuit (droite du sens horaire) : inX = -uz, inZ = ux
+    // Normale vers l'EXTÉRIEUR du circuit (gauche du sens horaire) : outX = uz, outZ = -ux
+    const inX = -uz, inZ = ux;
+    const outX = uz, outZ = -ux;
     const d1x = p.x - prev.x, d1z = p.z - prev.z;
     const d2x = next.x - p.x, d2z = next.z - p.z;
     const curv = (d1x * d2z - d1z * d2x);
-    trackFrames.push({ x: p.x, z: p.z, ux, uz, nx, nz, curv });
+    trackFrames.push({ x: p.x, z: p.z, ux, uz, inX, inZ, outX, outZ, curv });
   }
 
   // Maillage ruban de la piste principale
@@ -156,8 +157,8 @@ export async function buildCircuitWorld(scene, renderer, gameRef = null) {
         const pf = trackFrames[(i - 1) % TRACK_SAMPLES];
         accLen += Math.hypot(f.x - pf.x, f.z - pf.z);
       }
-      const lx = f.x - f.nx * TRACK_HALF, lz = f.z - f.nz * TRACK_HALF;
-      const rx = f.x + f.nx * TRACK_HALF, rz = f.z + f.nz * TRACK_HALF;
+      const lx = f.x + f.outX * TRACK_HALF, lz = f.z + f.outZ * TRACK_HALF;
+      const rx = f.x + f.inX * TRACK_HALF, rz = f.z + f.inZ * TRACK_HALF;
       pos.push(lx, 0.025, lz, rx, 0.025, rz);
       const u = accLen / 12;
       uvs.push(u, 0, u, 1);
@@ -185,57 +186,103 @@ export async function buildCircuitWorld(scene, renderer, gameRef = null) {
   const kerbZones = []; // { x, z, r }
   {
     const kerbMat = new THREE.MeshStandardMaterial({ map: kerbTex, roughness: 0.65, metalness: 0.05 });
-    const kerbGeo = new THREE.BoxGeometry(1.15, 0.07, 2.8);
+    const kerbGeo = new THREE.BoxGeometry(1.15, 0.065, 2.8);
     for (let i = 0; i < TRACK_SAMPLES; i += 1) {
       const f = trackFrames[i];
       if (Math.abs(f.curv) < 0.085) continue;
-      const side = f.curv > 0 ? 1 : -1;
-      const kx = f.x + f.nx * side * (TRACK_HALF + 0.45);
-      const kz = f.z + f.nz * side * (TRACK_HALF + 0.45);
+      const dirX = f.curv > 0 ? f.inX : f.outX;
+      const dirZ = f.curv > 0 ? f.inZ : f.outZ;
+      const kx = f.x + dirX * (TRACK_HALF + 0.45);
+      const kz = f.z + dirZ * (TRACK_HALF + 0.45);
       const m = new THREE.Mesh(kerbGeo, kerbMat);
-      m.position.set(kx, 0.04, kz);
+      m.position.set(kx, 0.038, kz);
       m.rotation.y = Math.atan2(f.ux, f.uz);
       m.receiveShadow = true;
       scene.add(m);
       kerbZones.push({ x: kx, z: kz, r: 1.6 });
     }
 
-    // Banc d'essai de suspension (bandes rugueuses / vibreurs rapprochés au sud du paddock : x = -80..-30, z = 28)
+    // Banc d'essai de suspension (bandes rugueuses / vibreurs rapprochés au sud du paddock : x = -80..-25, z = 28)
     const bumpMat = new THREE.MeshStandardMaterial({ map: kerbTex, roughness: 0.6, metalness: 0.1 });
-    for (let bx = -82; bx <= -28; bx += 2.2) {
-      const bm = new THREE.Mesh(new THREE.BoxGeometry(0.85, 0.08, 6.5), bumpMat);
-      bm.position.set(bx, 0.045, 28);
+    for (let bx = -82; bx <= -26; bx += 2.2) {
+      const bm = new THREE.Mesh(new THREE.BoxGeometry(0.85, 0.075, 7.0), bumpMat);
+      bm.position.set(bx, 0.04, 28);
       bm.castShadow = bm.receiveShadow = true;
       scene.add(bm);
-      kerbZones.push({ x: bx, z: 28, r: 3.4 });
+      kerbZones.push({ x: bx, z: 28, r: 3.6 });
     }
   }
 
-  // ------------------------------------------------------------------ Paddock Asphalté, Pit Lane & Skidpad de Drift
+  // ------------------------------------------------------------------ Paddock Asphalté, Voies d'Accès au Circuit & Skidpad de Drift
   const asphMat = new THREE.MeshStandardMaterial({
     map: asphaltTex, roughness: 0.80, metalness: 0.08,
     polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1,
   });
 
-  // Dalle Paddock + Pit Lane + Piste de Slalom / Suspension (x: -115..85, z: -102..50)
-  const paddockFloor = new THREE.Mesh(new THREE.PlaneGeometry(195, 145), asphMat);
+  // Grande dalle Paddock + Voie des Stands fusionnée directement avec la ligne droite (x: -115..90, z: -115..46)
+  const paddockFloor = new THREE.Mesh(new THREE.PlaneGeometry(205, 161), asphMat);
   paddockFloor.rotation.x = -Math.PI / 2;
-  paddockFloor.position.set(-15, 0.018, -26);
+  paddockFloor.position.set(-12.5, 0.018, -34.5);
   paddockFloor.receiveShadow = true;
   scene.add(paddockFloor);
   blockers.push(paddockFloor);
+
+  // Voie de liaison Sud (relie le Paddock/Skidpad directement à la Chicane Sud : x = -12..12, z = 35..112)
+  const southLink = new THREE.Mesh(new THREE.PlaneGeometry(24, 78), asphMat);
+  southLink.rotation.x = -Math.PI / 2;
+  southLink.position.set(0, 0.02, 74);
+  southLink.receiveShadow = true;
+  scene.add(southLink);
+
+  // Voie de liaison Est (relie le Skidpad directement à la Ligne Droite Est : x = 68..168, z = -12)
+  const eastLink = new THREE.Mesh(new THREE.PlaneGeometry(100, 22), asphMat);
+  eastLink.rotation.x = -Math.PI / 2;
+  eastLink.position.set(118, 0.02, -12);
+  eastLink.receiveShadow = true;
+  scene.add(eastLink);
+
+  // Marquages fléchés au sol vers le Circuit Grand Prix (Accès Ouest x = -55 et Accès Est x = 35)
+  const arrowTex = canvasTex(256, 512, (ctx, w, h) => {
+    ctx.clearRect(0, 0, w, h);
+    ctx.strokeStyle = '#ffd24a';
+    ctx.lineWidth = 10;
+    ctx.setLineDash([28, 20]);
+    ctx.strokeRect(12, 0, w - 24, h);
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#4ade80';
+    for (const y of [110, 250, 390]) {
+      ctx.beginPath();
+      ctx.moveTo(w / 2, y - 48);
+      ctx.lineTo(w / 2 + 58, y + 20);
+      ctx.lineTo(w / 2 + 24, y + 20);
+      ctx.lineTo(w / 2 + 24, y + 54);
+      ctx.lineTo(w / 2 - 24, y + 54);
+      ctx.lineTo(w / 2 - 24, y + 20);
+      ctx.lineTo(w / 2 - 58, y + 20);
+      ctx.closePath();
+      ctx.fill();
+    }
+  });
+  const arrowMat = new THREE.MeshBasicMaterial({
+    map: arrowTex, transparent: true, depthWrite: false,
+    polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3,
+  });
+  for (const ax of [-55, 38]) {
+    const lane = new THREE.Mesh(new THREE.PlaneGeometry(10, 24), arrowMat);
+    lane.rotation.x = -Math.PI / 2;
+    lane.position.set(ax, 0.032, -98);
+    scene.add(lane);
+  }
 
   // Skidpad Circulaire de Drift (x = 32, z = -12, R = 42m) avec anneaux peints
   const skidTex = canvasTex(512, 512, (ctx, w, h) => {
     const cx = w / 2, cy = h / 2;
     ctx.fillStyle = '#22252a';
     ctx.beginPath(); ctx.arc(cx, cy, w * 0.49, 0, Math.PI * 2); ctx.fill();
-    // Traces circulaires de pneus de drift
     ctx.strokeStyle = 'rgba(10,10,12,0.55)';
     ctx.lineWidth = 26;
     ctx.beginPath(); ctx.arc(cx, cy, w * 0.24, 0, Math.PI * 2); ctx.stroke();
     ctx.beginPath(); ctx.arc(cx, cy, w * 0.39, 0, Math.PI * 2); ctx.stroke();
-    // Cercles de repère blanc / rouge / bleu
     ctx.strokeStyle = '#e8ecf2'; ctx.lineWidth = 5;
     ctx.beginPath(); ctx.arc(cx, cy, w * 0.47, 0, Math.PI * 2); ctx.stroke();
     ctx.strokeStyle = '#ff3828'; ctx.lineWidth = 4;
@@ -268,10 +315,11 @@ export async function buildCircuitWorld(scene, renderer, gameRef = null) {
   finishLine.position.set(0, 0.035, -115);
   scene.add(finishLine);
 
+  const steelMat = new THREE.MeshStandardMaterial({ color: 0x22262c, roughness: 0.4, metalness: 0.8 });
+
   // Portique de Départ / Chronométrage au-dessus de x = 0, z = -115
   {
     const gantry = new THREE.Group();
-    const steelMat = new THREE.MeshStandardMaterial({ color: 0x22262c, roughness: 0.4, metalness: 0.8 });
     for (const sz of [-TRACK_HALF - 1.2, TRACK_HALF + 1.2]) {
       const pillar = new THREE.Mesh(new THREE.BoxGeometry(0.7, 6.8, 0.7), steelMat);
       pillar.position.set(0, 3.4, sz);
@@ -288,7 +336,7 @@ export async function buildCircuitWorld(scene, renderer, gameRef = null) {
       ctx.fillStyle = '#101318'; ctx.fillRect(0, 0, w, h);
       ctx.strokeStyle = '#e62424'; ctx.lineWidth = 8; ctx.strokeRect(6, 6, w - 12, h - 12);
       ctx.fillStyle = '#ffffff'; ctx.font = 'bold 46px Impact, Arial, sans-serif'; ctx.textAlign = 'center';
-      ctx.fillText('🏁 STRASBOURG RING — CIRCUIT D\'ESSAIS VÉHICULES 🏁', w / 2, 80);
+      ctx.fillText('🏁 STRASBOURG RING — DÉPART / CHRONO 🏁', w / 2, 80);
     });
     const bannerMat = new THREE.MeshStandardMaterial({ map: bannerTex, emissive: 0x222222, roughness: 0.4 });
     for (const sx of [-0.62, 0.62]) {
@@ -308,13 +356,54 @@ export async function buildCircuitWorld(scene, renderer, gameRef = null) {
       rBulb.position.set(-0.82, 5.34, i * 1.1);
       gantry.add(rBulb);
       const gBulb = new THREE.Mesh(new THREE.SphereGeometry(0.11, 10, 8), greenLightMat);
-      gBulb.position.set(-0.82, 5.05, i * 1.1);
+      gBulb.position.set(-0.82, 5.05, i * 0.0 + i * 1.1);
       gantry.add(gBulb);
     }
     gantry.position.set(0, 0, -115);
     scene.add(gantry);
     lightSources.push({ x: 0, y: 5.5, z: -115, color: 0xffd8a8, intensity: 65, dist: 28 });
   }
+
+  // Portiques lumineux d'indication des accès (Accès Piste Ouest, Accès Piste Est, Accès Drift)
+  const addSignArch = (x, z, rotY, width, title, borderHex = '#22c55e') => {
+    const g = new THREE.Group();
+    for (const sx of [-width / 2, width / 2]) {
+      const post = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.25, 5.4, 12), steelMat);
+      post.position.set(sx, 2.7, 0);
+      g.add(post);
+    }
+    const bar = new THREE.Mesh(new THREE.BoxGeometry(width + 0.6, 1.0, 0.4), steelMat);
+    bar.position.set(0, 5.0, 0);
+    g.add(bar);
+    const sTex = canvasTex(1024, 128, (ctx, w, h) => {
+      ctx.fillStyle = '#0d1520'; ctx.fillRect(0, 0, w, h);
+      ctx.strokeStyle = borderHex; ctx.lineWidth = 10; ctx.strokeRect(6, 6, w - 12, h - 12);
+      ctx.fillStyle = '#ffffff'; ctx.font = 'bold 46px Impact, Arial, sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText(title, w / 2, 82);
+    });
+    const sMat = new THREE.MeshStandardMaterial({ map: sTex, emissive: 0x1a2836, roughness: 0.35 });
+    for (const sz of [-0.22, 0.22]) {
+      const pl = new THREE.Mesh(new THREE.PlaneGeometry(width, 0.92), sMat);
+      pl.position.set(0, 5.0, sz);
+      if (sz < 0) pl.rotation.y = Math.PI;
+      g.add(pl);
+    }
+    g.position.set(x, 0, z);
+    g.rotation.y = rotY;
+    scene.add(g);
+    const c = Math.cos(rotY), s = Math.sin(rotY);
+    for (const sx of [-width / 2, width / 2]) {
+      collision.addCircle(x + c * sx, z - s * sx, 0.3, 5.4);
+    }
+    lightSources.push({ x, y: 4.8, z, color: 0x90f0b0, intensity: 42, dist: 24 });
+  };
+
+  // Portique d'accès direct au circuit juste devant le spawn du joueur (x = -55, z = -98)
+  addSignArch(-55, -98, 0, 13, '⬆️ ACCÈS PISTE GRAND PRIX (ENTRÉE OUEST) ⬆️', '#22c55e');
+  // Portique d'accès Est vers le Virage 1 (x = 38, z = -98)
+  addSignArch(38, -98, 0, 13, '⬆️ ACCÈS PISTE GRAND PRIX (SORTIE STANDS) ⬆️', '#38bdf8');
+  // Portique d'accès Sud vers la Chicane (x = 0, z = 48)
+  addSignArch(0, 48, 0, 14, '⬇️ ACCÈS CIRCUIT SUD (CHICANE S) ⬇️', '#f59e0b');
 
   // ------------------------------------------------------------------ Tribune Principale (face à la ligne de départ, z = -134)
   {
@@ -339,62 +428,63 @@ export async function buildCircuitWorld(scene, renderer, gameRef = null) {
     roof.rotation.x = 0.12;
     roof.castShadow = true;
     stand.add(roof);
-    stand.position.set(0, 0, -131);
+    stand.position.set(0, 0, -133);
     scene.add(stand);
-    collision.addBox(0, -134, 66, 10, 0, 7);
+    collision.addBox(0, -136, 66, 10, 0, 7);
     blockers.push(stand);
   }
 
-  // ------------------------------------------------------------------ Stands / Garages du Paddock (x = -92..-32, z = -88)
+  // ------------------------------------------------------------------ Stands / Garages du Paddock (x = -94..-30, z = -66, ouverts vers le Nord / Circuit !)
   {
     const pitBuilding = new THREE.Group();
     const wallMat = new THREE.MeshStandardMaterial({ color: 0x2c313a, roughness: 0.65, metalness: 0.35 });
     const stripeMat = new THREE.MeshStandardMaterial({ color: 0xd82222, roughness: 0.4, metalness: 0.3 });
     const neonMat = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xd8ecff, emissiveIntensity: 2.4 });
 
-    // Toit et mur du fond des garages
+    // Toit et mur du fond des garages (situés à z = -64, ouverts vers -Z c'est-à-dire face à la piste !)
     const roof = new THREE.Mesh(new THREE.BoxGeometry(64, 0.5, 12), wallMat);
-    roof.position.set(-62, 4.4, -88);
+    roof.position.set(-62, 4.4, -64);
     roof.castShadow = roof.receiveShadow = true;
     pitBuilding.add(roof);
 
     const fascia = new THREE.Mesh(new THREE.BoxGeometry(64.2, 0.65, 12.2), stripeMat);
-    fascia.position.set(-62, 4.75, -88);
+    fascia.position.set(-62, 4.75, -64);
     pitBuilding.add(fascia);
 
+    // Mur du fond côté Sud (z = -58.2) pour que les garages s'ouvrent vers le Nord (vers la piste z = -115 !)
     const backWall = new THREE.Mesh(new THREE.BoxGeometry(64, 4.4, 0.5), wallMat);
-    backWall.position.set(-62, 2.2, -93.8);
+    backWall.position.set(-62, 2.2, -58.2);
     backWall.castShadow = backWall.receiveShadow = true;
     pitBuilding.add(backWall);
-    collision.addBox(-62, -93.8, 64, 0.6, 0, 4.5);
+    collision.addBox(-62, -58.2, 64, 0.6, 0, 4.5);
 
     // Cloisons des 6 boxes de stand + néons au plafond
     for (let i = 0; i <= 6; i++) {
       const gx = -94 + i * 10.66;
       const div = new THREE.Mesh(new THREE.BoxGeometry(0.35, 4.4, 11.5), wallMat);
-      div.position.set(gx, 2.2, -88);
+      div.position.set(gx, 2.2, -64);
       div.castShadow = true;
       pitBuilding.add(div);
-      collision.addBox(gx, -88, 0.4, 11.5, 0, 4.4);
+      collision.addBox(gx, -64, 0.4, 11.5, 0, 4.4);
       if (i < 6) {
         const neon = new THREE.Mesh(new THREE.BoxGeometry(6.5, 0.08, 0.35), neonMat);
-        neon.position.set(gx + 5.33, 4.1, -87.5);
+        neon.position.set(gx + 5.33, 4.1, -64.5);
         pitBuilding.add(neon);
-        lightSources.push({ x: gx + 5.33, y: 3.9, z: -86, color: 0xd8ecff, intensity: 38, dist: 18 });
+        lightSources.push({ x: gx + 5.33, y: 3.9, z: -66, color: 0xd8ecff, intensity: 40, dist: 20 });
       }
     }
     scene.add(pitBuilding);
     blockers.push(pitBuilding);
   }
 
-  // Muret des stands (Pit Wall) entre la ligne droite (-115) et le paddock (-103), de x = -85 à x = 55
+  // Petit Muret des Commissaires (seulement 26m de long entre x = -28 et x = -2 à z = -105) : laisse d'immenses ouvertures à gauche et à droite !
   {
     const pitWallMat = new THREE.MeshStandardMaterial({ color: 0x3a404a, roughness: 0.75 });
-    const pw = new THREE.Mesh(new THREE.BoxGeometry(110, 1.05, 0.55), pitWallMat);
-    pw.position.set(-15, 0.525, -104.5);
+    const pw = new THREE.Mesh(new THREE.BoxGeometry(26, 0.95, 0.55), pitWallMat);
+    pw.position.set(-15, 0.475, -105);
     pw.castShadow = pw.receiveShadow = true;
     scene.add(pw);
-    collision.addBox(-15, -104.5, 110, 0.6, 0, 1.1);
+    collision.addBox(-15, -105, 26, 0.6, 0, 1.0);
     blockers.push(pw);
   }
 
@@ -402,9 +492,9 @@ export async function buildCircuitWorld(scene, renderer, gameRef = null) {
   {
     const coneMat = new THREE.MeshStandardMaterial({ color: 0xff5510, roughness: 0.5 });
     const bandMat = new THREE.MeshStandardMaterial({ color: 0xf4f6fa, roughness: 0.4 });
-    // Ligne de slalom de x = -82 à x = 2, z = -34 (franchissable sans bloquer la voiture, petits cônes visuels)
-    for (let i = 0; i < 10; i++) {
-      const cx = -82 + i * 9.2, cz = -34;
+    // Ligne de slalom de x = -82 à x = -10, z = -12 (cônes souples visuels sans collision bloquante)
+    for (let i = 0; i < 9; i++) {
+      const cx = -82 + i * 9.0, cz = -12;
       const cg = new THREE.Group();
       const c1 = new THREE.Mesh(new THREE.ConeGeometry(0.28, 0.68, 12), coneMat);
       c1.position.y = 0.34; cg.add(c1);
@@ -414,41 +504,34 @@ export async function buildCircuitWorld(scene, renderer, gameRef = null) {
       scene.add(cg);
     }
 
-    // Piles de pneus de sécurité aux abords du paddock et du skidpad
-    const tireColors = [0xd82020, 0xf2f4f8, 0x2068d8, 0x1a1c20];
-    const tireStacks = [
-      [-102, -104], [44, -104], [82, -55], [82, 25], [-102, -55], [-102, 25],
-      [32, -12], // Pilier central du Skidpad de Drift
-    ];
-    for (let s = 0; s < tireStacks.length; s++) {
-      const [tx, tz] = tireStacks[s];
-      const sg = new THREE.Group();
-      const mat = new THREE.MeshStandardMaterial({ color: tireColors[s % tireColors.length], roughness: 0.8 });
-      for (let h = 0; h < 3; h++) {
-        const t = new THREE.Mesh(new THREE.TorusGeometry(0.55, 0.22, 10, 18), mat);
-        t.rotation.x = Math.PI / 2;
-        t.position.y = 0.22 + h * 0.40;
-        t.castShadow = true;
-        sg.add(t);
-      }
-      sg.position.set(tx, 0, tz);
-      scene.add(sg);
-      collision.addCircle(tx, tz, 0.78, 1.3, undefined, 'prop');
+    // Pilier central de pneus au milieu du Skidpad de Drift (x = 32, z = -12)
+    const tireColors = [0xd82020, 0xf2f4f8, 0x2068d8];
+    const sg = new THREE.Group();
+    for (let h = 0; h < 3; h++) {
+      const mat = new THREE.MeshStandardMaterial({ color: tireColors[h % 3], roughness: 0.8 });
+      const t = new THREE.Mesh(new THREE.TorusGeometry(0.55, 0.22, 10, 18), mat);
+      t.rotation.x = Math.PI / 2;
+      t.position.y = 0.22 + h * 0.40;
+      t.castShadow = true;
+      sg.add(t);
     }
+    sg.position.set(32, 0, -12);
+    scene.add(sg);
+    collision.addCircle(32, -12, 0.78, 1.3, undefined, 'prop');
   }
 
-  // ------------------------------------------------------------------ Glissières de sécurité extérieures & Éclairage du circuit
+  // ------------------------------------------------------------------ Glissières de sécurité EXTÉRIEURES & Éclairage du circuit
   {
     const railMat = new THREE.MeshStandardMaterial({ color: 0x8a929e, roughness: 0.45, metalness: 0.78 });
     const poleMat = new THREE.MeshStandardMaterial({ color: 0x22262c, roughness: 0.5, metalness: 0.7 });
     const bulbMat = new THREE.MeshStandardMaterial({ color: 0xfff0d0, emissive: 0xffc870, emissiveIntensity: 2.8 });
 
-    // Glissières sur le bord extérieur de la piste + projecteurs tous les 18 échantillons
+    // Glissières posées sur le BORD EXTÉRIEUR (outX, outZ) de la piste : l'intérieur reste 100% libre d'accès !
     for (let i = 0; i < TRACK_SAMPLES; i += 4) {
       const f = trackFrames[i];
       const fNext = trackFrames[(i + 4) % TRACK_SAMPLES];
-      const ox0 = f.x + f.nx * (TRACK_HALF + 3.2), oz0 = f.z + f.nz * (TRACK_HALF + 3.2);
-      const ox1 = fNext.x + fNext.nx * (TRACK_HALF + 3.2), oz1 = fNext.z + fNext.nz * (TRACK_HALF + 3.2);
+      const ox0 = f.x + f.outX * (TRACK_HALF + 4.0), oz0 = f.z + f.outZ * (TRACK_HALF + 4.0);
+      const ox1 = fNext.x + fNext.outX * (TRACK_HALF + 4.0), oz1 = fNext.z + fNext.outZ * (TRACK_HALF + 4.0);
       const mx = (ox0 + ox1) * 0.5, mz = (oz0 + oz1) * 0.5;
       const segLen = Math.hypot(ox1 - ox0, oz1 - oz0);
       const rail = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.75, segLen + 0.15), railMat);
@@ -458,15 +541,15 @@ export async function buildCircuitWorld(scene, renderer, gameRef = null) {
       scene.add(rail);
       collision.addSegment(ox0, oz0, ox1, oz1, 1.2, 'wall');
 
-      if (i % 20 === 0) {
-        const lx = f.x + f.nx * (TRACK_HALF + 4.2), lz = f.z + f.nz * (TRACK_HALF + 4.2);
+      if (i % 18 === 0) {
+        const lx = f.x + f.outX * (TRACK_HALF + 5.2), lz = f.z + f.outZ * (TRACK_HALF + 5.2);
         const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.10, 0.14, 7.5, 8), poleMat);
         pole.position.set(lx, 3.75, lz);
         scene.add(pole);
         const head = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.25, 0.5), bulbMat);
-        head.position.set(lx - f.nx * 0.8, 7.5, lz - f.nz * 0.8);
+        head.position.set(lx - f.outX * 0.8, 7.5, lz - f.outZ * 0.8);
         scene.add(head);
-        lightSources.push({ x: lx - f.nx * 2, y: 7.2, z: lz - f.nz * 2, color: 0xffd699, intensity: 65, dist: 32 });
+        lightSources.push({ x: lx - f.outX * 2, y: 7.2, z: lz - f.outZ * 2, color: 0xffd699, intensity: 70, dist: 35 });
       }
     }
 
@@ -477,34 +560,36 @@ export async function buildCircuitWorld(scene, renderer, gameRef = null) {
     collision.addSegment(-half, half, -half, -half, 5, 'wall');
   }
 
-  // ------------------------------------------------------------------ Véhicules d'Essais (Toutes les variantes de Voiture GT, Motos, Vélos)
-  const startPos = new THREE.Vector3(-82, 0, -64);
+  // ------------------------------------------------------------------ Véhicules d'Essais (Alignés face à la piste !)
+  // Le joueur apparaît à (-55, 0, -82), face au Nord (yaw = 0) : juste devant la Voiture GT Rouge Corsa et le portique d'accès à la piste !
+  const startPos = new THREE.Vector3(-55, 0, -82);
   const vehicleSpawns = [
-    // 1) Voiture GT Rouge Corsa juste devant le joueur au Paddock
-    { type: 'voiture', x: -75, z: -64, yaw: Math.PI / 2, variant: 0 },
-    // 2) Les 5 autres livrées alignées devant les boxes des stands
-    { type: 'voiture', x: -88, z: -78, yaw: 0, variant: 1 }, // Bleu Alpin
-    { type: 'voiture', x: -77.3, z: -78, yaw: 0, variant: 2 }, // Jaune Racing
-    { type: 'voiture', x: -66.6, z: -78, yaw: 0, variant: 3 }, // Vert Émeraude
-    { type: 'voiture', x: -56.0, z: -78, yaw: 0, variant: 4 }, // Argent GT
-    { type: 'voiture', x: -45.3, z: -78, yaw: 0, variant: 5 }, // Noir Carbone
-    // 3) Voiture GT en Pole Position sur la grille de départ (face à l'Est : yaw = -Math.PI / 2)
+    // 1) Voiture GT Rouge Corsa juste devant le joueur, prête à s'élancer sur le circuit (z = -88 -> z = -115)
+    { type: 'voiture', x: -55, z: -88, yaw: 0, variant: 0 },
+    // 2) Les 6 livrées de Voiture GT exposées devant les 6 boxes des stands (z = -70, tournées vers la piste yaw = 0)
+    { type: 'voiture', x: -88.7, z: -70, yaw: 0, variant: 0 }, // Rouge Corsa
+    { type: 'voiture', x: -78.0, z: -70, yaw: 0, variant: 1 }, // Bleu Alpin
+    { type: 'voiture', x: -67.3, z: -70, yaw: 0, variant: 2 }, // Jaune Racing
+    { type: 'voiture', x: -56.6, z: -70, yaw: 0, variant: 3 }, // Vert Émeraude
+    { type: 'voiture', x: -46.0, z: -70, yaw: 0, variant: 4 }, // Argent GT
+    { type: 'voiture', x: -35.3, z: -70, yaw: 0, variant: 5 }, // Noir Carbone
+    // 3) 2 Voitures GT en Pole Position sur la grille de départ (face à l'Est : yaw = -Math.PI / 2)
     { type: 'voiture', x: -8, z: -112.5, yaw: -Math.PI / 2, variant: 0 },
     { type: 'voiture', x: -16, z: -117.5, yaw: -Math.PI / 2, variant: 1 },
-    // 4) Motos sportives, Grosses Motos & Vélos d'essai au Paddock
-    { type: 'moto', x: -34, z: -78, yaw: 0 },
-    { type: 'moto', x: -30, z: -78, yaw: 0 },
-    { type: 'grosseMoto', x: -25, z: -78, yaw: 0 },
-    { type: 'grosseMoto', x: -20, z: -78, yaw: 0 },
-    { type: 'velo', x: -15, z: -78, yaw: 0 },
-    { type: 'velo', x: -12, z: -78, yaw: 0 },
+    // 4) Motos sportives, Grosses Motos & Vélos d'essai alignés à droite des stands (z = -70, face à la piste)
+    { type: 'moto', x: -24, z: -70, yaw: 0 },
+    { type: 'moto', x: -20, z: -70, yaw: 0 },
+    { type: 'grosseMoto', x: -15, z: -70, yaw: 0 },
+    { type: 'grosseMoto', x: -10, z: -70, yaw: 0 },
+    { type: 'velo', x: -5, z: -70, yaw: 0 },
+    { type: 'velo', x: -2, z: -70, yaw: 0 },
   ];
 
-  // Station Essence & Réparation dans le Paddock
+  // Station Essence & Réparation Gratuite dans le Paddock
   const parkings = [];
   {
     const PK = {
-      zone: 'Circuit & Paddock', x: -62, z: -54, yaw: 0,
+      zone: 'Paddock & Stands', x: -20, z: -86, yaw: 0,
       rect: { w: 10, d: 5 }, slots: [-2.4, -0.8, 0.8, 2.4],
       bays: [],
       pump: { dx: 4.5, dz: 0 },
@@ -519,95 +604,12 @@ export async function buildCircuitWorld(scene, renderer, gameRef = null) {
     });
   }
 
-  // ------------------------------------------------------------------ Machines Zombies, Munitions, Pack-a-Punch & Armes au Paddock
-  const stations = [];
-  const machines = [];
-  const wallWeapons = [];
-
-  // Borne de Munitions
-  {
-    const sx = -96, sz = -64;
-    const g = makeAmmoStation();
-    g.position.set(sx, 0, sz);
-    g.rotation.y = Math.PI / 2;
-    scene.add(g);
-    const [w, d, h] = g.userData.size;
-    collision.addBox(sx, sz, w, d, -g.rotation.y, h);
-    stations.push(new THREE.Vector3(sx, 0, sz));
-    lightSources.push({ x: sx + 1, y: 2.5, z: sz, color: 0x4dff7a, intensity: 10, dist: 9 });
-  }
-
-  // Pack-a-Punch + Boîte Mystère + Distributeurs d'Atouts le long du Paddock Ouest
-  const addMachine = (type, id, x, z, rot = 0) => {
-    let name, price, color, g;
-    if (type === 'perk') {
-      const P = CONFIG.perks[id];
-      name = P.name; price = P.price; color = P.color;
-      g = makePerkMachine(id, P, price);
-    } else if (type === 'pap') {
-      name = 'PACK-A-PUNCH'; price = 5000; color = '#b24bff';
-      g = makePackAPunch();
-    } else {
-      name = 'BOÎTE MYSTÈRE'; price = CONFIG.box.price; color = '#5fb8ff';
-      g = makeMysteryBox();
-    }
-    const [w, d, h] = g.userData.size;
-    g.position.set(x, 0, z);
-    g.rotation.y = rot;
-    scene.add(g);
-    collision.addBox(x, z, w, d, -rot, h);
-    const entry = { type, id, name, price, color, letter: type === 'perk' ? CONFIG.perks[id].letter : null, zone: 0, pos: new THREE.Vector3(x, 0, z), group: g, active: true };
-    machines.push(entry);
-    lightSources.push({ x, y: h + 0.6, z, color: new THREE.Color(color).getHex(), intensity: 9, dist: 9, box: type === 'box' ? entry : null });
-  };
-
-  addMachine('pap', 'pap', -96, -56, Math.PI / 2);
-  addMachine('box', 'box', -96, -49, Math.PI / 2);
-  const perkList = ['juggernog', 'staminup', 'speedcola', 'doubletap', 'quickrevive', 'phdflopper', 'mulekick'];
-  perkList.forEach((pid, idx) => {
-    addMachine('perk', pid, -92 + idx * 4.5, -44, 0);
-  });
-
-  // Quelques armes sur panneaux au paddock
-  const wallList = ['rifle', 'mp5', 'shotgun', 'deagle', 'sniper', 'm249'];
-  wallList.forEach((wid, idx) => {
-    const W = CONFIG.weapons[wid];
-    if (!W) return;
-    const wx = -54 + idx * 4.2, wz = -44;
-    const g = makeWallBuy(wid, W.name, W.price, 0xffaa44);
-    addPosts(g);
-    g.position.set(wx, 0, wz);
-    g.rotation.y = 0;
-    scene.add(g);
-    collision.addBox(wx, wz, 1.6, 0.2, 0, 2.2);
-    wallWeapons.push({ id: wid, name: W.name, price: W.price, ammoPrice: W.ammoPrice, pos: new THREE.Vector3(wx, 0, wz + 0.6), zone: 0 });
-  });
-
-  const boxes = machines.filter((m) => m.type === 'box');
-  function setActiveBox(i) {
-    boxes.forEach((b, k) => { b.active = k === i; b.group.visible = b.active; });
-  }
-  setActiveBox(0);
-
-  // ------------------------------------------------------------------ Grille de Navigation & Apparition des Zombies
+  // ------------------------------------------------------------------ Grille de Navigation & Collisions
   collision.build();
   levels.build();
   levels.buildNavs(NavGrid, collision);
   const nav = new NavGrid(halfX, halfZ, collision, [], 1.5, 0.45);
   nav.build();
-
-  const pickGround = (px, pz, minD = 16, maxD = 36) => {
-    for (let t = 0; t < 60; t++) {
-      const a = Math.random() * Math.PI * 2;
-      const d = minD + Math.random() * (maxD - minD);
-      const x = clamp(px + Math.cos(a) * d, -half + 10, half - 10);
-      const z = clamp(pz + Math.sin(a) * d, -half + 10, half - 10);
-      const ix = nav.cx(x), iz = nav.cz(z);
-      if (!nav.inside(ix, iz) || nav.blocked[nav.idx(ix, iz)]) continue;
-      return new THREE.Vector3(x, 0, z);
-    }
-    return new THREE.Vector3(px + 20, 0, pz);
-  };
 
   // ------------------------------------------------------------------ Mini-carte 2D du Circuit (mapImage)
   const MAP_SCALE = 1.0;
@@ -618,15 +620,17 @@ export async function buildCircuitWorld(scene, renderer, gameRef = null) {
     const x = mapImage.getContext('2d');
     x.fillStyle = '#1b2819';
     x.fillRect(0, 0, W, Hh);
-    // Paddock
+    // Paddock & Liaisons
     x.fillStyle = '#2d3138';
-    x.fillRect((-112 + halfX) * MAP_SCALE, (-98 + halfZ) * MAP_SCALE, 195 * MAP_SCALE, 145 * MAP_SCALE);
+    x.fillRect((-115 + halfX) * MAP_SCALE, (-115 + halfZ) * MAP_SCALE, 205 * MAP_SCALE, 161 * MAP_SCALE);
+    x.fillRect((-12 + halfX) * MAP_SCALE, (35 + halfZ) * MAP_SCALE, 24 * MAP_SCALE, 78 * MAP_SCALE);
+    x.fillRect((68 + halfX) * MAP_SCALE, (-23 + halfZ) * MAP_SCALE, 100 * MAP_SCALE, 22 * MAP_SCALE);
     // Skidpad
     x.fillStyle = '#353a42';
     x.beginPath();
     x.arc((32 + halfX) * MAP_SCALE, (-12 + halfZ) * MAP_SCALE, 42 * MAP_SCALE, 0, Math.PI * 2);
     x.fill();
-    // Ruban du circuit
+    // Ruban du circuit Grand Prix
     x.strokeStyle = '#484f5a';
     x.lineWidth = TRACK_WIDTH * MAP_SCALE;
     x.lineCap = 'round'; x.lineJoin = 'round';
@@ -639,7 +643,7 @@ export async function buildCircuitWorld(scene, renderer, gameRef = null) {
     x.stroke();
     // Ligne départ
     x.strokeStyle = '#ff3828';
-    x.lineWidth = 3;
+    x.lineWidth = 4;
     x.beginPath();
     x.moveTo((0 + halfX) * MAP_SCALE, (-115 - TRACK_HALF + halfZ) * MAP_SCALE);
     x.lineTo((0 + halfX) * MAP_SCALE, (-115 + TRACK_HALF + halfZ) * MAP_SCALE);
@@ -684,16 +688,45 @@ export async function buildCircuitWorld(scene, renderer, gameRef = null) {
     return 0;
   };
 
+  // Zones indicatives affichées sous la boussole
+  const ZONE_NAMES = [
+    'Paddock & Stands',
+    'Ligne Droite Départ / Arrivée',
+    'Aire de Drift (Skidpad)',
+    'Banc d\'Essai Suspension',
+    'Courbe Rapide Est & Épingle',
+    'Chicane Sud',
+    'Grande Parabolique Ouest',
+  ];
+  const zoneOf = (x, z) => {
+    if (z < -102 && x >= -130 && x <= 130) return 1;
+    if (Math.hypot(x - 32, z + 12) <= 44) return 2;
+    if (x >= -90 && x <= -20 && z >= 15 && z <= 42) return 3;
+    if (x > 90) return 4;
+    if (z > 80) return 5;
+    if (x < -115) return 6;
+    return 0;
+  };
+
   return {
+    isCircuitTest: true,
     half, blockers, spawnPoints: [], windowSpawns: [],
     pickWindow: () => null,
-    pickGround,
-    stationPos: stations[0], stations, wallWeapons,
+    pickGround: () => null,
+    stationPos: null, stations: [], wallWeapons: [],
     vehicleSpawns, parkings, bikeStations: [], bikeCheck: [],
     doors: [], openDoor: () => false,
-    zoneOf: () => 0, startPos, nav, collision, machines, boxes, setActiveBox,
-    zoneNames: ['Circuit & Paddock'],
-    zoneCenters: [{ name: 'Circuit & Paddock', x: 0, z: 0 }],
+    zoneOf, startPos, nav, collision, machines: [], boxes: [], setActiveBox: () => {},
+    zoneNames: ZONE_NAMES,
+    zoneCenters: [
+      { name: 'Paddock & Stands', x: -55, z: -82 },
+      { name: 'Ligne Droite Départ / Arrivée', x: -8, z: -115 },
+      { name: 'Aire de Drift (Skidpad)', x: 32, z: -12 },
+      { name: 'Banc d\'Essai Suspension', x: -55, z: 28 },
+      { name: 'Courbe Rapide Est & Épingle', x: 130, z: 32 },
+      { name: 'Chicane Sud', x: 0, z: 106 },
+      { name: 'Grande Parabolique Ouest', x: -165, z: 0 },
+    ],
     startZone: 0, sealedPoints: [],
     mapImage,
     mapView: { halfX, halfZ, scale: MAP_SCALE },
@@ -706,7 +739,7 @@ export async function buildCircuitWorld(scene, renderer, gameRef = null) {
     floorAt: (x, z, y, out) => levels.floorAt(x, z, y, out),
     collide: (pos, r, out, ignore) => collision.resolve(pos, r, out, ignore),
     rayHit: (ox, oy, oz, dx, dy, dz, maxT) => collision.rayHit(ox, oy, oz, dx, dy, dz, maxT),
-    ceilingAt: (x, z) => (x >= -94 && x <= -30 && z >= -94 && z <= -82 ? 4.3 : Infinity),
+    ceilingAt: (x, z) => (x >= -94 && x <= -30 && z >= -70 && z <= -58 ? 4.3 : Infinity),
     kerbAt,
     update(px, pz, dt) {
       sky.position.set(px, 0, pz);
@@ -721,9 +754,9 @@ export async function buildCircuitWorld(scene, renderer, gameRef = null) {
           const isBest = lapTime < bestLap;
           if (isBest) bestLap = lapTime;
           const msg = `⏱️ TOUR : ${lapTime.toFixed(2)} s${isBest ? ' — RECORD DU TOUR !' : ` (Meilleur : ${bestLap.toFixed(2)} s)`}`;
-          hud?.announce?.(msg);
+          hud?.announce?.('CHRONO CIRCUIT', msg, 3500);
         } else {
-          hud?.popup?.('🏁 CHRONO LANCÉ — BON TOUR !');
+          hud?.popup?.('🏁 CHRONO LANCÉ — BON TOUR !', 'bonus');
         }
         lapActive = true;
         lapTime = 0;

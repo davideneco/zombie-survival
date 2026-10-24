@@ -108,7 +108,14 @@ export class Vehicle {
     if (this.state === 'wreck') {
       this.speed = 0; this.dyaw = 0; this.throttle = 0;
       this.wreckT -= dt;
-      if (this.wreckT <= 0) { this.state = 'gone'; this.group.visible = false; return; }
+      if (this.wreckT <= 0) {
+        if (g.world?.isCircuitTest && !g.isClient) {
+          g.respawnVehicle(this);
+          if (g.isMultiplayer) g.net?.send({ t: 'v_respawn', id: this.id });
+          return;
+        }
+        this.state = 'gone'; this.group.visible = false; return;
+      }
     } else if (local) this.drive(dt); else this.follow(dt);
     if (this.state !== 'wreck') this.dyaw = angDiff(this.yaw, prevYaw);
     this.apply(dt);
@@ -935,23 +942,25 @@ export function installVehicles(game, { world, hud, sfx, scene }) {
     // Ce que la borne ferait pour la moto : { cost (pts), missing (PV), liters }
     serviceOf(v) {
       const missing = Math.max(0, v.maxHp - v.hp), liters = v.hasTank ? Math.max(0, v.def.tank - v.fuel) : 0;
-      return { missing, liters, cost: Math.ceil(missing * R().damage.repairPrice + liters * R().fuel.pricePerL - 1e-6) };
+      const rawCost = Math.ceil(missing * R().damage.repairPrice + liters * R().fuel.pricePerL - 1e-6);
+      return { missing, liters, cost: world.isCircuitTest ? 0 : rawCost, needed: rawCost > 0 };
     },
     pumpPrompt(np) {
-      if (!np.v) return 'Borne du parking : aucune moto à portée (8 m)';
+      if (!np.v) return 'Borne du stand : aucun véhicule à portée (8 m)';
       const sv = this.serviceOf(np.v), name = np.v.def.name;
-      if (sv.cost <= 0) return `${name} : plein fait, en parfait état`;
+      if (!sv.needed) return `${name} : plein fait, en parfait état`;
+      if (world.isCircuitTest) return `${game.binds.tag('interact')} Plein + réparation ${name} : GRATUIT (essence ${Math.round(np.v.fuelFrac * 100)} % · PV ${Math.round(np.v.hpFrac * 100)} %)`;
       return `${game.binds.tag('interact')} Plein + réparation ${name} : ${sv.cost} pts (essence ${Math.round(np.v.fuelFrac * 100)} % · PV ${Math.round(np.v.hpFrac * 100)} %)`;
     },
     usePump(np) {
       const v = np.v;
       if (!v) { sfx.deny(); return; }
       const sv = this.serviceOf(v);
-      if (sv.cost <= 0) return;
+      if (!sv.needed) return;
       if (this.points < sv.cost) { sfx.deny(); return; }
       this.points -= sv.cost; // le client paie d'abord (comme les portes) : l'hôte rembourse s'il refuse
       sfx.buy();
-      hud.announce(v.def.name, `Plein + réparation : −${sv.cost} pts`, 2200);
+      hud.announce(v.def.name, world.isCircuitTest ? 'Plein + réparation : GRATUIT' : `Plein + réparation : −${sv.cost} pts`, 2200);
       if (this.isClient) this.net?.send({ t: 'v_service', id: v.id, paid: sv.cost });
       else this.hostService(v.id, null, sv.cost);
     },
@@ -985,7 +994,7 @@ export function installVehicles(game, { world, hud, sfx, scene }) {
       const refund = (pts) => { if (pts <= 0) return; if (pid == null) this.points += pts; else this.net?.send({ t: 'v_refund', pts }, pid); };
       if (!v || !v.usable || !v.hasTank) { refund(paid); return; }
       const sv = this.serviceOf(v);
-      if (sv.cost <= 0 || sv.cost > paid) { refund(paid); return; } // déjà en parfait état, ou plus abîmée depuis : on rend tout
+      if (!sv.needed || sv.cost > paid) { refund(paid); return; } // déjà en parfait état, ou plus abîmée depuis : on rend tout
       v.hp = v.maxHp;
       this.flushVehicleHp(v);
       this.setFuel(v, v.def.tank, true);

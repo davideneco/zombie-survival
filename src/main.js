@@ -767,7 +767,7 @@ const game = {
     this.boxMove = null;
   },
   resetBox() {
-    if (!world.boxes) return;
+    if (!world.boxes?.length) return;
     world.setActiveBox(Math.max(0, world.boxes.findIndex((b) => b.zone === world.startZone)));
     this.boxUses = 0;
     this.boxLimit = 1 + Math.floor(Math.random() * CONFIG.box.maxUses);
@@ -890,8 +890,8 @@ const game = {
 
   nearStation() {
     const p = this.player.pos;
-    for (const s of world.stations || [world.stationPos]) {
-      if (Math.hypot(p.x - s.x, p.z - s.z) < 3.2) return true;
+    for (const s of world.stations || (world.stationPos ? [world.stationPos] : [])) {
+      if (s && Math.hypot(p.x - s.x, p.z - s.z) < 3.2) return true;
     }
     return false;
   },
@@ -1205,12 +1205,18 @@ const game = {
       if (this.player) this.player.statDowns = 0;
       this.round = 0;
     }
-    this.intermission = (this.isHost || !this.isMultiplayer) ? 2 : 0;
+    this.intermission = (!world.isCircuitTest && (this.isHost || !this.isMultiplayer)) ? 2 : 0;
     this.toSpawn = 0;
     this.buffs.instaKill = 0;
     this.buffs.doublePoints = 0;
     this.player.reset();
     this.resetVehicles?.();
+    if (world.isCircuitTest) {
+      for (const id of ['round', 'points', 'stats', 'perks', 'crosshair']) {
+        const el = document.getElementById(id);
+        if (el) el.style.display = 'none';
+      }
+    }
   },
 
   gameOver() {
@@ -1295,8 +1301,8 @@ const game = {
     this.updateMiniBar(dt);
     this.updateFinale(dt);
 
-    // Gestion des manches (Hôte ou Solo UNIQUEMENT) — en pause pendant l'Heure du Jugement
-    if ((this.isHost || !this.isMultiplayer) && !this.finale) {
+    // Gestion des manches (Hôte ou Solo UNIQUEMENT) — en pause pendant l'Heure du Jugement ou sur le circuit de test
+    if (!world.isCircuitTest && (this.isHost || !this.isMultiplayer) && !this.finale) {
       const alive = this.zombies.filter((z) => !z.dead).length;
       if (this.toSpawn > 0) {
         this.spawnTimer -= dt;
@@ -2341,7 +2347,10 @@ function precompileShaders() {
 precompileShaders();
 
 game.reset(true);
-hud.showMenu('ZOMBIE SURVIVAL', `${world.mapName}<br>Survivez seul ou en coopération.`);
+hud.showMenu(
+  world.isCircuitTest ? 'CIRCUIT DE TEST' : 'ZOMBIE SURVIVAL',
+  world.isCircuitTest ? `${world.mapName}<br>Piste Grand Prix, Aire de Drift & Banc de Suspension.` : `${world.mapName}<br>Survivez seul ou en coopération.`
+);
 
 // Mode debug : ?debug&x=0&z=0&yaw=0&pitch=0
 const q = new URLSearchParams(location.search);
