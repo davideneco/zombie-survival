@@ -15,7 +15,7 @@ const VERSION := 3
 const FIELDS := ["games", "wins", "best_round", "best_kills", "best_points", "best_time", "total_time", "total_kills"]
 const ZONE_FIELDS := ["games", "escapes", "best_round", "best_kills", "best_points", "best_time", "fastest"]
 const MODE_FIELDS := ["games", "best_round", "best_kills", "best_points", "best_time", "total_time"]
-const MODES := ["timed", "arsenal"]   ## GameMode.TIMED, GameMode.ARSENAL
+const MODES := ["timed", "arsenal", "alpine"]   ## GameMode.TIMED, GameMode.ARSENAL ; v0.34.0 : "alpine" = Classique sur la Station des Aiguilles
 
 var path := DEFAULT_PATH
 var by_diff: Dictionary = {}

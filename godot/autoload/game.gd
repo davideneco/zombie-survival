@@ -172,11 +172,14 @@ func new_game(seed_value: int = -1, map: String = "", weapons: Array = [], prelo
 		world = null
 		collision = arena.collision
 	else:
-		world = preloaded if preloaded is World else World.load_world()   # preloaded : chargé sur un fil de travail pendant l'écran de chargement
+		if map_name == "alpine":   # v0.34.0 : Station des Aiguilles (sim/alpine_map.gd)
+			world = preloaded if preloaded is World and (preloaded as World).map_id == "alpine" else AlpineMap.load_map()
+		else:
+			world = preloaded if preloaded is World else World.load_world()   # preloaded : chargé sur un fil de travail pendant l'écran de chargement
 		arena = null
 		collision = world.collision
 	gm = null
-	if world != null and GameMode.valid(mode) == GameMode.ZONE:   # v0.26.0 : Zone unique (portes murées, sortie, machines de base)
+	if world != null and world.map_id == "strasbourg" and GameMode.valid(mode) == GameMode.ZONE:   # v0.26.0 : Zone unique (portes murées, sortie, machines de base)
 		gm = GameMode.new(GameMode.ZONE, zone_pick)
 		if not gm.setup(world):
 			push_warning("Zone unique : zone %d invalide, partie classique" % zone_pick)
@@ -213,7 +216,9 @@ func new_game(seed_value: int = -1, map: String = "", weapons: Array = [], prelo
 	director.reset()
 	zombies.clear()
 	shake = 0.0
-	rides = Rides.new(self) if world != null else null
+	rides = (Rides.new(self, AlpineMap.rides_data()) if world.map_id == "alpine" else Rides.new(self)) if world != null else null
+	if rides != null and world.map_id == "alpine":
+		AlpineMap.dress_vehicles(rides)
 	unstick = Unstick.new() if world != null else null
 	if unstick != null:
 		unstick.done.connect(func(a: Vector2, b: Vector2, d: float, c: bool) -> void:
@@ -229,7 +234,7 @@ func new_game(seed_value: int = -1, map: String = "", weapons: Array = [], prelo
 	env.levels = world.levels if world != null and not world.levels.links.is_empty() else null
 	env.rng = rng
 	env.rides = rides
-	finale = FinaleSim.new(self) if world != null else null
+	finale = (AlpineFinale.new(self) if world.map_id == "alpine" else FinaleSim.new(self)) if world != null else null
 	finale_done = false
 	eternal = false
 	daynight = DayNight.new()
@@ -827,9 +832,11 @@ func _spawn_zombie() -> void:
 		if zi >= 0:
 			zname = world.zone_names[zi]
 		var IK: Dictionary = Z["ironKnight"]
-		knight = r >= int(IK["fromRound"]) and zname == String(IK["zone"]) and _count_kind("armored") < int(IK["maxAlive"]) and rng.randf() < float(IK["chance"])
+		var kz := String(world.objects.get("knightZone", IK["zone"]))   # v0.34.0 : zones propres à la carte alpine
+		var pz: Array = world.objects.get("pestZones", Z["pestilent"]["zones"])
+		knight = r >= int(IK["fromRound"]) and zname == kz and _count_kind("armored") < int(IK["maxAlive"]) and rng.randf() < float(IK["chance"])
 		var PE: Dictionary = Z["pestilent"]
-		pest = not knight and r >= int(PE["fromRound"]) and (PE["zones"] as Array).has(zname) and _count_kind("bloat") < int(PE["maxAlive"]) and rng.randf() < float(PE["chance"])
+		pest = not knight and r >= int(PE["fromRound"]) and pz.has(zname) and _count_kind("bloat") < int(PE["maxAlive"]) and rng.randf() < float(PE["chance"])
 	var jitter: Array = Rules.SPAWN_SPEED_JITTER
 	var spd := director.zombie_speed * (float(jitter[0]) + rng.randf() * float(jitter[1]))
 	if not knight and not pest and r >= int(Z["runnerRound"]) and rng.randf() < float(Z["runnerChance"]):

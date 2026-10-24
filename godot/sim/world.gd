@@ -34,6 +34,7 @@ var windows := PackedFloat64Array()
 var window_busy := PackedFloat64Array()  ## busyUntil de chaque fenêtre
 var _win_grid: Dictionary = {}
 var load_ms := 0
+var map_id := "strasbourg"               ## v0.34.0 : "strasbourg" (monde cuit) ou "alpine" (Station des Aiguilles, construite par AlpineMap)
 
 static func _json(path: String) -> Variant:
 	return JSON.parse_string(FileAccess.get_file_as_string(path))
@@ -124,6 +125,11 @@ func _load() -> void:
 		doors.append(d)
 	# les cases bloquées « par une porte » restent bloquées dans le fichier (portes fermées) ; on retrouve l'indice de porte des segments
 	windows = FileAccess.get_file_as_bytes(DIR + "windows.f64").to_float64_array()
+	index_windows()
+
+## Grille de rangement des fenêtres (pick_window) et leurs délais ; à rappeler si `windows` change (AlpineMap).
+func index_windows() -> void:
+	_win_grid.clear()
 	window_busy.resize(windows.size() / WIN_STRIDE)
 	window_busy.fill(0.0)
 	for i in windows.size() / WIN_STRIDE:

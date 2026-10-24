@@ -14,3 +14,6 @@ roof_slate: Poly Haven "roof_slates_02" (https://polyhaven.com/a/roof_slates_02)
 roof_clay: Poly Haven "clay_roof_tiles_02" (https://polyhaven.com/a/clay_roof_tiles_02), CC0 1.0
 ground_grass: Poly Haven "leafy_grass" (https://polyhaven.com/a/leafy_grass), CC0 1.0
 ground_paving: Poly Haven "rectangular_paving" (https://polyhaven.com/a/rectangular_paving), CC0 1.0
+ground_snow: Poly Haven "snow_02" (https://polyhaven.com/a/snow_02), CC0 1.0
+wall_fieldstone: Poly Haven "stone_wall" (https://polyhaven.com/a/stone_wall), CC0 1.0
+rock_cliff: Poly Haven "rock_face" (https://polyhaven.com/a/rock_face), CC0 1.0

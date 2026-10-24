@@ -40,6 +40,15 @@ const WORLD_LIGHT_MASK := 0xFFFFF & ~(1 << 19)   ## toutes les couches sauf cell
 var moon: DirectionalLight3D
 var sky_mat: ShaderMaterial
 var arena := false
+## v0.34.0 : Station des Aiguilles : brouillard de montagne (plus léger et plus clair que celui de la ville, les sommets restent visibles),
+## renforcé par la tempête de neige (`storm` 0..1, posé chaque image par alpine_view.gd).
+var alpine := false
+var storm := 0.0
+const ALP_FOG := ["16202e", "c9aaa0", "dfe6ee"]
+const ALP_DENSITY := [0.0105, 0.0075, 0.0042]
+const ALP_STORM_FOG := Color("aeb8c4")
+var _alp_fog_d := 0.0105
+var _alp_fog_c := Color("16202e")
 var sky_k := 0.0                    ## 0 nuit, 0,5 aube, 1 jour (J10 : l'Acte V repeint le ciel)
 var zone_k := {"exposure": 1.0, "env": 1.0, "torch": 1.0}
 var zone_name := ""
@@ -179,6 +188,12 @@ func _set_atmosphere(k: float) -> void:
 
 ## Le brouillard de profondeur de Godot vaut smoothstep(début, fin, d) x densité (mesuré sur des quads blancs, voir docs/GODOT_PORT.md J9). Avec début 0, fin = 1,65 / densité
 ## et courbe 1, il suit le brouillard exponentiel carré de Three.js 1 - exp(-(d x densité)^2) à 0,07 près (écart maximal à 70 m ; 0,00 à 0 m et à 100 m).
+## v0.34.0 : brouillard de la station : celui du ciel, épaissi et blanchi par la tempête.
+func _apply_storm() -> void:
+	var s := clampf(storm, 0.0, 1.0)
+	env.fog_light_color = _alp_fog_c.lerp(ALP_STORM_FOG.darkened(0.75 * (1.0 - sky_k)), s * 0.7)
+	_set_fog(_alp_fog_d * (1.0 + 3.2 * s))
+
 func _set_fog(density: float) -> void:
 	env.fog_density = 1.0
 	env.fog_depth_begin = 0.0
@@ -409,11 +424,16 @@ func set_sky_k(k: float, hour := -1.0) -> void:
 	_hemi_k = _pick_n(SKY_HEMI, k)
 	_last_brightness = -1.0   # relance le calcul de l'ambiance avec la nouvelle intensité
 	env.fog_light_color = _pick_c(SKY_FOG, k)
+	if alpine:
+		_alp_fog_c = _pick_c(ALP_FOG, k)
+		_alp_fog_d = _pick_n(ALP_DENSITY, k)
 	_set_atmosphere(k)
 	# v0.32.0 : de jour le brouillard du JS (0,011 : opaque à 150 m, image laiteuse) est ramené à DAY_FOG_K : brume légère, la ville reste lisible jusqu'au bout de la portée
 	# des tuiles (180 m, plan lointain de la caméra : ~85 % de brume, la coupure se fond dans le ciel). (La réduction de v0.24.5 était écrasée par l'appel suivant : elle n'a jamais agi.) Nuit inchangée.
 	var day_cut := 0.0 if _dbg_fogday else (1.0 - DAY_FOG_K) * _sm(clampf((k - 0.2) / 0.5, 0.0, 1.0))
 	_set_fog(_pick_n(SKY_DENSITY, k) * (1.15 if arena else 1.0) * (1.0 - day_cut))
+	if alpine:
+		_apply_storm()
 	if cycle:
 		# une seule lumière directionnelle : le soleil au-dessus de l'horizon, la lune dessous ; chacune s'éteint en s'approchant de l'horizon (le relais se fait à énergie nulle,
 		# l'ambiance du ciel porte le crépuscule)
@@ -491,6 +511,8 @@ func _tick(dt: float) -> void:
 	for key: String in ["exposure", "env", "torch"]:
 		zone_k[key] += (float(Z[key]) - float(zone_k[key])) * k
 	_follow_cycle()
+	if alpine:
+		_apply_storm()
 	apply_exposure()
 	_update_torch()
 	# l'ombre de la lune suit le joueur (lumière à (25, 55, 15) de la cible) : l'orientation est fixe, seul le volume d'ombre suit la caméra

@@ -12,14 +12,14 @@ const DEFAULTS := {
 	"cinema": true, "halo": true, "char": 0, "name": "Joueur",
 	"upscaler": 0, "res_scale": 0, "sharp": 0.9, "aa": 0, "aniso": 0, "fps": false,   ## v0.19.1 « Mise à l'échelle » : 0 natif (bilinéaire), 1 FSR 1.0, 2 FSR 2.2 ; indice de RES_SCALES ; netteté 0..1
 	"daynight": 0, "day_minutes": 14, "view": 0,   ## v0.25.0 : cycle jour / nuit (DayNight : 0 Auto, 1 Toujours nuit, 2 Toujours jour), minutes réelles pour 24 h de jeu, vue à pied (0 première, 1 troisième personne)
-	"difficulty": "normal", "map": "strasbourg",   ## menu « Carte et difficulté » (v0.14.0) : voir Difficulty ; carte : "strasbourg" ou "arena"
+	"difficulty": "normal", "map": "strasbourg",   ## menu « Carte et difficulté » (v0.14.0) : voir Difficulty ; carte : "strasbourg", "alpine" (v0.34.0) ou "arena"
 	"mode": "classic", "zone": 0,   ## v0.26.0 : menu « Mode de jeu » : GameMode ("classic" | "zone" | "timed" | "arsenal", v0.33.0) et zone choisie (indice 0..26)
 }
 ## bornes des curseurs (index.html : optBrightness…)
 const RANGES := {
 	"brightness": [0.6, 3.0, 0.05], "fov": [60.0, 110.0, 1.0], "sens": [0.3, 3.0, 0.05], "quality": [0, 2, 1], "daynight": [0, 2, 1], "day_minutes": [4, 30, 1], "view": [0, 1, 1], "upscaler": [0, 2, 1], "res_scale": [0, 4, 1], "sharp": [0.0, 1.0, 0.05], "aa": [0, 4, 1], "aniso": [0, 3, 1], "volume": [0.0, 1.0, 0.05], "music": [0.0, 1.0, 0.05],
 }
-const MAPS := ["strasbourg", "arena"]
+const MAPS := ["strasbourg", "alpine", "arena"]   ## v0.34.0 : "alpine" = Station des Aiguilles (sim/alpine_map.gd)
 const ZONE_COUNT := 27   ## zones de la carte de Strasbourg (objects.json) : borne du réglage "zone"
 const VIEW_NAMES := ["1re personne", "3e personne"]
 const QUALITY_NAMES := ["Rapide", "Normale", "Haute"]

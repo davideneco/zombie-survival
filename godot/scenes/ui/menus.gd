@@ -13,7 +13,7 @@ signal quit_requested
 
 const MapView := preload("res://scenes/ui/map_view.gd")
 const Backdrop := preload("res://scenes/ui/menu_backdrop.gd")
-const MAP_NAMES := {"strasbourg": "STRASBOURG", "arena": "ARÈNE DE TEST"}
+const MAP_NAMES := {"strasbourg": "STRASBOURG", "alpine": "STATION DES AIGUILLES", "arena": "ARÈNE DE TEST"}
 
 var stack := UiStack.new()
 var settings: Settings
@@ -295,9 +295,11 @@ func _build_mapdiff(col: Control) -> void:
 	mrow.alignment = BoxContainer.ALIGNMENT_CENTER
 	mrow.add_theme_constant_override("separation", 12)
 	p.add_child(mrow)
-	var descs := {"strasbourg": "La Grande Île au complet : portes, machines, véhicules, tram, cathédrale et fin de partie.", "arena": "Petite arène plate pour essayer les armes : pas de ville, de machines ni de véhicules."}
+	var descs := {"strasbourg": "La Grande Île au complet : portes, machines, véhicules, tram, cathédrale et fin de partie.",
+		"alpine": "Station de ski abandonnée en hiver : chalets, hôtel, église, télésiège, lac gelé, motoneiges, tempête et nuit. 6 zones.",
+		"arena": "Petite arène plate pour essayer les armes : pas de ville, de machines ni de véhicules."}
 	for m: String in Settings.MAPS:
-		_map_cards[m] = _card(mrow, "%s\n%s" % [MAP_NAMES[m], descs[m]], 340, 100, func() -> void: settings.set_value("map", m))
+		_map_cards[m] = _card(mrow, "%s\n%s" % [MAP_NAMES[m], descs[m]], 300, 112, func() -> void: settings.set_value("map", m))
 	_hint(p, "DIFFICULTÉ (vie et vitesse des zombies)")
 	var drow := HBoxContainer.new()
 	drow.alignment = BoxContainer.ALIGNMENT_CENTER
@@ -306,8 +308,12 @@ func _build_mapdiff(col: Control) -> void:
 	for d: Dictionary in Difficulty.LIST:
 		var id: String = d["id"]
 		_diff_cards[id] = _card(drow, "%s\n%s" % [d["name"], d["desc"]], 224, 110, func() -> void: settings.set_value("difficulty", id))
-	_hint(p, "Les statistiques sont comptées par difficulté (Strasbourg seulement). Les modes Zone unique, Contre la montre et Arsenal aléatoire se jouent toujours sur Strasbourg.")
+	_hint(p, "Statistiques par difficulté : Strasbourg ; la Station des Aiguilles a ses records à part. Zone unique : Strasbourg seulement ; Contre la montre et Arsenal aléatoire : Strasbourg ou la station.")
 	_btn(p, "RETOUR", func() -> void: _back(), "GoButton", 240)
+
+## v0.34.0 : nom d'une ligne « autres modes » des statistiques ("alpine" : Classique sur la Station des Aiguilles).
+static func _stat_mode_name(mid: String) -> String:
+	return "STATION DES AIGUILLES" if mid == "alpine" else GameMode.name_of(mid)
 
 func _refresh_mapdiff() -> void:
 	for m: String in _map_cards:
@@ -759,9 +765,9 @@ func _render_stats() -> void:
 	for mid: String in GameStats.MODES:
 		var me: Dictionary = st.by_mode.get(mid, {})
 		if me.is_empty() or int(me["games"]) <= 0:
-			ml.append("[color=#ffd24a]%s[/color] : [color=#888888]aucune partie[/color]" % GameMode.name_of(mid))
+			ml.append("[color=#ffd24a]%s[/color] : [color=#888888]aucune partie[/color]" % _stat_mode_name(mid))
 			continue
-		ml.append("[color=#ffd24a]%s[/color] : %d partie%s · %s pts · manche %d · %d tués · %s" % [GameMode.name_of(mid), int(me["games"]), "s" if int(me["games"]) > 1 else "",
+		ml.append("[color=#ffd24a]%s[/color] : %d partie%s · %s pts · manche %d · %d tués · %s" % [_stat_mode_name(mid), int(me["games"]), "s" if int(me["games"]) > 1 else "",
 			_thousands(int(me["best_points"])), int(me["best_round"]), int(me["best_kills"]), GameStats.format_time(float(me["best_time"]))])
 	_zone_stats.text = "[center][b]ZONE UNIQUE[/b] (meilleurs scores par zone)\n%s\n[b]AUTRES MODES[/b] (meilleurs scores)\n%s[/center]" % [("\n".join(zl) if not zl.is_empty() else "[color=#888888]Aucune partie en Zone unique.[/color]"), "\n".join(ml)]
 	_stats_note.text = "Aucune partie enregistrée pour le moment." if st.total_games() == 0 else "Enregistrées à la fin de chaque partie (mort, victoire, ou retour au menu). Fichier : %s" % ProjectSettings.globalize_path(st.path)

@@ -17,6 +17,7 @@ const ZombieView := preload("res://scenes/zombie_view.gd")
 const ZombieModelView := preload("res://scenes/zombie_model_view.gd")
 const ARENA := preload("res://scenes/world/arena.tscn")
 const WORLD := preload("res://scenes/world/world.tscn")
+const AlpineView := preload("res://scenes/world/alpine_view.gd")   # v0.34.0 : Station des Aiguilles
 const HUD := preload("res://scenes/ui/hud.tscn")
 const Menus := preload("res://scenes/ui/menus.gd")
 const WeaponView := preload("res://scenes/weapon_view.gd")
@@ -436,9 +437,12 @@ func _connect_perf_events() -> void:
 func _map_choice() -> String:
 	if _map != "":
 		return _map
-	if _mode_choice() != GameMode.CLASSIC:   # v0.26.0 / v0.33.0 : Zone unique, Contre la montre, Arsenal : toujours sur la carte de Strasbourg
+	var m := String(Game.settings.get_value("map"))
+	if _mode_choice() == GameMode.ZONE:   # v0.26.0 : Zone unique : toujours sur la carte de Strasbourg
 		return "strasbourg"
-	return String(Game.settings.get_value("map"))
+	if _mode_choice() != GameMode.CLASSIC and m == "arena":   # v0.33.0 / v0.34.0 : Contre la montre, Arsenal : Strasbourg ou la station alpine
+		return "strasbourg"
+	return m
 
 func _mode_choice() -> String:
 	return GameMode.valid(_mode_arg if _mode_arg != "" else String(Game.settings.get_value("mode")))
@@ -473,7 +477,7 @@ func _start_session() -> void:
 	await _step(0.0)
 	# 1. données de la carte sur un fil de travail (l'interface continue d'animer fond et barre)
 	var th := Thread.new()
-	th.start(func() -> Object: return Arena.load_arena() if map == "arena" else World.load_world())
+	th.start(func() -> Object: return Arena.load_arena() if map == "arena" else (AlpineMap.load_map() if map == "alpine" else World.load_world()))
 	var tw := Time.get_ticks_msec()
 	while th.is_alive():
 		await _progress(_flow.step_text(), 1.0 - exp(-(Time.get_ticks_msec() - tw) / 700.0))
@@ -588,6 +592,10 @@ func _record_stats() -> void:
 		var zb := Game.stats.record_zone(Game.gm.zone_name, Game.difficulty, Game.round_number, Game.kills, Game.points_earned, Game.time, Game.escaped)
 		print("statistiques Zone unique (%s) : manche %d, %d tués, %d points gagnés, %.0f s, évasion %s ; records battus : %s" % [Game.gm.zone_name, Game.round_number, Game.kills, Game.points_earned, Game.time, Game.escaped, zb])
 		return
+	if Game.timed == null and Game.arsenal == null and Game.world != null and Game.world.map_id == "alpine":   # v0.34.0 : Classique de la station alpine : à part
+		var ab := Game.stats.record_mode("alpine", Game.difficulty, Game.round_number, Game.kills, Game.points_earned, Game.time)
+		print("statistiques Station des Aiguilles : manche %d, %d tués, %d points gagnés, %.0f s ; records battus : %s" % [Game.round_number, Game.kills, Game.points_earned, Game.time, ab])
+		return
 	if Game.timed != null or Game.arsenal != null:   # v0.33.0 : Contre la montre, Arsenal aléatoire : à part
 		var mb := Game.stats.record_mode(Game.mode_id(), Game.difficulty, Game.round_number, Game.kills, Game.points_earned, Game.time)
 		print("statistiques %s : manche %d, %d tués, %d points gagnés, %.0f s ; records battus : %s" % [GameMode.name_of(Game.mode_id()), Game.round_number, Game.kills, Game.points_earned, Game.time, mb])
@@ -638,7 +646,10 @@ func _build_scene_nodes(map: String) -> void:
 	add_child(_camera)
 	_graphics = GraphicsView.new()
 	add_child(_graphics)
+	_graphics.alpine = map == "alpine"   # v0.34.0 : neige, brouillard de montagne, vent
 	_graphics.setup(_camera, map == "arena")
+	if map == "alpine":
+		_camera.far = 900.0   # les montagnes autour de la station (le brouillard de montagne est plus léger que celui de la ville)
 	if _sky_arg >= 0.0:
 		_graphics.dbg_sky = _sky_arg
 		_graphics.set_sky_k(_sky_arg)
@@ -673,7 +684,10 @@ func _build_scene_nodes(map: String) -> void:
 	if not ZombieModels.use_old:
 		ZombieModels.warm()   # J16 : instances de zombies prêtes à l'avance (pas d'à-coup à la première apparition)
 	_hud_last = {"banner": "", "bar": {}, "mark": "", "fanal": -2.0, "fanal_text": ""}
-	_arena_node = (WORLD if Game.world != null else ARENA).instantiate()
+	if Game.world != null and Game.world.map_id == "alpine":
+		_arena_node = AlpineView.new()
+	else:
+		_arena_node = (WORLD if Game.world != null else ARENA).instantiate()
 	add_child(_arena_node)
 
 func _finish_scene(_map_name: String) -> void:

@@ -29,6 +29,9 @@ const GODOT_TEXTURES = {
   roof_clay: 'clay_roof_tiles_02',        // tuiles rouges
   ground_grass: 'leafy_grass',            // v0.32.3 : pelouses des places et pieds d'arbres
   ground_paving: 'rectangular_paving',    // v0.32.3 : dalles des trottoirs
+  ground_snow: 'snow_02',                 // v0.34.0 : station alpine : neige au sol, sur les toits et les rebords
+  wall_fieldstone: 'stone_wall',          // v0.34.0 : soubassements en moellons des chalets, église, murets
+  rock_cliff: 'rock_face',                // v0.34.0 : falaises et éboulis autour de la station
 };
 if (process.argv.includes('--godot')) {
   const out = path.join('godot', 'assets', 'pbr_src'); // sources .jpg (ignorées par Godot : .gdignore) ; tools/pack-pbr.py écrit godot/assets/pbr/*/{a,m}.png

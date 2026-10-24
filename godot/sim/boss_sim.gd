@@ -136,6 +136,8 @@ func damage(amount: float, _head: bool, hit: Dictionary = {}) -> bool:
 		health = float(T[1]) * mx
 		if ctx.want_leap:
 			begin_leap()
+		else:   # v0.34.0 : fin de partie sans tour (Station des Aiguilles) : la phase III se joue sur place
+			_enter_phase(3)
 	elif phase == 3 and health < float(T[2]) * mx:
 		health = float(T[2]) * mx
 		enrage()
