@@ -66,6 +66,9 @@ var _engine_gain := 0.0
 var _engine_pitch := 1.0
 var _music_players: Array[AudioStreamPlayer] = []
 var _music_cur := 0
+var playlist_enabled := true   ## false : boucles de rock cuites (tests)
+var _playlist: Array[AudioStream] = []
+var _playlist_i := 0
 var _music_streams: Dictionary = {}
 var _mute_fx: Tween
 var _lp_index := -1
@@ -672,7 +675,13 @@ func start_music() -> void:
 			add_child(p)
 			_music_players.append(p)
 	custom_music = find_custom_track()
-	if custom_music != null:
+	_playlist.clear()
+	if playlist_enabled:
+		_playlist = _load_playlist()
+	if custom_music == null and not _playlist.is_empty():
+		_play_playlist_track(0)
+		music_level = -1
+	elif custom_music != null:
 		_music_players[0].stream = custom_music
 		_music_players[0].volume_db = -30.0
 		_music_players[0].play()
@@ -697,8 +706,37 @@ func set_mood(new_intensity: float, new_muffled: bool) -> void:
 func current_level() -> int:
 	return AudioRules.music_level(intensity, lull)
 
+## Morceaux de la liste de lecture (playlist_N.ogg, fournis par l'utilisateur) : joués à la suite, en boucle, à la place des boucles de rock.
+func _load_playlist() -> Array[AudioStream]:
+	var out: Array[AudioStream] = []
+	for i in range(1, 9):
+		var path := "%splaylist_%d.ogg" % [MUSIC_DIR, i]
+		if ResourceLoader.exists(path):
+			var s := load(path) as AudioStream
+			if s != null:
+				out.append(s)
+	return out
+
+func _play_playlist_track(i: int) -> void:
+	_playlist_i = i % _playlist.size()
+	var old := _music_players[_music_cur]
+	var nxt := _music_players[1 - _music_cur]
+	nxt.stream = _playlist[_playlist_i]
+	nxt.volume_db = -40.0
+	nxt.play()
+	_tween_vol(nxt, 0.0, 2.0)
+	if old.playing:
+		_tween_vol(old, -60.0, 2.0, true)
+	_music_cur = 1 - _music_cur
+	if not nxt.finished.is_connected(_on_playlist_finished):
+		nxt.finished.connect(_on_playlist_finished.bind(nxt))
+
+func _on_playlist_finished(p: AudioStreamPlayer) -> void:
+	if p == _music_players[_music_cur] and not _playlist.is_empty():
+		_play_playlist_track(_playlist_i + 1)
+
 func _refresh_music() -> void:
-	if not music_started or custom_music != null:
+	if not music_started or custom_music != null or not _playlist.is_empty():
 		return
 	var level := current_level()
 	if level == music_level:

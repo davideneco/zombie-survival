@@ -26,3 +26,6 @@ godot/assets/pbr_src/
 godot/assets/pbr/*/*.png
 tools/charlib/__pycache__/
 godot/data/city_details.bin
+
+# musique fournie par l utilisateur (droits non verifies) : jamais commitee
+godot/assets/audio/music/playlist_*

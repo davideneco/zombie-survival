@@ -438,6 +438,9 @@ func _custom_track(t: Node) -> void:
 	Sfx.set_mood(0.55, false)
 	t.check(not Sfx.muffled and Sfx.muffle_target()["hz"] == 20000.0 and Sfx.intensity == 0.55, "partie : musique ouverte")
 	# démarrage réel de la musique : un lecteur par niveau joué, bouclé
+	Sfx.playlist_enabled = false
+	Sfx.music_started = false
+	Sfx.music_level = -1
 	Sfx.start_music()
 	t.check(Sfx.music_started and Sfx.custom_music == null and Sfx.music_level == AudioRules.music_level(0.55, false), "musique lancée au niveau %d" % Sfx.music_level)
 	var cur: AudioStreamPlayer = Sfx._music_players[Sfx._music_cur]

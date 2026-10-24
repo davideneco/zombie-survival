@@ -1256,3 +1256,7 @@ Signalé par un joueur (Windows, Radeon RX 7700 XT, écran 3440x1440, export `to
 - **Ce qui reste du chargement** : surtout la compilation des shaders et des pipelines au premier emploi (sur le fil principal dans le modèle de rendu de Godot utilisé), les constructions par code (cathédrale, nez de la rame, boîtes, mobilier) et le préchauffage.
 - **Non vérifié** : Windows, la carte AMD et l'écran 3440 x 1440 du joueur (aucun ici) ; le `.pck` exporté n'a pas été refait pour ces versions. Le journal `--startup-log` (`diagnostic-demarrage.bat`) donne maintenant le détail de chaque étape du chargement et chaque image lente : c'est ce qu'il faudra demander au joueur.
 
+
+## v0.34.9 — Playlist de l'utilisateur
+
+La musique de fond est remplacée par deux morceaux fournis par l'utilisateur (« jeaux davide », « Midnight Lurch »), convertis en Ogg Vorbis (`assets/audio/music/playlist_1.ogg`, `playlist_2.ogg`), joués à la suite en boucle avec un fondu enchaîné de 2 s (`Sfx._load_playlist`). Si ces fichiers sont absents, les boucles de rock cuites reviennent ; `theme.*` garde la priorité. Les fichiers ne sont PAS commités (droits non vérifiés, `.gitignore`) : ils sont seulement dans l'export local. Le niveau d'intensité n'agit plus sur la musique tant que la playlist est active.
