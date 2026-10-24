@@ -24,7 +24,7 @@ import { wreckMaterial } from './vehicleModels.js';
 import { installLauncher } from './launcher.js';
 import { makeDisplay } from './weaponDisplay.js';
 import { installUi } from './ui.js';
-import { installDebugMenu } from './debugMenu.js';
+import { installModMenu } from './modMenu.js';
 import { installUnstick } from './unstick.js';
 import { installKeybinds } from './keybinds.js';
 import { installKeysMenu } from './keysMenu.js';
@@ -1409,8 +1409,6 @@ const game = {
     const fanalPrompt = this.fanalPrompt?.();
     if (fanalPrompt && !p.vehicle) promptText = fanalPrompt;
     if (!promptText && p.vaultReady && !p.vault) promptText = `${game.binds.tag('jump')} Enjamber`;
-    const unstickPrompt = this.unstick?.prompt();
-    if (unstickPrompt && !p.vehicle) promptText = unstickPrompt; // coincé : l'invite de déblocage passe avant les autres
     hud.prompt(promptText);
   },
 };
@@ -1430,7 +1428,7 @@ installTram(game, { world, scene, hud, sfx });
 installTramWalk(game, { world, hud, sfx }); // intérieur praticable de la rame (v0.40.0)
 RemotePlayer.rideOf = (id) => game.rideById(id); // coéquipiers debout dans une rame : leur position est dans le repère de la rame
 installLauncher(game, { world, scene, fx });
-installDebugMenu(game, { world, hud, sfx });
+installModMenu(game, { world, hud, sfx });
 installUnstick(game, { world, hud, sfx });
 game.initVehicles();
 game.initTrams();
@@ -2072,6 +2070,10 @@ hud.el.optionsPanel.addEventListener('click', (e) => e.stopPropagation());
 document.getElementById('btnPlay').addEventListener('click', () => hud.showPanel('menuPanel'));
 document.getElementById('btnOptions').addEventListener('click', () => openOptions('titlePanel'));
 document.getElementById('btnPauseOptions').addEventListener('click', () => openOptions('pausePanel'));
+document.getElementById('btnModMenu')?.addEventListener('click', () => {
+  hud.hideOverlay();
+  game.modMenu?.show();
+});
 document.getElementById('btnOptBack').addEventListener('click', () => hud.showPanel(game.ui.optionsBack));
 document.getElementById('btnResume').addEventListener('click', () => lockAndPlay());
 document.getElementById('btnModeBack').addEventListener('click', (e) => {

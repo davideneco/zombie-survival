@@ -651,7 +651,6 @@ CONFIG.keybinds = [
   { id: 'tramGong', group: 'Équipement', label: 'Gong du tram (attire les zombies)', def: 'key:h', kind: 'key', ctx: 'moto' },
   { id: 'tramDoors', group: 'Équipement', label: 'Portes du tram (ouvrir / fermer)', def: 'key:o', kind: 'key', ctx: 'moto' },
   { id: 'tramSwitch', group: 'Équipement', label: 'Aiguillage du tram : tout droit / dévié (conducteur)', def: 'key:b', kind: 'key', ctx: 'moto' },
-  { id: 'unstick', group: 'Équipement', label: 'Se débloquer (maintenir)', def: 'key:k', kind: 'key', ctx: 'foot' },
   { id: 'chat', group: 'Équipement', label: 'Chat écrit (multijoueur) : ouvrir la saisie', def: 'code:Enter', kind: 'key', ctx: 'all' },
 ];
 // Chat écrit (v0.42.0, src/chat.js ; le relais server/rooms.mjs applique les mêmes limites, il ne fait pas confiance au client) :
@@ -667,11 +666,11 @@ CONFIG.fixedKeys = [
   ['Molette', 'Changer d\'arme'],
   ['Clic molette', 'Lance-grenades (fusil d\'assaut PaP III)'],
   ['Échap', 'Pause · fermer la carte ou un menu'],
-  ['F9', 'Menu debug (hôte uniquement)'],
+  ['F9', 'Menu Mods & Triche (Admin, téléportation, armes, atouts, etc.)'],
 ];
 // Touches réservées : refusées à la capture (le navigateur ou le jeu s'en sert)
 CONFIG.reservedKeys = {
-  Escape: 'Échap annule la capture', F9: 'F9 ouvre le menu debug de l\'hôte', F5: 'F5 recharge la page', F11: 'F11 gère le plein écran', F12: 'F12 ouvre les outils du navigateur',
+  Escape: 'Échap annule la capture', F9: 'F9 ouvre le menu mods & triche', F5: 'F5 recharge la page', F11: 'F11 gère le plein écran', F12: 'F12 ouvre les outils du navigateur',
   MetaLeft: 'cette touche appartient au système', MetaRight: 'cette touche appartient au système', ContextMenu: 'cette touche appartient au système',
 };
 

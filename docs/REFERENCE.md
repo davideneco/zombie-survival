@@ -1,6 +1,6 @@
 # Zombie Survival — fiche de référence
 
-Version du jeu : **v0.48.0** (package 0.48.0). Générée automatiquement par `node tools/make-docs.mjs` à partir de `src/config.js` et du jeu.
+Version du jeu : **v0.49.0** (package 0.49.0). Générée automatiquement par `node tools/make-docs.mjs` à partir de `src/config.js` et du jeu.
 Carte annotée : [carte.png](carte.png). Armes de profil : [armes.png](armes.png). Les mêmes tableaux en tableur : dossier [csv/](csv/).
 
 Pour demander une modification, citez la ligne (ex. « Mitrailleuse RPK : chargeur 100 », « Mastodonte à 3000 pts », « porte P3 à 500 pts », « mettre la boîte mystère dans la zone Temple-Neuf »).
@@ -538,7 +538,7 @@ Prix d'une porte : le plus cher des deux prix de zone (colonne « Prix de la por
 | Portes (touche) | O : conducteur ; sinon, quand personne ne conduit, n'importe quel occupant (via l'hôte) | H : gong depuis l'intérieur aussi |
 | Zombies | ne rentrent pas dans la rame et ne la traversent pas | une porte ouverte les attire (ils se massent devant, à 0,55 m de la caisse) ; ils frappent le joueur à moins de 1,3 m ; ailleurs la caisse encaisse (2 PV) |
 | Tir, grenades, couteau, réanimation | comme à pied | la grenade garde la vitesse de la rame, ignore la caisse et rebondit sur le plancher ; pas de fente du couteau |
-| Menu debug (F9), déblocage | F9 : l'hôte rejoint un coéquipier debout dans la rame (repère local) ; K : replace dans l'allée | un joueur téléporté sort de la rame |
+| Menu mods / triche (F9) | F9 : menu mods et téléportation (coéquipiers, zones, armes, atouts, déblocage) | accessible en jeu et depuis le menu pause |
 
 ## Tram : l'aiguillage du nœud de Homme de Fer (croisement des lignes A / D et B / C / F)
 
@@ -639,7 +639,7 @@ Prix d'une porte : le plus cher des deux prix de zone (colonne « Prix de la por
 | Hache du Bourreau | dégâts x3, touche 2 zombies | récompense de la finale : remplace le couteau |
 | Points | 10 par touche, 100 par mort |  |
 
-## Enjambement et déblocage
+## Enjambement
 
 | Réglage | Valeur | Unité / remarque |
 |---|---|---|
@@ -648,7 +648,6 @@ Prix d'une porte : le plus cher des deux prix de zone (colonne « Prix de la por
 | Enjambables (hauteur <= 1,15 m) | banc, poubelle, jardinière, caisse seule, borne, vélos (profondeur <= 1,3 m), sacs de sable, barrière de foule, bloc béton |  |
 | On marche dessus | palette (0,2 m) |  |
 | Non enjambables | voiture, fontaine, chalet, caisses empilées, porte payante, barricade scellée, parapet de quai, machines, bornes de munitions, garde-corps de la cathédrale |  |
-| Se débloquer (K) | maintenir 2 s | l'invite apparaît si une touche de déplacement est maintenue 4 s sans avancer de 0,5 m, ou après 3 s dans une poche fermée ; arrivée à moins de 40 m dans une zone ouverte (sinon centre de zone) ; recharge 30 s ; impossible en moto, à terre, à l'étage |
 
 ## Commandes (touches par défaut, modifiables dans Options > Touches)
 
@@ -673,13 +672,12 @@ Prix d'une porte : le plus cher des deux prix de zone (colonne « Prix de la por
 | B (en tram, conducteur) | Aiguillage : tout droit / dévié au nœud de l'Homme de Fer |
 | F | Lampe torche |
 | Espace (devant un obstacle bas) | Enjamber |
-| K (maintenir 2 s, si coincé) | Se débloquer |
 | V (à pied) | Coup de couteau (aussi : clic gauche quand le chargeur et la réserve sont vides) |
 | M | Carte |
 | Clic molette | Lance-grenades sous le canon (fusil d'assaut Pack-a-Punch niveau III) |
 | Entrée | Chat écrit (multijoueur) : ouvre la saisie en bas à gauche ; Entrée envoie, Échap annule ; aucune autre touche n'agit pendant la saisie (200 caractères, 5 messages par 4 s ; option « Afficher le chat » dans Options) |
-| Échap | Ferme la saisie du chat, la carte ou le menu debug ; sinon menu pause (reprise : Échap, ou clic si le navigateur refuse) ; ferme aussi la capture d'une touche dans Options > Touches |
-| F9 (hôte) | Menu debug de l'hôte : 1-4 joueur, T deux fois amener, Y rejoindre, N réanimer, U débloquer les zombies, P perfs |
+| Échap | Ferme la saisie du chat, la carte ou le menu mods ; sinon menu pause (reprise : Échap, ou clic si le navigateur refuse) ; ferme aussi la capture d'une touche dans Options > Touches |
+| F9 | Menu Mods & Triche : godmode, munitions infinies, téléportation, armes (PaP 0-III), atouts, points, portes, zombies |
 
 ### Notes
 

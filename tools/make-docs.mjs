@@ -210,7 +210,7 @@ table('23_tram_interieur', 'Tram : l\'intérieur praticable (on marche dans la r
   ['Portes (touche)', `${kn0('tramDoors')} : conducteur ; sinon, quand personne ne conduit, n'importe quel occupant (via l'hôte)`, `${kn0('tramGong')} : gong depuis l'intérieur aussi`],
   ['Zombies', 'ne rentrent pas dans la rame et ne la traversent pas', `une porte ouverte les attire (ils se massent devant, à ${fr2(TW.doorSpot)} m de la caisse) ; ils frappent le joueur à moins de 1,3 m ; ailleurs la caisse encaisse (${TR.zombieHit} PV)`],
   ['Tir, grenades, couteau, réanimation', 'comme à pied', 'la grenade garde la vitesse de la rame, ignore la caisse et rebondit sur le plancher ; pas de fente du couteau'],
-  ['Menu debug (F9), déblocage', `F9 : l'hôte rejoint un coéquipier debout dans la rame (repère local) ; ${kn0('unstick')} : replace dans l'allée`, 'un joueur téléporté sort de la rame']]);
+  ['Menu mods / triche (F9)', 'F9 : menu mods et téléportation (coéquipiers, zones, armes, atouts, déblocage)', 'accessible en jeu et depuis le menu pause']]);
 // ---- tram : les aiguillages (v0.41.0)
 const TJ = TR.junction, jct = (await import(path.join(ROOT, 'src/tramTrack.js'))).buildJunction(TJ, TNET.byId);
 table('24_tram_aiguillages', `Tram : l'aiguillage du nœud de ${TJ.name} (croisement des lignes A / D et B / C / F)`, ['Réglage', 'Valeur', 'Remarque'], [
@@ -273,14 +273,13 @@ table('17_couteau', 'Couteau (toujours disponible, hors inventaire)', ['Réglage
   ['Bourreau', `${KN.boss.dmg} fixes`, `x ${String(Fn.boss.sens.front).replace('.', ',')} de face, x ${Fn.boss.sens.back} dans le dos (les mêmes sensibilités que les balles)`],
   ['Hache du Bourreau', `dégâts x${KN.axe.dmgMult}, touche ${1 + KN.axe.extra} zombies`, 'récompense de la finale : remplace le couteau'],
   ['Points', `${KN.points.hit} par touche, ${KN.points.kill} par mort`, '']]);
-const VA = C.vault, US = C.unstick, fr1 = (n) => String(n).replace('.', ',');
-table('18_enjambement_deblocage', 'Enjambement et déblocage', ['Réglage', 'Valeur', 'Unité / remarque'], [
+const VA = C.vault, fr1 = (n) => String(n).replace('.', ',');
+table('18_enjambement', 'Enjambement', ['Réglage', 'Valeur', 'Unité / remarque'], [
   ['Enjambement', `${kn0('jump')} face à un obstacle enjambable`, `à moins de ${fr1(VA.reach)} m, de face (moins de ${VA.maxAngle}°), profondeur traversée ${fr1(VA.maxDepth)} m au plus, case d'arrivée libre à ±${fr1(VA.heightTol)} m, dans une zone OUVERTE (jamais de contournement d'une porte payante)`],
   ['Durée', fr1(VA.time), `s (caméra +${fr1(VA.camLift)} m, arme baissée, pas de tir)`],
   ['Enjambables (hauteur <= 1,15 m)', 'banc, poubelle, jardinière, caisse seule, borne, vélos (profondeur <= 1,3 m), sacs de sable, barrière de foule, bloc béton', ''],
   ['On marche dessus', 'palette (0,2 m)', ''],
-  ['Non enjambables', 'voiture, fontaine, chalet, caisses empilées, porte payante, barricade scellée, parapet de quai, machines, bornes de munitions, garde-corps de la cathédrale', ''],
-  [`Se débloquer (${kn0('unstick')})`, `maintenir ${US.holdTime} s`, `l'invite apparaît si une touche de déplacement est maintenue ${US.stuckAfter} s sans avancer de ${fr1(US.moveMin)} m, ou après ${US.trapAfter} s dans une poche fermée ; arrivée à moins de ${US.maxDist} m dans une zone ouverte (sinon centre de zone) ; recharge ${US.cooldown} s ; impossible en moto, à terre, à l'étage`]]);
+  ['Non enjambables', 'voiture, fontaine, chalet, caisses empilées, porte payante, barricade scellée, parapet de quai, machines, bornes de munitions, garde-corps de la cathédrale', '']]);
 const kn = kn0;
 table('14_commandes', 'Commandes (touches par défaut, modifiables dans Options > Touches)', ['Touche par défaut', 'Action'], [
   ['Options > Touches', 'Change toutes les touches ci-dessous, sauf souris, molette, Échap et F9 (réglage local, gardé sur l\'appareil ; échange proposé si une touche est déjà prise)'],
@@ -289,12 +288,12 @@ table('14_commandes', 'Commandes (touches par défaut, modifiables dans Options 
   [kn('interact'), 'Acheter, ouvrir une porte, utiliser une machine ou la borne des motos, réanimer (maintenir), monter / descendre d\'une moto ou d\'un vélo'],
   [`ZQSD / ${kn('forward')}${kn('left')}${kn('back')}${kn('right')} (en moto ou à vélo)`, 'Accélérer, freiner / reculer, tourner'], [`${kn('jump')} (en moto ou à vélo)`, 'Frein à main (frein à vélo)'], [`${kn('vehicleView')} (en moto ou à vélo)`, 'Vue à la 3e personne / à la 1re personne'],
   [`${kn('forward')}${kn('back')} / ${kn('jump')} (en tram, conducteur)`, 'Accélérer / frein de service puis marche arrière ; frein d\'urgence'], [`${kn('tramDoors')} / ${kn('tramGong')} (en tram)`, 'Ouvrir ou fermer les portes (conducteur, à l\'arrêt) ; gong qui attire les zombies'], [`${kn('tramSwitch')} (en tram, conducteur)`, 'Aiguillage : tout droit / dévié au nœud de l\'Homme de Fer'],
-  [kn('torch'), 'Lampe torche'], [`${kn('jump')} (devant un obstacle bas)`, 'Enjamber'], [`${kn('unstick')} (maintenir 2 s, si coincé)`, 'Se débloquer'],
+  [kn('torch'), 'Lampe torche'], [`${kn('jump')} (devant un obstacle bas)`, 'Enjamber'],
   [`${kn('knife')} (à pied)`, 'Coup de couteau (aussi : clic gauche quand le chargeur et la réserve sont vides)'], [kn('map'), 'Carte'],
   ['Clic molette', 'Lance-grenades sous le canon (fusil d\'assaut Pack-a-Punch niveau III)'],
   [kn('chat'), 'Chat écrit (multijoueur) : ouvre la saisie en bas à gauche ; Entrée envoie, Échap annule ; aucune autre touche n\'agit pendant la saisie (200 caractères, 5 messages par 4 s ; option « Afficher le chat » dans Options)'],
-  ['Échap', 'Ferme la saisie du chat, la carte ou le menu debug ; sinon menu pause (reprise : Échap, ou clic si le navigateur refuse) ; ferme aussi la capture d\'une touche dans Options > Touches'],
-  ['F9 (hôte)', 'Menu debug de l\'hôte : 1-4 joueur, T deux fois amener, Y rejoindre, N réanimer, U débloquer les zombies, P perfs']]);
+  ['Échap', 'Ferme la saisie du chat, la carte ou le menu mods ; sinon menu pause (reprise : Échap, ou clic si le navigateur refuse) ; ferme aussi la capture d\'une touche dans Options > Touches'],
+  ['F9', 'Menu Mods & Triche : godmode, munitions infinies, téléportation, armes (PaP 0-III), atouts, points, portes, zombies']]);
 
 // ------------------------------------------------------------------ CSV (séparateur ; , virgule décimale, UTF-8 avec BOM pour Excel)
 for (const f of fs.readdirSync(CSV)) if (f.endsWith('.csv')) fs.rmSync(path.join(CSV, f));

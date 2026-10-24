@@ -106,39 +106,13 @@ export function installUnstick(game, { world, hud, sfx }) {
     return true;
   };
 
-  // Appelé à chaque image (joueur local)
+  // Appelé à chaque image : détection automatique désactivée au profit du Menu Mods (F9)
   st.update = (dt) => {
-    const p = game.player, K = p.keys;
-    st.cool = Math.max(0, st.cool - dt);
-    const ok = game.started && game.playing && !game.over && !p.vehicle && !p.downed && !p.dead && !p.vault && !p.region;
-    if (!ok) { st.t = 0; st.trapT = 0; st.stuck = false; st.holdT = 0; return; }
-    const held = game.binds.anyMove(K);
-    if (!held || Math.hypot(p.pos.x - st.ref.x, p.pos.z - st.ref.z) >= U.moveMin) { st.t = 0; st.ref.x = p.pos.x; st.ref.z = p.pos.z; }
-    else st.t += dt;
-    // poche fermée : vérifiée 2 fois par seconde (étiquette de la composante, calculée une fois par ouverture de porte)
-    st.trapCheck -= dt;
-    if (st.trapCheck <= 0) {
-      st.trapCheck = 0.5;
-      const main = st.main(), l = p.onTram ? main : st.labelAt(p.pos.x, p.pos.z), n = nav(); // (debout dans une rame : pas de poche de la grille)
-      // seules les petites poches comptent : l'intérieur de la cathédrale, par exemple, forme de grandes composantes séparées de la ville
-      const small = l !== main && (l === 0 || n.components().sizes[l] * n.cell * n.cell < U.pocketMaxArea);
-      st.trapT = small ? st.trapT + 0.5 : 0;
-    }
-    const wasStuck = st.stuck;
-    st.stuck = st.t >= U.stuckAfter || st.trapT >= U.trapAfter;
-    if (st.stuck && !wasStuck) console.info('[UNSTICK] joueur coincé en', p.pos.x.toFixed(1), p.pos.z.toFixed(1), st.t >= U.stuckAfter ? '(touche maintenue sans avancer)' : '(poche fermée)');
-    if (st.stuck && game.binds.down('unstick', K)) {
-      st.holdT += dt;
-      if (st.holdT >= U.holdTime) { if (!st.trigger()) st.holdT = 0; }
-    } else st.holdT = 0;
+    st.stuck = false;
+    st.holdT = 0;
   };
 
-  // Invite à afficher (ou null)
-  st.prompt = () => {
-    if (!st.stuck) return null;
-    if (st.cool > 0) return `Déblocage disponible dans ${Math.ceil(st.cool)} s`;
-    if (st.holdT > 0) return `${game.binds.tag('unstick')} Maintenir pour se débloquer (${Math.max(0, U.holdTime - st.holdT).toFixed(1)} s)`;
-    return `${game.binds.tag('unstick')} Maintenir ${U.holdTime} s : se débloquer`;
-  };
+  // Invite à afficher : désactivée
+  st.prompt = () => null;
   return st;
 }

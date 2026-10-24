@@ -23,6 +23,9 @@ export class Player {
     this._v = new THREE.Vector3();
     this._v2 = new THREE.Vector3();
     this.perks = {};
+    this.godMode = false;
+    this.infiniteAmmo = false;
+    this.superSpeed = false;
     this.statsVersion = 0; // incrémenté quand les atouts changent (invalide le cache des stats d'arme)
     this.lastMouse = -99;  // game.time du dernier mouvement de souris (recentrage de la vue du conducteur)
     this.ride = new RideCam(this); // vue à la troisième personne sur une moto
@@ -137,23 +140,31 @@ export class Player {
     return this.inventory.some((w) => w.id === id);
   }
 
-  // Nouvelle arme : prend un emplacement libre, sinon remplace l'arme en main
-  giveWeapon(id) {
+  // Nouvelle arme : prend un emplacement libre, sinon remplace l'arme en main (pap: 0 à 3)
+  giveWeapon(id, pap = 0) {
     const cfg = CONFIG.weapons[id];
     if (!cfg) return;
+    let w;
     const existing = this.inventory.findIndex((w) => w.id === id);
     if (existing >= 0) {
-      const w = this.inventory[existing];
-      w.reserve = this.statsOf(w).maxReserve;
+      w = this.inventory[existing];
       this.switchWeapon(existing);
-      return;
-    }
-    const w = this.newWeapon(id);
-    if (this.inventory.length < this.maxWeapons) {
-      this.inventory.push(w);
-      this.switchWeapon(this.inventory.length - 1);
     } else {
-      this.inventory[this.weaponIdx] = w;
+      w = this.newWeapon(id);
+      if (this.inventory.length < this.maxWeapons) {
+        this.inventory.push(w);
+        this.switchWeapon(this.inventory.length - 1);
+      } else {
+        this.inventory[this.weaponIdx] = w;
+        this.switchWeapon(this.weaponIdx);
+      }
+    }
+    if (pap >= 0) {
+      w.pap = Math.max(0, Math.min(3, pap | 0));
+      w._statsKey = null;
+      const s = this.statsOf(w);
+      w.ammo = s.magSize;
+      this.refill(w);
       this.switchWeapon(this.weaponIdx);
     }
   }
@@ -222,7 +233,7 @@ export class Player {
       const k = letter(e);
       if (k) this.keys['letter:' + k] = true;
       if (!this.game.playing || e.repeat) return;
-      if (this.game.debugMenu?.open) return; // menu debug (F9) : les lettres et chiffres lui sont réservés
+      if (this.game.debugMenu?.open || this.game.modMenu?.open) return; // menu debug / mods : les touches lui sont réservées
       const B = this.game.binds;
       if (B.is('reload', e) && !this.locked && !this.driving) this.reload();
       if (B.is('interact', e)) this.game.interact();
@@ -255,7 +266,7 @@ export class Player {
     });
 
     document.addEventListener('mousedown', (e) => {
-      if (!this.game.playing || this.game.debugMenu?.open || this.game.chat?.open) return;
+      if (!this.game.playing || this.game.debugMenu?.open || this.game.modMenu?.open || this.game.chat?.open) return;
       if (e.button === 0) this.mouseDown = true;
       if (e.button === 1) { e.preventDefault(); this.fireGL(this.game.time); } // clic molette : lance-grenades sous canon (niveau III des fusils d'assaut)
       if (e.button === 2) this.aiming = true;
@@ -377,6 +388,7 @@ export class Player {
       sprinting = !this.downed && B.down('sprint', K) && mz > 0 && !this.aiming;
       const stamin = this.perks.staminup ? 1.3 : 1;
       let speed = this.downed ? 1.2 : (sprinting ? P.sprintSpeed * stamin : P.walkSpeed * (this.perks.staminup ? 1.1 : 1));
+      if (this.superSpeed) speed *= 2.2;
       if (this.aiming && !this.downed) speed *= 0.6;
       if (moving) { const l = Math.hypot(mx, mz); mx /= l; mz /= l; }
       const sin = Math.sin(this.yaw), cos = Math.cos(this.yaw);
@@ -437,6 +449,13 @@ export class Player {
     // ---- régénération ----
     if (!this.downed && this.health < this.maxHealth && now - this.lastHurt > P.regenDelay) {
       this.health = Math.min(this.maxHealth, this.health + P.regenRate * dt);
+    }
+    if (this.godMode) {
+      this.health = this.maxHealth;
+    }
+    if (this.infiniteAmmo && w) {
+      w.reserve = cfg.maxReserve;
+      if (w.gl) w.gl = cfg.gl?.shells || 0;
     }
 
     // ---- visée (ADS) ----
@@ -729,7 +748,7 @@ export class Player {
   shoot(now, moving) {
     const cfg = this.curCfg;
     const w = this.curW;
-    w.ammo--;
+    if (!this.infiniteAmmo) w.ammo--;
     // Semi-auto : fireRate est un plafond (une balle par clic). Sinon on cumule à partir du tir prévu et non de `now`, pour
     // ne pas arrondir la période à l'image supérieure ; après une pause, on repart de `now` (pas de rafale de rattrapage).
     const period = 1 / cfg.fireRate;
@@ -887,7 +906,7 @@ export class Player {
   // -------------------------------------------------------------- Dégâts
   // src : origine des dégâts ('blast' explosion, 'crash' choc de moto ; absent = coup de zombie, Bourreau…)
   hurt(amount, src = null) {
-    if (this.downed || this.dead) return;
+    if (this.godMode || this.downed || this.dead) return;
     if (this.perks.phdflopper && (src === 'blast' || src === 'crash')) return; // PHD Flopper : immunité aux explosions et aux chocs
     this.health -= amount;
     this.lastHurt = this.game.time;

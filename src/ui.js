@@ -51,10 +51,11 @@ export function installUi(game, { hud, canvas, lockAndPlay }) {
       hud.toggleMap(on);
       if (on) this.open('map'); else this.close('map');
     },
-    closeOverlays() { // carte, menu debug, saisie du chat
+    closeOverlays() { // carte, menu debug, mod menu, saisie du chat
       game.chat?.close({ send: false, relock: false });
       if (hud.mapOpen) hud.toggleMap(false);
-      game.debugMenu?.close();
+      game.debugMenu?.close({ relock: false });
+      game.modMenu?.close({ relock: false });
       this.over = [];
     },
     showBanner(on) {
@@ -102,6 +103,7 @@ export function installUi(game, { hud, canvas, lockAndPlay }) {
     // avec le bandeau léger ; sinon pause complète. Si l'écran montre déjà une couche (pause demandée par le jeu), rien à faire.
     onPointerUnlocked() {
       if (game.chat?.absorbUnlock()) return; // libérée par le chat (ouverture de la saisie), ou saisie ouverte : ce n'est pas un appui d'Échap
+      if (game.modMenu?.absorbUnlock()) return; // libérée par le menu mods
       if (!game.started || game.over) return;
       if (!hidden(el.overlay)) return;
       if (game.summitFx?.orbit.on) { // Échap pendant la vue orbitale (souris déjà rendue) : on la passe ; l'écran « STRASBOURG LIBÉRÉE » suit
@@ -124,7 +126,8 @@ export function installUi(game, { hud, canvas, lockAndPlay }) {
       if (ae && /^(INPUT|TEXTAREA)$/.test(ae.tagName) && ae.type !== 'range') { ae.blur(); return 'blur'; } // champ de texte : d'abord retirer le focus
       const t = this.top();
       switch (t) {
-        case 'debug': game.debugMenu?.close(); break;
+        case 'modMenu':
+        case 'debug': (game.modMenu || game.debugMenu)?.close(); break;
         case 'map': this.toggleMap(false); break;
         case 'banner': this.pause(); break;
         case 'options': hud.showPanel(this.optionsBack); break;
