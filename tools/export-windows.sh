@@ -141,6 +141,13 @@ DIAGNOSTIC DU DÉMARRAGE ET DU MENU (lenteurs au lancement, menu qui rame)
   En ligne de commande : Zombie.console.exe -- --startup-log=C:\chemin\demarrage.txt
   (pour les images lentes pendant une partie : -- --perf-log=C:\chemin\perf.txt)
 
+ZOMBIES COINCÉS OU QUI APPARAISSENT BIZARREMENT
+  Double-clique sur diagnostic-zombies.bat : le jeu se lance normalement et écrit, dans ce dossier, zombies.jsonl : chaque zombie
+  immobile, coincé, perdu ou téléporté, chaque apparition (fenêtre ou sol, distance au joueur, vue ou cachée) et chaque relance, avec
+  les positions. Joue jusqu'à voir le problème, note l'heure, quitte le jeu, puis envoie zombies.jsonl.
+  En ligne de commande : Zombie.console.exe -- --zombie-stuck-log=C:\chemin\zombies.jsonl
+  (en jeu, F9 puis P affiche les mêmes compteurs ; U relance les zombies coincés)
+
 DONNÉES ENREGISTRÉES
   Réglages, touches, meilleurs scores et statistiques sont écrits dans :
     %APPDATA%\\Godot\\app_userdata\\Zombie Survival
@@ -169,6 +176,18 @@ echo Termine. Fichier : "%~dp0demarrage.txt"
 pause
 EOF2
 sed -i 's/$/\r/' "$APP/diagnostic-demarrage.bat"
+# v0.34.10 : lanceur du suivi des zombies (ZombieWatch) : écrit zombies.jsonl à côté de l'exe
+cat >"$APP/diagnostic-zombies.bat" <<'EOF2'
+@echo off
+cd /d "%~dp0"
+echo Zombie Survival : suivi des zombies dans "%~dp0zombies.jsonl"
+echo Joue jusqu'a voir le probleme, quitte le jeu, puis envoie zombies.jsonl.
+Zombie.console.exe -- "--zombie-stuck-log=%~dp0zombies.jsonl"
+echo.
+echo Termine. Fichier : "%~dp0zombies.jsonl"
+pause
+EOF2
+sed -i 's/$/\r/' "$APP/diagnostic-zombies.bat"
 
 # --- 6. archive -----------------------------------------------------------------------------------------------------------------------
 ZIP="$OUT/ZombieSurvival-windows-v$VERSION.zip"

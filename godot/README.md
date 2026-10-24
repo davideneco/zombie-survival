@@ -46,6 +46,14 @@ Zombie.console.exe -- --perf-log=perf.txt
 
 Play 5 to 10 minutes, close the window normally, then send `perf.txt` (the `SPIKE` lines are enough). Automatic bench: `--perf-soak=5` (a bot plays for 5 minutes).
 
+## Diagnosing stuck zombies and spawns
+
+```bash
+Zombie.console.exe -- --zombie-stuck-log=zombies.jsonl      # or diagnostic-zombies.bat in the Windows package
+```
+
+The game starts normally (menu); every zombie that stays still, pushes against a wall, ends up inside an obstacle, loses its way or jumps (teleport), every appearance (window or ground, straight-line and walking distance to the player, seen or hidden) and every recovery is written as one JSON object per line, with a summary every 30 s (`sim/zombie_watch.gd`). Default file: `user://zombie-stuck-log.jsonl`. In game, F9 then P shows the same counters. Suite `j42` measures both maps with a scripted tour.
+
 ## Useful launch options
 
 After `--`: `--map=alpine|arena` (Strasbourg otherwise), `--mode=classic|zone|timed|arsenal`, `--zone=N|Name` (Zone unique in that zone), `--difficulty=easy|normal|hard`, `--seed=N`, `--bot` (the bot plays), `--no-music`, `--no-warmup`, `--no-boss-intro`, `--perf-log=F`, `--perf-soak=N`, `--quit-at=S`, `--shot=f.png --at=S` (screenshot), `--god` (health kept full, for performance runs). `--show-collision[=report.json]` draws the collision through the walls, `--eye-y=Y` raises the camera (see `docs/GODOT_PORT.md`, geometry diagnostics). The others (`--do=`, `--horde=`, `--seat=`, `--tram-at=`, `--zoo*`…) are for test captures; they are parsed in `scenes/main.gd`.

@@ -73,4 +73,8 @@ func _redraw() -> void:
 			_fps, int(Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME)),
 			Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME) / 1000.0, Game.zombies.size(), Game.round_number,
 			Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS) * 1000.0]
+		# v0.34.10 : suivi des zombies (ZombieWatch) : immobiles, perdus, téléportés, apparitions ; journal --zombie-stuck-log
+		h += "\n" + Game.watch.summary().replace("), ", "),\n")
+		if Game.watch.log_on:
+			h += "\njournal : %s" % ProjectSettings.globalize_path(Game.watch.log_path)
 	_label.text = h

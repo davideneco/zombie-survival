@@ -101,6 +101,7 @@ var time_up := false       ## Contre la montre : le chrono est arrivé à 0 (fin
 var pfx := PerkFx.new()    ## v0.27.0 : nouveaux atouts (sim/perk_fx.gd) : recharges, gouttes, tombe, Bastion
 var points_earned := 0     ## v0.26.0 : total des points gagnés (somme des points_gained), dépenses non déduites : score du mode Zone unique
 var settings: Settings     ## J7 : réglages du joueur et touches (user://settings.cfg, ou --settings=chemin)
+var watch := ZombieWatch.new()   ## v0.34.10 : zombies immobiles, téléportations, apparitions (sim/zombie_watch.gd ; journal : --zombie-stuck-log[=chemin])
 
 func _init() -> void:
 	StartupLog.mark("autoload Game: start")
@@ -126,6 +127,7 @@ func _init() -> void:
 		if a.begins_with("--trophy="):
 			trophy_path = a.substr(9)
 	StartupLog.mark("autoload Game: settings and stats read")
+	watch.setup(OS.get_cmdline_user_args(), "")
 	for a in OS.get_cmdline_user_args():   # J9 : surcharges de captures et de mesures, jamais sauvegardées
 		if a.begins_with("--quality="):
 			settings.autosave = false
@@ -255,6 +257,8 @@ func new_game(seed_value: int = -1, map: String = "", weapons: Array = [], prelo
 	over = false
 	playing = true
 	_next_id = 1
+	watch.reset(map_name)
+	watch.write({"ev": "game", "map": map_name, "mode": mode_id(), "difficulty": difficulty, "seed": rng.seed})
 
 ## Libère la partie (retour au menu principal) : plus de monde, de joueur ni de zombies en mémoire ; l'état est celui d'avant la première partie.
 func unload() -> void:
@@ -408,6 +412,7 @@ func step(dt: float, input: Dictionary) -> void:
 		if z.dead and z.death_t > Rules.CORPSE_TIME:
 			zombies.remove_at(i)
 	_relocate(dt)
+	watch.step(self, dt)
 	_player_events()
 	if arsenal != null and arsenal.pending:   # arme rendue par le Pack-a-Punch : le changement d'arme en attente s'applique
 		_arsenal_roll()
@@ -580,6 +585,7 @@ func next_zombie_id() -> int:
 func add_zombie(z: ZombieSim) -> void:
 	zombies.append(z)
 	zombie_spawned.emit(z)
+	watch.on_spawn(self, z, "finale")
 
 ## Points pour tous les joueurs (récompenses de boss) : popup « bonus ».
 func add_bonus_points(n: int) -> void:
@@ -874,6 +880,7 @@ func _spawn_zombie() -> void:
 			z.yaw = atan2(player.pos.x - z.pos.x, player.pos.z - z.pos.z)
 	zombies.append(z)
 	zombie_spawned.emit(z)
+	watch.on_spawn(self, z, String(sp["type"]))
 
 ## Pose un zombie à la main (démonstration, captures, tests) : sorti, à la vitesse donnée ; kind "", "armored" ou "bloat".
 func debug_spawn(p: Vector3, spd: float, crawl := false, kind := "") -> ZombieSim:
@@ -909,6 +916,7 @@ func use_door() -> int:
 		return -1
 	points -= price
 	world.open_door(id)
+	watch.write({"ev": "door", "t": snappedf(time, 0.01), "id": id, "zones": world.doors[id]["opened"], "px": snappedf(player.pos.x, 0.01), "pz": snappedf(player.pos.z, 0.01)})
 	door_opened.emit(id)
 	powerups.opening_bonus(self, world.doors[id])
 	return id

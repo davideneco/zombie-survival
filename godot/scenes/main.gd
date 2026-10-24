@@ -7,6 +7,8 @@ extends Node3D
 ## J7 : sans aucun argument, le jeu s'ouvre sur l'écran titre ; avec un argument, la partie démarre tout de suite (outils, captures). --menu force le titre,
 ## --ui=title|menu|options|keys|capture|conflict|pause|map|over|victory|mode|escape|timeup ouvre un écran (captures), --hud-demo montre les éléments de la finale (barre de boss, bandeau, Fanal),
 ## --settings=chemin utilise un autre fichier de réglages (Game.settings).
+## v0.34.10 : --zombie-stuck-log[=chemin] écrit le suivi des zombies (immobiles, perdus, téléportés, apparitions, relances ; sim/zombie_watch.gd) en JSON,
+## une ligne par évènement (user://zombie-stuck-log.jsonl par défaut) ; le menu s'ouvre comme sans argument.
 ## v0.14.0 : le menu principal ne charge RIEN de la partie (ni monde, ni zombies, ni vues de jeu : Game.world est nul). NOUVELLE PARTIE (ou tout argument de jeu)
 ## lance `_start_session` : chargement par étapes avec barre de progression (données de la carte sur un fil de travail, construction de la ville répartie sur
 ## plusieurs images), puis la partie. Retour au menu : tout est libéré (`_unload_session`, Game.unload). Options : --difficulty=easy|normal|hard, --stats=chemin
@@ -78,7 +80,7 @@ static var FinaleView: GDScript:   # J10
 	get: return _view_res("FinaleView")
 static var AngelView: GDScript:
 	get: return _view_res("AngelView")
-const PERF_ARGS := ["--perf-log="]   ## v0.19.0 : n'ouvre pas la partie (le menu s'affiche quand c'est le seul argument)
+const PERF_ARGS := ["--perf-log=", "--startup-log", "--zombie-stuck-log"]   ## v0.19.0 : n'ouvre pas la partie (le menu s'affiche quand ce sont les seuls arguments) ; v0.34.10 : journaux de démarrage et des zombies aussi
 const TRACER_COLOR := Color("ffd27a")
 const TRACER_TIME := 0.06
 const TRACER_WIDTH := 0.012
