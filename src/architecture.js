@@ -730,7 +730,12 @@ export function createArchitecture({ renderer, plasterImg, plaster2Img, roofP, r
         else rh = 0;
       }
       const height = num(tags.height);
+      const ignH = num(opts.ignH ?? tags['ign:h']);
       if (height != null) wallTop = Math.max(3, height - rh);
+      else if (levelsTag == null && ignH != null) {
+        const ignLevels = Math.max(1, Math.min(8, Math.round((ignH - GF_H) / FLOOR_H) + 1));
+        wallTop = GF_H + (ignLevels - 1) * FLOOR_H;
+      }
       if (style === 'gothic' && height == null) wallTop = Math.max(wallTop, 14);
       const shop = opts.shop && style !== 'gothic' && style !== 'modern' && levels >= 2 ? matFor('shop', Math.floor(rnd() * 6) % 3 + 3 * Math.floor(rnd() * 2)) : null;
       const st = { main: matFor(style, variant), shop, uoff: rnd() };

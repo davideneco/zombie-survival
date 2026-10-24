@@ -1,6 +1,6 @@
 # Zombie Survival — Strasbourg
 
-A co-op survival game against waves of zombies, set in the **Grande Île of Strasbourg**, rebuilt from OpenStreetMap data (buildings, quays, squares, the cathedral). Play solo or with up to **4 players**.
+A co-op survival game against waves of zombies, set in the **Grande Île of Strasbourg**, rebuilt from OpenStreetMap and IGN BD TOPO data (buildings with real photogrammetric heights, quays, squares, street furniture, the cathedral). Play solo or with up to **4 players**.
 
 There are two versions of the same game:
 
@@ -31,7 +31,7 @@ A **downed** player has 45 s to be revived (hold the interact key).
 ### Vehicles
 - **Motorbikes**: a bike and a big two-seater (place Gutenberg, place Broglie). Hit points, fuel, they only run zombies over above a certain speed.
 - **Bicycles**: 23 free bikes at 19 stations (a "V" marker on the map). 43 km/h, 150 HP, no shooting, never run zombies over; a hard crash throws the rider.
-- **Tram**: two lines through the widest streets (A / D and B / C / F) with rails, platforms, overhead wires, and red lights in front of doors that are still closed. A **drivable tram** (23.5 m, 50 km/h, 3,000 HP, mows zombies down) waits at the "Homme de Fer" platform: restore power at the substation (2,000 points, once for the whole team), then drive. You can board on foot, walk and sit inside while it moves, and pick the track at the Homme de Fer switch (`B`). Zombies cannot enter the tram.
+- **Tram**: two real CTS lines across the Grande Île (**A / D** from Pont de Paris through Homme de Fer, Place Kléber, Langstross Grand'Rue and Saint-Nicolas; **B / C / F** from Pont Kuss / Alt Winmärik through Homme de Fer, Broglie and Opéra) with rails, platforms, overhead wires, and red lights in front of doors that are still closed. A **drivable tram** (23.5 m, 50 km/h, 3,000 HP, mows zombies down) waits at the "Homme de Fer" platform: restore power at the substation (2,000 points, once for the whole team), then drive. You can board on foot, walk and sit inside while it moves, and pick the track at the Homme de Fer switch (`B`). Zombies cannot enter the tram.
 
 ### Endgame
 - **Maître Tanneur**: from round 15, every 5 rounds, a huge plague victim roams Petite France or Saint-Pierre-le-Vieux.
@@ -124,6 +124,6 @@ To check a change: `npx vite build`, then play a game with `?debug` in the URL.
 
 ## Credits
 
-- Map data: © [OpenStreetMap](https://www.openstreetmap.org/copyright) contributors, ODbL licence.
+- Map data: © [OpenStreetMap](https://www.openstreetmap.org/copyright) contributors (ODbL) and [IGN BD TOPO](https://geoservices.ign.fr/bdtopo) (Licence Ouverte Etalab 2.0).
 - 3D engine: [Three.js](https://threejs.org/). Port: [Godot](https://godotengine.org/).
 - Godot port weapons: Quaternius and Tabasco; zombies: Quaternius; details and licences in `godot/assets/*/LICENSE.txt`.

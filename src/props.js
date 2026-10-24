@@ -46,6 +46,24 @@ const sandbagTex = () => canvasTex(128, 128, (x, w, h) => {
 const hazardTex = () => canvasTex(256, 64, (x, w, h) => {
   for (let i = -2; i < 12; i++) { x.fillStyle = i % 2 ? '#141414' : '#e8b818'; x.beginPath(); x.moveTo(i * 32, 0); x.lineTo(i * 32 + 32, 0); x.lineTo(i * 32 + 64, h); x.lineTo(i * 32 + 32, h); x.fill(); }
 });
+const posterTex = () => canvasTex(256, 256, (x, w, h) => { // affiches de spectacles et plan de ville (colonnes Morris, kiosques, panneaux)
+  x.fillStyle = '#1d2d22'; x.fillRect(0, 0, w, h);
+  const cards = [
+    [6, 8, 114, 114, '#c84b31', '#f3e5ab', 'OPÉRA DU RHIN'],
+    [132, 8, 116, 114, '#244d6a', '#e8eef2', 'STRASBOURG'],
+    [6, 132, 114, 116, '#d99b26', '#1e1a16', 'THÉÂTRE'],
+    [132, 132, 116, 116, '#ebe4d4', '#2a362e', 'GRANDE ÎLE'],
+  ];
+  for (const [px, py, pw, ph, bg, fg, title] of cards) {
+    x.fillStyle = bg; x.fillRect(px, py, pw, ph);
+    x.strokeStyle = fg; x.lineWidth = 2; x.strokeRect(px + 4, py + 4, pw - 8, ph - 8);
+    x.fillStyle = fg; x.font = 'bold 12px Arial, sans-serif'; x.textAlign = 'center';
+    x.fillText(title, px + pw / 2, py + 24, pw - 14);
+    x.fillRect(px + 14, py + 34, pw - 28, 3);
+    x.fillStyle = 'rgba(0,0,0,0.22)'; x.fillRect(px + 14, py + 46, pw - 28, 38);
+    x.fillStyle = fg; x.fillRect(px + 18, py + 92, pw - 36, 4); x.fillRect(px + 24, py + 100, pw - 48, 3);
+  }
+});
 
 // ------------------------------------------------------------------ Géométries utilitaires
 const box = (w, h, d, x = 0, y = 0, z = 0, rx = 0, ry = 0, rz = 0) => {
@@ -116,6 +134,8 @@ export function createProps() {
     roofRed: new THREE.MeshStandardMaterial({ color: 0x7a2a22, roughness: 0.8 }),
     awning: new THREE.MeshStandardMaterial({ color: 0xffffff, map: awningTex(), roughness: 0.9, side: THREE.DoubleSide }),
     warm: new THREE.MeshStandardMaterial({ color: 0xffe0a0, emissive: 0xffb050, emissiveIntensity: 0.9 }),
+    poster: new THREE.MeshStandardMaterial({ color: 0xffffff, map: posterTex(), roughness: 0.75 }),
+    postYellow: reflective(new THREE.MeshStandardMaterial({ color: 0xe6b81c, roughness: 0.38, metalness: 0.35 }), 0.7),
   };
   M.wood.map.repeat.set(1, 1);
 
@@ -214,6 +234,57 @@ export function createProps() {
     parts.push(rail);
     P.pew = [[merge(parts), M.pewWood]];
   }
+  // Colonne Morris : socle mouluré et dôme à écailles vert wagon, fût d'affiches, épi de faîtage en bronze
+  {
+    const green = [
+      lathe([[0.001, 0], [0.68, 0], [0.68, 0.14], [0.62, 0.18], [0.60, 0.50], [0.64, 0.54], [0.57, 0.58], [0.001, 0.58]], 16),
+      lathe([[0.57, 2.78], [0.65, 2.83], [0.76, 2.92], [0.74, 3.02], [0.64, 3.06], [0.58, 3.24], [0.42, 3.48], [0.20, 3.66], [0.06, 3.74], [0.001, 3.75]], 16),
+    ];
+    const finial = [lathe([[0.001, 3.74], [0.08, 3.78], [0.04, 3.92], [0.09, 4.02], [0.02, 4.22], [0.001, 4.28]], 10)];
+    P.column = [[merge(green), M.darkGreen], [cyl(0.565, 0.565, 2.2, 18, 0, 1.68, 0), M.poster], [merge(finial), M.bronze]];
+  }
+  // Kiosque à journaux octogonal : soubassement et structure vert sombre, comptoir bois, vitrines et affiches, dôme à lanterneau
+  {
+    const green = [
+      cyl(1.38, 1.42, 0.14, 8, 0, 0.07, 0),
+      cyl(1.28, 1.32, 0.86, 8, 0, 0.50, 0),
+      cyl(1.35, 1.35, 0.08, 8, 0, 0.95, 0),
+      cyl(1.36, 1.32, 0.34, 8, 0, 2.42, 0),
+      cyl(1.58, 1.62, 0.09, 8, 0, 2.62, 0),
+      cyl(0.45, 1.54, 0.65, 8, 0, 2.99, 0),
+      cyl(0.38, 0.42, 0.32, 8, 0, 3.46, 0),
+      cyl(0.04, 0.48, 0.34, 8, 0, 3.78, 0),
+    ];
+    for (let i = 0; i < 8; i++) {
+      const a = (i + 0.5) * (Math.PI / 4);
+      green.push(cyl(0.045, 0.045, 1.32, 6, Math.cos(a) * 1.22, 1.62, Math.sin(a) * 1.22));
+    }
+    const glass = [cyl(1.18, 1.18, 1.26, 8, 0, 1.62, 0)];
+    const posters = [
+      box(0.75, 1.05, 0.04, 0, 1.60, -1.23),
+      box(0.04, 1.05, 0.75, -1.23, 1.60, 0),
+      box(0.04, 1.05, 0.75, 1.23, 1.60, 0),
+    ];
+    P.kiosk = [[merge(green), M.darkGreen], [merge(glass), M.glass], [merge(posters), M.poster], [box(1.15, 0.07, 0.38, 0, 0.99, 1.22), M.woodPlain], [box(0.95, 0.58, 0.05, 0, 1.48, 1.19), M.warm]];
+  }
+  // Boîte aux lettres jaune sur piètement fonte
+  {
+    const stand = [cyl(0.16, 0.22, 0.08, 10, 0, 0.04, 0), cyl(0.07, 0.085, 0.68, 10, 0, 0.38, 0), box(0.36, 0.04, 0.30, 0, 0.94, 0.02)];
+    const body = [box(0.44, 0.54, 0.36, 0, 0.98, 0), box(0.46, 0.06, 0.39, 0, 1.26, 0.01, 0.08)];
+    P.postbox = [[merge(stand), M.iron], [merge(body), M.postYellow]];
+  }
+  // Panneau d'information / plan de ville double face (« sucette »)
+  {
+    const frame = [
+      cyl(0.045, 0.055, 2.25, 8, -0.58, 1.125, 0),
+      cyl(0.045, 0.055, 2.25, 8, 0.58, 1.125, 0),
+      box(1.28, 1.56, 0.12, 0, 1.46, 0),
+      box(1.36, 0.09, 0.18, 0, 2.27, 0),
+      box(0.22, 0.05, 0.26, -0.58, 0.025, 0),
+      box(0.22, 0.05, 0.26, 0.58, 0.025, 0),
+    ];
+    P.board = [[merge(frame), M.iron], [box(1.12, 1.38, 0.14, 0, 1.46, 0), M.poster]];
+  }
 
   // ---- instances
   const inst = {}; // type -> [{ m: Matrix4, c: Color|null }]
@@ -228,6 +299,7 @@ export function createProps() {
       for (const [geo, mat] of P[type]) {
         const useColor = mat === M.carPaint;
         const im = new THREE.InstancedMesh(geo, mat, list.length);
+        im.name = 'prop:' + type;
         list.forEach((it, i) => { im.setMatrixAt(i, it.m); if (useColor) im.setColorAt(i, it.c || new THREE.Color(0x777777)); });
         im.castShadow = im.receiveShadow = true;
         im.frustumCulled = false;

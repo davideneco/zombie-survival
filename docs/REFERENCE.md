@@ -1,6 +1,6 @@
 # Zombie Survival — fiche de référence
 
-Version du jeu : **v0.47.0 · e98fe0f · 2026-10-14** (package 0.47.1). Générée automatiquement par `node tools/make-docs.mjs` à partir de `src/config.js` et du jeu.
+Version du jeu : **v0.48.0** (package 0.48.0). Générée automatiquement par `node tools/make-docs.mjs` à partir de `src/config.js` et du jeu.
 Carte annotée : [carte.png](carte.png). Armes de profil : [armes.png](armes.png). Les mêmes tableaux en tableur : dossier [csv/](csv/).
 
 Pour demander une modification, citez la ligne (ex. « Mitrailleuse RPK : chargeur 100 », « Mastodonte à 3000 pts », « porte P3 à 500 pts », « mettre la boîte mystère dans la zone Temple-Neuf »).
@@ -376,13 +376,13 @@ Prix d'une porte : le plus cher des deux prix de zone (colonne « Prix de la por
 | 17 | Arme au mur | DRAGUNOV SVD | Rue du Dôme | 2000 | 84 | -120 |
 | 18 | BOÎTE MYSTÈRE (emplacement possible) | BOÎTE MYSTÈRE (emplacement possible) | Rue du Dôme | 950 | 77 | -123 |
 | 19 | Borne de munitions | Borne de munitions | Grandes Arcades |  | -103 | -21 |
-| 20 | Arme au mur | AK-47 | Grandes Arcades | 1600 | -102 | -47 |
+| 20 | Arme au mur | AK-47 | Grandes Arcades | 1600 | -99 | -49 |
 | 21 | Arme au mur | FN P90 | Grandes Arcades | 1800 | -103 | -41 |
 | 22 | Atout | MULE KICK | Grandes Arcades | 4000 | -127 | -16 |
 | 23 | BOÎTE MYSTÈRE (emplacement possible) | BOÎTE MYSTÈRE (emplacement possible) | Grandes Arcades | 950 | -109 | -59 |
 | 24 | Borne de munitions | Borne de munitions | Place Kléber |  | -203 | -169 |
 | 25 | Arme au mur | RPK | Place Kléber | 2500 | -227 | -134 |
-| 26 | Arme au mur | M249 SAW | Place Kléber | 3000 | -179 | -131 |
+| 26 | Arme au mur | M249 SAW | Place Kléber | 3000 | -179 | -127 |
 | 27 | Atout | MASTODONTE | Place Kléber | 2500 | -207 | -113 |
 | 28 | BOÎTE MYSTÈRE (emplacement possible) | BOÎTE MYSTÈRE (emplacement possible) | Place Kléber | 950 | -184 | -141 |
 | 29 | Borne de munitions | Borne de munitions | Place Gutenberg |  | -1 | 81 |
@@ -417,7 +417,7 @@ Prix d'une porte : le plus cher des deux prix de zone (colonne « Prix de la por
 | 58 | Arme au mur | AREX ZERO 1 | Musée historique | 700 | 201 | 223 |
 | 59 | BOÎTE MYSTÈRE (emplacement possible) | BOÎTE MYSTÈRE (emplacement possible) | Musée historique | 950 | 195 | 211 |
 | 60 | Borne de munitions | Borne de munitions | Place Broglie |  | 155 | -330 |
-| 61 | Arme au mur | RPK | Place Broglie | 2500 | 161 | -369 |
+| 61 | Arme au mur | RPK | Place Broglie | 2500 | 161 | -366 |
 | 62 | BOÎTE MYSTÈRE (emplacement possible) | BOÎTE MYSTÈRE (emplacement possible) | Place Broglie | 950 | 149 | -362 |
 | 63 | Arme au mur | DRAGUNOV SVD | Quai Schoepflin | 2000 | -35 | -459 |
 | 64 | Arme au mur | FAMAS F1 | Hôtel de Neuwiller | 1300 | -479 | -265 |
@@ -499,13 +499,13 @@ Prix d'une porte : le plus cher des deux prix de zone (colonne « Prix de la por
 
 | Ligne | Longueur | Arrêts (abscisse depuis le heurtoir de départ) | Remarque |
 |---|---|---|---|
-| A / D (AD) | 538 m | Place Kléber (268 m) · Gutenberg (518 m) | rayon de courbure minimal 40 m ; un heurtoir à chaque bout |
-| B / C / F (BCF) | 1100 m | Alt Winmärik (81 m) · Homme de Fer (178 m) · Broglie (599 m) · République (793 m) · Préfecture (1066 m) | rayon de courbure minimal 30 m ; un heurtoir à chaque bout |
+| A / D (AD) | 802 m | Place Kléber (238 m) · Langstross Grand'Rue (471 m) · Saint-Nicolas (718 m) | rayon de courbure minimal 40 m ; un heurtoir à chaque bout |
+| B / C / F (BCF) | 1119 m | Alt Winmärik (133 m) · Homme de Fer (421 m) · Broglie (833 m) · Opéra (1088 m) | rayon de courbure minimal 28 m ; un heurtoir à chaque bout |
 | Largeur libre | 6,5 m | de part et d'autre de l'axe, vérifiée sur la grille de navigation | décor (voitures, barricades) à 5 m de l'axe au moins ; arbres et lampadaires écartés du couloir |
 | Portes de zone | feu rouge | une porte fermée qui coupe une voie est un heurtoir signalé par un feu (vert une fois ouverte) | la rame freine d'elle-même à 15 m ; l'ouvrir libère le tronçon |
 | Rendu | rails : 1 appel (InstancedMesh) | quais + heurtoirs + mâts : 1 appel ; poteaux : 1 appel ; fils + feux : 1 appel | 12 m entre deux poteaux, côtés alternés |
 
-## Tram : la rame conduisible (une seule, garée au quai « Homme de Fer » de la ligne B / C / F)
+## Tram : la rame conduisible (une seule, garée au quai « Homme de Fer » de la ligne B / C / F ; les rames de décor ne roulent pas)
 
 | Réglage | Valeur | Remarque |
 |---|---|---|
@@ -544,13 +544,13 @@ Prix d'une porte : le plus cher des deux prix de zone (colonne « Prix de la por
 
 | Réglage | Valeur | Remarque |
 |---|---|---|
-| Nœud | croisement de AD et BCF (-308 ; -238) | 4 bras : Heurtoir nord (A / D) · Place Kléber (A / D) · Alt Winmärik (B / C / F) · Broglie (B / C / F) |
-| Raccord Alt Winmärik (B / C / F) <-> Place Kléber (A / D) | arc de rayon 25 m, virage de 71° (31 m) | vitesse plafonnée à 18 km/h comme tout virage ; se parcourt dans les deux sens |
-| Raccord Heurtoir nord (A / D) <-> Broglie (B / C / F) | arc de rayon 30 m, virage de 65° (34 m) | vitesse plafonnée à 20 km/h comme tout virage ; se parcourt dans les deux sens |
+| Nœud | croisement de AD et BCF (-308 ; -238) | 4 bras : Pont de Paris (A / D) · Langstross / St-Nicolas (A / D) · Alt Winmärik (B / C / F) · Broglie / Opéra (B / C / F) |
+| Raccord Alt Winmärik (B / C / F) <-> Langstross / St-Nicolas (A / D) | arc de rayon 25 m, virage de 71° (31 m) | vitesse plafonnée à 18 km/h comme tout virage ; se parcourt dans les deux sens |
+| Raccord Pont de Paris (A / D) <-> Broglie / Opéra (B / C / F) | arc de rayon 30 m, virage de 65° (34 m) | vitesse plafonnée à 20 km/h comme tout virage ; se parcourt dans les deux sens |
 | Sorties de chaque bras | tout droit, ou le raccord de ce bras | les deux autres virages (plus de 100°) sont impossibles : quai de l'Homme de Fer, rotonde |
 | Choix | B (conducteur assis) : tout droit / dévié | réglage unique pour toute l'équipe, effectif tant que le nez est à plus de 3 m du point de divergence (verrouillé ensuite) ; une rame entièrement sur un bras prend la voie choisie, sans saut |
 | Indications | à l'écran : « AIGUILLAGE > TOUT DROIT / DÉVIÉ : direction », verrou et distance ; sur la voie : un signal à trois feux par bras | feu ambre fixe, feu blanc en haut au centre (tout droit) ou du côté du virage (dévié) ; raccords gris sur la carte |
-| Itinéraires | chaque virage est une voie complète (ligne d'arrivée, arc, ligne de départ) qui suit exactement les lignes hors de l'arc | la rame change de voie par reprojection de son centre (même géométrie) ; portes de zone sont des butées sur chaque voie |
+| Itinéraires | chaque virage est une voie complète (ligne d'arrivée, arc, ligne de départ) qui suit exactement les lignes hors de l'arc | la rame change de voie par reprojection de son centre (même géométrie) ; portes de zone et rames de décor sont des butées sur chaque voie |
 | Réseau | t_state : k (voie) et sw (réglage) ; instantané des arrivants : idem | chaque machine suit la voie du conducteur sans saut visuel |
 | Quai de l'Homme de Fer | déplacé de 13 m vers l'ouest et raccourci (22 m) pour laisser la place au raccord | la rame y est garée, le nez à 8 m du point de divergence |
 
@@ -615,7 +615,7 @@ Prix d'une porte : le plus cher des deux prix de zone (colonne « Prix de la por
 | 11 | Grand'Rue | -382 | 16 | 1 |
 | 12 | Grand Séminaire | 300 | -57 | 1 |
 | 13 | Musée historique | 181 | 228 | 1 |
-| 14 | Place Broglie | 152 | -340 | 2 |
+| 14 | Place Broglie | 146 | -350 | 2 |
 | 15 | Quai Schoepflin | -13 | -469 | 1 |
 | 16 | Ancienne Douane | 32 | 330 | 1 |
 | 17 | Saint-Thomas | -195 | 227 | 1 |

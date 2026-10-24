@@ -367,7 +367,7 @@ export const CONFIG = {
       { zone: "Grand'Rue", x: -382.1, z: 15.9, yaw: 2.618, bikes: 1 },
       { zone: 'Grand Séminaire', x: 299.6, z: -57.2, yaw: 2.094, bikes: 1 },
       { zone: 'Musée historique', x: 181, z: 228.2, yaw: 2.356, bikes: 1 },
-      { zone: 'Place Broglie', x: 152.4, z: -340.4, yaw: -3.142, bikes: 2 },
+      { zone: 'Place Broglie', x: 146.4, z: -350.4, yaw: -3.142, bikes: 2 },
       { zone: 'Quai Schoepflin', x: -12.9, z: -469.2, yaw: -2.618, bikes: 1 },
       { zone: 'Ancienne Douane', x: 32.4, z: 330.1, yaw: 2.094, bikes: 1 },
       { zone: 'Saint-Thomas', x: -194.9, z: 226.9, yaw: -3.142, bikes: 1 },
@@ -449,12 +449,11 @@ export const CONFIG = {
     },
   },
 
-  // Tram (v0.38.0 : réseau de voies ; v0.39.0 : rame conduisible). Le plan d'Open Street Map n'a ni rues ni voies : les lignes sont tracées à la main
-  // (x vers l'est, z vers le sud, en mètres depuis le centre des données) le long des rues les plus larges, vérifiées par script : une ligne est une
-  // polyligne [[x, z, r?], ...], r étant le rayon (m, au moins minRadius) de l'arc de raccord posé au sommet (30 par défaut). Largeur libre exigée
-  // de part et d'autre de l'axe : `clearHalf` (6,5 m en tout) sur la grille de navigation.
-  //  - A / D : de l'angle nord-ouest de la place (heurtoir) à l'Homme de Fer (axe à 64° sous la rotonde), puis la place Kléber et la place Gutenberg
-  //  - B / C / F : de l'ouest (Alt Winmärik) à l'Homme de Fer (rue est-ouest au nord de la place), puis Broglie et le nord-est de l'île
+  // Tram (v0.38.0 : réseau de voies ; v0.39.0 : rame conduisible ; v0.48.0 : tracés réels OpenStreetMap / CTS). Une ligne est une
+  // polyligne [[x, z, r?], ...] (x vers l'est, z vers le sud, en mètres depuis le centre des données), r étant le rayon (m, au moins minRadius)
+  // de l'arc de raccord posé au sommet (30 par défaut). Largeur libre exigée de part et d'autre de l'axe : `clearHalf` (6,5 m en tout) sur la grille.
+  //  - A / D : du pont de Paris à l'Homme de Fer (axe à 64° sous la rotonde), puis Francs-Bourgeois / Place Kléber, Langstross Grand'Rue et pont Saint-Nicolas
+  //  - B / C / F : du pont Kuss (Alt Winmärik) à l'Homme de Fer, puis rue de la Mésange, place Broglie et l'Opéra (pont du Théâtre)
   // stops : arrêts { name, at: [x, z] (projeté sur la voie), len (quai, m) } ; chaque bout de ligne porte un heurtoir. Une porte de zone fermée qui
   // coupe une voie est un heurtoir avec feu rouge (la rame freine d'elle-même) ; l'ouvrir libère le tronçon.
   tram: {
@@ -509,21 +508,21 @@ export const CONFIG = {
     junction: {
       name: 'Homme de Fer', a: 'AD', b: 'BCF', lockGap: 3, signalDist: 14,
       arms: {
-        AN: { line: 'AD', end: 0, name: 'Heurtoir nord (A / D)' }, AS: { line: 'AD', end: 1, name: 'Place Kléber (A / D)' },
-        BW: { line: 'BCF', end: 0, name: 'Alt Winmärik (B / C / F)' }, BE: { line: 'BCF', end: 1, name: 'Broglie (B / C / F)' },
+        AN: { line: 'AD', end: 0, name: 'Pont de Paris (A / D)' }, AS: { line: 'AD', end: 1, name: 'Langstross / St-Nicolas (A / D)' },
+        BW: { line: 'BCF', end: 0, name: 'Alt Winmärik (B / C / F)' }, BE: { line: 'BCF', end: 1, name: 'Broglie / Opéra (B / C / F)' },
       },
       turns: [{ from: 'BW', to: 'AS', r: 25 }, { from: 'AN', to: 'BE', r: 30 }],
     },
     lines: [
       {
         id: 'AD', name: 'A / D', color: '#d8452b',
-        pts: [[-343, -326], [-323.4, -270.5, 60], [-290.56, -203], [-270.84, -162.56, 40], [-236, -125, 40], [-124, -125, 45], [-101, -56, 40], [-58, 8, 40], [-22, 52]],
-        stops: [{ name: 'Place Kléber', at: [-196, -125], len: 34 }, { name: 'Gutenberg', at: [-34.7, 36.5], len: 30 }],
+        pts: [[-351, -350], [-343, -326, 60], [-323.4, -270.5, 60], [-290.56, -203], [-270.84, -162.56, 45], [-248, -116, 45], [-233, -76, 40], [-190, -30, 45], [-168.5, 18, 45], [-162.5, 120, 45], [-142, 160, 50], [-82, 233, 50], [-23, 328, 50], [-8, 360]],
+        stops: [{ name: 'Place Kléber', at: [-256, -132], len: 34 }, { name: "Langstross Grand'Rue", at: [-165, 75], len: 34 }, { name: 'Saint-Nicolas', at: [-48, 286], len: 30 }],
       },
       {
         id: 'BCF', name: 'B / C / F', color: '#2b6fd8',
-        pts: [[-516, -190], [-493, -188, 30], [-366, -231, 40], [-297, -239.8, 40], [-262, -240.6, 30], [-194, -236, 40], [-97, -233, 40], [-37, -237, 30], [8, -257.6, 30], [41.6, -271.2, 40], [127.6, -329.4, 40], [158, -366, 30], [205, -368, 30], [250, -374, 40], [284, -378, 40], [315, -398, 40], [345, -404, 40], [378, -404, 40], [398, -384, 40], [436, -334, 40], [480, -290]],
-        stops: [{ name: 'Alt Winmärik', at: [-438, -206.6], len: 34 }, { name: 'Homme de Fer', at: [-345.1, -233.7], len: 22 }, { name: 'Broglie', at: [63.3, -285.9], len: 34 }, { name: 'République', at: [228.8, -371.2], len: 34 }, { name: 'Préfecture', at: [456, -314], len: 30 }],
+        pts: [[-718, -62], [-692, -91, 28], [-670, -104.5, 28], [-644, -102.5, 28], [-582, -157, 45], [-483, -190, 50], [-366, -231, 40], [-297, -239.8, 40], [-262, -240.6, 30], [-195, -233, 50], [-70, -233, 50], [-22, -240, 45], [25, -260, 45], [85, -299, 50], [215, -385, 40], [238, -410, 40], [290, -444]],
+        stops: [{ name: 'Alt Winmärik', at: [-611, -132], len: 34 }, { name: 'Homme de Fer', at: [-345.1, -233.7], len: 22 }, { name: 'Broglie', at: [56, -280], len: 34 }, { name: 'Opéra', at: [264, -427], len: 30 }],
       },
     ],
   },

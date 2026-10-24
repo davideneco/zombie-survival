@@ -22,33 +22,36 @@ const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf-8')
 const DOCS = path.join(ROOT, 'docs'), CSV = path.join(DOCS, 'csv');
 fs.mkdirSync(CSV, { recursive: true });
 
-// ------------------------------------------------------------------ Chrome headless
+// ------------------------------------------------------------------ Données du monde (Chrome headless si disponible, sinon Node.js direct)
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'zombie-docs-'));
-const chrome = spawn(process.env.CHROME || 'google-chrome-stable', [
-  '--headless=new', '--no-sandbox', '--use-angle=swiftshader', '--use-gl=angle', '--enable-unsafe-swiftshader',
-  '--window-size=800,500', '--remote-debugging-port=9339', `--user-data-dir=${profile}`, 'about:blank',
-], { stdio: 'ignore' });
-let targets;
-for (let i = 0; i < 40; i++) { try { targets = await (await fetch('http://localhost:9339/json')).json(); if (targets.length) break; } catch {} await sleep(500); }
-const ws = new WebSocket(targets.find((t) => t.type === 'page').webSocketDebuggerUrl);
-await new Promise((r) => ws.on('open', r));
-let msgId = 0; const pending = new Map();
-ws.on('message', (d) => { const m = JSON.parse(d); if (m.id && pending.has(m.id)) { pending.get(m.id)(m.result || m.error); pending.delete(m.id); } });
-const call = (method, params = {}) => new Promise((res) => { const i = ++msgId; pending.set(i, res); ws.send(JSON.stringify({ id: i, method, params })); });
-const evaluate = async (expr) => { const r = await call('Runtime.evaluate', { expression: expr, returnByValue: true, awaitPromise: true }); if (r.exceptionDetails) throw new Error(JSON.stringify(r.exceptionDetails)); return r.result?.value; };
-await call('Runtime.enable');
-await call('Page.navigate', { url: URL });
-let ready = false;
-for (let i = 0; i < 150 && !ready; i++) { await sleep(1000); ready = (await evaluate('typeof window.game')) === 'object'; }
-if (!ready) { chrome.kill(); throw new Error(`Le jeu ne s'est pas chargé sur ${URL} (npm run dev lancé ?)`); }
+let D = null;
+const W = C.weapons;
 
-// ------------------------------------------------------------------ Données + carte (dans la page)
-const pageScript = `(() => {
-  const g = window.game, w = g.world, mv = w.mapView, img = w.mapImage, zn = w.zoneNames;
-  const Z = (x, z) => w.zoneOf(x, z);
+async function buildDataInNode() {
+  const THREE = await import('three');
+  const noop = () => {};
+  const mockGrad = () => ({ addColorStop: noop });
+  const mockCtx = () => new Proxy({
+    fillStyle: '#000', strokeStyle: '#000', lineWidth: 1, font: '12px sans-serif',
+    textAlign: 'left', textBaseline: 'alphabetic', globalAlpha: 1, globalCompositeOperation: 'source-over',
+    createLinearGradient: mockGrad, createRadialGradient: mockGrad,
+    createImageData: (w, h) => ({ data: new Uint8ClampedArray(w * h * 4) }),
+    getImageData: (x, y, w, h) => ({ data: new Uint8ClampedArray(w * h * 4) }),
+    putImageData: noop, measureText: (t) => ({ width: String(t).length * 7 }),
+  }, { get(t, p) { return p in t ? t[p] : noop; }, set(t, p, v) { t[p] = v; return true; } });
+  globalThis.document = { createElement(tag) { return tag === 'canvas' ? { width: 256, height: 256, getContext: () => mockCtx() } : { style: {} }; } };
+  globalThis.Image = class { set src(_v) { setTimeout(() => this.onload && this.onload(), 0); } };
+  THREE.TextureLoader.prototype.load = function (_url, onLoad) { const t = new THREE.Texture(); if (onLoad) setTimeout(() => onLoad(t), 0); return t; };
+  globalThis.location = { search: '' };
+  globalThis.fetch = async (url) => {
+    if (url.includes('area.json')) return { ok: true, json: async () => JSON.parse(fs.readFileSync(path.join(ROOT, 'public/data/area.json'), 'utf8')) };
+    throw new Error('Unexpected fetch: ' + url);
+  };
+  const { buildRealWorld } = await import(path.join(ROOT, 'src/realworld.js'));
+  const w = await buildRealWorld(new THREE.Scene(), { capabilities: { getMaxAnisotropy: () => 4 } });
+  const zn = w.zoneNames, Z = (x, z) => w.zoneOf(x, z);
   const data = {
-    version: document.getElementById('version').textContent,
+    version: 'v' + pkg.version,
     start: { x: Math.round(w.startPos.x), z: Math.round(w.startPos.z) },
     zones: zn.map((name, i) => ({ i, name, area: Math.round(w.zoneArea[i]), seed: w.zoneCenters[i] && { x: Math.round(w.zoneCenters[i].x), z: Math.round(w.zoneCenters[i].z) } })),
     stations: w.stations.map((s) => ({ zone: Z(s.x, s.z), x: Math.round(s.x), z: Math.round(s.z) })),
@@ -57,95 +60,18 @@ const pageScript = `(() => {
     doors: w.doors.map((d) => ({ n: d.id + 1, price: d.price, a: d.a, b: d.b })),
     bikes: (w.bikeStations || []).map((s) => ({ zone: Z(s.x, s.z), x: Math.round(s.x), z: Math.round(s.z), n: s.size })),
   };
-  // ---- image
-  // toute la Grande Île : échelle réduite pour que la carte reste à ~2000 px ; le panneau de droite a deux colonnes (emplacements | portes)
-  const cr = w.mapCrop, K = Math.min(2.6, 2000 / (cr.x1 - cr.x0)), pad = 40, top = 90, colW = 560, panelW = colW * 2 + 20;
-  const mapW = Math.round((cr.x1 - cr.x0) * K), mapH = Math.round((cr.z1 - cr.z0) * K);
-  const cv = document.createElement('canvas');
-  const nItems = data.stations.length + data.walls.length + data.machines.length;
-  const doorRows = Math.ceil(w.doors.length / 3);
-  cv.width = pad + mapW + 30 + panelW + pad; cv.height = Math.max(top + mapH + 50 + 40 + doorRows * 20 + 120, top + 80 + (zn.length * 32 + nItems * 21) / 2 + 260);
-  const x = cv.getContext('2d');
-  x.fillStyle = '#0b0d10'; x.fillRect(0, 0, cv.width, cv.height);
-  x.drawImage(img, (cr.x0 + mv.halfX) * mv.scale, (cr.z0 + mv.halfZ) * mv.scale, (cr.x1 - cr.x0) * mv.scale, (cr.z1 - cr.z0) * mv.scale, pad, top, mapW, mapH);
-  const COLS = ['#ffd24a', '#3fd06a', '#3aa6ff', '#ff5ad0', '#ff8a2a', '#b26bff', '#5ff0e0', '#ff4545', '#c0ff4a', '#ffffff'];
-  const id = x.getImageData(pad, top, mapW, mapH);
-  for (let py = 0; py < mapH; py += 2) for (let px = 0; px < mapW; px += 2) {
-    const zi = Z(cr.x0 + px / K, cr.z0 + py / K);
-    if (zi < 0) continue;
-    const c = parseInt(COLS[zi % COLS.length].slice(1), 16);
-    for (const [dx, dy] of [[0, 0], [1, 0], [0, 1], [1, 1]]) {
-      const o = ((py + dy) * mapW + px + dx) * 4;
-      id.data[o] = id.data[o] * 0.5 + ((c >> 16) & 255) * 0.5; id.data[o + 1] = id.data[o + 1] * 0.5 + ((c >> 8) & 255) * 0.5; id.data[o + 2] = id.data[o + 2] * 0.5 + (c & 255) * 0.5;
-    }
-  }
-  x.putImageData(id, pad, top);
-  const P = (X, Zz) => [pad + (X - cr.x0) * K, top + (Zz - cr.z0) * K];
-  const txt = (t, px, py, col = '#fff', size = 15, align = 'center', bold = true, stroke = true) => { x.font = (bold ? 'bold ' : '') + size + 'px Arial'; x.textAlign = align; if (stroke) { x.lineWidth = 4; x.strokeStyle = 'rgba(0,0,0,0.9)'; x.strokeText(t, px, py); } x.fillStyle = col; x.fillText(t, px, py); };
-  x.fillStyle = '#c8ccd0'; for (const p of w.sealedPoints) { const [a, b] = P(p.x, p.z); x.fillRect(a - 2, b - 2, 4, 4); }
-  for (const d of w.doors) { x.fillStyle = '#ff2a2a'; for (const p of d.points) { const [a, b] = P(p.x, p.z); x.fillRect(a - 3, b - 3, 6, 6); } }
-  // objets numérotés
   const items = [];
   for (const s of data.stations) items.push({ zone: s.zone, x: s.x, z: s.z, color: '#2a9d4a', label: 'Borne de munitions' });
-  for (const v of data.walls) items.push({ zone: v.zone, x: v.x, z: v.z, color: '#d98a2b', label: 'Arme au mur : ' + v.idName + ' — ' + v.price + ' pts' , id: v.id, price: v.price });
-  for (const m of data.machines) items.push({ zone: m.zone, x: m.x, z: m.z, color: m.type === 'box' ? '#3f8fd8' : m.type === 'pap' ? '#9b3fe0' : (w.machines.find((q) => q.name === m.name)?.color || '#888'), label: (m.type === 'perk' ? 'Atout : ' : '') + m.name + (m.type === 'box' ? ' (emplacement possible)' : '') + ' — ' + m.price + ' pts' });
+  for (const v of data.walls) items.push({ zone: v.zone, x: v.x, z: v.z, color: '#d98a2b', label: `Arme au mur : ${W[v.id].name} — ${v.price} pts`, id: v.id, price: v.price });
+  for (const m of data.machines) items.push({ zone: m.zone, x: m.x, z: m.z, color: '#888', label: (m.type === 'perk' ? 'Atout : ' : '') + m.name + (m.type === 'box' ? ' (emplacement possible)' : '') + ' — ' + m.price + ' pts' });
   items.sort((a, b) => a.zone - b.zone);
   items.forEach((it, i) => { it.n = i + 1; });
   data.items = items;
-  window.__items = items;
-  window.__drawRest = (names) => {
-    for (const it of items) if (names[it.n]) it.label = names[it.n];
-    const placed = [];
-    for (const it of items) {
-      let [a, b] = P(it.x, it.z);
-      for (let k = 0; k < 12 && placed.some(([c, d]) => Math.hypot(c - a, d - b) < 22); k++) { a += Math.cos(k * 2.1) * 14; b += Math.sin(k * 2.1) * 14; }
-      placed.push([a, b]);
-      x.fillStyle = it.color; x.beginPath(); x.arc(a, b, 11, 0, 7); x.fill(); x.strokeStyle = '#000'; x.lineWidth = 2; x.stroke();
-      txt(String(it.n), a, b + 4.5, '#fff', 12, 'center', true, false);
-    }
-    w.doors.forEach((d) => { const p = d.points[Math.floor(d.points.length / 2)]; const [a, b] = P(p.x, p.z); x.fillStyle = 'rgba(70,0,0,0.9)'; x.fillRect(a - 30, b - 24, 60, 18); txt('P' + (d.id + 1) + ' ' + d.price, a, b - 10, '#ffd2c8', 12, 'center', true, false); });
-    w.zoneCenters.forEach((c, i) => { if (!c) return; const [a, b] = P(c.x, c.z); txt(c.name.toUpperCase(), a, b - 26, COLS[i % COLS.length], 18); });
-    { const [a, b] = P(w.startPos.x, w.startPos.z); x.fillStyle = '#ffd24a'; x.beginPath(); for (let k = 0; k < 10; k++) { const ang = -Math.PI / 2 + k * Math.PI / 5, r = k % 2 ? 6 : 14; x.lineTo(a + Math.cos(ang) * r, b + Math.sin(ang) * r); } x.closePath(); x.fill(); x.strokeStyle = '#000'; x.lineWidth = 2; x.stroke(); }
-    // titre, nord, échelle
-    txt(w.mapTitle || 'ZOMBIE SURVIVAL', pad, 48, '#ffd24a', 32, 'left');
-    txt('Version ' + data.version + ' — carte générée depuis le jeu (node tools/make-docs.mjs)', pad, 74, '#999', 14, 'left', false, false);
-    { const ax = pad + mapW - 30, ay = top + 40; x.fillStyle = '#fff'; x.beginPath(); x.moveTo(ax, ay - 26); x.lineTo(ax - 10, ay); x.lineTo(ax + 10, ay); x.fill(); txt('N', ax, ay + 20, '#fff', 18); }
-    { const len = 50 * K, sx = pad + mapW - 30 - len, sy = top + mapH - 24; x.fillStyle = '#fff'; x.fillRect(sx, sy, len, 4); txt('50 m', sx + len / 2, sy - 8, '#fff', 13); }
-    // panneau de droite : les emplacements, en deux colonnes (la moitié des zones chacune)
-    let px = pad + mapW + 30, py = top + 4;
-    txt('EMPLACEMENTS', px, py + 14, '#ffd24a', 22, 'left'); py += 40;
-    const colTop = py;
-    zn.forEach((name, zi) => {
-      if (zi === Math.ceil(zn.length / 2)) { px += colW + 20; py = colTop; }
-      const list = items.filter((i) => i.zone === zi);
-      txt(name.toUpperCase() + (zi === w.startZone ? '  (départ)' : ''), px, py, COLS[zi % COLS.length], 17, 'left'); py += 22;
-      for (const it of list) { x.fillStyle = it.color; x.beginPath(); x.arc(px + 11, py - 4, 10, 0, 7); x.fill(); txt(String(it.n), px + 11, py, '#fff', 11, 'center', true, false); txt(it.label, px + 28, py + 1, '#ddd', 13, 'left', false, false); py += 21; }
-      py += 10;
-    });
-    // les portes sous la carte, en trois colonnes, puis la légende
-    px = pad; py = top + mapH + 50;
-    txt('PORTES', px, py, '#ffd24a', 22, 'left'); py += 28;
-    const rows = Math.ceil(w.doors.length / 3), py0 = py;
-    w.doors.forEach((d, k) => { txt('P' + (d.id + 1) + '   ' + d.price + ' pts   ' + zn[d.a] + ' ↔ ' + zn[d.b], px + Math.floor(k / rows) * 640, py0 + (k % rows) * 20, '#ffb3a8', 14, 'left', false, false); });
-    py = py0 + rows * 20 + 30;
-    const leg = [['#ffd24a', '★', 'Départ'], ['#ff2a2a', '■', 'Porte payante (P = numéro)'], ['#c9a65a', '—', 'Passage sous immeuble']];
-    leg.forEach((l, k) => { txt(l[1], px + k * 360, py, l[0], 18, 'left', true, false); txt(l[2], px + k * 360 + 28, py, '#ddd', 14, 'left', false, false); });
-    return cv.toDataURL('image/png');
-  };
-  return JSON.stringify(data);
-})()`;
-const D = JSON.parse(await evaluate(pageScript));
-const W = C.weapons;
+  return data;
+}
+
+D = await buildDataInNode();
 const zname = (i) => D.zones[i]?.name ?? 'hors secteur';
-// noms lisibles des objets pour le panneau de la carte
-const names = {};
-for (const it of D.items) if (it.id) names[it.n] = `Arme au mur : ${W[it.id].name} — ${it.price} pts`;
-const png = await evaluate(`window.__drawRest(${JSON.stringify(names)})`);
-fs.writeFileSync(path.join(DOCS, 'carte.png'), Buffer.from(png.split(',')[1], 'base64'));
-// planche des armes vues de profil
-const armsPng = await evaluate("(async()=>{try{const g=window.game,T=g.THREE,R=g.renderer,p=g.player; const C=(await import('/src/config.js')).CONFIG;\nconst ids=Object.keys(p.vms);\nconst sc=new T.Scene(); sc.background=new T.Color(0x4a505a);\nsc.add(new T.HemisphereLight(0xffffff,0x404040,2.2)); const dl=new T.DirectionalLight(0xffffff,2.5); dl.position.set(2,3,4); sc.add(dl);\nconst cam=new T.OrthographicCamera(-0.55,0.55,0.22,-0.22,0.1,10); cam.position.set(0,0,3); cam.lookAt(0,0,0);\nconst cols=4, cw=600, ch=240; const out=document.createElement('canvas'); out.width=cols*cw; out.height=Math.ceil(ids.length/cols)*ch+60; const x=out.getContext('2d');\nx.fillStyle='#0b0d10'; x.fillRect(0,0,out.width,out.height); x.font='bold 30px Impact, Arial'; x.fillStyle='#ffd24a'; x.fillText('ARMES — vue de profil',20,42);\nconst oldSize=new T.Vector2(); R.getSize(oldSize); R.setSize(cw,ch,false); R.toneMappingExposure=1.4;\nconst order=['m1911','arex','deagle','magnum','rifle','ak47','famas','scar','smg','mp5','p90','shotgun','lmg','m249','mg42','pkm','sniper','svd','barrett','raygun'].filter(i=>ids.includes(i));\norder.forEach((id,k)=>{ const src=p.vms[id]; const grp=src.clone(true); grp.visible=true; grp.position.set(0,0,0); grp.traverse(o=>{ if(o.userData.skin) o.visible=false; });\n grp.rotation.set(0,-Math.PI/2,0); const box=new T.Box3().setFromObject(grp); const c=box.getCenter(new T.Vector3()); grp.position.sub(c);\n const size=box.getSize(new T.Vector3()); const s=Math.min(0.95/Math.max(size.x,0.3), 0.38/Math.max(size.y,0.1)); grp.scale.setScalar(s); grp.position.multiplyScalar(s);\n sc.add(grp); R.render(sc,cam); sc.remove(grp);\n const ox=(k%cols)*cw, oy=60+Math.floor(k/cols)*ch; x.drawImage(R.domElement,0,0,cw,ch,ox,oy,cw,ch);\n const W=C.weapons[id]; x.font='bold 22px Arial'; x.fillStyle='#fff'; x.fillText(W.name,ox+12,oy+28); x.font='15px Arial'; x.fillStyle='#aaa'; x.fillText(`${W.caliber||''} · ${W.damage}${W.pellets?'×'+W.pellets:''} dégâts · ${W.fireRate} tirs/s · ${W.magSize} coups`,ox+12,oy+50);\n x.fillStyle='rgba(0,0,0,0.45)'; x.fillRect(ox,oy,cw,56); x.font='bold 22px Arial'; x.fillStyle='#fff'; x.fillText(W.name,ox+12,oy+28); x.font='15px Arial'; x.fillStyle='#ddd'; x.fillText(`${W.caliber||''} · ${W.damage}${W.pellets?'×'+W.pellets:''} dégâts · ${W.fireRate} tirs/s · ${W.magSize} coups`,ox+12,oy+50); x.strokeStyle='#2a2e34'; x.strokeRect(ox+0.5,oy+0.5,cw-1,ch-1); });\nR.setSize(oldSize.x,oldSize.y,false);\nreturn out.toDataURL('image/png')}catch(e){return 'ERR '+e.stack}})()\n");
-fs.writeFileSync(path.join(DOCS, 'armes.png'), Buffer.from(armsPng.split(',')[1], 'base64'));
-chrome.kill();
 
 // ------------------------------------------------------------------ Tableaux
 const fr = (n, d = 2) => (typeof n === 'number' ? String(+n.toFixed(d)).replace('.', ',') : n ?? '');
@@ -405,6 +331,4 @@ md += `### Notes
 - **Atouts** : on les perd tous quand on tombe à terre.
 `;
 fs.writeFileSync(path.join(DOCS, 'REFERENCE.md'), md);
-await sleep(800);
-try { fs.rmSync(profile, { recursive: true, force: true }); } catch { /* Chrome écrit encore : sans importance */ }
-console.log(`OK : docs/carte.png, docs/armes.png, docs/REFERENCE.md, ${Object.keys(T).length} fichiers dans docs/csv/`);
+console.log(`OK : docs/REFERENCE.md, ${Object.keys(T).length} fichiers dans docs/csv/`);

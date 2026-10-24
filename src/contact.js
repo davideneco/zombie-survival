@@ -13,7 +13,7 @@ import { CONFIG } from './config.js';
 const PROP_BLOB = {
   car: [5.4, 2.6, 0.8], bench: [2.4, 1.0, 0.6], bin: [1.0, 1.0, 0.6], bollard: [0.55, 0.55, 0.5], bike: [1.8, 0.7, 0.5], statue: [3.4, 3.4, 0.65],
   planter: [2.1, 1.3, 0.55], crate: [1.7, 1.7, 0.65], pallet: [1.6, 1.5, 0.5], jersey: [3.0, 1.2, 0.6], crowd: [2.6, 0.8, 0.45], sandbags: [2.7, 1.0, 0.6],
-  chalet: [4.2, 3.2, 0.6], pew: [4.9, 1.0, 0.5],
+  chalet: [4.2, 3.2, 0.6], pew: [4.9, 1.0, 0.5], column: [1.9, 1.9, 0.7], kiosk: [3.4, 3.4, 0.75], postbox: [0.85, 0.85, 0.55], board: [1.8, 0.8, 0.55],
 };
 
 function blobTexture() {

@@ -30,9 +30,16 @@ const query = `[out:json][timeout:180][maxsize:536870912];(
   way["highway"]["covered"="yes"](${bbox});
   node["natural"="tree"](${bbox});
   node["highway"="street_lamp"](${bbox});
-  node["amenity"~"^(bench|waste_basket|fountain|bicycle_parking)$"](${bbox});
+  node["amenity"~"^(bench|waste_basket|fountain|bicycle_parking|post_box)$"](${bbox});
   node["barrier"="bollard"](${bbox});
   node["tourism"="artwork"](${bbox});
+  node["tourism"="information"]["information"~"^(board|map|terminal)$"](${bbox});
+  node["advertising"~"^(column|poster_box)$"](${bbox});
+  node["man_made"="planter"](${bbox});
+  node["shop"="kiosk"](${bbox});
+  way["shop"="kiosk"](${bbox});
+  way["railway"="tram"](${bbox});
+  node["railway"="tram_stop"](${bbox});
   node["historic"~"^(memorial|monument)$"](${bbox});
 );out geom;`;
 
@@ -72,7 +79,7 @@ const ring = (geom) => geom.map(toLocal);
 const raw = await fetchOverpass();
 fs.mkdirSync('data', { recursive: true });
 
-const out = { center: { lat: LAT, lon: LON }, half: HALF, halfZ: HALFZ, buildings: [], parts: [], passages: [], roads: [], water: [], trees: [], lamps: [], furniture: [], parks: [], barriers: [] };
+const out = { center: { lat: LAT, lon: LON }, half: HALF, halfZ: HALFZ, buildings: [], parts: [], passages: [], roads: [], water: [], trees: [], lamps: [], furniture: [], extraFurniture: [], parks: [], barriers: [] };
 
 // étiquettes OSM utiles au rendu (style de façade, toit, couleurs, monuments)
 const KEEP = ['building', 'building:part', 'building:levels', 'building:min_level', 'roof:shape', 'roof:levels', 'roof:height', 'roof:direction',
@@ -92,6 +99,11 @@ for (const el of raw.elements) {
     const p = toLocal(el);
     if (t.natural === 'tree') out.trees.push(p);
     else if (t.highway === 'street_lamp') out.lamps.push(p);
+    else if (t.advertising === 'column') out.extraFurniture.push({ p, kind: 'column' });
+    else if (t.amenity === 'post_box') out.extraFurniture.push({ p, kind: 'postbox' });
+    else if (t.shop === 'kiosk') out.extraFurniture.push({ p, kind: 'kiosk' });
+    else if (t.man_made === 'planter') out.extraFurniture.push({ p, kind: 'planter' });
+    else if (t.advertising === 'poster_box' || t.tourism === 'information') out.extraFurniture.push({ p, kind: 'board' });
     else if (t.amenity || t.barrier || t.tourism || t.historic) out.furniture.push({ p, kind: t.amenity || (t.barrier === 'bollard' ? 'bollard' : t.tourism || t.historic), name: t.name || null });
     continue;
   }
@@ -116,6 +128,35 @@ for (const el of raw.elements) {
   }
 }
 
+// Hauteurs réelles IGN BD TOPO (Géoplateforme WFS : BDTOPO_V3:batiment)
+try {
+  const ignUrl = `https://data.geopf.fr/wfs/ows?SERVICE=WFS&VERSION=2.0.0&REQUEST=GetFeature&TYPENAMES=BDTOPO_V3:batiment&SRSNAME=CRS:84&BBOX=${LON - dLon},${LAT - dLat},${LON + dLon},${LAT + dLat},CRS:84&OUTPUTFORMAT=application/json&COUNT=5000`;
+  console.log('→ IGN BD TOPO WFS');
+  const ignRes = await fetch(ignUrl, { headers: { 'User-Agent': 'zombie-game-dev/0.1' } });
+  if (ignRes.ok) {
+    const ign = await ignRes.json();
+    const ignPts = [];
+    for (const f of ign.features || []) {
+      const h = parseFloat(f.properties?.hauteur);
+      if (!Number.isFinite(h) || h <= 0) continue;
+      const ring0 = f.geometry?.type === 'MultiPolygon' ? f.geometry.coordinates[0]?.[0] : f.geometry?.coordinates?.[0];
+      if (!ring0?.length) continue;
+      let cx = 0, cz = 0;
+      for (const [lon, lat] of ring0) { const [x, z] = toLocal({ lat, lon }); cx += x / ring0.length; cz += z / ring0.length; }
+      ignPts.push({ cx, cz, h: +h.toFixed(1) });
+    }
+    let matched = 0;
+    for (const b of out.buildings) {
+      let cx = 0, cz = 0;
+      for (const [x, z] of b.pts) { cx += x / b.pts.length; cz += z / b.pts.length; }
+      let bestD = 14, bestH = null;
+      for (const q of ignPts) { const d = Math.hypot(q.cx - cx, q.cz - cz); if (d < bestD) { bestD = d; bestH = q.h; } }
+      if (bestH != null) { b.ignH = bestH; matched++; }
+    }
+    console.log(`  IGN BD TOPO : ${matched}/${out.buildings.length} bâtiments calibrés`);
+  }
+} catch (e) { console.log('  IGN BD TOPO ignoré :', e.message); }
+
 fs.mkdirSync('public/data', { recursive: true });
 fs.writeFileSync('public/data/area.json', JSON.stringify(out));
-console.log(`OK : ${out.buildings.length} bâtiments, ${out.parts.length} parties de bâtiments, ${out.furniture.length} mobiliers, ${out.passages.length} passages sous immeubles, ${out.roads.length} routes, ${out.water.length} eau, ${out.trees.length} arbres, ${out.lamps.length} lampadaires, ${out.parks.length} zones vertes, ${out.barriers.length} barrières`);
+console.log(`OK : ${out.buildings.length} bâtiments, ${out.parts.length} parties de bâtiments, ${out.furniture.length} + ${out.extraFurniture.length} mobiliers, ${out.passages.length} passages sous immeubles, ${out.roads.length} routes, ${out.water.length} eau, ${out.trees.length} arbres, ${out.lamps.length} lampadaires, ${out.parks.length} zones vertes, ${out.barriers.length} barrières`);

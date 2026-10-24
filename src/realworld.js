@@ -294,7 +294,7 @@ export async function buildRealWorld(scene, renderer) {
       ghosts.push({ pts, h: bld.h, tags: bld.tags || {} });
       continue;
     }
-    blds.push({ pts, h: bld.h, tags: bld.tags || {}, name: bld.name, ghosts });
+    blds.push({ pts, h: bld.h, ignH: bld.ignH, tags: bld.tags || {}, name: bld.name, ghosts });
     ghosts = [];
   }
   const tailGhosts = ghosts;
@@ -482,7 +482,7 @@ export async function buildRealWorld(scene, renderer) {
     const cx = pts.reduce((s2, q) => s2 + q[0], 0) / pts.length, cz = pts.reduce((s2, q) => s2 + q[1], 0) / pts.length;
     const near = Math.hypot(cx - CONFIG.startHint.x, cz - CONFIG.startHint.z) < 420; // détails (boutiques, lucarnes) près du secteur
     const commercial = !!bld.tags.amenity || ['retail', 'commercial', 'hotel'].includes(bld.tags.building);
-    arch.building(pts, bld.tags, bld.h, (i) => edgeCuts[i], { inSector: near, shop: commercial || (near && rnd() < 0.38), passageH: PASSAGE_H });
+    arch.building(pts, bld.tags, bld.h, (i) => edgeCuts[i], { inSector: near, shop: commercial || (near && rnd() < 0.38), passageH: PASSAGE_H, ignH: bld.ignH });
   }
 
   for (const g of tailGhosts) ghostBuild(g);
@@ -1813,6 +1813,75 @@ export async function buildRealWorld(scene, renderer) {
         }
       }
     });
+    // ---- passe 3 : mobilier urbain enrichi (v0.48.0 : colonnes Morris, kiosques à journaux, boîtes aux lettres, panneaux d'affichage, bancs, corbeilles,
+    // potelets, jardinières), posé après `rnd` et `rndOuter` avec son propre générateur `rndExtra` pour ne modifier aucun tirage existant.
+    {
+      const rndExtra = seeded(77003);
+      const interactPts = [...stations, ...machines.map((m) => m.pos), ...wallWeapons.map((q) => q.pos), ...parkings.map((pk) => pk.pump), ...(tramInfo.substation ? [tramInfo.substation] : [])];
+      const bikeStationPts = (CONFIG.vehicles?.bikeStations || []).map((s) => [s.x, s.z]);
+      const pOut = { kind: null, push: 0, nx: 0, nz: 0 };
+      const clearProbe = (x, z, r) => { const pr = { x, y: 0.1, z }; pOut.push = 0; collision.resolve(pr, r, pOut); return pOut.push <= 1e-3; };
+      for (const f of data.extraFurniture || []) {
+        let [x, z] = f.p;
+        const smallWall = f.kind === 'postbox' || f.kind === 'bin' || f.kind === 'bench' || f.kind === 'bollard';
+        if (smallWall && (insideBuilding(x, z) || !reachAt(x, z))) {
+          const c = nav.nearestFree(x, z, 3);
+          if (c) { x = nav.worldX(c[0]); z = nav.worldZ(c[1]); }
+        }
+        if (zoneOf(x, z) < 0 || !reachAt(x, z) || insideBuilding(x, z) || inParking(x, z, 1.5)) continue;
+        if (tramInfo.covers(x, z) || tramDist(x, z) < CONFIG.tram.decorGap || (hdf && hdf.covers(x, z))) continue;
+        if (doorDist(x, z) < 3.5) continue;
+        if (!bikeStationPts.every(([bx, bz]) => Math.hypot(bx - x, bz - z) >= 6.5)) continue;
+        if (!interactPts.every((o) => Math.hypot(o.x - x, o.z - z) >= 3.5)) continue;
+        const wd = wallDir(x, z);
+        const big = f.kind === 'kiosk' || f.kind === 'column';
+        const wideFront = smallWall && collision.rayHit(x, 1, z, -Math.cos(wd.ang), 0, -Math.sin(wd.ang), 6) >= 3.8;
+        if (!wideFront && !clearance(nav.cx(x), nav.cz(z), big ? 2 : 1)) continue;
+        if (f.kind === 'kiosk' && wd.dist > 2.8 && freeAt(x, z, 5) && clearProbe(x, z, 1.9)) {
+          const th = f.yaw ?? rndExtra() * Math.PI * 2;
+          props.place('kiosk', x, z, th);
+          collision.addCircle(x, z, 1.38, 3.8);
+          lightSources.push({ x, y: 2.1, z, color: 0xffc878, intensity: 6, dist: 6 });
+          used.push([x, z]);
+        } else if (f.kind === 'column' && wd.dist > 2.0 && freeAt(x, z, 4) && clearProbe(x, z, 1.2)) {
+          props.place('column', x, z, f.yaw ?? rndExtra() * Math.PI * 2);
+          collision.addCircle(x, z, 0.68, 3.9);
+          used.push([x, z]);
+        } else if (f.kind === 'postbox' && freeAt(x, z, 2.2) && clearProbe(x, z, 0.7)) {
+          const th = wd.dist < 4 ? backTo(wd.ang) : (f.yaw ?? rndExtra() * Math.PI * 2);
+          props.place('postbox', x, z, th);
+          collision.addCircle(x, z, 0.28, 1.28, undefined, 'prop', true);
+          used.push([x, z]);
+        } else if (f.kind === 'board' && wd.dist > 1.4 && freeAt(x, z, 3.5) && clearProbe(x, z, 1.0)) {
+          const th = wd.dist < 5 ? backTo(wd.ang) + Math.PI / 2 : (f.yaw ?? streetDir(x, z));
+          props.place('board', x, z, -th);
+          collision.addBox(x, z, 1.3, 0.25, th, 2.3);
+          used.push([x, z]);
+        } else if (f.kind === 'planter' && freeAt(x, z, 3) && clearProbe(x, z, 1.2)) {
+          const th = streetDir(x, z);
+          props.place('planter', x, z, -th);
+          collision.addBox(x, z, 1.6, 0.8, th, 1, undefined, 'prop', true);
+          used.push([x, z]);
+        } else if (f.kind === 'bench' && freeAt(x, z, 2.6) && clearProbe(x, z, 1.1)) {
+          const th = wd.dist < 4 ? backTo(wd.ang) : (f.yaw ?? rndExtra() * Math.PI * 2);
+          props.place('bench', x, z, th);
+          collision.addBox(x, z, 1.9, 0.6, -th, 1, undefined, 'prop', true);
+          used.push([x, z]);
+        } else if (f.kind === 'bin' && freeAt(x, z, 1.8) && clearProbe(x, z, 0.6)) {
+          props.place('bin', x, z, f.yaw ?? rndExtra() * 6);
+          collision.addCircle(x, z, 0.26, 1, undefined, 'prop', true);
+          used.push([x, z]);
+        } else if (f.kind === 'bollard' && freeAt(x, z, 1.2) && clearProbe(x, z, 0.45)) {
+          props.place('bollard', x, z);
+          collision.addCircle(x, z, 0.1, 0.9, undefined, 'prop', true);
+        } else if (f.kind === 'crowd' && freeAt(x, z, 2.8) && clearProbe(x, z, 1.2)) {
+          const th = f.yaw ?? streetDir(x, z);
+          props.place('crowd', x, z, -th);
+          collision.addBox(x, z, 2, 0.2, th, 1.1, undefined, 'prop', true);
+          used.push([x, z]);
+        }
+      }
+    }
     // ---- stations de vélos (v0.43.0, CONFIG.vehicles.bikeStations), posées en DERNIER : elles ne consomment aucun tirage et ne sont pas dans `used` pendant
     // le placement du décor, donc le décor, les machines, les armes, les portes et les motos restent exactement ceux de la v0.42.0. Chaque station est
     // vérifiée contre ce qui a été posé (`used` complet et collisions) : emprise entièrement dans sa zone, accessible, dégagée, à 8 m au moins des
