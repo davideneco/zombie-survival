@@ -170,6 +170,38 @@ func nav_of(region: int) -> NavGrid:
 	PerfLog.note_load("grille d'étage", str(region), pt)
 	return navs[region]
 
+## v0.34.6 : grilles des étages calculées sur un fil de travail pendant le chargement (avant : une par image pendant le préchauffage, ~0,9 s) ; les grilles
+## ne lisent que la collision et les régions (rien n'est modifié pendant le chargement). `finish_warm_navs` attend la fin et range les grilles absentes.
+var _navs_task := -1
+var _navs_built: Dictionary = {}
+
+func start_warm_navs() -> void:
+	if _navs_task >= 0 or nav_collision == null:
+		return
+	var todo: Array[int] = []
+	for r in regions.size():
+		if r > 0 and not navs.has(r) and regions[r]["kind"] == "floor" and _region_has_tris(r):
+			todo.append(r)
+	_navs_built = {}
+	_navs_task = WorkerThreadPool.add_task(func() -> void:
+		var out := {}
+		for r in todo:
+			out[r] = NavGrid.build_region(self, r, nav_collision)
+		_navs_built = out, false, "floor nav grids")
+
+func warm_navs_done() -> bool:
+	return _navs_task < 0 or WorkerThreadPool.is_task_completed(_navs_task)
+
+func finish_warm_navs() -> void:
+	if _navs_task < 0:
+		return
+	WorkerThreadPool.wait_for_task_completion(_navs_task)
+	_navs_task = -1
+	for r: int in _navs_built:
+		if not navs.has(r):
+			navs[r] = _navs_built[r]
+	_navs_built = {}
+
 ## Grille de navigation de chaque étage plat, d'un coup (outils et tests).
 func build_navs(col: Collision, cell := 0.5, margin := 0.4) -> void:
 	navs.clear()

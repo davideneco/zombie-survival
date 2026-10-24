@@ -30,17 +30,19 @@ func setup(cam: Camera3D) -> void:
 		add_child(vv)
 		vv.setup(v)
 		_vehicle_views.append(vv)
+	await get_tree().process_frame   # v0.34.6 : une image de l'écran de chargement entre les véhicules et la rame (setup est attendu par main.gd)
 	for t in r.trams:
 		_tram_view = Node3D.new()
 		_tram_view.set_script(TramView)
 		add_child(_tram_view)
-		_tram_view.setup(t)
+		await _tram_view.setup(t, true)
 	for i in r.parkings.size():
 		_make_parking(r.parkings[i], i)
 	_make_stations(r)
 	_make_gate_lamps(r)
 	_make_signal_lamps(r)
 	_make_rider()
+	_built = true
 
 func remember() -> void:
 	for vv in _vehicle_views:
@@ -251,9 +253,10 @@ func _process(dt: float) -> void:
 	_tick(dt)
 	PerfLog.add(&"rames", _pt)
 
+var _built := false   ## v0.34.6 : setup attend des images (rame) : rien n'est mis à jour avant la fin
 func _tick(dt: float) -> void:
 	var r: Rides = Game.rides
-	if r == null:
+	if r == null or not _built:
 		return
 	_lamp_t -= dt
 	if _lamp_t <= 0.0:

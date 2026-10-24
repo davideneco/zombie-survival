@@ -20,7 +20,11 @@ static func _h(x: float, y: float) -> float:
 
 ## dens : densité (0..1) par texel de 1 m sur la grille (w x h) d'origine o ; sdf : Image du champ de distance aux façades (ground_sdf.png) et ses réglages.
 func build(trees: PackedVector2Array, dens: PackedByteArray, w: int, h: int, o: Vector2, sdf: Image, sdf_min: float, sdf_range: float) -> void:
-	name = "Vegetation"
+	var placed := place(trees, dens, w, h, o, sdf, sdf_min, sdf_range)
+	build_placed(placed[0], placed[1])
+
+## v0.34.6 : placement seul (fonction pure, appelée sur un fil de travail par world_view) : [touffes, grilles], transformations par maille.
+static func place(trees: PackedVector2Array, dens: PackedByteArray, w: int, h: int, o: Vector2, sdf: Image, sdf_min: float, sdf_range: float) -> Array:
 	var tufts := {}
 	var grates := {}
 	var sw := sdf.get_width() if sdf != null else 0
@@ -54,6 +58,10 @@ func build(trees: PackedVector2Array, dens: PackedByteArray, w: int, h: int, o: 
 		if float(dens[(iz * w + ix) * 2]) / 255.0 > 0.5:
 			continue   # arbre de pelouse : pas de grille
 		_add(grates, Transform3D(Basis(Vector3.UP, _h(p.x, p.y) * 0.3), Vector3(p.x, 0.03, p.y)))
+	return [tufts, grates]
+
+func build_placed(tufts: Dictionary, grates: Dictionary) -> void:
+	name = "Vegetation"
 	var tuft_mesh := _tuft_mesh()
 	var tm := ShaderMaterial.new()
 	tm.shader = GRASS_SHADER
@@ -84,7 +92,7 @@ func tufts_count_set(t: Dictionary) -> void:
 	for k: Vector2i in t:
 		tuft_count += (t[k] as Array).size()
 
-func _add(d: Dictionary, xf: Transform3D) -> void:
+static func _add(d: Dictionary, xf: Transform3D) -> void:
 	var key := Vector2i(floori(xf.origin.x / CELL), floori(xf.origin.z / CELL))
 	var lst: Array = d.get(key, [])
 	lst.append(xf)

@@ -28,11 +28,22 @@ var _shadow_nodes: Array[MultiMeshInstance3D] = []
 static func exists() -> bool:
 	return FileAccess.file_exists(PATH)
 
-func build(slice: Callable) -> void:
-	name = "DetailsVille"
+## v0.34.6 : lecture de city_details.bin et calcul des instances sur un fil de travail (avant : ~0,9 s sur le fil principal). `start()` peut être appelé dès le
+## début du chargement ; `build()` attend le résultat en laissant l'écran de chargement s'animer.
+static var _task := -1
+static var _result: Dictionary = {}
+
+static func start() -> void:
+	if _task >= 0 or not exists():
+		return
+	_result = {}
+	_task = WorkerThreadPool.add_task(func() -> void: _result = _compute(), true, "city details")
+
+## Instances par (type, maille) : PackedFloat32Array au format du tampon de MultiMesh (12 flottants de transformation + 4 de couleur). Fonction pure.
+static func _compute() -> Dictionary:
 	var bytes := FileAccess.get_file_as_bytes(PATH)
 	if bytes.size() < 8 or bytes.slice(0, 4).get_string_from_ascii() != "ZCD1":
-		return
+		return {}
 	var hlen := bytes.decode_u32(4)
 	var head: Dictionary = JSON.parse_string(bytes.slice(8, 8 + hlen).get_string_from_utf8())
 	var off := 8 + hlen
@@ -42,9 +53,6 @@ func build(slice: Callable) -> void:
 		var w: int = k[1]
 		arrs[k[0]] = bytes.slice(off, off + n * w * 4).to_float32_array()
 		off += n * w * 4
-	var meshes := _meshes()
-	var mats := _materials()
-	# instances par (type, maille) : PackedFloat32Array au format du tampon de MultiMesh (12 flottants de transformation + 4 de couleur)
 	var buckets := {}
 	var add := func(kind: String, xf: Transform3D, col: Color) -> void:
 		var key := Vector2i(floori(xf.origin.x / CELL), floori(xf.origin.z / CELL))
@@ -56,8 +64,6 @@ func build(slice: Callable) -> void:
 	var W: PackedFloat32Array = arrs["windows"]
 	var nw := W.size() / 10
 	for i in nw:
-		if i % 4000 == 0:
-			await slice.call()
 		var o := i * 10
 		var p := Vector3(W[o], W[o + 1], W[o + 2])
 		var Z := Vector3(W[o + 3], 0.0, W[o + 4]).normalized()
@@ -120,6 +126,23 @@ func build(slice: Callable) -> void:
 		var X := b - a
 		var Zr := X.cross(Vector3.UP).normalized()
 		add.call("ridge", Transform3D(Basis(X, Vector3.UP, Zr), a), Color(0.55, 0.33, 0.26))
+	return buckets
+
+func build(slice: Callable) -> void:
+	name = "DetailsVille"
+	start()
+	if _task < 0:
+		return
+	while not WorkerThreadPool.is_task_completed(_task):
+		await get_tree().process_frame
+	WorkerThreadPool.wait_for_task_completion(_task)
+	_task = -1
+	var buckets := _result
+	_result = {}
+	if buckets.is_empty():
+		return
+	var meshes := _meshes()
+	var mats := _materials()
 	# MultiMesh par seau
 	var made := 0
 	for bk: String in buckets:

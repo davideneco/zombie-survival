@@ -52,6 +52,8 @@ var _t_boot_ms := 0
 var _first_draw := false
 var _load_max_dt := 0.0               ## pire durée d'image pendant le chargement (l'interface reste-t-elle vivante ?)
 var _load_frames := 0
+var _load_last_us := 0
+var _load_slow := 0                   ## v0.34.6 : images du chargement de plus de 100 ms
 var _hud: CanvasLayer
 var _menus: CanvasLayer
 var _menu := false                ## s'ouvre sur l'écran titre (aucun argument, ou --menu)
@@ -479,6 +481,8 @@ func _start_session() -> void:
 	_unload_session()
 	_load_max_dt = 0.0
 	_load_frames = 0
+	_load_last_us = 0
+	_load_slow = 0
 	_report_memory("avant chargement")
 	Game.difficulty = Difficulty.valid(_difficulty_arg if _difficulty_arg != "" else String(Game.settings.get_value("difficulty")))
 	Game.mode = _mode_choice()
@@ -493,12 +497,17 @@ func _start_session() -> void:
 		await _progress(_flow.step_text(), 1.0 - exp(-(Time.get_ticks_msec() - tw) / 700.0))
 		await get_tree().process_frame
 	var data: Object = th.wait_to_finish()
+	var t_pf := StartupLog.t()
+	LoadPrefetch.start(map)   # v0.34.6 : modèles, shaders et textures du jeu lus par les fils du chargeur pendant la construction des vues et de la ville
+	StartupLog.span("game loading: %d resources requested from loader threads" % LoadPrefetch.requested, t_pf)
 	var t_data := Time.get_ticks_msec() - t0
 	StartupLog.mark("game loading: map data read (thread)")
 	# 2. état de la partie (rapide : les données sont déjà là)
 	_flow.next_step()
 	await _step(0.0)
+	var t_state := StartupLog.t()
 	_new_game_state(data, map)
+	StartupLog.span("game state (Game.new_game)", t_state)
 	# 3. vues de jeu
 	_flow.next_step()
 	await _step(0.0)
@@ -521,12 +530,13 @@ func _start_session() -> void:
 	# 5. préchauffage sous le voile du chargement (pipelines, sons, pools : v0.19.0), puis derniers réglages
 	_flow.next_step()
 	await _step(0.0)
-	_finish_scene(map)
+	await _finish_scene(map)
 	var t_warm := Time.get_ticks_msec()
 	if not _no_warmup:
 		await _warmup()
 	var t_warm_ms := Time.get_ticks_msec() - t_warm
 	StartupLog.mark("game loading: warm-up done", "%d ms" % t_warm_ms)
+	LoadPrefetch.finish()
 	_flow.next_step()
 	await _step(0.0)
 	_session_live = true
@@ -534,10 +544,10 @@ func _start_session() -> void:
 	PerfLog.event("partie prête")
 	_flow.finish_loading()
 	_menus.begin_game()
-	StartupLog.mark("game loading: game ready", "%d ms in total, worst frame %.0f ms, map %s" % [Time.get_ticks_msec() - t0, _load_max_dt * 1000.0, map])
+	StartupLog.mark("game loading: game ready", "%d ms in total, %d frames, worst frame %.0f ms, %d frames over 100 ms, map %s" % [Time.get_ticks_msec() - t0, _load_frames, _load_max_dt * 1000.0, _load_slow, map])
 	StartupLog.session(true)
-	print("CHARGEMENT : partie prête en %d ms (données %d ms, vues %d ms, ville %d ms, préchauffage %d ms, fin %d ms) ; %d images, pire image %.0f ms ; carte %s, difficulté %s" % [
-		Time.get_ticks_msec() - t0, t_data, t_scene - t_data, t_city - t_scene, t_warm_ms, Time.get_ticks_msec() - t0 - t_city - t_warm_ms, _load_frames, _load_max_dt * 1000.0, map, Game.difficulty])
+	print("CHARGEMENT : partie prête en %d ms (données %d ms, vues %d ms, ville %d ms, préchauffage %d ms, fin %d ms) ; %d images, pire image %.0f ms, %d de plus de 100 ms ; carte %s, difficulté %s" % [
+		Time.get_ticks_msec() - t0, t_data, t_scene - t_data, t_city - t_scene, t_warm_ms, Time.get_ticks_msec() - t0 - t_city - t_warm_ms, _load_frames, _load_max_dt * 1000.0, _load_slow, map, Game.difficulty])
 	_report_memory("partie lancée")
 
 ## v0.19.0 : préchauffage (voir warmup.gd), tourne sous l'écran de chargement.
@@ -557,6 +567,7 @@ func _make_warm_view(z: ZombieSim) -> Node3D:
 ## Libère la partie en cours : vues, ville, zombies, simulation (retour au menu, rejouer).
 func _unload_session() -> void:
 	_session_live = false
+	LoadPrefetch.finish()
 	StartupLog.session(false)
 	PerfLog.phase = PerfLog.PHASE_MENU
 	for v in _views.values():
@@ -652,6 +663,8 @@ func _new_game_state(data: Object, map: String) -> void:
 	if _open_all and Game.world != null:
 		Game.world.open_all_doors()
 	Game.flow_threaded = not _sync_flow and Game.world != null
+	if Game.world != null and Game.world.levels != null and not _no_warmup:
+		Game.world.levels.start_warm_navs()   # v0.34.6 : grilles des étages sur un fil de travail pendant la construction de la ville
 	if _horde > 0:
 		_spawn_horde(_horde)
 	if _zoo > 0.0:
@@ -659,6 +672,7 @@ func _new_game_state(data: Object, map: String) -> void:
 
 ## Caméra, ciel, effets, HUD, arme et nœud de la carte (la ville se construit ensuite : `build()`).
 func _build_scene_nodes(map: String) -> void:
+	var ts := StartupLog.t()
 	_camera = Camera3D.new()
 	_camera.fov = float(Game.settings.get_value("fov"))
 	_camera.near = 0.05
@@ -675,15 +689,21 @@ func _build_scene_nodes(map: String) -> void:
 	if _sky_arg >= 0.0:
 		_graphics.dbg_sky = _sky_arg
 		_graphics.set_sky_k(_sky_arg)
+	StartupLog.span("views: camera and sky", ts)
+	ts = StartupLog.t()
 	_fx = FxView.new()
 	add_child(_fx)
 	_fx.setup(_camera)
 	_finale_view = FinaleView.new()
 	add_child(_finale_view)
 	_finale_view.setup(_camera, _fx)
+	StartupLog.span("views: effects and finale", ts)
+	ts = StartupLog.t()
 	_hud = HUD.instantiate()
 	add_child(_hud)
 	_graphics.torch_toggled.connect(func(on: bool) -> void: _hud.toast("Lampe torche allumée" if on else "Lampe torche éteinte", 1.5))
+	StartupLog.span("views: HUD", ts)
+	ts = StartupLog.t()
 	_weapon_view = Node3D.new()
 	_weapon_view.set_script(WeaponView)
 	add_child(_weapon_view)
@@ -695,6 +715,8 @@ func _build_scene_nodes(map: String) -> void:
 	_weapon_view.posed.connect(_flush_shots)
 	Game.view_cam().dbg_orbit = _tp_orbit
 	Game.view_cam().dbg_arm = _tp_arm
+	StartupLog.span("views: weapon", ts)
+	ts = StartupLog.t()
 	_avatar = PlayerAvatar.new()
 	_avatar.dbg_pose = _avatar_pose
 	add_child(_avatar)
@@ -703,6 +725,8 @@ func _build_scene_nodes(map: String) -> void:
 	_intro = BossIntro.new()
 	add_child(_intro)
 	_intro.setup(_camera, _hud, _finale_view, _create_view)
+	StartupLog.span("views: avatar and boss intro", ts)
+	ts = StartupLog.t()
 	if not ZombieModels.use_old:
 		ZombieModels.warm()   # J16 : instances de zombies prêtes à l'avance (pas d'à-coup à la première apparition)
 	_hud_last = {"banner": "", "bar": {}, "mark": "", "fanal": -2.0, "fanal_text": ""}
@@ -711,27 +735,40 @@ func _build_scene_nodes(map: String) -> void:
 	else:
 		_arena_node = (WORLD if Game.world != null else ARENA).instantiate()
 	add_child(_arena_node)
+	StartupLog.span("views: zombie models and map node", ts)
+
+## v0.34.6 : une image de l'écran de chargement entre deux constructions (la barre et le fond restent animés).
+func _load_frame() -> void:
+	await get_tree().process_frame
 
 func _finish_scene(_map_name: String) -> void:
+	var ts := StartupLog.t()
 	if Game.rides != null:
 		_rides_view = Node3D.new()
 		_rides_view.set_script(RidesView)
 		add_child(_rides_view)
-		_rides_view.setup(_camera)
+		await _rides_view.setup(_camera)
 		_start_mounted()
+		await _load_frame()
 	if Game.machines != null:
 		_machines_view = Node3D.new()
 		_machines_view.set_script(MachinesView)
 		add_child(_machines_view)
 		_machines_view.setup()
+		await _load_frame()
+	StartupLog.span("finish: vehicles and machines", ts)
+	ts = StartupLog.t()
 	_shop_view = ShopView.new()   # v0.28.0 : wall weapon panels and ammo stations (the JS ones are dropped from the baked tiles)
 	add_child(_shop_view)
 	_shop_view.setup()
+	await _load_frame()
 	if Game.world != null and not Game.world.furniture.is_empty() and "--dbg-nofurniture" not in OS.get_cmdline_user_args():
 		_furniture_view = FurnitureView.new()   # v0.33.1 : bancs, lampadaires, corbeilles, bornes, barrières, kiosques, colonnes
 		add_child(_furniture_view)
 		_furniture_view.setup(Game.world.furniture)
 		print("mobilier urbain : %s (triangles par modèle %s)" % [_furniture_view.counts, _furniture_view.triangles])
+	StartupLog.span("finish: wall weapons and street furniture", ts)
+	ts = StartupLog.t()
 	_perk_view = Node3D.new()   # v0.27.0 : gouttes, tombe, décharges, toiles
 	_perk_view.set_script(PerkFxView)
 	add_child(_perk_view)
@@ -766,7 +803,10 @@ func _finish_scene(_map_name: String) -> void:
 		_soak.setup(Game)
 	_prev_player = Game.player.pos
 	_apply_brightness()
+	StartupLog.span("finish: perks, zone, debug options", ts)
+	ts = StartupLog.t()
 	_map_prepare()
+	StartupLog.span("finish: map prepare", ts)
 	_pending.clear()
 	if _no_hud:
 		_hud.visible = false
@@ -1169,8 +1209,14 @@ func _process(dt: float) -> void:
 
 ## Menu sans partie : boutons à presser (--click), musique du menu, capture d'écran de menu.
 func _menu_tick(dt: float) -> void:
-	if _flow.state == SessionFlow.LOADING:
-		_load_max_dt = maxf(_load_max_dt, dt)
+	if _flow.state == SessionFlow.LOADING:   # v0.34.6 : durée réelle entre deux images (le dt du moteur est borné), images de plus de 100 ms
+		var now := Time.get_ticks_usec()
+		var real_dt := (now - _load_last_us) / 1.0e6 if _load_last_us > 0 else dt
+		_load_last_us = now
+		_load_max_dt = maxf(_load_max_dt, real_dt)
+		if real_dt > 0.1:
+			_load_slow += 1
+			StartupLog.mark("game loading: slow frame", "%.0f ms, %s" % [real_dt * 1000.0, _flow.step_text()])
 		_load_frames += 1
 	Sfx.set_mood(AudioRules.mood_intensity(false, false, 0), true)
 	_click_t += dt

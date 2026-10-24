@@ -47,18 +47,27 @@ func run(host: Node3D, cam: Camera3D, fx: Node3D, weapon_view: Node3D, machines_
 	var headless := DisplayServer.get_name() == "headless"
 	# 1. sons, pools, grilles d'étage
 	var pt := PerfLog.t()
+	var ts := StartupLog.t()
 	Sfx.warm_all()
 	PerfLog.add(&"charge", pt)
 	await progress.call("Préchauffage : sons", 0.05)
 	await tree.process_frame
+	StartupLog.span("warm-up: sounds", ts)
+	ts = StartupLog.t()
 	await _warm_pools(tree, progress)
+	StartupLog.span("warm-up: zombie pools", ts)
+	ts = StartupLog.t()
 	await _warm_navs(tree, progress)
+	StartupLog.span("warm-up: floor navigation grids", ts)
+	ts = StartupLog.t()
 	# 2. choses visibles, en anneau autour du joueur
 	var p0: Vector3 = Game.player.pos
 	_root = Node3D.new()
 	_root.name = "Warmup"
 	host.add_child(_root)
 	_build_ring(p0, fx, weapon_view, machines_view, hud, make_view)
+	StartupLog.span("warm-up: ring of things built", ts)
+	ts = StartupLog.t()
 	await progress.call("Préchauffage : effets", 0.4)
 	if not headless:
 		# 3. tour d'horizon sous le voile (4 caps) puis tour des points d'intérêt
@@ -76,6 +85,8 @@ func run(host: Node3D, cam: Camera3D, fx: Node3D, weapon_view: Node3D, machines_
 			_cam.rotation = Vector3(stops[i][2], stops[i][1], 0.0)
 			await _frames(tree, FRAMES_PER_STOP)
 			await progress.call("Préchauffage : rendu", 0.8 + 0.2 * float(i + 1) / stops.size())
+	StartupLog.span("warm-up: frames drawn (%d)" % frames, ts)
+	ts = StartupLog.t()
 	# 4. on range
 	if machines_view != null:
 		machines_view.warm_show(false)
@@ -90,6 +101,7 @@ func run(host: Node3D, cam: Camera3D, fx: Node3D, weapon_view: Node3D, machines_
 	if fx != null:
 		fx.clear()
 	await tree.process_frame
+	StartupLog.span("warm-up: cleanup", ts)
 	pipelines_after = pipeline_total()
 	frames += 1
 	seconds = (Time.get_ticks_msec() - t0) / 1000.0
@@ -122,9 +134,11 @@ func _warm_navs(tree: SceneTree, progress: Callable) -> void:
 	if Game.world == null or Game.world.levels == null:
 		return
 	var lv: Levels = Game.world.levels
+	while not lv.warm_navs_done():   # v0.34.6 : calculées sur un fil de travail depuis le début du chargement (Levels.start_warm_navs)
+		await tree.process_frame
+	lv.finish_warm_navs()
 	for r in lv.regions.size():
 		lv.nav_of(r)
-		await tree.process_frame
 	await progress.call("Préchauffage : étages", 0.3)
 
 func _ring(p0: Vector3, i: int, n: int, radius: float) -> Vector3:

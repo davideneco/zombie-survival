@@ -32,11 +32,13 @@ var _base := 0
 static func available() -> bool:
 	return FileAccess.file_exists(DIR + "car.bin") and FileAccess.file_exists(DIR + "car.json")
 
-func setup(s: TramSim) -> void:
+## v0.34.6 : `spread` : une image de l'écran de chargement après la première cabine et avant la dernière (à attendre : `await setup(s, true)`).
+func setup(s: TramSim, spread := false) -> void:
 	sim = s
 	if not available():
 		push_warning("tram_view : assets/tram absent (node tools/bake-tram.mjs) : rame de repli")
 		_fallback()
+		_built = true
 		return
 	_meta = JSON.parse_string(FileAccess.get_file_as_string(DIR + "car.json"))
 	_bin = FileAccess.get_file_as_bytes(DIR + "car.bin")
@@ -48,10 +50,13 @@ func setup(s: TramSim) -> void:
 		add_child(g)
 		_mods.append(g)
 		_build_module(g, i, mods[i])
+		if spread and (i == 0 or i == mods.size() - 2):
+			await get_tree().process_frame   # v0.34.6 : les deux bouts (cabines) coûtent ~150 ms chacun : une image de l'écran de chargement entre eux
 	for i in s.n:
 		var m: Dictionary = s.mods[i]
 		_cur.append(Vector3(m["x"], m["z"], m["yaw"]))
 		_prev.append(Vector3(m["x"], m["z"], m["yaw"]))
+	_built = true
 	apply(1.0)
 
 func _tex(name: String) -> Texture2D:
@@ -228,8 +233,9 @@ func _process(_dt: float) -> void:
 	_tick(_dt)
 	PerfLog.add(&"tram", _pt)
 
+var _built := false   ## v0.34.6 : setup attend des images entre les modules : rien n'est appliqué avant la fin
 func _tick(_dt: float) -> void:
-	if sim != null:
+	if sim != null and _built:
 		apply(Engine.get_physics_interpolation_fraction())
 
 func apply(f: float) -> void:

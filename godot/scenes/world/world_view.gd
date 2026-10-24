@@ -8,6 +8,7 @@ const DIR := "res://data/world/"
 const Surfaces := preload("res://scenes/world/surfaces.gd")
 const GfxAssets := preload("res://scenes/gfx_assets.gd")
 const PatchView := preload("res://scenes/world/patch_view.gd")
+const VegetationView := preload("res://scenes/world/vegetation_view.gd")
 const INSTANCE_CELL := 160.0      ## m : maille de rangement des instances (MultiMesh)
 const TILE_VIS_RANGE := 190.0     ## m : au-delà, la tuile n'est plus dessinée (le brouillard la cache déjà ; la caméra du JS s'arrête à 170 m)
 const TREE_CARD_RANGE := [60.0, 190.0, 190.0]   ## portée des cartes de feuillage selon la qualité (Rapide : arbres plus proches seulement)
@@ -66,8 +67,58 @@ var _slice_t := 0
 ## Cède la main au moteur (une image) quand ~10 ms de travail se sont écoulées : l'écran de chargement reste vivant et sa barre avance.
 func _slice() -> void:
 	if Time.get_ticks_usec() - _slice_t > 10000:
+		var ty := Time.get_ticks_usec()
 		await get_tree().process_frame
 		_slice_t = Time.get_ticks_usec()
+		_yield_us += _slice_t - ty
+		_yield_n += 1
+
+## v0.34.6 : étapes de build() dans le journal de démarrage (temps total, dont travail hors des images cédées).
+var _yield_us := 0
+var _yield_n := 0
+var _st_us := 0
+var _st_y := 0
+var _st_n := 0
+func _stage(label: String) -> void:
+	if not StartupLog.on:
+		return
+	var now := Time.get_ticks_usec()
+	StartupLog.mark("city: " + label, "%.0f ms, work %.0f ms, %d frames" % [(now - _st_us) / 1000.0, (now - _st_us - (_yield_us - _st_y)) / 1000.0, _yield_n - _st_n])
+	_st_us = now
+	_st_y = _yield_us
+	_st_n = _yield_n
+
+## v0.34.6 : `fn(i)` pour i dans [0, n) sur les fils du WorkerThreadPool (tâche de groupe prioritaire) ; l'écran de chargement continue de s'animer et sa barre
+## va de frac0 à frac1. Renvoie les résultats dans l'ordre. `fn` ne doit toucher ni à l'arbre de scène ni à un état partagé modifiable.
+var _jobs_mutex := Mutex.new()
+var _jobs_done := 0
+func _run_jobs(n: int, fn: Callable, frac0: float, frac1: float, label: String) -> Array:
+	var out: Array = []
+	out.resize(n)
+	if n == 0:
+		return out
+	_jobs_done = 0
+	var job := func(i: int) -> void:
+		var r: Variant = fn.call(i)
+		_jobs_mutex.lock()
+		out[i] = r
+		_jobs_done += 1
+		_jobs_mutex.unlock()
+	var gid := WorkerThreadPool.add_group_task(job, n, maxi(1, OS.get_processor_count() - 2), true, label)   # deux fils laissés au moteur (rendu)
+	while not WorkerThreadPool.is_group_task_completed(gid):
+		progress.emit(frac0 + (frac1 - frac0) * float(_jobs_done) / float(n))
+		await _frame()
+	WorkerThreadPool.wait_for_group_task_completion(gid)
+	progress.emit(frac1)
+	return out
+
+## Une image de l'écran de chargement (comptée dans le journal comme les images cédées par _slice).
+func _frame() -> void:
+	var ty := Time.get_ticks_usec()
+	await get_tree().process_frame
+	_slice_t = Time.get_ticks_usec()
+	_yield_us += _slice_t - ty
+	_yield_n += 1
 
 ## Construit la carte (v0.14.0 : ce n'est plus fait dans _ready, pour pouvoir le répartir sur plusieurs images). À attendre : `await view.build()`.
 var _no_cathedral := OS.get_cmdline_user_args().has("--dbg-nocath")
@@ -75,10 +126,16 @@ var _no_cathedral := OS.get_cmdline_user_args().has("--dbg-nocath")
 func build() -> void:
 	var t0 := Time.get_ticks_msec()
 	_slice_t = Time.get_ticks_usec()
+	_st_us = _slice_t
+	if CityDetails.exists() and not OS.get_cmdline_user_args().has("--dbg-nodetails"):
+		CityDetails.start()   # v0.34.6 : calcul des détails sur un fil de travail, pendant les textures et les tuiles
+	_start_grass_job()
 	await _load_textures()
+	_stage("textures")
 	progress.emit(0.25)
-	_load_materials()
+	await _load_materials()
 	_plank_materials()
+	_stage("materials")
 	await _slice()
 	if not _no_cathedral and not OS.get_cmdline_user_args().has("--dbg-cath031"):   # --dbg-cath031 : extérieur de la v0.31 (comparaisons)
 		_cath_rect = CathedralZone.world_rect().grow(2.0)
@@ -86,38 +143,47 @@ func build() -> void:
 		_cath_stone.set_shader_parameter("flood_energy", 0.7)   # la couleur de sommet du contour cuit (teinte rose ~0,9) sert d'occlusion : lavis un peu moins fort
 		_cath_roof = preload("res://scenes/world/cathedral_view.gd").make_roof_mat()
 		_cath_roof.set_shader_parameter("use_vc", 0.0)
+	# v0.34.6 : tuiles lues et converties en maillages sur les fils du WorkerThreadPool (avant : sur le fil principal, ~1,3 s), assemblées ici dans l'ordre
 	var tiles: Dictionary = _json(DIR + "tiles.json")
-	var n_tiles := (tiles["tiles"] as Array).size()
-	var ti := 0
+	_prepare_tile_jobs()
+	var jobs: Array = []
 	for t: Dictionary in tiles["tiles"]:
-		ti += 1
-		progress.emit(0.25 + 0.6 * ti / maxf(1.0, n_tiles))
-		await _slice()
 		var kk := String(t["key"]).split("_")
 		var trect := Rect2(float(tiles["x0"]) + float(kk[0]) * float(tiles["tile"]), float(tiles["z0"]) + float(kk[1]) * float(tiles["tile"]), float(tiles["tile"]), float(tiles["tile"]))
-		var mi := _mesh_from_pack(DIR + "tiles/t%s.bin" % t["key"], _cath_rect.size.x > 0.0 and trect.intersects(_cath_rect))
+		jobs.append([DIR + "tiles/t%s.bin" % t["key"], _cath_rect.size.x > 0.0 and trect.intersects(_cath_rect)])
+	var res: Array = await _run_jobs(jobs.size(), func(i: int) -> Variant: return _mesh_data(jobs[i][0], jobs[i][1]), 0.25, 0.85, "city tiles")
+	for i in res.size():
+		await _slice()
+		var mi := _mesh_instance(res[i])
 		if mi != null:
 			mi.visibility_range_end = TILE_VIS_RANGE
 			add_child(mi)
 			tile_count += 1
-			triangle_count += int(t["tri"])
+			triangle_count += int(tiles["tiles"][i]["tri"])
+	_stage("tiles")
 	await _slice()
 	var patches := PatchView.build()   # v0.23.2 : murs de collision sans surface dessinée
 	if patches != null:
 		add_child(patches)
 	_load_doors()
+	_stage("patches and doors")
 	await _slice()
 	if CityDetails.exists() and not OS.get_cmdline_user_args().has("--dbg-nodetails"):   # v0.32.2 : fenêtres, volets, balcons, gouttières, cheminées en 3D
 		details = CityDetails.new()
 		add_child(details)
 		await details.build(_slice)
+	_stage("city details")
 	if not _no_cathedral:
 		var cv := preload("res://scenes/world/cathedral_view.gd").new()
 		add_child(cv)
 		cv.build()
+	_stage("cathedral")
+	await _frame()
 	_load_instances()
+	_stage("instances")
 	await _slice()
-	_grass_mask()
+	await _grass_mask()
+	_stage("grass and vegetation")
 	if not _water_cells.is_empty():   # v0.32.5 : reflet plan de l'eau (Haute)
 		var cells := PackedVector2Array()
 		for k: Vector2i in _water_cells:
@@ -126,6 +192,7 @@ func build() -> void:
 		add_child(water_reflection)
 		water_reflection.setup(cells, _kinds.get("water", []))
 	_lamps()
+	_stage("water and lamps")
 	progress.emit(1.0)
 	built = true
 	Game.door_opened.connect(_on_door_opened)
@@ -185,29 +252,39 @@ func _load_textures() -> void:
 	for m: Dictionary in _json(DIR + "materials.json"):
 		if m.has("bmap") and int(m["bmap"]) >= 0 and bool(m["vc"]) and int(m["emap"]) >= 0:
 			_bump_ids[int(m["bmap"])] = true
-	var n_tex := 0
-	for t: Dictionary in list:
-		n_tex += 1
-		progress.emit(0.25 * n_tex / maxf(1.0, list.size()))
-		await _slice()
-		var path := String(t["file"])   # res:// direct : lisible depuis le .pck exporté
-		var img := Image.load_from_file(path)
-		if img == null or img.is_empty():
-			push_warning("texture absente : %s" % path)
-			_textures.append(null)
-			continue
-		if img.get_format() != Image.FORMAT_RGBA8 and img.get_format() != Image.FORMAT_RGB8:
-			img.convert(Image.FORMAT_RGBA8)
-		if _bump_ids.has(_textures.size()):   # v0.24.1 : carte de bosses des façades : la normale de relief est calculée ici (Image.bump_map_to_normal_map, natif) puis compressée (BC5)
-			var nimg := img.duplicate() as Image
-			nimg.bump_map_to_normal_map(BUMP_SCALE)
-			nimg.generate_mipmaps()
-			if DisplayServer.get_name() != "headless":
+	# v0.34.6 : lecture et mipmaps sur les fils du WorkerThreadPool (avant : une par une sur le fil principal) ; la compression (BC5) et la création des
+	# textures restent ici (elles passent par le serveur de rendu : sur un fil de travail, la compression bloquait le jeu)
+	var compress := DisplayServer.get_name() != "headless"
+	var res: Array = await _run_jobs(list.size(), func(i: int) -> Variant: return _texture_job(String(list[i]["file"]), _bump_ids.has(i)), 0.0, 0.2, "city textures")
+	for i in res.size():
+		var r: Array = res[i]
+		if r[1] != null:
+			var nimg: Image = r[1]
+			if compress:
 				nimg.compress_from_channels(Image.COMPRESS_S3TC, Image.USED_CHANNELS_RG)
-			_relief[_textures.size()] = ImageTexture.create_from_image(nimg)
-			img.convert(Image.FORMAT_L8)
-		img.generate_mipmaps()
-		_textures.append(ImageTexture.create_from_image(img))
+			_relief[i] = ImageTexture.create_from_image(nimg)
+		_textures.append(ImageTexture.create_from_image(r[0]) if r[0] != null else null)
+		if i % 16 == 15:
+			progress.emit(0.2 + 0.05 * float(i) / float(res.size()))
+			await _slice()
+
+## [image ou null, normale de relief (non compressée) ou null] (fil de travail : aucun état partagé, aucun appel au serveur de rendu).
+static func _texture_job(path: String, bump: bool) -> Array:
+	var img := Image.load_from_file(path)   # res:// direct : lisible depuis le .pck exporté
+	if img == null or img.is_empty():
+		push_warning("texture absente : %s" % path)
+		return [null, null]
+	if img.get_format() != Image.FORMAT_RGBA8 and img.get_format() != Image.FORMAT_RGB8:
+		img.convert(Image.FORMAT_RGBA8)
+	var relief: Image = null
+	if bump:   # v0.24.1 : carte de bosses des façades : la normale de relief est calculée ici (Image.bump_map_to_normal_map, natif) puis compressée (BC5)
+		var nimg := img.duplicate() as Image
+		nimg.bump_map_to_normal_map(BUMP_SCALE)
+		nimg.generate_mipmaps()
+		relief = nimg
+		img.convert(Image.FORMAT_L8)
+	img.generate_mipmaps()
+	return [img, relief]
 
 func _relief_tex(i: int) -> Texture2D:
 	return _relief.get(i)
@@ -221,6 +298,7 @@ func _load_materials() -> void:
 		files.append(String(t["file"]))
 	var keep_shops := "--dbg-oldshops" in OS.get_cmdline_user_args()
 	for m: Dictionary in _json(DIR + "materials.json"):
+		await _slice()   # v0.34.6 : l'écran de chargement s'anime entre deux matériaux (la première compilation de chaque shader coûte des dizaines de ms)
 		if not keep_shops and ShopView.baked_shop_material(m):
 			_shop_mats[_materials.size()] = true
 		var k := Surfaces.kind(m, files)
@@ -390,37 +468,67 @@ static func _to_v3(f: PackedFloat32Array) -> PackedVector3Array:
 		out[i] = Vector3(f[i * 3], f[i * 3 + 1], f[i * 3 + 2])
 	return out
 
-func _mesh_from_pack(path: String, cath := false) -> MeshInstance3D:
+## v0.34.6 : partie sans état partagé (appelée sur les fils de travail pour les tuiles) : { mesh (ArrayMesh ou null), water (mailles d'eau), cath (triangles par sort),
+## dropped (surfaces de panneaux retirées) }. Les matériaux de la cathédrale sont créés avant (_prepare_tile_jobs).
+func _mesh_data(path: String, cath := false) -> Dictionary:
+	var out := {"surfaces": [], "water": {}, "cath": [0, 0, 0, 0, 0, 0, 0], "dropped": 0}
 	var pk := _open_pack(path, "ZMP1")
 	if pk.is_empty():
-		return null
+		return out
 	var head: Dictionary = pk[0]
-	var mesh := ArrayMesh.new()
+	var surfs: Array = out["surfaces"]
+	var water: Dictionary = out["water"]
 	for s: Dictionary in head["surfaces"]:
 		if _shop_mats.has(int(s["mat"])):
-			shop_surfaces_dropped += 1
+			out["dropped"] = int(out["dropped"]) + 1
 			continue
 		var arr := _surface_arrays(s, pk[1], pk[2], true)
-		if _materials[int(s["mat"])] is ShaderMaterial and (_materials[int(s["mat"])] as ShaderMaterial).shader == Surfaces.WATER:
+		if _water_mats.has(int(s["mat"])):
 			var wv: PackedVector3Array = arr[Mesh.ARRAY_VERTEX]
 			for i in range(0, wv.size(), 3):
-				var key := Vector2i(floori(wv[i].x / 48.0), floori(wv[i].z / 48.0))
-				_water_cells[key] = true
+				water[Vector2i(floori(wv[i].x / 48.0), floori(wv[i].z / 48.0))] = true
 		if cath and _cath_role.has(int(s["mat"])):
-			_add_cath_split(mesh, arr, int(s["mat"]))
+			_add_cath_split(surfs, arr, int(s["mat"]), out["cath"])
 			continue
-		mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arr)
-		mesh.surface_set_material(mesh.get_surface_count() - 1, _materials[int(s["mat"])])
-	if mesh.get_surface_count() == 0:
+		surfs.append([arr, _materials[int(s["mat"])]])
+	return out
+
+## Fil principal : compteurs, mailles d'eau, nœud.
+func _mesh_instance(d: Dictionary) -> MeshInstance3D:
+	shop_surfaces_dropped += int(d["dropped"])
+	for k: Vector2i in d["water"]:
+		_water_cells[k] = true
+	for c in 7:
+		cath_tris[c] += int(d["cath"][c])
+	if (d["surfaces"] as Array).is_empty():
 		return null
+	var mesh := ArrayMesh.new()
+	for sf: Array in d["surfaces"]:
+		mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, sf[0])
+		mesh.surface_set_material(mesh.get_surface_count() - 1, sf[1])
 	var mi := MeshInstance3D.new()
 	mi.mesh = mesh
 	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	mi.set_meta("tile", true)   # set_quality règle les ombres portées (la lune)
 	return mi
 
+func _mesh_from_pack(path: String, cath := false) -> MeshInstance3D:
+	return _mesh_instance(_mesh_data(path, cath))
+
+## v0.34.6 : avant les tâches des tuiles : matériaux d'eau repérés, et matériaux de remplacement de la cathédrale créés pour chaque rôle (avant : à la
+## première tuile qui en avait besoin ; les fils de travail ne créent rien).
+var _water_mats: Dictionary = {}
+func _prepare_tile_jobs() -> void:
+	for i in _materials.size():
+		if _materials[i] is ShaderMaterial and (_materials[i] as ShaderMaterial).shader == Surfaces.WATER:
+			_water_mats[i] = true
+	if _cath_rect.size.x <= 0.0:
+		return
+	for mat: int in _cath_role:
+		_cath_material(String(_cath_role[mat]), mat)
+
 ## v0.32.0 : répartit les triangles d'une surface cuite entre son matériau, la pierre et la toiture de la cathédrale (ou les retire), voir CathedralZone.
-func _add_cath_split(mesh: ArrayMesh, arr: Array, mat: int) -> void:
+func _add_cath_split(surfs: Array, arr: Array, mat: int, counts: Array) -> void:
 	var role: String = _cath_role[mat]
 	var v: PackedVector3Array = arr[Mesh.ARRAY_VERTEX]
 	var idx: PackedInt32Array = arr[Mesh.ARRAY_INDEX]
@@ -428,7 +536,7 @@ func _add_cath_split(mesh: ArrayMesh, arr: Array, mat: int) -> void:
 	var t := 0
 	while t + 2 < idx.size():
 		var c := CathedralZone.classify(role, v[idx[t]], v[idx[t + 1]], v[idx[t + 2]])
-		cath_tris[c] += 1
+		counts[c] += 1
 		if c != CathedralZone.DROP:
 			var p: PackedInt32Array = parts[c]
 			p.append(idx[t])
@@ -436,6 +544,17 @@ func _add_cath_split(mesh: ArrayMesh, arr: Array, mat: int) -> void:
 			p.append(idx[t + 2])
 			parts[c] = p
 		t += 3
+	var mats: Array = [_materials[mat], _cath_stone, _cath_roof, null, _cath_inwall.get(mat), _cath_extra.get(mat), _cath_floor]
+	for k in [0, 1, 2, 4, 5, 6]:
+		var p: PackedInt32Array = parts[k]
+		if p.is_empty():
+			continue
+		var a2 := arr.duplicate()
+		a2[Mesh.ARRAY_INDEX] = p
+		surfs.append([a2, mats[k]])
+
+## Matériau de remplacement d'un rôle de la cathédrale (créé une fois, sur le fil principal).
+func _cath_material(role: String, mat: int) -> void:
 	if role == "inwall" and not _cath_inwall.has(mat):
 		var src: StandardMaterial3D = _materials[mat]
 		var im := ShaderMaterial.new()
@@ -466,15 +585,6 @@ func _add_cath_split(mesh: ArrayMesh, arr: Array, mat: int) -> void:
 		var u := Cathedral.P(1.0, 0.0) - o
 		_cath_floor.set_shader_parameter("origin", Vector3(o.x, 0.0, o.y))
 		_cath_floor.set_shader_parameter("axis_u", Vector3(u.x, 0.0, u.y))
-	var mats: Array = [_materials[mat], _cath_stone, _cath_roof, null, _cath_inwall.get(mat), _cath_extra.get(mat), _cath_floor]
-	for k in [0, 1, 2, 4, 5, 6]:
-		var p: PackedInt32Array = parts[k]
-		if p.is_empty():
-			continue
-		var a2 := arr.duplicate()
-		a2[Mesh.ARRAY_INDEX] = p
-		mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, a2)
-		mesh.surface_set_material(mesh.get_surface_count() - 1, mats[k])
 
 func _load_doors() -> void:
 	for d: Dictionary in Game.world.doors:
@@ -599,22 +709,90 @@ var grass_texture: ImageTexture
 var vegetation: Node3D
 var _water_cells: Dictionary = {}
 var water_reflection: Node
-func _grass_mask() -> void:
+## v0.34.6 : masque des pelouses et placement de la végétation sur un fil de travail, lancé au début de build() (avant : ~0,4 s sur le fil principal après les
+## instances) : le fil relit lui-même les positions des troncs (instances.bin) et le champ de distance du sol (ground_sdf.png).
+var _grass_task := -1
+var _grass_res: Array = []
+var _grass_args: Array = []
+func _start_grass_job() -> void:
 	var meta := GfxAssets.meta()
-	if meta.is_empty() or _tree_pos.is_empty() or "--dbg-nograss" in OS.get_cmdline_user_args():
+	if meta.is_empty() or "--dbg-nograss" in OS.get_cmdline_user_args():
 		return
 	var o: Array = meta["sdf_origin"]
 	var sz: Array = meta["sdf_size"]
 	var w := int(ceil(float(sz[0])))
 	var h := int(ceil(float(sz[1])))
+	var origin := Vector2(float(o[0]), float(o[1]))
+	var vege := not "--dbg-novege" in OS.get_cmdline_user_args()
+	var sdf_min := float(meta["sdf_min"])
+	var sdf_range := float(meta["sdf_range"])
+	_grass_args = [w, h, vege]
+	_grass_task = WorkerThreadPool.add_task(func() -> void:
+		var trees := tree_positions(DIR + "instances.bin")
+		if trees.is_empty():
+			return
+		var sdf: Image = null
+		if vege:
+			sdf = Image.load_from_file(GfxAssets.DIR + "ground_sdf.png")
+			if sdf != null and sdf.is_empty():
+				sdf = null
+		var data := grass_mask_data(trees, w, h, origin)
+		_grass_res = [trees, data, VegetationView.place(trees, data, w, h, origin, sdf, sdf_min, sdf_range) if vege else []], true, "grass mask")
+
+## Positions (x, z) des troncs d'arbres du décor instancié (maillage « trees » de moins de 10 000 instances), comme _load_instances. Fonction pure.
+static func tree_positions(path: String) -> PackedVector2Array:
+	var out := PackedVector2Array()
+	var pk := _open_pack(path, "ZMI1")
+	if pk.is_empty():
+		return out
+	var bytes: PackedByteArray = pk[1]
+	var base: int = pk[2]
+	for m: Dictionary in pk[0]["meshes"]:
+		var n := int(m["count"])
+		if n <= 0 or String(m.get("name", "")) != "trees" or n >= 10000:
+			continue
+		var xf := bytes.slice(base + int(m["xf"]), base + int(m["xf"]) + n * 48).to_float32_array()
+		for i in n:
+			out.append(Vector2(xf[i * 12 + 3], xf[i * 12 + 11]))
+	return out
+
+func _grass_mask() -> void:
+	if _grass_task < 0:
+		return
+	while not WorkerThreadPool.is_task_completed(_grass_task):
+		await _frame()
+	WorkerThreadPool.wait_for_task_completion(_grass_task)
+	_grass_task = -1
+	if _grass_res.is_empty() or _tree_pos.is_empty():
+		return
+	if _grass_res[0] != _tree_pos:
+		push_warning("végétation : positions des arbres différentes de celles du décor")
+	var w: int = _grass_args[0]
+	var h: int = _grass_args[1]
+	var img := Image.create_from_data(w, h, false, Image.FORMAT_RG8, _grass_res[1])
+	grass_texture = ImageTexture.create_from_image(img)
+	# v0.32.4 : touffes d'herbe et grilles d'arbres (même masque)
+	if bool(_grass_args[2]):
+		vegetation = VegetationView.new()
+		add_child(vegetation)
+		vegetation.build_placed(_grass_res[2][0], _grass_res[2][1])
+	_grass_res = []
+	for m: ShaderMaterial in _kinds.get("ground", []):
+		m.set_shader_parameter("grass_mask", grass_texture)
+		m.set_shader_parameter("grass_a", load("res://assets/pbr/ground_grass/a.png"))
+		m.set_shader_parameter("grass_m", load("res://assets/pbr/ground_grass/m.png"))
+		m.set_shader_parameter("grass_on", 1.0)
+
+## Masque des pelouses (R : densité d'arbres) et des fosses d'arbres (G), 1 m par texel (w x h, origine o). Fonction pure.
+static func grass_mask_data(trees: PackedVector2Array, w: int, h: int, o: Vector2) -> PackedByteArray:
 	var dens := PackedFloat32Array()
 	dens.resize(w * h)
 	var pit := PackedByteArray()
 	pit.resize(w * h)
 	var R := 9.0
-	for p in _tree_pos:
-		var cx := p.x - float(o[0])
-		var cz := p.y - float(o[1])
+	for p in trees:
+		var cx := p.x - o.x
+		var cz := p.y - o.y
 		for iz in range(maxi(0, int(cz - R)), mini(h, int(cz + R) + 1)):
 			for ix in range(maxi(0, int(cx - R)), mini(w, int(cx + R) + 1)):
 				var d := Vector2(ix + 0.5 - cx, iz + 0.5 - cz).length()
@@ -628,20 +806,7 @@ func _grass_mask() -> void:
 	for i in w * h:
 		data[i * 2] = int(clampf(dens[i], 0.0, 1.0) * 255.0)
 		data[i * 2 + 1] = pit[i]
-	var img := Image.create_from_data(w, h, false, Image.FORMAT_RG8, data)
-	grass_texture = ImageTexture.create_from_image(img)
-	# v0.32.4 : touffes d'herbe et grilles d'arbres (même masque)
-	if not "--dbg-novege" in OS.get_cmdline_user_args():
-		var sdf_t := GfxAssets.texture("ground_sdf.png", false)
-		var sdf_img: Image = sdf_t.get_image() if sdf_t != null else null
-		vegetation = preload("res://scenes/world/vegetation_view.gd").new()
-		add_child(vegetation)
-		vegetation.build(_tree_pos, data, w, h, Vector2(float(o[0]), float(o[1])), sdf_img, float(meta["sdf_min"]), float(meta["sdf_range"]))
-	for m: ShaderMaterial in _kinds.get("ground", []):
-		m.set_shader_parameter("grass_mask", grass_texture)
-		m.set_shader_parameter("grass_a", load("res://assets/pbr/ground_grass/a.png"))
-		m.set_shader_parameter("grass_m", load("res://assets/pbr/ground_grass/m.png"))
-		m.set_shader_parameter("grass_on", 1.0)
+	return data
 
 # ---------------------------------------------------------------- sources de lumière
 ## Le JS redistribue 8 PointLight (décroissance 2) sur les sources les plus proches du joueur toutes les 0,4 s (realworld.js assignLights) : lampadaires (60, portée 20), panneaux
