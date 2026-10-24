@@ -52,7 +52,9 @@ Play 5 to 10 minutes, close the window normally, then send `perf.txt` (the `SPIK
 Zombie.console.exe -- --zombie-stuck-log=zombies.jsonl      # or diagnostic-zombies.bat in the Windows package
 ```
 
-The game starts normally (menu); every zombie that stays still, pushes against a wall, ends up inside an obstacle, loses its way or jumps (teleport), every appearance (window or ground, straight-line and walking distance to the player, seen or hidden) and every recovery is written as one JSON object per line, with a summary every 30 s (`sim/zombie_watch.gd`). Default file: `user://zombie-stuck-log.jsonl`. In game, F9 then P shows the same counters. Suite `j42` measures both maps with a scripted tour.
+The game starts normally (menu); every zombie that stays still, pushes against a wall, ends up inside an obstacle, loses its way or jumps (teleport), every appearance (window or ground, straight-line and walking distance to the player, seen or hidden) and every recovery is written as one JSON object per line, with a summary every 30 s (`sim/zombie_watch.gd`). Default file: `user://zombie-stuck-log.jsonl`. In game, F9 then P shows the same counters; U forces the recovery of stuck zombies. Suite `j42` measures both maps with a scripted tour.
+
+Since v0.34.11, zombies and spawns follow port rules (not in the JS): the alpine map's flow field covers the whole station; the added street furniture is in the Strasbourg navigation grid; a zombie blocked against a corner follows the field cell by cell, one inside an obstacle walks out to the nearest free cell, a crowd never pushes a zombie through a wall; a stuck, lost or far zombie is never teleported: it sinks into the ground if the player sees it, then comes back by a window or from the ground, hidden from the player. Round spawns are always animated, in an open zone, hidden from the player and within 70 m of walking (95 m fallback); nothing appears in the 2 s after a door is bought. `--no-furniture-nav` keeps the furniture out of the grid (comparisons).
 
 ## Useful launch options
 
@@ -65,7 +67,7 @@ tools/godot-check.sh          # everything: export config and golden files from 
 tools/godot-check.sh j9       # one suite
 ```
 
-More than 162,000 checks (162,768), 0 failures at v0.34.8. The **golden files** are outputs of the JS game (Node or Chrome) that the GDScript must reproduce: config, collision, navigation, weapons, vehicles, prices, tram, bosses. Tests run headless, without rendering; screenshots need a display (or `xvfb-run`).
+More than 162,000 checks (162,851), 0 failures at v0.34.11. The **golden files** are outputs of the JS game (Node or Chrome) that the GDScript must reproduce: config, collision, navigation, weapons, vehicles, prices, tram, bosses. Tests run headless, without rendering; screenshots need a display (or `xvfb-run`).
 
 ## Layout
 

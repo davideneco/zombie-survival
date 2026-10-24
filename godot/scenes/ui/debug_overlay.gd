@@ -1,7 +1,7 @@
 class_name DebugOverlay
 extends CanvasLayer
 ## Menu debug solo (F9, port de la part « hôte seul » de src/debugMenu.js) : la souris reste capturée, tout se fait au clavier.
-##   U débloquer les zombies coincés (relocalisation forcée près du joueur) · P bascule FPS / appels de rendu / triangles / zombies · Échap ou F9 ferme.
+##   U débloquer les zombies coincés (v0.34.11 : ils s'enfoncent dans le sol puis réapparaissent cachés, par une fenêtre ou depuis le sol) · P bascule FPS / appels de rendu / triangles / zombies · Échap ou F9 ferme.
 ## Les parties qui concernent d'autres joueurs (1-4, T, Y, N : amener / rejoindre / réanimer) attendent le multijoueur (J12).
 ## `Game.debug_open` dit au menu Échap de fermer ce panneau d'abord.
 
@@ -73,7 +73,7 @@ func _redraw() -> void:
 			_fps, int(Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME)),
 			Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME) / 1000.0, Game.zombies.size(), Game.round_number,
 			Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS) * 1000.0]
-		# v0.34.10 : suivi des zombies (ZombieWatch) : immobiles, perdus, téléportés, apparitions ; journal --zombie-stuck-log
+		# v0.34.10 : suivi des zombies (ZombieWatch) : immobiles, perdus, téléportés, apparitions, relances ; journal --zombie-stuck-log
 		h += "\n" + Game.watch.summary().replace("), ", "),\n")
 		if Game.watch.log_on:
 			h += "\njournal : %s" % ProjectSettings.globalize_path(Game.watch.log_path)

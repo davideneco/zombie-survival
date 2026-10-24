@@ -311,7 +311,9 @@ func _on_zombie_event(z: ZombieSim, name: String) -> void:
 		"glass":
 			glass(z.spawn_center, z.spawn_normal.x, z.spawn_normal.y)
 		"emerge":
-			dirt(Vector3(z.spawn_pos.x, 0.3, z.spawn_pos.z), 26)
+			dirt(Vector3(z.spawn_pos.x, z.spawn_pos.y + 0.3, z.spawn_pos.z), 26)
+		"burrow":
+			dirt(Vector3(z.spawn_pos.x, z.spawn_pos.y + 0.3, z.spawn_pos.z), 20)
 
 # ---------------------------------------------------------------- chaque image
 func _process(dt: float) -> void:
@@ -389,10 +391,10 @@ func _zombie_marks(dt: float) -> void:
 			_dead_marked[z.id] = true
 			decal(z.pos.x, z.pos.z, 1.7)
 			_decal_dirty = true
-		elif z.spawn_type == "ground" and z.spawn_t > 0.0:
+		elif (z.spawn_type == "ground" or (z.spawn_type == "burrow" and not z.burrowed())) and z.spawn_t > 0.0:
 			var left: float = _rumble.get(z.id, 0.0) - dt
 			if left <= 0.0:
 				_rumble[z.id] = _rng.randf() / 14.0 * 2.0
-				dirt(Vector3(z.spawn_pos.x, 0.25, z.spawn_pos.z), 3)
+				dirt(Vector3(z.spawn_pos.x, z.spawn_pos.y + 0.25, z.spawn_pos.z), 3)
 			else:
 				_rumble[z.id] = left

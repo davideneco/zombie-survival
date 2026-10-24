@@ -15,6 +15,7 @@ func run(t: Node) -> void:
 	var g: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(GOLDEN))
 	_rng.seed = 20260613
 	var w := World.load_world()
+	w.set_extras(false)        # v0.34.11 : la grille du JS, sans le mobilier ajouté (World.stamp_furniture)
 	_regions(t, w, g)          # avant d'ouvrir les portes : le golden est calculé portes fermées
 	_hops(t, w, g)
 	_balance(t, g)
@@ -672,24 +673,27 @@ func _variants(t: Node) -> void:
 func _relocate(t: Node) -> void:
 	_scenario(35)
 	var p := Game.player.pos
-	# un zombie coincé (no_progress élevé) à plus de 12 m : téléporté à 22-45 m
+	# v0.34.11 (écart voulu avec main.js relocateZombies) : un zombie coincé (no_progress élevé) n'est plus téléporté : hors de la vue du joueur
+	# (il est à 30 m sur le côté), il réapparaît aussitôt par une fenêtre ou depuis le sol, à une place cachée et à distance de marche bornée
 	var z := _make_zombie(p + Vector3(30, 0, 0), 2.0)
 	z.no_progress = 10.0
 	Game.relocate_t = 0.0
-	var before := z.pos
 	Game.step(DT, {})
-	var d := Vector2(z.pos.x - p.x, z.pos.z - p.z).length()
-	t.check(z.pos.distance_to(before) > 1.0 and d >= 21.0 and d <= 46.0, "relocalisation d'un zombie coincé : %.1f m du joueur" % d)
-	t.check(Game.relocated >= 1 and z.no_progress == 0.0, "relocalisation comptée, no_progress remis à zéro")
-	# un zombie trop loin (hors du champ de flux) : relocalisé après RELOCATE_FAR_COUNT passes
-	var far := _make_zombie(p + Vector3(300, 0, 0), 2.0)
+	var at := z.spawn_outside if z.spawn_type == "window" else z.spawn_pos
+	var d := Vector2(at.x - p.x, at.z - p.z).length()
+	t.check(z.spawn_t > 0.0 and (z.spawn_type == "window" or z.spawn_type == "ground") and d >= 6.0 and d <= 80.0,
+		"zombie coincé relancé par une apparition animée (%s à %.1f m du joueur)" % [z.spawn_type, d])
+	t.check(Game.relocated >= 1 and z.no_progress == 0.0, "relance comptée, no_progress remis à zéro")
+	# un zombie trop loin (hors du champ de flux) : relancé après RELOCATE_FAR_COUNT s à plus de RELOCATE_FAR m
+	var fc := Game.env.nav.nearest_free(p.x + 300.0, p.z, 12)   # sur une case libre (au fond d'un immeuble, il serait relancé plus tôt : « inside »)
+	var far := _make_zombie(Vector3(Game.env.nav.world_x(fc % Game.env.nav.nx), 0, Game.env.nav.world_z(fc / Game.env.nav.nx)) if fc >= 0 else p + Vector3(300, 0, 0), 2.0)
 	var moved_at := -1.0
 	for f in 60 * 8:
 		Game.step(DT, {})
-		if Vector2(far.pos.x - p.x, far.pos.z - p.z).length() < 100.0:
+		if far.spawn_t > 0.0 and Vector2(far.pos.x - p.x, far.pos.z - p.z).length() < 100.0:
 			moved_at = f * DT
 			break
-	t.check(moved_at > 2.0 and moved_at < 6.5, "zombie lointain ramené près du joueur après %.1f s (4 passes d'une seconde)" % moved_at)
+	t.check(moved_at > 2.0 and moved_at < 6.5 and far.spawn_type != "", "zombie lointain relancé près du joueur après %.1f s, par une apparition animée (%s)" % [moved_at, far.spawn_type])
 
 # ------------------------------------------------------------------ bots de marche (tools/stuck-scan.mjs, étape bots)
 func _walkers(t: Node) -> void:

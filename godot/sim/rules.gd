@@ -97,6 +97,29 @@ const GROUND_TRIES := 80          ## realworld.js pickGround : essais
 const GROUND_CLEARANCE := 1       ## 3 x 3 cases libres autour du point
 const WINDOW_CHANCE := 0.65       ## pickSpawn : fenêtre d'abord avec cette probabilité
 const REGION_FIELD_PERIOD := 0.3  ## updateRegionFields : champ des étages recalculé toutes les 0,3 s
+
+# --- v0.34.11 (port, écart voulu avec main.js relocateZombies et pickSpawn) : zombies coincés et apparitions. Un zombie coincé, perdu ou trop loin
+# n'est plus téléporté (apparition sans animation) : il s'enfonce dans le sol s'il est en vue, puis réapparaît par une fenêtre ou depuis le sol,
+# hors de la vue du joueur et à distance de marche bornée. Les apparitions de manche sont soumises aux mêmes règles. Voir Game._rescue, Game._pick_spawn.
+const ZOMBIE_ESCAPE_NP := 1.0     ## no_progress au-delà : il suit la case voisine la plus basse du champ (NavGrid.steer_local)
+const ZOMBIE_ESCAPE_CELLS := 3    ## dans un obstacle sans direction : case libre du champ la plus proche à moins de 3 cases (NavGrid.escape)
+const ZOMBIE_TUNNEL_CHECK := 0.2  ## déplacement d'un pas au-delà (m) : on vérifie qu'il ne traverse pas un mur (rayon de collision)
+const BURROW_TIME := 1.3          ## s : il s'enfonce dans le sol avant de réapparaître ailleurs
+const BURROW_HOLD := 30.0         ## s : délai d'attente sous terre (renouvelé) tant qu'aucune place n'est libre
+const RESCUE_INTERVAL := 0.5      ## s entre deux passes de Game._rescue
+const RESCUE_PER_PASS := 1        ## au plus 1 zombie relancé par passe (jamais en masse : 2 par seconde au plus)
+const RESCUE_STUCK := 4.0         ## no_progress (s) au-delà : coincé, à plus de RESCUE_NEAR m du joueur
+const RESCUE_NEAR := 3.0
+const RESCUE_LOST := 3.0          ## lost_t (s) au-delà : perdu (aucune direction vers sa cible)
+const RESCUE_INSIDE := 1.5        ## s au fond d'un obstacle (aucune case libre à 2 cases) : relancé
+const SPAWN_WALK_MAX := 70.0      ## m de marche (champ de flux) au plus entre le joueur et le point d'apparition (fenêtre, sol)
+const SPAWN_WALK_MAX2 := 95.0     ## repli
+const SPAWN_VIEW_DIST := 90.0     ## un point plus loin que ça n'est pas « vu » (ZombieWatch.seen_by)
+const SPAWN_VIEW_DOT := 0.3       ## cône de vision (cosinus du demi-angle, ~72°)
+const SPAWN_RETRY := 0.5          ## s : aucune place cachée, l'apparition est remise (la manche n'avance pas)
+const SPAWN_RELAX_AFTER := 6.0    ## s d'apparitions remises : on accepte une sortie de terre visible (toujours animée)
+const DOOR_CALM := 2.0            ## s sans apparition ni réapparition après l'achat d'une porte
+const ALPINE_FLOW_RANGE := 600.0  ## m : le champ de flux couvre toute la station (300 x 300 m, détours compris ; CONFIG.zombie.flow.range = 160 pour la ville)
 const CRAWLER_HEAD := Vector3(0, 0.38, 0.82)      ## rampant : tête tenue à ~0,8 m devant les hanches (pose _poseCrawl : colonne à 1,42 rad), approximation
 const CRAWLER_BODY_CENTER := Vector3(0, 0.3, 0.35)   ## hitBody du rampant : position (0, 0.3, 0.35), échelle (1, 0.42, 1.5)
 const CRAWLER_BODY_HALF := Vector3(0.5, 0.3465, 0.6)

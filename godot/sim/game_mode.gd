@@ -222,8 +222,11 @@ func collision_boxes() -> Array:
 
 # ------------------------------------------------------------------ apparitions
 ## Où apparaît le prochain zombie (remplace Game._pick_spawn en Zone unique) : une fenêtre de la zone ou un point au sol de la zone, à
-## [spawnMin, spawnMax] m du joueur et HORS de son champ de vision (derrière lui, ou caché par un mur). Repli : le point le plus lointain.
-func pick_spawn(g: Node) -> Dictionary:
+## [spawnMin, spawnMax] m du joueur et HORS de son champ de vision (derrière lui, ou caché par un mur). Repli : le point le plus lointain,
+## seulement si relax (v0.34.11 : sinon {} et Game remet l'apparition, comme sur toute la carte).
+var relaxed := 0   ## v0.34.11 : apparitions au point de repli (peut-être en vue, toujours animées)
+
+func pick_spawn(g: Node, relax := true) -> Dictionary:
 	var w: World = g.world
 	var p: PlayerSim = g.player
 	var rng: RandomNumberGenerator = g.rng
@@ -236,7 +239,7 @@ func pick_spawn(g: Node) -> Dictionary:
 				continue
 			var o := w.window_outside(wi)
 			var d := Vector2(o.x - p.pos.x, o.z - p.pos.z).length()
-			if d >= lo and d <= hi and not seen(g, w.window_center(wi)):
+			if d >= lo and d <= hi and not seen(g, w.window_center(wi)) and not seen(g, o + Vector3(0, 1.0, 0)):
 				ok.append(wi)
 		if not ok.is_empty():
 			var wi := ok[rng.randi() % ok.size()]
@@ -249,6 +252,9 @@ func pick_spawn(g: Node) -> Dictionary:
 			var d := Vector2(q.x - p.pos.x, q.y - p.pos.z).length()
 			if d >= lo and d <= hi and not seen(g, Vector3(q.x, 1.0, q.y)):
 				return {"type": "ground", "pos": Vector3(q.x, 0.0, q.y)}
+	if not relax:
+		return {}
+	relaxed += 1
 	# repli (zone minuscule, joueur au milieu) : le point au sol le plus éloigné du joueur
 	var far := Vector2.INF
 	var fd := -1.0
@@ -263,18 +269,6 @@ func pick_spawn(g: Node) -> Dictionary:
 
 ## Le point est-il vu par le joueur : à moins de viewDist m, dans le cône de vision et sans mur entre les deux ?
 func seen(g: Node, at: Vector3) -> bool:
-	var p: PlayerSim = g.player
-	var eye := p.pos + Vector3(0, 1.6, 0)
-	var to := at - eye
-	var flat := Vector2(to.x, to.z)
-	var d := flat.length()
-	if d > float(Config.at("zoneMode.viewDist", CONFIG["viewDist"])):
-		return false
-	if d < 0.5:
-		return true
-	var fwd := Vector2(-sin(p.yaw), -cos(p.yaw))
-	if flat.normalized().dot(fwd) < float(Config.at("zoneMode.viewDot", CONFIG["viewDot"])):
-		return false
-	var len := to.length()
-	var hit: float = g.collision.ray_hit(eye.x, eye.y, eye.z, to.x / len, to.y / len, to.z / len, len)
-	return hit >= len - 0.3
+	# v0.34.11 : même règle que les apparitions de toute la carte (Game._seen : 90 m, ~72°) ; viewDist / viewDot ne peuvent que l'élargir
+	return ZombieWatch.seen_by(g.player, g.collision, at, maxf(float(Config.at("zoneMode.viewDist", CONFIG["viewDist"])), Rules.SPAWN_VIEW_DIST),
+		minf(float(Config.at("zoneMode.viewDot", CONFIG["viewDot"])), Rules.SPAWN_VIEW_DOT))

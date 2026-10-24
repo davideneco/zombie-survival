@@ -47,6 +47,7 @@ static func load_map() -> World:
 	var w := World.new()
 	w.map_id = "alpine"
 	w.furniture_on = false
+	w.flow_range = Rules.ALPINE_FLOW_RANGE   # v0.34.11 : le champ couvre toute la station (sinon un zombie à plus de 160 m de marche fonce dans les murs)
 	var half := float(D["half"])
 	w.half_x = half
 	w.half_z = half

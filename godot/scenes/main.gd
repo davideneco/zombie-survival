@@ -164,7 +164,7 @@ var _eye_y := -1.0e9             ## --eye-y=Y : hauteur de la caméra (vue aéri
 var _collision_floor := -1.0e9   ## --collision-floor=Y : un seul étage
 var _horde := 0
 var _zoo := 0.0                  ## --zoo=D : une rangée de chaque type de zombie (normal, coureur, boiteux, rampant, chevalier, pestiféré) à D m devant le joueur (captures)
-var _zoo_state := ""             ## --zoo-state=death|headless|hit|window|ground : état imposé aux zombies du zoo (à --zoo-at=S secondes de jeu pour death / headless / hit ; dès le départ pour window / ground)
+var _zoo_state := ""             ## --zoo-state=death|headless|hit|burrow|window|ground : état imposé aux zombies du zoo (à --zoo-at=S secondes de jeu pour death / headless / hit / burrow ; dès le départ pour window / ground)
 var _zoo_at := 0.5
 var _zoo_done := false
 var _horde_only := ""            ## --horde-only=normal|run|limp|crawl|armored|bloat : tous les zombies de --horde sont de ce type (captures)
@@ -278,6 +278,8 @@ func _ready() -> void:
 			Game.settings.values["day_minutes"] = clampi(int(a.substr(14)), 2, 120)
 		elif a == "--no-furniture":   # v0.33.1 : sans le mobilier urbain ajouté (collision et dessin : comparaisons)
 			StreetFurniture.enabled = false
+		elif a == "--no-furniture-nav":   # v0.34.11 : mobilier gardé, mais pas marqué dans la grille de navigation (comparaisons)
+			World.furniture_nav = false
 		elif a.begins_with("--pos="):
 			var f := a.substr(6).split(",")
 			_at_pos = Vector3(float(f[0]), 0.0, float(f[1]))
@@ -978,6 +980,8 @@ func _zoo_apply() -> void:
 				z.damage(1.0e9, true)
 			"hit":
 				z.damage(1.0, false)
+			"burrow":   # v0.34.11 : ils s'enfoncent dans le sol (relance d'un zombie coincé en vue), puis réapparaissent hors de la vue
+				z.start_burrow()
 
 ## --do= : actions de démonstration (captures, vidéos). perks : tous les atouts ; powerup:TYPE : un bonus devant le joueur ; money ; box / pap : achète
 ## à la machine la plus proche de la position ; to-box / to-pap / to-perk:ID : se place devant la machine ; down : à terre.

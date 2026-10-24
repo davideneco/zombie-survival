@@ -416,6 +416,8 @@ func _on_zombie_event(z: ZombieSim, name: String) -> void:
 		"emerge":
 			play("dirt", v, z.pos)
 			play("groan", minf(1.0, v * 1.4), z.pos)
+		"burrow":   # v0.34.11 : un zombie relancé s'enfonce dans le sol
+			play("dirt", v, z.pos)
 
 func _on_round_started(_n: int) -> void:
 	lull = false

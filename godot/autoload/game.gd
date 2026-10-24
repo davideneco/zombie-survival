@@ -72,7 +72,11 @@ var env: ZombieEnv         ## ce que voient les zombies (joueurs, collision, cha
 var flow_cool := 0.0       ## délai avant de relancer le champ de flux de la carte
 var region_field_t := 0.0
 var relocate_t := 0.0
-var relocated := 0         ## zombies téléportés près des joueurs depuis le début de la partie (suivi des tests)
+var relocated := 0         ## zombies relancés (réapparus par une fenêtre ou depuis le sol, v0.34.11) depuis le début de la partie (suivi des tests)
+var spawn_calm_until := 0.0   ## v0.34.11 : pas d'apparition avant ce temps de jeu (achat d'une porte : Rules.DOOR_CALM)
+var _spawn_wait_since := -1.0 ## v0.34.11 : temps de jeu de la première apparition remise faute de place cachée (-1 : aucune)
+var spawns_postponed := 0     ## apparitions remises (suivi des tests)
+var spawns_relaxed := 0       ## apparitions de repli, peut-être en vue (toujours animées) après SPAWN_RELAX_AFTER s sans place cachée
 var flow_threaded := false ## champ de flux de la carte calculé sur un fil de travail (jeu) ; faux dans les tests (échange des tampons reproductible)
 var flow_us := 0           ## microsecondes passées dans le champ de flux au dernier pas (banc d'essai)
 var rng := RandomNumberGenerator.new()
@@ -249,6 +253,10 @@ func new_game(seed_value: int = -1, map: String = "", weapons: Array = [], prelo
 	region_field_t = 0.0
 	relocate_t = 0.0
 	relocated = 0
+	spawn_calm_until = 0.0
+	_spawn_wait_since = -1.0
+	spawns_postponed = 0
+	spawns_relaxed = 0
 	points = int(Config.at("player.startPoints"))
 	points_earned = 0
 	escaped = false
@@ -653,7 +661,7 @@ func field_targets(region: int) -> Array:
 		if pl.dead:
 			continue
 		if lv == null or pl.tregion == region:
-			out.append(pl.pos)
+			out.append(_anchor(pl.pos) if region == 0 else pl.pos)
 			continue
 		var hop := lv.next_hop(region, pl.tregion)
 		if hop.is_empty():
@@ -662,6 +670,36 @@ func field_targets(region: int) -> Array:
 		var e: Array = path[0] if int(hop["dir"]) > 0 else path[path.size() - 1]
 		out.append(Vector3(e[0], 0.0, e[2]))
 	return out
+
+## v0.34.11 : case de départ du champ pour un joueur collé à un mur (sa case est dans la marge, donc bloquée) : la case libre la plus proche
+## SANS mur entre lui et elle (rayon de collision). NavGrid.nearest_free seule pouvait choisir une case de l'autre côté d'une palissade mince :
+## les zombies de ce côté-là croyaient être arrivés et restaient contre le mur.
+func _anchor(p: Vector3) -> Vector3:
+	var nav := env.nav
+	if nav == null:
+		return p
+	var ix := nav.cx(p.x)
+	var iz := nav.cz(p.z)
+	if not nav.inside(ix, iz) or nav.blocked[nav.idx(ix, iz)] == 0:
+		return p
+	var best := p
+	var bd := INF
+	for dz in range(-2, 3):
+		for dx in range(-2, 3):
+			var jx := ix + dx
+			var jz := iz + dz
+			if not nav.inside(jx, jz) or nav.blocked[nav.idx(jx, jz)] != 0:
+				continue
+			var wx := nav.world_x(jx)
+			var wz := nav.world_z(jz)
+			var d := Vector2(wx - p.x, wz - p.z).length()
+			if d >= bd or d < 1e-4:
+				continue
+			if collision.ray_hit(p.x, p.y + 1.0, p.z, (wx - p.x) / d, 0.0, (wz - p.z) / d, d) < d - 0.05:
+				continue
+			bd = d
+			best = Vector3(wx, p.y, wz)
+	return best
 
 ## Sources du champ de la carte : les joueurs, plus le gong du tram s'il sonne (main.js : world.lure).
 func _targets_with_lure() -> Array:
@@ -679,7 +717,7 @@ func _update_fields(dt: float) -> void:
 	var nv := env.nav
 	flow_cool -= dt
 	if nv.job_active or flow_cool <= 0.0:
-		var max_cost := roundi(float(F["range"]) / nv.cell * 10.0)
+		var max_cost := roundi((world.flow_range if world != null and world.flow_range > 0.0 else float(F["range"])) / nv.cell * 10.0)
 		if flow_threaded:
 			nv.update_field_threaded(_targets_with_lure(), max_cost)
 		else:
@@ -703,8 +741,12 @@ func _update_fields(dt: float) -> void:
 					rn.compute_field(t)
 	flow_us = Time.get_ticks_usec() - t0
 
-## Zombies coincés dans le décor ou partis trop loin : ils réapparaissent près du joueur (main.js relocateZombies).
-## force : menu debug (U), sans attendre et avec des seuils plus bas ; renvoie le nombre de zombies déplacés.
+## Zombies coincés dans le décor, perdus ou partis trop loin (main.js relocateZombies, revu en v0.34.11) : au lieu d'être téléportés près du
+## joueur (une apparition sans animation, parfois sous ses yeux), ils s'enfoncent dans le sol s'ils sont en vue, puis réapparaissent par une
+## fenêtre ou depuis le sol, hors de la vue du joueur et à distance de marche bornée (_pick_spawn). Au plus RESCUE_PER_PASS par passe.
+## Relancé : coincé (no_progress > RESCUE_STUCK s à plus de RESCUE_NEAR m), perdu (lost_t > RESCUE_LOST s : aucune direction), au fond
+## d'un obstacle (RESCUE_INSIDE s), trop loin (plus de RELOCATE_FAR m pendant RELOCATE_FAR_COUNT s). Le Bourreau n'est jamais relancé (JS).
+## force : menu debug (U), sans attendre et avec des seuils plus bas ; renvoie le nombre de zombies relancés.
 func _relocate(dt: float, force := false) -> int:
 	if world == null:
 		return 0
@@ -712,28 +754,114 @@ func _relocate(dt: float, force := false) -> int:
 		relocate_t -= dt
 		if relocate_t > 0.0:
 			return 0
-		relocate_t = Rules.RELOCATE_INTERVAL
+		relocate_t = Rules.RESCUE_INTERVAL
 	if player.dead or player.tregion != 0:
 		return 0
+	var nav := world.nav
+	var budget := 1000 if force else (0 if time < spawn_calm_until else Rules.RESCUE_PER_PASS)
 	var moved := 0
+	var step_t := 0.0 if force else Rules.RESCUE_INTERVAL
 	for z in zombies:
-		if z.dead or z.spawn_t > 0.0 or z.region != 0 or not z.link.is_empty():
+		if z.dead:
+			continue
+		if z.burrowed():   # sous terre : il revient dès qu'une place cachée est libre
+			if budget > 0 and _respawn(z, {"why": "burrowed"}):
+				budget -= 1
+				moved += 1
+			continue
+		if z.spawn_t > 0.0 or z.appear > 0.0 or z.region != 0 or not z.link.is_empty() or not z.vault.is_empty() or (z.is_boss and not z.mini):
 			continue
 		var near := Vector2(player.pos.x - z.pos.x, player.pos.z - z.pos.z).length()
-		if not force:
-			z.far_t = z.far_t + 1.0 if near > Rules.RELOCATE_FAR else 0.0
-		var stuck := z.no_progress > (1.5 if force else Rules.RELOCATE_STUCK) and near > (5.0 if force else Rules.RELOCATE_STUCK_NEAR)
-		if not stuck and not (force and near > 70.0) and (force or z.far_t < Rules.RELOCATE_FAR_COUNT):
+		z.far_t = z.far_t + step_t if near > Rules.RELOCATE_FAR else 0.0
+		var deep := nav.is_blocked_at(z.pos.x, z.pos.z) and nav.nearest_free(z.pos.x, z.pos.z, 2) < 0
+		z.inside_t = z.inside_t + step_t if deep else 0.0
+		var why := ""
+		if z.no_progress > (1.5 if force else Rules.RESCUE_STUCK) and near > (2.0 if force else Rules.RESCUE_NEAR):
+			why = "stuck"
+		elif z.lost_t > (0.5 if force else Rules.RESCUE_LOST):
+			why = "lost"
+		elif deep and (force or z.inside_t >= Rules.RESCUE_INSIDE):
+			why = "inside"
+		elif z.far_t >= float(Rules.RELOCATE_FAR_COUNT) or (force and near > 70.0):
+			why = "far"
+		if why == "" or budget <= 0:
 			continue
-		var g := world.pick_ground(player.pos.x, player.pos.z, Rules.RELOCATE_MIN, Rules.RELOCATE_MAX, rng)
-		if g == Vector3.INF:
-			continue
-		z.pos = Vector3(g.x, 0.0, g.z)
-		z.no_progress = 0.0
-		z.far_t = 0.0
+		budget -= 1
 		moved += 1
-	relocated += moved
+		var info := {"why": why, "x": snappedf(z.pos.x, 0.01), "z": snappedf(z.pos.z, 0.01), "near": snappedf(near, 0.1), "np": snappedf(z.no_progress, 0.1),
+			"lost": snappedf(z.lost_t, 0.1)}
+		if _seen(z.pos + Vector3(0, 1.0, 0)) or not _respawn(z, info):
+			info["burrow"] = true
+			z.start_burrow()   # en vue (ou aucune place libre) : il s'enfonce d'abord dans le sol
+			watch.on_rescue(self, z, "burrow", info)
 	return moved
+
+## Fait réapparaître un zombie (relancé) par une fenêtre ou depuis le sol, à une place cachée (_pick_spawn strict). false : aucune place.
+func _respawn(z: ZombieSim, info: Dictionary = {}) -> bool:
+	var sp := _pick_spawn(true)
+	if sp.is_empty():
+		return false
+	z.reset_for_respawn()
+	if String(sp["type"]) == "window":
+		var wi := int(sp["index"])
+		var n := world.window_normal(wi)
+		z.start_window_spawn(world.window_inside(wi), world.window_outside(wi), world.window_center(wi), n, atan2(n.x, n.y), wi)
+	else:
+		z.start_ground_spawn(sp["pos"], rng.randf() * TAU)
+	relocated += 1
+	var d := info.duplicate()
+	d["type"] = z.spawn_type
+	var at := z.spawn_outside if z.spawn_type == "window" else z.spawn_pos
+	d["to"] = [snappedf(at.x, 0.01), snappedf(at.z, 0.01)]
+	d["d"] = snappedf(Vector2(at.x - player.pos.x, at.z - player.pos.z).length(), 0.1)
+	watch.on_rescue(self, z, "respawn", d)
+	return true
+
+## Le point est-il vu par le joueur (cône de vision, distance, sans mur entre les deux) ?
+func _seen(at: Vector3) -> bool:
+	return ZombieWatch.seen_by(player, collision, at, Rules.SPAWN_VIEW_DIST, Rules.SPAWN_VIEW_DOT)
+
+## Distance de marche (m) du champ de flux jusqu'au point (case libre voisine si le point est dans la marge d'un mur) ; INF : pas de chemin connu.
+func _walk_at(x: float, z: float) -> float:
+	var nav := env.nav if env != null else null
+	if nav == null:
+		return 0.0
+	var w := nav.walk_distance(x, z)
+	if w == INF and nav.is_blocked_at(x, z):
+		var c := nav.nearest_free(x, z, 1)
+		if c >= 0:
+			var d := nav.dist[c]
+			w = INF if d >= NavGrid.INF_D else (d / 10.0) * nav.cell
+	return w
+
+## Le champ de flux de la carte est-il prêt (au moins un calcul fini) ? Sinon les apparitions s'en tiennent aux distances à vol d'oiseau.
+func _field_ready() -> bool:
+	return env != null and env.nav != null and env.nav.field_swaps > 0
+
+## Une place d'apparition au sol convient : à moins de walk_max m de marche et, si hidden, hors de la vue du joueur.
+func _ground_ok(x: float, z: float, walk_max: float, hidden := true) -> bool:
+	if _field_ready() and _walk_at(x, z) > walk_max:
+		return false
+	return not hidden or not _seen(Vector3(x, 1.0, z))
+
+## Fenêtre libre à [min_d, max_d] m du point, à moins de walk_max m de marche, cachée du joueur (ni la fenêtre ni l'arrivée en vue) ; -1 si aucune.
+func _pick_window_hidden(pp: Vector3, min_d: float, max_d: float, walk_max: float) -> int:
+	var cand := world.windows_near(pp.x, pp.z, min_d, max_d, time)
+	var n := cand.size()
+	if n == 0:
+		return -1
+	var start := rng.randi() % n
+	for k in n:
+		var wi := cand[(start + k) % n]
+		var o := world.window_outside(wi)
+		if world.furniture_on and not world.furniture.is_empty() and StreetFurniture.blocks_spawn(o.x, o.z):
+			continue
+		if _field_ready() and _walk_at(o.x, o.z) > walk_max:
+			continue
+		if _seen(world.window_center(wi)) or _seen(o + Vector3(0, 1.0, 0)):
+			continue
+		return wi
+	return -1
 
 ## Le pestiféré explose à sa mort (finale.js onFinaleKill) : 38 x (1 - d / 5) à moins de 4,2 m du joueur (et 2,5 m de hauteur).
 func _bloat_burst(z: ZombieSim) -> void:
@@ -773,10 +901,14 @@ func spawn_weights(pool: Array[PlayerSim]) -> Array[float]:
 		wts.append(1.0 / (1.0 + n))
 	return wts
 
-## Où apparaît le prochain zombie (main.js pickSpawn) : { type: "window", index } ou { type: "ground", pos }.
-func _pick_spawn() -> Dictionary:
+## Où apparaît le prochain zombie (main.js pickSpawn, revu en v0.34.11) : { type: "window", index } ou { type: "ground", pos }, ou {} s'il n'y a
+## aucune place convenable (l'apparition est remise). Toujours dans une zone ouverte, par une fenêtre (escalade) ou depuis le sol (sortie de
+## terre), HORS DE LA VUE du joueur et à moins de SPAWN_WALK_MAX m de MARCHE (champ de flux) : une fenêtre à 11-60 m, sinon le sol à 18-50 m,
+## sinon une fenêtre à 6-80 m, sinon le sol à 8-60 m (SPAWN_WALK_MAX2). strict : rien d'autre ; sinon, après SPAWN_RELAX_AFTER s d'apparitions
+## remises, une sortie de terre visible (animée) près du joueur. Le dernier repli du JS (15 m à l'est, sans contrôle) n'existe plus.
+func _pick_spawn(strict := false) -> Dictionary:
 	if gm != null:   # v0.26.0 : Zone unique : fenêtres et sol de la zone, hors du champ de vision
-		return gm.pick_spawn(self)
+		return gm.pick_spawn(self, not strict and _spawn_wait_since >= 0.0 and time - _spawn_wait_since >= Rules.SPAWN_RELAX_AFTER)
 	if world != null:
 		var alive: Array[PlayerSim] = []
 		for pl in env.players:
@@ -785,18 +917,27 @@ func _pick_spawn() -> Dictionary:
 		var pool: Array[PlayerSim] = alive if not alive.is_empty() else env.players
 		var pp := spawn_target(pool).pos
 		if rng.randf() < Rules.WINDOW_CHANCE:
-			var wi := world.pick_window(pp.x, pp.z, Rules.WORLD_SPAWN_MIN, Rules.WORLD_SPAWN_MAX, time, rng)
+			var wi := _pick_window_hidden(pp, Rules.WORLD_SPAWN_MIN, Rules.WORLD_SPAWN_MAX, Rules.SPAWN_WALK_MAX)
 			if wi >= 0:
 				world.window_busy[wi] = time + Rules.WINDOW_BUSY
 				return {"type": "window", "index": wi}
-		var g := world.pick_ground(pp.x, pp.z, Rules.GROUND_MIN, Rules.GROUND_MAX, rng)
+		var g := world.pick_ground(pp.x, pp.z, Rules.GROUND_MIN, Rules.GROUND_MAX, rng, _ground_ok.bind(Rules.SPAWN_WALK_MAX))
 		if g != Vector3.INF:
 			return {"type": "ground", "pos": g}
-		var wi2 := world.pick_window(pp.x, pp.z, Rules.WORLD_SPAWN_MIN2, Rules.WORLD_SPAWN_MAX2, time, rng)
+		var wi2 := _pick_window_hidden(pp, Rules.WORLD_SPAWN_MIN2, Rules.WORLD_SPAWN_MAX2, Rules.SPAWN_WALK_MAX2)
 		if wi2 >= 0:
 			world.window_busy[wi2] = time + Rules.WINDOW_BUSY
 			return {"type": "window", "index": wi2}
-		return {"type": "ground", "pos": Vector3(pp.x + Rules.WORLD_SPAWN_FALLBACK, 0.0, pp.z)}
+		var g2 := world.pick_ground(pp.x, pp.z, 8.0, 60.0, rng, _ground_ok.bind(Rules.SPAWN_WALK_MAX2), Rules.GROUND_TRIES * 2)
+		if g2 != Vector3.INF:
+			return {"type": "ground", "pos": g2}
+		if strict or _spawn_wait_since < 0.0 or time - _spawn_wait_since < Rules.SPAWN_RELAX_AFTER:
+			return {}
+		var g3 := world.pick_ground(pp.x, pp.z, 8.0, 40.0, rng, _ground_ok.bind(Rules.SPAWN_WALK_MAX2, false), Rules.GROUND_TRIES * 2)
+		if g3 != Vector3.INF:
+			spawns_relaxed += 1
+			return {"type": "ground", "pos": g3}
+		return {}
 	var best: Vector3 = arena.spawn_points[0]
 	var best_d := -1.0
 	for _i in 3:
@@ -807,6 +948,12 @@ func _pick_spawn() -> Dictionary:
 			best = sp
 	return {"type": "arena", "pos": best + Vector3((rng.randf() - 0.5) * Rules.SPAWN_JITTER, 0, (rng.randf() - 0.5) * Rules.SPAWN_JITTER)}
 
+## v0.34.11 : l'apparition de la manche est remise de SPAWN_RETRY s (aucune place cachée, ou porte tout juste achetée).
+func _postpone_spawn() -> void:
+	director.to_spawn += 1
+	director.spawn_timer = maxf(director.spawn_timer, Rules.SPAWN_RETRY)
+	spawns_postponed += 1
+
 func _count_kind(k: String) -> int:
 	var n := 0
 	for q in zombies:
@@ -815,7 +962,16 @@ func _count_kind(k: String) -> int:
 	return n
 
 func _spawn_zombie() -> void:
+	if world != null and time < spawn_calm_until:
+		_postpone_spawn()
+		return
 	var sp := _pick_spawn()
+	if sp.is_empty():
+		if _spawn_wait_since < 0.0:
+			_spawn_wait_since = time
+		_postpone_spawn()
+		return
+	_spawn_wait_since = -1.0
 	var Z: Dictionary = Config.at("zombie")
 	var z := ZombieSim.new()
 	z.id = _next_id
@@ -916,6 +1072,7 @@ func use_door() -> int:
 		return -1
 	points -= price
 	world.open_door(id)
+	spawn_calm_until = time + Rules.DOOR_CALM   # v0.34.11 : pas de vague d'apparitions derrière la porte qu'on vient d'ouvrir
 	watch.write({"ev": "door", "t": snappedf(time, 0.01), "id": id, "zones": world.doors[id]["opened"], "px": snappedf(player.pos.x, 0.01), "pz": snappedf(player.pos.z, 0.01)})
 	door_opened.emit(id)
 	powerups.opening_bonus(self, world.doors[id])

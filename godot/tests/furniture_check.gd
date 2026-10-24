@@ -167,6 +167,8 @@ func _clearances(t: Node, w: World, items: Array) -> void:
 func _paths(t: Node, w: World, items: Array) -> void:
 	var nav := w.nav
 	var t0 := Time.get_ticks_msec()
+	var stamped := w.furniture_cells.size()   # v0.34.11 : le mobilier est marqué dans la grille au chargement ; on part de la grille du JS
+	w.stamp_furniture(false)
 	var before: PackedInt32Array = nav.components()["labels"].duplicate()
 	var marked := nav.blocked.duplicate()
 	var n_marked := 0
@@ -205,6 +207,7 @@ func _paths(t: Node, w: World, items: Array) -> void:
 	t.check(split.is_empty(), "mobilier : aucun passage coupé (composantes coupées en deux : %d%s ; %d cases sous le mobilier)" % [split.size(), where, n_marked])
 	# composante principale (portes ouvertes) : seules les cases sous le mobilier en sortent
 	var w3 := World.load_world()
+	w3.stamp_furniture(false)
 	w3.open_all_doors()
 	var n3 := w3.nav
 	var lab3: PackedInt32Array = n3.components()["labels"]
@@ -232,6 +235,13 @@ func _paths(t: Node, w: World, items: Array) -> void:
 			lost += 1
 	t.check(lost == 0, "mobilier : toute la ville reste d'un seul tenant, portes ouvertes (%d cases isolées sur %d)" % [lost, n_main])
 	print("j30 : mobilier : %d cases bloquées, composantes contrôlées en %d ms" % [n_marked, Time.get_ticks_msec() - t0])
+	# v0.34.11 : la grille du jeu bloque exactement ces cases (World.stamp_furniture), et set_extras(false) rend la grille du JS
+	w.stamp_furniture(true)
+	var same := 0
+	for k in w.furniture_cells.size():
+		if w._furniture_prev[k] == 0 and marked[w.furniture_cells[k]] != 0:
+			same += 1
+	t.check(stamped == w.furniture_cells.size() and same == n_marked, "mobilier marqué dans la grille de navigation : %d cases (contrôle : %d, communes %d)" % [w.furniture_cells.size(), n_marked, same])
 
 ## Les apparitions au sol évitent le mobilier ; les golden (set_extras(false)) ne le voient pas.
 func _spawns(t: Node, w: World, items: Array) -> void:

@@ -7,7 +7,7 @@ extends RefCounted
 ##   - "pop": a zombie that jumps more than POP_DIST m in one step outside of any animation (teleport);
 ##   - "spawn": where each zombie appears (window, ground, finale), straight-line and walking distance to the player, seen by the player
 ##     or not, animated or not;
-##   - "rescue": recoveries reported by Game (on_rescue: none in this version; Game._relocate still teleports, seen here as "pop");
+##   - "rescue": recoveries done by Game (sink into the ground, come back through a window or from the ground), see Game._relocate;
 ##   - "blocked" (no_progress past BLOCKED_NP), "inside" (deep inside an obstacle), "lost" (no direction: ZombieSim.lost_t).
 ## Counters are always kept (tests and the soak bot read them); a text log (one JSON object per line) is written only with
 ## `--zombie-stuck-log[=path]` (default user://zombie-stuck-log.jsonl) so that a player can send the data. Pure: no node.
@@ -125,7 +125,7 @@ func write(d: Dictionary) -> void:
 		_file.flush()
 
 ## Is the point seen by the player: within `view` m, in front of him (cone) and with no wall in between (eye ray).
-static func seen_by(p: PlayerSim, col: Collision, at: Vector3, view := 90.0, dot := 0.3) -> bool:
+static func seen_by(p: PlayerSim, col: Collision, at: Vector3, view := Rules.SPAWN_VIEW_DIST, dot := Rules.SPAWN_VIEW_DOT) -> bool:
 	if p == null:
 		return false
 	var eye := p.pos + Vector3(0, 1.6, 0)
@@ -154,8 +154,13 @@ func on_spawn(g: Node, z: ZombieSim, kind: String) -> void:
 	if nav != null and z.region == 0:
 		walk = nav.walk_distance(at.x, at.z)
 	var anim := z.spawn_type != "" or z.appear > 0.0
-	var look := (z.spawn_center if z.spawn_type == "window" else at) + Vector3(0, 1.0, 0)
-	var seen := seen_by(p, g.collision, look, 90.0, 0.3) if g.collision != null else false
+	# seen: the window itself or the point where it lands (window), the spot at chest height (ground) — the rule of Game._pick_spawn
+	var seen := false
+	if g.collision != null:
+		if z.spawn_type == "window":
+			seen = seen_by(p, g.collision, z.spawn_center) or seen_by(p, g.collision, z.spawn_outside + Vector3(0, 1.0, 0))
+		else:
+			seen = seen_by(p, g.collision, at + Vector3(0, 1.0, 0))
 	if not anim:
 		spawns_no_anim += 1
 	if seen:
@@ -235,8 +240,8 @@ func step(g: Node, dt: float) -> void:
 		var jump := Vector2(z.pos.x - float(s["x"]), z.pos.z - float(s["z"])).length()
 		if jump > POP_DIST and z.spawn_t <= 0.0 and z.link.is_empty() and z.vault.is_empty():
 			pops += 1
-			var vis := seen_by(p, g.collision, z.pos + Vector3(0, 1.0, 0), 90.0, 0.3) \
-					or seen_by(p, g.collision, Vector3(float(s["x"]), 1.0, float(s["z"])), 90.0, 0.3)
+			var vis := seen_by(p, g.collision, z.pos + Vector3(0, 1.0, 0), Rules.SPAWN_VIEW_DIST, Rules.SPAWN_VIEW_DOT) \
+					or seen_by(p, g.collision, Vector3(float(s["x"]), 1.0, float(s["z"])), Rules.SPAWN_VIEW_DIST, Rules.SPAWN_VIEW_DOT)
 			if vis:
 				pops_seen += 1
 			write({"ev": "pop", "t": snappedf(g.time, 0.01), "id": z.id, "from": [snappedf(float(s["x"]), 0.01), snappedf(float(s["z"]), 0.01)],
@@ -260,21 +265,15 @@ func step(g: Node, dt: float) -> void:
 				inside_events += 1
 				write(describe(g, z, "inside"))
 			s["in"] = deep
-		# lost: target out of sight and the flow field gives no direction (it walks straight at its target, into walls); checked every HEAVY_PERIOD s
-		if heavy:
-			var lost := nav != null and active(z) and z.region == 0 and z.target != null and z.target.tregion == 0 \
-					and Vector2(z.target.pos.x - z.pos.x, z.target.pos.z - z.pos.z).length() >= 1.5 \
-					and not nav.los(z.pos.x, z.pos.z, z.target.pos.x, z.target.pos.z) and not nav.steer(z.pos.x, z.pos.z)
-			if lost:
-				lost_seconds += HEAVY_PERIOD
-				s["lt"] = float(s.get("lt", 0.0)) + HEAVY_PERIOD
-				worst_lost = maxf(worst_lost, float(s["lt"]))
-				if not bool(s.get("lost", false)):
-					lost_events += 1
-					write(describe(g, z, "lost"))
-			else:
-				s["lt"] = 0.0
-			s["lost"] = lost
+		# lost: target out of sight and the flow field gives no direction (ZombieSim.lost_t: it walks straight at its target, into walls)
+		var lost := z.lost_t > 0.0 and active(z)
+		if lost:
+			lost_seconds += dt
+			worst_lost = maxf(worst_lost, z.lost_t)
+			if not bool(s.get("lost", false)):
+				lost_events += 1
+				write(describe(g, z, "lost"))
+		s["lost"] = lost
 		var tgt := z.target
 		var far := tgt != null and Vector2(tgt.pos.x - z.pos.x, tgt.pos.z - z.pos.z).length() > NEAR
 		if not active(z) or not far:

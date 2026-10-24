@@ -43,6 +43,8 @@ var sidestep_t := 0.0
 var sidestep_dir := 1.0
 var no_progress := 0.0   ## secondes passées sans réussir à avancer (relocalisation)
 var far_t := 0.0
+var inside_t := 0.0      ## v0.34.11 : secondes au fond d'un obstacle (compté par Game._rescue)
+var lost_t := 0.0        ## v0.34.11 : secondes sans direction (objectif hors de vue et champ de flux muet : il marche tout droit vers sa cible)
 var region := 0          ## étage (0 = sol de la ville)
 var link: Dictionary = {}   ## escalier en cours d'emprunt : { link, dir, s } ; vide si aucun
 var vault: Dictionary = {}  ## enjambement en cours : { t, x0, z0, x1, z1 }
@@ -66,6 +68,7 @@ var spawn_center := Vector3.ZERO
 var spawn_normal := Vector2.ZERO
 var spawn_pos := Vector3.ZERO
 var spawn_window := -1          ## indice de la fenêtre (World.windows)
+var spawn_serial := 0           ## v0.34.11 : +1 à chaque apparition (une vue déjà créée refait son tertre et ne glisse pas de l'ancienne place)
 var lean_x := 0.0               ## inclinaison du modèle pendant l'apparition (rad)
 var _knocks := 0
 var _broke := false
@@ -80,6 +83,7 @@ var pose_nod := 0.18
 var pose_speed_walk := 1.0      ## 0 : sur place
 
 # interne
+static var tunnel_check := true   ## v0.34.11 : contrôle anti-traversée des murs (coupé seulement par le test qui montre son effet)
 var _dir := Vector2.ZERO
 var _vh: Dictionary = {}
 
@@ -148,27 +152,73 @@ func start_window_spawn(inside: Vector3, outside: Vector3, center: Vector3, norm
 	yaw = win_yaw
 	spawn_elapsed = 0.0
 	spawn_t = spawn_total
+	spawn_serial += 1
 	_knocks = 0
 	_broke = false
 
-## Apparition depuis le sol : la terre tremble, puis il remonte.
+## Apparition depuis le sol : la terre tremble, puis il remonte. p.y : hauteur du sol d'arrivée (0 en ville ; plancher de l'étage pour la fin de partie).
 func start_ground_spawn(p: Vector3, start_yaw: float) -> void:
 	spawn_type = "ground"
 	spawn_total = Rules.GND_DELAY + Rules.GND_RISE
 	spawn_pos = p
-	pos = Vector3(p.x, -2.0, p.z)
+	pos = Vector3(p.x, p.y - 2.0, p.z)
 	yaw = start_yaw
 	spawn_elapsed = 0.0
 	spawn_t = spawn_total
+	spawn_serial += 1
 	_rumbled = false
 	_emerged = false
+
+## v0.34.11 : il s'enfonce dans le sol (BURROW_TIME s), puis attend sous terre que Game le fasse réapparaître ailleurs (fenêtre ou sol,
+## Game._respawn) : un zombie coincé ou perdu ne disparaît jamais d'un coup sous les yeux du joueur. Inactif et intouchable une fois à mi-chemin.
+func start_burrow() -> void:
+	spawn_type = "burrow"
+	spawn_total = Rules.BURROW_TIME + Rules.BURROW_HOLD
+	spawn_pos = pos
+	spawn_elapsed = 0.0
+	spawn_t = spawn_total
+	spawn_serial += 1
+	attacking = false
+	attack_windup = -1.0
+	vault = {}
+	_rumbled = false
+
+## Sous terre, prêt à réapparaître ailleurs.
+func burrowed() -> bool:
+	return spawn_type == "burrow" and spawn_elapsed >= Rules.BURROW_TIME
+
+## Avant une nouvelle apparition (Game._respawn) : plus d'escalier, d'enjambement, d'attaque ni de compteurs de blocage.
+func reset_for_respawn() -> void:
+	link = {}
+	vault = {}
+	vault_cd = 0.0
+	attack_windup = -1.0
+	attacking = false
+	attack_cd = Rules.ZOMBIE_FIRST_ATTACK_CD
+	stuck_t = 0.0
+	sidestep_t = 0.0
+	no_progress = 0.0
+	far_t = 0.0
+	lost_t = 0.0
+	inside_t = 0.0
+	region = 0
+	lean_x = 0.0
+	moving = false
+
+## La vue le cache-t-elle ? Il cogne derrière la fenêtre, la terre tremble encore, ou il est sous terre (enfoncé).
+func view_hidden() -> bool:
+	if spawn_t <= 0.0:
+		return false
+	if spawn_type == "burrow":
+		return spawn_elapsed >= Rules.BURROW_TIME
+	return spawn_elapsed < (Rules.WIN_WARN if spawn_type == "window" else Rules.GND_DELAY)
 
 ## Saute l'animation d'apparition (zombie déjà sorti).
 func skip_spawn() -> void:
 	if spawn_type == "window":
 		pos = spawn_outside
 	elif spawn_type == "ground":
-		pos = Vector3(spawn_pos.x, 0.0, spawn_pos.z)
+		pos = Vector3(spawn_pos.x, spawn_pos.y, spawn_pos.z)
 	spawn_elapsed = spawn_total
 	spawn_t = 0.0
 	lean_x = 0.0
@@ -182,6 +232,8 @@ func targetable() -> bool:
 		return false
 	if spawn_t <= 0.0:
 		return true
+	if spawn_type == "burrow":
+		return spawn_elapsed < Rules.BURROW_TIME * 0.5
 	if spawn_type == "window":
 		return spawn_elapsed > Rules.WIN_WARN + Rules.WIN_CLIMB * Rules.WIN_HIT_AT
 	return spawn_elapsed > Rules.GND_DELAY + Rules.GND_RISE * Rules.GND_HIT_AT
@@ -326,10 +378,24 @@ func step(dt: float, env: ZombieEnv) -> void:
 	var dirz := dz / (dist if dist > 0.0 else 1.0)
 	var visible := true
 	if nav != null:
-		visible = dist < Rules.SEE_DIST or nav.los(pos.x, pos.z, gx, gz)
-		if not visible and nav.steer(pos.x, pos.z):
-			dirx = nav.steer_x
-			dirz = nav.steer_z
+		if dist < Rules.SEE_DIST:   # tout près : visible, sauf un mur entre les deux (v0.34.11 : sinon il pousse contre une palissade, le joueur derrière)
+			visible = dist < 0.05 or env.collision.ray_hit(pos.x, pos.y + 1.0, pos.z, dx / dist, 0.0, dz / dist, dist) >= dist - 0.05
+		else:
+			visible = nav.los(pos.x, pos.z, gx, gz)
+		if not visible:
+			# v0.34.11 : bloqué depuis ZOMBIE_ESCAPE_NP s : il suit la case voisine la plus basse du champ (contourne le coin au lieu de viser loin) ;
+			# sans direction (il est dans un obstacle) : vers la case libre la plus proche du champ ; sinon il est perdu (Game le fait réapparaître)
+			var ok := nav.steer_local(pos.x, pos.z) if no_progress > Rules.ZOMBIE_ESCAPE_NP else nav.steer(pos.x, pos.z)
+			if not ok:
+				ok = nav.escape(pos.x, pos.z, Rules.ZOMBIE_ESCAPE_CELLS)
+			if ok:
+				dirx = nav.steer_x
+				dirz = nav.steer_z
+				lost_t = 0.0
+			else:
+				lost_t += dt
+		else:
+			lost_t = 0.0
 	# orientation lissée
 	var diff := atan2(dirx, dirz) - yaw
 	diff = atan2(sin(diff), cos(diff))
@@ -367,6 +433,13 @@ func step(dt: float, env: ZombieEnv) -> void:
 				pos.z += oz / d * push
 		pos = env.collision.resolve(pos, float(Z["radius"]))
 		var moved := sqrt((pos.x - bx) * (pos.x - bx) + (pos.z - bz) * (pos.z - bz))
+		if tunnel_check and moved > Rules.ZOMBIE_TUNNEL_CHECK:   # v0.34.11 : poussé fort (foule) : jamais à travers un mur (la collision le pousserait de l'autre côté)
+			var ux := (pos.x - bx) / moved
+			var uz := (pos.z - bz) / moved
+			if env.collision.ray_hit(bx, pos.y + 0.6, bz, ux, 0.0, uz, moved) < moved - 0.01:
+				pos.x = bx
+				pos.z = bz
+				moved = 0.0
 		if moved < sp * dt * Rules.ZOMBIE_AUTO_STUCK_RATIO:
 			no_progress += dt
 		else:
@@ -519,6 +592,21 @@ func _spawn_update(dt: float) -> void:
 			pos = Vector3(spawn_outside.x, 0.0, spawn_outside.z)
 			lean_x = 0.0
 		return
+	if spawn_type == "burrow":
+		var tb := minf(1.0, e / Rules.BURROW_TIME)
+		if not _rumbled:
+			_rumbled = true
+			events.append("burrow")
+		pos.x = spawn_pos.x
+		pos.z = spawn_pos.z
+		pos.y = spawn_pos.y - 1.95 * tb * tb
+		lean_x = 0.35 * tb
+		walk_t += dt * 1.6
+		_pose(0.15, 1.0 + tb * 0.7, 0.2 + 0.25 * tb, 0.3)
+		if spawn_t <= 0.0:   # resté sous terre trop longtemps sans place libre : il attend encore (Game._respawn)
+			spawn_t = Rules.BURROW_HOLD
+			spawn_elapsed = Rules.BURROW_TIME
+		return
 	# sol
 	if e < Rules.GND_DELAY:
 		if not _rumbled:
@@ -532,10 +620,10 @@ func _spawn_update(dt: float) -> void:
 	var ease2 := 1.0 - pow(1.0 - t2, 2.2)
 	pos.x = spawn_pos.x
 	pos.z = spawn_pos.z
-	pos.y = -1.95 + 1.95 * ease2
+	pos.y = spawn_pos.y - 1.95 + 1.95 * ease2
 	lean_x = 0.35 * (1.0 - t2)
 	walk_t += dt * 1.6
 	_pose(0.15, 1.7 - t2 * 0.7, 0.2 + 0.25 * (1.0 - t2), 0.3 - t2 * 0.1)
 	if spawn_t <= 0.0:
-		pos.y = 0.0
+		pos.y = spawn_pos.y
 		lean_x = 0.0

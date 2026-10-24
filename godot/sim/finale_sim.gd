@@ -187,6 +187,8 @@ func spawn_at(kind: String, region: int, x: float, z: float, y_override: float =
 		zb.runner = true
 	zb.region = region
 	zb.pos = Vector3(x, y, z)
+	if kind != "gargoyle":   # v0.34.11 : il sort du sol (ou du dallage de l'étage), jamais d'apparition sans animation ; la gargouille a la sienne (appear)
+		zb.start_ground_spawn(Vector3(x, y, z), atan2(g.player.pos.x - x, g.player.pos.z - z) if g.player != null else 0.0)
 	g.add_zombie(zb)
 	g.boss_event.emit("dust", {"x": x, "y": y + 0.4, "z": z, "n": 10})
 	return zb
@@ -875,6 +877,7 @@ func maybe_spawn_tanner() -> bool:
 	tn.id = g.next_zombie_id()
 	tn.rng = g.rng
 	tn.pos = Vector3(x, 0.0, zz)
+	tn.start_ground_spawn(tn.pos, 0.0)   # v0.34.11 : il sort de terre
 	g.add_zombie(tn)
 	g.announce("MAÎTRE TANNEUR", "Il rôde dans %s…" % g.world.zone_names[zi])
 	return true

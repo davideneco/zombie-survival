@@ -685,6 +685,74 @@ func steer(x: float, z: float) -> bool:
 	steer_z = vz / l
 	return true
 
+## v0.34.11 : comme steer, mais seulement vers une case voisine (8 voisins, sans coin coupé) : le zombie suit le champ case par case
+## (un zombie bloqué contre un coin : la visée lointaine de steer frôle le coin, la case voisine le contourne). Résultat dans steer_x, steer_z.
+func steer_local(x: float, z: float) -> bool:
+	var ix := cx(x)
+	var iz := cz(z)
+	if not inside(ix, iz):
+		return false
+	var w := nx
+	var best := dist[iz * w + ix]
+	var bx := ix
+	var bz := iz
+	for dz in range(-1, 2):
+		for dx in range(-1, 2):
+			var jx := ix + dx
+			var jz := iz + dz
+			if jx < 0 or jz < 0 or jx >= w or jz >= nz:
+				continue
+			if dx != 0 and dz != 0 and (blocked[iz * w + jx] != 0 or blocked[jz * w + ix] != 0):
+				continue
+			var d := dist[jz * w + jx]
+			if d < best:
+				best = d
+				bx = jx
+				bz = jz
+	if best >= INF_D or (bx == ix and bz == iz):
+		return false
+	var vx := world_x(bx) - x
+	var vz := world_z(bz) - z
+	var l := sqrt(vx * vx + vz * vz)
+	if l < 1e-6:
+		return false
+	steer_x = vx / l
+	steer_z = vz / l
+	return true
+
+## v0.34.11 : sortie d'un obstacle : direction vers le centre de la case libre et atteinte par le champ la plus proche, à moins de r cases
+## (un zombie poussé au fond de la marge d'un mur ou d'un meuble, là où steer ne voit aucune voisine utile). Résultat dans steer_x, steer_z.
+func escape(x: float, z: float, r: int) -> bool:
+	var ix := cx(x)
+	var iz := cz(z)
+	if inside(ix, iz) and blocked[iz * nx + ix] == 0:
+		return false   # sur une case libre : rien à fuir (sans champ ici, il est perdu, pas coincé)
+	var best_d := INF
+	var bx := -1
+	var bz := -1
+	for dz in range(-r, r + 1):
+		for dx in range(-r, r + 1):
+			var jx := ix + dx
+			var jz := iz + dz
+			if not inside(jx, jz):
+				continue
+			var j := jz * nx + jx
+			if blocked[j] != 0 or dist[j] >= INF_D:
+				continue
+			var ddx := world_x(jx) - x
+			var ddz := world_z(jz) - z
+			var d2 := ddx * ddx + ddz * ddz
+			if d2 < best_d:
+				best_d = d2
+				bx = jx
+				bz = jz
+	if bx < 0 or best_d < 1e-6:
+		return false
+	var l := sqrt(best_d)
+	steer_x = (world_x(bx) - x) / l
+	steer_z = (world_z(bz) - z) / l
+	return true
+
 ## Parcours en largeur de test (8 voisins, sans coin coupé) : chemin de cases du départ au but, vide si inaccessible.
 func bfs(from: int, to: int) -> PackedInt32Array:
 	var prev := PackedInt32Array()

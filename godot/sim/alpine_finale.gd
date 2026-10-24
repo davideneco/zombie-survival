@@ -64,9 +64,13 @@ func start_wave(n: int) -> void:
 	g.announce("VAGUE %d / %d" % [n + 1, WAVES.size()], String(W["name"]).to_upper())
 	g.finale_sfx.emit("round_start", 1.0)
 
-## Point d'apparition d'une vague : au sol, dans une zone ouverte, entre 14 et 34 m du joueur (repli : 20 m devant lui).
+## Point d'apparition d'une vague : au sol, dans une zone ouverte, entre 14 et 34 m du joueur, caché de lui si possible (repli : 20 m devant lui).
 func alpine_spawn_point() -> Vector2:
 	var p: PlayerSim = g.player
+	for k in 3:   # v0.34.11 : d'abord hors de la vue du joueur et à distance de marche bornée (Game._ground_ok), comme les apparitions de manche
+		var hp: Vector3 = g.world.pick_ground(p.pos.x, p.pos.z, 14.0, 34.0 + k * 8.0, g.rng, Callable(g, "_ground_ok").bind(Rules.SPAWN_WALK_MAX))
+		if hp != Vector3.INF:
+			return Vector2(hp.x, hp.z)
 	for k in 4:
 		var gp: Vector3 = g.world.pick_ground(p.pos.x, p.pos.z, 14.0, 34.0 + k * 8.0, g.rng)
 		if gp != Vector3.INF:
@@ -238,6 +242,7 @@ func maybe_spawn_tanner() -> bool:
 	tn.id = g.next_zombie_id()
 	tn.rng = g.rng
 	tn.pos = Vector3(x, 0.0, zz)
+	tn.start_ground_spawn(tn.pos, 0.0)   # v0.34.11 : il sort de terre
 	g.add_zombie(tn)
 	g.announce("MAÎTRE TANNEUR", "Il rôde dans %s…" % g.world.zone_names[zi])
 	return true

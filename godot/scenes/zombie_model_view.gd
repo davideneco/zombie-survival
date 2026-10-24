@@ -33,6 +33,7 @@ var _last_health := 0.0
 var _flash := 0.0
 var _flash_on := false
 var _mound_t := 0.0
+var _serial := 0                 ## ZombieSim.spawn_serial vu (v0.34.11)
 var _cur := ""
 var _acc := 0.0
 var _frame := 0
@@ -70,21 +71,47 @@ func setup(z: ZombieSim) -> void:
 	_set_variant(true)
 	if ZombieModels.show_boxes:
 		_debug_boxes()
+	_serial = z.spawn_serial
 	if z.spawn_type == "ground":
-		_mound = MeshInstance3D.new()
-		var mm := SphereMesh.new()
-		mm.radius = 0.75
-		mm.height = 0.75
-		mm.is_hemisphere = true
-		_mound.mesh = mm
-		var mat := StandardMaterial3D.new()
-		mat.albedo_color = Color("3a2e23")
-		mat.roughness = 1.0
-		_mound.material_override = mat
-		_mound.top_level = true
-		add_child(_mound)
-		_mound.global_position = Vector3(z.spawn_pos.x, 0.0, z.spawn_pos.z)
-		_mound.scale = Vector3(0.2, 0.05, 0.2)
+		_make_mound(z)
+
+## Tertre de terre d'une sortie de terre (ou d'un zombie qui s'enfonce, v0.34.11). L'ancien tertre s'affaisse en 3 s (pas de disparition d'un coup).
+func _make_mound(z: ZombieSim) -> void:
+	if _mound != null:
+		_fade_mound()
+	_mound_t = 0.0
+	_mound = MeshInstance3D.new()
+	var mm := SphereMesh.new()
+	mm.radius = 0.75
+	mm.height = 0.75
+	mm.is_hemisphere = true
+	_mound.mesh = mm
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = Color("3a2e23")
+	mat.roughness = 1.0
+	_mound.material_override = mat
+	_mound.top_level = true
+	add_child(_mound)
+	_mound.global_position = Vector3(z.spawn_pos.x, z.spawn_pos.y, z.spawn_pos.z)
+	_mound.scale = Vector3(0.2, 0.05, 0.2)
+
+## v0.34.11 : nouvelle apparition d'un zombie déjà affiché (relancé : il s'enfonce, puis ressort ailleurs) : tertre refait, pas de glissade.
+func _on_respawn(z: ZombieSim) -> void:
+	_serial = z.spawn_serial
+	if z.spawn_type != "burrow":
+		_prev_pos = z.pos
+		position = z.pos
+	if z.spawn_type == "ground" or z.spawn_type == "burrow":
+		_make_mound(z)
+	elif _mound != null:
+		_fade_mound()
+
+func _fade_mound() -> void:
+	var m := _mound
+	_mound = null
+	var tw := m.create_tween()
+	tw.tween_property(m, "scale", Vector3(m.scale.x, 0.001, m.scale.z), 3.0)
+	tw.tween_callback(m.queue_free)
 
 ## --show-boxes : les boîtes de touche de la simulation (tête rouge, corps bleu) en transparence, pour juger de l'écart avec le modèle dessiné.
 ## v0.20.0 : ce sont les boîtes du modèle (ZombieHit), remises à jour à chaque image selon l'animation.
@@ -217,13 +244,13 @@ func _process(dt: float) -> void:
 func _process_view(dt: float) -> void:
 	var z := sim
 	_t += dt
+	if z.spawn_serial != _serial:
+		_on_respawn(z)
 	var f := Engine.get_physics_interpolation_fraction()
 	position = _prev_pos.lerp(z.pos, f)
 	if ZombieModels.variant_key(z) != _vkey or z.crawler != _crawl_flag:
 		_set_variant(false)
-	var hidden := false
-	if z.spawn_t > 0.0:
-		hidden = z.spawn_elapsed < (Rules.WIN_WARN if z.spawn_type == "window" else Rules.GND_DELAY)
+	var hidden := z.view_hidden()
 	_group.visible = not hidden
 	_blob.visible = not hidden and z.pos.y > -0.4 and not (z.dead and z.death_t > 2.2)
 	_blob.position.y = 0.015 - position.y
@@ -263,7 +290,10 @@ func _mound_step(dt: float) -> void:
 	if _mound == null:
 		return
 	var z := sim
-	if z.spawn_t > 0.0:
+	if z.spawn_type == "burrow" and z.spawn_t > 0.0:   # il s'enfonce : le tertre grandit
+		var kb := minf(1.0, z.spawn_elapsed / Rules.BURROW_TIME)
+		_mound.scale = Vector3(0.3 + kb * 0.8, 0.05 + kb * 0.32, 0.3 + kb * 0.8)
+	elif z.spawn_t > 0.0:
 		var k := minf(1.0, z.spawn_elapsed / Rules.GND_DELAY)
 		_mound.scale = Vector3(0.3 + k * 0.8, 0.05 + k * 0.32, 0.3 + k * 0.8)
 	else:
