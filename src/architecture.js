@@ -317,8 +317,8 @@ function material(renderer, set, repeatSafe = true, params = {}) {
   const mk = (c, srgb) => { const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = aniso; if (srgb) t.colorSpace = THREE.SRGBColorSpace; return t; };
   return new THREE.MeshStandardMaterial({
     map: mk(set.cMap, true), bumpMap: mk(set.cBump, false), bumpScale: 2.2,
-    emissiveMap: mk(set.cEmis, true), emissive: 0xffe2b8, emissiveIntensity: 0.55,
-    roughness: 0.9, vertexColors: true, side: THREE.DoubleSide, ...params,
+    emissiveMap: mk(set.cEmis, true), emissive: 0xffaa44, emissiveIntensity: 1.5,
+    roughness: 0.82, vertexColors: true, side: THREE.DoubleSide, ...params,
   });
 }
 

@@ -36,6 +36,14 @@ export class Vehicle {
     this.pos = new THREE.Vector3();
     this.seats = Array(this.def.seats).fill(null); // id réseau du joueur assis (0 en solo), null = libre
     this.engine = null;
+    if (type !== 'bike') {
+      this.headlight = new THREE.SpotLight(0xfff0d0, 0, 36, 0.65, 0.7, 1.8);
+      this.headlight.position.set(0, 0.85, -0.6);
+      this.headlightTarget = new THREE.Object3D();
+      this.headlightTarget.position.set(0, 0.3, -15);
+      this.group.add(this.headlight, this.headlightTarget);
+      this.headlight.target = this.headlightTarget;
+    }
     this.reset();
   }
 
@@ -49,6 +57,7 @@ export class Vehicle {
     this.respawnRound = 0; this.respawnPending = false; this.respawnRetry = 0; this.fxAcc = 0; this.alarmT = 0;
     this.fuel = this.def.tank; this.fuelLock = 0; this.missCd = 1; this.missT = 0; this.beepT = 0; this.dryNoted = false;
     this.seats.fill(null);
+    if (this.headlight) this.headlight.intensity = 0;
     this.setWreckLook(false);
     this.group.visible = true;
     this.syncNet();
@@ -99,6 +108,9 @@ export class Vehicle {
   update(dt) {
     const g = this.game;
     if (this.state === 'gone') return;
+    if (this.headlight) {
+      this.headlight.intensity = (this.hasDriver && this.state === 'ok') ? 36 : 0;
+    }
     const local = this.state !== 'wreck' && this.seats[0] != null && this.seats[0] === g.localId();
     const prevYaw = this.yaw;
     if (this.crashT > 0) this.crashT -= dt;

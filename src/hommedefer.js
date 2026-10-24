@@ -761,7 +761,7 @@ export function atlas(variant = 'decor') {
   };
   const mk = (emis) => canvasTex(1024, 512, (x) => draw(x, emis));
   const A = ATLASES[variant] = { map: mk(false), emissive: mk(true) };
-  A.mat = new THREE.MeshStandardMaterial({ map: A.map, emissiveMap: A.emissive, emissive: 0xffffff, emissiveIntensity: 0.9, roughness: 0.55, metalness: 0.2 });
+  A.mat = new THREE.MeshStandardMaterial({ map: A.map, emissiveMap: A.emissive, emissive: 0xffffff, emissiveIntensity: 1.4, roughness: 0.62, metalness: 0.25 });
   return A;
 }
 

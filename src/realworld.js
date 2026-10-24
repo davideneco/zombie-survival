@@ -209,7 +209,7 @@ export async function buildRealWorld(scene, renderer) {
     for (let i = 0; i < uv.count; i++) uv.setXY(i, (uv.getX(i) * GROUND_W) / GROUND_TILE, (uv.getY(i) * GROUND_H) / GROUND_TILE);
     const mat = new THREE.MeshStandardMaterial({
       map: cobble.map, normalMap: cobble.normalMap, roughnessMap: cobble.roughnessMap,
-      color: 0xb8b2aa, normalScale: new THREE.Vector2(1.2, 1.2),
+      color: 0x8a8680, normalScale: new THREE.Vector2(1.2, 1.2),
     });
     groundMesh = new THREE.Mesh(geo, mat);
     groundMesh.rotation.x = -Math.PI / 2;

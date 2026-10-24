@@ -10,14 +10,14 @@ import { reflective } from './envmap.js';
 const std = (color, rough = 0.6, metal = 0.2, extra = {}) => new THREE.MeshStandardMaterial({ color, roughness: rough, metalness: metal, ...extra });
 let MAT = null;
 const mats = () => MAT || (MAT = {
-  black: reflective(std(0x15161a, 0.55, 0.3), 0.8), // reflets d'ambiance (envmap.js)
-  steel: reflective(std(0x1d2025, 0.6, 0.4), 0.9),
-  chrome: reflective(std(0xc4c9d1, 0.2, 0.85), 1.4),
-  rubber: std(0x0c0c0e, 0.92, 0),
-  seat: std(0x20170f, 0.8, 0.05),
-  lamp: std(0xfff1c9, 0.3, 0, { emissive: 0xffe2a0, emissiveIntensity: 2.2 }),
-  tail: std(0x661111, 0.4, 0, { emissive: 0xff2020, emissiveIntensity: 1.6 }),
-  screen: std(0x9fb4c4, 0.1, 0.1, { transparent: true, opacity: 0.35 }),
+  black: reflective(std(0x181a1d, 0.65, 0.45), 0.8), // reflets d'ambiance (envmap.js)
+  steel: reflective(std(0x22262b, 0.62, 0.55), 0.9),
+  chrome: reflective(std(0x9da3aa, 0.32, 0.85), 1.3),
+  rubber: std(0x121214, 0.92, 0),
+  seat: std(0x241a12, 0.82, 0.05),
+  lamp: std(0xfff1c9, 0.3, 0, { emissive: 0xffd070, emissiveIntensity: 2.6 }),
+  tail: std(0x4a0a0a, 0.4, 0, { emissive: 0xcc1515, emissiveIntensity: 1.8 }),
+  screen: std(0x7a8e9e, 0.12, 0.1, { transparent: true, opacity: 0.35 }),
 });
 
 // Matériau noir partagé de toutes les épaves (compilé au préchauffage : voir precompileShaders dans main.js)

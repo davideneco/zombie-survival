@@ -71,8 +71,8 @@ export function makeSkyDome(radius = 300) {
   const C = CONFIG.graphics.sky;
   const el = C.moonElevation, az = C.moonAzimuth;
   const uniforms = {
-    uTop: { value: new THREE.Color('#04070d') }, uMid: { value: new THREE.Color('#0c1522') }, uBot: { value: new THREE.Color('#1b2535') },
-    uCloudNight: { value: new THREE.Color(C.cloudNight) }, uMoonDir: { value: new THREE.Vector3(Math.cos(el) * Math.cos(az), Math.sin(el), Math.cos(el) * Math.sin(az)).normalize() },
+    uTop: { value: new THREE.Color('#020408') }, uMid: { value: new THREE.Color('#050912') }, uBot: { value: new THREE.Color('#070c16') },
+    uCloudNight: { value: new THREE.Color('#161c28') }, uMoonDir: { value: new THREE.Vector3(Math.cos(el) * Math.cos(az), Math.sin(el), Math.cos(el) * Math.sin(az)).normalize() },
     uTime: { value: 0 }, uMoon: { value: 1 }, uCloud: { value: C.cloudCover }, uDay: { value: 0 }, uMoonSize: { value: C.moonSize },
   };
   const mat = new THREE.ShaderMaterial({ uniforms, vertexShader: VERT, fragmentShader: FRAG, side: THREE.BackSide, depthWrite: false, depthTest: true, fog: false });
