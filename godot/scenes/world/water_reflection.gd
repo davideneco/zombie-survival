@@ -68,7 +68,7 @@ func _process(dt: float) -> void:
 			_apply()
 	if not _near:
 		return
-	var size := get_viewport().get_visible_rect().size
+	var size := Vector2(get_window().size)   # pixels réels (v0.34.7 : l'interface est mise à l'échelle, pas la 3D)
 	var want := Vector2i(maxi(64, int(size.x) / SCALE), maxi(64, int(size.y) / SCALE))
 	if vp.size != want:
 		vp.size = want

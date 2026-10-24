@@ -266,9 +266,10 @@ func _on_setting(key: String) -> void:
 		"brightness":
 			apply_exposure()
 
+## Taille de rendu 3D en pixels réels (v0.34.7 : l'interface est mise à l'échelle, CONTENT_SCALE_MODE_CANVAS_ITEMS : le rectangle visible est en unités
+## de l'interface, 1280 x 720 et plus ; la 3D, elle, est rendue à la taille de la fenêtre).
 func _size() -> Vector2i:
-	var vp := get_viewport()
-	return Vector2i(vp.get_visible_rect().size)
+	return get_window().size
 
 ## applyQuality : résolution de rendu, ombres, nuages, anticrénelage, passe finale (table de couleurs, halo), vignette et grain.
 func apply_quality(q: int) -> void:

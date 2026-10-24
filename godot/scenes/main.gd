@@ -166,6 +166,7 @@ var _ruin := ""                   # --ruin=smoke|burn|wreck : abîme les motos (
 
 func _ready() -> void:
 	StartupLog.mark("main scene: _ready (main.gd and its preloads compiled)")
+	UiTheme.apply_ui_scale(get_window())   # v0.34.7 : menus et HUD à l'échelle de l'écran (avant la construction des menus)
 	StartupLog.attach(get_tree())
 	var user_args := OS.get_cmdline_user_args()
 	var game_args := Array(user_args).filter(func(a: String) -> bool: return not PERF_ARGS.any(func(p: String) -> bool: return a.begins_with(p)))
@@ -382,7 +383,7 @@ func _ready() -> void:
 		await _start_session()
 		_open_ui(_ui)
 	print("MENU : prêt %d ms après le lancement du moteur (_ready : %d ms)" % [Time.get_ticks_msec(), Time.get_ticks_msec() - _t_boot_ms])
-	StartupLog.mark("main: _ready done", "window %s, mode %d, quality %d, vsync %d, character %d" % [get_window().size, DisplayServer.window_get_mode(), int(Game.settings.get_value("quality")),
+	StartupLog.mark("main: _ready done", "window %s, UI %s, mode %d, quality %d, vsync %d, character %d" % [get_window().size, get_viewport().get_visible_rect().size, DisplayServer.window_get_mode(), int(Game.settings.get_value("quality")),
 		DisplayServer.window_get_vsync_mode(), int(Game.settings.get_value("char"))])
 
 ## Signaux de la simulation : branchés UNE fois (les vues de jeu, elles, sont recréées à chaque partie : on teste leur présence).
@@ -1066,8 +1067,10 @@ func _unhandled_input(event: InputEvent) -> void:
 		var m := event as InputEventMouseMotion
 		var sens := Rules.MOUSE_SENS * float(Game.settings.get_value("sens")) * Game.arms.sens_zoom()   # visée : souris plus lente (player.js : zoom)
 		Game.player.last_mouse = Game.time
-		Game.player.yaw -= m.relative.x * sens
-		Game.player.pitch = clampf(Game.player.pitch - m.relative.y * sens, -Rules.PITCH_LIMIT, Rules.PITCH_LIMIT)
+		# v0.34.7 : déplacement en pixels de l'écran (screen_relative) : `relative` est divisé par l'échelle de l'interface (x 2 en 2560 x 1440) ; la
+		# sensibilité reste celle d'avant, quelle que soit la résolution
+		Game.player.yaw -= m.screen_relative.x * sens
+		Game.player.pitch = clampf(Game.player.pitch - m.screen_relative.y * sens, -Rules.PITCH_LIMIT, Rules.PITCH_LIMIT)
 	elif event is InputEventMouseButton and event.pressed and live and Input.mouse_mode != Input.MOUSE_MODE_CAPTURED and not _bot:
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	if not live:

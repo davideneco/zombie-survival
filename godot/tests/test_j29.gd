@@ -170,7 +170,7 @@ func run_preview(t: Node) -> void:
 	# v0.34.4 : les modèles vus au menu restent (changer de survivant ne relit rien) ; un seul est visible ; trim ne garde que le choisi
 	t.check(pv.show_character("harry", Color("e0b040")) and pv.model().id == "harry" and CharacterModel.loaded_count() == 2 and pv.has_instance("karim"), "aperçu : changer de survivant garde l'ancien modèle en mémoire")
 	var shown := 0
-	for c in pv.get_child(0).get_children():
+	for c in pv._vp.get_children():
 		for m in c.get_children():
 			if m is CharacterModel and (m as CharacterModel).visible:
 				shown += 1

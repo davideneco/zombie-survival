@@ -96,6 +96,23 @@ static func label(text: String, size := 16, color := TEXT, font: Font = null, ou
 	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	return l
 
+## v0.34.7 : mise à l'échelle de l'interface. Menus et HUD sont conçus pour 1280 x 720 ; avant, sans réglage `window/stretch`, ils restaient en pixels réels
+## (petits, et le menu centré au milieu d'un écran 3440 x 1440). Mode CANVAS_ITEMS : l'interface est agrandie du rapport min(largeur / 1280, hauteur / 720)
+## (x 1,5 en 1920 x 1080, x 2 en 2560 x 1440 et 3440 x 1440) et nette (textes et formes redessinés à la taille réelle) ; ASPECT_EXPAND : sur un écran plus
+## large (21:9) ou plus haut (16:10), la surface de l'interface s'agrandit au lieu de bandes noires (les éléments ancrés aux bords y restent). La 3D est
+## toujours rendue à la taille de la fenêtre (sa résolution suit les réglages de qualité et de mise à l'échelle 3D, pas ceci).
+const UI_BASE := Vector2i(1280, 720)
+
+static func apply_ui_scale(w: Window) -> void:
+	w.content_scale_size = UI_BASE
+	w.content_scale_mode = Window.CONTENT_SCALE_MODE_CANVAS_ITEMS
+	w.content_scale_aspect = Window.CONTENT_SCALE_ASPECT_EXPAND
+
+## Taille de la surface de l'interface (unités de l'interface) pour une fenêtre de `win` pixels (règle d'ASPECT_EXPAND ; tests).
+static func ui_size(win: Vector2i) -> Vector2:
+	var k := minf(float(win.x) / UI_BASE.x, float(win.y) / UI_BASE.y)
+	return Vector2(win) / k
+
 ## Place un contrôle par rapport à un point d'ancrage (ax, ay en fraction de l'écran) : décalage (ox, oy) et taille (w, h).
 static func place(c: Control, ax: float, ay: float, ox: float, oy: float, w: float, h: float) -> void:
 	c.anchor_left = ax

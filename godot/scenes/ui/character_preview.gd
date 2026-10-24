@@ -1,5 +1,5 @@
 class_name CharacterPreview
-extends SubViewportContainer
+extends Control
 ## v0.21.1 : aperçu 3D tournant du personnage choisi (menu SURVIVANT). Un SubViewport à monde propre (le monde du jeu n'est pas touché), fond transparent, deux lumières,
 ## un socle à la couleur d'accent. N'affiche que le modèle choisi (CharacterModel.create : chargement paresseux, les autres modèles sont libérés) ; ne rend que quand le
 ## panneau est visible. Sans modèle (fichier absent) : le conteneur reste vide et masqué, le menu garde les portraits PNG.
@@ -28,15 +28,23 @@ var _cam: Camera3D
 var _drag := false
 var _idle_t := 3.0
 
+var _box: SubViewportContainer   ## v0.34.7 : contient le SubViewport, rendu en pixels réels et réduit à la taille de l'aperçu (voir _fit)
+var _base := Vector2(260, 330)
+
 func _init(size := Vector2(260, 330)) -> void:
+	_base = size
 	custom_minimum_size = size
-	stretch = true
+	_box = SubViewportContainer.new()
+	_box.stretch = false
+	_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_box)
 	_vp = SubViewport.new()
+	_vp.size = Vector2i(size)
 	_vp.own_world_3d = true
 	_vp.transparent_bg = true
 	_vp.msaa_3d = Viewport.MSAA_4X
 	_vp.render_target_update_mode = SubViewport.UPDATE_WHEN_VISIBLE
-	add_child(_vp)
+	_box.add_child(_vp)
 	var env := Environment.new()
 	env.background_mode = Environment.BG_CLEAR_COLOR
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
@@ -87,6 +95,24 @@ func _init(size := Vector2(260, 330)) -> void:
 	_cam = cam
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	set_process(false)
+
+## v0.34.7 : l'interface est mise à l'échelle (x 2 en 2560 x 1440) : le SubViewport est rendu en pixels réels (taille de l'aperçu x échelle) et son
+## conteneur est réduit d'autant : l'aperçu reste net au lieu d'être un rendu 270 x 330 agrandi. À 1280 x 720 rien ne change.
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_RESIZED or what == NOTIFICATION_ENTER_TREE:
+		_fit.call_deferred()
+
+func _fit() -> void:
+	if not is_inside_tree():
+		return
+	var k := clampf(get_viewport_transform().get_scale().x, 1.0, 4.0)
+	var want := Vector2i((size * k).round())
+	if want.x <= 0 or want.y <= 0:
+		return
+	if _vp.size != want:
+		_vp.size = want
+	_box.size = Vector2(want)
+	_box.scale = Vector2.ONE / k
 
 func _gui_input(ev: InputEvent) -> void:
 	if ev is InputEventMouseButton and (ev as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT:

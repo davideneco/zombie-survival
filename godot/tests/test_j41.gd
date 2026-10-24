@@ -1,5 +1,5 @@
 extends RefCounted
-## v0.34.6 / v0.34.7 : game loading work moved to threads (same results as the main-thread code it replaces).
+## v0.34.6 / v0.34.7 : game loading work moved to threads (same results as the main-thread code it replaces) and UI scaling.
 
 const WorldView := preload("res://scenes/world/world_view.gd")
 const CityDetails := preload("res://scenes/world/city_details_view.gd")
@@ -8,6 +8,7 @@ func run(t: Node) -> void:
 	_prefetch(t)
 	_navs(t)
 	_city(t)
+	_ui_scale(t)
 
 func _prefetch(t: Node) -> void:
 	t.check(LoadPrefetch.paths_for("arena").is_empty(), "prefetch: nothing for the arena")
@@ -62,3 +63,14 @@ func _city(t: Node) -> void:
 			if k.begins_with("frame|"):
 				frames += (b[k] as PackedFloat32Array).size() / 16
 		t.check(b.size() > 100 and frames > 1000, "city details computed off the main thread: %d buckets, %d window frames" % [b.size(), frames])
+
+func _ui_scale(t: Node) -> void:
+	for c: Array in [[Vector2i(1280, 720), Vector2(1280, 720)], [Vector2i(1920, 1080), Vector2(1280, 720)], [Vector2i(2560, 1440), Vector2(1280, 720)],
+			[Vector2i(3440, 1440), Vector2(1720, 720)], [Vector2i(1920, 1200), Vector2(1280, 800)], [Vector2i(2560, 1080), Vector2(2560.0 / 1.5, 720)]]:
+		var got := UiTheme.ui_size(c[0])
+		t.check(got.is_equal_approx(c[1]), "UI scale: %s window -> %s UI units (got %s)" % [c[0], c[1], got])
+	var w := Window.new()
+	UiTheme.apply_ui_scale(w)
+	t.check(w.content_scale_mode == Window.CONTENT_SCALE_MODE_CANVAS_ITEMS and w.content_scale_aspect == Window.CONTENT_SCALE_ASPECT_EXPAND and w.content_scale_size == Vector2i(1280, 720),
+		"UI scale: canvas items, expand, 1280 x 720 base")
+	w.free()
