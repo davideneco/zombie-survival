@@ -38,7 +38,7 @@ export function installSummit(game, { world, scene, hud, sfx, fx, hemi, moon, mo
   const C = world.cathedral;
   const T = { x: 0, z: 0 }; // axe de la flèche (monde)
   let fanalPos = null;
-  if (C) {
+  if (C && C.P) {
     [T.x, T.z] = C.P(TOWER.c[0], TOWER.c[1]);
     const a = 235 * DEG; // sur le balcon, du côté du garde-corps, adossé à l'aiguille
     const [fx0, fz0] = C.P(TOWER.c[0] + Math.cos(a) * 2.05, TOWER.c[1] + Math.sin(a) * 2.05);
@@ -64,6 +64,7 @@ export function installSummit(game, { world, scene, hud, sfx, fx, hemi, moon, mo
 
   // ----------------------------------------------------------------- le Fanal d'Erwin
   const buildFanal = () => {
+    if (!fanalPos) return null;
     const g = new THREE.Group(); g.position.set(fanalPos.x, fanalPos.y, fanalPos.z); g.scale.setScalar(1.8);
     const iron = new THREE.MeshStandardMaterial({ color: 0x3a3d44, roughness: 0.45, metalness: 0.9, emissive: 0x14161a });
     const add = (geo, mat, x = 0, y = 0, z = 0) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); g.add(m); return m; };
@@ -189,7 +190,7 @@ export function installSummit(game, { world, scene, hud, sfx, fx, hemi, moon, mo
   const api = {
     sky, orbit, T, fanalPos,
     get shown() { return !!beam; },
-    showBeam() { if (!beam && C) beam = buildBeam(); },
+    showBeam() { if (!beam && C && C.P) beam = buildBeam(); },
     showFanal() { if (!fanal && fanalPos) fanal = buildFanal(); },
     show() { api.showBeam(); api.showFanal(); },
     setFanal(p, lit) { api.showFanal(); if (fanal) { fanal.p = Math.max(0, Math.min(1, p || 0)); if (lit) fanal.lit = 1; } },

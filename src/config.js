@@ -12,68 +12,135 @@ export const PAP_LEVELS = [
   { roman: 'III', price: 20000, color: 0xff6a10, tracer: 0xff8a30, flash: 0xffb060, dmg: 5, ray: 3, head: 1.4, pierce: 4, mag: 1.5, magX: 1.33, reserve: 2.5, reload: 0.75, spread: 0.7, ammo: 5, pulseHz: 2 },
 ];
 
+const getInitialMap = () => {
+  if (typeof window !== 'undefined') {
+    const p = new URLSearchParams(window.location.search).get('map');
+    if (p === 'gare' || p === 'strasbourg' || p === 'arena') return p;
+    const saved = localStorage.getItem('zombie_map');
+    if (saved === 'gare' || saved === 'strasbourg' || saved === 'arena') return saved;
+  }
+  return 'strasbourg';
+};
+
+export const CURRENT_MAP = getInitialMap();
+
+export function setMap(name) {
+  if (name !== 'gare' && name !== 'strasbourg' && name !== 'arena') return;
+  if (typeof window !== 'undefined') {
+    localStorage.setItem('zombie_map', name);
+    const url = new URL(window.location.href);
+    url.searchParams.set('map', name);
+    window.location.href = url.toString();
+  }
+}
+
+export const GARE_SECTOR = {
+  maxDist: 75,
+  basePrice: 750,
+  priceStep: 250,
+  outerDecor: { carArea: 4000, junkArea: 2000, bikeMax: 30, chaletRadius: 30 },
+  zones: [
+    {
+      name: 'Place de la Gare',
+      start: true,
+      seed: { x: 75, z: 12 },
+      items: ['station', 'wall:m1911', 'wall:shotgun', 'wall:smg', 'perk:quickrevive', 'box']
+    },
+    {
+      name: 'Verrière Moderne',
+      seed: { x: 32, z: 12 },
+      doorPrice: 750,
+      items: ['station', 'wall:mp5', 'wall:arex', 'perk:staminup', 'box']
+    },
+    {
+      name: 'Grand Hall Historique',
+      seed: { x: 2, z: 12 },
+      doorPrice: 1000,
+      items: ['station', 'wall:ak47', 'wall:p90', 'perk:juggernog', 'box']
+    },
+    {
+      name: 'Quais & Voies',
+      seed: { x: -38, z: 12 },
+      doorPrice: 1250,
+      items: ['station', 'wall:famas', 'wall:lmg', 'perk:speedcola', 'box']
+    },
+    {
+      name: 'Plateforme TGV',
+      seed: { x: -25, z: -35 },
+      doorPrice: 1500,
+      items: ['pap', 'station', 'wall:barrett', 'wall:crossbow', 'perk:doubletap', 'box']
+    },
+    {
+      name: 'Parvis Nord & Hôtels',
+      outer: true,
+      seed: { x: 80, z: -45 },
+      doorPrice: 1000,
+      items: ['station', 'wall:scar', 'perk:phdflopper', 'box']
+    },
+    {
+      name: 'Aile Sud de la Gare',
+      outer: true,
+      seed: { x: 20, z: 65 },
+      doorPrice: 1000,
+      items: ['station', 'wall:sniper', 'box']
+    }
+  ]
+};
+
+export const STRASBOURG_SECTOR = {
+  maxDist: 95,        // rayon d'une zone d'origine (m, en distance de marche) ; les zones `outer` n'ont pas de limite
+  basePrice: 750,     // (repli) prix d'une porte vers une zone sans doorPrice : de la place de départ
+  priceStep: 250,     // (repli) supplément par zone plus éloignée
+  // Décor des zones `outer`, proportionnel à leur surface (une voiture / un objet de barricade par tant de m²) ; le décor des zones
+  // d'origine garde son tirage et ses plafonds propres (14 voitures, 47 objets de barricade)
+  outerDecor: { carArea: 6000, junkArea: 2500, bikeMax: 30, chaletRadius: 40 },
+  zones: [
+    { name: 'Marché-Neuf', start: true, items: ['station', 'wall:m1911', 'wall:shotgun', 'wall:smg', 'perk:quickrevive', 'box'] },
+    { name: 'Temple-Neuf', seed: { x: -35, z: -95 }, doorPrice: 750, items: ['station', 'wall:arex', 'wall:mp5', 'perk:staminup', 'box'] },
+    { name: 'Rue des Orfèvres', seed: { x: 40, z: -70 }, doorPrice: 750, items: ['wall:famas', 'perk:speedcola', 'box'] },
+    { name: 'Rue du Dôme', seed: { x: 110, z: -111 }, doorPrice: 1000, items: ['station', 'wall:sniper', 'wall:svd', 'box'] },
+    { name: 'Grandes Arcades', seed: { x: -110, z: -45 }, doorPrice: 1000, items: ['station', 'wall:ak47', 'wall:p90', 'perk:mulekick', 'box'] },
+    { name: 'Place Kléber', seed: { x: -199, z: -145 }, doorPrice: 1250, items: ['station', 'perk:juggernog', 'wall:lmg', 'wall:m249', 'box'] },
+    { name: 'Place Gutenberg', seed: { x: -20, z: 90 }, doorPrice: 1250, items: ['station', 'perk:doubletap', 'wall:scar', 'wall:pkm', 'box'] },
+    { name: 'Cathédrale', seed: { x: 103, z: 33 }, doorPrice: 1000, items: ['station', 'wall:deagle', 'wall:rifle', 'box'] },
+    // fin de partie : l'intérieur de la cathédrale, derrière le grand portail (porte la plus chère)
+    { name: 'Intérieur de la Cathédrale', seed: 'cathedral', portal: true, doorPrice: 5000, items: ['pap', 'clock', 'station', 'box'] },
+    // place de l'Homme de Fer (rotonde du tram), derrière la place Kléber : profondeur 4, donc 1500 pts calculés. Ajoutée en dernier :
+    // le tirage des emplacements des autres zones ne change pas.
+    // isolatedRnd : ses emplacements (et son décor) ne consomment pas le tirage commun aux autres zones
+    { name: 'Homme de Fer', seed: { x: -290, z: -203 }, isolatedRnd: true, doorPrice: 1500, items: ['station', 'wall:crossbow', 'wall:m79', 'perk:phdflopper', 'box'] },
+    // ---- le reste de la Grande Île (v0.27.0) : zones `outer`, dans cet ordre (le tirage des zones d'origine ne bouge pas :
+    // les zones `outer` ont leur propre générateur). Noms tirés des monuments OpenStreetMap ; « Grand'Rue » et « Quai Schoepflin »
+    // sont des noms déduits du plan (à confirmer). Armes premium au mur (v0.28.0) : magnum 2000, saiga 3000, mg42 4000, barrett 5000.
+    // palier A : 1500
+    { name: 'Saint-Pierre-le-Jeune', outer: true, seed: { x: -140, z: -340 }, doorPrice: 1500, items: ['station', 'wall:magnum', 'box'] },
+    { name: "Grand'Rue", outer: true, seed: { x: -400, z: 10 }, doorPrice: 1500, items: ['station', 'wall:mp5', 'box'] },
+    { name: 'Grand Séminaire', outer: true, seed: { x: 300, z: -60 }, doorPrice: 1500, items: ['station', 'wall:shotgun', 'box'] },
+    { name: 'Palais Rohan', outer: true, seed: { x: 260, z: 140 }, doorPrice: 1500, items: ['wall:ak47'] },
+    { name: 'Musée historique', outer: true, seed: { x: 200, z: 215 }, doorPrice: 1500, items: ['station', 'wall:arex', 'box'] },
+    // palier B : 2000
+    { name: 'Place Broglie', outer: true, seed: { x: 150, z: -345 }, doorPrice: 2000, chalets: 4, items: ['station', 'wall:lmg', 'box'] },
+    { name: 'Quai Schoepflin', outer: true, seed: { x: -20, z: -470 }, doorPrice: 2000, items: ['wall:svd'] },
+    { name: 'Hôtel de Neuwiller', outer: true, seed: { x: -450, z: -250 }, doorPrice: 2000, items: ['wall:famas'] },
+    { name: 'Monument Stoeber', outer: true, seed: { x: -490, z: -150 }, doorPrice: 2000, items: ['station', 'wall:scar', 'box'] },
+    { name: 'Ancienne Douane', outer: true, seed: { x: 30, z: 330 }, doorPrice: 2000, items: ['station', 'wall:sniper'] },
+    { name: 'Saint-Thomas', outer: true, seed: { x: -230, z: 250 }, doorPrice: 2000, items: ['station', 'wall:saiga', 'box'] },
+    { name: 'Église Réformée', outer: true, seed: { x: -330, z: 170 }, doorPrice: 2000, items: ['wall:smg'] },
+    // palier C : 2500
+    { name: 'Opéra', outer: true, seed: { x: 250, z: -450 }, doorPrice: 2500, items: ['station', 'wall:mg42'] },
+    { name: 'Préfecture', outer: true, seed: { x: 400, z: -340 }, doorPrice: 2500, items: ['station', 'wall:pkm', 'box'] },
+    { name: 'Saint-Étienne', outer: true, seed: { x: 540, z: -90 }, doorPrice: 2500, items: ['station', 'wall:m249', 'box'] },
+    { name: 'Saint-Pierre-le-Vieux', outer: true, seed: { x: -620, z: -60 }, doorPrice: 2500, items: ['wall:deagle'] },
+    { name: 'Petite France', outer: true, seed: { x: -660, z: 150 }, doorPrice: 2500, items: ['wall:barrett'] },
+  ],
+};
+
 export const CONFIG = {
-  map: 'strasbourg', // 'strasbourg' (lieu réel OpenStreetMap) ou 'arena' (arène de test)
-  // Strasbourg : toute la Grande Île (données dans public/data/area.json, voir tools/fetch-osm.mjs)
-  startHint: { x: 4.3, z: -35.7 }, // point de départ (place du Marché-Neuf, centre de l'ancienne carte), en mètres depuis le centre des données
-  cityHint: { x: -199, z: -145 }, // un point du réseau de rues principal (place Kléber)
-  breaches: 3,                     // secours : bâtiments à effondrer si aucun passage sous immeuble ne relie la place à la ville
-  // Toute la Grande Île est jouable, découpée en zones qu'on ouvre l'une après l'autre en payant les portes.
-  // Chaque zone part d'un vrai lieu (seed, en mètres : x vers l'est, z vers le sud) ; les cases sont attribuées
-  // à la zone la plus proche en distance de marche. Trois phases (realworld.js) : 1) les zones d'origine (sans `outer`),
-  // limitées à maxDist ; 2) les zones `outer: true`, sans limite de distance, sur les cases restantes ; 3) les poches enclavées
-  // sont rattachées en entier à la zone voisine qui les touche le plus. Les portes tombent entre deux zones voisines.
-  // Prix d'une porte = le plus cher des `doorPrice` des deux zones qu'elle sépare (Marché-Neuf : 0). Paliers des zones `outer` :
-  // A 1500, B 2000, C 2500 (voir les commentaires de chaque zone).
-  // items : ce qu'on trouve dans la zone ('station' = borne de munitions, 'wall:<arme>', 'perk:<atout>', 'pap',
-  //         'box' = un emplacement possible de la boîte mystère : il n'y a qu'une boîte, qui se déplace).
-  sector: {
-    maxDist: 95,        // rayon d'une zone d'origine (m, en distance de marche) ; les zones `outer` n'ont pas de limite
-    basePrice: 750,     // (repli) prix d'une porte vers une zone sans doorPrice : de la place de départ
-    priceStep: 250,     // (repli) supplément par zone plus éloignée
-    // Décor des zones `outer`, proportionnel à leur surface (une voiture / un objet de barricade par tant de m²) ; le décor des zones
-    // d'origine garde son tirage et ses plafonds propres (14 voitures, 47 objets de barricade)
-    outerDecor: { carArea: 6000, junkArea: 2500, bikeMax: 30, chaletRadius: 40 },
-    zones: [
-      { name: 'Marché-Neuf', start: true, items: ['station', 'wall:m1911', 'wall:shotgun', 'wall:smg', 'perk:quickrevive', 'box'] },
-      { name: 'Temple-Neuf', seed: { x: -35, z: -95 }, doorPrice: 750, items: ['station', 'wall:arex', 'wall:mp5', 'perk:staminup', 'box'] },
-      { name: 'Rue des Orfèvres', seed: { x: 40, z: -70 }, doorPrice: 750, items: ['wall:famas', 'perk:speedcola', 'box'] },
-      { name: 'Rue du Dôme', seed: { x: 110, z: -111 }, doorPrice: 1000, items: ['station', 'wall:sniper', 'wall:svd', 'box'] },
-      { name: 'Grandes Arcades', seed: { x: -110, z: -45 }, doorPrice: 1000, items: ['station', 'wall:ak47', 'wall:p90', 'perk:mulekick', 'box'] },
-      { name: 'Place Kléber', seed: { x: -199, z: -145 }, doorPrice: 1250, items: ['station', 'perk:juggernog', 'wall:lmg', 'wall:m249', 'box'] },
-      { name: 'Place Gutenberg', seed: { x: -20, z: 90 }, doorPrice: 1250, items: ['station', 'perk:doubletap', 'wall:scar', 'wall:pkm', 'box'] },
-      { name: 'Cathédrale', seed: { x: 103, z: 33 }, doorPrice: 1000, items: ['station', 'wall:deagle', 'wall:rifle', 'box'] },
-      // fin de partie : l'intérieur de la cathédrale, derrière le grand portail (porte la plus chère)
-      { name: 'Intérieur de la Cathédrale', seed: 'cathedral', portal: true, doorPrice: 5000, items: ['pap', 'clock', 'station', 'box'] },
-      // place de l'Homme de Fer (rotonde du tram), derrière la place Kléber : profondeur 4, donc 1500 pts calculés. Ajoutée en dernier :
-      // le tirage des emplacements des autres zones ne change pas.
-      // isolatedRnd : ses emplacements (et son décor) ne consomment pas le tirage commun aux autres zones
-      { name: 'Homme de Fer', seed: { x: -290, z: -203 }, isolatedRnd: true, doorPrice: 1500, items: ['station', 'wall:crossbow', 'wall:m79', 'perk:phdflopper', 'box'] },
-      // ---- le reste de la Grande Île (v0.27.0) : zones `outer`, dans cet ordre (le tirage des zones d'origine ne bouge pas :
-      // les zones `outer` ont leur propre générateur). Noms tirés des monuments OpenStreetMap ; « Grand'Rue » et « Quai Schoepflin »
-      // sont des noms déduits du plan (à confirmer). Armes premium au mur (v0.28.0) : magnum 2000, saiga 3000, mg42 4000, barrett 5000.
-      // palier A : 1500
-      { name: 'Saint-Pierre-le-Jeune', outer: true, seed: { x: -140, z: -340 }, doorPrice: 1500, items: ['station', 'wall:magnum', 'box'] },
-      { name: "Grand'Rue", outer: true, seed: { x: -400, z: 10 }, doorPrice: 1500, items: ['station', 'wall:mp5', 'box'] },
-      { name: 'Grand Séminaire', outer: true, seed: { x: 300, z: -60 }, doorPrice: 1500, items: ['station', 'wall:shotgun', 'box'] },
-      { name: 'Palais Rohan', outer: true, seed: { x: 260, z: 140 }, doorPrice: 1500, items: ['wall:ak47'] },
-      { name: 'Musée historique', outer: true, seed: { x: 200, z: 215 }, doorPrice: 1500, items: ['station', 'wall:arex', 'box'] },
-      // palier B : 2000
-      { name: 'Place Broglie', outer: true, seed: { x: 150, z: -345 }, doorPrice: 2000, chalets: 4, items: ['station', 'wall:lmg', 'box'] },
-      { name: 'Quai Schoepflin', outer: true, seed: { x: -20, z: -470 }, doorPrice: 2000, items: ['wall:svd'] },
-      { name: 'Hôtel de Neuwiller', outer: true, seed: { x: -450, z: -250 }, doorPrice: 2000, items: ['wall:famas'] },
-      { name: 'Monument Stoeber', outer: true, seed: { x: -490, z: -150 }, doorPrice: 2000, items: ['station', 'wall:scar', 'box'] },
-      { name: 'Ancienne Douane', outer: true, seed: { x: 30, z: 330 }, doorPrice: 2000, items: ['station', 'wall:sniper'] },
-      { name: 'Saint-Thomas', outer: true, seed: { x: -230, z: 250 }, doorPrice: 2000, items: ['station', 'wall:saiga', 'box'] },
-      { name: 'Église Réformée', outer: true, seed: { x: -330, z: 170 }, doorPrice: 2000, items: ['wall:smg'] },
-      // palier C : 2500
-      { name: 'Opéra', outer: true, seed: { x: 250, z: -450 }, doorPrice: 2500, items: ['station', 'wall:mg42'] },
-      { name: 'Préfecture', outer: true, seed: { x: 400, z: -340 }, doorPrice: 2500, items: ['station', 'wall:pkm', 'box'] },
-      { name: 'Saint-Étienne', outer: true, seed: { x: 540, z: -90 }, doorPrice: 2500, items: ['station', 'wall:m249', 'box'] },
-      { name: 'Saint-Pierre-le-Vieux', outer: true, seed: { x: -620, z: -60 }, doorPrice: 2500, items: ['wall:deagle'] },
-      { name: 'Petite France', outer: true, seed: { x: -660, z: 150 }, doorPrice: 2500, items: ['wall:barrett'] },
-    ],
-  },
+  map: CURRENT_MAP, // 'strasbourg' (Grande Île) ou 'gare' (Gare de Strasbourg) ou 'arena'
+  startHint: CURRENT_MAP === 'gare' ? { x: 75, z: 12 } : { x: 4.3, z: -35.7 },
+  cityHint: CURRENT_MAP === 'gare' ? { x: 32, z: 12 } : { x: -199, z: -145 },
+  breaches: CURRENT_MAP === 'gare' ? 0 : 3,
+  sector: CURRENT_MAP === 'gare' ? GARE_SECTOR : STRASBOURG_SECTOR,
 
   arenaHalf: 30,    // arène de test : 60 x 60 m
 

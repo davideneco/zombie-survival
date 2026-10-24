@@ -21,7 +21,7 @@ export function installFinale(game, { world, scene, hud, sfx, fx }) {
   const players = () => [game.player, ...game.remotes.values()];
   const standing = () => players().filter((p) => !p.dead && !p.downed);
   const R = {}; // régions utiles : crypt, R2, R3, W2, PL
-  for (const r of lv().regions) {
+  for (const r of lv()?.regions || []) {
     if (r.name === 'Crypte romane') R.crypt = r.id;
     else if (r.name === 'Triforium') R.R2 = r.id;
     else if (r.name === 'Galerie haute') R.R3 = r.id;
@@ -532,7 +532,7 @@ export function installFinale(game, { world, scene, hud, sfx, fx }) {
     // quartiers (zones) déjà ouverts, et nombre requis : la ville doit être en grande partie libérée avant l'Heure du Jugement
     openZones() { return world.zoneNames.reduce((n, _, i) => n + (world.isZoneOpen(i) ? 1 : 0), 0); },
     // true si l'Heure du Jugement peut sonner : manche minimale et nombre de quartiers ouverts (l'hôte revalide les demandes des clients)
-    finaleReady() { const Fc = F(); return this.round >= Fc.minRound && this.openZones() >= (Fc.minZones || 0); },
+    finaleReady() { const Fc = F(); return !!world.cathedral && this.round >= Fc.minRound && this.openZones() >= (Fc.minZones || 0); },
 
     finalePrompt(m) {
       const Fc = F();

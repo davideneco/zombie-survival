@@ -6,12 +6,13 @@
 //           node tools/fetch-osm.mjs 48.5822 7.7485 820 560   (Grande Île de Strasbourg)
 import fs from 'node:fs';
 
-const [lat0, lon0, halfArg, halfZArg] = process.argv.slice(2);
+const [lat0, lon0, halfArg, halfZArg, outArg] = process.argv.slice(2);
 if (!lat0 || !lon0) {
-  console.error('Usage: node tools/fetch-osm.mjs <lat> <lon> [demi-taille en m]');
+  console.error('Usage: node tools/fetch-osm.mjs <lat> <lon> [demi-taille en m] [demi-hauteur en m] [chemin de sortie]');
   process.exit(1);
 }
 const LAT = parseFloat(lat0), LON = parseFloat(lon0), HALF = parseFloat(halfArg || 110), HALFZ = parseFloat(halfZArg || HALF);
+const OUT_PATH = outArg || 'public/data/area.json';
 
 const mPerDegLat = 111320;
 const mPerDegLon = 111320 * Math.cos((LAT * Math.PI) / 180);
@@ -38,8 +39,9 @@ const query = `[out:json][timeout:180][maxsize:536870912];(
   node["man_made"="planter"](${bbox});
   node["shop"="kiosk"](${bbox});
   way["shop"="kiosk"](${bbox});
-  way["railway"="tram"](${bbox});
+  way["railway"~"^(tram|rail|platform)$"](${bbox});
   node["railway"="tram_stop"](${bbox});
+  way["highway"](${bbox});
   node["historic"~"^(memorial|monument)$"](${bbox});
 );out geom;`;
 
@@ -56,7 +58,7 @@ async function fetchOverpass() {
         console.log('→', url);
         const res = await fetch(url, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': 'zombie-game-dev/0.1' },
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': 'ZombieSurvivalGame/1.0' },
           body: 'data=' + encodeURIComponent(query),
         });
         const text = await res.text();
@@ -79,7 +81,7 @@ const ring = (geom) => geom.map(toLocal);
 const raw = await fetchOverpass();
 fs.mkdirSync('data', { recursive: true });
 
-const out = { center: { lat: LAT, lon: LON }, half: HALF, halfZ: HALFZ, buildings: [], parts: [], passages: [], roads: [], water: [], trees: [], lamps: [], furniture: [], extraFurniture: [], parks: [], barriers: [] };
+const out = { center: { lat: LAT, lon: LON }, half: HALF, halfZ: HALFZ, buildings: [], parts: [], passages: [], roads: [], rails: [], platforms: [], water: [], trees: [], lamps: [], furniture: [], extraFurniture: [], parks: [], barriers: [] };
 
 // étiquettes OSM utiles au rendu (style de façade, toit, couleurs, monuments)
 const KEEP = ['building', 'building:part', 'building:levels', 'building:min_level', 'roof:shape', 'roof:levels', 'roof:height', 'roof:direction',
@@ -114,6 +116,8 @@ for (const el of raw.elements) {
     else if (t.building) out.buildings.push({ pts, h: heightOf(t), name: t.name || null, tags: tagsOf(t) });
     else if (t.highway) out.roads.push({ pts, type: t.highway, width: parseFloat(t.width) || null, bridge: !!t.bridge, area: t.area === 'yes' });
     else if (t.waterway || t.natural === 'water') out.water.push({ pts, line: !!t.waterway, width: parseFloat(t.width) || null });
+    else if (t.railway === 'rail') out.rails.push({ pts });
+    else if (t.railway === 'platform' || t.public_transport === 'platform') out.platforms.push({ pts, ref: t.ref || null });
     else if (t.barrier) out.barriers.push({ pts, type: t.barrier });
     else if (t.leisure || t.landuse) out.parks.push({ pts, kind: t.leisure || t.landuse });
   } else if (el.type === 'relation' && el.members) {
@@ -157,6 +161,7 @@ try {
   }
 } catch (e) { console.log('  IGN BD TOPO ignoré :', e.message); }
 
-fs.mkdirSync('public/data', { recursive: true });
-fs.writeFileSync('public/data/area.json', JSON.stringify(out));
+import path from 'node:path';
+fs.mkdirSync(path.dirname(OUT_PATH), { recursive: true });
+fs.writeFileSync(OUT_PATH, JSON.stringify(out));
 console.log(`OK : ${out.buildings.length} bâtiments, ${out.parts.length} parties de bâtiments, ${out.furniture.length} + ${out.extraFurniture.length} mobiliers, ${out.passages.length} passages sous immeubles, ${out.roads.length} routes, ${out.water.length} eau, ${out.trees.length} arbres, ${out.lamps.length} lampadaires, ${out.parks.length} zones vertes, ${out.barriers.length} barrières`);

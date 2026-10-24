@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { CONFIG, papAmmoMult } from './config.js';
+import { CONFIG, papAmmoMult, setMap } from './config.js';
 import { buildWorld } from './world.js';
 import { buildRealWorld } from './realworld.js';
 import { Player } from './player.js';
@@ -2208,6 +2208,35 @@ document.getElementById('btnModeBack').addEventListener('click', (e) => {
 document.getElementById('btnQuit').addEventListener('click', () => {
   if (confirm('Quitter la partie et revenir au menu principal ?')) location.reload();
 });
+
+// Sélecteur de carte (Gare de Strasbourg / Grande Île)
+const btnSelectMap = document.getElementById('btnSelectMap');
+const btnPauseMap = document.getElementById('btnPauseMap');
+const syncMapBtns = () => {
+  const isGare = CONFIG.map === 'gare';
+  const label = isGare ? '🗺️ CARTE : GARE DE STRASBOURG' : '🗺️ CARTE : GRANDE ÎLE';
+  if (btnSelectMap) btnSelectMap.textContent = isGare ? '🗺️ CARTE : GARE DE STRASBOURG (CLIQUER POUR GRANDE ÎLE)' : '🗺️ CARTE : GRANDE ÎLE (CLIQUER POUR GARE)';
+  if (btnPauseMap) btnPauseMap.textContent = label + ' (CHANGER)';
+};
+
+btnSelectMap?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  const next = CONFIG.map === 'gare' ? 'strasbourg' : 'gare';
+  setMap(next);
+});
+
+btnPauseMap?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  if (game.isMultiplayer && !game.isHost) {
+    hud.popup("Changement de carte réservé à l'hôte", 'warning');
+    return;
+  }
+  const next = CONFIG.map === 'gare' ? 'strasbourg' : 'gare';
+  if (confirm(`Changer de carte vers ${next === 'gare' ? 'la Gare de Strasbourg' : 'la Grande Île'} ?\n(La page va se recharger sur la nouvelle carte)`)) {
+    setMap(next);
+  }
+});
+syncMapBtns();
 
 // Précompilation de tous les shaders pendant le chargement : sinon chaque nouvel objet (zombie rampant,
 // arme sortie de la boîte, grenade, bonus…) fait compiler son shader en pleine partie et le jeu saccade.

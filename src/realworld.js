@@ -13,6 +13,7 @@ import { Levels } from './levels.js';
 import { createArchitecture, BAY_W } from './architecture.js';
 import { createProps } from './props.js';
 import { planCathedral, CEIL, pointInPoly as inPoly } from './cathedral.js';
+import { planGare } from './gare.js';
 import { buildCathedral, augmentPlan, PORTAL_H } from './cath/index.js';
 import { HDF, isRotunda, isOpenShelter, rotundaInfo, shelterInfo, planHdf, legacyRailDist, buildHdfStructures, buildHdfDecor } from './hommedefer.js';
 import { planTram, buildTramNetwork } from './tramNet.js';
@@ -174,7 +175,7 @@ const NO_EDGE = -2; // (détection des portes) pas de limite entre deux cases
 
 export async function buildRealWorld(scene, renderer) {
   const rnd = seeded(20240611);
-  const data = await (await fetch('/data/area.json')).json();
+  const data = await (await fetch(CONFIG.map === 'gare' ? '/data/gare.json' : '/data/area.json')).json();
   const halfX = data.half, halfZ = data.halfZ || data.half;
   const Z = CONFIG.sector;
 
@@ -188,6 +189,7 @@ export async function buildRealWorld(scene, renderer) {
   data.water = [...data.water.filter((w) => w.line), ...stitchRings(data.water.filter((w) => !w.line))];
 
   // ---------------------------------------------------------------- Île jouable (délimitée par l'eau)
+  const isGare = CONFIG.map === 'gare';
   const isl = computeIsland(data, CONFIG.startHint.x, CONFIG.startHint.z);
   const onIsland = (x, z) => {
     const i = Math.floor((x + isl.hx) / isl.cell), j = Math.floor((z + isl.hz) / isl.cell);
@@ -300,10 +302,15 @@ export async function buildRealWorld(scene, renderer) {
   const tailGhosts = ghosts;
   let cathInfo = null;
   const levels = new Levels(); // étages (cathédrale : balcons, escaliers, plateforme, flèche)
-  // Cathédrale : intérieur jouable (zone de fin de partie)
-  let kCath = blds.findIndex((b) => b.name === 'Cathédrale Notre-Dame');
-  if (kCath < 0) kCath = blds.reduce((best, b, k) => (b.tags.building === 'cathedral' && (best < 0 || Math.abs(polyArea(b.pts)) > Math.abs(polyArea(blds[best].pts))) ? k : best), -1);
-  const cath = kCath >= 0 ? augmentPlan(planCathedral(blds[kCath].pts, (data.parts || []).map((p) => ({ pts: cleanRing(p.pts), tags: p.tags || {} })))) : null;
+  // Édifice intérieur modélisé : Cathédrale (Grande Île) ou Gare de Strasbourg
+  let cath = null, gare = null, kCath = -1;
+  if (isGare) {
+    gare = planGare(blds, data.parts || [], data.rails || [], data.platforms || []);
+  } else {
+    kCath = blds.findIndex((b) => b.name === 'Cathédrale Notre-Dame');
+    if (kCath < 0) kCath = blds.reduce((best, b, k) => (b.tags.building === 'cathedral' && (best < 0 || Math.abs(polyArea(b.pts)) > Math.abs(polyArea(blds[best].pts))) ? k : best), -1);
+    cath = kCath >= 0 ? augmentPlan(planCathedral(blds[kCath].pts, (data.parts || []).map((p) => ({ pts: cleanRing(p.pts), tags: p.tags || {} })))) : null;
+  }
 
   // Passages sous immeubles : on repère les portions d'axe qui passent dans un bâtiment
   const passages = preparePassages(data.passages);
@@ -440,6 +447,13 @@ export async function buildRealWorld(scene, renderer) {
     const pts = bld.pts;
     if (breach.removed.has(k)) { rubble.push(pts); continue; }
 
+    // Gare de Strasbourg : l'édifice et ses quais ont leur intérieur modélisé dans src/gare.js
+    if (isGare && gare) {
+      if (bld.name === 'Strasbourg' || bld.tags?.building === 'train_station' || pts.some(([x, z]) => gare.insideInner(x, z))) {
+        continue;
+      }
+    }
+
     // bâtiment annexe cartographié à l'intérieur de la cathédrale (chapelle, sacristie…) : on le retire
     if (cath && k !== kCath) {
       // un seul coin sous la voûte, ou un coin de l'intérieur dans le bâtiment, suffit à le retirer
@@ -494,6 +508,12 @@ export async function buildRealWorld(scene, renderer) {
     if (pts.length < 3) continue;
     if (polyArea(pts) < 0) pts.reverse();
     let opts = {};
+    if (isGare && gare) {
+      const c = pts.reduce((a, q) => [a[0] + q[0] / pts.length, a[1] + q[1] / pts.length], [0, 0]);
+      if (prt.tags?.name === 'Verrière de la gare' || gare.insideInner(c[0], c[1])) {
+        continue;
+      }
+    }
     if (cath) {
       const c = pts.reduce((a, q) => [a[0] + q[0] / pts.length, a[1] + q[1] / pts.length], [0, 0]);
       if (inPoly(c[0], c[1], cath.outline)) {
@@ -684,8 +704,9 @@ export async function buildRealWorld(scene, renderer) {
   // ---------------------------------------------------------------- Sol : trottoirs, variation, flaques, plaques d'égout (shader du sol, v0.46.0)
   const groundApi = createGround(scene, { mesh: groundMesh, polys: blds.map((b) => b.pts), bounds: { x0: -GROUND_W / 2, z0: -GROUND_H / 2, w: GROUND_W, h: GROUND_H }, onIsland, tramDist });
 
-  // ---------------------------------------------------------------- Intérieur de la cathédrale
+  // ---------------------------------------------------------------- Intérieur de la cathédrale ou de la gare
   if (cath) cathInfo = buildCathedral({ scene, plan: cath, collision, lightSources, props, levels });
+  if (gare) gare.finish(scene, collision, lightSources, props);
   cutGroundHoles(levels.holePolys);
 
   // ---------------------------------------------------------------- Place de l'Homme de Fer : rotonde et abris (avant la grille de collision)
@@ -1511,6 +1532,10 @@ export async function buildRealWorld(scene, renderer) {
           const fixed = type === 'pap' ? cath.pap : cath.clock;
           addMachine(type, id, fixed.p, zi, fixed.rot);
           placed.push(fixed.p);
+        } else if (isGare && gare && type === 'pap') {
+          const p = [gare.pap.x, gare.pap.z];
+          addMachine(type, id, p, zi, gare.pap.yaw);
+          placed.push(p);
         } else {
           const R = start ? 30 : 35;
           // un atout n'est jamais abandonné : si aucun emplacement n'est loin des portes, on retombe sur l'ancien tirage
@@ -2126,8 +2151,9 @@ export async function buildRealWorld(scene, renderer) {
     stationPos, stations, wallWeapons, vehicleSpawns, parkings, bikeStations, bikeCheck, doors, openDoor, zoneOf, startPos, nav, collision, machines, boxes, setActiveBox,
     zoneNames: ZONE_NAMES, zoneCenters, startZone, sealedPoints, mapImage, mapView: { halfX, halfZ, scale: MAP_SCALE },
     isZoneOpen: (i) => !!zoneOpen[i], zoneArea, zoneOf1, // zoneOf1 : zone d'après le découpage d'origine (outils de test)
-    mapCrop: { x0: Math.max(-halfX, secMinX - 40), x1: Math.min(halfX, secMaxX + 40), z0: Math.max(-halfZ, secMinZ - 40), z1: Math.min(halfZ, secMaxZ + 40) }, mapTitle: 'GRANDE ÎLE — STRASBOURG',
+    mapCrop: { x0: Math.max(-halfX, secMinX - 40), x1: Math.min(halfX, secMaxX + 40), z0: Math.max(-halfZ, secMinZ - 40), z1: Math.min(halfZ, secMaxZ + 40) }, mapTitle: isGare ? 'GARE DE STRASBOURG' : 'GRANDE ÎLE — STRASBOURG',
     cathedral: cath ? { seed: cath.seed, clock: cath.clock, insideInner: cath.insideInner, inner: cath.inner, P: cath.P, S: cath.S, T: cath.T, ceilAt: cath.ceilAt, info: cathInfo } : null,
+    gare: gare ? { seed: gare.seed, clock: gare.clock, insideInner: gare.insideInner, ceilAt: gare.ceilAt } : null,
     levels, hdf: hdfInfo, tram: tramInfo, mapFixes: { partWalls, fountains: fountainCircles.length }, // v0.35.2 : murs ajoutés aux façades des parties 3D (tests, outils)
    
     sky: skyApi, setLampScale: (k) => { lampScale = k; lightTimer = 0; },
@@ -2137,8 +2163,12 @@ export async function buildRealWorld(scene, renderer) {
     floorAt: (x, z, y, out) => levels.floorAt(x, z, y, out),
     collide: (pos, r, out, ignore) => collision.resolve(pos, r, out, ignore),
     rayHit: (ox, oy, oz, dx, dy, dz, maxT) => collision.rayHit(ox, oy, oz, dx, dy, dz, maxT),
-    // Hauteur du plafond à l'aplomb de (x, z) : voûtes de la cathédrale, passage sous immeuble (PASSAGE_H), sinon rien (ciel ouvert)
+    // Hauteur du plafond à l'aplomb de (x, z) : voûtes de la cathédrale, verrière de la gare, passage sous immeuble (PASSAGE_H), sinon rien (ciel ouvert)
     ceilingAt: (x, z) => {
+      if (isGare && gare) {
+        const cg = gare.ceilAt(x, z);
+        if (cg != null) return cg;
+      }
       const c = cath ? cath.ceilAt(x, z) : null;
       if (c != null) return c;
       return axisInside(x, z) ? PASSAGE_H : Infinity;
