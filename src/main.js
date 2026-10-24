@@ -2164,6 +2164,10 @@ document.getElementById('btnPlay').addEventListener('click', () => hud.showPanel
 document.getElementById('btnOptions').addEventListener('click', () => openOptions('titlePanel'));
 document.getElementById('btnPauseOptions').addEventListener('click', () => openOptions('pausePanel'));
 document.getElementById('btnModMenu')?.addEventListener('click', () => {
+  if (game.isMultiplayer && !game.isHost) {
+    hud.popup("Menu Mods réservé à l'hôte", 'warning');
+    return;
+  }
   hud.hideOverlay();
   game.modMenu?.show();
 });

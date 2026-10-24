@@ -376,27 +376,262 @@ export function createProps() {
     return g;
   }
 
-  // ---- grand portail gothique : deux battants cloutés qui pivotent sur leurs gonds
+  // ---- Grand Portail Occidental de la Cathédrale de Strasbourg (porte monumentale 5000 pts) :
+  // façade gothique en grès rose des Vosges, perron monumental en marches, voussures étagées en ogive,
+  // grand gâble alsacien triangulaire à pinacles, trumeau sculpté et lourds battants en chêne à ferronnerie d'art.
   function portalDoors(len, h = 8.2) {
     const g = new THREE.Group();
-    const studs = new THREE.MeshStandardMaterial({ color: 0x2a2a2c, roughness: 0.4, metalness: 0.8 });
-    const oak = new THREE.MeshStandardMaterial({ color: 0x4a2a16, map: M.wood.map, roughness: 0.8 });
-    const leaves = [];
+
+    // Matériaux réalistes PBR
+    const stoneRose = new THREE.MeshStandardMaterial({ color: 0xaa6250, roughness: 0.82, metalness: 0.04 });
+    const stoneDark = new THREE.MeshStandardMaterial({ color: 0x764032, roughness: 0.88, metalness: 0.04 });
+    const oak = new THREE.MeshStandardMaterial({ color: 0x361f12, map: M.wood.map, roughness: 0.75 });
+    const iron = new THREE.MeshStandardMaterial({ color: 0x1c1e20, roughness: 0.45, metalness: 0.85 });
+    const bronze = new THREE.MeshStandardMaterial({ color: 0x785633, roughness: 0.35, metalness: 0.85 });
+    const ember = new THREE.MeshStandardMaterial({ color: 0xff6611, emissive: 0xff4400, emissiveIntensity: 2.8, roughness: 0.3 });
+
+    const staticRose = [];
+    const staticDark = [];
+    const staticIron = [];
+    const staticBronze = [];
+    const staticEmber = [];
+
+    // Helper : arc brisé gothique (ogive équilatérale)
+    const makeGothicArchGeos = (span, yBase, depth, zPos, thickness = 0.28) => {
+      const geos = [];
+      const hw = span / 2;
+      const n = 12;
+      // Arc gauche
+      for (let i = 0; i < n; i++) {
+        const a0 = Math.PI - (i / n) * (Math.PI / 3);
+        const a1 = Math.PI - ((i + 1) / n) * (Math.PI / 3);
+        const x0 = hw + span * Math.cos(a0), y0 = yBase + span * Math.sin(a0);
+        const x1 = hw + span * Math.cos(a1), y1 = yBase + span * Math.sin(a1);
+        const dx = x1 - x0, dy = y1 - y0, segLen = Math.hypot(dx, dy);
+        const ang = Math.atan2(dy, dx);
+        geos.push(box(segLen, thickness, depth, (x0 + x1) / 2, (y0 + y1) / 2, zPos, 0, 0, ang));
+      }
+      // Arc droit
+      for (let i = 0; i < n; i++) {
+        const a0 = (Math.PI / 3) * (1 - i / n);
+        const a1 = (Math.PI / 3) * (1 - (i + 1) / n);
+        const x0 = -hw + span * Math.cos(a0), y0 = yBase + span * Math.sin(a0);
+        const x1 = -hw + span * Math.cos(a1), y1 = yBase + span * Math.sin(a1);
+        const dx = x1 - x0, dy = y1 - y0, segLen = Math.hypot(dx, dy);
+        const ang = Math.atan2(dy, dx);
+        geos.push(box(segLen, thickness, depth, (x0 + x1) / 2, (y0 + y1) / 2, zPos, 0, 0, ang));
+      }
+      return geos;
+    };
+
+    // ---------------- 1. LE PERRON EN MARCHES (3 marches en grès rose) ----------------
+    staticRose.push(box(len + 1.4, 0.18, 0.75, 0, 0.27, 0.45)); // marche haute
+    staticRose.push(box(len + 2.6, 0.18, 1.45, 0, 0.18, 0.8));  // marche médiane
+    staticRose.push(box(len + 3.8, 0.18, 2.15, 0, 0.09, 1.15)); // marche basse
+    staticDark.push(box(len + 1.45, 0.03, 0.08, 0, 0.36, 0.83)); // nez de marche
+    staticDark.push(box(len + 2.65, 0.03, 0.08, 0, 0.27, 1.53));
+    staticDark.push(box(len + 3.85, 0.03, 0.08, 0, 0.18, 2.23));
+
+    // ---------------- 2. LE TRUMEAU CENTRAL (PILIER & STATUE) ----------------
+    // Base et pilier chanfreiné
+    staticRose.push(cyl(0.32, 0.38, 0.8, 8, 0, 0.4, 0.05));
+    staticRose.push(box(0.44, h - 0.8, 0.58, 0, (h + 0.8) / 2, 0.05));
+    // Chapiteau sommital du trumeau sous le linteau
+    staticRose.push(box(0.56, 0.35, 0.65, 0, h - 0.15, 0.05));
+    staticDark.push(box(0.6, 0.1, 0.68, 0, h - 0.02, 0.05));
+
+    // Niche et statue médiévale de la Vierge de Strasbourg
+    staticDark.push(box(0.34, 0.18, 0.28, 0, 1.9, 0.35)); // piédouche / console
+    staticRose.push(cyl(0.12, 0.18, 1.45, 8, 0, 2.72, 0.35)); // corps drapé
+    staticRose.push(new THREE.SphereGeometry(0.1, 8, 6).translate(0, 3.55, 0.35)); // tête
+    staticBronze.push(cyl(0.11, 0.11, 0.04, 8, 0, 3.66, 0.35)); // couronne
+    staticRose.push(cyl(0.02, 0.24, 0.65, 6, 0, 4.08, 0.35)); // dais gothique en clocheton
+    staticDark.push(box(0.38, 0.08, 0.38, 0, 3.76, 0.35));
+
+    // ---------------- 3. ÉBRASEMENTS LATÉRAUX, COLONNETTES & CONTREFORTS ----------------
     for (const side of [-1, 1]) {
-      const pivot = new THREE.Group(); pivot.position.set(side * len / 2, 0, 0);
-      const w = len / 2;
-      const leaf = new THREE.Mesh(box(w, h, 0.18, -side * w / 2, h / 2, 0), oak);
-      const bands = [];
-      for (const y of [1, h * 0.35, h * 0.65, h - 1]) bands.push(box(w * 0.92, 0.12, 0.05, -side * w / 2, y, 0.11));
-      for (let i = 0; i < 6; i++) for (let j = 0; j < 10; j++) bands.push(new THREE.SphereGeometry(0.035, 6, 4).translate(-side * (0.2 + (i * (w - 0.4)) / 5), 0.6 + (j * (h - 1.2)) / 9, 0.1));
-      pivot.add(leaf, new THREE.Mesh(merge(bands), studs));
+      const xCol = side * (len / 2 + 0.24);
+      // Piédroit principal intérieur
+      staticRose.push(box(0.48, h, 0.65, xCol, h / 2, 0.05));
+
+      // Faisceau de 3 colonnettes étagées en perspective (retombées des voussures)
+      const cols = [
+        { x: side * (len / 2 + 0.08), z: 0.28 },
+        { x: side * (len / 2 + 0.26), z: 0.48 },
+        { x: side * (len / 2 + 0.44), z: 0.68 },
+      ];
+      for (const c of cols) {
+        staticDark.push(cyl(0.13, 0.15, 0.5, 8, c.x, 0.25, c.z)); // base torique
+        staticRose.push(cyl(0.075, 0.075, h - 0.9, 8, c.x, (h + 0.1) / 2, c.z)); // fût
+        staticDark.push(cyl(0.14, 0.09, 0.4, 8, c.x, h - 0.2, c.z)); // chapiteau à feuillages
+      }
+
+      // Grand contrefort latéral saillant
+      const xButtress = side * (len / 2 + 0.95);
+      staticRose.push(box(1.0, h + 3.2, 1.5, xButtress, (h + 3.2) / 2, 0.45));
+      staticDark.push(box(1.12, 0.22, 1.62, xButtress, h + 3.3, 0.45)); // corniche
+
+      // Pinacle gothique sommital élancé
+      staticRose.push(box(0.7, 1.8, 0.7, xButtress, h + 4.3, 0.45)); // tourelle carrée ajourée
+      staticDark.push(box(0.78, 0.12, 0.78, xButtress, h + 5.26, 0.45));
+      // Flèche pyramidale pointue à 4 pans tournée à 45°
+      staticRose.push(cyl(0.02, 0.44, 2.6, 4, xButtress, h + 6.6, 0.45, 0, Math.PI / 4));
+      staticBronze.push(new THREE.SphereGeometry(0.08, 6, 6).translate(xButtress, h + 7.95, 0.45)); // fleuron sommital
+
+      // Flambeaux / lanternes gothiques en fer forgé
+      const xTorch = side * (len / 2 + 0.95);
+      staticIron.push(box(0.08, 0.12, 0.55, xTorch, 3.4, 1.25)); // bras mural
+      staticIron.push(box(0.06, 0.4, 0.06, xTorch, 3.55, 1.48)); // hampe
+      staticIron.push(cyl(0.22, 0.14, 0.24, 6, xTorch, 3.75, 1.48)); // vasque
+      staticIron.push(cyl(0.03, 0.24, 0.35, 6, xTorch, 4.25, 1.48)); // chapeau pointu
+      staticEmber.push(cyl(0.06, 0.16, 0.35, 6, xTorch, 3.95, 1.48)); // flamme ardente émissive
+    }
+
+    // ---------------- 4. LINTEAU, TYMPAN & VOUSSURES CONCENTRIQUES ----------------
+    // Grand linteau transversal mouluré
+    staticRose.push(box(len + 1.4, 0.5, 0.75, 0, h + 0.25, 0.1));
+    staticDark.push(box(len + 1.5, 0.1, 0.8, 0, h + 0.48, 0.1));
+
+    // Tympan gothique plein (fermeture de l'ogive)
+    const tympanHw = len / 2 + 0.05;
+    const tympanHeight = len * 0.866;
+    const tympanGeos = [];
+    // Remplissage progressif du tympan en tranches étagées
+    const nTympanSteps = 16;
+    for (let i = 0; i < nTympanSteps; i++) {
+      const y0 = h + 0.5 + (i * tympanHeight) / nTympanSteps;
+      const y1 = h + 0.5 + ((i + 1) * tympanHeight) / nTympanSteps;
+      const midY = (y0 + y1) / 2;
+      const dy = midY - (h + 0.5);
+      // Largeur de l'ogive équilatérale à cette hauteur
+      const halfSpan = tympanHw * Math.max(0.05, 1 - Math.pow(dy / tympanHeight, 1.2));
+      tympanGeos.push(box(halfSpan * 2, (tympanHeight / nTympanSteps) + 0.04, 0.4, 0, midY, 0.05));
+    }
+    staticRose.push(...tympanGeos);
+
+    // Bas-relief sculpté sur le tympan : arcatures et rosace
+    staticDark.push(box(len * 0.28, 1.8, 0.06, -len * 0.25, h + 1.5, 0.26));
+    staticDark.push(box(len * 0.28, 1.8, 0.06, len * 0.25, h + 1.5, 0.26));
+    staticDark.push(box(len * 0.24, 2.2, 0.06, 0, h + 1.7, 0.26));
+    staticDark.push(new THREE.TorusGeometry(0.45, 0.07, 6, 18).translate(0, h + 3.2, 0.26)); // rosace du tympan
+
+    // 3 rangs de Voussures concentriques étagées en saillie vers l'avant
+    staticRose.push(...makeGothicArchGeos(len + 0.35, h + 0.5, 0.3, 0.28, 0.24));
+    staticDark.push(...makeGothicArchGeos(len + 0.75, h + 0.5, 0.32, 0.48, 0.26));
+    staticRose.push(...makeGothicArchGeos(len + 1.15, h + 0.5, 0.35, 0.68, 0.28));
+
+    // ---------------- 5. LE GRAND GÂBLE ALSACIEN TRIANGULAIRE AIGU ----------------
+    const gableBaseY = h + 1.8;
+    const gableApexY = h + 7.6;
+    const gableHw = len / 2 + 0.85;
+    const gableSlopeLen = Math.hypot(gableHw, gableApexY - gableBaseY);
+    const gableAng = Math.atan2(gableApexY - gableBaseY, gableHw);
+
+    // Montants rampants gauche et droit du gâble
+    staticRose.push(box(gableSlopeLen, 0.35, 0.42, -gableHw / 2, (gableBaseY + gableApexY) / 2, 0.3, 0, 0, gableAng));
+    staticRose.push(box(gableSlopeLen, 0.35, 0.42, gableHw / 2, (gableBaseY + gableApexY) / 2, 0.3, 0, 0, -gableAng));
+
+    // Crochets gothiques étagés le long des rampants
+    for (let k = 1; k <= 5; k++) {
+      const frac = k / 6;
+      const gxL = -gableHw + frac * gableHw;
+      const gxR = gableHw - frac * gableHw;
+      const gy = gableBaseY + frac * (gableApexY - gableBaseY);
+      staticDark.push(box(0.16, 0.24, 0.28, gxL - 0.08, gy + 0.1, 0.3, 0, 0, gableAng));
+      staticDark.push(box(0.16, 0.24, 0.28, gxR + 0.08, gy + 0.1, 0.3, 0, 0, -gableAng));
+    }
+
+    // Fleuron sommital en croix ouvragée au sommet du gâble
+    staticDark.push(cyl(0.06, 0.14, 0.8, 6, 0, gableApexY + 0.35, 0.3));
+    staticRose.push(box(0.48, 0.14, 0.2, 0, gableApexY + 0.5, 0.3));
+    staticRose.push(box(0.14, 0.65, 0.2, 0, gableApexY + 0.55, 0.3));
+    staticBronze.push(new THREE.SphereGeometry(0.1, 8, 8).translate(0, gableApexY + 0.9, 0.3));
+
+    // Rosace aveugle centrale du gâble
+    staticDark.push(new THREE.TorusGeometry(0.65, 0.09, 8, 24).translate(0, h + 4.6, 0.32));
+    staticRose.push(box(1.1, 0.08, 0.12, 0, h + 4.6, 0.32));
+    staticRose.push(box(0.08, 1.1, 0.12, 0, h + 4.6, 0.32));
+
+    // ---------------- 6. LES BATTANTS MONUMENTAUX (LEAVES MOBILES) ----------------
+    const leaves = [];
+    const doorGap = 0.46; // espace réservé au trumeau central
+    const leafW = (len - doorGap) / 2;
+
+    for (const side of [-1, 1]) {
+      const pivot = new THREE.Group();
+      pivot.position.set(side * len / 2, 0, 0);
+
+      const leafWood = [];
+      const leafIron = [];
+      const leafBronze = [];
+
+      // Vantail en chêne massif vieilli
+      leafWood.push(box(leafW, h, 0.22, -side * leafW / 2, h / 2, 0));
+
+      // 6 grands panneaux sculptés en ogive (2 colonnes x 3 rangs)
+      const pColW = leafW * 0.38;
+      for (let col = 0; col < 2; col++) {
+        const pCenterX = -side * (leafW * 0.26 + col * leafW * 0.44);
+        for (let row = 0; row < 3; row++) {
+          const pCenterY = 1.3 + row * 2.3;
+          // Cadre mouluré du panneau
+          leafWood.push(box(pColW, 1.8, 0.04, pCenterX, pCenterY, 0.12));
+          // Fond de panneau avec arc brisé sculpté
+          leafWood.push(box(pColW * 0.82, 1.5, 0.02, pCenterX, pCenterY - 0.08, 0.13));
+          leafWood.push(cyl(0.02, pColW * 0.41, 0.35, 4, pCenterX, pCenterY + 0.78, 0.13, 0, Math.PI / 4));
+        }
+      }
+
+      // 4 puissantes pentures en fer forgé ornées de volutes
+      const strapY = [0.85, 2.7, 5.0, 7.3];
+      for (const y of strapY) {
+        // Barre principale
+        leafIron.push(box(leafW * 0.94, 0.14, 0.04, -side * leafW / 2, y, 0.12));
+        // Gonds massifs sur l'axe du pivot
+        leafIron.push(cyl(0.08, 0.08, 0.32, 8, 0, y, 0.05));
+        // Volutes forgées en arabesques
+        leafIron.push(box(0.06, 0.48, 0.03, -side * (leafW * 0.35), y + 0.25, 0.13, 0, 0, side * 0.65));
+        leafIron.push(box(0.06, 0.48, 0.03, -side * (leafW * 0.35), y - 0.25, 0.13, 0, 0, -side * 0.65));
+        leafIron.push(box(0.06, 0.38, 0.03, -side * (leafW * 0.72), y + 0.2, 0.13, 0, 0, -side * 0.5));
+        leafIron.push(box(0.06, 0.38, 0.03, -side * (leafW * 0.72), y - 0.2, 0.13, 0, 0, side * 0.5));
+
+        // Clous forgés pyramidaux
+        for (let i = 0; i < 7; i++) {
+          const cx = -side * (0.2 + (i * (leafW - 0.38)) / 6);
+          leafIron.push(new THREE.SphereGeometry(0.035, 6, 4).translate(cx, y, 0.14));
+        }
+      }
+
+      // Heurtoir monumental en bronze
+      const knockerX = -side * (leafW * 0.42);
+      const knockerY = 1.65;
+      leafBronze.push(cyl(0.14, 0.14, 0.03, 12, knockerX, knockerY, 0.12, Math.PI / 2, 0)); // rosace
+      leafBronze.push(new THREE.TorusGeometry(0.09, 0.022, 8, 16).translate(knockerX, knockerY - 0.08, 0.14)); // anneau
+
+      pivot.add(
+        new THREE.Mesh(merge(leafWood), oak),
+        new THREE.Mesh(merge(leafIron), iron),
+        new THREE.Mesh(merge(leafBronze), bronze)
+      );
+
       g.add(pivot);
       leaves.push(pivot);
     }
-    // arc brisé en pierre au-dessus
-    const arch = new THREE.Mesh(box(len + 0.8, 0.6, 0.5, 0, h + 0.3, 0), new THREE.MeshStandardMaterial({ color: 0xa87c6a, roughness: 0.85 }));
-    g.add(arch);
-    g.traverse((o) => { if (o.isMesh) { o.castShadow = o.receiveShadow = true; } });
+
+    // ---------------- 7. ASSEMBLAGE FINAL DES MAILLAGES STATIQUES ----------------
+    if (staticRose.length) g.add(new THREE.Mesh(merge(staticRose), stoneRose));
+    if (staticDark.length) g.add(new THREE.Mesh(merge(staticDark), stoneDark));
+    if (staticIron.length) g.add(new THREE.Mesh(merge(staticIron), iron));
+    if (staticBronze.length) g.add(new THREE.Mesh(merge(staticBronze), bronze));
+    if (staticEmber.length) g.add(new THREE.Mesh(merge(staticEmber), ember));
+
+    g.traverse((o) => {
+      if (o.isMesh) {
+        o.castShadow = true;
+        o.receiveShadow = true;
+      }
+    });
+
     g.userData.leaves = leaves;
     return g;
   }

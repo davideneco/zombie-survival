@@ -106,9 +106,15 @@ export function installModMenu(game, { world, hud, sfx }) {
   };
   mod.list = list;
 
+  const isHostOrSolo = () => !game.isMultiplayer || game.isHost;
+
   // ------------------------------------------------------------------ Ouverture / Fermeture
   mod.show = function show() {
     if (!game.started || game.over) return false;
+    if (!isHostOrSolo()) {
+      hud?.popup?.("Menu Mods réservé à l'hôte", 'warning');
+      return false;
+    }
     mod.open = true;
     game.ui?.open('modMenu');
     game.ui?.open('debug'); // assure la compatibilité avec ui.stack
@@ -137,7 +143,14 @@ export function installModMenu(game, { world, hud, sfx }) {
     }
   };
 
-  mod.toggle = () => (mod.open ? mod.close() : mod.show());
+  mod.toggle = () => {
+    if (mod.open) return mod.close();
+    if (!isHostOrSolo()) {
+      hud?.popup?.("Menu Mods réservé à l'hôte", 'warning');
+      return false;
+    }
+    return mod.show();
+  };
 
   mod.absorbUnlock = function absorbUnlock() {
     if (mod.unlockPending) {
@@ -1193,7 +1206,13 @@ export function installModMenu(game, { world, hud, sfx }) {
     if (game.chat?.open) return;
     if (e.code === 'F9') {
       e.preventDefault();
-      if (!e.repeat) mod.toggle();
+      if (!e.repeat) {
+        if (!isHostOrSolo()) {
+          hud?.popup?.("Menu Mods réservé à l'hôte", 'warning');
+          return;
+        }
+        mod.toggle();
+      }
       return;
     }
     if (!mod.open) return;

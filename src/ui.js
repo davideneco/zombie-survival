@@ -73,6 +73,10 @@ export function installUi(game, { hud, canvas, lockAndPlay }) {
       game.player.releaseInputs();
       if (document.pointerLockElement) document.exitPointerLock();
       hud.showOverlay('PAUSE', game.isMultiplayer ? 'La partie continue pour vos coéquipiers.' : 'Jeu en pause.', null);
+      const btnMod = document.getElementById('btnModMenu');
+      if (btnMod) {
+        btnMod.style.display = (!game.isMultiplayer || game.isHost) ? '' : 'none';
+      }
       hud.showPanel('pausePanel');
     },
     // Reprise au clavier : on tente de reprendre la souris ; Chrome refuse environ 1 s après une sortie par Échap (SecurityError /
