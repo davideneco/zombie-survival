@@ -5,8 +5,10 @@ extends Node3D
 ## de Game (impact, explosion, zombie_event, zombie_killed) et les zombies morts ; son propre générateur aléatoire (la simulation n'est jamais touchée).
 
 const GfxAssets := preload("res://scenes/gfx_assets.gd")
-const PARTICLE := preload("res://shaders/fx_particle.gdshader")
-const DECAL := preload("res://shaders/fx_decal.gdshader")
+static var PARTICLE: Shader:
+	get: return load("res://shaders/fx_particle.gdshader")   # v0.34.3: loaded on first use (a preload would load it with the main scene, before the menu)
+static var DECAL: Shader:
+	get: return load("res://shaders/fx_decal.gdshader")   # v0.34.3: loaded on first use (a preload would load it with the main scene, before the menu)
 const N := 280
 const NG := 220
 const DECALS := 64

@@ -8,29 +8,51 @@ extends RefCounted
 ## La reconnaissance se fait sur les propriétés du matériau, pas sur son indice (une cuisson refaite change les indices).
 
 const GfxAssets := preload("res://scenes/gfx_assets.gd")
-const GROUND := preload("res://shaders/ground.gdshader")
-const WATER := preload("res://shaders/water.gdshader")
-const FACADE := preload("res://shaders/facade.gdshader")
-const STONE := preload("res://shaders/stone.gdshader")
-const PBR_STONE_BIG_A := preload("res://assets/pbr/wall_stone_big/a.png")
-const PBR_STONE_BIG_M := preload("res://assets/pbr/wall_stone_big/m.png")
-const ROOF := preload("res://shaders/roof.gdshader")
-const PBR_ROOF_A := preload("res://assets/pbr/roof_clay/a.png")
-const PBR_SLATE_A := preload("res://assets/pbr/roof_slate/a.png")
-const PBR_SLATE_M := preload("res://assets/pbr/roof_slate/m.png")
-const PBR_ROOF_M := preload("res://assets/pbr/roof_clay/m.png")
-const FOLIAGE := preload("res://shaders/foliage.gdshader")
+static var GROUND: Shader:
+	get: return load("res://shaders/ground.gdshader")   # v0.34.3: loaded on first use (a preload would load it with the main scene, before the menu)
+static var WATER: Shader:
+	get: return load("res://shaders/water.gdshader")   # v0.34.3: loaded on first use (a preload would load it with the main scene, before the menu)
+static var FACADE: Shader:
+	get: return load("res://shaders/facade.gdshader")   # v0.34.3: loaded on first use (a preload would load it with the main scene, before the menu)
+static var STONE: Shader:
+	get: return load("res://shaders/stone.gdshader")   # v0.34.3: loaded on first use (a preload would load it with the main scene, before the menu)
+static var PBR_STONE_BIG_A: Texture2D:
+	get: return load("res://assets/pbr/wall_stone_big/a.png")   # v0.34.3: loaded on first use (a preload would load it with the main scene, before the menu)
+static var PBR_STONE_BIG_M: Texture2D:
+	get: return load("res://assets/pbr/wall_stone_big/m.png")   # v0.34.3: loaded on first use (a preload would load it with the main scene, before the menu)
+static var ROOF: Shader:
+	get: return load("res://shaders/roof.gdshader")   # v0.34.3: loaded on first use (a preload would load it with the main scene, before the menu)
+static var PBR_ROOF_A: Texture2D:
+	get: return load("res://assets/pbr/roof_clay/a.png")   # v0.34.3: loaded on first use (a preload would load it with the main scene, before the menu)
+static var PBR_SLATE_A: Texture2D:
+	get: return load("res://assets/pbr/roof_slate/a.png")   # v0.34.3: loaded on first use (a preload would load it with the main scene, before the menu)
+static var PBR_SLATE_M: Texture2D:
+	get: return load("res://assets/pbr/roof_slate/m.png")   # v0.34.3: loaded on first use (a preload would load it with the main scene, before the menu)
+static var PBR_ROOF_M: Texture2D:
+	get: return load("res://assets/pbr/roof_clay/m.png")   # v0.34.3: loaded on first use (a preload would load it with the main scene, before the menu)
+static var FOLIAGE: Shader:
+	get: return load("res://shaders/foliage.gdshader")   # v0.34.3: loaded on first use (a preload would load it with the main scene, before the menu)
 ## v0.24.1 : matériaux PBR des façades (godot/assets/pbr/, tools/pack-pbr.py ; a : détail d'albédo, m : normale RG + rugosité + AO ; VRAM compressés à l'import)
-const PBR_PLASTER_A := preload("res://assets/pbr/wall_plaster/a.png")
-const PBR_PLASTER_M := preload("res://assets/pbr/wall_plaster/m.png")
-const PBR_STONE_A := preload("res://assets/pbr/wall_stone/a.png")
-const PBR_STONE_M := preload("res://assets/pbr/wall_stone/m.png")
-const PBR_TIMBER_A := preload("res://assets/pbr/wall_timber_plaster/a.png")
-const PBR_TIMBER_M := preload("res://assets/pbr/wall_timber_plaster/m.png")
-const PBR_STUCCO_A := preload("res://assets/pbr/wall_stucco/a.png")
-const PBR_STUCCO_M := preload("res://assets/pbr/wall_stucco/m.png")
-const PBR_WOOD_A := preload("res://assets/pbr/wood_beam/a.png")
-const PBR_WOOD_M := preload("res://assets/pbr/wood_beam/m.png")
+static var PBR_PLASTER_A: Texture2D:
+	get: return load("res://assets/pbr/wall_plaster/a.png")   # v0.34.3: loaded on first use (a preload would load it with the main scene, before the menu)
+static var PBR_PLASTER_M: Texture2D:
+	get: return load("res://assets/pbr/wall_plaster/m.png")   # v0.34.3: loaded on first use (a preload would load it with the main scene, before the menu)
+static var PBR_STONE_A: Texture2D:
+	get: return load("res://assets/pbr/wall_stone/a.png")   # v0.34.3: loaded on first use (a preload would load it with the main scene, before the menu)
+static var PBR_STONE_M: Texture2D:
+	get: return load("res://assets/pbr/wall_stone/m.png")   # v0.34.3: loaded on first use (a preload would load it with the main scene, before the menu)
+static var PBR_TIMBER_A: Texture2D:
+	get: return load("res://assets/pbr/wall_timber_plaster/a.png")   # v0.34.3: loaded on first use (a preload would load it with the main scene, before the menu)
+static var PBR_TIMBER_M: Texture2D:
+	get: return load("res://assets/pbr/wall_timber_plaster/m.png")   # v0.34.3: loaded on first use (a preload would load it with the main scene, before the menu)
+static var PBR_STUCCO_A: Texture2D:
+	get: return load("res://assets/pbr/wall_stucco/a.png")   # v0.34.3: loaded on first use (a preload would load it with the main scene, before the menu)
+static var PBR_STUCCO_M: Texture2D:
+	get: return load("res://assets/pbr/wall_stucco/m.png")   # v0.34.3: loaded on first use (a preload would load it with the main scene, before the menu)
+static var PBR_WOOD_A: Texture2D:
+	get: return load("res://assets/pbr/wood_beam/a.png")   # v0.34.3: loaded on first use (a preload would load it with the main scene, before the menu)
+static var PBR_WOOD_M: Texture2D:
+	get: return load("res://assets/pbr/wood_beam/m.png")   # v0.34.3: loaded on first use (a preload would load it with the main scene, before the menu)
 
 ## m : entrée de materials.json ; files : chemins des textures (textures.json) pour reconnaître le pavé.
 static func kind(m: Dictionary, files: Array) -> String:

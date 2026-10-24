@@ -10,7 +10,8 @@ extends Node3D
 ## Même repère que le modèle du JS : x vers l'avant, y haut, z largeur, origine au sol au milieu. Une MultiMesh par modèle et par maille (peinture par instance).
 
 const GeoBuilder := preload("res://scenes/world/geo_builder.gd")
-const SHADER := preload("res://shaders/car.gdshader")
+static var SHADER: Shader:
+	get: return load("res://shaders/car.gdshader")   # v0.34.3: loaded on first use (a preload would load it with the main scene, before the menu)
 
 const L0 := -2.18
 const L1 := 2.17

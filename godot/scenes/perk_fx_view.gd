@@ -4,7 +4,8 @@ extends Node3D
 ## arcs), toile de la Veuve noire (disque de fils violets au sol), aura de l'Ultime Volonté (colonne dorée autour du joueur). Lit Game.pfx
 ## et écoute Game.perk_event ; aucun effet sur la partie.
 
-const RING_SHADER := preload("res://shaders/perk_ring.gdshader")
+static var RING_SHADER: Shader:
+	get: return load("res://shaders/perk_ring.gdshader")   # v0.34.3: loaded on first use (a preload would load it with the main scene, before the menu)
 
 var _drops: Dictionary = {}       ## id -> Node3D
 var _tomb: Node3D

@@ -7,10 +7,14 @@ extends Node3D
 ## Les triangles et les matériaux (stone.gdshader, cath_glass.gdshader) sont construits avec GeoBuilder ; les statues sont des MultiMesh.
 
 const GeoBuilder := preload("res://scenes/world/geo_builder.gd")
-const STONE_SHADER := preload("res://shaders/stone.gdshader")
-const GLASS_SHADER := preload("res://shaders/cath_glass.gdshader")
-const STONE_A := preload("res://assets/pbr/wall_stone_big/a.png")
-const STONE_M := preload("res://assets/pbr/wall_stone_big/m.png")
+static var STONE_SHADER: Shader:
+	get: return load("res://shaders/stone.gdshader")   # v0.34.3: loaded on first use (a preload would load it with the main scene, before the menu)
+static var GLASS_SHADER: Shader:
+	get: return load("res://shaders/cath_glass.gdshader")   # v0.34.3: loaded on first use (a preload would load it with the main scene, before the menu)
+static var STONE_A: Texture2D:
+	get: return load("res://assets/pbr/wall_stone_big/a.png")   # v0.34.3: loaded on first use (a preload would load it with the main scene, before the menu)
+static var STONE_M: Texture2D:
+	get: return load("res://assets/pbr/wall_stone_big/m.png")   # v0.34.3: loaded on first use (a preload would load it with the main scene, before the menu)
 
 const WALL_S := -48.0           ## plan du mur ouest dans le repère de la nef
 const SKIN := 2.6               ## m : épaisseur de la peau devant le mur (couvre les bosses du contour OSM)
@@ -366,9 +370,12 @@ func _finish() -> void:
 
 ## v0.32.0 : nef, bas-côtés, arcs-boutants, flancs du massif (scenes/world/cathedral_nave.gd), dans le repère de la nef (nœuds `top_level`).
 const CathedralNave := preload("res://scenes/world/cathedral_nave.gd")
-const ROOF_SHADER := preload("res://shaders/cath_roof.gdshader")
-const SLATE_A := preload("res://assets/pbr/roof_slate/a.png")
-const SLATE_M := preload("res://assets/pbr/roof_slate/m.png")
+static var ROOF_SHADER: Shader:
+	get: return load("res://shaders/cath_roof.gdshader")   # v0.34.3: loaded on first use (a preload would load it with the main scene, before the menu)
+static var SLATE_A: Texture2D:
+	get: return load("res://assets/pbr/roof_slate/a.png")   # v0.34.3: loaded on first use (a preload would load it with the main scene, before the menu)
+static var SLATE_M: Texture2D:
+	get: return load("res://assets/pbr/roof_slate/m.png")   # v0.34.3: loaded on first use (a preload would load it with the main scene, before the menu)
 var roof_mat: ShaderMaterial
 var nave_triangles := 0
 
@@ -430,7 +437,7 @@ func _build_nave() -> void:
 	it.build()
 	_add_mesh(it.stone, _interior_mat(), xf, false, 140.0)
 	var fm := ShaderMaterial.new()
-	fm.shader = preload("res://shaders/cath_floor.gdshader")
+	fm.shader = load("res://shaders/cath_floor.gdshader")
 	fm.set_shader_parameter("stone_a", STONE_A)
 	fm.set_shader_parameter("stone_m", STONE_M)
 	var o := Cathedral.P(0.0, 0.0)

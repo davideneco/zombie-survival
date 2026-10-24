@@ -103,6 +103,7 @@ var points_earned := 0     ## v0.26.0 : total des points gagnés (somme des poin
 var settings: Settings     ## J7 : réglages du joueur et touches (user://settings.cfg, ou --settings=chemin)
 
 func _init() -> void:
+	StartupLog.mark("autoload Game: start")
 	var path := Settings.DEFAULT_PATH
 	for a in OS.get_cmdline_user_args():
 		if a.begins_with("--settings="):
@@ -124,6 +125,7 @@ func _init() -> void:
 	for a in OS.get_cmdline_user_args():
 		if a.begins_with("--trophy="):
 			trophy_path = a.substr(9)
+	StartupLog.mark("autoload Game: settings and stats read")
 	for a in OS.get_cmdline_user_args():   # J9 : surcharges de captures et de mesures, jamais sauvegardées
 		if a.begins_with("--quality="):
 			settings.autosave = false

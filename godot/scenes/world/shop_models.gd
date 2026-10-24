@@ -7,10 +7,14 @@ extends RefCounted
 ## Local frame: the face looks along +Z; the origin is the JS group origin (wall panel: 6 cm in front of the wall, station: centre of its footprint).
 
 const WeaponModels := preload("res://scenes/weapon_models.gd")
-const SHADER := preload("res://shaders/shop_pbr.gdshader")
-const GLOW_SHADER := preload("res://shaders/shop_glow.gdshader")
-const WOOD_A := preload("res://assets/pbr/wood_door/a.png")
-const WOOD_M := preload("res://assets/pbr/wood_door/m.png")
+static var SHADER: Shader:
+	get: return load("res://shaders/shop_pbr.gdshader")   # v0.34.3: loaded on first use (a preload would load it with the main scene, before the menu)
+static var GLOW_SHADER: Shader:
+	get: return load("res://shaders/shop_glow.gdshader")   # v0.34.3: loaded on first use (a preload would load it with the main scene, before the menu)
+static var WOOD_A: Texture2D:
+	get: return load("res://assets/pbr/wood_door/a.png")   # v0.34.3: loaded on first use (a preload would load it with the main scene, before the menu)
+static var WOOD_M: Texture2D:
+	get: return load("res://assets/pbr/wood_door/m.png")   # v0.34.3: loaded on first use (a preload would load it with the main scene, before the menu)
 
 ## Wall panel (metres)
 const PW := 1.78            ## outer width of the frame

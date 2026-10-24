@@ -54,7 +54,7 @@ static func build() -> MeshInstance3D:
 		else:
 			var m := StandardMaterial3D.new()
 			m.albedo_color = PLASTER * 1.6
-			m.albedo_texture = preload("res://assets/pbr/wall_plaster/a.png")
+			m.albedo_texture = load("res://assets/pbr/wall_plaster/a.png")
 			m.uv1_triplanar = true
 			m.uv1_world_triplanar = true
 			m.uv1_scale = Vector3(0.6, 0.6, 0.6)

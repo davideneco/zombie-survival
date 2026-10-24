@@ -5,7 +5,8 @@ extends RefCounted
 ## (pool : une instance = squelette + AnimationPlayer + maillages, rendue à sa variante par la vue), crée le matériau partagé et pose l'armure du chevalier.
 ## Repère des modèles : pieds à y = 0, face vers +Z (comme la vue en primitives : yaw de la simulation inchangé), mètres natifs du pack (x ~1,4 m de haut pour Basic).
 
-const SHADER := preload("res://shaders/zombie_model.gdshader")
+static var SHADER: Shader:
+	get: return load("res://shaders/zombie_model.gdshader")   # v0.34.3: loaded on first use (a preload would load it with the main scene, before the menu)
 const GfxAssets := preload("res://scenes/gfx_assets.gd")
 const TABLE_PATH := "res://data/zombie_models.json"
 const DIR := "res://assets/zombies/"

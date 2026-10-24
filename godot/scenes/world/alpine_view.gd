@@ -10,8 +10,10 @@ signal progress(frac: float)
 
 const GeoBuilder := preload("res://scenes/world/geo_builder.gd")
 const CarsView := preload("res://scenes/world/cars_view.gd")
-const SHADER := preload("res://shaders/alpine.gdshader")
-const ICE := preload("res://shaders/ice.gdshader")
+static var SHADER: Shader:
+	get: return load("res://shaders/alpine.gdshader")   # v0.34.3: loaded on first use (a preload would load it with the main scene, before the menu)
+static var ICE: Shader:
+	get: return load("res://shaders/ice.gdshader")   # v0.34.3: loaded on first use (a preload would load it with the main scene, before the menu)
 const PBR := "res://assets/pbr/%s/%s.png"
 const LAMP_LIGHTS := 8
 const LAMP_RANGE := 22.0

@@ -114,24 +114,17 @@ func _ready() -> void:
 	_text.add_theme_font_override("normal_font", UiTheme.body())
 	_text.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	col.add_child(_text)
-	_build_title(col)
-	_build_menu(col)
-	_build_pause(col)
-	_build_options(col)
-	_build_keys(col)
-	_build_over(col)
-	_build_victory(col)
-	_build_mapdiff(col)
-	_build_mode(col)
-	_build_perks(col)
-	_build_stats(col)
-	_build_credits(col)
-	_build_loading(col)
+	for b: Array in [["title", _build_title], ["menu", _build_menu], ["pause", _build_pause], ["options", _build_options], ["keys", _build_keys], ["over", _build_over],
+			["victory", _build_victory], ["mapdiff", _build_mapdiff], ["mode", _build_mode], ["perks", _build_perks], ["stats", _build_stats], ["credits", _build_credits], ["loading", _build_loading]]:
+		var tb := StartupLog.t()
+		(b[1] as Callable).call(col)
+		StartupLog.span("menus: build %s" % b[0], tb)
 	settings.changed.connect(_on_setting)
 	binds.changed.connect(func() -> void:
 		if stack.has(UiStack.KEYS):
 			_render_keys())
 	_sync()
+	StartupLog.watch(self)
 
 # ---------------------------------------------------------------- construction
 func _panel(name: String, parent: Node, gap := 14) -> VBoxContainer:
@@ -1162,6 +1155,7 @@ func _sync() -> void:
 			_title.text = "OPTIONS"
 			_text.text = ""
 	map_view.visible = stack.has(UiStack.MAP)
+	StartupLog.screen = panel_layer
 	if panel_layer == UiStack.OPTIONS:
 		_sync_options()
 	_focus_first(panel_layer)
@@ -1463,6 +1457,8 @@ func _do_swap() -> void:
 
 # ---------------------------------------------------------------- entrées
 func _input(event: InputEvent) -> void:
+	if StartupLog.on and ((event is InputEventMouseButton and not event.pressed) or (event is InputEventKey and event.pressed and not event.echo) or event is InputEventJoypadButton):
+		StartupLog.input_seen()
 	if event is InputEventJoypadButton and event.is_action_pressed("ui_cancel") and stack.blocks_game():   # manette : B = retour
 		escape()
 		get_viewport().set_input_as_handled()

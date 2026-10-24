@@ -3,7 +3,8 @@ extends RefCounted
 ## flash de dégât en uniformes), sur DEUX atlas partagés (chair, tissus) et un masque de sang partagé : mémoire constante.
 
 const GfxAssets := preload("res://scenes/gfx_assets.gd")
-const SHADER := preload("res://shaders/zombie_skin.gdshader")
+static var SHADER: Shader:
+	get: return load("res://shaders/zombie_skin.gdshader")   # v0.34.3: loaded on first use (a preload would load it with the main scene, before the menu)
 const COLS := 4
 const ROWS := 3
 ## CELLS de zombieSkin.js

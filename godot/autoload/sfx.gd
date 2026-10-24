@@ -75,10 +75,13 @@ var _rng := RandomNumberGenerator.new()
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	StartupLog.mark("autoload Sfx: ready")
 	_rng.randomize()
 	_build_buses()
 	_load_manifest()
+	var t_req := StartupLog.t()
 	_request_streams()
+	StartupLog.span("Sfx: %d sounds requested from loader threads" % (manifest.get("sounds", {}) as Dictionary).size(), t_req)
 	_connect_signals()
 	apply_settings()
 	if Game.settings != null:

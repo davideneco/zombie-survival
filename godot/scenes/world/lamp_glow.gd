@@ -2,7 +2,8 @@ extends Node3D
 ## Halos (billboards) et flaques de lumière (quads horizontaux) pour toutes les sources de lumière fixes de la ville (v0.22.2), en deux MultiMesh : 2 appels de dessin au total,
 ## sans lumière dynamique. Les 8 vraies lumières les plus proches (world_view.gd) éclairent seules le décor ; ceci montre les autres, au loin et de près. Voir shaders/lamp_glow.gdshader.
 
-const SHADER := preload("res://shaders/lamp_glow.gdshader")
+static var SHADER: Shader:
+	get: return load("res://shaders/lamp_glow.gdshader")   # v0.34.3: loaded on first use (a preload would load it with the main scene, before the menu)
 const DOOR_PANEL := 0xff8844   ## panneaux de porte : déjà émissifs, trop nombreux (239), pas de halo
 
 var _halo_mat: ShaderMaterial

@@ -5,7 +5,8 @@ extends Node3D
 ## La collision n'a pas à changer : les segments de la porte fermée bloquent déjà (World.sealed les garde fermés pour toujours).
 ## Les pans réutilisent le shader de pierre (stone.gdshader) avec la brique PBR (assets/pbr/wall_brick), sans projecteurs.
 
-const STONE_SHADER := preload("res://shaders/stone.gdshader")
+static var STONE_SHADER: Shader:
+	get: return load("res://shaders/stone.gdshader")   # v0.34.3: loaded on first use (a preload would load it with the main scene, before the menu)
 const WeaponModels := preload("res://scenes/weapon_models.gd")
 const BRICK_A := "res://assets/pbr/wall_brick/a.png"
 const BRICK_M := "res://assets/pbr/wall_brick/m.png"

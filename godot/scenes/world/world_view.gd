@@ -329,10 +329,10 @@ func _plank_materials() -> void:
 		return
 	var src: StandardMaterial3D = _materials[best]
 	var pm := ShaderMaterial.new()
-	pm.shader = preload("res://shaders/planks.gdshader")
+	pm.shader = load("res://shaders/planks.gdshader")
 	pm.set_shader_parameter("albedo_tex", src.albedo_texture)
-	pm.set_shader_parameter("wood_a", preload("res://assets/pbr/wood_door/a.png"))
-	pm.set_shader_parameter("wood_m", preload("res://assets/pbr/wood_door/m.png"))
+	pm.set_shader_parameter("wood_a", load("res://assets/pbr/wood_door/a.png"))
+	pm.set_shader_parameter("wood_m", load("res://assets/pbr/wood_door/m.png"))
 	pm.set_shader_parameter("uv_scale", Vector2(src.uv1_scale.x, src.uv1_scale.y))
 	_materials[best] = pm
 	planks_material = best
@@ -439,7 +439,7 @@ func _add_cath_split(mesh: ArrayMesh, arr: Array, mat: int) -> void:
 	if role == "inwall" and not _cath_inwall.has(mat):
 		var src: StandardMaterial3D = _materials[mat]
 		var im := ShaderMaterial.new()
-		im.shader = preload("res://shaders/cath_inwall.gdshader")
+		im.shader = load("res://shaders/cath_inwall.gdshader")
 		im.set_shader_parameter("albedo_tex", src.albedo_texture)
 		im.set_shader_parameter("emis_tex", src.emission_texture)
 		im.set_shader_parameter("emis_color", src.emission)
@@ -452,14 +452,14 @@ func _add_cath_split(mesh: ArrayMesh, arr: Array, mat: int) -> void:
 		_cath_inwall[mat] = im
 	if role == "vault" and not _cath_extra.has(mat):
 		var vm := ShaderMaterial.new()
-		vm.shader = preload("res://shaders/cath_vault.gdshader")
+		vm.shader = load("res://shaders/cath_vault.gdshader")
 		vm.set_shader_parameter("albedo_tex", (_materials[mat] as StandardMaterial3D).albedo_texture)
 		vm.set_shader_parameter("stone_a", Surfaces.PBR_STONE_BIG_A)
 		vm.set_shader_parameter("stone_m", Surfaces.PBR_STONE_BIG_M)
 		_cath_extra[mat] = vm
 	if role == "plain" and _cath_floor == null:
 		_cath_floor = ShaderMaterial.new()
-		_cath_floor.shader = preload("res://shaders/cath_floor.gdshader")
+		_cath_floor.shader = load("res://shaders/cath_floor.gdshader")
 		_cath_floor.set_shader_parameter("stone_a", Surfaces.PBR_STONE_BIG_A)
 		_cath_floor.set_shader_parameter("stone_m", Surfaces.PBR_STONE_BIG_M)
 		var o := Cathedral.P(0.0, 0.0)
@@ -639,8 +639,8 @@ func _grass_mask() -> void:
 		vegetation.build(_tree_pos, data, w, h, Vector2(float(o[0]), float(o[1])), sdf_img, float(meta["sdf_min"]), float(meta["sdf_range"]))
 	for m: ShaderMaterial in _kinds.get("ground", []):
 		m.set_shader_parameter("grass_mask", grass_texture)
-		m.set_shader_parameter("grass_a", preload("res://assets/pbr/ground_grass/a.png"))
-		m.set_shader_parameter("grass_m", preload("res://assets/pbr/ground_grass/m.png"))
+		m.set_shader_parameter("grass_a", load("res://assets/pbr/ground_grass/a.png"))
+		m.set_shader_parameter("grass_m", load("res://assets/pbr/ground_grass/m.png"))
 		m.set_shader_parameter("grass_on", 1.0)
 
 # ---------------------------------------------------------------- sources de lumière

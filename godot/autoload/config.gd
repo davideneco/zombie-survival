@@ -9,7 +9,9 @@ var pap_levels: Array = []      ## PAP_LEVELS (l'indice 0 vaut null)
 var loaded := false
 
 func _init() -> void:
+	StartupLog.mark("autoload Config: start")
 	reload()
+	StartupLog.mark("autoload Config: config.json read")
 
 func reload() -> bool:
 	loaded = false

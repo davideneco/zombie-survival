@@ -5,7 +5,8 @@ extends Node3D
 ## Repère d'un modèle : origine au sol au milieu de l'emprise, largeur le long de x, profondeur le long de z, face avant (assise, guichet) vers +z.
 
 const GeoBuilder := preload("res://scenes/world/geo_builder.gd")
-const SHADER := preload("res://shaders/furniture.gdshader")
+static var SHADER: Shader:
+	get: return load("res://shaders/furniture.gdshader")   # v0.34.3: loaded on first use (a preload would load it with the main scene, before the menu)
 const CELL := 160.0
 const RANGE := {"bench": 120.0, "bin": 90.0, "bollard": 80.0, "lamp": 170.0, "barrier": 100.0, "kiosk": 200.0, "column": 200.0}
 

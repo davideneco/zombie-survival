@@ -10,7 +10,8 @@ extends RefCounted
 ## Frame of a module (as the bake): x along the tram (front nose toward +x), y up, z to the side (+z right), origin at the middle of the module.
 ## Shell: one surface with the paint shader (shaders/tram_paint.gdshader, region per cell in COLOR.r), glass apart (transparent).
 
-const PAINT := preload("res://shaders/tram_paint.gdshader")
+static var PAINT: Shader:
+	get: return load("res://shaders/tram_paint.gdshader")   # v0.34.3: loaded on first use (a preload would load it with the main scene, before the menu)
 const HALF := 2.2                ## half length of a module shell (JS: module / 2 - 0.15)
 const NOSE := 1.7                ## nose length (JS)
 const BOT := 0.18                ## bottom of the skirt

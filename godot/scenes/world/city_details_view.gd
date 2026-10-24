@@ -7,7 +7,8 @@ extends Node3D
 
 const GeoBuilder := preload("res://scenes/world/geo_builder.gd")
 const PATH := "res://data/city_details.bin"
-const SHADER := preload("res://shaders/city_detail.gdshader")
+static var SHADER: Shader:
+	get: return load("res://shaders/city_detail.gdshader")   # v0.34.3: loaded on first use (a preload would load it with the main scene, before the menu)
 const CELL := 48.0
 const F_OPEN := 1
 const F_CLOSED := 2
@@ -284,14 +285,14 @@ func _mat(kind: int, a: Texture2D, mm: Texture2D, sc: float, tint: Color, use_in
 	return sm
 
 func _materials() -> Dictionary:
-	var stone_a := preload("res://assets/pbr/wall_stone/a.png")
-	var stone_m := preload("res://assets/pbr/wall_stone/m.png")
-	var wood_a := preload("res://assets/pbr/wood_door/a.png")
-	var wood_m := preload("res://assets/pbr/wood_door/m.png")
-	var brick_a := preload("res://assets/pbr/wall_brick/a.png")
-	var brick_m := preload("res://assets/pbr/wall_brick/m.png")
-	var clay_a := preload("res://assets/pbr/roof_clay/a.png")
-	var clay_m := preload("res://assets/pbr/roof_clay/m.png")
+	var stone_a := load("res://assets/pbr/wall_stone/a.png")
+	var stone_m := load("res://assets/pbr/wall_stone/m.png")
+	var wood_a := load("res://assets/pbr/wood_door/a.png")
+	var wood_m := load("res://assets/pbr/wood_door/m.png")
+	var brick_a := load("res://assets/pbr/wall_brick/a.png")
+	var brick_m := load("res://assets/pbr/wall_brick/m.png")
+	var clay_a := load("res://assets/pbr/roof_clay/a.png")
+	var clay_m := load("res://assets/pbr/roof_clay/m.png")
 	var m := {}
 	m["frame"] = _mat(0, stone_a, stone_m, 1.2, Color(1, 1, 1))
 	m["sill"] = m["frame"]

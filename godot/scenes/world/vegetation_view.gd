@@ -6,7 +6,8 @@ extends Node3D
 const CELL := 48.0
 const TUFT_RANGE := [0.0, 32.0, 55.0]
 const GRATE_RANGE := [40.0, 70.0, 110.0]
-const GRASS_SHADER := preload("res://shaders/grass_tuft.gdshader")
+static var GRASS_SHADER: Shader:
+	get: return load("res://shaders/grass_tuft.gdshader")   # v0.34.3: loaded on first use (a preload would load it with the main scene, before the menu)
 
 var tuft_count := 0
 var grate_count := 0

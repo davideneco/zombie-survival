@@ -4,8 +4,10 @@ extends Node
 ## qualité (Rapide / Normale / Haute) et les options Luminosité, Effets cinéma, Halo lumineux de Game.settings. L'exposition suit la zone du joueur (lissée).
 ## Les règles et les valeurs viennent de GraphicsRules / CONFIG.graphics ; ici, seulement le branchement sur le moteur. Ne touche pas à la simulation.
 
-const SKY_SHADER := preload("res://shaders/sky.gdshader")
-const CINEMA_SHADER := preload("res://shaders/cinema.gdshader")
+static var SKY_SHADER: Shader:
+	get: return load("res://shaders/sky.gdshader")   # v0.34.3: loaded on first use (a preload would load it with the main scene, before the menu)
+static var CINEMA_SHADER: Shader:
+	get: return load("res://shaders/cinema.gdshader")   # v0.34.3: loaded on first use (a preload would load it with the main scene, before the menu)
 
 ## Réglages de main.js : fond, brouillard exponentiel (carte / arène), hémisphère, lune.
 const FOG_COLOR := Color("0b121c")

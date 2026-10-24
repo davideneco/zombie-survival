@@ -163,6 +163,8 @@ var _probe_last := 0
 var _ruin := ""                   # --ruin=smoke|burn|wreck : abîme les motos (fumée, incendie, épave) pour les captures
 
 func _ready() -> void:
+	StartupLog.mark("main scene: _ready (main.gd and its preloads compiled)")
+	StartupLog.attach(get_tree())
 	var user_args := OS.get_cmdline_user_args()
 	var game_args := Array(user_args).filter(func(a: String) -> bool: return not PERF_ARGS.any(func(p: String) -> bool: return a.begins_with(p)))
 	_menu = game_args.is_empty() or "--menu" in user_args
@@ -349,8 +351,10 @@ func _ready() -> void:
 			_load_shot_at = float(f2[1]) if f2.size() > 1 else 0.5
 	_t_boot_ms = Time.get_ticks_msec()
 	_record_ok = _menu and not _bot and _soak_rounds == 0
+	var t_menus := StartupLog.t()
 	_menus = Menus.new()
 	add_child(_menus)
+	StartupLog.span("menus built", t_menus)
 	add_child(DebugOverlay.new())
 	_fps_overlay = FpsOverlay.new()
 	add_child(_fps_overlay)
@@ -366,7 +370,9 @@ func _ready() -> void:
 	_connect_game_signals()
 	_apply_audio()
 	if "--no-music" not in user_args:
+		var t_music := StartupLog.t()
 		Sfx.start_music()
+		StartupLog.span("music started", t_music)
 	if _menu:
 		_menus.open_title()
 		_open_ui(_ui)
@@ -374,6 +380,8 @@ func _ready() -> void:
 		await _start_session()
 		_open_ui(_ui)
 	print("MENU : prêt %d ms après le lancement du moteur (_ready : %d ms)" % [Time.get_ticks_msec(), Time.get_ticks_msec() - _t_boot_ms])
+	StartupLog.mark("main: _ready done", "window %s, mode %d, quality %d, vsync %d, character %d" % [get_window().size, DisplayServer.window_get_mode(), int(Game.settings.get_value("quality")),
+		DisplayServer.window_get_vsync_mode(), int(Game.settings.get_value("char"))])
 
 ## Signaux de la simulation : branchés UNE fois (les vues de jeu, elles, sont recréées à chaque partie : on teste leur présence).
 func _connect_game_signals() -> void:
@@ -465,6 +473,7 @@ func _start_session() -> void:
 	if not _flow.start_loading():
 		return
 	var t0 := Time.get_ticks_msec()
+	StartupLog.mark("game loading: start")
 	PerfLog.phase = PerfLog.PHASE_LOADING
 	_unload_session()
 	_load_max_dt = 0.0
@@ -484,6 +493,7 @@ func _start_session() -> void:
 		await get_tree().process_frame
 	var data: Object = th.wait_to_finish()
 	var t_data := Time.get_ticks_msec() - t0
+	StartupLog.mark("game loading: map data read (thread)")
 	# 2. état de la partie (rapide : les données sont déjà là)
 	_flow.next_step()
 	await _step(0.0)
@@ -493,6 +503,7 @@ func _start_session() -> void:
 	await _step(0.0)
 	_build_scene_nodes(map)
 	var t_scene := Time.get_ticks_msec() - t0
+	StartupLog.mark("game loading: game state and views built")
 	# 4. la ville (tuiles, textures, décor) répartie sur plusieurs images
 	_flow.next_step()
 	if _arena_node != null and _arena_node.has_method("build"):
@@ -500,6 +511,7 @@ func _start_session() -> void:
 		await _arena_node.build()
 	await _step(1.0)
 	var t_city := Time.get_ticks_msec() - t0
+	StartupLog.mark("game loading: city built")
 	for a in OS.get_cmdline_user_args():   # v0.34.0 : --export-geom=DIR (station alpine) : géométrie pour les scans, puis quitte
 		if a.begins_with("--export-geom=") and _arena_node != null and _arena_node.has_method("export_geometry"):
 			_arena_node.export_geometry(a.substr(14))
@@ -513,6 +525,7 @@ func _start_session() -> void:
 	if not _no_warmup:
 		await _warmup()
 	var t_warm_ms := Time.get_ticks_msec() - t_warm
+	StartupLog.mark("game loading: warm-up done", "%d ms" % t_warm_ms)
 	_flow.next_step()
 	await _step(0.0)
 	_session_live = true
@@ -520,6 +533,8 @@ func _start_session() -> void:
 	PerfLog.event("partie prête")
 	_flow.finish_loading()
 	_menus.begin_game()
+	StartupLog.mark("game loading: game ready", "%d ms in total, worst frame %.0f ms, map %s" % [Time.get_ticks_msec() - t0, _load_max_dt * 1000.0, map])
+	StartupLog.session(true)
 	print("CHARGEMENT : partie prête en %d ms (données %d ms, vues %d ms, ville %d ms, préchauffage %d ms, fin %d ms) ; %d images, pire image %.0f ms ; carte %s, difficulté %s" % [
 		Time.get_ticks_msec() - t0, t_data, t_scene - t_data, t_city - t_scene, t_warm_ms, Time.get_ticks_msec() - t0 - t_city - t_warm_ms, _load_frames, _load_max_dt * 1000.0, map, Game.difficulty])
 	_report_memory("partie lancée")
@@ -541,6 +556,7 @@ func _make_warm_view(z: ZombieSim) -> Node3D:
 ## Libère la partie en cours : vues, ville, zombies, simulation (retour au menu, rejouer).
 func _unload_session() -> void:
 	_session_live = false
+	StartupLog.session(false)
 	PerfLog.phase = PerfLog.PHASE_MENU
 	for v in _views.values():
 		_drop(v)
@@ -1135,6 +1151,7 @@ func _process(dt: float) -> void:
 		if DisplayServer.get_name() != "headless":
 			await RenderingServer.frame_post_draw
 		print("MENU : premier affichage à %d ms après le lancement du moteur" % Time.get_ticks_msec())
+		StartupLog.mark("first frame presented")
 		if _probe:
 			print("PROBE title : world=%s arena=%s player=%s director=%s zombies=%d flow=%d" % [Game.world != null, Game.arena != null, Game.player != null, Game.director != null, Game.zombies.size(), _flow.state])
 			get_tree().quit(0 if Game.world == null and Game.arena == null and Game.player == null and Game.director == null and Game.zombies.is_empty() and _flow.is_menu() else 1)
@@ -1183,7 +1200,9 @@ func _press(want: String) -> void:
 		return
 	var b := _find_button(_menus, want)
 	if b != null:
+		StartupLog.input_seen()
 		b.pressed.emit()
+		b.button_up.emit()   # as a real click: --startup-log times the handler up to button_up
 	else:
 		printerr("--click : bouton « %s » introuvable" % want)
 
