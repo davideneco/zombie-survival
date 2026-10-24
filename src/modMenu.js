@@ -10,7 +10,7 @@
 // - Monde & Zombies : ouvrir toutes les portes de Strasbourg, nuke / tuer tous les zombies actifs,
 //   changer de manche, faire apparaître des bonus (Max Ammo, Insta-kill, Nuke, Double Points).
 
-import { CONFIG, PAP_LEVELS, setMap } from './config.js';
+import { CONFIG, PAP_LEVELS } from './config.js';
 
 const RINGS = [1.5, 2.5, 3.5, 5.0];
 const ANGLES = 12;
@@ -341,20 +341,6 @@ export function installModMenu(game, { world, hud, sfx }) {
     } else if (type === 'pap') {
       const m = (world.machines || []).find((x) => x.type === 'pap');
       if (m) { target = m.pos; label = 'Pack-a-Punch'; }
-    } else if (type === 'gare_parvis') {
-      target = { x: 75, y: 0, z: 12 }; label = 'Place de la Gare';
-    } else if (type === 'gare_verriere') {
-      target = { x: 31, y: 0, z: 0 }; label = 'Verrière Moderne';
-    } else if (type === 'gare_hall') {
-      target = { x: 2, y: 0, z: 0 }; label = 'Hall Central (Piano, Paul, Relay)';
-    } else if (type === 'gare_hall_nord') {
-      target = { x: 2, y: 0, z: -38 }; label = 'Hall Nord (Billetterie & Guichets)';
-    } else if (type === 'gare_hall_sud') {
-      target = { x: 2, y: 0, z: 38 }; label = 'Hall Sud (Consignes & Services)';
-    } else if (type === 'gare_quais') {
-      target = { x: -18, y: 0, z: 0 }; label = 'Quai 1 (Voie 1)';
-    } else if (type === 'gare_ter') {
-      target = { x: -39.5, y: 0.5, z: 0 }; label = 'Intérieur Rame TER';
     } else if (type === 'cathedral_front') {
       const c = world.zoneCenters?.[7];
       if (c) { target = { x: c.x, y: 0, z: c.z }; label = 'Parvis de la Cathédrale'; }
@@ -807,14 +793,6 @@ export function installModMenu(game, { world, hud, sfx }) {
         </div>
 
         <div class="mod-card">
-          <div class="mod-card-title">🗺️ CHOIX DE LA CARTE DE JEU</div>
-          <div style="font-size: 13px; color: #94a3b8; margin-bottom: 8px;">Carte active : <b style="color: #38bdf8;">${CONFIG.map === 'gare' ? 'Gare de Strasbourg' : 'Grande Île de Strasbourg'}</b></div>
-          <button class="mod-btn mod-btn-primary" id="modToggleMapBtn" style="width: 100%; border-color: #38bdf8; color: #38bdf8;">
-            ${CONFIG.map === 'gare' ? 'PASSER SUR LA GRANDE ÎLE (RECHARGEMENT)' : 'PASSER SUR LA GARE DE STRASBOURG (RECHARGEMENT)'}
-          </button>
-        </div>
-
-        <div class="mod-card">
           <div class="mod-card-title">📍 TÉLÉPORTATION PAR QUARTIER DE STRASBOURG (${zones.length} ZONES)</div>
           <div class="mod-controls-row">
             <select id="modZoneSelect" class="mod-select" style="flex: 2;">
@@ -832,20 +810,12 @@ export function installModMenu(game, { world, hud, sfx }) {
           <div style="margin-top: 10px;">
             <label style="font-size: 12px; color: #94a3b8; margin-bottom: 6px; display: block;">Accès directs rapides :</label>
             <div class="mod-btn-row">
-              ${CONFIG.map === 'gare' ? `
-                <button class="mod-btn-sm" data-tp-zone="0">Place de la Gare</button>
-                <button class="mod-btn-sm" data-tp-zone="1">Verrière Moderne</button>
-                <button class="mod-btn-sm" data-tp-zone="2">Grand Hall</button>
-                <button class="mod-btn-sm" data-tp-zone="3">Quais & Voies</button>
-                <button class="mod-btn-sm" data-tp-zone="4">Plateforme TGV</button>
-              ` : `
-                <button class="mod-btn-sm" data-tp-zone="5">Place Kléber</button>
-                <button class="mod-btn-sm" data-tp-zone="7">Cathédrale</button>
-                <button class="mod-btn-sm" data-tp-zone="9">Homme de Fer</button>
-                <button class="mod-btn-sm" data-tp-zone="26">Petite France</button>
-                <button class="mod-btn-sm" data-tp-zone="11">Grand'Rue</button>
-                <button class="mod-btn-sm" data-tp-zone="13">Palais Rohan</button>
-              `}
+              <button class="mod-btn-sm" data-tp-zone="5">Place Kléber</button>
+              <button class="mod-btn-sm" data-tp-zone="7">Cathédrale</button>
+              <button class="mod-btn-sm" data-tp-zone="9">Homme de Fer</button>
+              <button class="mod-btn-sm" data-tp-zone="26">Petite France</button>
+              <button class="mod-btn-sm" data-tp-zone="11">Grand'Rue</button>
+              <button class="mod-btn-sm" data-tp-zone="13">Palais Rohan</button>
             </div>
           </div>
         </div>
@@ -859,47 +829,16 @@ export function installModMenu(game, { world, hud, sfx }) {
             </button>
             <button class="mod-btn mod-btn-purple" data-tp-poi="pap">
               <b>🔧 MACHINE PACK-A-PUNCH</b>
-              <small>${CONFIG.map === 'gare' ? 'Sur le Quai 1 de la Gare' : 'Atelier d\'amélioration'}</small>
+              <small>Atelier d'amélioration</small>
             </button>
-            ${CONFIG.map === 'gare' ? `
-              <button class="mod-btn mod-btn-sub" data-tp-poi="gare_verriere">
-                <b>🪟 LA VERRIÈRE (BULLE 2007)</b>
-                <small>Arche vitrée & façade historique</small>
-              </button>
-              <button class="mod-btn mod-btn-sub" data-tp-poi="gare_hall">
-                <b>🎹 HALL CENTRAL (PIANO & PAUL)</b>
-                <small>Piano SNCF, boulangerie Paul, Relay</small>
-              </button>
-              <button class="mod-btn mod-btn-sub" data-tp-poi="gare_hall_nord">
-                <b>🎟️ HALL NORD (BILLETTERIE)</b>
-                <small>Espace vente & bornes TER Fluo</small>
-              </button>
-              <button class="mod-btn mod-btn-sub" data-tp-poi="gare_hall_sud">
-                <b>🛅 HALL SUD (CONSIGNES)</b>
-                <small>Consignes bagages & commodités</small>
-              </button>
-              <button class="mod-btn mod-btn-sub" data-tp-poi="gare_quais">
-                <b>🚆 QUAI 1 & MARQUISE</b>
-                <small>Quai voyageurs & voies ferrées</small>
-              </button>
-              <button class="mod-btn mod-btn-sub" data-tp-poi="gare_ter">
-                <b>🚄 INTÉRIEUR DU TRAIN TER</b>
-                <small>Dans la voiture voyageur du train</small>
-              </button>
-              <button class="mod-btn mod-btn-sub" data-tp-poi="gare_parvis">
-                <b>🏙️ PLACE DE LA GARE</b>
-                <small>Parvis extérieur & tramway CTS</small>
-              </button>
-            ` : `
-              <button class="mod-btn mod-btn-sub" data-tp-poi="cathedral_inside">
-                <b>🏛️ INTÉRIEUR CATHÉDRALE</b>
-                <small>Entrer dans la nef de la cathédrale</small>
-              </button>
-              <button class="mod-btn mod-btn-sub" data-tp-poi="tram">
-                <b>🚋 INTÉRIEUR DU TRAMWAY</b>
-                <small>Monter dans la rame de tramway en circulation</small>
-              </button>
-            `}
+            <button class="mod-btn mod-btn-sub" data-tp-poi="cathedral_inside">
+              <b>🏛️ INTÉRIEUR CATHÉDRALE</b>
+              <small>Entrer dans la nef de la cathédrale</small>
+            </button>
+            <button class="mod-btn mod-btn-sub" data-tp-poi="tram">
+              <b>🚋 INTÉRIEUR DU TRAMWAY</b>
+              <small>Monter dans la rame de tramway en circulation</small>
+            </button>
           </div>
         </div>
 
@@ -1182,14 +1121,6 @@ export function installModMenu(game, { world, hud, sfx }) {
     document.getElementById('modClearPerks')?.addEventListener('click', () => mod.clearAllPerks());
     box.querySelectorAll('[data-toggle-perk]').forEach((btn) => {
       btn.addEventListener('click', () => mod.togglePerk(btn.dataset.togglePerk));
-    });
-
-    // Choix de la carte
-    document.getElementById('modToggleMapBtn')?.addEventListener('click', () => {
-      const next = CONFIG.map === 'gare' ? 'strasbourg' : 'gare';
-      if (confirm(`Changer de carte vers ${next === 'gare' ? 'la Gare de Strasbourg' : 'la Grande Île'} ?\n(La page va se recharger)`)) {
-        setMap(next);
-      }
     });
 
     // Téléportation

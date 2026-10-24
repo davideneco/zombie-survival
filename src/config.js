@@ -12,80 +12,9 @@ export const PAP_LEVELS = [
   { roman: 'III', price: 20000, color: 0xff6a10, tracer: 0xff8a30, flash: 0xffb060, dmg: 5, ray: 3, head: 1.4, pierce: 4, mag: 1.5, magX: 1.33, reserve: 2.5, reload: 0.75, spread: 0.7, ammo: 5, pulseHz: 2 },
 ];
 
-const getInitialMap = () => {
-  if (typeof window !== 'undefined') {
-    const p = new URLSearchParams(window.location.search).get('map');
-    if (p === 'gare' || p === 'strasbourg' || p === 'arena') return p;
-    const saved = localStorage.getItem('zombie_map');
-    if (saved === 'gare' || saved === 'strasbourg' || saved === 'arena') return saved;
-  }
-  return 'strasbourg';
-};
-
-export const CURRENT_MAP = getInitialMap();
-
-export function setMap(name) {
-  if (name !== 'gare' && name !== 'strasbourg' && name !== 'arena') return;
-  if (typeof window !== 'undefined') {
-    localStorage.setItem('zombie_map', name);
-    const url = new URL(window.location.href);
-    url.searchParams.set('map', name);
-    window.location.href = url.toString();
-  }
+if (typeof window !== 'undefined') {
+  try { localStorage.removeItem('zombie_map'); } catch (_) {}
 }
-
-export const GARE_SECTOR = {
-  maxDist: 75,
-  basePrice: 750,
-  priceStep: 250,
-  outerDecor: { carArea: 4000, junkArea: 2000, bikeMax: 30, chaletRadius: 30 },
-  zones: [
-    {
-      name: 'Place de la Gare',
-      start: true,
-      seed: { x: 75, z: 12 },
-      items: ['station', 'wall:m1911', 'wall:shotgun', 'wall:smg', 'perk:quickrevive', 'box']
-    },
-    {
-      name: 'Verrière Moderne',
-      seed: { x: 31, z: 0 },
-      doorPrice: 750,
-      items: ['station', 'wall:mp5', 'wall:arex', 'perk:staminup', 'box']
-    },
-    {
-      name: 'Grand Hall Historique',
-      seed: { x: 2, z: 0 },
-      doorPrice: 1000,
-      items: ['station', 'wall:ak47', 'wall:p90', 'perk:juggernog', 'box']
-    },
-    {
-      name: 'Quais & Voies',
-      seed: { x: -32, z: 0 },
-      doorPrice: 1250,
-      items: ['station', 'wall:famas', 'wall:lmg', 'perk:speedcola', 'box']
-    },
-    {
-      name: 'Plateforme TGV',
-      seed: { x: -18, z: -35 },
-      doorPrice: 1500,
-      items: ['pap', 'station', 'wall:barrett', 'wall:crossbow', 'perk:doubletap', 'box']
-    },
-    {
-      name: 'Parvis Nord & Hôtels',
-      outer: true,
-      seed: { x: 80, z: -45 },
-      doorPrice: 1000,
-      items: ['station', 'wall:scar', 'perk:phdflopper', 'box']
-    },
-    {
-      name: 'Aile Sud de la Gare',
-      outer: true,
-      seed: { x: 20, z: 65 },
-      doorPrice: 1000,
-      items: ['station', 'wall:sniper', 'box']
-    }
-  ]
-};
 
 export const STRASBOURG_SECTOR = {
   maxDist: 95,        // rayon d'une zone d'origine (m, en distance de marche) ; les zones `outer` n'ont pas de limite
@@ -136,11 +65,11 @@ export const STRASBOURG_SECTOR = {
 };
 
 export const CONFIG = {
-  map: CURRENT_MAP, // 'strasbourg' (Grande Île) ou 'gare' (Gare de Strasbourg) ou 'arena'
-  startHint: CURRENT_MAP === 'gare' ? { x: 75, z: 12 } : { x: 4.3, z: -35.7 },
-  cityHint: CURRENT_MAP === 'gare' ? { x: 32, z: 12 } : { x: -199, z: -145 },
-  breaches: CURRENT_MAP === 'gare' ? 0 : 3,
-  sector: CURRENT_MAP === 'gare' ? GARE_SECTOR : STRASBOURG_SECTOR,
+  map: 'strasbourg', // 'strasbourg' (Grande Île) ou 'arena'
+  startHint: { x: 4.3, z: -35.7 },
+  cityHint: { x: -199, z: -145 },
+  breaches: 3,
+  sector: STRASBOURG_SECTOR,
 
   arenaHalf: 30,    // arène de test : 60 x 60 m
 
