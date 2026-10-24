@@ -27,6 +27,23 @@ function speckle(ctx, size, n, alpha) {
  * Pousse un cercle (x,z) hors des rectangles et le garde dans la map.
  * Utilisé par le joueur ET les zombies.
  */
+function normalTexture(size, repeatX = 1, repeatY = 1) {
+  const c = document.createElement('canvas');
+  c.width = c.height = size;
+  const ctx = c.getContext('2d'), img = ctx.createImageData(size, size);
+  for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
+    const o = (y * size + x) * 4;
+    const nx = Math.round(((Math.sin(x * 0.35) + (Math.random() - 0.5) * 0.4) * 0.3 + 0.5) * 255);
+    const ny = Math.round(((Math.cos(y * 0.35) + (Math.random() - 0.5) * 0.4) * 0.3 + 0.5) * 255);
+    img.data[o] = nx; img.data[o + 1] = ny; img.data[o + 2] = 235; img.data[o + 3] = 255;
+  }
+  ctx.putImageData(img, 0, 0);
+  const t = new THREE.CanvasTexture(c);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.repeat.set(repeatX, repeatY);
+  return t;
+}
+
 export function resolveCollisions(pos, radius, colliders, half) {
   for (const c of colliders) {
     const cx = clamp(pos.x, c.minX, c.maxX);
@@ -61,18 +78,25 @@ export function buildWorld(scene) {
   const colliders = []; // rectangles 2D pour les déplacements
   const blockers = [];  // meshes qui arrêtent les balles
 
-  // ---------- Sol ----------
+  // ---------- Sol (avec relief PBR de normales et variations) ----------
   const floorTex = canvasTexture(256, (ctx, s) => {
-    ctx.fillStyle = '#4a4d48';
+    ctx.fillStyle = '#3a3d38';
     ctx.fillRect(0, 0, s, s);
     speckle(ctx, s, 3000, 0.08);
-    ctx.strokeStyle = 'rgba(0,0,0,0.35)';
+    ctx.strokeStyle = 'rgba(0,0,0,0.45)';
     ctx.lineWidth = 3;
     ctx.strokeRect(0, 0, s, s);
   }, half / 2, half / 2);
+  const floorNorm = normalTexture(256, half / 2, half / 2);
   const floor = new THREE.Mesh(
     new THREE.PlaneGeometry(half * 2, half * 2),
-    new THREE.MeshStandardMaterial({ map: floorTex, roughness: 0.95 })
+    new THREE.MeshStandardMaterial({
+      map: floorTex,
+      normalMap: floorNorm,
+      normalScale: new THREE.Vector2(0.85, 0.85),
+      roughness: 0.82,
+      metalness: 0.15,
+    })
   );
   floor.rotation.x = -Math.PI / 2;
   floor.receiveShadow = true;
@@ -81,9 +105,9 @@ export function buildWorld(scene) {
 
   // ---------- Murs d'enceinte ----------
   const wallTex = canvasTexture(256, (ctx, s) => {
-    ctx.fillStyle = '#5a5550';
+    ctx.fillStyle = '#4c4844';
     ctx.fillRect(0, 0, s, s);
-    ctx.strokeStyle = 'rgba(0,0,0,0.4)';
+    ctx.strokeStyle = 'rgba(0,0,0,0.5)';
     ctx.lineWidth = 3;
     for (let y = 0; y < s; y += s / 4) {
       ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(s, y); ctx.stroke();
@@ -92,7 +116,7 @@ export function buildWorld(scene) {
         ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y + s / 4); ctx.stroke();
       }
     }
-    speckle(ctx, s, 2500, 0.1);
+    speckle(ctx, s, 2500, 0.12);
   });
   const wallH = 5, wallT = 1;
   const walls = [
@@ -107,7 +131,7 @@ export function buildWorld(scene) {
     tex.repeat.set(Math.max(w, d) / 4, 1);
     const m = new THREE.Mesh(
       new THREE.BoxGeometry(w, wallH, d),
-      new THREE.MeshStandardMaterial({ map: tex, roughness: 0.9 })
+      new THREE.MeshStandardMaterial({ map: tex, roughness: 0.88, metalness: 0.05 })
     );
     m.position.set(x, wallH / 2, z);
     m.castShadow = m.receiveShadow = true;
@@ -115,17 +139,18 @@ export function buildWorld(scene) {
     blockers.push(m);
   }
 
-  // ---------- Obstacles (couverts) ----------
+  // ---------- Obstacles renforcés (élimination de l'effet bloc/Roblox) ----------
   const crateTex = canvasTexture(256, (ctx, s) => {
-    ctx.fillStyle = '#6b4a2b';
+    ctx.fillStyle = '#4a3622';
     ctx.fillRect(0, 0, s, s);
-    ctx.fillStyle = '#573a20';
+    ctx.fillStyle = '#3a2816';
     for (let i = 0; i < 4; i++) ctx.fillRect(0, i * (s / 4) + 2, s, 3);
-    speckle(ctx, s, 2500, 0.1);
-    ctx.strokeStyle = '#3a2512';
+    speckle(ctx, s, 2500, 0.12);
+    ctx.strokeStyle = '#24170a';
     ctx.lineWidth = 8;
     ctx.strokeRect(4, 4, s - 8, s - 8);
   });
+  const braceMat = new THREE.MeshStandardMaterial({ color: 0x222428, roughness: 0.65, metalness: 0.75 });
   // [x, z, largeur, profondeur, hauteur]
   const obstacles = [
     [8, 8, 3, 3, 2.2],
@@ -144,20 +169,29 @@ export function buildWorld(scene) {
     tex.repeat.set(Math.max(w, d) / 2, h / 2);
     const m = new THREE.Mesh(
       new THREE.BoxGeometry(w, h, d),
-      new THREE.MeshStandardMaterial({ map: tex, roughness: 0.85 })
+      new THREE.MeshStandardMaterial({ map: tex, roughness: 0.82, metalness: 0.1 })
     );
     m.position.set(x, h / 2, z);
     m.castShadow = m.receiveShadow = true;
     scene.add(m);
     blockers.push(m);
     colliders.push({ minX: x - w / 2, maxX: x + w / 2, minZ: z - d / 2, maxZ: z + d / 2 });
+
+    // Ajout de renforts d'arêtes métalliques pour accrocher les reflets spéculaires
+    for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+      const post = new THREE.Mesh(new THREE.BoxGeometry(0.12, h, 0.12), braceMat);
+      post.position.set(x + sx * (w / 2 - 0.05), h / 2, z + sz * (d / 2 - 0.05));
+      post.castShadow = true;
+      scene.add(post);
+      blockers.push(post);
+    }
   }
 
   // ---------- Borne d'achat de munitions (contre le mur ouest) ----------
   const stationPos = new THREE.Vector3(-half + 0.6, 0, 0);
   const station = new THREE.Mesh(
     new THREE.BoxGeometry(1.2, 1.8, 3),
-    new THREE.MeshStandardMaterial({ color: 0x2a3a2a, roughness: 0.6 })
+    new THREE.MeshStandardMaterial({ color: 0x222822, roughness: 0.72, metalness: 0.45 })
   );
   station.position.set(stationPos.x, 0.9, 0);
   station.castShadow = station.receiveShadow = true;
@@ -166,32 +200,41 @@ export function buildWorld(scene) {
   colliders.push({ minX: stationPos.x - 0.6, maxX: stationPos.x + 0.6, minZ: -1.5, maxZ: 1.5 });
   const panel = new THREE.Mesh(
     new THREE.BoxGeometry(0.05, 0.9, 2.4),
-    new THREE.MeshStandardMaterial({ color: 0x22ff66, emissive: 0x11cc44, emissiveIntensity: 1.5 })
+    new THREE.MeshStandardMaterial({ color: 0x3d664c, emissive: 0x228a42, emissiveIntensity: 1.5, roughness: 0.6 })
   );
   panel.position.set(stationPos.x + 0.62, 1.1, 0);
   scene.add(panel);
-  const stationLight = new THREE.PointLight(0x33ff77, 25, 8, 2);
+  const stationLight = new THREE.PointLight(0x38d96a, 20, 8, 2);
   stationLight.position.set(stationPos.x + 1.5, 1.5, 0);
   scene.add(stationLight);
 
   // ---------- Lampadaires aux quatre coins ----------
   for (const [sx, sz] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) {
     const x = sx * (half - 6), z = sz * (half - 6);
+    const poleMat = new THREE.MeshStandardMaterial({ color: 0x1a1c1e, roughness: 0.65, metalness: 0.75 });
     const pole = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.1, 0.12, 5, 8),
-      new THREE.MeshStandardMaterial({ color: 0x222222 })
+      new THREE.CylinderGeometry(0.09, 0.12, 5, 12),
+      poleMat
     );
     pole.position.set(x, 2.5, z);
     pole.castShadow = true;
     scene.add(pole);
+
+    // Lanterne avec chapeau et ampoule émissive PBR
+    const cap = new THREE.Mesh(new THREE.ConeGeometry(0.55, 0.28, 8), poleMat);
+    cap.position.set(x, 5.35, z);
+    scene.add(cap);
+
     const bulb = new THREE.Mesh(
-      new THREE.SphereGeometry(0.25, 12, 12),
-      new THREE.MeshBasicMaterial({ color: 0xffe9b0 })
+      new THREE.SphereGeometry(0.22, 14, 12),
+      new THREE.MeshStandardMaterial({ color: 0xffe2a0, emissive: 0xffaa44, emissiveIntensity: 2.8, roughness: 0.3 })
     );
-    bulb.position.set(x, 5.1, z);
+    bulb.position.set(x, 5.05, z);
     scene.add(bulb);
-    const light = new THREE.PointLight(0xffd9a0, 140, 28, 2);
-    light.position.set(x, 4.9, z);
+
+    // PointLight locale jaune/orangée avec portée et atténuation réalistes (decay: 2)
+    const light = new THREE.PointLight(0xffb555, 95, 24, 2);
+    light.position.set(x, 4.85, z);
     scene.add(light);
     colliders.push({ minX: x - 0.15, maxX: x + 0.15, minZ: z - 0.15, maxZ: z + 0.15 });
   }

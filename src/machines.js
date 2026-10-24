@@ -122,24 +122,65 @@ function perkFront(id, perk, price) {
 export function makePerkMachine(id, perk, price) {
   const g = new THREE.Group();
   const W = 1.2, H = 2.45, D = 0.9;
+  const isQR = id === 'quickrevive';
   const col = new THREE.Color(perk.color);
-  const paint = new THREE.MeshStandardMaterial({ color: col.clone().multiplyScalar(0.6), roughness: 0.6, metalness: 0.25 });
-  const chrome = new THREE.MeshStandardMaterial({ color: 0xb8bcc2, roughness: 0.25, metalness: 0.9 });
-  const dark = new THREE.MeshStandardMaterial({ color: 0x18181a, roughness: 0.6, metalness: 0.5 });
+  // Teintes désaturées et rugosités réalistes PBR
+  const paint = new THREE.MeshStandardMaterial({ color: col.clone().multiplyScalar(0.55), roughness: 0.72, metalness: 0.35 });
+  const chrome = new THREE.MeshStandardMaterial({ color: 0x9fa4ab, roughness: 0.32, metalness: 0.88 });
+  const dark = new THREE.MeshStandardMaterial({ color: 0x16181a, roughness: 0.82, metalness: 0.45 });
   const [map, emap] = perkFront(id, perk, price);
-  const front = new THREE.MeshStandardMaterial({ map, emissiveMap: emap, emissive: 0xffffff, emissiveIntensity: 0.75, roughness: 0.8, metalness: 0 });
+  const front = new THREE.MeshStandardMaterial({ map, emissiveMap: emap, emissive: isQR ? 0x7ac8ff : 0xffffff, emissiveIntensity: 1.5, roughness: 0.75, metalness: 0.1 });
+  
+  // Corps principal
   const body = new THREE.Mesh(new THREE.BoxGeometry(W, H, D), paint); body.position.y = H / 2 + 0.08; g.add(body);
-  // fronton arrondi
-  const top = new THREE.Mesh(new THREE.CylinderGeometry(W / 2, W / 2, D, 20, 1, false, 0, Math.PI), paint);
+  
+  // Fronton supérieur arrondi avec bordure de chanfrein
+  const top = new THREE.Mesh(new THREE.CylinderGeometry(W / 2, W / 2, D, 24, 1, false, 0, Math.PI), paint);
   top.rotation.z = Math.PI / 2; top.rotation.y = Math.PI / 2; top.position.y = H + 0.08; g.add(top);
+  const topRim = new THREE.Mesh(new THREE.CylinderGeometry(W / 2 + 0.02, W / 2 + 0.02, 0.06, 24, 1, false, 0, Math.PI), chrome);
+  topRim.rotation.z = Math.PI / 2; topRim.rotation.y = Math.PI / 2; topRim.position.set(0, H + 0.08, D / 2); g.add(topRim);
+  
+  // Façade imprimée
   const face = new THREE.Mesh(new THREE.PlaneGeometry(W - 0.08, H - 0.1), front); face.position.set(0, H / 2 + 0.1, D / 2 + 0.012); g.add(face);
-  // socle, bandes chromées, néons latéraux
+  
+  // Socle robuste avec pieds de surélévation (détails d'arêtes)
   const base = new THREE.Mesh(new THREE.BoxGeometry(W + 0.1, 0.12, D + 0.1), dark); base.position.y = 0.06; g.add(base);
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+    const foot = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.08, 0.14), dark);
+    foot.position.set(sx * (W / 2 - 0.02), 0.02, sz * (D / 2 - 0.02));
+    g.add(foot);
+  }
+  
+  // Bandes chromées, poignées latérales et néons lumineux pour le bloom halo
   for (const sx of [-1, 1]) {
     const trim = new THREE.Mesh(new THREE.BoxGeometry(0.05, H, 0.05), chrome); trim.position.set(sx * (W / 2 + 0.01), H / 2 + 0.08, D / 2); g.add(trim);
-    const neon = new THREE.Mesh(new THREE.BoxGeometry(0.04, H * 0.8, 0.04), new THREE.MeshStandardMaterial({ color: col, emissive: col, emissiveIntensity: 1.6 }));
+    const neonMat = new THREE.MeshStandardMaterial({
+      color: isQR ? 0x4ab6ff : col,
+      emissive: isQR ? 0x3aa6ff : col,
+      emissiveIntensity: 2.2,
+      roughness: 0.25,
+      metalness: 0.1,
+    });
+    const neon = new THREE.Mesh(new THREE.BoxGeometry(0.04, H * 0.8, 0.04), neonMat);
     neon.position.set(sx * (W / 2 + 0.03), H / 2 + 0.1, 0); g.add(neon);
+    // Poignées de maintien latérales pour casser la silhouette boîte
+    const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, 0.5, 8), chrome);
+    handle.position.set(sx * (W / 2 + 0.05), H * 0.6, 0); g.add(handle);
   }
+  
+  // Fente monnayeur / trappe en relief
+  const coinBezel = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.14, 0.06), chrome);
+  coinBezel.position.set(0.24, 0.95, D / 2 + 0.02); g.add(coinBezel);
+
+  // PointLight locale : lueur bleue éclatante pour Quick Revive, lueur d'ambiance pour les autres atouts
+  // Éclaire le sol, la façade du distributeur et les surfaces avoisinantes avec atténuation réaliste (decay: 2)
+  const lightColor = isQR ? 0x3aa6ff : col.getHex();
+  const lightIntensity = isQR ? 22 : 12;
+  const lightDist = isQR ? 10 : 7;
+  const pLight = new THREE.PointLight(lightColor, lightIntensity, lightDist, 2);
+  pLight.position.set(0, H * 0.55, D / 2 + 0.35);
+  g.add(pLight);
+
   g.userData.size = [W + 0.1, D + 0.1, H + 0.6];
   return g;
 }
@@ -171,21 +212,42 @@ function ammoFront() {
 export function makeAmmoStation() {
   const g = new THREE.Group();
   const W = 1.25, H = 1.75, D = 0.7;
-  const olive = new THREE.MeshStandardMaterial({ color: 0x4b5232, roughness: 0.7, metalness: 0.5 });
+  const olive = new THREE.MeshStandardMaterial({ color: 0x3d442c, roughness: 0.78, metalness: 0.4 });
+  const darkMetal = new THREE.MeshStandardMaterial({ color: 0x1f2123, roughness: 0.6, metalness: 0.75 });
   const [map, emap] = ammoFront();
-  const front = new THREE.MeshStandardMaterial({ map, emissiveMap: emap, emissive: 0xffffff, emissiveIntensity: 0.8, roughness: 0.85, metalness: 0.1 });
+  const front = new THREE.MeshStandardMaterial({ map, emissiveMap: emap, emissive: 0x4dff7a, emissiveIntensity: 1.2, roughness: 0.8, metalness: 0.15 });
   const body = new THREE.Mesh(new THREE.BoxGeometry(W, H, D), olive); body.position.y = H / 2; g.add(body);
   const face = new THREE.Mesh(new THREE.PlaneGeometry(W - 0.04, H - 0.04), front); face.position.set(0, H / 2, D / 2 + 0.012); g.add(face);
+  
+  // Cornières métalliques de renfort d'arêtes pour accrocher la lumière
+  for (const sx of [-1, 1]) {
+    const post = new THREE.Mesh(new THREE.BoxGeometry(0.04, H, 0.04), darkMetal);
+    post.position.set(sx * (W / 2 - 0.01), H / 2, D / 2);
+    g.add(post);
+  }
+  // Pieds surélevés
+  for (const sx of [-1, 1]) {
+    const foot = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.06, D), darkMetal);
+    foot.position.set(sx * (W / 2 - 0.1), 0.03, 0);
+    g.add(foot);
+  }
+
   // caisse ouverte posée dessus, pleine de cartouches
-  const crateMat = new THREE.MeshStandardMaterial({ color: 0x3e4428, roughness: 0.8, metalness: 0.4 });
+  const crateMat = new THREE.MeshStandardMaterial({ color: 0x323824, roughness: 0.85, metalness: 0.35 });
   const crate = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.28, 0.5), crateMat); crate.position.set(0, H + 0.14, 0); g.add(crate);
-  const brass = new THREE.MeshStandardMaterial({ color: 0xc8a040, roughness: 0.3, metalness: 0.9 });
+  const brass = new THREE.MeshStandardMaterial({ color: 0xb58e38, roughness: 0.35, metalness: 0.85 });
   const shells = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.025, 0.025, 0.14, 6), brass, 60);
   const m = new THREE.Matrix4();
   for (let i = 0; i < 60; i++) { m.makeTranslation(-0.38 + (i % 12) * 0.068, H + 0.3, -0.18 + Math.floor(i / 12) * 0.09); shells.setMatrixAt(i, m); }
   g.add(shells);
-  const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.07, 10, 8), new THREE.MeshStandardMaterial({ color: 0x4dff7a, emissive: 0x4dff7a, emissiveIntensity: 2 }));
+  const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.07, 10, 8), new THREE.MeshStandardMaterial({ color: 0x4dff7a, emissive: 0x38d960, emissiveIntensity: 2.5 }));
   lamp.position.set(W / 2 - 0.12, H + 0.06, D / 2 - 0.1); g.add(lamp);
+  
+  // PointLight locale verte/ambre pour éclairer le poste de ravitaillement
+  const ammoLight = new THREE.PointLight(0x4dff7a, 10, 6.5, 2);
+  ammoLight.position.set(0, H * 0.65, D / 2 + 0.35);
+  g.add(ammoLight);
+
   g.userData.size = [W, D, H + 0.3];
   return g;
 }
@@ -292,20 +354,35 @@ export function makeMysteryBox() {
   const g = new THREE.Group();
   const W = 1.7, H = 0.72, D = 0.85;
   const [map, emap] = boxSide();
-  const side = new THREE.MeshStandardMaterial({ map, emissiveMap: emap, emissive: 0xffffff, emissiveIntensity: 0.9, roughness: 0.9 });
-  const wood = new THREE.MeshStandardMaterial({ color: 0x3a2516, roughness: 0.85 });
-  const iron = new THREE.MeshStandardMaterial({ color: 0x3a3b3e, roughness: 0.45, metalness: 0.8 });
+  const side = new THREE.MeshStandardMaterial({ map, emissiveMap: emap, emissive: 0x4aa0ff, emissiveIntensity: 1.6, roughness: 0.85, metalness: 0.1 });
+  const wood = new THREE.MeshStandardMaterial({ color: 0x2e1e12, roughness: 0.88 });
+  const iron = new THREE.MeshStandardMaterial({ color: 0x2c2d30, roughness: 0.52, metalness: 0.85 });
   const body = new THREE.Mesh(new THREE.BoxGeometry(W, H, D), [side, side, wood, wood, side, side]); body.position.y = H / 2 + 0.05; g.add(body);
+  
+  // Cornières métalliques de coin pour accrocher la lumière sur les arêtes
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+    const angleIron = new THREE.Mesh(new THREE.BoxGeometry(0.04, H, 0.04), iron);
+    angleIron.position.set(sx * (W / 2 - 0.01), H / 2 + 0.05, sz * (D / 2 - 0.01));
+    g.add(angleIron);
+  }
   for (const sx of [-1, 1]) { const foot = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.08, D + 0.04), iron); foot.position.set(sx * (W / 2 - 0.12), 0.04, 0); g.add(foot); }
+  
   // couvercle bombé sur charnières
   const lid = new THREE.Group(); lid.position.set(0, H + 0.05, -D / 2); g.add(lid);
   const lidMesh = new THREE.Mesh(new THREE.CylinderGeometry(D / 2, D / 2, W, 16, 1, false, 0, Math.PI), wood);
   lidMesh.rotation.z = Math.PI / 2; lidMesh.scale.set(1, 1, 0.45); lidMesh.position.set(0, 0, D / 2); lid.add(lidMesh);
   for (const sx of [-0.55, 0, 0.55]) { const band = new THREE.Mesh(new THREE.CylinderGeometry(D / 2 + 0.025, D / 2 + 0.025, 0.07, 16, 1, false, 0, Math.PI), iron); band.rotation.z = Math.PI / 2; band.scale.set(1, 1, 0.45); band.position.set(sx, -0.004, D / 2); lid.add(band); } // 4 mm plus bas : sa face plane (dessous du couvercle ouvert) n'est plus coplanaire avec celle du couvercle
   const lock = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.2, 0.05), iron); lock.position.set(0, H - 0.02, D / 2 + 0.03); g.add(lock);
+  
   // faisceau de lumière bleue (repère de loin)
-  const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.32, 30, 14, 1, true), new THREE.MeshBasicMaterial({ color: 0x5fb8ff, transparent: true, opacity: 0.1, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
+  const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.32, 30, 14, 1, true), new THREE.MeshStandardMaterial({ color: 0x5fb8ff, emissive: 0x4aa0ff, emissiveIntensity: 1.8, transparent: true, opacity: 0.12, depthWrite: false, side: THREE.DoubleSide }));
   beam.position.y = 15; g.add(beam);
+  
+  // PointLight locale bleue surnaturelle qui illumine la boîte et le sol alentour
+  const boxLight = new THREE.PointLight(0x4aa0ff, 14, 8, 2);
+  boxLight.position.set(0, H + 0.25, 0);
+  g.add(boxLight);
+
   g.userData.lid = lid;
   g.userData.size = [W, D, H + 0.4];
   return g;
@@ -330,24 +407,40 @@ function papFront() {
 export function makePackAPunch() {
   const g = new THREE.Group();
   const W = 1.9, H = 1.7, D = 1.25;
-  const metal = new THREE.MeshStandardMaterial({ color: 0x2b2a30, roughness: 0.45, metalness: 0.85 });
+  const metal = new THREE.MeshStandardMaterial({ color: 0x24242a, roughness: 0.55, metalness: 0.82 });
   const [map, emap] = papFront();
-  const front = new THREE.MeshStandardMaterial({ map, emissiveMap: emap, emissive: 0xffffff, emissiveIntensity: 1.0, roughness: 0.75, metalness: 0.2 });
+  const front = new THREE.MeshStandardMaterial({ map, emissiveMap: emap, emissive: 0xc850ff, emissiveIntensity: 1.8, roughness: 0.72, metalness: 0.2 });
   const body = new THREE.Mesh(new THREE.BoxGeometry(W, H, D), metal); body.position.y = H / 2; g.add(body);
   const face = new THREE.Mesh(new THREE.PlaneGeometry(W - 0.06, H - 0.06), front); face.position.set(0, H / 2, D / 2 + 0.012); g.add(face);
+  
+  // Cornières de base et d'angles pour briser l'aspect parallélépipédique brut
+  for (const sx of [-1, 1]) {
+    const post = new THREE.Mesh(new THREE.BoxGeometry(0.06, H, 0.06), metal);
+    post.position.set(sx * (W / 2 - 0.02), H / 2, D / 2);
+    g.add(post);
+    const foot = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.08, D + 0.08), metal);
+    foot.position.set(sx * (W / 2 - 0.1), 0.04, 0);
+    g.add(foot);
+  }
+  
   // rouleaux et tuyaux sur le dessus
-  const roller = new THREE.MeshStandardMaterial({ color: 0x55525c, roughness: 0.35, metalness: 0.9 });
+  const roller = new THREE.MeshStandardMaterial({ color: 0x4a4752, roughness: 0.38, metalness: 0.88 });
   for (const z of [-0.3, 0.1]) { const r = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, W - 0.2, 16), roller); r.rotation.z = Math.PI / 2; r.position.set(0, H + 0.12, z); g.add(r); }
-  const pipe = new THREE.MeshStandardMaterial({ color: 0x6a3a8a, roughness: 0.4, metalness: 0.7, emissive: 0x3a0a5a, emissiveIntensity: 0.6 });
+  const pipe = new THREE.MeshStandardMaterial({ color: 0x5a2d78, roughness: 0.45, metalness: 0.65, emissive: 0x3a0a5a, emissiveIntensity: 0.8 });
   for (const sx of [-1, 1]) { const p = new THREE.Mesh(new THREE.TorusGeometry(0.35, 0.06, 8, 16, Math.PI), pipe); p.position.set(sx * (W / 2 - 0.2), H, -0.2); p.rotation.y = Math.PI / 2; g.add(p); }
   // fente d'introduction de l'arme, fermée par une porte coulissante
-  const rim = new THREE.MeshStandardMaterial({ color: 0xb8742a, roughness: 0.4, metalness: 0.9 });
+  const rim = new THREE.MeshStandardMaterial({ color: 0xa86422, roughness: 0.42, metalness: 0.85 });
   const hole = new THREE.MeshStandardMaterial({ color: 0x07030c, roughness: 0.6, metalness: 0.3, emissive: 0x2a0850, emissiveIntensity: 0.5 });
   const SY = 0.58;
   const put = (geo, mat, x, y, z) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); g.add(m); return m; };
   put(new THREE.BoxGeometry(1.3, 0.3, 0.05), rim, 0, SY, D / 2 + 0.03);
   put(new THREE.BoxGeometry(1.14, 0.2, 0.06), hole, 0, SY, D / 2 + 0.035);
   const slotDoor = new THREE.Mesh(new THREE.BoxGeometry(1.16, 0.22, 0.05), metal); slotDoor.position.set(0, SY, D / 2 + 0.07); g.add(slotDoor);
+
+  // PointLight mystique violette illuminant le Pack-a-Punch et le sol
+  const papLight = new THREE.PointLight(0xa838ff, 18, 9, 2);
+  papLight.position.set(0, SY + 0.35, D / 2 + 0.4);
+  g.add(papLight);
   // engrenages sur les flancs (tournent pendant l'amélioration)
   const gears = [];
   for (const sx of [-1, 1]) {

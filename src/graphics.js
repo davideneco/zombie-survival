@@ -116,6 +116,7 @@ export function createGraphics({ renderer, scene, camera, hemi, moon, settings }
   api.setTone = (name = G().tone.type) => {
     api.tone = name;
     renderer.toneMapping = TONES[name] ?? THREE.ACESFilmicToneMapping;
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
     scene.traverse((o) => { if (o.material) for (const m of [].concat(o.material)) m.needsUpdate = true; });
   };
   // exposition : valeur de base x Luminosité (Options) x zone ; hemi suit la Luminosité (inchangé)

@@ -79,7 +79,7 @@ export function buildBikeStationDecor(scene, collision, ST, L, G) {
     const off = new THREE.Vector3(0, 0, side * 0.025).applyAxisAngle(new THREE.Vector3(0, 1, 0), L.center.yaw);
     faces.push(f.translate(L.sign.x + off.x, py, L.sign.z + off.z));
   }
-  const faceMesh = new THREE.Mesh(merge(faces), stdMat('stationSign', () => new THREE.MeshBasicMaterial({ map: signTexture(), color: 0xdde4ee })));
+  const faceMesh = new THREE.Mesh(merge(faces), stdMat('stationSign', () => new THREE.MeshStandardMaterial({ map: signTexture(), color: 0xdde4ee, roughness: 0.65, metalness: 0.1 })));
   group.add(metalMesh, faceMesh);
   scene.add(group);
   for (const h of L.hoops) collision.addBox(h.x, h.z, 0.08, hoopW, -L.center.yaw, hoopH, undefined, 'prop', true);

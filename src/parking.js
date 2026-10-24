@@ -91,7 +91,7 @@ export function buildParkingDecor(scene, collision, lightSources, PK, L) {
   const back = new THREE.Mesh(new THREE.BoxGeometry(bw + 0.04, bh + 0.04, 0.04), stdMat('signback', 0x1a1d22, 0.6, 0.4));
   back.position.y = 2.05; sg.add(back);
   for (const side of [1, -1]) {
-    const face = new THREE.Mesh(new THREE.PlaneGeometry(bw, bh), new THREE.MeshBasicMaterial({ map: tex, color: 0xdde4ee }));
+    const face = new THREE.Mesh(new THREE.PlaneGeometry(bw, bh), new THREE.MeshStandardMaterial({ map: tex, color: 0xdde4ee, roughness: 0.65 }));
     face.position.set(0, 2.05, side * 0.025); face.rotation.y = side > 0 ? 0 : Math.PI;
     sg.add(face);
   }
@@ -105,9 +105,9 @@ export function buildParkingDecor(scene, collision, lightSources, PK, L) {
   const pg = new THREE.Group();
   const part = (w, h, d, mat, x, y, z) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat); m.position.set(x, y, z); pg.add(m); return m; };
   part(0.7, 0.12, 0.56, stdMat('pbase', 0x2b2e34, 0.7, 0.3), 0, 0.06, 0);
-  part(0.5, 1.3, 0.36, stdMat('pbody', 0xb82e22, 0.45, 0.35), 0, 0.77, 0);
+  part(0.5, 1.3, 0.36, stdMat('pbody', 0x9e241c, 0.55, 0.35), 0, 0.77, 0);
   part(0.58, 0.14, 0.44, stdMat('pcap', 0x1a1c20, 0.5, 0.4), 0, 1.49, 0);
-  const screen = new THREE.Mesh(new THREE.PlaneGeometry(0.44, 0.275), new THREE.MeshBasicMaterial({ map: pumpTexture(), color: 0xe6e6e6 }));
+  const screen = new THREE.Mesh(new THREE.PlaneGeometry(0.44, 0.275), new THREE.MeshStandardMaterial({ map: pumpTexture(), color: 0xe6e6e6, emissive: 0x283848, emissiveIntensity: 0.9, roughness: 0.4 }));
   screen.position.set(0, 1.12, 0.185); pg.add(screen);
   part(0.44, 0.04, 0.2, stdMat('pstripe', 0xf2c230, 0.5, 0.2), 0, 0.62, 0.19);
   part(0.1, 0.22, 0.1, stdMat('pholster', 0x16181c, 0.6, 0.3), 0.3, 0.9, 0);

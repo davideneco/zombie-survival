@@ -26,7 +26,7 @@ function assets() {
   if (ASSETS) return ASSETS;
   ASSETS = {
     geo: zombieGeometries(),
-    eyeMat: new THREE.MeshBasicMaterial({ color: 0xffc01a }),
+    eyeMat: new THREE.MeshStandardMaterial({ color: 0xffb81a, emissive: 0xff9900, emissiveIntensity: 2.5, roughness: 0.3 }),
     hitMat: new THREE.MeshBasicMaterial({ visible: false }),
   };
   return ASSETS;
@@ -193,7 +193,7 @@ export class Zombie {
     this.group.scale.setScalar(1.75);
     this.runner = false; this.limp = false;
     const A = assets();
-    const red = A.bossEye || (A.bossEye = new THREE.MeshBasicMaterial({ color: 0xff2010 }));
+    const red = A.bossEye || (A.bossEye = new THREE.MeshStandardMaterial({ color: 0xff1808, emissive: 0xff1000, emissiveIntensity: 2.8, roughness: 0.3 }));
     for (const e of this.eyes) { e.material = red; e.scale.setScalar(1.6); }
     for (const m of this.mats) m.color.multiplyScalar(0.55);
   }
@@ -221,7 +221,7 @@ export class Zombie {
       setCell(this.skinMat, CELLS.stoneSkin); setCell(this.faceMat, CELLS.stoneFace); setCell(this.shirtMat, CELLS.stoneCloth); setCell(this.pantsMat, CELLS.stoneCloth);
       for (const m of this.mats) { m.color.setRGB(0.5, 0.52, 0.55); m.bumpScale = 1.3; m.roughness = 1; m.userData.uBlood.value = 0; }
       this.group.scale.multiplyScalar(1.1);
-      const eye = A.gargEye || (A.gargEye = new THREE.MeshBasicMaterial({ color: 0xff7a24 }));
+      const eye = A.gargEye || (A.gargEye = new THREE.MeshStandardMaterial({ color: 0xff7014, emissive: 0xff5500, emissiveIntensity: 2.6, roughness: 0.3 }));
       for (const e of this.eyes) { e.material = eye; e.scale.setScalar(1.5); }
       const hornGeo = A.hornGeo || (A.hornGeo = new THREE.ConeGeometry(0.03, 0.17, 6));
       for (const sx of [-1, 1]) { const h = new THREE.Mesh(hornGeo, this.faceMat); h.position.set(sx * 0.07, 0.17, 0.0); h.rotation.set(-0.35, 0, -sx * 0.45); this.headGroup.add(h); }

@@ -40,32 +40,35 @@ document.getElementById('version').textContent = __GAME_VERSION__;
 // version verrait d'autres portes et d'autres prix.
 const GAME_V = String(__GAME_VERSION__).split(' ')[0];
 
-// ---------------------------------------------------------------- Rendu
-const renderer = new THREE.WebGLRenderer({ antialias: true });
+// ---------------------------------------------------------------- Rendu PBR réaliste & sombre (COD Zombies)
+const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.05; // exposition cinématographique sombre
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-renderer.toneMappingExposure = 1.3; // tone mapping et exposition : graphics.js (CONFIG.graphics.tone, par zone)
 document.body.prepend(renderer.domElement);
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x070b12);
-scene.fog = new THREE.FogExp2(0x0b121c, CONFIG.map === 'arena' ? 0.022 : 0.019);
+scene.background = new THREE.Color(0x04060c); // nuit d'encre Call of Duty Zombies
+scene.fog = new THREE.FogExp2(0x050810, CONFIG.map === 'arena' ? 0.024 : 0.021); // brouillard sombre de distance
 
 // au-delà de ~150 m le brouillard cache tout : inutile de dessiner plus loin
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.05, 170);
 
-// Ambiance nocturne réaliste
-const hemi = new THREE.HemisphereLight(0x6677aa, 0x222018, 1.1);
+// Éclairage nocturne réaliste : aucune AmbientLight blanche ou intense
+// Ciel froid très atténué (0.28) et lueur lunaire directionnelle bleutée discrète avec ombres douces
+const hemi = new THREE.HemisphereLight(0x182436, 0x0a0c10, 0.28);
 scene.add(hemi);
-const moon = new THREE.DirectionalLight(0x9fb4ff, 1.4);
+const moon = new THREE.DirectionalLight(0x5c7ca8, 0.42);
 moon.position.set(25, 55, 15);
 moon.castShadow = true;
 moon.shadow.mapSize.set(2048, 2048);
 Object.assign(moon.shadow.camera, { left: -45, right: 45, top: 45, bottom: -45, near: 1, far: 160 });
 moon.shadow.bias = -0.0004;
-moon.shadow.normalBias = 0.03;
+moon.shadow.normalBias = 0.035;
 scene.add(moon, moon.target);
 const MOON_OFFSET = new THREE.Vector3(25, 55, 15);
 
@@ -79,7 +82,7 @@ const gfx = createGraphics({ renderer, scene, camera, hemi, moon, settings });
 gfx.setTone();
 let appliedQuality = null;
 function applyVisualSettings() {
-  hemi.intensity = 1.1 * settings.brightness;
+  hemi.intensity = 0.28 * settings.brightness;
   gfx.applyExposure();
   const q = settings.quality ?? 1;
   if (q === appliedQuality) return;

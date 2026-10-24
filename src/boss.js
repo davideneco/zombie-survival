@@ -65,7 +65,7 @@ export class Boss extends Zombie {
     for (const sx of [-1, 1]) { const pad = new THREE.Mesh(new THREE.SphereGeometry(0.1, 8, 6), iron); pad.position.set(0, 0.03, 0); this.arms[sx < 0 ? 0 : 1].shoulder.add(pad); }
     // lanterne-cœur dans le dos : son point faible (dégâts x2 de dos), une cage de fer autour d'une flamme
     const lant = new THREE.Group(); lant.position.set(0, 0.3, -0.2);
-    lant.add(new THREE.Mesh(new THREE.SphereGeometry(0.075, 10, 8), new THREE.MeshBasicMaterial({ color: 0xffa030 })));
+    lant.add(new THREE.Mesh(new THREE.SphereGeometry(0.075, 10, 8), new THREE.MeshStandardMaterial({ color: 0xffa030, emissive: 0xff7010, emissiveIntensity: 2.5, roughness: 0.3 })));
     const cage = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.2, 8, 1, true), new THREE.MeshStandardMaterial({ color: 0x2a2c30, roughness: 0.5, metalness: 0.9, wireframe: true }));
     lant.add(cage);
     const glowMat = new THREE.MeshBasicMaterial({ color: 0xff7a18, transparent: true, opacity: 0.35, blending: THREE.AdditiveBlending, depthWrite: false });

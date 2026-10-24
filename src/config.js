@@ -579,12 +579,12 @@ export const CONFIG = {
   // se recompilent). levels[settings.quality] : 0 Rapide, 1 Normale, 2 Haute.
   graphics: {
     levels: [
-      { name: 'Rapide', pixelRatio: 0.75, shadows: false, softShadows: false, shadowSize: 1024, shadowEvery: 2, clouds: false, post: false, facade: 30, trees: 'ball', particles: 0.5, decals: 16 },
+      { name: 'Rapide', pixelRatio: 0.75, shadows: false, softShadows: true, shadowSize: 1024, shadowEvery: 2, clouds: false, post: false, facade: 30, trees: 'ball', particles: 0.5, decals: 16 },
       { name: 'Normale', pixelRatio: 1, shadows: true, softShadows: true, shadowSize: 1024, shadowEvery: 2, clouds: true, post: false, facade: 60, trees: 'cards', particles: 1, decals: 36 },
       { name: 'Haute', pixelRatio: 'device', shadows: true, softShadows: true, shadowSize: 2048, shadowEvery: 1, clouds: true, post: true, facade: 110, trees: 'cards+branches', particles: 1, decals: 64 },
     ],
     // tone mapping : 'aces' | 'agx' | 'neutral' ; exposition de base (multipliée par Luminosité des Options et par la zone)
-    tone: { type: 'aces', exposure: 1.3 },
+    tone: { type: 'aces', exposure: 1.05 },
     // lampe torche (player.js) : intensité (v0.43.0 : 55), ouverture, bord adouci (penumbra), décroissance, portée, teinte (chaude : les zombies ne blanchissent plus)
     torch: { intensity: 9, angle: 0.5, penumbra: 0.9, decay: 1.1, distance: 40, color: 0xffe0b0 },
     // armes (viewmodels.js) : chanfrein des boîtes (m), segments d'arrondi, usure des arêtes (gain de clarté, seuil), intensité des reflets d'ambiance

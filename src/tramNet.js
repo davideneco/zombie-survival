@@ -56,7 +56,7 @@ const cylAt = (r0, r1, h, x, y, z, color, seg = 8) => { const g = new THREE.Cyli
 let MAT = null;
 const mats = () => MAT || (MAT = {
   steel: new THREE.MeshStandardMaterial({ color: 0xffffff, vertexColors: true, metalness: 0.3, roughness: 0.6 }),
-  basic: new THREE.MeshBasicMaterial({ color: 0xffffff, vertexColors: true }),
+  basic: new THREE.MeshStandardMaterial({ color: 0xffffff, vertexColors: true, metalness: 0.65, roughness: 0.45 }),
 });
 
 // Ruban fin (deux quads croisés) de a à b : fils de la caténaire

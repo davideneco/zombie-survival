@@ -1313,7 +1313,7 @@ export async function buildRealWorld(scene, renderer) {
       const names = `${ZONE_NAMES[g.a]} ↔ ${ZONE_NAMES[g.b]}`;
       x.fillText(names, 256, 164, 480); // maxWidth : les noms longs (Saint-Pierre-le-Vieux ↔ Monument Stoeber) se resserrent
       const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace;
-      const signMat = new THREE.MeshBasicMaterial({ map: tex });
+      const signMat = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.72 });
       for (const r of pieces) {
         const len = Math.hypot(r.x1 - r.x0, r.z1 - r.z0);
         if (len < 0.2) continue;
@@ -1357,7 +1357,7 @@ export async function buildRealWorld(scene, renderer) {
       x.textAlign = 'center'; x.fillStyle = '#f2c414'; x.font = 'bold 46px Impact, Arial, sans-serif'; x.fillText('ZONE FERMÉE', 256, 84);
       x.fillStyle = '#ddd'; x.font = '22px Arial, sans-serif'; x.fillText('accès interdit — secteur non sécurisé', 256, 116);
       const sealTex = new THREE.CanvasTexture(cv); sealTex.colorSpace = THREE.SRGBColorSpace;
-      const sealSignMat = new THREE.MeshBasicMaterial({ map: sealTex });
+      const sealSignMat = new THREE.MeshStandardMaterial({ map: sealTex, roughness: 0.72 });
       const SH = 3.6;
       for (const g of sealedGroups) {
         for (const r of straightPieces(g.runs)) {
@@ -1453,7 +1453,7 @@ export async function buildRealWorld(scene, renderer) {
         name = 'BOÎTE MYSTÈRE'; price = CONFIG.box.price; color = '#5fb8ff';
         g = makeMysteryBox();
         const [, , bh] = g.userData.size;
-        const sign = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 0.47), new THREE.MeshBasicMaterial({ map: signTex(name, `${price} PTS`, color), transparent: true }));
+        const sign = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 0.47), new THREE.MeshStandardMaterial({ map: signTex(name, `${price} PTS`, color), transparent: true, roughness: 0.7 }));
         sign.position.set(0, bh + 0.55, 0.3);
         g.add(sign);
         g.userData.sign = sign;
@@ -1608,8 +1608,8 @@ export async function buildRealWorld(scene, renderer) {
 
   // ---------------------------------------------------------------- Lampadaires (instanciés, 6 à 8 vraies lumières mobiles)
   {
-    const poleMat = new THREE.MeshStandardMaterial({ color: 0x1d1f22, roughness: 0.5, metalness: 0.7 });
-    const lampMat = new THREE.MeshStandardMaterial({ color: 0xffe2a0, emissive: 0xffc566, emissiveIntensity: 2.2 });
+    const poleMat = new THREE.MeshStandardMaterial({ color: 0x1d1f22, roughness: 0.65, metalness: 0.75 });
+    const lampMat = new THREE.MeshStandardMaterial({ color: 0xffe2a0, emissive: 0xffaa44, emissiveIntensity: 2.8, roughness: 0.25 });
     const dummy = new THREE.Object3D();
     const poles = [], lanterns = [], caps = [];
     for (const [x, z] of data.lamps) {
@@ -1620,7 +1620,7 @@ export async function buildRealWorld(scene, renderer) {
       dummy.position.set(x, 4.35, z); dummy.updateMatrix(); lanterns.push(dummy.matrix.clone());
       dummy.position.set(x, 4.65, z); dummy.updateMatrix(); caps.push(dummy.matrix.clone());
       collision.addCircle(x, z, 0.12);
-      lightSources.push({ x, y: 4.2, z, color: 0xffc77a, intensity: 60, dist: 20 });
+      lightSources.push({ x, y: 4.2, z, color: 0xffb555, intensity: 50, dist: 22 });
     }
     if (poles.length) {
       scene.add(instanced(new THREE.CylinderGeometry(0.06, 0.09, 4.2, 8), poleMat, poles));
@@ -2067,11 +2067,11 @@ export async function buildRealWorld(scene, renderer) {
     return true;
   }
 
-  // Lumières mobiles : un petit nombre de PointLight redistribuées sur les sources les plus proches
-  const LIGHTS = 8;
+  // Lumières mobiles : PointLight locales redistribuées dynamiquement sur les sources les plus proches
+  const LIGHTS = 18;
   const lightPool = [];
   for (let i = 0; i < LIGHTS; i++) {
-    const l = new THREE.PointLight(0xffffff, 0, 10, 2);
+    const l = new THREE.PointLight(0xffffff, 0, 12, 2);
     scene.add(l);
     lightPool.push(l);
   }

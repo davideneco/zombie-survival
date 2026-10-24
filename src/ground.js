@@ -244,7 +244,8 @@ export function createGround(scene, { mesh, polys, bounds, onIsland, tramDist })
         roughnessFactor = mix(roughnessFactor, roughnessFactor * 0.72, gWet);
         roughnessFactor = mix(roughnessFactor, 0.045, gPud);`)
       .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
-        normal = normalize(mix(normal, nonPerturbedNormal, clamp(gApron * 0.85 + gKerb * 0.5 + gPud, 0.0, 1.0)));`)
+        vec3 waterNorm = nonPerturbedNormal + vec3(sin(vGPos.x * 5.0 + vGPos.z * 3.5) * 0.025, 0.0, cos(vGPos.z * 5.0 - vGPos.x * 3.5) * 0.025) * gPud;
+        normal = normalize(mix(normal, normalize(waterNorm), clamp(gApron * 0.85 + gKerb * 0.5 + gPud * 0.92, 0.0, 1.0)));`)
       .replace('#include <lights_fragment_end>', `#include <lights_fragment_end>
         reflectedLight.indirectSpecular *= 1.0 + gPud * uPuddle.z;`);
   };

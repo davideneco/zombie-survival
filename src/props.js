@@ -111,31 +111,31 @@ export function merge(list) {
 // ------------------------------------------------------------------ Bibliothèque
 export function createProps() {
   const M = {
-    iron: reflective(new THREE.MeshStandardMaterial({ color: 0x1f2326, roughness: 0.55, metalness: 0.7 }), 0.7),
-    darkGreen: reflective(new THREE.MeshStandardMaterial({ color: 0x1f3a2c, roughness: 0.5, metalness: 0.5 }), 0.6),
+    iron: reflective(new THREE.MeshStandardMaterial({ color: 0x222629, roughness: 0.65, metalness: 0.75 }), 0.7),
+    darkGreen: reflective(new THREE.MeshStandardMaterial({ color: 0x1e2e24, roughness: 0.68, metalness: 0.45 }), 0.6),
     wood: new THREE.MeshStandardMaterial({ color: 0xffffff, map: plankTex(), roughness: 0.85 }),
-    woodPlain: new THREE.MeshStandardMaterial({ color: 0x6e4a2c, roughness: 0.8 }),
-    pewWood: new THREE.MeshStandardMaterial({ color: 0xffffff, map: oakTex(), roughness: 0.55 }),
-    carPaint: reflective(new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.35, metalness: 0.55 }), 1.0),
-    glass: reflective(new THREE.MeshStandardMaterial({ color: 0x0b1118, roughness: 0.08, metalness: 0.9 }), 1.4),
-    tyre: new THREE.MeshStandardMaterial({ color: 0x121212, roughness: 0.9 }),
-    chrome: reflective(new THREE.MeshStandardMaterial({ color: 0xb8bcc2, roughness: 0.25, metalness: 0.9 }), 1.5),
-    lightsF: new THREE.MeshStandardMaterial({ color: 0xfff3d8, emissive: 0x6a5a40, roughness: 0.3 }),
-    lightsR: new THREE.MeshStandardMaterial({ color: 0x8a0e0e, emissive: 0x2a0000, roughness: 0.3 }),
-    concrete: new THREE.MeshStandardMaterial({ color: 0x9b9890, roughness: 0.95 }),
-    sandstone: new THREE.MeshStandardMaterial({ color: 0xb98270, roughness: 0.9 }),
-    bronze: reflective(new THREE.MeshStandardMaterial({ color: 0x3e5a4a, roughness: 0.45, metalness: 0.75 }), 1.0),
-    water: reflective(new THREE.MeshStandardMaterial({ color: 0x18324a, roughness: 0.05, metalness: 0.6 }), 1.2),
-    leaf: new THREE.MeshStandardMaterial({ color: 0x3b5e2b, roughness: 1, flatShading: true }),
-    flower: new THREE.MeshStandardMaterial({ color: 0xb8202a, roughness: 0.8 }),
-    sandbag: new THREE.MeshStandardMaterial({ color: 0xffffff, map: sandbagTex(), roughness: 1 }),
-    hazard: new THREE.MeshStandardMaterial({ color: 0xffffff, map: hazardTex(), roughness: 0.6 }),
-    redWhite: reflective(new THREE.MeshStandardMaterial({ color: 0xc8c8c8, roughness: 0.4, metalness: 0.6 }), 0.8),
-    roofRed: new THREE.MeshStandardMaterial({ color: 0x7a2a22, roughness: 0.8 }),
+    woodPlain: new THREE.MeshStandardMaterial({ color: 0x5a3c24, roughness: 0.82 }),
+    pewWood: new THREE.MeshStandardMaterial({ color: 0xffffff, map: oakTex(), roughness: 0.6 }),
+    carPaint: reflective(new THREE.MeshStandardMaterial({ color: 0xd8d8d8, roughness: 0.52, metalness: 0.48 }), 0.8),
+    glass: reflective(new THREE.MeshStandardMaterial({ color: 0x090e14, roughness: 0.12, metalness: 0.88 }), 1.4),
+    tyre: new THREE.MeshStandardMaterial({ color: 0x141416, roughness: 0.92 }),
+    chrome: reflective(new THREE.MeshStandardMaterial({ color: 0x9da3aa, roughness: 0.32, metalness: 0.85 }), 1.3),
+    lightsF: new THREE.MeshStandardMaterial({ color: 0xfff0d0, emissive: 0xffc866, emissiveIntensity: 1.8, roughness: 0.35 }),
+    lightsR: new THREE.MeshStandardMaterial({ color: 0x6e0e0e, emissive: 0x4a0000, emissiveIntensity: 1.2, roughness: 0.35 }),
+    concrete: new THREE.MeshStandardMaterial({ color: 0x78756e, roughness: 0.92, metalness: 0.05 }),
+    sandstone: new THREE.MeshStandardMaterial({ color: 0x8e6e62, roughness: 0.88 }),
+    bronze: reflective(new THREE.MeshStandardMaterial({ color: 0x36483c, roughness: 0.52, metalness: 0.72 }), 0.9),
+    water: reflective(new THREE.MeshStandardMaterial({ color: 0x14283c, roughness: 0.06, metalness: 0.55 }), 1.2),
+    leaf: new THREE.MeshStandardMaterial({ color: 0x2e4624, roughness: 0.95, flatShading: true }),
+    flower: new THREE.MeshStandardMaterial({ color: 0x8e1a22, roughness: 0.8 }),
+    sandbag: new THREE.MeshStandardMaterial({ color: 0xffffff, map: sandbagTex(), roughness: 0.98 }),
+    hazard: new THREE.MeshStandardMaterial({ color: 0xffffff, map: hazardTex(), roughness: 0.65 }),
+    redWhite: reflective(new THREE.MeshStandardMaterial({ color: 0xb0b0b0, roughness: 0.48, metalness: 0.55 }), 0.7),
+    roofRed: new THREE.MeshStandardMaterial({ color: 0x68221c, roughness: 0.82 }),
     awning: new THREE.MeshStandardMaterial({ color: 0xffffff, map: awningTex(), roughness: 0.9, side: THREE.DoubleSide }),
-    warm: new THREE.MeshStandardMaterial({ color: 0xffe0a0, emissive: 0xffb050, emissiveIntensity: 0.9 }),
+    warm: new THREE.MeshStandardMaterial({ color: 0xffd890, emissive: 0xff9933, emissiveIntensity: 1.6 }),
     poster: new THREE.MeshStandardMaterial({ color: 0xffffff, map: posterTex(), roughness: 0.75 }),
-    postYellow: reflective(new THREE.MeshStandardMaterial({ color: 0xe6b81c, roughness: 0.38, metalness: 0.35 }), 0.7),
+    postYellow: reflective(new THREE.MeshStandardMaterial({ color: 0xba8c22, roughness: 0.68, metalness: 0.3 }), 0.6),
   };
   M.wood.map.repeat.set(1, 1);
 
@@ -185,11 +185,38 @@ export function createProps() {
   // Fontaine : vasque et colonne
   P.fountain = [[merge([lathe([[1.5, 0], [1.6, 0.55], [1.45, 0.6], [1.35, 0.15], [0.001, 0.15]], 20), lathe([[0.18, 0], [0.18, 1.3], [0.6, 1.45], [0.55, 1.6], [0.001, 1.55]], 14)]), M.sandstone],
     [cyl(1.36, 1.36, 0.06, 20, 0, 0.45, 0), M.water]];
-  // Jardinière avec buissons
-  P.planter = [[box(1.6, 0.6, 0.8, 0, 0.3, 0), M.woodPlain], [merge([new THREE.IcosahedronGeometry(0.42, 0).scale(1, 0.8, 1).translate(-0.4, 0.82, 0), new THREE.IcosahedronGeometry(0.46, 0).scale(1, 0.85, 1).translate(0.35, 0.86, 0.05)]), M.leaf],
-    [merge([new THREE.SphereGeometry(0.08, 6, 5).translate(-0.2, 1.05, 0.25), new THREE.SphereGeometry(0.08, 6, 5).translate(0.4, 1.12, -0.2), new THREE.SphereGeometry(0.08, 6, 5).translate(0.1, 1.15, 0.3)]), M.flower]];
-  // Caisse en planches et palette
-  P.crate = [[box(1.1, 1.0, 1.1, 0, 0.5, 0), M.wood]];
+  // Jardinière avec buissons : bac à rebord mouluré et pieds
+  {
+    const planP = [
+      box(1.56, 0.54, 0.76, 0, 0.31, 0),
+      box(1.68, 0.08, 0.88, 0, 0.6, 0), // rebord supérieur mouluré
+      box(1.64, 0.06, 0.84, 0, 0.03, 0), // socle
+    ];
+    for (const sx of [-0.65, 0.65]) for (const sz of [-0.3, 0.3]) {
+      planP.push(box(0.12, 0.58, 0.12, sx, 0.31, sz)); // montants d'angles
+    }
+    P.planter = [[merge(planP), M.woodPlain], [merge([new THREE.IcosahedronGeometry(0.42, 0).scale(1, 0.8, 1).translate(-0.4, 0.82, 0), new THREE.IcosahedronGeometry(0.46, 0).scale(1, 0.85, 1).translate(0.35, 0.86, 0.05)]), M.leaf],
+      [merge([new THREE.SphereGeometry(0.08, 6, 5).translate(-0.2, 1.05, 0.25), new THREE.SphereGeometry(0.08, 6, 5).translate(0.4, 1.12, -0.2), new THREE.SphereGeometry(0.08, 6, 5).translate(0.1, 1.15, 0.3)]), M.flower]];
+  }
+  // Caisse en planches renforcée : cornières d'angle en fer, traverses et diagonales
+  {
+    const W = 1.1, H = 1.0, D = 1.1;
+    const core = box(W - 0.04, H - 0.04, D - 0.04, 0, H / 2, 0);
+    const trims = [];
+    for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+      trims.push(box(0.06, H, 0.06, sx * (W / 2 - 0.025), H / 2, sz * (D / 2 - 0.025)));
+    }
+    for (const sy of [0.035, H - 0.035]) {
+      trims.push(box(W, 0.07, 0.05, 0, sy, D / 2 - 0.025));
+      trims.push(box(W, 0.07, 0.05, 0, sy, -D / 2 + 0.025));
+      trims.push(box(0.05, 0.07, D - 0.1, W / 2 - 0.025, sy, 0));
+      trims.push(box(0.05, 0.07, D - 0.1, -W / 2 + 0.025, sy, 0));
+    }
+    // Traverses diagonales qui accrochent la lumière
+    trims.push(box(Math.hypot(W, H) * 0.88, 0.05, 0.03, 0, H / 2, D / 2 - 0.012, 0, 0, Math.atan2(H, W)));
+    trims.push(box(Math.hypot(W, H) * 0.88, 0.05, 0.03, 0, H / 2, -D / 2 + 0.012, 0, 0, -Math.atan2(H, W)));
+    P.crate = [[core, M.wood], [merge(trims), M.iron]];
+  }
   P.pallet = [[merge([box(1.2, 0.04, 0.12, 0, 0.13, -0.42), box(1.2, 0.04, 0.12, 0, 0.13, -0.14), box(1.2, 0.04, 0.12, 0, 0.13, 0.14), box(1.2, 0.04, 0.12, 0, 0.13, 0.42),
     box(0.1, 0.1, 1.0, -0.5, 0.06, 0), box(0.1, 0.1, 1.0, 0, 0.06, 0), box(0.1, 0.1, 1.0, 0.5, 0.06, 0)]), M.woodPlain]];
   // Bloc béton de chantier (profil "New Jersey")
