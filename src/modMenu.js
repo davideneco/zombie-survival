@@ -937,8 +937,12 @@ export function installModMenu(game, { world, hud, sfx }) {
           <div class="mod-card-title">🚗 VÉHICULES JOUABLES</div>
           <div class="mod-grid">
             <button class="mod-btn mod-btn-primary" id="modSpawnCarBtn">
-              <b>🏎️ FAIRE APPARAÎTRE UNE VOITURE GT</b>
-              <small>Coupé GT avec suspension 3D, drift et boîte 6 rapports</small>
+              <b>🏎️ FAIRE APPARAÎTRE VOITURE GT</b>
+              <small>Coupé GT 2 places (101 km/h, drift propulsion & boîte 6 rapports)</small>
+            </button>
+            <button class="mod-btn mod-btn-gold" id="modSpawnSuvBtn">
+              <b>🛻 FAIRE APPARAÎTRE 4X4 TOUT-TERRAIN</b>
+              <small>4x4 Raid 4 places (2400 PV, pare-buffles & suspension grand débattement)</small>
             </button>
             <button class="mod-btn mod-btn-sub" id="modSpawnMotoBtn">
               <b>🏍️ FAIRE APPARAÎTRE UNE MOTO</b>
@@ -1250,9 +1254,16 @@ export function installModMenu(game, { world, hud, sfx }) {
     });
     document.getElementById('modSpawnCarBtn')?.addEventListener('click', () => {
       game.spawnVehicle('voiture');
-      hud.announce('VÉHICULE APPARU', 'Voiture sportive prête à rouler !', 2500);
+      hud.announce('VÉHICULE APPARU', 'Voiture GT prête à rouler !', 2500);
       sfx.horn?.();
-      say('Voiture apparue devant vous');
+      say('Voiture GT apparue devant vous');
+      mod.close();
+    });
+    document.getElementById('modSpawnSuvBtn')?.addEventListener('click', () => {
+      game.spawnVehicle('suv');
+      hud.announce('VÉHICULE APPARU', '4x4 Tout-Terrain prêt à rouler !', 2500);
+      sfx.horn?.();
+      say('4x4 Tout-Terrain apparu devant vous');
       mod.close();
     });
     document.getElementById('modSpawnMotoBtn')?.addEventListener('click', () => {

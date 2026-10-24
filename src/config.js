@@ -360,10 +360,10 @@ export const CONFIG = {
         pump: { dx: -4.5, dz: 0.5 }, sign: { dx: 4.5, dz: 3.5 },
         rect: { w: 12, d: 12 },
       },
-      // place Kléber : 1 voiture
+      // place Kléber : 1 4x4 tout-terrain
       {
         zone: 'Place Kléber', x: -200, z: -145, yaw: 0,
-        bays: [{ type: 'voiture', dx: 0 }],
+        bays: [{ type: 'suv', dx: 0 }],
         slots: [0],
         pump: { dx: -3.6, dz: 0 }, sign: { dx: 3.6, dz: 3.5 },
         rect: { w: 10, d: 12 },
@@ -404,7 +404,7 @@ export const CONFIG = {
       { type: 'voiture', zone: 'Marché-Neuf' },
       { type: 'moto', zone: 'Place Gutenberg' },
       { type: 'grosseMoto', zone: 'Place Broglie' },
-      { type: 'voiture', zone: 'Place Kléber' },
+      { type: 'suv', zone: 'Place Kléber' },
     ],
     // Écraser un zombie (propre à chaque moto, voir `roadkill` des types) : sous la vitesse vmin, aucun dégât et la moto est stoppée
     // par le zombie (vitesse plafonnée à stopSpeed, arrêt net au contact) ; au-dessus, dégâts = K x v x r avec
@@ -463,6 +463,11 @@ export const CONFIG = {
         name: 'VOITURE GT', hudName: 'VOITURE GT', det: 'la', isCar: true, seats: 2, camArm: 5.8, hp: 1400, tank: 35, idle: 0.005, gas: 0.020, perSpeed: 0.025, maxSpeed: 28, accel: 12.5, brake: 35, reverseSpeed: 6.5, drag: 0.14,
         wheelbase: 2.68, maxSteer: 0.58, grip: 18, radius: 1.15, bikeRadius: 1.15, roadkill: { K: 52, vmin: 4, slowdown: 0.95 },
         leanK: -0.018, crash: { minSpeed: 13, damagePerMs: 2.2, maxDamage: 35 }, wreckLift: 0.75,
+      },
+      suv: {
+        name: '4X4 TOUT-TERRAIN', hudName: '4X4 TOUT-TERRAIN', det: 'le', isCar: true, isSuv: true, seats: 4, camArm: 6.4, hp: 2400, tank: 50, idle: 0.006, gas: 0.024, perSpeed: 0.028, maxSpeed: 23.5, accel: 10.5, brake: 30, reverseSpeed: 6.0, drag: 0.17,
+        wheelbase: 2.92, maxSteer: 0.54, grip: 20, radius: 1.25, bikeRadius: 1.25, roadkill: { K: 72, vmin: 3.5, slowdown: 0.97 },
+        leanK: -0.026, crash: { minSpeed: 15, damagePerMs: 1.6, maxDamage: 28 }, wreckLift: 0.92,
       },
       // Vélo (v0.43.0) : gratuit, réparti par stations (bikeStations), une place, pas de réservoir (tank 0 : aucune jauge, aucune panne sèche, aucun bidon),
       // jamais d'écrasement (roadkill.vmin 99 : un zombie au contact arrête le vélo net, comme une moto lente), le cycliste ne tire pas (conducteur).

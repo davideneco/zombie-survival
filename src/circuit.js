@@ -561,22 +561,25 @@ export async function buildCircuitWorld(scene, renderer, gameRef = null) {
   }
 
   // ------------------------------------------------------------------ Véhicules d'Essais (Alignés face à la piste !)
-  // Le joueur apparaît à (-55, 0, -82), face au Nord (yaw = 0) : juste devant la Voiture GT Rouge Corsa et le portique d'accès à la piste !
+  // Le joueur apparaît à (-55, 0, -82), face au Nord (yaw = 0) : juste devant la Voiture GT et le 4x4 Tout-Terrain côte à côte !
   const startPos = new THREE.Vector3(-55, 0, -82);
   const vehicleSpawns = [
-    // 1) Voiture GT Rouge Corsa juste devant le joueur, prête à s'élancer sur le circuit (z = -88 -> z = -115)
-    { type: 'voiture', x: -55, z: -88, yaw: 0, variant: 0 },
-    // 2) Les 6 livrées de Voiture GT exposées devant les 6 boxes des stands (z = -70, tournées vers la piste yaw = 0)
-    { type: 'voiture', x: -88.7, z: -70, yaw: 0, variant: 0 }, // Rouge Corsa
-    { type: 'voiture', x: -78.0, z: -70, yaw: 0, variant: 1 }, // Bleu Alpin
-    { type: 'voiture', x: -67.3, z: -70, yaw: 0, variant: 2 }, // Jaune Racing
-    { type: 'voiture', x: -56.6, z: -70, yaw: 0, variant: 3 }, // Vert Émeraude
-    { type: 'voiture', x: -46.0, z: -70, yaw: 0, variant: 4 }, // Argent GT
-    { type: 'voiture', x: -35.3, z: -70, yaw: 0, variant: 5 }, // Noir Carbone
-    // 3) 2 Voitures GT en Pole Position sur la grille de départ (face à l'Est : yaw = -Math.PI / 2)
-    { type: 'voiture', x: -8, z: -112.5, yaw: -Math.PI / 2, variant: 0 },
-    { type: 'voiture', x: -16, z: -117.5, yaw: -Math.PI / 2, variant: 1 },
-    // 4) Motos sportives, Grosses Motos & Vélos d'essai alignés à droite des stands (z = -70, face à la piste)
+    // 1) Duo d'accueil juste devant le joueur : Voiture GT Rouge Corsa (gauche) & 4x4 Tout-Terrain Orange Expédition (droite)
+    { type: 'voiture', x: -58.5, z: -88, yaw: 0, variant: 0 },
+    { type: 'suv', x: -51.5, z: -88, yaw: 0, variant: 2 },
+    // 2) Les 6 boxes des stands (z = -70, face à la piste) : 3 Voitures GT + 3 4x4 Tout-Terrain
+    { type: 'voiture', x: -88.7, z: -70, yaw: 0, variant: 0 }, // GT Rouge Corsa
+    { type: 'voiture', x: -78.0, z: -70, yaw: 0, variant: 1 }, // GT Bleu Alpine
+    { type: 'voiture', x: -67.3, z: -70, yaw: 0, variant: 5 }, // GT Jaune Racing
+    { type: 'suv', x: -56.6, z: -70, yaw: 0, variant: 0 },     // 4x4 Vert Kaki Tactique
+    { type: 'suv', x: -46.0, z: -70, yaw: 0, variant: 1 },     // 4x4 Sable Désert Dakar
+    { type: 'suv', x: -35.3, z: -70, yaw: 0, variant: 3 },     // 4x4 Bleu Arctique
+    // 3) Grille de départ (face à l'Est : yaw = -Math.PI / 2) : 1 Voiture GT & 1 4x4 Tout-Terrain
+    { type: 'voiture', x: -8, z: -112.5, yaw: -Math.PI / 2, variant: 1 },
+    { type: 'suv', x: -16, z: -117.5, yaw: -Math.PI / 2, variant: 0 },
+    // 4) Banc d'Essai de Suspension (x = 58, z = -22, face aux vibreurs vers le Sud : yaw = Math.PI)
+    { type: 'suv', x: 58, z: -22, yaw: Math.PI, variant: 1 },
+    // 5) Motos sportives, Grosses Motos & Vélos d'essai alignés à droite des stands (z = -70, face à la piste)
     { type: 'moto', x: -24, z: -70, yaw: 0 },
     { type: 'moto', x: -20, z: -70, yaw: 0 },
     { type: 'grosseMoto', x: -15, z: -70, yaw: 0 },

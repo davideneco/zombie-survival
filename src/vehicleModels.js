@@ -609,4 +609,325 @@ export function buildVoiture(variant = 0) {
   };
 }
 
-export const BUILDERS = { moto: buildMoto, grosseMoto: buildGrosseMoto, velo: buildVelo, voiture: buildVoiture };
+// ---------------------------------------------------------------- 4X4 TOUT-TERRAIN : SUV / Pick-up Raid surélevé, 4 places, pneus cramponnés
+export const SUV_PAINTS = [
+  0x4b5d3b, // Vert Kaki Tactique
+  0xd4a056, // Sable Désert Dakar
+  0xd9531e, // Orange Expédition
+  0x2a6088, // Bleu Arctique
+  0x626870, // Gris Titane Mat
+  0x1e2024, // Noir Blindé
+];
+
+function offroadWheel(R, width, rimMat, beadMat) {
+  const M = mats(), g = new THREE.Group();
+  const tireR = 0.105;
+  const tire = new THREE.TorusGeometry(R - tireR * 0.82, tireR, 14, 28).rotateY(Math.PI / 2);
+  tire.scale(width / (tireR * 2), 1, 1);
+  g.add(new THREE.Mesh(tire, M.rubber));
+
+  // Crampons tout-terrain (14 pavés sculptés sur la bande de roulement)
+  for (let i = 0; i < 14; i++) {
+    const a = (i * Math.PI * 2) / 14;
+    const lug = new THREE.Mesh(new THREE.BoxGeometry(width * 0.88, 0.028, 0.065), M.rubber);
+    lug.position.set(0, Math.cos(a) * (R - 0.008), Math.sin(a) * (R - 0.008));
+    lug.rotation.x = -a;
+    g.add(lug);
+  }
+
+  // Flancs épais du pneu tout-terrain
+  const sideR = R - tireR * 0.38;
+  const innerR = R - tireR * 1.62;
+  for (const sx of [-1, 1]) {
+    const ring = new THREE.Mesh(new THREE.RingGeometry(innerR, sideR, 24), M.rubber);
+    ring.rotation.y = sx > 0 ? Math.PI / 2 : -Math.PI / 2;
+    ring.position.x = sx * (width * 0.46);
+    g.add(ring);
+  }
+
+  // Jante Beadlock renforcée à 6 branches larges + anneau bronze
+  const rimR = innerR;
+  const barrel = new THREE.Mesh(new THREE.CylinderGeometry(rimR, rimR, width * 0.84, 20, 1, true).rotateZ(Math.PI / 2), rimMat);
+  g.add(barrel);
+  const beadRing = new THREE.Mesh(new THREE.TorusGeometry(rimR * 0.94, 0.016, 8, 20).rotateY(Math.PI / 2), beadMat);
+  beadRing.position.x = width * 0.38;
+  g.add(beadRing);
+  for (let k = 0; k < 6; k++) {
+    const a = (k * Math.PI) / 3;
+    box(g, 0.032, rimR * 1.85, 0.048, rimMat, width * 0.32 - k * 0.0004, 0, 0, a);
+  }
+  const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.072, 0.072, width * 0.86, 14).rotateZ(Math.PI / 2), M.black);
+  g.add(hub);
+  const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.042, 0.042, width * 0.90, 12).rotateZ(Math.PI / 2), beadMat);
+  g.add(cap);
+
+  // Disque de frein acier
+  const disc = new THREE.Mesh(new THREE.CylinderGeometry(rimR * 0.76, rimR * 0.76, 0.02, 20).rotateZ(Math.PI / 2), M.steel);
+  disc.position.x = width * 0.12;
+  g.add(disc);
+  return g;
+}
+
+export function buildSuv(variant = 0) {
+  const M = mats();
+  const cHex = SUV_PAINTS[Math.abs(variant | 0) % SUV_PAINTS.length];
+  const paint = reflective(std(cHex, 0.38, 0.48), 1.15);
+  const armorMat = std(0x16181c, 0.78, 0.25);
+  const darkTrim = std(0x101215, 0.82, 0.18);
+  const skidMat = std(0x9ea6b0, 0.42, 0.75);
+  const beadMat = std(0xc59b27, 0.35, 0.7);
+  const springMat = std(0xfbc02d, 0.35, 0.3);
+  const glassMat = reflective(std(0x1a2530, 0.09, 0.15, { transparent: true, opacity: 0.48 }), 1.35);
+  const drlMat = std(0xffffff, 0.2, 0, { emissive: 0xfff3cc, emissiveIntensity: 3.2 });
+  const amberMat = std(0xff8f00, 0.25, 0, { emissive: 0xff9800, emissiveIntensity: 2.2 });
+  const brakeMat = std(0x550808, 0.3, 0, { emissive: 0xd91414, emissiveIntensity: 1.8 });
+  const revMat = std(0xcccccc, 0.3, 0, { emissive: 0xffffff, emissiveIntensity: 0 });
+  const towMat = std(0xd32f2f, 0.35, 0.4);
+
+  const root = new THREE.Group();
+  const body = new THREE.Group();
+  root.add(body);
+
+  const R = 0.43, wb = 2.92, tw = 1.78; // Garde au sol haute, empattement 2.92 m, voie large 1.78 m
+  const halfWb = wb / 2, halfTw = tw / 2;
+
+  // 1. Châssis échelle & Caisse de 4x4 surélevée à passages de roues trapézoïdaux
+  const bodyShape = new THREE.Shape();
+  bodyShape.moveTo(-2.32, 0.38);
+  bodyShape.lineTo(-2.36, 0.96);
+  bodyShape.lineTo(-2.18, 1.06);
+  bodyShape.lineTo(-1.05, 1.12);
+  bodyShape.lineTo(1.55, 1.12);
+  bodyShape.lineTo(2.26, 1.10);
+  bodyShape.lineTo(2.30, 0.42);
+  bodyShape.lineTo(halfWb + R + 0.12, 0.38);
+  bodyShape.absarc(halfWb, R + 0.06, R + 0.10, 0, Math.PI, false);
+  bodyShape.lineTo(-halfWb + R + 0.12, 0.38);
+  bodyShape.absarc(-halfWb, R + 0.06, R + 0.10, 0, Math.PI, false);
+  bodyShape.lineTo(-2.32, 0.38);
+  bodyShape.closePath();
+
+  const bodyGeo = new THREE.ExtrudeGeometry(bodyShape, {
+    depth: 1.78,
+    bevelEnabled: true,
+    bevelThickness: 0.06,
+    bevelSize: 0.04,
+    bevelSegments: 3,
+    curveSegments: 12,
+  });
+  bodyGeo.rotateY(-Math.PI / 2);
+  bodyGeo.translate(0.89, 0, 0);
+  body.add(new THREE.Mesh(bodyGeo, paint));
+
+  // Longitudines de châssis échelle + Marchepieds tubulaires (Rock Sliders)
+  box(body, 1.44, 0.14, 4.36, armorMat, 0, 0.34, 0);
+  for (const sx of [-1, 1]) {
+    tube(body, [sx * 0.98, 0.33, -0.95], [sx * 0.98, 0.33, 0.95], 0.036, armorMat, 8);
+    box(body, 0.10, 0.03, 1.82, armorMat, sx * 0.94, 0.35, 0);
+    // Élargisseurs d'ailes rivetés noirs mats (Fender Flares)
+    for (const wz of [-halfWb, halfWb]) {
+      const flare = new THREE.Mesh(
+        new THREE.TorusGeometry(R + 0.09, 0.065, 8, 18, Math.PI).rotateY(Math.PI / 2),
+        armorMat
+      );
+      flare.position.set(sx * 0.92, R + 0.06, wz);
+      body.add(flare);
+      // Amortisseurs hélicoïdaux jaunes visibles dans les passages de roues
+      tube(body, [sx * 0.68, R + 0.04, wz], [sx * 0.68, R + 0.48, wz], 0.038, springMat, 8);
+      tube(body, [sx * 0.68, R - 0.02, wz], [sx * 0.68, R + 0.52, wz], 0.020, M.chrome, 8);
+    }
+    // Rainures de portières avant/arrière + poignées robustes
+    box(body, 0.02, 0.62, 0.018, darkTrim, sx * 0.92, 0.76, -0.02);
+    box(body, 0.02, 0.62, 0.018, darkTrim, sx * 0.92, 0.76, 0.92);
+    box(body, 0.035, 0.035, 0.16, armorMat, sx * 0.93, 0.96, -0.18);
+    box(body, 0.035, 0.035, 0.16, armorMat, sx * 0.93, 0.96, 0.72);
+  }
+
+  // 2. Capot nervuré, Calandre 7 fentes, Pare-buffles acier, Treuil & Sabot moteur
+  box(body, 1.48, 0.07, 1.14, paint, 0, 1.11, -1.62, -0.04, 0, 0);
+  box(body, 0.56, 0.045, 0.78, armorMat, 0, 1.14, -1.58, -0.04, 0, 0); // Prise d'air centrale noire
+  // Calandre verticale noire + 7 fentes tout-terrain
+  box(body, 1.66, 0.44, 0.08, armorMat, 0, 0.80, -2.35);
+  for (let i = -3; i <= 3; i++) {
+    box(body, 0.11, 0.32, 0.10, darkTrim, i * 0.16, 0.80, -2.36);
+  }
+  // Pare-chocs acier tout-terrain + Sabot moteur aluminium + Treuil + Manilles rouges
+  box(body, 1.98, 0.22, 0.26, armorMat, 0, 0.46, -2.38);
+  box(body, 1.18, 0.26, 0.34, skidMat, 0, 0.29, -2.28, 0.42, 0, 0); // Sabot aluminium incliné
+  box(body, 0.48, 0.16, 0.18, darkTrim, 0, 0.52, -2.46); // Treuil électrique
+  tube(body, [-0.18, 0.52, -2.48], [0.18, 0.52, -2.48], 0.045, M.steel, 10);
+  for (const sx of [-1, 1]) {
+    box(body, 0.04, 0.11, 0.10, towMat, sx * 0.46, 0.45, -2.50); // Manilles de remorquage rouges
+    // Pare-buffles tubulaire (Bullbar)
+    tube(body, [sx * 0.52, 0.54, -2.44], [sx * 0.44, 1.02, -2.38], 0.036, armorMat, 8);
+  }
+  tube(body, [-0.44, 1.02, -2.38], [0.44, 1.02, -2.38], 0.036, armorMat, 8);
+  tube(body, [-0.48, 0.78, -2.42], [0.48, 0.78, -2.42], 0.028, armorMat, 8);
+
+  // 3. Cabine double (Crew Cab) haute, Snorkel, Galerie de toit & Rampe de 4 phares LED
+  box(body, 1.58, 0.07, 2.26, paint, 0, 1.78, 0.26); // Pavillon haut
+  // Pare-brise droit de 4x4 (rx = -0.38)
+  box(body, 1.56, 0.035, 0.74, glassMat, 0, 1.44, -0.96, -0.38, 0, 0);
+  // Lunette arrière verticale
+  box(body, 1.48, 0.62, 0.035, glassMat, 0, 1.44, 1.42);
+  // Vitres latérales avant, arrière et custode + Piliers A/B/C/D
+  for (const sx of [-1, 1]) {
+    box(body, 0.028, 0.54, 0.82, glassMat, sx * 0.81, 1.42, -0.34, 0, 0, sx * -0.06);
+    box(body, 0.028, 0.54, 0.82, glassMat, sx * 0.81, 1.42, 0.62, 0, 0, sx * -0.06);
+    tube(body, [sx * 0.84, 1.10, -1.10], [sx * 0.78, 1.78, -0.84], 0.042, paint); // Montant A
+    box(body, 0.06, 0.68, 0.11, armorMat, sx * 0.82, 1.44, 0.12); // Montant B
+    box(body, 0.07, 0.68, 0.16, paint, sx * 0.82, 1.44, 1.12); // Montant C
+    // Rétroviseurs rectangulaires de 4x4
+    tube(body, [sx * 0.86, 1.20, -0.78], [sx * 1.04, 1.24, -0.76], 0.022, armorMat);
+    box(body, 0.10, 0.18, 0.07, armorMat, sx * 1.06, 1.26, -0.76);
+  }
+  // Snorkel (prise d'air surélevée) sur l'aile et le montant A droit
+  tube(body, [0.92, 1.08, -1.45], [0.92, 1.14, -1.06], 0.042, armorMat, 8);
+  tube(body, [0.92, 1.14, -1.06], [0.85, 1.84, -0.80], 0.040, armorMat, 8);
+  box(body, 0.12, 0.09, 0.14, armorMat, 0.85, 1.87, -0.82);
+
+  // Galerie de toit expédition + Rampe de 4 projecteurs LED + Jerrican de raid
+  for (const sx of [-0.72, 0.72]) {
+    tube(body, [sx, 1.84, -0.76], [sx, 1.84, 1.28], 0.024, armorMat, 8);
+  }
+  for (const rz of [-0.74, -0.10, 0.56, 1.24]) {
+    tube(body, [-0.72, 1.84, rz], [0.72, 1.84, rz], 0.020, armorMat, 8);
+  }
+  // 4 projecteurs LED de toit à l'avant de la galerie
+  for (const lx of [-0.52, -0.18, 0.18, 0.52]) {
+    box(body, 0.18, 0.11, 0.10, armorMat, lx, 1.91, -0.78);
+    box(body, 0.15, 0.08, 0.02, drlMat, lx, 1.91, -0.83);
+  }
+  // Malle d'expédition et jerrican rouge sanglés sur la galerie
+  box(body, 0.62, 0.18, 0.48, armorMat, -0.24, 1.92, 0.45);
+  box(body, 0.22, 0.28, 0.34, towMat, 0.38, 1.96, 0.45);
+
+  // 4. Arceau arrière (Roll-cage), Roue de secours sur le hayon & Double échappement haut
+  for (const sx of [-0.72, 0.72]) {
+    tube(body, [sx, 1.78, 1.38], [sx, 1.10, 2.18], 0.038, armorMat, 8);
+    tube(body, [sx, 1.44, 1.78], [sx, 1.10, 1.56], 0.028, armorMat, 8);
+  }
+  tube(body, [-0.72, 1.46, 1.76], [0.72, 1.46, 1.76], 0.032, armorMat, 8);
+
+  // Pare-chocs arrière acier + Attelage + Roue de secours complète fixée sur le hayon
+  box(body, 1.94, 0.22, 0.24, armorMat, 0, 0.46, 2.34);
+  const spareWheel = offroadWheel(0.38, 0.24, armorMat, beadMat);
+  spareWheel.rotation.y = Math.PI / 2;
+  spareWheel.position.set(0.18, 0.96, 2.40);
+  body.add(spareWheel);
+
+  // Doubles sorties d'échappement latérales biseautées
+  for (const sx of [-1, 1]) {
+    tube(body, [sx * 0.68, 0.36, 2.05], [sx * 0.74, 0.34, 2.42], 0.048, M.chrome, 10);
+  }
+
+  // 5. Habitacle 4 places (4 sièges tout-terrain, planche de bord, écran GPS vert, volant)
+  box(body, 1.50, 0.30, 0.48, darkTrim, 0, 1.04, -0.78);
+  const gpsMat = std(0x0a2818, 0.2, 0, { emissive: 0x2ecc71, emissiveIntensity: 1.5 });
+  box(body, 0.34, 0.14, 0.02, gpsMat, -0.42, 1.15, -0.54);
+  box(body, 0.26, 0.16, 0.03, gpsMat, 0.0, 1.12, -0.53);
+  // Console centrale & levier de boîte de transfert 4x4
+  box(body, 0.28, 0.28, 1.35, armorMat, 0, 0.68, 0.05);
+  tube(body, [-0.04, 0.82, -0.25], [-0.04, 0.98, -0.22], 0.018, M.chrome);
+  ball(body, 0.038, 0.038, 0.038, armorMat, -0.04, 0.99, -0.22);
+  tube(body, [0.06, 0.82, -0.15], [0.06, 0.93, -0.12], 0.016, M.chrome);
+  ball(body, 0.032, 0.032, 0.032, towMat, 0.06, 0.94, -0.12); // Pommeau rouge Gamme Courte (4L)
+
+  // 4 sièges (2 avant à z = -0.10, 2 arrière à z = 0.78)
+  for (const sz of [-0.10, 0.78]) {
+    for (const sx of [-0.42, 0.42]) {
+      box(body, 0.50, 0.14, 0.50, M.seat, sx, 0.64, sz);
+      box(body, 0.48, 0.58, 0.12, M.seat, sx, 0.98, sz + 0.22, -0.12, 0, 0);
+      box(body, 0.26, 0.18, 0.10, darkTrim, sx, 1.32, sz + 0.26, -0.08, 0, 0);
+    }
+  }
+
+  // Volant tout-terrain à 4 branches
+  const volantG = new THREE.Group();
+  volantG.position.set(-0.42, 1.10, -0.46);
+  volantG.rotation.x = -0.45;
+  body.add(volantG);
+  volantG.add(new THREE.Mesh(new THREE.TorusGeometry(0.18, 0.025, 10, 24), M.rubber));
+  box(volantG, 0.34, 0.032, 0.018, armorMat, 0, 0, 0);
+  box(volantG, 0.032, 0.18, 0.018, armorMat, 0, -0.08, 0);
+  ball(volantG, 0.06, 0.06, 0.03, armorMat, 0, 0, 0.01);
+  box(volantG, 0.028, 0.028, 0.03, beadMat, 0, 0.18, 0);
+
+  // 6. Optiques : Phares ronds LED avec anneau + clignotants ambre + feux arrière verticaux
+  let lampL = null;
+  for (const sx of [-1, 1]) {
+    const halo = new THREE.Mesh(new THREE.TorusGeometry(0.115, 0.016, 8, 20), drlMat);
+    halo.position.set(sx * 0.66, 0.82, -2.39);
+    body.add(halo);
+    const l = ball(body, 0.095, 0.095, 0.05, M.lamp, sx * 0.66, 0.82, -2.38);
+    if (sx < 0) lampL = l;
+    box(body, 0.14, 0.055, 0.04, amberMat, sx * 0.78, 0.64, -2.38); // Clignotant ambre
+  }
+
+  // Blocs feux arrière verticaux blindés
+  const tailStrip = box(body, 1.68, 0.03, 0.04, M.tail, 0, 1.10, 2.31);
+  const brakeL = box(body, 0.16, 0.32, 0.06, brakeMat, -0.82, 0.82, 2.30);
+  const brakeR = box(body, 0.16, 0.32, 0.06, brakeMat, 0.82, 0.82, 2.30);
+  const brakeCenter = box(body, 0.38, 0.035, 0.04, brakeMat, 0, 1.76, 1.44);
+  const revL = box(body, 0.12, 0.09, 0.06, revMat, -0.82, 0.62, 2.31);
+  const revR = box(body, 0.12, 0.09, 0.06, revMat, 0.82, 0.62, 2.31);
+
+  const spotL = new THREE.SpotLight(0xfff8e7, 34, 68, 0.62, 0.55, 1.15);
+  spotL.position.set(-0.66, 0.84, -2.42);
+  spotL.target.position.set(-0.66, 0.15, -32);
+  body.add(spotL, spotL.target);
+
+  const spotR = new THREE.SpotLight(0xfff8e7, 34, 68, 0.62, 0.55, 1.15);
+  spotR.position.set(0.66, 0.84, -2.42);
+  spotR.target.position.set(0.66, 0.15, -32);
+  body.add(spotR, spotR.target);
+
+  // 7. Train roulant (4 roues tout-terrain R=0.43 m + pivots de direction Ackermann)
+  const wRL = offroadWheel(R, 0.29, armorMat, beadMat);
+  wRL.position.set(-halfTw, R, halfWb);
+  root.add(wRL);
+  const wRR = offroadWheel(R, 0.29, armorMat, beadMat);
+  wRR.position.set(halfTw, R, halfWb);
+  root.add(wRR);
+
+  const steerLeft = new THREE.Group();
+  steerLeft.position.set(-halfTw, R, -halfWb);
+  root.add(steerLeft);
+  const wFL = offroadWheel(R, 0.29, armorMat, beadMat);
+  steerLeft.add(wFL);
+
+  const steerRight = new THREE.Group();
+  steerRight.position.set(halfTw, R, -halfWb);
+  root.add(steerRight);
+  const wFR = offroadWheel(R, 0.29, armorMat, beadMat);
+  steerRight.add(wFR);
+
+  return {
+    group: finish(root),
+    body,
+    steerLeft,
+    steerRight,
+    volant: volantG,
+    steer: steerLeft,
+    wheels: [wFL, wFR, wRL, wRR],
+    wheelRadius: R,
+    length: 4.72,
+    width: 1.98,
+    tail: tailStrip,
+    lamp: lampL,
+    brakeMat,
+    revMat,
+    brakeLights: [brakeL, brakeR, brakeCenter],
+    reverseLights: [revL, revR],
+    headlights: [spotL, spotR],
+    exhaustPoints: [[-0.74, 0.34, 2.42], [0.74, 0.34, 2.42]],
+    seats: [
+      { hip: [-0.42, 0.72, -0.10], eye: [-0.42, 1.38, -0.10] }, // Conducteur (avant gauche)
+      { hip: [0.42, 0.72, -0.10], eye: [0.42, 1.38, -0.10] },  // Passager (avant droit)
+      { hip: [-0.42, 0.76, 0.78], eye: [-0.42, 1.42, 0.78] },  // Passager (arrière gauche)
+      { hip: [0.42, 0.76, 0.78], eye: [0.42, 1.42, 0.78] },   // Passager (arrière droit)
+    ],
+  };
+}
+
+export const BUILDERS = { moto: buildMoto, grosseMoto: buildGrosseMoto, velo: buildVelo, voiture: buildVoiture, suv: buildSuv };

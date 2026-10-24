@@ -1,6 +1,6 @@
 # Zombie Survival — fiche de référence
 
-Version du jeu : **v0.64.0** (package 0.64.0). Générée automatiquement par `node tools/make-docs.mjs` à partir de `src/config.js` et du jeu.
+Version du jeu : **v0.65.0** (package 0.65.0). Générée automatiquement par `node tools/make-docs.mjs` à partir de `src/config.js` et du jeu.
 Carte annotée : [carte.png](carte.png). Armes de profil : [armes.png](armes.png). Les mêmes tableaux en tableur : dossier [csv/](csv/).
 
 Pour demander une modification, citez la ligne (ex. « Mitrailleuse RPK : chargeur 100 », « Mastodonte à 3000 pts », « porte P3 à 500 pts », « mettre la boîte mystère dans la zone Temple-Neuf »).
@@ -556,26 +556,26 @@ Prix d'une porte : le plus cher des deux prix de zone (colonne « Prix de la por
 
 ## Motos (deux parkings au panneau bleu « P », avec chacun une borne plein + réparation : place Gutenberg, 2 motos ; place Broglie, 1 moto)
 
-| Réglage | MOTO | GROSSE MOTO | VOITURE GT | Unité |
-|---|---|---|---|---|
-| Places | 1 | 2 | 2 |  |
-| Points de vie | 300 | 500 | 1400 | PV |
-| Vitesse max | 76 | 61 | 101 | km/h |
-| Réservoir | 6 | 10 | 35 | L |
-| Autonomie à fond | 3 | 4 | 11,7 | min |
-| Seuil d'écrasement | 32 | 25 | 14 | km/h (en dessous : aucun dégât, un zombie arrête la moto) |
-| Dégâts d'écrasement au seuil / à la vitesse max | 58 / 336 | 67 / 408 | 83 / 1456 | PV de zombie |
-| Usure par écrasement | 5 (zombie tué) / 12 (survivant) | idem | idem | PV de la moto |
-| Choc contre un objet physique (voiture, mobilier, arbre, machine…) | (vitesse perdue - 6) x 5 | idem | idem | PV de la moto |
-| Choc contre un mur (façade, quai, parapet, porte, marche, bord de l'île) | aucun dégât pour la moto | idem | idem | le pilote se blesse comme pour un objet |
-| Choc contre une autre moto | (vitesse d'approche - 4) x 4, pour chacune ; rebond 1.3 x la vitesse vers l'autre | idem | idem | PV de la moto (la moto garée est un obstacle fixe) |
-| Coup de zombie sur un occupant | 10 | idem | idem | PV de la moto (le joueur perd 20) |
-| Explosion proche (grenade, M79…) | 10 % des dégâts infligés aux zombies | idem | idem |  |
-| À 0 PV | feu 2 s, explosion (rayon 5 m, 1000 aux zombies, jusqu'à 50 aux joueurs sans jamais les tuer), épave 20 s | idem | idem |  |
-| Retour au parking | 2 manches après la destruction, PV pleins, 40 % d'essence | idem | idem |  |
-| Borne du parking (à pied, moto à moins de 8 m) | 50 pts par litre + 2 pts par PV | idem | idem | plein + réparation |
-| Bidon d'essence (bonus) | +2,5 L, 3 % par zombie tué si une moto est sous 50 % | idem | idem |  |
-| Panne sèche | réserve < 15 % : bip, ratés < 5 %, à 0 : poussée 3 m/s | idem | idem |  |
+| Réglage | MOTO | GROSSE MOTO | VOITURE GT | 4X4 TOUT-TERRAIN | Unité |
+|---|---|---|---|---|---|
+| Places | 1 | 2 | 2 | 4 |  |
+| Points de vie | 300 | 500 | 1400 | 2400 | PV |
+| Vitesse max | 76 | 61 | 101 | 85 | km/h |
+| Réservoir | 6 | 10 | 35 | 50 | L |
+| Autonomie à fond | 3 | 4 | 11,7 | 14,4 | min |
+| Seuil d'écrasement | 32 | 25 | 14 | 13 | km/h (en dessous : aucun dégât, un zombie arrête la moto) |
+| Dégâts d'écrasement au seuil / à la vitesse max | 58 / 336 | 67 / 408 | 83 / 1456 | 101 / 1692 | PV de zombie |
+| Usure par écrasement | 5 (zombie tué) / 12 (survivant) | idem | idem | idem | PV de la moto |
+| Choc contre un objet physique (voiture, mobilier, arbre, machine…) | (vitesse perdue - 6) x 5 | idem | idem | idem | PV de la moto |
+| Choc contre un mur (façade, quai, parapet, porte, marche, bord de l'île) | aucun dégât pour la moto | idem | idem | idem | le pilote se blesse comme pour un objet |
+| Choc contre une autre moto | (vitesse d'approche - 4) x 4, pour chacune ; rebond 1.3 x la vitesse vers l'autre | idem | idem | idem | PV de la moto (la moto garée est un obstacle fixe) |
+| Coup de zombie sur un occupant | 10 | idem | idem | idem | PV de la moto (le joueur perd 20) |
+| Explosion proche (grenade, M79…) | 10 % des dégâts infligés aux zombies | idem | idem | idem |  |
+| À 0 PV | feu 2 s, explosion (rayon 5 m, 1000 aux zombies, jusqu'à 50 aux joueurs sans jamais les tuer), épave 20 s | idem | idem | idem |  |
+| Retour au parking | 2 manches après la destruction, PV pleins, 40 % d'essence | idem | idem | idem |  |
+| Borne du parking (à pied, moto à moins de 8 m) | 50 pts par litre + 2 pts par PV | idem | idem | idem | plein + réparation |
+| Bidon d'essence (bonus) | +2,5 L, 3 % par zombie tué si une moto est sous 50 % | idem | idem | idem |  |
+| Panne sèche | réserve < 15 % : bip, ratés < 5 %, à 0 : poussée 3 m/s | idem | idem | idem |  |
 
 ## Vélos (gratuits, 19 stations et 23 vélos : arceaux et panneau « VÉLOS » turquoise, pastille « V » sur la carte)
 

@@ -84,7 +84,7 @@ export class RideCam {
     const t = this.tmp;
     if (veh) {
       if (veh.v.def.isCar && this.k > 0.25) {
-        veh.v.toWorld([0, 1.32, 0.25], t);
+        veh.v.toWorld(veh.v.def.isSuv ? [0, 1.72, 0.35] : [0, 1.32, 0.25], t);
         t.y += C.pivotUp;
       } else {
         veh.v.eyeWorld(veh.seat, t);

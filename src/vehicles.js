@@ -296,15 +296,16 @@ export class Vehicle {
     if (D.isCar) {
       // Vitesse latérale réelle (dérive / survirage au frein à main ou à haute vitesse)
       const vLat = this.vLat || 0;
-      // Force centrifuge projetée sur l'axe latéral droit (+x local) : quand yawRate > 0 (tourne à gauche), la caisse dérive vers la droite (+vLat)
-      const centrif = yawRate * sp * (hb ? 0.92 : 0.38);
-      // Adhérence latérale des pneus (réduite si frein à main tiré ou forte glisse)
-      const latGrip = hb ? 2.6 : (Math.abs(vLat) > 3.5 ? 6.5 : 11.5);
+      const isSuv = !!D.isSuv;
+      // Force centrifuge projetée sur l'axe latéral droit (+x local) : le 4x4 (transmission intégrale) dérive moins facilement que la propulsion GT
+      const centrif = yawRate * sp * (hb ? (isSuv ? 0.78 : 0.92) : (isSuv ? 0.28 : 0.38));
+      // Adhérence latérale des pneus (pneus tout-terrain 4WD plus accrocheurs, propulsion GT plus joueuse en glisse)
+      const latGrip = hb ? (isSuv ? 3.4 : 2.6) : (Math.abs(vLat) > 3.5 ? (isSuv ? 8.2 : 6.5) : (isSuv ? 13.5 : 11.5));
       const nextVLat = (vLat + centrif * dt) * Math.max(0, 1 - latGrip * dt);
       this.vLat = clamp(nextVLat, -12, 12);
       // En drift, la dérive fait pivoter l'arrière (survirage contrôlable au contre-braquage)
       if (hb && Math.abs(sp) > 4) {
-        yawRate += -this.steer * 0.65 * Math.sign(sp);
+        yawRate += -this.steer * (isSuv ? 0.48 : 0.65) * Math.sign(sp);
       }
       // Légère perte de vitesse longitudinale proportionnelle à l'angle de dérive (frottement des pneus en travers)
       if (Math.abs(this.vLat) > 0.8) {
@@ -318,28 +319,31 @@ export class Vehicle {
 
     // Suspension 3D à ressort-amortisseur (Roulis, Tangage, Rebond vertical sur vibreurs)
     if (D.isCar) {
+      const isSuv = !!D.isSuv;
       const accelLon = dt > 1e-4 ? clamp((sp - prevSp) / dt, -35, 25) : 0;
       const accelLat = yawRate * sp + (this.vLat || 0) * 1.8;
 
-      // Tangage (Pitch) : cabrage à l'accélération (< 0), plongée au freinage (> 0)
-      const targetPitch = clamp(-accelLon * 0.0024 + (this.braking && sp > 1 ? 0.028 : 0), -0.065, 0.075);
-      const pitchK = 65, pitchDamp = 11;
+      // Tangage (Pitch) : cabrage à l'accélération (< 0), plongée au freinage (> 0) — débattement plus ample sur le 4x4
+      const pitchMult = isSuv ? 0.0036 : 0.0024;
+      const targetPitch = clamp(-accelLon * pitchMult + (this.braking && sp > 1 ? (isSuv ? 0.042 : 0.028) : 0), isSuv ? -0.095 : -0.065, isSuv ? 0.11 : 0.075);
+      const pitchK = isSuv ? 44 : 65, pitchDamp = isSuv ? 8.5 : 11;
       this.pitchVel = ((this.pitchVel || 0) + (targetPitch - (this.pitch || 0)) * pitchK * dt) * Math.max(0, 1 - pitchDamp * dt);
-      this.pitch = clamp((this.pitch || 0) + this.pitchVel * dt, -0.09, 0.09);
+      this.pitch = clamp((this.pitch || 0) + this.pitchVel * dt, -0.12, 0.12);
 
-      // Roulis (Roll / Lean) : inclinaison extérieure en virage sous l'effet de la force centrifuge
-      const targetRoll = clamp(accelLat * (D.leanK ?? -0.014), -0.11, 0.11);
-      const rollK = 58, rollDamp = 10;
+      // Roulis (Roll / Lean) : inclinaison extérieure en virage sous l'effet de la force centrifuge (centre de gravité plus haut sur le 4x4)
+      const targetRoll = clamp(accelLat * (D.leanK ?? -0.014), isSuv ? -0.16 : -0.11, isSuv ? 0.16 : 0.11);
+      const rollK = isSuv ? 38 : 58, rollDamp = isSuv ? 8.0 : 10;
       this.rollVel = ((this.rollVel || 0) + (targetRoll - (this.lean || 0)) * rollK * dt) * Math.max(0, 1 - rollDamp * dt);
-      this.lean = clamp((this.lean || 0) + this.rollVel * dt, -0.14, 0.14);
+      this.lean = clamp((this.lean || 0) + this.rollVel * dt, -0.18, 0.18);
 
-      // Excitation verticale de la suspension (vibreurs du circuit + irrégularités à haute vitesse)
+      // Excitation verticale de la suspension (vibreurs du circuit + irrégularités à haute vitesse) : grand débattement tout-terrain sur le 4x4
       const kerb = g.world.kerbAt?.(this.pos.x, this.pos.z) || 0;
-      const vibe = kerb > 0 && Math.abs(sp) > 1 ? Math.sin(this.wheelRot * 3.5) * 0.028 * kerb : 0;
-      const bump = Math.abs(sp) > 5 ? Math.sin(this.wheelRot * 1.7) * 0.004 * (Math.abs(sp) / D.maxSpeed) : 0;
+      const vibe = kerb > 0 && Math.abs(sp) > 1 ? Math.sin(this.wheelRot * 3.5) * (isSuv ? 0.052 : 0.028) * kerb : 0;
+      const bump = Math.abs(sp) > 5 ? Math.sin(this.wheelRot * 1.7) * (isSuv ? 0.008 : 0.004) * (Math.abs(sp) / D.maxSpeed) : 0;
       const targetY = vibe + bump;
-      this.suspVel = ((this.suspVel || 0) + (targetY - (this.suspY || 0)) * 90 * dt) * Math.max(0, 1 - 14 * dt);
-      this.suspY = clamp((this.suspY || 0) + this.suspVel * dt, -0.06, 0.06);
+      const suspK = isSuv ? 58 : 90, suspDamp = isSuv ? 10 : 14, maxSusp = isSuv ? 0.11 : 0.06;
+      this.suspVel = ((this.suspVel || 0) + (targetY - (this.suspY || 0)) * suspK * dt) * Math.max(0, 1 - suspDamp * dt);
+      this.suspY = clamp((this.suspY || 0) + this.suspVel * dt, -maxSusp, maxSusp);
     } else {
       this.lean += (clamp(yawRate * Math.abs(sp) * (D.leanK ?? 0.035), -0.55, 0.55) - this.lean) * Math.min(1, dt * 6);
     }

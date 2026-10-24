@@ -471,12 +471,12 @@ export class Sfx {
   // set(rpm 0..1, accélérateur -1..1, vitesse 0..1, volume 0..1) ; stop() l'éteint.
   createEngine(kind) {
     if (!this.ctx) return null;
-    const c = this.ctx, isCar = kind === 'voiture', big = kind === 'grosseMoto' || isCar;
+    const c = this.ctx, isSuv = kind === 'suv', isCar = kind === 'voiture' || isSuv, big = kind === 'grosseMoto' || isCar;
     const out = c.createGain(); out.gain.value = 0;
-    const am = c.createGain(); am.gain.value = isCar ? 0.55 : big ? 0.62 : 0.8;
-    const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = isCar ? 750 : 900; lp.Q.value = 2;
+    const am = c.createGain(); am.gain.value = isSuv ? 0.62 : isCar ? 0.55 : big ? 0.62 : 0.8;
+    const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = isSuv ? 620 : isCar ? 750 : 900; lp.Q.value = 2;
     const osc = (type, gain) => { const o = c.createOscillator(), g = c.createGain(); o.type = type; g.gain.value = gain; o.connect(g).connect(lp); o.start(); return o; };
-    const o1 = osc('sawtooth', isCar ? 0.6 : 0.5), o2 = osc('square', isCar ? 0.28 : 0.22), sub = osc('sine', big ? 0.7 : 0.4);
+    const o1 = osc('sawtooth', isCar ? 0.6 : 0.5), o2 = osc('square', isCar ? 0.28 : 0.22), sub = osc('sine', isSuv ? 0.85 : big ? 0.7 : 0.4);
     lp.connect(am).connect(out);
     const lfo = c.createOscillator(), lg = c.createGain();
     lfo.frequency.value = 10; lg.gain.value = big ? 0.38 : 0.18; lfo.connect(lg).connect(am.gain); lfo.start();
@@ -484,12 +484,12 @@ export class Sfx {
     wind.buffer = this.noiseBuf; wind.loop = true; wf.type = 'bandpass'; wf.frequency.value = 700; wf.Q.value = 0.6; wg.gain.value = 0;
     wind.connect(wf).connect(wg).connect(out); wind.start();
     out.connect(this.bus);
-    const base = isCar ? 32 : big ? 34 : 52, span = isCar ? 85 : big ? 95 : 175;
+    const base = isSuv ? 26 : isCar ? 32 : big ? 34 : 52, span = isSuv ? 70 : isCar ? 85 : big ? 95 : 175;
     return {
       set: (rpm, throttle, ratio, vol) => {
         const t = c.currentTime, f = base + rpm * span;
         o1.frequency.setTargetAtTime(f, t, 0.04); o2.frequency.setTargetAtTime(f * 1.006, t, 0.04); sub.frequency.setTargetAtTime(f * 0.5, t, 0.04);
-        lp.frequency.setTargetAtTime((isCar ? 400 : 500) + rpm * 1800 + Math.max(0, throttle) * 600, t, 0.05);
+        lp.frequency.setTargetAtTime((isSuv ? 320 : isCar ? 400 : 500) + rpm * 1800 + Math.max(0, throttle) * 600, t, 0.05);
         lfo.frequency.setTargetAtTime(big ? 5 + rpm * 17 : 12 + rpm * 44, t, 0.05);
         wf.frequency.setTargetAtTime(500 + ratio * 1500, t, 0.1); wg.gain.setTargetAtTime(ratio * 0.3, t, 0.1);
         out.gain.setTargetAtTime(vol * (0.16 + 0.1 * rpm + Math.max(0, throttle) * 0.06), t, 0.05);
@@ -508,11 +508,12 @@ export class Sfx {
       for (let i = 0; i < 6; i++) this._tone('square', 2400 - i * 90, 2000 - i * 90, 0.012, 0.05, { at: 0.12 + i * 0.045 });
       return;
     }
-    if (kind === 'voiture') {
+    if (kind === 'voiture' || kind === 'suv') {
+      const k = kind === 'suv' ? 0.8 : 1;
       this._noise(0.2, 0.3, 600, 'lowpass');
-      this._tone('sawtooth', 35, 65, 0.5, 0.35, { at: 0.1, dist: true });
-      this._tone('sawtooth', 65, 140, 0.55, 0.4, { at: 0.45, dist: true });
-      this._tone('sawtooth', 140, 50, 0.4, 0.3, { at: 0.85, dist: true });
+      this._tone('sawtooth', 35 * k, 65 * k, 0.5, 0.35, { at: 0.1, dist: true });
+      this._tone('sawtooth', 65 * k, 140 * k, 0.55, 0.4, { at: 0.45, dist: true });
+      this._tone('sawtooth', 140 * k, 50 * k, 0.4, 0.3, { at: 0.85, dist: true });
       return;
     }
     const big = kind === 'grosseMoto';
