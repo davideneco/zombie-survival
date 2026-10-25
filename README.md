@@ -31,6 +31,7 @@ A **downed** player has 45 s to be revived (hold the interact key).
 ### Vehicles
 - **Motorbikes**: a bike and a big two-seater (place Gutenberg, place Broglie). Hit points, fuel, they only run zombies over above a certain speed.
 - **Bicycles**: 23 free bikes at 19 stations (a "V" marker on the map). 43 km/h, 150 HP, no shooting, never run zombies over; a hard crash throws the rider.
+- **Car** (Godot port only, since godot v0.36.0): three drivable French city cars (no real make) on place Kléber, quai Schoepflin and the Ancienne Douane quay (a violet car on the map). 94 km/h, 900 HP, 35 L tank (fuel cans give 8 L), driver + 3 seats, headlights, horn that draws zombies, crashes into walls cost HP, runs zombies over above 22 km/h; zombies hit the bodywork (the cabin takes most of the blow); at 0 HP it burns, explodes and comes back two rounds later.
 - **Tram**: two lines through the widest streets (A / D and B / C / F) with rails, platforms, overhead wires, and red lights in front of doors that are still closed. A **drivable tram** (23.5 m, 50 km/h, 3,000 HP, mows zombies down) waits at the "Homme de Fer" platform: restore power at the substation (2,000 points, once for the whole team), then drive. You can board on foot, walk and sit inside while it moves, and pick the track at the Homme de Fer switch (`B`). Zombies cannot enter the tram.
 
 ### Endgame
@@ -60,6 +61,7 @@ Every key can be changed in **Options > Touches** (click an action, press the ne
 | `Enter` | Text chat (multiplayer) |
 
 - **Motorbike / bicycle**: `Z Q S D` to drive, `Space` handbrake, `V` changes view, `E` to get off.
+- **Car** (Godot port): `Z Q S D` to drive (`S` brakes, then reverses), `Space` handbrake (slides), `F` headlights, `H` horn, `V` first / third person view, `E` to get in or out. The driver cannot shoot; passengers can.
 - **Tram**: `Z`/`W` accelerate, `S` brake then reverse, `Space` emergency brake, `O` doors, `H` bell (draws zombies within 50 m), `V` view, `B` switch, `E` board, sit, stand.
 - **Pack-a-Punch III assault rifle**: middle click fires the grenade launcher.
 - **Host**: `F9` opens the debug menu.
