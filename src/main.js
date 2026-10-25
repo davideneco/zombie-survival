@@ -1645,6 +1645,7 @@ function setupNetworkHandlers(net) {
       net.send({
         t: 'sync',
         v: GAME_V,
+        map: CONFIG.map,
         dh: doorsHash(),
         started: game.started,
         round: game.round,
@@ -1912,6 +1913,15 @@ function setupNetworkHandlers(net) {
 
   // Synchronisation globale (pour le nouveau client qui rejoint)
   net.onHost('sync', (m) => {
+    // Si l'hôte est sur une autre carte (ex: Circuit vs Strasbourg), on bascule automatiquement sur sa carte et on rejoint le salon
+    if (m.map && m.map !== CONFIG.map) {
+      localStorage.setItem('zombie_map', m.map);
+      const u = new URL(location.href);
+      u.searchParams.set('map', m.map);
+      if (game.roomCode) u.searchParams.set('join', game.roomCode);
+      location.href = u.toString();
+      return;
+    }
     // même version, mêmes portes (identifiants et prix) que l'hôte : sinon la partie est incohérente, on quitte
     if ((m.v && m.v !== GAME_V) || (m.dh && m.dh !== doorsHash())) {
       alert(`Version du jeu différente de celle de l'hôte (${m.v || '?'} contre ${GAME_V}) : les portes ne correspondent pas. Rechargez la page pour récupérer la dernière version.`);
@@ -1947,6 +1957,16 @@ function setupNetworkHandlers(net) {
       if (zd.angel) z.region = 1;
       game.zombies.push(z);
     }
+  });
+
+  // Changement de carte déclenché par l'hôte en cours de salon / partie
+  net.onHost('map_change', (m) => {
+    if (!m.map) return;
+    localStorage.setItem('zombie_map', m.map);
+    const u = new URL(location.href);
+    u.searchParams.set('map', m.map);
+    if (m.code || game.roomCode) u.searchParams.set('join', m.code || game.roomCode);
+    setTimeout(() => { location.href = u.toString(); }, 250);
   });
 
   // Démarrage par l'hôte
@@ -2049,8 +2069,7 @@ hud.el.btnSolo.addEventListener('click', (e) => {
 });
 
 // Créer salon Co-op (Hôte)
-hud.el.btnHost.addEventListener('click', async (e) => {
-  e.stopPropagation();
+async function hostRoom(requestedCode = null) {
   try {
     const net = new Net();
     await net.connect();
@@ -2074,16 +2093,20 @@ hud.el.btnHost.addEventListener('click', async (e) => {
       updateLobbyUI(m.peers);
     });
 
-    net.send({ t: 'create', name: game.playerName, slot: game.charPref, v: GAME_V });
+    net.send({ t: 'create', name: game.playerName, slot: game.charPref, v: GAME_V, map: CONFIG.map, code: requestedCode || undefined });
   } catch (err) {
     alert("Impossible d'héberger le salon : " + err.message);
   }
+}
+
+hud.el.btnHost.addEventListener('click', (e) => {
+  e.stopPropagation();
+  hostRoom();
 });
 
 // Rejoindre salon (Client)
-hud.el.btnJoin.addEventListener('click', async (e) => {
-  e.stopPropagation();
-  const code = (hud.el.joinCode.value || '').toUpperCase().trim();
+async function joinRoom(rawCode, retries = 0) {
+  const code = (rawCode || hud.el.joinCode.value || '').toUpperCase().trim();
   if (code.length < 4) { alert('Veuillez entrer un code de 4 lettres.'); return; }
 
   try {
@@ -2092,9 +2115,25 @@ hud.el.btnJoin.addEventListener('click', async (e) => {
     game.net = net;
     setupNetworkHandlers(net);
 
-    net.on('error', (m) => { alert(m.msg || 'Erreur salon.'); });
+    net.on('error', (m) => {
+      if (retries > 0) {
+        net.close();
+        setTimeout(() => joinRoom(code, retries - 1), 400);
+        return;
+      }
+      alert(m.msg || 'Erreur salon.');
+    });
 
     net.on('joined', (m) => {
+      if (m.map && m.map !== CONFIG.map) {
+        net.close();
+        localStorage.setItem('zombie_map', m.map);
+        const u = new URL(location.href);
+        u.searchParams.set('map', m.map);
+        u.searchParams.set('join', m.code || code);
+        location.href = u.toString();
+        return;
+      }
       net.id = m.id;
       game.mySlot = m.slot || 0;
       game.player.setCharacter(charOf(game.mySlot));
@@ -2123,8 +2162,8 @@ hud.el.btnJoin.addEventListener('click', async (e) => {
         game.started = true;
         hud.showOverlay(
           'PARTIE EN COURS',
-          "Le combat a déjà commencé !<br><b style='color:#ffd24a'>Cliquez pour rejoindre vos coéquipiers !</b>",
-          'REJOINDRE LE COMBAT'
+          "La session a déjà commencé !<br><b style='color:#ffd24a'>Cliquez pour rejoindre vos coéquipiers !</b>",
+          'REJOINDRE'
         );
       } else {
         hud.el.lobbyStatus.innerHTML += `<div style="font-size:15px; color:#aaa; margin-top:6px;">En attente que l'hôte lance la partie…</div>`;
@@ -2135,6 +2174,11 @@ hud.el.btnJoin.addEventListener('click', async (e) => {
   } catch (err) {
     alert('Impossible de rejoindre : ' + err.message);
   }
+}
+
+hud.el.btnJoin.addEventListener('click', (e) => {
+  e.stopPropagation();
+  joinRoom();
 });
 
 // Lancer la partie (Hôte)
@@ -2273,13 +2317,25 @@ const syncMapBtns = () => {
   }
 };
 syncMapBtns();
+game.changeMap = (targetMap) => {
+  if (game.isMultiplayer && game.isHost && game.roomCode) {
+    game.net?.send({ t: 'map_change', map: targetMap, code: game.roomCode });
+    localStorage.setItem('zombie_map', targetMap);
+    const u = new URL(location.href);
+    u.searchParams.set('map', targetMap);
+    u.searchParams.set('host', game.roomCode);
+    location.href = u.toString();
+    return;
+  }
+  setMap(targetMap);
+};
 document.getElementById('btnSelectMap')?.addEventListener('click', (e) => {
   e.stopPropagation();
-  setMap(CONFIG.map === 'circuit' ? 'strasbourg' : 'circuit');
+  game.changeMap(CONFIG.map === 'circuit' ? 'strasbourg' : 'circuit');
 });
 document.getElementById('btnPauseMap')?.addEventListener('click', (e) => {
   e.stopPropagation();
-  setMap(CONFIG.map === 'circuit' ? 'strasbourg' : 'circuit');
+  game.changeMap(CONFIG.map === 'circuit' ? 'strasbourg' : 'circuit');
 });
 document.getElementById('btnModMenu')?.addEventListener('click', () => {
   if (game.isMultiplayer && !game.isHost) {
@@ -2352,8 +2408,23 @@ hud.showMenu(
   world.isCircuitTest ? `${world.mapName}<br>Piste Grand Prix, Aire de Drift & Banc de Suspension.` : `${world.mapName}<br>Survivez seul ou en coopération.`
 );
 
-// Mode debug : ?debug&x=0&z=0&yaw=0&pitch=0
+// Mode debug : ?debug&x=0&z=0&yaw=0&pitch=0, ou reconnexion auto salon : ?host=ABCD / ?join=ABCD
 const q = new URLSearchParams(location.search);
+if (q.has('host') || q.has('join')) {
+  const hCode = q.get('host');
+  const jCode = q.get('join');
+  const cleanUrl = new URL(location.href);
+  cleanUrl.searchParams.delete('host');
+  cleanUrl.searchParams.delete('join');
+  history.replaceState(null, '', cleanUrl.toString());
+  hud.showPanel('menuPanel');
+  if (hCode) {
+    hostRoom(hCode);
+  } else if (jCode) {
+    hud.el.joinCode.value = jCode;
+    joinRoom(jCode, 5);
+  }
+}
 if (q.has('debug')) {
   const pl = game.player;
   if (q.has('x')) pl.pos.x = parseFloat(q.get('x'));

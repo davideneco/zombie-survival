@@ -26,9 +26,10 @@ export class Vehicle {
     this.game = game;
     this.id = id;
     this.type = type;
+    this.variant = spawn.variant ?? 0;
     this.def = CONFIG.vehicles.types[type];
     this.spawn = { x: spawn.x, z: spawn.z, yaw: spawn.yaw };
-    this.model = BUILDERS[type](spawn.variant ?? 0);
+    this.model = BUILDERS[type](this.variant);
     this.station = spawn.station ?? -1; // station de vélos d'attache (-1 : une moto de parking)
     this.group = this.model.group;
     this.group.rotation.order = 'YXZ';
@@ -81,7 +82,12 @@ export class Vehicle {
   get usable() { return this.state === 'ok'; }
 
   // état cible (reçu du conducteur) vers lequel on interpole quand on ne conduit pas
-  syncNet() { this.net = { x: this.pos.x, z: this.pos.z, yaw: this.yaw, speed: this.speed, steer: this.steer, lean: this.lean }; }
+  syncNet() {
+    this.net = {
+      x: this.pos.x, z: this.pos.z, yaw: this.yaw, speed: this.speed, steer: this.steer, lean: this.lean,
+      pitch: this.pitch || 0, suspY: this.suspY || 0, vLat: this.vLat || 0, braking: !!this.braking, throttle: this.throttle || 0,
+    };
+  }
 
   // point local de la moto -> monde (sans tenir compte de l'inclinaison, négligeable pour une position)
   toWorld(p, out) {
@@ -90,6 +96,7 @@ export class Vehicle {
   }
   hipWorld(seat, out) { return this.toWorld(this.model.seats[seat].hip, out); }
   eyeWorld(seat, out) { return this.toWorld(this.model.seats[seat].eye, out); }
+  seatParent() { return this.model.body || this.group; } // sur voiture/4x4, les occupants suivent la carrosserie suspendue
 
   get hasDriver() { return this.seats[0] != null; }
   isDriver(seat) { return seat === 0; }          // la place de conducteur (les rames de tram en ont deux : une par cabine)
@@ -125,7 +132,11 @@ export class Vehicle {
       this.sendT -= dt;
       if (this.sendT <= 0) {
         this.sendT = 0.05;
-        g.net.send({ t: 'v_state', id: this.id, x: r2(this.pos.x), z: r2(this.pos.z), yaw: r2(this.yaw), spd: r2(this.speed), st: r2(this.steer), ln: r2(this.lean), fu: r1(this.fuel) });
+        g.net.send({
+          t: 'v_state', id: this.id, x: r2(this.pos.x), z: r2(this.pos.z), yaw: r2(this.yaw),
+          spd: r2(this.speed), st: r2(this.steer), ln: r2(this.lean), fu: r1(this.fuel),
+          pt: r2(this.pitch || 0), sy: r2(this.suspY || 0), vl: r2(this.vLat || 0), br: this.braking ? 1 : 0, th: this.throttle || 0,
+        });
       }
     }
   }
@@ -205,7 +216,7 @@ export class Vehicle {
     }
   }
 
-  // Moto d'un autre joueur (ou garée) : on rejoint doucement le dernier état reçu
+  // Moto ou voiture d'un autre joueur (ou garée) : on rejoint doucement le dernier état reçu (suspension, feux stop et fumée de drift compris)
   follow(dt) {
     const n = this.net, k = Math.min(1, dt * 10);
     if (Math.hypot(n.x - this.pos.x, n.z - this.pos.z) > 15) { this.pos.x = n.x; this.pos.z = n.z; this.yaw = n.yaw; }
@@ -215,9 +226,33 @@ export class Vehicle {
     this.speed += (n.speed - this.speed) * k;
     this.steer += (n.steer - this.steer) * k;
     this.lean += (n.lean - this.lean) * k;
-    this.steerAngle = this.steer * this.def.maxSteer / (1 + Math.abs(this.speed) * 0.12);
-    this.throttle = 0;
-    this.braking = false;
+    this.pitch = (this.pitch || 0) + ((n.pitch || 0) - (this.pitch || 0)) * k;
+    this.suspY = (this.suspY || 0) + ((n.suspY || 0) - (this.suspY || 0)) * k;
+    this.vLat = (this.vLat || 0) + ((n.vLat || 0) - (this.vLat || 0)) * k;
+    this.steerAngle = this.steer * this.def.maxSteer / (1 + Math.abs(this.speed) * (this.def.isCar ? 0.085 : 0.12));
+    this.throttle = n.throttle || 0;
+    this.braking = !!n.braking;
+    if (this.def.isCar && (Math.abs(this.vLat) > 2.2 || (this.braking && Math.abs(this.speed) > 8))) {
+      this.emitDriftFx(dt);
+    }
+  }
+
+  emitDriftFx(dt) {
+    this.driftFxT = (this.driftFxT || 0) + dt;
+    if (this.driftFxT > 0.045) {
+      this.driftFxT = 0;
+      const cy = Math.cos(this.yaw), sy = Math.sin(this.yaw), halfTw = this.def.isSuv ? 0.89 : 0.82, rearZ = this.def.wheelbase / 2;
+      for (const sx of [-halfTw, halfTw]) {
+        const wx = this.pos.x + cy * sx + sy * rearZ;
+        const wz = this.pos.z - sy * sx + cy * rearZ;
+        fx.emit(wx, this.pos.y + 0.08, wz, {
+          count: 2, color: [0xe2e4e8, 0xc0c4cc, 0x9ea2a8], speed: 1.1, up: 0.45, size: 0.26, life: 0.65, grav: -0.15, spread: 0.35,
+        });
+        fx.emit(wx, this.pos.y + 0.03, wz, {
+          count: 1, color: [0x151618, 0x222428], speed: 0.2, up: 0.02, size: 0.16, life: 1.8, grav: 0, spread: 0.08,
+        });
+      }
+    }
   }
 
   // ------------------------------------------------------------------ conduite (client du conducteur)
@@ -350,29 +385,13 @@ export class Vehicle {
 
     // Fumée de pneus arrière et traces de gomme en dérapage (frein à main ou forte dérive latérale)
     const isDrifting = D.isCar && ((hb && Math.abs(sp) > 3) || Math.abs(this.vLat || 0) > 2.2);
-    if (isDrifting) {
-      this.driftFxT = (this.driftFxT || 0) + dt;
-      if (this.driftFxT > 0.045) {
-        this.driftFxT = 0;
-        const cy = Math.cos(this.yaw), sy = Math.sin(this.yaw);
-        for (const sx of [-0.82, 0.82]) {
-          const wx = this.pos.x + cy * sx + sy * 1.34;
-          const wz = this.pos.z - sy * sx + cy * 1.34;
-          fx.emit(wx, this.pos.y + 0.08, wz, {
-            count: 2, color: [0xe2e4e8, 0xc0c4cc, 0x9ea2a8], speed: 1.1, up: 0.45, size: 0.26, life: 0.65, grav: -0.15, spread: 0.35,
-          });
-          // Gomme noire projetée sur l'asphalte
-          fx.emit(wx, this.pos.y + 0.03, wz, {
-            count: 1, color: [0x151618, 0x222428], speed: 0.2, up: 0.02, size: 0.16, life: 1.8, grav: 0, spread: 0.08,
-          });
-        }
-      }
-    }
+    if (isDrifting) this.emitDriftFx(dt);
 
-    // Klaxon de voiture (clic gauche ou touche H du conducteur)
+    // Klaxon de voiture (clic gauche ou touche H du conducteur), synchronisé en multijoueur
     if (D.isCar && (g.player.keys.click || K['KeyH']) && (!this.hornT || this.hornT <= 0)) {
       this.hornT = 0.35;
       g.sfx.horn?.();
+      if (g.isMultiplayer && g.net?.connected) g.net.send({ t: 'v_horn', id: this.id });
     }
     if (this.hornT > 0) this.hornT -= dt;
 
@@ -558,14 +577,22 @@ export function installVehicles(game, { world, hud, sfx, scene }) {
       world.vehicles = this.vehicles; // pour la carte
     },
 
-    spawnVehicle(type = 'voiture', x, z, yaw) {
+    spawnVehicle(type = 'voiture', x, z, yaw, variant = 0) {
+      if (!CONFIG.vehicles.types[type]) return null;
       const p = this.player;
-      const px = x != null ? x : (p.pos.x - Math.sin(p.yaw) * 4);
-      const pz = z != null ? z : (p.pos.z - Math.cos(p.yaw) * 4);
+      const px = x != null ? x : (p.pos.x - Math.sin(p.yaw) * 4.5);
+      const pz = z != null ? z : (p.pos.z - Math.cos(p.yaw) * 4.5);
       const pyaw = yaw != null ? yaw : p.yaw;
+      if (this.isMultiplayer && this.isClient) {
+        this.net?.send({ t: 'v_spawn_req', type, x: r2(px), z: r2(pz), yaw: r2(pyaw), var: variant | 0 });
+        return null;
+      }
       const id = this.vehicles.length;
-      const v = new Vehicle(this, scene, id, type, { x: px, z: pz, yaw: pyaw });
+      const v = new Vehicle(this, scene, id, type, { x: px, z: pz, yaw: pyaw, variant: variant | 0 });
       this.vehicles.push(v);
+      if (this.isMultiplayer && this.isHost) {
+        this.net?.send({ t: 'v_spawn', id, type, x: r2(px), z: r2(pz), yaw: r2(pyaw), var: variant | 0 });
+      }
       return v;
     },
 
@@ -756,7 +783,7 @@ export function installVehicles(game, { world, hud, sfx, scene }) {
     },
     respawnVehicle(v) {
       v.reset();
-      if (!v.isTram) v.fuel = v.def.tank * R().fuel.respawn; // revient avec 40 % d'essence (un vélo : sans réservoir)
+      if (!v.isTram) v.fuel = v.def.tank * (world.isCircuitTest ? 1 : R().fuel.respawn); // 100 % sur le circuit, 40 % en survie
       if (this.player.vehicle?.v === v) this.player.vehicle = null;
       if (this.player.onTram?.v === v) this.tramWalkOff?.(); // la rame retourne au dépôt : on n'y est plus
       this.refreshRiders();
@@ -779,9 +806,9 @@ export function installVehicles(game, { world, hud, sfx, scene }) {
       p.mouseDown = false; p.aiming = false;
       v.syncNet();
       if (v.isTram) sfx.tramChime?.(true, 0.6); else sfx.mount?.(v.type);
-      const B = game.binds, kE = B.label('interact');
+      const B = game.binds, kE = B.label('interact'), kV = B.label('vehicleView');
       if (v.isTram) { const [a, b] = this.tramEnterText(v, seat); hud.announce(a, b, 4500); }
-      else hud.announce(v.def.name, seat === 0 ? `${B.moveLabel()} : conduire · ${B.label('jump')} : ${v.hasTank ? 'frein à main' : 'frein'} · ${kE} : descendre` : `Vous êtes passager : tirez ! · ${kE} : descendre`, 3500);
+      else hud.announce(v.def.name, seat === 0 ? `${B.moveLabel()} : conduire · ${B.label('jump')} : ${v.hasTank ? 'frein à main' : 'frein'} · ${kE} : descendre` : (world.isCircuitTest ? `Passager à bord · ${kV} : changer de vue · ${kE} : descendre` : `Vous êtes passager : tirez ! · ${kE} : descendre`), 3500);
       this.refreshRiders();
     },
 
@@ -790,15 +817,17 @@ export function installVehicles(game, { world, hud, sfx, scene }) {
       if (!rv) return;
       const { v, seat } = rv;
       if (v.isTram) { this.leaveTram(v, seat, force); return; }
-      // on descend sur le côté (gauche pour le conducteur, droite pour le passager), sinon de l'autre côté
+      // on descend du côté de la portière du siège (gauche pour conducteur/arrière-gauche, droite pour passager/arrière-droit)
       const c = Math.cos(v.yaw), s = Math.sin(v.yaw);
       v.hipWorld(seat, pt);
       let ex = pt.x, ez = pt.z;
-      for (const side of [seat === 0 ? -1 : 1, seat === 0 ? 1 : -1]) {
-        const q = { x: pt.x + c * side * 1.0, y: 0.1, z: pt.z - s * side * 1.0 };
+      const prefSide = (v.model.seats[seat]?.hip?.[0] ?? 0) < -0.05 ? -1 : (seat === 0 ? -1 : 1);
+      const stepOut = v.def.isCar ? 1.35 : 1.0;
+      for (const side of [prefSide, -prefSide]) {
+        const q = { x: pt.x + c * side * stepOut, y: 0.1, z: pt.z - s * side * stepOut };
         world.collide(q, 0.4);
         ex = q.x; ez = q.z;
-        if (Math.hypot(q.x - (pt.x + c * side), q.z - (pt.z - s * side)) < 0.3) break;
+        if (Math.hypot(q.x - (pt.x + c * side * stepOut), q.z - (pt.z - s * side * stepOut)) < 0.3) break;
       }
       const sp = v.speed, fx = -s, fz = -c;
       world.floorAt?.(ex, ez, 0.1, fl);
@@ -869,8 +898,29 @@ export function installVehicles(game, { world, hud, sfx, scene }) {
       net.on('v_state', (m) => {
         const v = this.vehicles[m.id];
         if (!v || v.seats[0] === myId()) return;
-        v.net = { x: m.x, z: m.z, yaw: m.yaw, speed: m.spd, steer: m.st, lean: m.ln };
+        v.net = {
+          x: m.x, z: m.z, yaw: m.yaw, speed: m.spd, steer: m.st, lean: m.ln,
+          pitch: m.pt || 0, suspY: m.sy || 0, vLat: m.vl || 0, braking: !!m.br, throttle: m.th || 0,
+        };
         if (m.fu != null && performance.now() > v.fuelLock) v.fuel = clamp(+m.fu, 0, v.def.tank); // anciens messages : pas de `fu`
+      });
+      net.on('v_horn', (m) => {
+        const v = this.vehicles[m.id];
+        if (!v) return;
+        const d = Math.hypot(v.pos.x - this.player.pos.x, v.pos.z - this.player.pos.z);
+        if (d < 65) sfx.horn?.();
+      });
+      net.on('v_spawn_req', (m) => {
+        if (this.isHost && CONFIG.vehicles.types[m.type]) {
+          this.spawnVehicle(m.type, +m.x || 0, +m.z || 0, +m.yaw || 0, m.var | 0);
+        }
+      });
+      net.onHost('v_spawn', (m) => {
+        if (this.isHost || !CONFIG.vehicles.types[m.type]) return;
+        const id = m.id | 0;
+        if (!this.vehicles[id]) {
+          this.vehicles[id] = new Vehicle(this, scene, id, m.type, { x: +m.x || 0, z: +m.z || 0, yaw: +m.yaw || 0, variant: m.var | 0 });
+        }
       });
       net.on('v_req', (m) => { if (this.isHost) this.hostSeat(m.id, m.seat, m.from); });
       net.on('v_leave', (m) => {
@@ -881,7 +931,7 @@ export function installVehicles(game, { world, hud, sfx, scene }) {
         this.broadcastSeats(v);
         this.refreshRiders();
       });
-      net.onHost('v_deny', () => hud.announce('PLACE INDISPONIBLE', 'Place prise ou moto hors d\'usage.', 1800));
+      net.onHost('v_deny', () => hud.announce('PLACE INDISPONIBLE', 'Place prise ou véhicule hors d\'usage.', 1800));
       // points de vie : l'hôte les écrit (v_dmg des clients), les autres les reçoivent
       net.on('v_dmg', (m) => { const v = this.rideById(m.id); if (this.isHost && v) this.damageVehicle(v, clamp(+m.amt || 0, 0, 200), m.src || ''); });
       net.onHost('v_hp', (m) => { const v = this.rideById(m.id); if (v && !this.isHost && v.state === 'ok') v.hp = clamp(+m.hp, 0, v.maxHp); });
@@ -906,13 +956,26 @@ export function installVehicles(game, { world, hud, sfx, scene }) {
 
     // (les messages de la rame : voir bindTramNet dans tram.js)
 
-    // Nouvel arrivant : positions, occupants, PV et état de toutes les motos (wreck : secondes d'épave restantes ; back : manche de retour)
+    // Nouvel arrivant : positions, occupants, PV et état de tous les véhicules (y compris ceux apparus via F9)
     vehicleSnapshot() {
-      return [...this.vehicles.map((v) => ({ id: v.id, x: v.pos.x, z: v.pos.z, yaw: v.yaw, seats: v.seats, hp: r2(v.hp), fu: r2(v.fuel), st: v.state, wreck: r2(v.wreckT), back: v.respawnRound })), ...(this.tramSnapshot?.() || [])];
+      return [
+        ...this.vehicles.map((v) => ({
+          id: v.id, type: v.type, var: v.variant || 0,
+          sx: r2(v.spawn.x), sz: r2(v.spawn.z), syaw: r2(v.spawn.yaw),
+          x: v.pos.x, z: v.pos.z, yaw: v.yaw, seats: v.seats,
+          hp: r2(v.hp), fu: r2(v.fuel), st: v.state, wreck: r2(v.wreckT), back: v.respawnRound,
+        })),
+        ...(this.tramSnapshot?.() || []),
+      ];
     },
     applyVehicleSnapshot(list) {
       for (const s of list || []) {
         if (s.tr) { this.applyTramSnapshot(s); continue; } // une rame (id >= 100)
+        if (!this.vehicles[s.id] && s.type && CONFIG.vehicles.types[s.type]) {
+          this.vehicles[s.id] = new Vehicle(this, scene, s.id, s.type, {
+            x: s.sx ?? s.x, z: s.sz ?? s.z, yaw: s.syaw ?? s.yaw, variant: s.var ?? 0,
+          });
+        }
         const v = this.vehicles[s.id];
         if (!v) continue;
         v.pos.set(s.x, 0, s.z); v.yaw = s.yaw; v.speed = 0; v.seats = s.seats.slice(); v.syncNet(); v.apply();

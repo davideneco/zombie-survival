@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { cloneWeapon, pulseWeapon, weaponKit } from './weaponDisplay.js';
 import { flashMaterial } from './fx.js';
+import { CONFIG } from './config.js';
 
 // =====================================================================
 //  Les personnages jouables : quatre survivants au physique, aux vêtements et à l'équipement distincts.
@@ -518,12 +519,20 @@ export class Avatar {
     const pitch = s.pitch || 0;
     this.pitchG.rotation.x = pitch * 0.8 - this.torsoG.rotation.x;
     this.headG.rotation.x = pitch * 0.5 - this.torsoG.rotation.x;
-    // conducteur : les deux mains sur le guidon (pas d'arme), le buste ne suit pas la visée
-    if (s.seat === 1) {
+    // conducteur ou mode circuit de test : pas d'arme dans les mains
+    if (s.seat === 1 || CONFIG.map === 'circuit') {
       this.weapon.visible = false;
       this.flash.visible = false;
       this.pitchG.rotation.x = -this.torsoG.rotation.x;
-      for (const a of this.arms) this.solveArm(a, new THREE.Vector3(a.side * 0.3, -0.32, -0.52));
+      if (s.seat) {
+        for (const a of this.arms) this.solveArm(a, new THREE.Vector3(a.side * 0.3, -0.32, -0.52));
+      } else {
+        const sp = Math.min(8, s.speed || 0), amp = Math.min(1, sp / 4) * 0.22;
+        for (const a of this.arms) {
+          const sw = Math.sin(this.walk + (a.side > 0 ? Math.PI : 0)) * amp;
+          this.solveArm(a, new THREE.Vector3(a.side * 0.28, -0.52, -0.10 + sw));
+        }
+      }
       return;
     }
     this.weapon.visible = true;

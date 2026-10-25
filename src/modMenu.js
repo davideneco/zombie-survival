@@ -1247,10 +1247,10 @@ export function installModMenu(game, { world, hud, sfx }) {
 
     // Véhicules & Cartes
     document.getElementById('modMapStrasbourg')?.addEventListener('click', () => {
-      if (CONFIG.map !== 'strasbourg') setMap('strasbourg');
+      if (CONFIG.map !== 'strasbourg') (game.changeMap || setMap)('strasbourg');
     });
     document.getElementById('modMapCircuit')?.addEventListener('click', () => {
-      if (CONFIG.map !== 'circuit') setMap('circuit');
+      if (CONFIG.map !== 'circuit') (game.changeMap || setMap)('circuit');
     });
     document.getElementById('modSpawnCarBtn')?.addEventListener('click', () => {
       game.spawnVehicle('voiture');

@@ -61,13 +61,15 @@ function onMessage(ws, raw) {
 
   if (msg.t === 'create') {
     if (ws.room) leave(ws);
-    const code = makeCode();
-    const room = { code, host: ws.pid, started: false, members: new Map() };
+    const reqCode = typeof msg.code === 'string' ? msg.code.toUpperCase().trim() : '';
+    const code = (/^[A-Z]{4}$/.test(reqCode) && !rooms.has(reqCode)) ? reqCode : makeCode();
+    const map = msg.map === 'circuit' ? 'circuit' : 'strasbourg';
+    const room = { code, host: ws.pid, started: false, map, members: new Map() };
     const slot0 = freeSlot(room, msg.slot);
     room.members.set(ws.pid, { id: ws.pid, name, ws, slot: slot0 });
     rooms.set(code, room);
     ws.room = code;
-    send(ws, { t: 'joined', id: ws.pid, slot: slot0, code, host: ws.pid, started: false, peers: peersOf(room) });
+    send(ws, { t: 'joined', id: ws.pid, slot: slot0, code, host: ws.pid, started: false, map: room.map, peers: peersOf(room) });
     return;
   }
 
@@ -80,7 +82,7 @@ function onMessage(ws, raw) {
     const slot = freeSlot(room, msg.slot);
     room.members.set(ws.pid, { id: ws.pid, name, ws, slot });
     ws.room = code;
-    send(ws, { t: 'joined', id: ws.pid, slot, code, host: room.host, started: room.started, peers: peersOf(room) });
+    send(ws, { t: 'joined', id: ws.pid, slot, code, host: room.host, started: room.started, map: room.map, peers: peersOf(room) });
     for (const m of room.members.values()) if (m.id !== ws.pid) send(m.ws, { t: 'peer', id: ws.pid, name, slot });
     return;
   }
