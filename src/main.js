@@ -147,7 +147,9 @@ const game = {
   sfx, hud, world, settings,
   player: null,
 
-  // Multijoueur
+  // Multijoueur & Spawn
+  activeSpawn: null,
+  spawnZoneIndex: null,
   net: null,
   isHost: false,
   isClient: false,
@@ -768,7 +770,10 @@ const game = {
   },
   resetBox() {
     if (!world.boxes?.length) return;
-    world.setActiveBox(Math.max(0, world.boxes.findIndex((b) => b.zone === world.startZone)));
+    const targetZone = this.spawnZoneIndex != null ? this.spawnZoneIndex : world.startZone;
+    let bIdx = world.boxes.findIndex((b) => b.zone === targetZone);
+    if (bIdx < 0) bIdx = Math.max(0, world.boxes.findIndex((b) => b.zone === world.startZone));
+    world.setActiveBox(Math.max(0, bIdx));
     this.boxUses = 0;
     this.boxLimit = 1 + Math.floor(Math.random() * CONFIG.box.maxUses);
     if (this.boxMove) { this.boxMove.from.group.remove(this.boxMove.teddy); this.boxMove = null; }
@@ -1210,6 +1215,12 @@ const game = {
     this.buffs.instaKill = 0;
     this.buffs.doublePoints = 0;
     this.player.reset();
+    if (this.isHost || !this.isMultiplayer) {
+      if (resetStats || !this.activeSpawn) this.pickRandomSpawn();
+      this.applySpawnPoint(this.activeSpawn, this.mySlot || 0);
+    } else if (this.activeSpawn) {
+      this.applySpawnPoint(this.activeSpawn, this.mySlot || 1);
+    }
     this.resetVehicles?.();
     if (world.isCircuitTest) {
       for (const id of ['round', 'points', 'stats', 'perks', 'crosshair']) {
@@ -1217,6 +1228,62 @@ const game = {
         if (el) el.style.display = 'none';
       }
     }
+  },
+
+  pickRandomSpawn() {
+    if (world.isCircuitTest || !CONFIG.spawnPoints?.length) return null;
+    const sp = CONFIG.spawnPoints[Math.floor(Math.random() * CONFIG.spawnPoints.length)];
+    this.activeSpawn = sp;
+    return sp;
+  },
+
+  applySpawnPoint(sp, slot = 0) {
+    if (!sp || world.isCircuitTest) return;
+    this.activeSpawn = sp;
+    const yaw = sp.yaw || 0;
+    const rx = Math.cos(yaw), rz = -Math.sin(yaw);
+    const isCoop = this.isMultiplayer || this.remotes.size > 0;
+    const side = isCoop ? (slot === 0 ? -0.8 : (slot === 1 ? 0.8 : (slot - 0.5) * 1.2)) : 0;
+    const px = sp.x + rx * side;
+    const pz = sp.z + rz * side;
+
+    if (this.player) {
+      this.player.pos.set(px, 0, pz);
+      this.player.vel.set(0, 0, 0);
+      this.player.yaw = yaw;
+      this.player.pitch = 0;
+      this.player.camera?.rotation.set(0, yaw, 0);
+    }
+
+    let zi = world.zoneNames ? world.zoneNames.indexOf(sp.zone) : -1;
+    if (zi < 0 && world.zoneOf) zi = world.zoneOf(sp.x, sp.z);
+    if (zi >= 0) {
+      this.spawnZoneIndex = zi;
+      world.setZoneOpen?.(zi, true);
+
+      if (world.doors) {
+        for (const d of world.doors) {
+          if (d.basePrice == null) d.basePrice = d.price;
+          d.price = d.basePrice;
+          if ((d.a === zi || d.b === zi) && !d.portal && d.price > 750) {
+            d.price = 750;
+          }
+        }
+      }
+
+      if (world.boxes?.length) {
+        const bIdx = world.boxes.findIndex((b) => b.zone === zi);
+        if (bIdx >= 0) world.setActiveBox?.(bIdx);
+      }
+    }
+
+    for (const rp of this.remotes.values()) {
+      const rSide = rp.slot === 0 ? -0.8 : (rp.slot === 1 ? 0.8 : (rp.slot - 0.5) * 1.2);
+      rp.pos.set(sp.x + rx * rSide, 0, sp.z + rz * rSide);
+      rp.yaw = yaw;
+    }
+
+    hud.announce('ZONE DE DÉPART', sp.name.toUpperCase(), 3500);
   },
 
   gameOver() {
@@ -1587,13 +1654,20 @@ game.player.setCharacter(charOf(game.charPref));
 // Empreinte des portes (zones reliées et prix, dans l'ordre des identifiants) : identique chez tous les joueurs d'une même version
 function doorsHash() {
   let h = 2166136261;
-  for (const ch of (world.doors || []).map((d) => `${d.a}-${d.b}-${d.price}`).join(',')) h = Math.imul(h ^ ch.charCodeAt(0), 16777619);
+  for (const ch of (world.doors || []).map((d) => `${d.a}-${d.b}-${d.basePrice ?? d.price}`).join(',')) h = Math.imul(h ^ ch.charCodeAt(0), 16777619);
   return (h >>> 0).toString(36);
 }
 
 function addRemote(id, name, slot) {
   if (game.remotes.has(id)) return game.remotes.get(id);
   const rp = new RemotePlayer(scene, id, name, slot, game.net);
+  if (game.activeSpawn) {
+    const yaw = game.activeSpawn.yaw || 0;
+    const rx = Math.cos(yaw), rz = -Math.sin(yaw);
+    const rSide = slot === 0 ? -0.8 : (slot === 1 ? 0.8 : (slot - 0.5) * 1.2);
+    rp.pos.set(game.activeSpawn.x + rx * rSide, 0, game.activeSpawn.z + rz * rSide);
+    rp.yaw = yaw;
+  }
   game.remotes.set(id, rp);
   return rp;
 }
@@ -1656,11 +1730,13 @@ function setupNetworkHandlers(net) {
 
     // L'hôte synchronise le nouvel arrivant
     if (game.isHost) {
+      if (!game.activeSpawn) game.pickRandomSpawn();
       net.send({
         t: 'sync',
         v: GAME_V,
         map: CONFIG.map,
         dh: doorsHash(),
+        sp: game.activeSpawn,
         started: game.started,
         round: game.round,
         toSpawn: game.toSpawn,
@@ -1945,6 +2021,7 @@ function setupNetworkHandlers(net) {
     game.round = m.round;
     game.toSpawn = m.toSpawn;
     hud.setRound(m.round);
+    if (m.sp) game.applySpawnPoint(m.sp, game.mySlot || 1);
     game.buffs = m.buffs || game.buffs;
     for (const id of m.doors || []) game.openDoor(id, false);
     if (m.box != null && m.box >= 0) world.setActiveBox?.(m.box);
@@ -1984,8 +2061,9 @@ function setupNetworkHandlers(net) {
   });
 
   // Démarrage par l'hôte
-  net.onHost('start', () => {
+  net.onHost('start', (m) => {
     game.started = true;
+    if (m?.sp) game.applySpawnPoint(m.sp, game.mySlot || 1);
     game.reset(false);
     hud.showOverlay(
       'PARTIE LANCÉE !',
@@ -1994,8 +2072,9 @@ function setupNetworkHandlers(net) {
     );
   });
 
-  net.onHost('restart', () => {
+  net.onHost('restart', (m) => {
     game.started = true;
+    if (m?.sp) game.applySpawnPoint(m.sp, game.mySlot || 1);
     game.reset(true);
     hud.showOverlay(
       'NOUVELLE PARTIE',
@@ -2036,8 +2115,9 @@ function lockAndPlay() {
   sfx.init();
   if (game.over) {
     if (game.isHost || !game.isMultiplayer) {
+      game.pickRandomSpawn();
       game.reset(true);
-      if (game.isHost) game.net?.send({ t: 'restart' });
+      if (game.isHost) game.net?.send({ t: 'restart', sp: game.activeSpawn });
     }
   }
   const req = canvas.requestPointerLock();
@@ -2200,7 +2280,9 @@ hud.el.btnStartGame.addEventListener('click', (e) => {
   e.stopPropagation();
   if (!game.isHost) return;
   game.started = true;
-  game.net.send({ t: 'start' });
+  if (!game.activeSpawn) game.pickRandomSpawn();
+  game.applySpawnPoint(game.activeSpawn, 0);
+  game.net.send({ t: 'start', sp: game.activeSpawn });
   hud.hideOverlay();
   game.reset(false);
   lockAndPlay();

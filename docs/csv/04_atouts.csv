@@ -1,8 +1,8 @@
 ﻿id;Atout;Lettre;Effet;Prix (pts);Prix solo (pts);Zone
-juggernog;MASTODONTE;M;Santé max 250;2500;2500;Place Kléber
-speedcola;SPEED COLA;S;Rechargement 2x plus rapide;3000;3000;Rue des Orfèvres
-doubletap;DOUBLE TAP;D;Cadence +33 %, dégâts +25 %;2000;2000;Place Gutenberg
-quickrevive;RÉANIMATION RAPIDE;R;Solo : se relève seul · Co-op : réanime 2x plus vite;1500;500;Marché-Neuf
-mulekick;MULE KICK;K;Porter 3 armes;4000;4000;Grandes Arcades
-staminup;STAMIN-UP;E;Course plus rapide;2000;2000;Temple-Neuf
-phdflopper;PHD FLOPPER;P;Immunisé aux explosions et aux chocs · saut en sprint : onde explosive;2000;2000;Homme de Fer
+juggernog;MASTODONTE;M;Santé max 250;2500;2500;Place Kléber, Place Broglie, Petite France
+speedcola;SPEED COLA;S;Rechargement 2x plus rapide;3000;3000;Rue des Orfèvres, Grand'Rue, Opéra
+doubletap;DOUBLE TAP;D;Cadence +33 %, dégâts +25 %;2000;2000;Place Gutenberg, Palais Rohan
+quickrevive;RÉANIMATION RAPIDE;R;Solo : se relève seul · Co-op : réanime 2x plus vite;1500;500;Marché-Neuf, Grand Séminaire, Saint-Pierre-le-Vieux
+mulekick;MULE KICK;K;Porter 3 armes;4000;4000;Grandes Arcades, Saint-Thomas
+staminup;STAMIN-UP;E;Course plus rapide;2000;2000;Temple-Neuf, Saint-Pierre-le-Jeune, Saint-Étienne
+phdflopper;PHD FLOPPER;P;Immunisé aux explosions et aux chocs · saut en sprint : onde explosive;2000;2000;Homme de Fer, Ancienne Douane

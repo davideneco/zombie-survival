@@ -1339,7 +1339,8 @@ export async function buildRealWorld(scene, renderer) {
     links.forEach((g, di) => {
       const far = depth[g.a] > depth[g.b] ? g.a : g.b;
       const price = Math.max(zonePrice(g.a), zonePrice(g.b));
-      const door = { id: di, price, a: g.a, b: g.b, toZone: far, name: ZONE_NAMES[far], open: false, points: [], segs: [], meshes: [], cells: [] };
+      const isPortal = !!Z.zones[far].portal;
+      const door = { id: di, price, a: g.a, b: g.b, toZone: far, name: ZONE_NAMES[far], open: false, points: [], segs: [], meshes: [], cells: [], portal: isPortal };
       const pieces = straightPieces(g.runs);
       const longest = pieces.reduce((b, r) => (Math.hypot(r.x1 - r.x0, r.z1 - r.z0) > Math.hypot(b.x1 - b.x0, b.z1 - b.z0) ? r : b), pieces[0]);
       const cv = document.createElement('canvas'); cv.width = 512; cv.height = 192;
@@ -1519,12 +1520,13 @@ export async function buildRealWorld(scene, renderer) {
       for (const item of zone.items || []) {
         const [type, id] = item.split(':');
         if (type === 'station') {
-          const sp = spotIn(zi, 3, start ? 7 : 3, start ? 14 : 30, gaps);
+          const sp = spotIn(zi, 3, start ? 7 : 3, start ? 14 : 30, gaps) || spotIn(zi, 3, start ? 7 : 3, start ? 14 : 30);
           if (sp) { addStation(sp[0], sp[1], fx, fz); stations[stations.length - 1].zone = zi; }
         } else if (type === 'wall') {
           const W = CONFIG.weapons[id];
           const n0 = wallWeapons.length;
-          addWallBuy(id, W.name, W.price, W.ammoPrice, WALL_COLORS[id] || 0xff8833, spotIn(zi, 2, start ? 6 : 4, start ? 26 : 32, gaps), fx, fz, !!zone.outer);
+          const wsp = spotIn(zi, 2, start ? 6 : 4, start ? 26 : 32, gaps) || spotIn(zi, 2, start ? 6 : 4, start ? 26 : 32);
+          addWallBuy(id, W.name, W.price, W.ammoPrice, WALL_COLORS[id] || 0xff8833, wsp, fx, fz, !!zone.outer);
           if (wallWeapons.length > n0) wallWeapons[n0].zone = zi;
         } else if (zone.seed === 'cathedral' && cath && (type === 'pap' || type === 'clock')) {
           const fixed = type === 'pap' ? cath.pap : cath.clock;
@@ -1532,8 +1534,8 @@ export async function buildRealWorld(scene, renderer) {
           placed.push(fixed.p);
         } else {
           const R = start ? 30 : 35;
-          // un atout n'est jamais abandonné : si aucun emplacement n'est loin des portes, on retombe sur l'ancien tirage
-          addMachine(type, id, type === 'perk' ? spotIn(zi, 3, 4, R, PERK_DOOR_GAPS) || spotIn(zi, 3, 4, R) : spotIn(zi, 3, 4, R, gaps), zi);
+          // un atout ou une boîte n'est jamais abandonné : si aucun emplacement n'est loin des portes, on retombe sur l'ancien tirage
+          addMachine(type, id, type === 'perk' ? spotIn(zi, 3, 4, R, PERK_DOOR_GAPS) || spotIn(zi, 3, 4, R) : spotIn(zi, 3, 4, R, gaps) || spotIn(zi, 3, 4, R), zi);
         }
       }
       if (rndState != null) rnd.load(rndState);
@@ -2144,7 +2146,7 @@ export async function buildRealWorld(scene, renderer) {
     half: Math.max(halfX, halfZ), blockers, spawnPoints: [], windowSpawns, pickWindow, pickGround,
     stationPos, stations, wallWeapons, vehicleSpawns, parkings, bikeStations, bikeCheck, doors, openDoor, zoneOf, startPos, nav, collision, machines, boxes, setActiveBox,
     zoneNames: ZONE_NAMES, zoneCenters, startZone, sealedPoints, mapImage, mapView: { halfX, halfZ, scale: MAP_SCALE },
-    isZoneOpen: (i) => !!zoneOpen[i], zoneArea, zoneOf1, // zoneOf1 : zone d'après le découpage d'origine (outils de test)
+    isZoneOpen: (i) => !!zoneOpen[i], setZoneOpen: (i, open = true) => { zoneOpen[i] = open; }, zoneArea, zoneOf1, // zoneOf1 : zone d'après le découpage d'origine (outils de test)
     mapCrop: { x0: Math.max(-halfX, secMinX - 40), x1: Math.min(halfX, secMaxX + 40), z0: Math.max(-halfZ, secMinZ - 40), z1: Math.min(halfZ, secMaxZ + 40) }, mapTitle: 'GRANDE ÎLE — STRASBOURG',
     cathedral: cath ? { seed: cath.seed, clock: cath.clock, insideInner: cath.insideInner, inner: cath.inner, P: cath.P, S: cath.S, T: cath.T, ceilAt: cath.ceilAt, info: cathInfo } : null,
     levels, hdf: hdfInfo, tram: tramInfo, mapFixes: { partWalls, fountains: fountainCircles.length }, // v0.35.2 : murs ajoutés aux façades des parties 3D (tests, outils)

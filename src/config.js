@@ -42,48 +42,58 @@ export const STRASBOURG_SECTOR = {
   outerDecor: { carArea: 6000, junkArea: 2500, bikeMax: 30, chaletRadius: 40 },
   zones: [
     { name: 'Marché-Neuf', start: true, items: ['station', 'wall:m1911', 'wall:shotgun', 'wall:smg', 'perk:quickrevive', 'box'] },
-    { name: 'Temple-Neuf', seed: { x: -35, z: -95 }, doorPrice: 750, items: ['station', 'wall:arex', 'wall:mp5', 'perk:staminup', 'box'] },
-    { name: 'Rue des Orfèvres', seed: { x: 40, z: -70 }, doorPrice: 750, items: ['wall:famas', 'perk:speedcola', 'box'] },
-    { name: 'Rue du Dôme', seed: { x: 110, z: -111 }, doorPrice: 1000, items: ['station', 'wall:sniper', 'wall:svd', 'box'] },
-    { name: 'Grandes Arcades', seed: { x: -110, z: -45 }, doorPrice: 1000, items: ['station', 'wall:ak47', 'wall:p90', 'perk:mulekick', 'box'] },
-    { name: 'Place Kléber', seed: { x: -199, z: -145 }, doorPrice: 1250, items: ['station', 'perk:juggernog', 'wall:lmg', 'wall:m249', 'box'] },
-    { name: 'Place Gutenberg', seed: { x: -20, z: 90 }, doorPrice: 1250, items: ['station', 'perk:doubletap', 'wall:scar', 'wall:pkm', 'box'] },
-    { name: 'Cathédrale', seed: { x: 103, z: 33 }, doorPrice: 1000, items: ['station', 'wall:deagle', 'wall:rifle', 'box'] },
+    { name: 'Temple-Neuf', seed: { x: -35, z: -95 }, doorPrice: 750, items: ['station', 'wall:arex', 'wall:mp5', 'wall:famas', 'perk:staminup', 'box'] },
+    { name: 'Rue des Orfèvres', seed: { x: 40, z: -70 }, doorPrice: 750, items: ['station', 'wall:famas', 'wall:smg', 'perk:speedcola', 'box'] },
+    { name: 'Rue du Dôme', seed: { x: 110, z: -111 }, doorPrice: 1000, items: ['station', 'wall:sniper', 'wall:svd', 'wall:arex', 'box'] },
+    { name: 'Grandes Arcades', seed: { x: -110, z: -45 }, doorPrice: 1000, items: ['station', 'wall:ak47', 'wall:p90', 'wall:shotgun', 'perk:mulekick', 'box'] },
+    { name: 'Place Kléber', seed: { x: -199, z: -145 }, doorPrice: 1250, items: ['station', 'wall:rifle', 'wall:lmg', 'wall:m249', 'perk:juggernog', 'box'] },
+    { name: 'Place Gutenberg', seed: { x: -20, z: 90 }, doorPrice: 1250, items: ['station', 'wall:shotgun', 'wall:scar', 'wall:pkm', 'perk:doubletap', 'box'] },
+    { name: 'Cathédrale', seed: { x: 103, z: 33 }, doorPrice: 1000, items: ['station', 'wall:deagle', 'wall:rifle', 'wall:magnum', 'box'] },
     // fin de partie : l'intérieur de la cathédrale, derrière le grand portail (porte la plus chère)
-    { name: 'Intérieur de la Cathédrale', seed: 'cathedral', portal: true, doorPrice: 5000, items: ['pap', 'clock', 'station', 'box'] },
+    { name: 'Intérieur de la Cathédrale', seed: 'cathedral', portal: true, doorPrice: 5000, items: ['pap', 'clock', 'station', 'box', 'wall:barrett'] },
     // place de l'Homme de Fer (rotonde du tram), derrière la place Kléber : profondeur 4, donc 1500 pts calculés. Ajoutée en dernier :
     // le tirage des emplacements des autres zones ne change pas.
     // isolatedRnd : ses emplacements (et son décor) ne consomment pas le tirage commun aux autres zones
-    { name: 'Homme de Fer', seed: { x: -290, z: -203 }, isolatedRnd: true, doorPrice: 1500, items: ['station', 'wall:crossbow', 'wall:m79', 'perk:phdflopper', 'box'] },
+    { name: 'Homme de Fer', seed: { x: -290, z: -203 }, isolatedRnd: true, doorPrice: 1500, items: ['station', 'wall:p90', 'wall:crossbow', 'wall:m79', 'perk:phdflopper', 'box'] },
     // ---- le reste de la Grande Île (v0.27.0) : zones `outer`, dans cet ordre (le tirage des zones d'origine ne bouge pas :
     // les zones `outer` ont leur propre générateur). Noms tirés des monuments OpenStreetMap ; « Grand'Rue » et « Quai Schoepflin »
     // sont des noms déduits du plan (à confirmer). Armes premium au mur (v0.28.0) : magnum 2000, saiga 3000, mg42 4000, barrett 5000.
     // palier A : 1500
-    { name: 'Saint-Pierre-le-Jeune', outer: true, seed: { x: -140, z: -340 }, doorPrice: 1500, items: ['station', 'wall:magnum', 'box'] },
-    { name: "Grand'Rue", outer: true, seed: { x: -400, z: 10 }, doorPrice: 1500, items: ['station', 'wall:mp5', 'box'] },
-    { name: 'Grand Séminaire', outer: true, seed: { x: 300, z: -60 }, doorPrice: 1500, items: ['station', 'wall:shotgun', 'box'] },
-    { name: 'Palais Rohan', outer: true, seed: { x: 260, z: 140 }, doorPrice: 1500, items: ['wall:ak47'] },
-    { name: 'Musée historique', outer: true, seed: { x: 200, z: 215 }, doorPrice: 1500, items: ['station', 'wall:arex', 'box'] },
+    { name: 'Saint-Pierre-le-Jeune', outer: true, seed: { x: -140, z: -340 }, doorPrice: 1500, items: ['station', 'wall:magnum', 'wall:mp5', 'perk:staminup', 'box'] },
+    { name: "Grand'Rue", outer: true, seed: { x: -400, z: 10 }, doorPrice: 1500, items: ['station', 'wall:mp5', 'wall:shotgun', 'perk:speedcola', 'box'] },
+    { name: 'Grand Séminaire', outer: true, seed: { x: 300, z: -60 }, doorPrice: 1500, items: ['station', 'wall:shotgun', 'wall:rifle', 'perk:quickrevive', 'box'] },
+    { name: 'Palais Rohan', outer: true, seed: { x: 260, z: 140 }, doorPrice: 1500, items: ['station', 'wall:ak47', 'wall:arex', 'perk:doubletap', 'box'] },
+    { name: 'Musée historique', outer: true, seed: { x: 200, z: 215 }, doorPrice: 1500, items: ['station', 'wall:arex', 'wall:scar', 'wall:smg', 'box'] },
     // palier B : 2000
-    { name: 'Place Broglie', outer: true, seed: { x: 150, z: -345 }, doorPrice: 2000, chalets: 4, items: ['station', 'wall:lmg', 'box'] },
-    { name: 'Quai Schoepflin', outer: true, seed: { x: -20, z: -470 }, doorPrice: 2000, items: ['wall:svd'] },
-    { name: 'Hôtel de Neuwiller', outer: true, seed: { x: -450, z: -250 }, doorPrice: 2000, items: ['wall:famas'] },
-    { name: 'Monument Stoeber', outer: true, seed: { x: -490, z: -150 }, doorPrice: 2000, items: ['station', 'wall:scar', 'box'] },
-    { name: 'Ancienne Douane', outer: true, seed: { x: 30, z: 330 }, doorPrice: 2000, items: ['station', 'wall:sniper'] },
-    { name: 'Saint-Thomas', outer: true, seed: { x: -230, z: 250 }, doorPrice: 2000, items: ['station', 'wall:saiga', 'box'] },
-    { name: 'Église Réformée', outer: true, seed: { x: -330, z: 170 }, doorPrice: 2000, items: ['wall:smg'] },
+    { name: 'Place Broglie', outer: true, seed: { x: 150, z: -345 }, doorPrice: 2000, chalets: 4, items: ['station', 'wall:smg', 'wall:famas', 'wall:lmg', 'perk:juggernog', 'box'] },
+    { name: 'Quai Schoepflin', outer: true, seed: { x: -20, z: -470 }, doorPrice: 2000, items: ['station', 'wall:svd', 'wall:mp5', 'box'] },
+    { name: 'Hôtel de Neuwiller', outer: true, seed: { x: -450, z: -250 }, doorPrice: 2000, items: ['station', 'wall:famas', 'wall:saiga', 'box'] },
+    { name: 'Monument Stoeber', outer: true, seed: { x: -490, z: -150 }, doorPrice: 2000, items: ['station', 'wall:scar', 'wall:p90', 'box'] },
+    { name: 'Ancienne Douane', outer: true, seed: { x: 30, z: 330 }, doorPrice: 2000, items: ['station', 'wall:sniper', 'wall:shotgun', 'perk:phdflopper', 'box'] },
+    { name: 'Saint-Thomas', outer: true, seed: { x: -230, z: 250 }, doorPrice: 2000, items: ['station', 'wall:saiga', 'wall:rifle', 'perk:mulekick', 'box'] },
+    { name: 'Église Réformée', outer: true, seed: { x: -330, z: 170 }, doorPrice: 2000, items: ['station', 'wall:smg', 'wall:ak47', 'box'] },
     // palier C : 2500
-    { name: 'Opéra', outer: true, seed: { x: 250, z: -450 }, doorPrice: 2500, items: ['station', 'wall:mg42'] },
-    { name: 'Préfecture', outer: true, seed: { x: 400, z: -340 }, doorPrice: 2500, items: ['station', 'wall:pkm', 'box'] },
-    { name: 'Saint-Étienne', outer: true, seed: { x: 540, z: -90 }, doorPrice: 2500, items: ['station', 'wall:m249', 'box'] },
-    { name: 'Saint-Pierre-le-Vieux', outer: true, seed: { x: -620, z: -60 }, doorPrice: 2500, items: ['wall:deagle'] },
-    { name: 'Petite France', outer: true, seed: { x: -660, z: 150 }, doorPrice: 2500, items: ['wall:barrett'] },
+    { name: 'Opéra', outer: true, seed: { x: 250, z: -450 }, doorPrice: 2500, items: ['station', 'wall:deagle', 'wall:mg42', 'perk:speedcola', 'box'] },
+    { name: 'Préfecture', outer: true, seed: { x: 400, z: -340 }, doorPrice: 2500, items: ['station', 'wall:pkm', 'wall:rifle', 'box'] },
+    { name: 'Saint-Étienne', outer: true, seed: { x: 540, z: -90 }, doorPrice: 2500, items: ['station', 'wall:m249', 'wall:scar', 'perk:staminup', 'box'] },
+    { name: 'Saint-Pierre-le-Vieux', outer: true, seed: { x: -620, z: -60 }, doorPrice: 2500, items: ['station', 'wall:deagle', 'wall:shotgun', 'perk:quickrevive', 'box'] },
+    { name: 'Petite France', outer: true, seed: { x: -660, z: 150 }, doorPrice: 2500, items: ['station', 'wall:barrett', 'wall:saiga', 'wall:mp5', 'perk:juggernog', 'box'] },
   ],
 };
 
 export const CONFIG = {
   map: CURRENT_MAP, // 'strasbourg' (Grande Île), 'circuit' (Circuit d'Essais Véhicules) ou 'arena'
   startHint: CURRENT_MAP === 'circuit' ? { x: -88, z: -18 } : { x: 4.3, z: -35.7 },
+  spawnPoints: [
+    { x: -0.6, z: -30.9, yaw: 0, name: 'Place du Marché-Neuf', zone: 'Marché-Neuf' },
+    { x: -195.0, z: -142.0, yaw: 1.57, name: 'Place Kléber', zone: 'Place Kléber' },
+    { x: -22.0, z: 72.0, yaw: 0, name: 'Place Gutenberg', zone: 'Place Gutenberg' },
+    { x: 160.0, z: -345.0, yaw: 0, name: 'Place Broglie', zone: 'Place Broglie' },
+    { x: -285.0, z: -202.0, yaw: -1.57, name: "Place de l'Homme de Fer", zone: 'Homme de Fer' },
+    { x: 105.0, z: 35.0, yaw: -1.2, name: 'Parvis de la Cathédrale', zone: 'Cathédrale' },
+    { x: -32.0, z: -78.0, yaw: -1.2, name: 'Temple-Neuf', zone: 'Temple-Neuf' },
+    { x: -200.0, z: 235.0, yaw: 0, name: 'Place Saint-Thomas', zone: 'Saint-Thomas' },
+  ],
   cityHint: CURRENT_MAP === 'circuit' ? { x: 0, z: 0 } : { x: -199, z: -145 },
   breaches: 3,
   sector: STRASBOURG_SECTOR,
@@ -509,7 +519,7 @@ export const CONFIG = {
     // l'axe d'une voie (avertissement en ?debug) ; ad : cap (°) de la ligne A / D sous la rotonde ; decor : rames de décor { line, side (-1 vers le
     // début de la ligne, 1 vers la fin), modules } cherchées à moins de maxReach m du point de la ligne le plus proche de la rotonde
     hdf: {
-      colPhase: 10, columnGap: 1.2, ad: 64,
+      colPhase: 19, columnGap: 2.8, ad: 64,
       decor: [],   // v0.47.2 : plus de rame de décor (elle bloquait la voie) ; la seule rame est la rame conduisible
     },
     // ---- rame conduisible (v0.39.0) : une seule, garée au quai « Homme de Fer » de la ligne B / C / F ; les rames de décor ne roulent pas

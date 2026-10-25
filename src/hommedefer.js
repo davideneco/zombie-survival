@@ -177,7 +177,10 @@ export function buildHdfStructures({ scene, collision, lightSources, rotundas, s
     const cols = [];
     for (let k = 0; k < C.columns; k++) {
       const a = ((plan.colPhase + (k * 360) / C.columns) * Math.PI) / 180;
-      cols.push([r.cx + Math.cos(a) * C.colCircle, r.cz + Math.sin(a) * C.colCircle, a]);
+      const colX = r.cx + Math.cos(a) * C.colCircle, colZ = r.cz + Math.sin(a) * C.colCircle;
+      // Sécurité absolue : aucun pilier ne doit empiéter sur les voies ou aiguillages du tram
+      if (plan.net && plan.net.dist(colX, colZ, 30) < 2.6) continue;
+      cols.push([colX, colZ, a]);
     }
     for (const [x, z] of cols) collision.addCircle(x, z, C.colRadius, C.height, -Infinity, 'wall'); // colonne : architecture
     out.columns.push(...cols.map(([x, z]) => [x, z]));
