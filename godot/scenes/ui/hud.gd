@@ -456,7 +456,7 @@ func _on_mode_event(n: String, d: Dictionary) -> void:
 func _on_powerup(type: String) -> void:
 	match type:
 		"fuel":
-			popup("+2,5 L ESSENCE", "bonus")
+			popup(("+%s L ESSENCE" % String.num(Game.powerups.last_fuel)).replace(".", ","), "bonus")
 		"max_ammo":
 			popup("MUNITIONS MAX", "bonus")
 		"insta_kill":
@@ -648,6 +648,14 @@ func _update_vehicle() -> void:
 		_v_fuel.set_bar(ff, HudCalc.fuel_color(ff))
 		_v_fuel_txt.text = "%d %%" % roundi(ff * 100.0)
 		_v_fuel_row.modulate.a = 0.6 + 0.4 * absf(sin(Time.get_ticks_msec() / 250.0)) if ff < 0.15 else 1.0
+	if bool(gg.get("car", false)):   # v0.36.0 : voiture : litres restants et témoin des phares
+		if has_tank:
+			_v_fuel_txt.text = "%d L" % roundi(float(gg.get("liters", 0.0)))
+		_v_switch.visible = bool(gg.get("lights", false))
+		if _v_switch.visible:
+			_v_switch_l.text = "PHARES  %s" % binds.tag("torch")
+			_v_switch_l.add_theme_color_override("font_color", Color("9fd4ff"))
+		return
 	var sw: Dictionary = gg.get("sw", {})
 	_v_switch.visible = not sw.is_empty()
 	if not sw.is_empty():

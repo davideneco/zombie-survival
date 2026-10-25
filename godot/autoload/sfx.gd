@@ -84,6 +84,7 @@ func _ready() -> void:
 	_load_manifest()
 	var t_req := StartupLog.t()
 	_request_streams()
+	_synth_sounds()
 	StartupLog.span("Sfx: %d sounds requested from loader threads" % (manifest.get("sounds", {}) as Dictionary).size(), t_req)
 	_connect_signals()
 	apply_settings()
@@ -91,6 +92,21 @@ func _ready() -> void:
 		Game.settings.changed.connect(func(key: String) -> void:
 			if key == "volume" or key == "music":
 				apply_settings())
+
+## v0.36.0 : sons synthétisés au lancement (aucun fichier cuit) : klaxon de la voiture.
+func _synth_sounds() -> void:
+	var rate := 22050
+	var smp := AudioRules.horn_samples(rate, 0.55)
+	var data := PackedByteArray()
+	data.resize(smp.size() * 2)
+	for i in smp.size():
+		data.encode_s16(i * 2, int(round(smp[i] * 32000.0)))
+	var st := AudioStreamWAV.new()
+	st.format = AudioStreamWAV.FORMAT_16_BITS
+	st.mix_rate = rate
+	st.stereo = false
+	st.data = data
+	_streams["car_horn"] = {"dry": [st], "send": [null], "gain_db": -2.0}
 
 # ---------------------------------------------------------------- bus
 func _build_buses() -> void:
@@ -475,7 +491,17 @@ func _on_ride_event(name: String, data: Dictionary) -> void:
 	var d := _dist(v.pos) if v is Object and "pos" in v else 0.0
 	match name:
 		"mount":
-			play("mount_%s" % String(v.type))
+			if v is CarSim:
+				play("knock", 0.7, v.pos, 0.8)   # v0.36.0 : portière qui claque
+			else:
+				play("mount_%s" % String(v.type))
+		"dismount":
+			if v is CarSim:
+				play("knock", 0.6, v.pos, 0.85)
+		"horn":
+			play("car_horn", 1.0 if _is_local(v) else maxf(0.3, AudioRules.far_vol(d, 90.0)), v.pos if v is Object else Vector3.INF)
+		"lights":
+			play("tick", 0.5, Vector3.INF, 1.4)
 		"chime", "chime_open", "chime_close":
 			var open: bool = bool(data.get("open", name != "chime_close"))
 			play("tram_chime_open" if open else "tram_chime_close", 0.6 if name == "chime" else AudioRules.far_vol(d, 60.0), v.pos if v is Object else Vector3.INF)
@@ -605,6 +631,8 @@ func _engine_state() -> Dictionary:
 			var ratio := clampf(absf(v.v) / float(Config.at("tram.drive.maxSpeed")), 0.0, 1.0)
 			return {"kind": "tram", "rpm": ratio, "throttle": maxf(0.0, v.throttle)}
 		return {}
+	if v is CarSim and v.seats[0] != null and v.state == "ok" and v.fuel > 0.0:   # v0.36.0 : voiture (boucle de la grosse moto, plus grave)
+		return {"kind": "voiture", "rpm": AudioRules.car_rpm(v.ground_speed(), float(v.def["maxSpeed"]), v.throttle), "throttle": v.throttle}
 	if v.has_tank() and v.seats[0] != null and v.state == "ok" and v.fuel > 0.0:
 		return {"kind": String(v.type), "rpm": AudioRules.moto_rpm(v.speed, float(v.def["maxSpeed"]), v.throttle), "throttle": v.throttle}
 	return {}
@@ -624,12 +652,14 @@ func _update_engine(dt: float) -> void:
 		if _engine == null:
 			return
 	var kind: String = st["kind"]
-	var bake: Dictionary = manifest["engines"]["engine_%s" % kind]
+	var car := kind == "voiture"
+	var src := "grosseMoto" if car else kind
+	var bake: Dictionary = manifest["engines"]["engine_%s" % src]
 	var bake_rpm: float = float(bake["rpm"]) if bake["rpm"] != null else float(bake["ratio"])
-	var f_now := AudioRules.engine_freq(kind, float(st["rpm"]))
-	var f_bake := AudioRules.engine_freq(kind, bake_rpm)
-	var g_now := AudioRules.engine_gain(kind, float(st["rpm"]), float(st["throttle"]), 1.0)
-	var g_bake := AudioRules.engine_gain(kind, bake_rpm, float(bake["throttle"]), 1.0)
+	var f_now := AudioRules.engine_freq(src, float(st["rpm"])) * (AudioRules.CAR_PITCH if car else 1.0)
+	var f_bake := AudioRules.engine_freq(src, bake_rpm)
+	var g_now := AudioRules.engine_gain(src, float(st["rpm"]), float(st["throttle"]), 1.0)
+	var g_bake := AudioRules.engine_gain(src, bake_rpm, float(bake["throttle"]), 1.0)
 	var k := 1.0 - exp(-dt / 0.05)   # setTargetAtTime(…, 0.04..0.05)
 	_engine_pitch += (f_now / f_bake - _engine_pitch) * k
 	_engine_gain += (g_now / g_bake - _engine_gain) * (1.0 - exp(-dt / 0.08))
@@ -641,7 +671,7 @@ func _update_engine(dt: float) -> void:
 var _engine_base_db := 0.0
 
 func _start_engine(kind: String) -> void:
-	var key := "engine_%s" % kind
+	var key := "engine_%s" % ("grosseMoto" if kind == "voiture" else kind)
 	if not manifest.has("engines") or not manifest["engines"].has(key):
 		return
 	if _engine == null:

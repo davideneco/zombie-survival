@@ -4,7 +4,7 @@ extends Control
 ## continue pendant que la carte est ouverte. L'image du plan se construit sur un fil de travail dès le début de la partie (MapImage).
 
 const SCALE_KEY := "scale"
-const LEGEND := "▲ vous   ● vert : munitions   ● orange : arme murale   ● bleu ? : boîte mystère   P : Pack-a-Punch   ● couleurs : atouts   ■ rouge : porte verrouillée (prix)   P bleu : motos   V turquoise : vélos   ━ lignes de tram   N ↑"
+const LEGEND := "▲ vous   ● vert : munitions   ● orange : arme murale   ● bleu ? : boîte mystère   P : Pack-a-Punch   ● couleurs : atouts   ■ rouge : porte (prix)   P bleu : motos   V turquoise : vélos   ▬ violet : voitures   ━ lignes de tram   N ↑"
 const BIKE := Color("1fa89a")
 const LEGEND_ZONE := "▲ vous   S vert : PORTE DE SORTIE (victoire)   ● vert : munitions   ● orange : arme murale   ● bleu ? : boîte mystère   ● couleurs : atouts   MURÉ : passage fermé   N ↑"
 
@@ -197,6 +197,9 @@ func _draw() -> void:
 			draw_line(q + Vector2(6, -6), q + Vector2(-6, 6), Color("9aa0a6"), 3.0)
 			continue
 		var f := v.hp / v.max_hp()
+		if v is CarSim:   # v0.36.0 : voiture : pictogramme violet (rouge / orange si abîmée), orienté selon son cap
+			_car_icon(q, v.yaw, Color("d83a2e") if f < 0.25 else (Color("e8892b") if f < 0.5 else CAR))
+			continue
 		var col := Color("d83a2e") if f < 0.25 else (Color("e8892b") if f < 0.5 else (BIKE if v.station >= 0 else Color("e0c22e")))
 		_icon(q, col, "V" if v.type == "velo" else ("M" if v.type == "moto" else "G"))
 	if Game.rides != null:
@@ -256,6 +259,20 @@ func _draw() -> void:
 ## v0.26.0 : le point est-il dans la zone du mode Zone unique (plan zoomé : on n'y montre que la zone) ?
 func _zin(w: World, x: float, z: float) -> bool:
 	return Game.gm == null or w.zone_of(x, z) == Game.gm.zone
+
+const CAR := Color("a660ff")
+
+## v0.36.0 : voiture vue de dessus (carrosserie, pare-brise, roues), tournée selon le cap ; cadre blanc pour la lire sur le plan.
+func _car_icon(p: Vector2, yaw: float, color: Color) -> void:
+	var ang := -yaw   # avant de la voiture (-sin, -cos) -> haut de l'écran pour un cap nul (le nord en haut)
+	draw_set_transform(p, ang, Vector2.ONE)
+	draw_rect(Rect2(Vector2(-8, -13), Vector2(16, 26)), Color.WHITE)
+	draw_rect(Rect2(Vector2(-6.5, -11.5), Vector2(13, 23)), color)
+	draw_rect(Rect2(Vector2(-5, -6), Vector2(10, 5)), Color("1c2633"))
+	draw_rect(Rect2(Vector2(-5, 5), Vector2(10, 3)), Color("1c2633"))
+	for w in [Vector2(-9, -9), Vector2(7, -9), Vector2(-9, 5), Vector2(7, 5)]:
+		draw_rect(Rect2(w, Vector2(2, 5)), Color.BLACK)
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 func _icon(p: Vector2, color: Color, label: String) -> void:
 	draw_circle(p, 7, color)

@@ -180,7 +180,11 @@ var _tp_arm := 0.0
 var _avatar_pose := ""             # --avatar-pose=Idle|Walk|Run|Jump : animation figée (captures)
 var _rides_view: Node3D
 var _prev_eye := Vector3.ZERO    # J5 : œil (caméra) au pas précédent, pour l'interpolation sur un véhicule
-var _mount := ""                  # --mount=moto|grosseMoto|velo|tram : monte sur la machine la plus proche de l'arrivée
+var _mount := ""                  # --mount=moto|grosseMoto|velo|tram|voiture : monte sur la machine la plus proche de l'arrivée
+var _car_idx := 0                 # v0.36.0 : --car=N
+var _car_pass := 0                # v0.36.0 : --car-passengers=N
+var _car_zombies := 0             # v0.36.0 : --car-zombies=N
+var _car_lights := -1             # v0.36.0 : --car-lights=0|1 (sinon : allumés la nuit en montant)
 var _auto_fwd := false            # --auto-fwd : accélérateur maintenu (captures et vidéos)
 var _power := false               # --power : sous-station remise (tram alimenté)
 var _tram_door := false           # --tram-doors : portes de la rame ouvertes au départ
@@ -334,6 +338,14 @@ func _ready() -> void:
 			_sync_flow = true
 		elif a.begins_with("--mount="):
 			_mount = a.substr(8)
+		elif a.begins_with("--car="):   # v0.36.0 : --mount=voiture --car=N : la N-ième voiture (0 : place Kléber)
+			_car_idx = int(a.substr(6))
+		elif a.begins_with("--car-passengers="):   # v0.36.0 : N survivants assis aux places passagers (captures)
+			_car_pass = int(a.substr(17))
+		elif a.begins_with("--car-lights="):
+			_car_lights = int(a.substr(13))
+		elif a.begins_with("--car-zombies="):   # v0.36.0 : N zombies autour de la voiture montée (captures)
+			_car_zombies = int(a.substr(14))
 		elif a.begins_with("--act="):
 			var f3 := a.substr(6).split("@")
 			_acts.append([f3[0], float(f3[1]) if f3.size() > 1 else 0.3])
@@ -759,6 +771,7 @@ func _build_scene_nodes(map: String) -> void:
 	_hud = HUD.instantiate()
 	add_child(_hud)
 	_graphics.torch_toggled.connect(func(on: bool) -> void: _hud.toast("Lampe torche allumée" if on else "Lampe torche éteinte", 1.5))
+	_graphics.car_lights_toggled.connect(func(on: bool) -> void: _hud.toast("Phares allumés" if on else "Phares éteints", 1.5))
 	StartupLog.span("views: HUD", ts)
 	ts = StartupLog.t()
 	_weapon_view = Node3D.new()
@@ -1065,10 +1078,10 @@ func _start_mounted() -> void:
 	r.cam.third_person = bool(Game.settings.get_value("tp_vehicle")) and not _first_person
 	if _ruin != "":
 		for v in r.vehicles:
-			if v.type == "moto" or v.type == "grosseMoto":
+			if v.type == "moto" or v.type == "grosseMoto" or v is CarSim:
 				match _ruin:
 					"smoke":
-						v.hp = v.max_hp() * (0.4 if v.type == "moto" else 0.2)
+						v.hp = v.max_hp() * (0.4 if v.type == "moto" else (0.3 if v is CarSim else 0.2))
 					"burn":
 						r.damage_vehicle(v, 1.0e9)
 						v.burn_t = 1.0e9
@@ -1097,6 +1110,25 @@ func _start_mounted() -> void:
 		else:
 			r.try_mount(tr, 0)
 		return
+	if _mount == "voiture":   # v0.36.0
+		var cars := r.vehicles.filter(func(v: VehicleSim) -> bool: return v is CarSim)
+		if cars.is_empty():
+			return
+		var car: CarSim = cars[clampi(_car_idx, 0, cars.size() - 1)]
+		var ids := CharacterModel.ids().filter(func(id: String) -> bool: return id != String(CharacterDefs.of_slot(int(Game.settings.get_value("char")))["id"]))
+		for i in range(1, mini(_car_pass, 3) + 1):
+			car.seats[i] = ids[(i - 1) % ids.size()]
+		Game.player.pos = car.to_world([-1.4, 0.0, 0.1])
+		Game.player.pos.y = 0.0
+		r.try_mount(car, 0)
+		Game.player.yaw = car.yaw
+		if _car_lights >= 0:
+			car.lights = _car_lights == 1
+		for i in _car_zombies:
+			var a := TAU * i / maxi(1, _car_zombies)
+			var z := Game.debug_spawn(car.to_world([cos(a) * 7.0, 0.0, sin(a) * 9.0]), 1.0)
+			z.spawn_t = 0.0
+		return
 	for v in r.vehicles:
 		if v.type == _mount:
 			Game.player.pos = Vector3(v.x + 1.0, 0.0, v.z + 0.5)
@@ -1111,7 +1143,7 @@ func _exit_tree() -> void:
 ## Perte de focus de la fenêtre en pleine partie : pause (le JS passe en pause quand le navigateur libère le pointeur ; la souris capturée de Godot est
 ## relâchée de la même façon). Ni pendant un menu, ni pour un pilote automatique.
 func _notification(what: int) -> void:
-	if what == NOTIFICATION_APPLICATION_FOCUS_OUT and not _bot and _menus != null:
+	if what == NOTIFICATION_APPLICATION_FOCUS_OUT and not _bot and _menus != null and _shot_path == "":   # v0.36.0 : une capture ne se met pas en pause
 		_menus.focus_lost()
 	elif what == NOTIFICATION_WM_CLOSE_REQUEST:
 		PerfLog.finish()
