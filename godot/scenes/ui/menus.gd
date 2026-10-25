@@ -296,7 +296,7 @@ func _build_mapdiff(col: Control) -> void:
 	var descs := {"strasbourg": "La Grande Île au complet : portes, machines, véhicules, tram, cathédrale et fin de partie.",
 		"alpine": "Station de ski abandonnée en hiver : chalets, hôtel, église, télésiège, lac gelé, motoneiges, tempête et nuit. 6 zones.",
 		"arena": "Petite arène plate pour essayer les armes : pas de ville, de machines ni de véhicules.",
-		"vehicules": "Tous les véhicules dans un hangar, piste, tremplins, slalom, boue, glace, mur de crash et télémétrie. Sans zombies ni armes."}
+		"vehicules": "Tous les véhicules au hangar : piste, tremplins, slalom, boue, glace, mur de crash, télémétrie. Sans zombies ni armes."}
 	for m: String in Settings.MAPS:
 		_map_cards[m] = _card(mrow, "%s\n%s" % [MAP_NAMES[m], descs[m]], 252, 132, func() -> void: settings.set_value("map", m))
 	_hint(p, "DIFFICULTÉ (vie et vitesse des zombies)")
