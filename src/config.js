@@ -452,22 +452,28 @@ export const CONFIG = {
     },
     types: {
       moto: {
-        name: 'MOTO', seats: 1, camArm: 3.4, hp: 300, tank: 6, idle: 0.004, gas: 0.012, perSpeed: 0.017, maxSpeed: 21, accel: 11, brake: 28, reverseSpeed: 3.5, drag: 0.12,
-        wheelbase: 1.35, maxSteer: 0.62, grip: 15, radius: 0.55, bikeRadius: 0.45, roadkill: { K: 16, vmin: 9, slowdown: 0.85 },
+        name: 'MOTO', seats: 1, camArm: 3.4, hp: 300, tank: 6, idle: 0.004, gas: 0.012, perSpeed: 0.017, maxSpeed: 30.5, accel: 13, brake: 14, reverseSpeed: 3.5, drag: 0.11,
+        wheelbase: 1.38, maxSteer: 0.60, steerRate: 8.5, steerSpeedFactor: 0.09, grip: 16, radius: 0.55, bikeRadius: 0.45, roadkill: { K: 16, vmin: 9, slowdown: 0.85 },
+        gears: 5, idleRpm: 1200, redlineRpm: 9500, maxRpm: 11000, drivetrain: 'RWD',
       },
       grosseMoto: {
-        name: 'GROSSE MOTO', seats: 2, camArm: 4.0, hp: 500, tank: 10, idle: 0.005, gas: 0.016, perSpeed: 0.021, maxSpeed: 17, accel: 8, brake: 24, reverseSpeed: 3, drag: 0.12,
-        wheelbase: 1.75, maxSteer: 0.5, grip: 11, radius: 0.7, bikeRadius: 0.55, roadkill: { K: 24, vmin: 7, slowdown: 0.90 },
+        name: 'GROSSE MOTO', seats: 2, camArm: 4.0, hp: 500, tank: 10, idle: 0.005, gas: 0.016, perSpeed: 0.021, maxSpeed: 26.5, accel: 10, brake: 11.5, reverseSpeed: 3, drag: 0.12,
+        wheelbase: 1.75, maxSteer: 0.48, steerRate: 6.5, steerSpeedFactor: 0.11, grip: 12, radius: 0.7, bikeRadius: 0.55, roadkill: { K: 24, vmin: 7, slowdown: 0.90 },
+        gears: 5, idleRpm: 950, redlineRpm: 6200, maxRpm: 7000, drivetrain: 'RWD',
       },
       voiture: {
-        name: 'VOITURE GT', hudName: 'VOITURE GT', det: 'la', isCar: true, seats: 2, camArm: 5.8, hp: 1400, tank: 35, idle: 0.005, gas: 0.020, perSpeed: 0.025, maxSpeed: 28, accel: 12.5, brake: 35, reverseSpeed: 6.5, drag: 0.14,
-        wheelbase: 2.68, maxSteer: 0.58, grip: 18, radius: 1.15, bikeRadius: 1.15, roadkill: { K: 52, vmin: 4, slowdown: 0.95 },
-        leanK: -0.018, crash: { minSpeed: 13, damagePerMs: 2.2, maxDamage: 35 }, wreckLift: 0.75,
+        name: 'VOITURE GT', hudName: 'VOITURE GT', det: 'la', isCar: true, drivetrain: 'RWD', seats: 2, camArm: 5.8, hp: 1400, tank: 40, idle: 0.005, gas: 0.020, perSpeed: 0.025,
+        maxSpeed: 39.0, accel: 13.8, brake: 9.8, reverseSpeed: 8.5, drag: 0.09,
+        wheelbase: 2.60, maxSteer: 0.65, steerRate: 10.5, steerSpeedFactor: 0.052, grip: 22, radius: 1.15, bikeRadius: 1.15, roadkill: { K: 52, vmin: 4, slowdown: 0.95 },
+        gears: 6, gearTopSpeeds: [9.5, 16.0, 22.8, 29.0, 34.5, 39.0], idleRpm: 900, redlineRpm: 7500, maxRpm: 8500,
+        leanK: -0.016, crash: { minSpeed: 14, damagePerMs: 2.0, maxDamage: 35 }, wreckLift: 0.75,
       },
       suv: {
-        name: '4X4 TOUT-TERRAIN', hudName: '4X4 TOUT-TERRAIN', det: 'le', isCar: true, isSuv: true, seats: 4, camArm: 6.4, hp: 2400, tank: 50, idle: 0.006, gas: 0.024, perSpeed: 0.028, maxSpeed: 23.5, accel: 10.5, brake: 30, reverseSpeed: 6.0, drag: 0.17,
-        wheelbase: 2.92, maxSteer: 0.54, grip: 20, radius: 1.25, bikeRadius: 1.25, roadkill: { K: 72, vmin: 3.5, slowdown: 0.97 },
-        leanK: -0.026, crash: { minSpeed: 15, damagePerMs: 1.6, maxDamage: 28 }, wreckLift: 0.92,
+        name: '4X4 TOUT-TERRAIN', hudName: '4X4', det: 'le', isCar: true, isSuv: true, drivetrain: 'AWD', seats: 4, camArm: 6.4, hp: 2400, tank: 55, idle: 0.006, gas: 0.024, perSpeed: 0.028,
+        maxSpeed: 29.2, accel: 11.2, brake: 6.8, reverseSpeed: 7.0, drag: 0.14,
+        wheelbase: 3.12, maxSteer: 0.40, steerRate: 4.8, steerSpeedFactor: 0.095, grip: 14.5, radius: 1.25, bikeRadius: 1.25, roadkill: { K: 72, vmin: 3.5, slowdown: 0.97 },
+        gears: 5, gearTopSpeeds: [6.8, 12.2, 18.0, 23.8, 29.2], idleRpm: 750, redlineRpm: 4800, maxRpm: 5500,
+        leanK: -0.028, crash: { minSpeed: 16, damagePerMs: 1.5, maxDamage: 28 }, wreckLift: 0.92,
       },
       // Vélo (v0.43.0) : gratuit, réparti par stations (bikeStations), une place, pas de réservoir (tank 0 : aucune jauge, aucune panne sèche, aucun bidon),
       // jamais d'écrasement (roadkill.vmin 99 : un zombie au contact arrête le vélo net, comme une moto lente), le cycliste ne tire pas (conducteur).

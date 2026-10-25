@@ -46,7 +46,8 @@ export class Vehicle {
     this.yaw = s.yaw; this.dyaw = 0;
     this.speed = 0; this.vLat = 0; this.steer = 0; this.steerAngle = 0;
     this.lean = 0; this.rollVel = 0; this.pitch = 0; this.pitchVel = 0; this.suspY = 0; this.suspVel = 0;
-    this.wheelRot = 0; this.throttle = 0; this.braking = false; this.gear = 1;
+    this.wheelRot = 0; this.throttle = 0; this.braking = false; this.handbraking = false; this.brakePress = 0;
+    this.gear = 1; this.gearLabel = 'N'; this.rpm = 0.18; this.rpmVal = this.def.idleRpm || 900; this.shiftT = 0;
     this.crashT = 0; this.sendT = 0; this.hitT = 0;
     this.hp = this.def.hp; this.state = 'ok'; this.burnT = 0; this.wreckT = 0; this.hpDirty = false; this.hpSendT = 0;
     this.respawnRound = 0; this.respawnPending = false; this.respawnRetry = 0; this.fxAcc = 0; this.alarmT = 0;
@@ -278,37 +279,61 @@ export class Vehicle {
     if (dry && !this.dryNoted) { this.dryNoted = true; g.sfx.cough?.(1); g.hud.announce('PANNE SÈCHE', `Plus d'essence : ${D.det || 'la'} ${(D.hudName || 'moto').toLowerCase()} n'avance plus qu'au pas`, 3500); }
     if (!dry && this.fuel > 0) this.dryNoted = false;
 
-    // vitesse : courbe de couple par rapport, freinage dégressif, marche arrière, résistance aérodynamique quadratique
-    const aeroDrag = D.isCar ? (0.012 * sp * Math.abs(sp) + D.drag * Math.abs(sp) + 0.55) : (D.drag * Math.abs(sp) + 0.8);
+    // vitesse : courbe de couple par rapport, freinage progressif réaliste, coupure de passage de rapport, résistance aérodynamique quadratique
+    const isRwd = D.drivetrain === 'RWD', isAwd = D.drivetrain === 'AWD';
+    const aeroDrag = D.isCar ? (0.0085 * sp * Math.abs(sp) + D.drag * Math.abs(sp) + 0.45) : (D.drag * Math.abs(sp) + 0.65);
     const coast = () => { const drag = aeroDrag * dt; sp = Math.abs(sp) <= drag ? 0 : sp - Math.sign(sp) * drag; };
+    if (this.shiftT > 0) this.shiftT = Math.max(0, this.shiftT - dt);
     this.throttle = 0;
     this.braking = false;
+    this.handbraking = !!hb;
+
+    // Pression de freinage progressive (attaque hydraulique réaliste en ~0,28 s sur GT et ~0,35 s sur le 4x4 au lieu d'un blocage instantané)
+    const wantServiceBrake = (fwdKey && sp < -0.2) || (backKey && sp > 0.25);
+    if (wantServiceBrake) {
+      this.brakePress = Math.min(1, (this.brakePress || 0) + dt * (D.isSuv ? 2.9 : 3.6));
+    } else {
+      this.brakePress = Math.max(0, (this.brakePress || 0) - dt * 9);
+    }
+    const effBrake = D.brake * (0.25 + 0.75 * this.brakePress) + 0.004 * sp * sp;
+
     if (fwdKey && !backKey) {
       this.throttle = 1;
-      if (sp < -0.1) { sp += D.brake * dt; this.braking = true; }
-      else if (dry) { if (sp < FU.pushSpeed) sp = Math.min(FU.pushSpeed, sp + FU.pushAccel * dt); else coast(); }
-      else if (miss) { this.throttle = 0; coast(); }
-      else {
-        // Courbe de poussée sportive : fort couple à bas/moyen régime
+      if (sp < -0.2) {
+        sp = Math.min(0, sp + effBrake * dt);
+        this.braking = true;
+      } else if (dry) {
+        if (sp < FU.pushSpeed) sp = Math.min(FU.pushSpeed, sp + FU.pushAccel * dt); else coast();
+      } else if (miss || this.shiftT > 0.04) {
+        // Coupure d'injection pendant le passage de rapport supérieur
+        if (this.shiftT <= 0) this.throttle = 0;
+        coast();
+      } else {
         const ratio = Math.abs(sp) / D.maxSpeed;
-        const torqueCurve = D.isCar ? Math.max(0.18, 1.08 - 0.88 * (ratio ** 1.35)) : Math.max(0.1, 1 - ratio);
+        // AWD (4x4) : très fort couple au décollage (4 roues motrices), s'essouffle à haute vitesse
+        // RWD (Voiture GT) : montée en régime rageuse et allonge jusqu'à 140 km/h
+        const torqueCurve = isAwd
+          ? Math.max(0.16, 1.18 - 0.98 * (ratio ** 1.15))
+          : D.isCar
+            ? Math.max(0.22, 1.06 - 0.80 * (ratio ** 1.45))
+            : Math.max(0.15, 1 - ratio * 0.85);
         sp += D.accel * torqueCurve * dt;
       }
     } else if (backKey && !fwdKey) {
       this.throttle = -1;
       if (sp > 0.25) {
-        sp -= D.brake * dt;
+        sp = Math.max(0, sp - effBrake * dt);
         this.braking = true;
       } else {
-        sp = Math.max(-(dry ? Math.min(D.reverseSpeed, FU.pushSpeed) : D.reverseSpeed), sp - (dry ? FU.pushAccel : D.accel * 0.55) * dt);
+        sp = Math.max(-(dry ? Math.min(D.reverseSpeed, FU.pushSpeed) : D.reverseSpeed), sp - (dry ? FU.pushAccel : D.accel * 0.48) * dt);
       }
     } else coast();
 
     if (hb) {
       this.braking = true;
-      // Sur voiture, le frein à main bloque surtout le train arrière (déclenche la glisse sans stopper net l'élan)
-      const b = D.brake * (D.isCar ? 0.52 : 1.1) * dt;
-      sp = Math.abs(sp) <= b ? 0 : sp - Math.sign(sp) * b;
+      // Le frein à main n'agit que sur l'essieu arrière : ralentissement modéré qui fait décrocher l'arrière sans stopper la voiture
+      const hbDecel = D.brake * (D.isCar ? (isRwd ? 0.42 : 0.48) : 0.75) * dt;
+      sp = Math.abs(sp) <= hbDecel ? 0 : sp - Math.sign(sp) * hbDecel;
     }
     sp = clamp(sp, -D.reverseSpeed, D.maxSpeed);
 
@@ -318,33 +343,59 @@ export class Vehicle {
       this.fuel = Math.max(0, this.fuel - (D.idle + gas) * dt);
     }
 
-    // Direction et physique de dérive latérale (Slip angle + transfert de masse pour la voiture)
-    const steerRate = D.isCar ? (steerIn !== 0 ? 8.5 : 11.0) : 7.0;
-    this.steer += (steerIn - this.steer) * Math.min(1, dt * steerRate);
-    const speedFactor = D.isCar ? 0.085 : 0.12;
+    // Direction différenciée selon la crémaillère du véhicule (vive et braquage court sur GT vs démultipliée et rayon large sur 4x4)
+    const baseSteerRate = D.steerRate ?? (D.isCar ? 8.5 : 7.0);
+    const curSteerRate = steerIn !== 0 ? baseSteerRate : baseSteerRate * 1.35;
+    this.steer += (steerIn - this.steer) * Math.min(1, dt * curSteerRate);
+    const speedFactor = D.steerSpeedFactor ?? (D.isCar ? 0.075 : 0.11);
     this.steerAngle = this.steer * D.maxSteer / (1 + Math.abs(sp) * speedFactor);
 
-    let yawRate = -(sp / D.wheelbase) * Math.tan(this.steerAngle) * (hb ? (D.isCar ? 1.85 : 1.5) : 1);
-    const maxYaw = (D.grip * (hb ? (D.isCar ? 1.75 : 1.6) : 1)) / Math.max(3, Math.abs(sp));
+    let yawRate = -(sp / D.wheelbase) * Math.tan(this.steerAngle) * (hb ? (isRwd ? 1.75 : 1.45) : 1);
+    const maxYaw = (D.grip * (hb ? (isRwd ? 1.65 : 1.4) : 1)) / Math.max(3.2, Math.abs(sp));
     yawRate = clamp(yawRate, -maxYaw, maxYaw);
 
+    const kerb = g.world.kerbAt?.(this.pos.x, this.pos.z) || 0;
+
     if (D.isCar) {
-      // Vitesse latérale réelle (dérive / survirage au frein à main ou à haute vitesse)
+      // Physique de transmission : PROPULSION (RWD - Voiture GT) vs 4 ROUES MOTRICES (AWD - 4x4 Tout-Terrain)
       const vLat = this.vLat || 0;
       const isSuv = !!D.isSuv;
-      // Force centrifuge projetée sur l'axe latéral droit (+x local) : le 4x4 (transmission intégrale) dérive moins facilement que la propulsion GT
-      const centrif = yawRate * sp * (hb ? (isSuv ? 0.78 : 0.92) : (isSuv ? 0.28 : 0.38));
-      // Adhérence latérale des pneus (pneus tout-terrain 4WD plus accrocheurs, propulsion GT plus joueuse en glisse)
-      const latGrip = hb ? (isSuv ? 3.4 : 2.6) : (Math.abs(vLat) > 3.5 ? (isSuv ? 8.2 : 6.5) : (isSuv ? 13.5 : 11.5));
+      const gasOn = this.throttle > 0 && sp > 1.5;
+
+      // En Propulsion (RWD), accélérer fort en virage sature le train arrière (survirage au couple / Power Oversteer)
+      // En 4x4 Intégral (AWD), le train avant motrice et tire le nez dans la trajectoire (stabilisation active à l'accélération)
+      const powerSlideMult = isRwd && gasOn ? (1 + 0.55 * Math.abs(this.steer)) : (isAwd && gasOn ? 0.72 : 1.0);
+      const centrif = yawRate * sp * (hb ? (isRwd ? 0.96 : 0.72) : (isRwd ? 0.40 : 0.24)) * powerSlideMult;
+
+      // Adhérence latérale : réduite au frein à main ou en propulsion plein gaz ; augmentée en 4x4 quand les 4 roues tractent
+      let latGrip = hb
+        ? (isRwd ? 2.1 : 3.2)
+        : (Math.abs(vLat) > 3.2 ? (isRwd ? 5.8 : 8.8) : (isRwd ? 11.2 : 14.8));
+      if (isAwd && gasOn && !hb) latGrip += 3.6; // Le 4x4 se remet en ligne quand on accélère
+      if (isRwd && kerb > 0.3) latGrip *= 0.82;  // La GT propulsion patine légèrement sur les vibreurs hauts
+
       const nextVLat = (vLat + centrif * dt) * Math.max(0, 1 - latGrip * dt);
-      this.vLat = clamp(nextVLat, -12, 12);
-      // En drift, la dérive fait pivoter l'arrière (survirage contrôlable au contre-braquage)
-      if (hb && Math.abs(sp) > 4) {
-        yawRate += -this.steer * (isSuv ? 0.48 : 0.65) * Math.sign(sp);
+      this.vLat = clamp(nextVLat, -13, 13);
+
+      // Survirage dynamique : en RWD, l'arrière pivote au frein à main ET sous fort couple en virage (1re/2e/3e vitesse)
+      if (hb && Math.abs(sp) > 3.5) {
+        yawRate += -this.steer * (isRwd ? 0.72 : 0.42) * Math.sign(sp);
+      } else if (isRwd && gasOn && Math.abs(this.steer) > 0.35 && sp < 26) {
+        yawRate += -this.steer * 0.34 * (1 - sp / 32);
       }
-      // Légère perte de vitesse longitudinale proportionnelle à l'angle de dérive (frottement des pneus en travers)
+
+      // Patinage au démarrage (Wheelspin) sur la Voiture GT Propulsion plein gaz en 1re vitesse
+      if (isRwd && this.throttle > 0 && sp >= 0 && sp < 6.8 && !dry) {
+        this.emitDriftFx(dt);
+      }
+
+      // Perte de vitesse longitudinale proportionnelle à l'angle de dérive (moindre en 4x4)
       if (Math.abs(this.vLat) > 0.8) {
-        sp *= Math.max(0.92, 1 - 0.018 * Math.abs(this.vLat) * dt);
+        sp *= Math.max(0.92, 1 - (isAwd ? 0.011 : 0.017) * Math.abs(this.vLat) * dt);
+      }
+      // Sur les vibreurs / banc de suspension, la GT basse perd un peu d'élan alors que le 4x4 franchit sans ralentir
+      if (isRwd && kerb > 0.4 && sp > 8) {
+        sp *= 1 - 0.04 * kerb * dt;
       }
     } else {
       this.vLat = 0;
@@ -359,8 +410,8 @@ export class Vehicle {
       const accelLat = yawRate * sp + (this.vLat || 0) * 1.8;
 
       // Tangage (Pitch) : cabrage à l'accélération (< 0), plongée au freinage (> 0) — débattement plus ample sur le 4x4
-      const pitchMult = isSuv ? 0.0036 : 0.0024;
-      const targetPitch = clamp(-accelLon * pitchMult + (this.braking && sp > 1 ? (isSuv ? 0.042 : 0.028) : 0), isSuv ? -0.095 : -0.065, isSuv ? 0.11 : 0.075);
+      const pitchMult = isSuv ? 0.0038 : 0.0025;
+      const targetPitch = clamp(-accelLon * pitchMult + (this.braking && sp > 1 ? (isSuv ? 0.048 : 0.032) * this.brakePress : 0), isSuv ? -0.095 : -0.065, isSuv ? 0.115 : 0.08);
       const pitchK = isSuv ? 44 : 65, pitchDamp = isSuv ? 8.5 : 11;
       this.pitchVel = ((this.pitchVel || 0) + (targetPitch - (this.pitch || 0)) * pitchK * dt) * Math.max(0, 1 - pitchDamp * dt);
       this.pitch = clamp((this.pitch || 0) + this.pitchVel * dt, -0.12, 0.12);
@@ -372,8 +423,7 @@ export class Vehicle {
       this.lean = clamp((this.lean || 0) + this.rollVel * dt, -0.18, 0.18);
 
       // Excitation verticale de la suspension (vibreurs du circuit + irrégularités à haute vitesse) : grand débattement tout-terrain sur le 4x4
-      const kerb = g.world.kerbAt?.(this.pos.x, this.pos.z) || 0;
-      const vibe = kerb > 0 && Math.abs(sp) > 1 ? Math.sin(this.wheelRot * 3.5) * (isSuv ? 0.052 : 0.028) * kerb : 0;
+      const vibe = kerb > 0 && Math.abs(sp) > 1 ? Math.sin(this.wheelRot * 3.5) * (isSuv ? 0.055 : 0.028) * kerb : 0;
       const bump = Math.abs(sp) > 5 ? Math.sin(this.wheelRot * 1.7) * (isSuv ? 0.008 : 0.004) * (Math.abs(sp) / D.maxSpeed) : 0;
       const targetY = vibe + bump;
       const suspK = isSuv ? 58 : 90, suspDamp = isSuv ? 10 : 14, maxSusp = isSuv ? 0.11 : 0.06;
@@ -383,8 +433,9 @@ export class Vehicle {
       this.lean += (clamp(yawRate * Math.abs(sp) * (D.leanK ?? 0.035), -0.55, 0.55) - this.lean) * Math.min(1, dt * 6);
     }
 
-    // Fumée de pneus arrière et traces de gomme en dérapage (frein à main ou forte dérive latérale)
-    const isDrifting = D.isCar && ((hb && Math.abs(sp) > 3) || Math.abs(this.vLat || 0) > 2.2);
+    // Fumée de pneus arrière et traces de gomme en dérapage ou freinage appuyé à haute vitesse
+    const hardBrakeSmoke = D.isCar && this.braking && this.brakePress > 0.82 && Math.abs(sp) > 16;
+    const isDrifting = D.isCar && ((hb && Math.abs(sp) > 3) || Math.abs(this.vLat || 0) > 2.1 || hardBrakeSmoke);
     if (isDrifting) this.emitDriftFx(dt);
 
     // Klaxon de voiture (clic gauche ou touche H du conducteur), synchronisé en multijoueur
@@ -533,32 +584,97 @@ export class Vehicle {
     });
   }
 
-  // ------------------------------------------------------------------ son du moteur & boîte 6 rapports + retour de flamme
+  // ------------------------------------------------------------------ son du moteur, boîte de vitesses étagée, compte-tours & retour de flamme
   updateEngine(dt, local) {
-    const g = this.game;
-    const running = this.hasTank && this.seats[0] != null && this.state === 'ok' && this.fuel > 0; // pas de conducteur, en feu ou à sec : moteur arrêté (un vélo n'a pas de moteur)
+    const g = this.game, D = this.def;
+    const running = this.hasTank && this.seats[0] != null && this.state === 'ok' && this.fuel > 0;
     if (running && !this.engine) this.engine = g.sfx.createEngine?.(this.type) || null;
     if (!running && this.engine) this.stopEngine();
-    // 6 rapports pour la voiture GT (4 pour les motos) : le régime retombe à chaque passage de vitesse avec retour de flamme à l'échappement
-    const gears = this.def.isCar ? 6 : 4;
-    const ratio = clamp(Math.abs(this.speed) / this.def.maxSpeed, 0, 1), gear = Math.min(gears - 1, Math.floor(ratio * gears));
-    if (this.def.isCar && gear !== this.gear) {
-      if (gear > this.gear && this.throttle > 0 && ratio > 0.22) {
+
+    const gears = D.gears || (D.isCar ? 6 : 5);
+    const absSp = Math.abs(this.speed);
+    const ratio = clamp(absSp / D.maxSpeed, 0, 1);
+
+    // Calcul du rapport engagé à partir de l'étagement réel de la boîte (gearTopSpeeds)
+    let gearIdx = 0;
+    let gearFrac = 0;
+    if (D.gearTopSpeeds && D.gearTopSpeeds.length) {
+      const tops = D.gearTopSpeeds;
+      gearIdx = tops.findIndex((t) => absSp <= t);
+      if (gearIdx < 0) gearIdx = tops.length - 1;
+      const prevTop = gearIdx > 0 ? tops[gearIdx - 1] * 0.62 : 0;
+      const curTop = tops[gearIdx];
+      gearFrac = clamp((absSp - prevTop) / Math.max(1, curTop - prevTop), 0, 1);
+    } else {
+      gearIdx = Math.min(gears - 1, Math.floor(ratio * gears));
+      const band = 1 / gears;
+      const low = gearIdx > 0 ? (gearIdx - 0.35) * band : 0;
+      const high = (gearIdx + 1) * band;
+      gearFrac = clamp((ratio - low) / Math.max(0.05, high - low), 0, 1);
+    }
+
+    if (D.isCar && gearIdx !== this.gear) {
+      if (gearIdx > this.gear && this.throttle > 0 && absSp > 5) {
+        this.shiftT = D.isSuv ? 0.16 : 0.11; // Coupure d'embrayage/injection au passage de rapport
         const pts = this.model.exhaustPoints || [[0, 0.3, 2.15]];
         for (const ep of pts) {
           this.toWorld(ep, tmpV);
           fx.emit(tmpV.x, tmpV.y, tmpV.z, { count: 3, color: [0xff7a18, 0xffb040, 0x66ccff], speed: 1.8, up: 0.2, size: 0.18, life: 0.22, grav: 0, spread: 0.25 });
         }
-        this.pitchVel = (this.pitchVel || 0) - 0.35; // léger à-coup de passage de rapport
+        this.pitchVel = (this.pitchVel || 0) - 0.32;
       }
-      this.gear = gear;
+      this.gear = gearIdx;
+    } else {
+      this.gear = gearIdx;
     }
+
+    // Indication du rapport engagé ('N', 'R', '1'..'6') et régime moteur (tr/min)
+    const idleRpm = D.idleRpm || 900, redlineRpm = D.redlineRpm || 7500;
+    if (this.speed < -0.25) {
+      this.gearLabel = 'R';
+      gearFrac = clamp(absSp / D.reverseSpeed, 0, 1);
+    } else if (absSp < 0.35 && this.throttle === 0) {
+      this.gearLabel = 'N';
+      gearFrac = 0;
+    } else {
+      this.gearLabel = String(gearIdx + 1);
+    }
+
+    const targetRpmNorm = running
+      ? clamp(0.16 + 0.76 * gearFrac + (this.throttle > 0 ? 0.08 : 0) - (this.shiftT > 0 ? 0.18 : 0), 0.14, 1.0)
+      : 0;
+    this.rpm = (this.rpm || 0.16) + (targetRpmNorm - (this.rpm || 0.16)) * Math.min(1, dt * 14);
+    this.rpmVal = running ? Math.round(idleRpm + (redlineRpm - idleRpm) * ((this.rpm - 0.14) / 0.86)) : 0;
+
     if (!this.engine) return;
-    const rpm = clamp(0.22 + 0.68 * (ratio * gears - gear) + Math.max(0, this.throttle) * 0.08, 0.15, 1);
     const d = g.player.camera.position.distanceTo(this.group.position);
-    this.engine.set(rpm, this.throttle, ratio, local ? 1 : clamp(1 - d / 55, 0, 1) ** 2);
+    this.engine.set(this.rpm, this.throttle, ratio, local ? 1 : clamp(1 - d / 55, 0, 1) ** 2);
   }
   stopEngine() { if (this.engine) { this.engine.stop(); this.engine = null; } }
+
+  hudInfo() {
+    const D = this.def;
+    return {
+      speed: this.speed,
+      vmax: D.maxSpeed,
+      vmin: D.roadkill.vmin,
+      hp: this.hp,
+      hpMax: this.maxHp,
+      fuel: this.hasTank ? this.fuelFrac : null,
+      name: D.hudName || D.name,
+      hasTach: this.hasTank,
+      rpm: this.rpmVal || 0,
+      idleRpm: D.idleRpm || 900,
+      redlineRpm: D.redlineRpm || 7500,
+      maxRpm: D.maxRpm || 8500,
+      gear: this.gearLabel || '1',
+      gears: D.gears || (D.isCar ? 6 : 5),
+      drivetrain: D.drivetrain || null,
+      isCar: !!D.isCar,
+      braking: !!this.braking,
+      drifting: !!(D.isCar && (this.handbraking || Math.abs(this.vLat || 0) > 2.1)),
+    };
+  }
 }
 
 // ====================================================================== installation dans le jeu

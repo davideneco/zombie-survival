@@ -1481,7 +1481,7 @@ const game = {
 
     // Prompt contextuel
     let promptText = null;
-    hud.setVehicle(p.vehicle ? (p.vehicle.v.isTram ? p.vehicle.v.hudInfo() : { speed: p.vehicle.v.speed, vmax: p.vehicle.v.def.maxSpeed, vmin: p.vehicle.v.def.roadkill.vmin, hp: p.vehicle.v.hp, hpMax: p.vehicle.v.maxHp, fuel: p.vehicle.v.hasTank ? p.vehicle.v.fuelFrac : null, name: p.vehicle.v.def.hudName }) : null); // vélo : pas de jauge d'essence, étiquette « PV VÉLO »
+    hud.setVehicle(p.vehicle ? p.vehicle.v.hudInfo() : null); // tableau de bord complet (compte-tours, vitesse, rapport, PV, essence)
     if (p.vehicle) {
       const kE = game.binds.tag('interact');
       promptText = p.vehicle.v.isTram ? this.tramRideHint(p.vehicle.v, p.vehicle.seat) : p.vehicle.v.state === 'burning' ? `SAUTEZ ! ${kE}` : p.vehicle.seat === 0 ? `${kE} Descendre` : `${kE} Descendre · clic gauche : tirer`;

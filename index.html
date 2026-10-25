@@ -86,9 +86,10 @@
     #mapOverlay.show { display: block; }
     #mapCanvas { width: 100%; height: 100%; }
 
-    #prompt { position: absolute; left: 50%; top: 62%; transform: translateX(-50%); white-space: nowrap; font-size: 22px; text-shadow: 0 0 4px #000; background: rgba(0,0,0,0.5); padding: 4px 16px; border-radius: 4px; display: none; }
-    /* Tableau de bord de la moto : compteur (gris sous le seuil d'écrasement, rouge au-dessus) et jauge de vitesse avec son trait de seuil */
-    #vehHud { position: absolute; left: 50%; bottom: 3%; transform: translateX(-50%); width: 280px; text-align: center; display: none; text-shadow: 0 0 6px #000; }
+    #prompt { position: absolute; left: 50%; top: 56%; transform: translateX(-50%); white-space: nowrap; font-size: 22px; text-shadow: 0 0 4px #000; background: rgba(0,0,0,0.5); padding: 4px 16px; border-radius: 4px; display: none; }
+    /* Tableau de bord du véhicule : compte-tours, rapport engagé, compteur de vitesse et jauges PV/essence */
+    #vehHud { position: absolute; left: 50%; bottom: 2.5%; transform: translateX(-50%); width: 380px; text-align: center; display: none; text-shadow: 0 0 6px #000; }
+    #vehCluster { display: none; margin: 0 auto 4px; width: 380px; height: 142px; filter: drop-shadow(0 4px 10px rgba(0,0,0,0.75)); }
     #vSwitch { display: none; margin: 0 auto 6px; padding: 4px 10px; width: fit-content; max-width: 100%; font: bold 13px/1.25 Arial, sans-serif; letter-spacing: 1px; color: #f4f4e8; background: rgba(10,12,16,0.72); border: 1px solid #5a6068; border-radius: 4px; }
     #vSwitch small { display: block; font-weight: normal; letter-spacing: 0.5px; color: #b9bec4; }
     #vSwitch.diverge { border-color: #e8c04a; color: #ffe08a; }
@@ -101,7 +102,7 @@
     .vbar b { position: absolute; top: -3px; bottom: -3px; width: 2px; background: #fff; box-shadow: 0 0 2px #000; }
     #speedo.hot + .vbar i { background: #ff4a3a; }
     .vrow { display: flex; align-items: center; gap: 6px; margin-top: 3px; font: 11px/1 Arial, sans-serif; letter-spacing: 1px; color: #ccc; }
-    .vrow span { width: 62px; text-align: right; }
+    .vrow span { width: 102px; text-align: right; white-space: nowrap; }
     .vrow .vbar { flex: 1; margin-top: 0; height: 9px; }
     .vrow em { width: 38px; text-align: left; font-style: normal; font-weight: bold; }
     .vrow.low .vbar { animation: pulse .5s infinite alternate; }
@@ -688,6 +689,7 @@
 
     <div id="vehHud">
       <div id="vSwitch"></div>
+      <canvas id="vehCluster" width="380" height="142"></canvas>
       <div id="speedo"></div>
       <div class="vbar" id="vSpeedBar"><i id="vSpeedFill"></i><b id="vSpeedTick"></b></div>
       <div class="vrow" id="vHpRow"><span>PV MOTO</span><div class="vbar"><i id="vHpFill"></i></div><em id="vHpTxt"></em></div>

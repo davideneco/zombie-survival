@@ -12,7 +12,9 @@ export class Hud {
       round: $('roundNum'),
       prompt: $('prompt'),
       vehHud: $('vehHud'),
+      vehCluster: $('vehCluster'),
       speedo: $('speedo'),
+      speedBar: $('vSpeedBar'),
       vSwitch: $('vSwitch'),
       speedFill: $('vSpeedFill'),
       speedTick: $('vSpeedTick'),
@@ -60,6 +62,7 @@ export class Hud {
     };
     this.compassCtx = this.el.compass ? this.el.compass.getContext('2d') : null;
     this.radarCtx = this.el.radar ? this.el.radar.getContext('2d') : null;
+    this.clusterCtx = this.el.vehCluster ? this.el.vehCluster.getContext('2d') : null;
     this.damageFlash = 0;
     this.nukeFlash = 0;
     this.announceTimer = null;
@@ -164,15 +167,25 @@ export class Hud {
       el.innerHTML = `AIGUILLAGE ▸ ${sw.diverge ? 'DÉVIÉ' : 'TOUT DROIT'} : ${sw.name}<small>${sw.locked ? 'verrouillé' : `${this.binds ? this.binds.tag('tramSwitch') : ''} pour changer`} · dans ${sw.dist} m</small>`;
     });
     const kmh = Math.round(Math.abs(info.speed) * 3.6), hot = Math.abs(info.speed) >= info.vmin; // (vélo : vmin 99 > vmax, jamais « hot »)
-    this._set('speedo', `${kmh}|${hot}`, () => {
-      this.el.speedo.innerHTML = `${kmh}<small>km/h</small>`;
-      this.el.speedo.classList.toggle('hot', hot);
+    const hasTach = !!info.hasTach && !!this.clusterCtx;
+    this._set('vtachmode', hasTach, () => {
+      if (this.el.vehCluster) this.el.vehCluster.style.display = hasTach ? 'block' : 'none';
+      if (this.el.speedo) this.el.speedo.style.display = hasTach ? 'none' : '';
+      if (this.el.speedBar) this.el.speedBar.style.display = hasTach ? 'none' : '';
     });
-    this._set('speedbar', `${Math.round(Math.abs(info.speed) / info.vmax * 200)}`, () => { this.el.speedFill.style.width = `${Math.min(100, Math.abs(info.speed) / info.vmax * 100)}%`; });
-    this._set('speedtick', `${info.vmin}|${info.vmax}`, () => { // repère du seuil d'écrasement ; masqué quand il est hors échelle (vélo : aucun écrasement)
-      this.el.speedTick.style.display = info.vmin >= info.vmax ? 'none' : '';
-      this.el.speedTick.style.left = `${Math.min(100, info.vmin / info.vmax * 100)}%`;
-    });
+    if (hasTach) {
+      this.drawCluster(info, kmh, hot);
+    } else {
+      this._set('speedo', `${kmh}|${hot}`, () => {
+        this.el.speedo.innerHTML = `${kmh}<small>km/h</small>`;
+        this.el.speedo.classList.toggle('hot', hot);
+      });
+      this._set('speedbar', `${Math.round(Math.abs(info.speed) / info.vmax * 200)}`, () => { this.el.speedFill.style.width = `${Math.min(100, Math.abs(info.speed) / info.vmax * 100)}%`; });
+      this._set('speedtick', `${info.vmin}|${info.vmax}`, () => { // repère du seuil d'écrasement ; masqué quand il est hors échelle (vélo : aucun écrasement)
+        this.el.speedTick.style.display = info.vmin >= info.vmax ? 'none' : '';
+        this.el.speedTick.style.left = `${Math.min(100, info.vmin / info.vmax * 100)}%`;
+      });
+    }
     // points de vie de la moto : verte, orange sous 50 %, rouge sous 25 %
     const f = info.hpMax > 0 ? Math.max(0, info.hp / info.hpMax) : 0, pct = Math.round(f * 100);
     this._set('vhp', pct, () => {
@@ -187,6 +200,240 @@ export class Hud {
       this.el.fuelFill.style.background = ff < 0.15 ? '#e03030' : '#e8b030';
       this.el.fuelTxt.textContent = `${fp} %`;
       this.el.fuelRow.classList.toggle('low', ff < 0.15);
+    });
+  }
+
+  drawCluster(info, kmh, hot) {
+    const ctx = this.clusterCtx;
+    if (!ctx) return;
+    const rpm = Math.round(info.rpm || 0);
+    const gear = info.gear || '1';
+    const key = `${kmh}|${ Math.round(rpm / 25) }|${gear}|${info.drivetrain || ''}|${info.braking ? 1 : 0}|${info.drifting ? 1 : 0}|${hot ? 1 : 0}`;
+    this._set('vcluster', key, () => {
+      const W = 380, H = 142;
+      ctx.clearRect(0, 0, W, H);
+      const a0 = Math.PI * 0.75, aSpan = Math.PI * 1.5, a1 = a0 + aSpan;
+
+      // Fond du bloc d'instrumentation
+      ctx.save();
+      ctx.fillStyle = 'rgba(10, 13, 18, 0.84)';
+      ctx.strokeStyle = 'rgba(140, 155, 175, 0.35)';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.roundRect(6, 6, W - 12, H - 10, 16);
+      ctx.fill();
+      ctx.stroke();
+
+      // ==================== CADRAN GAUCHE : COMPTE-TOURS (tr/min) ====================
+      const lx = 80, ly = 74, lr = 54;
+      const maxRpm = info.maxRpm || 8500;
+      const redRpm = info.redlineRpm || 7500;
+      const maxK = Math.ceil(maxRpm / 1000);
+      const dispMaxRpm = maxK * 1000;
+      const rpmFrac = Math.min(1, Math.max(0, rpm / dispMaxRpm));
+      const redFrac = Math.min(1, Math.max(0, redRpm / dispMaxRpm));
+
+      // Fond du cadran compte-tours
+      ctx.fillStyle = 'rgba(18, 22, 29, 0.95)';
+      ctx.beginPath(); ctx.arc(lx, ly, lr, 0, Math.PI * 2); ctx.fill();
+      ctx.lineWidth = 4;
+      ctx.strokeStyle = '#28303c';
+      ctx.beginPath(); ctx.arc(lx, ly, lr - 4, a0, a1); ctx.stroke();
+
+      // Zone rouge (rupteur)
+      ctx.strokeStyle = 'rgba(235, 45, 45, 0.85)';
+      ctx.lineWidth = 5;
+      ctx.beginPath(); ctx.arc(lx, ly, lr - 4, a0 + aSpan * redFrac, a1); ctx.stroke();
+
+      // Arc dynamique du régime moteur
+      const rpmCol = rpm >= redRpm ? '#ff2e2e' : rpm >= redRpm * 0.82 ? '#f5a623' : '#32d868';
+      if (rpmFrac > 0.005) {
+        ctx.strokeStyle = rpmCol;
+        ctx.lineWidth = 4.5;
+        ctx.beginPath(); ctx.arc(lx, ly, lr - 4, a0, a0 + aSpan * rpmFrac); ctx.stroke();
+      }
+
+      // Graduations x1000 tr/min
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      for (let k = 0; k <= maxK; k++) {
+        const f = k / maxK;
+        const ang = a0 + aSpan * f;
+        const isRed = (k * 1000) >= redRpm;
+        const c = Math.cos(ang), s = Math.sin(ang);
+        ctx.strokeStyle = isRed ? '#ff4a4a' : '#d0d6e0';
+        ctx.lineWidth = 1.8;
+        ctx.beginPath();
+        ctx.moveTo(lx + c * (lr - 9), ly + s * (lr - 9));
+        ctx.lineTo(lx + c * (lr - 2), ly + s * (lr - 2));
+        ctx.stroke();
+        ctx.fillStyle = isRed ? '#ff5858' : '#b8c0cc';
+        ctx.font = 'bold 9px Arial, sans-serif';
+        ctx.fillText(String(k), lx + c * (lr - 17), ly + s * (lr - 17));
+        if (k < maxK) {
+          const angHalf = a0 + aSpan * ((k + 0.5) / maxK);
+          ctx.strokeStyle = 'rgba(180,190,205,0.45)';
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(lx + Math.cos(angHalf) * (lr - 6), ly + Math.sin(angHalf) * (lr - 6));
+          ctx.lineTo(lx + Math.cos(angHalf) * (lr - 2), ly + Math.sin(angHalf) * (lr - 2));
+          ctx.stroke();
+        }
+      }
+
+      // Légende x1000 tr/min + affichage numérique
+      ctx.fillStyle = '#7e8896';
+      ctx.font = 'bold 7.5px Arial, sans-serif';
+      ctx.fillText('×1000 tr/min', lx, ly - 14);
+      ctx.fillStyle = rpm >= redRpm ? '#ff4a4a' : '#eef2f7';
+      ctx.font = 'bold 13px Arial, sans-serif';
+      ctx.fillText(`${rpm}`, lx, ly + 25);
+      ctx.fillStyle = '#8b94a2';
+      ctx.font = '8px Arial, sans-serif';
+      ctx.fillText('TR/MIN', lx, ly + 36);
+
+      // Aiguille du compte-tours
+      const rAng = a0 + aSpan * rpmFrac;
+      ctx.strokeStyle = '#ff3b30';
+      ctx.lineWidth = 2.4;
+      ctx.beginPath();
+      ctx.moveTo(lx - Math.cos(rAng) * 7, ly - Math.sin(rAng) * 7);
+      ctx.lineTo(lx + Math.cos(rAng) * (lr - 8), ly + Math.sin(rAng) * (lr - 8));
+      ctx.stroke();
+      ctx.fillStyle = '#252b34';
+      ctx.beginPath(); ctx.arc(lx, ly, 5.5, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = rpmCol;
+      ctx.beginPath(); ctx.arc(lx, ly, 2.5, 0, Math.PI * 2); ctx.fill();
+
+      // ==================== CONSOLE CENTRALE : RAPPORT & TRANSMISSION ====================
+      const cx = 190;
+      // Shift-lights (5 LEDs)
+      const shiftStart = redRpm * 0.62;
+      for (let i = 0; i < 5; i++) {
+        const thresh = shiftStart + (redRpm - shiftStart) * (i / 4);
+        const lit = rpm >= thresh;
+        const ledCol = i < 2 ? '#32d868' : i < 4 ? '#f5b020' : '#ff2828';
+        ctx.fillStyle = lit ? ledCol : 'rgba(255,255,255,0.12)';
+        ctx.beginPath();
+        ctx.arc(cx - 24 + i * 12, 20, 3.6, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // Boîtier du rapport engagé
+      ctx.fillStyle = 'rgba(22, 27, 36, 0.95)';
+      ctx.strokeStyle = rpm >= redRpm * 0.95 ? '#ff3b30' : 'rgba(130, 145, 165, 0.45)';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.roundRect(cx - 22, 30, 44, 46, 7);
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.fillStyle = '#8b94a2';
+      ctx.font = 'bold 7.5px Arial, sans-serif';
+      ctx.fillText('RAPPORT', cx, 39);
+      ctx.fillStyle = gear === 'R' ? '#ff5252' : gear === 'N' ? '#8892a0' : '#ffd24a';
+      ctx.font = 'bold 26px Arial, sans-serif';
+      ctx.fillText(String(gear), cx, 59);
+
+      // Badge de transmission (PROPULSION RWD / 4X4 AWD)
+      if (info.drivetrain) {
+        const isRwd = info.drivetrain === 'RWD';
+        ctx.fillStyle = isRwd ? 'rgba(235, 95, 35, 0.22)' : 'rgba(40, 175, 235, 0.22)';
+        ctx.strokeStyle = isRwd ? '#f07838' : '#38b8f0';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.roundRect(cx - 38, 82, 76, 17, 4);
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = isRwd ? '#ff9c64' : '#74d4ff';
+        ctx.font = 'bold 8.5px Arial, sans-serif';
+        ctx.fillText(isRwd ? 'PROPULSION · RWD' : '4X4 · AWD', cx, 91);
+      }
+
+      // Témoins FREIN / DRIFT
+      ctx.fillStyle = info.braking ? 'rgba(235, 40, 40, 0.9)' : 'rgba(255,255,255,0.08)';
+      ctx.beginPath(); ctx.roundRect(cx - 38, 104, 36, 15, 3); ctx.fill();
+      ctx.fillStyle = info.braking ? '#fff' : '#606875';
+      ctx.font = 'bold 8px Arial, sans-serif';
+      ctx.fillText('FREIN', cx - 20, 112);
+
+      ctx.fillStyle = info.drifting ? 'rgba(245, 155, 25, 0.92)' : 'rgba(255,255,255,0.08)';
+      ctx.beginPath(); ctx.roundRect(cx + 2, 104, 36, 15, 3); ctx.fill();
+      ctx.fillStyle = info.drifting ? '#111' : '#606875';
+      ctx.font = 'bold 8px Arial, sans-serif';
+      ctx.fillText('DRIFT', cx + 20, 112);
+
+      // ==================== CADRAN DROIT : COMPTEUR DE VITESSE (km/h) ====================
+      const rx = 300, ry = 74, rr = 54;
+      const maxKmh = Math.max(120, Math.ceil((info.vmax * 3.6) / 20) * 20);
+      const spdFrac = Math.min(1, Math.max(0, kmh / maxKmh));
+
+      // Fond du cadran vitesse
+      ctx.fillStyle = 'rgba(18, 22, 29, 0.95)';
+      ctx.beginPath(); ctx.arc(rx, ry, rr, 0, Math.PI * 2); ctx.fill();
+      ctx.lineWidth = 4;
+      ctx.strokeStyle = '#28303c';
+      ctx.beginPath(); ctx.arc(rx, ry, rr - 4, a0, a1); ctx.stroke();
+
+      // Arc dynamique de vitesse
+      const spdCol = hot ? '#ff4a3a' : '#38b6ff';
+      if (spdFrac > 0.005) {
+        ctx.strokeStyle = spdCol;
+        ctx.lineWidth = 4.5;
+        ctx.beginPath(); ctx.arc(rx, ry, rr - 4, a0, a0 + aSpan * spdFrac); ctx.stroke();
+      }
+
+      // Graduations tous les 20 km/h
+      const step = maxKmh > 140 ? 20 : 20;
+      for (let v = 0; v <= maxKmh; v += step) {
+        const f = v / maxKmh;
+        const ang = a0 + aSpan * f;
+        const c = Math.cos(ang), s = Math.sin(ang);
+        ctx.strokeStyle = '#d0d6e0';
+        ctx.lineWidth = 1.6;
+        ctx.beginPath();
+        ctx.moveTo(rx + c * (rr - 9), ry + s * (rr - 9));
+        ctx.lineTo(rx + c * (rr - 2), ry + s * (rr - 2));
+        ctx.stroke();
+        ctx.fillStyle = '#b8c0cc';
+        ctx.font = 'bold 8.5px Arial, sans-serif';
+        ctx.fillText(String(v), rx + c * (rr - 17), ry + s * (rr - 17));
+        if (v + step / 2 <= maxKmh) {
+          const angHalf = a0 + aSpan * ((v + step / 2) / maxKmh);
+          ctx.strokeStyle = 'rgba(180,190,205,0.45)';
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(rx + Math.cos(angHalf) * (rr - 6), ry + Math.sin(angHalf) * (rr - 6));
+          ctx.lineTo(rx + Math.cos(angHalf) * (rr - 2), ry + Math.sin(angHalf) * (rr - 2));
+          ctx.stroke();
+        }
+      }
+
+      // Affichage numérique de la vitesse au centre-bas
+      ctx.fillStyle = '#7e8896';
+      ctx.font = 'bold 7.5px Arial, sans-serif';
+      ctx.fillText('VITESSE', rx, ry - 14);
+      ctx.fillStyle = hot ? '#ff5848' : '#ffffff';
+      ctx.font = 'bold 17px Arial, sans-serif';
+      ctx.fillText(`${kmh}`, rx, ry + 24);
+      ctx.fillStyle = '#8b94a2';
+      ctx.font = 'bold 8px Arial, sans-serif';
+      ctx.fillText('KM/H', rx, ry + 36);
+
+      // Aiguille du compteur de vitesse
+      const sAng = a0 + aSpan * spdFrac;
+      ctx.strokeStyle = '#38b6ff';
+      ctx.lineWidth = 2.4;
+      ctx.beginPath();
+      ctx.moveTo(rx - Math.cos(sAng) * 7, ry - Math.sin(sAng) * 7);
+      ctx.lineTo(rx + Math.cos(sAng) * (rr - 8), ry + Math.sin(sAng) * (rr - 8));
+      ctx.stroke();
+      ctx.fillStyle = '#252b34';
+      ctx.beginPath(); ctx.arc(rx, ry, 5.5, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = spdCol;
+      ctx.beginPath(); ctx.arc(rx, ry, 2.5, 0, Math.PI * 2); ctx.fill();
+
+      ctx.restore();
     });
   }
 
