@@ -49,6 +49,15 @@ func _init(g_: Object, data_: Dictionary = {}) -> void:
 		for st: Dictionary in m["seats"]:
 			v.model_seats.append({"hip": st["hip"], "eye": st["eye"], "ry": float(st["ry"])})
 		vehicles.append(v)
+	# v0.36.0 : voitures conduisibles (Strasbourg : CarSim.SPOTS ; une doublure de test peut en donner dans data.cars)
+	var spots: Array = data.get("cars", CarSim.SPOTS if data_.is_empty() else [])
+	var next_id := 0
+	for v in vehicles:
+		next_id = maxi(next_id, v.id + 1)
+	for sp: Dictionary in spots:
+		vehicles.append(CarSim.new(next_id, sp))
+		next_id += 1
+	sync_car_boxes()
 	for pk: Dictionary in data["parkingsFull"]:
 		parkings.append(pk)
 	bike_stations = data["bikeStations"]
@@ -170,6 +179,7 @@ func step(dt: float, input: Dictionary) -> void:
 		var driven: bool = v.state != "wreck" and v.seats[0] != null
 		v.update(dt, g, _vel_in if driven else {}, driven)
 		_drain_events(v)
+	sync_car_boxes()
 	for t in trams:
 		var seat := -1
 		if ride != null and ride["v"] == t and int(ride["seat"]) <= 1:
@@ -178,9 +188,10 @@ func step(dt: float, input: Dictionary) -> void:
 		_drain_events(t)
 	if not lure.is_empty():
 		lure["t"] -= dt
-		if not trams.is_empty():
-			lure["x"] = trams[0].pos.x
-			lure["z"] = trams[0].pos.z
+		var src: Object = lure.get("v", trams[0] if not trams.is_empty() else null)   # v0.36.0 : le klaxon suit sa voiture, le gong la rame
+		if src != null:
+			lure["x"] = src.pos.x
+			lure["z"] = src.pos.z
 		if lure["t"] <= 0.0:
 			lure = {}
 	for r in all_rides():
@@ -236,7 +247,7 @@ func _drain_events(r: Object) -> void:
 			"beep":
 				g.ride_event.emit("beep", {"v": r})
 			"dry":
-				g.announce("PANNE SÈCHE", "Plus d'essence : la moto n'avance plus qu'au pas")
+				g.announce("PANNE SÈCHE", "Plus d'essence : %s %s n'avance plus qu'au pas" % [String(r.def.get("det", "la")), String(r.def["name"]).to_lower()])
 				g.ride_event.emit("dry", {"v": r})
 			_:
 				if String(e).begins_with("crash:"):
@@ -429,7 +440,7 @@ func vehicle_prompt(nv: Dictionary) -> String:
 	if int(v.def["seats"]) > 1:
 		role = " — conducteur" if int(nv["seat"]) == 0 else " — passager"
 	var fuel := " · essence %d %%" % roundi(v.fuel_frac() * 100.0) if v.has_tank() else ""
-	return "E Monter sur %s %s%s (PV %d %%%s)" % [String(v.def.get("det", "la")), String(v.def["name"]).to_lower(), role, roundi(v.hp_frac() * 100.0), fuel]
+	return "E Monter %s %s %s%s (PV %d %%%s)" % ["dans" if v is CarSim else "sur", String(v.def.get("det", "la")), String(v.def["name"]).to_lower(), role, roundi(v.hp_frac() * 100.0), fuel]
 
 func try_mount(v: Object, seat: int) -> void:
 	if v.seats[seat] != null or not v.usable():
@@ -450,6 +461,12 @@ func enter_vehicle(v: Object, seat: int) -> void:
 		var tt := tram_enter_text(v, seat)
 		g.announce(tt[0], tt[1])
 		g.ride_event.emit("chime", {"v": v, "open": true})
+	elif v is CarSim:   # v0.36.0
+		var dn: Variant = g.get("daynight")
+		if seat == 0 and dn != null and dn.is_night():
+			v.lights = true   # la nuit, les phares s'allument en montant
+		g.announce(String(v.def["name"]), "Z/Q/S/D : conduire · Espace : frein à main · F : phares · H : klaxon · V : vue · E : descendre" if seat == 0 else "Vous êtes passager : tirez ! · E : descendre")
+		g.ride_event.emit("mount", {"v": v})
 	else:
 		g.announce(String(v.def["name"]), ("Z/Q/S/D : conduire · Espace : %s · E : descendre" % ("frein à main" if v.has_tank() else "frein")) if seat == 0 else "Vous êtes passager : tirez ! · E : descendre")
 		g.ride_event.emit("mount", {"v": v})
@@ -470,11 +487,15 @@ func leave_vehicle(force := false) -> void:
 	var pt: Vector3 = v.hip_world(seat)
 	var ex := pt.x
 	var ez := pt.z
-	for side in [-1.0 if seat == 0 else 1.0, 1.0 if seat == 0 else -1.0]:
-		var q: Vector3 = g.collision.resolve(Vector3(pt.x + c * side * 1.0, 0.1, pt.z - s * side * 1.0), 0.4)
+	var first := -1.0 if seat == 0 else 1.0
+	if v is CarSim:   # v0.36.0 : on sort par la portière de sa place (gauche ou droite), sinon par l'autre côté
+		first = -1.0 if float(v.model_seats[seat]["hip"][0]) < 0.0 else 1.0
+	var out_d := 1.15 if v is CarSim else 1.0
+	for side in [first, -first]:
+		var q: Vector3 = g.collision.resolve(Vector3(pt.x + c * side * out_d, 0.1, pt.z - s * side * out_d), 0.4)
 		ex = q.x
 		ez = q.z
-		if Vector2(q.x - (pt.x + c * side), q.z - (pt.z - s * side)).length() < 0.3:
+		if Vector2(q.x - (pt.x + c * side * out_d), q.z - (pt.z - s * side * out_d)).length() < 0.3:
 			break
 	var sp: float = v.speed
 	var fl := {"y": 0.0, "region": 0}
@@ -492,6 +513,8 @@ func leave_vehicle(force := false) -> void:
 		v.steer = 0.0
 		v.lean = 0.0
 		v.throttle = 0.0
+		if v is CarSim:
+			v.slip = 0.0
 	v.seats[seat] = null
 	g.ride_event.emit("dismount", {"v": v})
 
@@ -583,6 +606,8 @@ func set_power(on: bool, silent := false) -> void:
 
 # ------------------------------------------------------------------ touches de la rame : gong, portes, aiguillage, vue
 func tram_gong() -> void:
+	if car_horn():
+		return
 	var t := tram_of_player()
 	if t == null or t.gong_cd > 0.0:
 		return
@@ -945,6 +970,8 @@ func prompt() -> String:
 		var v: Object = ride["v"]
 		if v.is_tram():
 			return tram_ride_hint(v, int(ride["seat"]))
+		if v is CarSim and int(ride["seat"]) == 0:
+			return "E Descendre · V vue · F phares (%s) · H klaxon" % ("allumés" if v.lights else "éteints")
 		return "E Descendre" if int(ride["seat"]) != 0 else "E Descendre · V vue"
 	if on_tram != null:
 		return tram_walk_hint(on_tram["v"])
@@ -985,5 +1012,73 @@ func gauge() -> Dictionary:
 		h["fuel_label"] = "ÉNERGIE"
 		h["tram"] = true
 		return h
-	return {"speed": v.speed, "vmax": float(v.def["maxSpeed"]), "vmin": float(v.def["roadkill"]["vmin"]), "hp": v.hp, "hp_max": v.max_hp(), "name": String(v.def["name"]),
+	var gg := {"speed": v.speed, "vmax": float(v.def["maxSpeed"]), "vmin": float(v.def["roadkill"]["vmin"]), "hp": v.hp, "hp_max": v.max_hp(), "name": String(v.def["name"]),
 		"fuel": v.fuel_frac(), "fuel_label": "ESSENCE", "has_tank": v.has_tank(), "tram": false, "sw": {}}
+	if v is CarSim:   # v0.36.0 : vitesse au sol (dérapage compris), phares, litres
+		gg["speed"] = v.ground_speed() * signf(v.speed if v.speed != 0.0 else 1.0)
+		gg["car"] = true
+		gg["lights"] = v.lights
+		gg["liters"] = v.fuel
+	return gg
+
+# ------------------------------------------------------------------ v0.36.0 : voiture
+## Boîtes dynamiques des voitures dans la collision du monde : le joueur à pied, les zombies et les motos ne les traversent pas ; une voiture
+## disparue (après l'épave) n'en a plus.
+const DYN_RANGE := 90.0
+func sync_car_boxes() -> void:
+	if g == null or g.collision == null:
+		return
+	var p: Variant = g.get("player")
+	for v in vehicles:
+		if not (v is CarSim):
+			continue
+		# loin du joueur (plus de DYN_RANGE m, personne à bord), une voiture garée n'est pas dans la collision : chaque collision de zombie
+		# ou de joueur parcourt les boîtes dynamiques, autant ne garder que celles qui comptent (banc d'essai de j3)
+		var near: bool = p == null or v.has_driver() or absf(v.x - p.pos.x) < DYN_RANGE and absf(v.z - p.pos.z) < DYN_RANGE
+		if v.state == "gone" or not near:
+			g.collision.clear_dynamic(v.key)
+		else:
+			g.collision.set_dynamic(v.key, [v.dyn_box()], "car")
+
+## La voiture où le joueur est assis (ou null).
+func car_of_player() -> CarSim:
+	if ride != null and ride["v"] is CarSim:
+		return ride["v"]
+	return null
+
+## Cible d'un zombie quand le joueur est en voiture : le point de la caisse le plus proche (il vient frapper la carrosserie, qui encaisse).
+func car_goal(z: ZombieSim) -> Dictionary:
+	var c := car_of_player()
+	if c == null or c.state == "wreck" or c.state == "gone":
+		return {}
+	if absf(z.pos.x - c.x) > 45.0 or absf(z.pos.z - c.z) > 45.0:
+		return {}
+	var q := c.closest_point(z.pos.x, z.pos.z)
+	return {"x": q.x, "z": q.y}
+
+## Part des coups de zombie qui atteint le joueur (la caisse encaisse le reste) : def.cabin en voiture, 1 sinon.
+func cabin_factor() -> float:
+	var c := car_of_player()
+	return float(c.def["cabin"]) if c != null and c.state == "ok" else 1.0
+
+## Klaxon (touche du gong, conducteur d'une voiture) : attire les zombies comme le gong (appât qui suit la voiture). true si l'on est en voiture.
+func car_horn() -> bool:
+	var c := car_of_player()
+	if c == null:
+		return false
+	if not c.is_driver(int(ride["seat"])):
+		return true
+	if c.honk():
+		var H: Dictionary = c.def["horn"]
+		lure = {"x": c.x, "z": c.z, "t": float(H["duration"]), "range": float(H["range"]), "v": c}
+		g.ride_event.emit("horn", {"v": c})
+	return true
+
+## Phares (touche de la lampe torche, conducteur d'une voiture). true si l'appui est consommé.
+func toggle_car_lights() -> bool:
+	var c := car_of_player()
+	if c == null or not c.is_driver(int(ride["seat"])):
+		return false
+	c.lights = not c.lights
+	g.ride_event.emit("lights", {"v": c, "on": c.lights})
+	return true

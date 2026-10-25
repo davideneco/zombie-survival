@@ -95,6 +95,28 @@ static func moto_rpm(speed: float, max_speed: float, throttle: float) -> float:
 	var gear := mini(gears - 1, int(floor(ratio * gears)))
 	return clampf(0.22 + 0.68 * (ratio * gears - gear) + maxf(0.0, throttle) * 0.08, 0.15, 1.0)
 
+## v0.36.0 : régime de la voiture (propre au port) : 5 rapports, ralenti plus bas que la moto. La boucle jouée est celle de la grosse moto,
+## transposée plus bas (CAR_PITCH : un quatre-cylindres plus grave et plus lisse que le bicylindre de la grosse moto).
+const CAR_GEARS := 5
+const CAR_PITCH := 0.78
+static func car_rpm(speed: float, max_speed: float, throttle: float) -> float:
+	var ratio := clampf(absf(speed) / max_speed, 0.0, 1.0)
+	var gear := mini(CAR_GEARS - 1, int(floor(ratio * CAR_GEARS)))
+	return clampf(0.18 + 0.62 * (ratio * CAR_GEARS - gear) * (0.75 + 0.25 * float(gear) / CAR_GEARS) + maxf(0.0, throttle) * 0.1, 0.15, 1.0)
+
+## v0.36.0 : klaxon synthétisé (deux notes en tierce, 415 et 520 Hz, ondes carrées adoucies, attaque et relâche courtes), mono, -1..1.
+static func horn_samples(rate: int, dur: float) -> PackedFloat32Array:
+	var n := int(round(rate * dur))
+	var out := PackedFloat32Array()
+	out.resize(n)
+	for i in n:
+		var t := float(i) / rate
+		var env := minf(1.0, t / 0.015) * minf(1.0, (dur - t) / 0.06)
+		var a := tanh(3.0 * sin(TAU * 415.0 * t)) + 0.8 * tanh(3.0 * sin(TAU * 520.0 * t))
+		a += 0.25 * sin(TAU * 830.0 * t) + 0.15 * sin(TAU * 1040.0 * t)
+		out[i] = clampf(a * 0.33 * env, -1.0, 1.0)
+	return out
+
 ## Volume d'un moteur ou d'une rame entendus de loin (vehicles.js : clamp(1 - d / 55)^2 ; tram.js distVol : clamp(1 - d / maxD)^2).
 static func far_vol(d: float, max_d: float) -> float:
 	return pow(clampf(1.0 - d / max_d, 0.0, 1.0), 2.0)

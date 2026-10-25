@@ -409,6 +409,8 @@ func step(dt: float, input: Dictionary) -> void:
 			var shielded := rides != null and rides.tram_shield(z)   # une rame : la caisse encaisse (sauf devant une porte ouverte)
 			if not shielded:
 				var dmg := pfx.filter_damage(self, z.strike_damage) if z.strike_target == player else z.strike_damage   # v0.27.0 : Bastion, Ultime Volonté
+				if rides != null and z.strike_target == player:
+					dmg *= rides.cabin_factor()   # v0.36.0 : en voiture, la caisse encaisse la plus grande part du coup
 				if dmg > 0.0:
 					player_hurt.emit(dmg)
 					if z.strike_target.hurt(dmg, time):

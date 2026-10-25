@@ -31,6 +31,19 @@ func reload() -> bool:
 	for id: String in PerkFx.PERKS:      # v0.27.0 : nouveaux atouts du port (fiches des distributeurs) et leur équilibrage
 		data["perks"][id] = PerkFx.PERKS[id]
 	data["perkFx"] = PerkFx.CONFIG
+	data["vehicles"]["types"]["voiture"] = CarSim.DEF.duplicate(true)   # v0.36.0 : voiture conduisible (Strasbourg), propre au port
+	for kb: Dictionary in data.get("keybinds", []):   # v0.36.0 : les touches de la voiture dans l'écran TOUCHES (mêmes liaisons)
+		match String(kb["id"]):
+			"jump":
+				kb["label"] = "Sauter · enjamber · frein à main (moto, voiture) · frein (vélo) · frein d'urgence (tram)"
+			"torch":
+				kb["label"] = "Lampe torche · phares (au volant d'une voiture)"
+			"interact":
+				kb["label"] = "Interagir (acheter, porte, machine, réanimer, moto, vélo, voiture)"
+			"vehicleView":
+				kb["label"] = "Changer de vue (en moto, à vélo, en voiture ou en tram)"
+			"tramGong":
+				kb["label"] = "Gong du tram · klaxon de la voiture (attirent les zombies)"
 	pap_levels = parsed["PAP_LEVELS"]
 	loaded = true
 	return true

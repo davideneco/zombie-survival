@@ -118,6 +118,8 @@ static func _keys(s: String, binds: Keybinds) -> String:
 	s = s.replace("O portes", "%s portes" % binds.tag("tramDoors"))
 	s = s.replace("O : portes", "%s portes" % binds.tag("tramDoors"))
 	s = s.replace("H gong", "%s gong" % binds.tag("tramGong"))
+	s = s.replace("H klaxon", "%s klaxon" % binds.tag("tramGong"))   # v0.36.0 : voiture
+	s = s.replace("F phares", "%s phares" % binds.tag("torch"))
 	s = s.replace("B aiguillage", "%s aiguillage" % binds.tag("tramSwitch"))
 	s = s.replace("Espace frein d'urgence", "%s frein d'urgence" % binds.tag("jump"))
 	s = s.replace("Z/Q/S/D : marcher", "%s : marcher" % binds.move_label())

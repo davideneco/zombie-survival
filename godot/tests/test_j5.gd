@@ -348,7 +348,8 @@ func _near(v: VehicleSim, dx := 1.2, dz := 0.6) -> void:
 func _game_vehicles(t: Node) -> void:
 	var r := _new_game()
 	var vd := Rides.load_data()
-	t.check(r.vehicles.size() == vd["vehicles"].size() and r.vehicles.size() == 26, "26 véhicules posés (3 motos, 23 vélos) : %d" % r.vehicles.size())
+	var n_bikes := r.vehicles.filter(func(v: VehicleSim) -> bool: return not (v is CarSim)).size()   # v0.36.0 : les voitures du port s'ajoutent (suite j43)
+	t.check(n_bikes == vd["vehicles"].size() and n_bikes == 26, "26 véhicules posés (3 motos, 23 vélos) : %d" % n_bikes)
 	t.check(r.trams.size() == 1, "une rame")
 	t.near(r.trams[0].pos.x, vd["tram"]["start"]["x"], "rame : position de départ x", 1e-4)
 	t.near(r.trams[0].pos.z, vd["tram"]["start"]["z"], "rame : position de départ z", 1e-4)

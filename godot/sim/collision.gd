@@ -198,6 +198,25 @@ func find_vault(ox: float, oz: float, ux: float, uz: float, reach: float) -> Dic
 				best = {"v": v, "tIn": t_in, "tOut": t_out, "nx": nx, "nz": nz}
 	return best
 
+## v0.36.0 : éléments (segments et cercles) des cases qui couvrent le rectangle, chacun une fois (voiture : collision d'une boîte orientée, CarSim).
+func items_in(min_x: float, min_z: float, max_x: float, max_z: float, out: Array) -> void:
+	out.clear()
+	stamp += 1
+	for ix in range(int(floor(min_x / cell)), int(floor(max_x / cell)) + 1):
+		for iz in range(int(floor(min_z / cell)), int(floor(max_z / cell)) + 1):
+			var arr: Variant = grid.get(_key(ix, iz))
+			if arr == null:
+				continue
+			for it: Dictionary in arr:
+				if it["stamp"] == stamp or it["off"]:
+					continue
+				it["stamp"] = stamp
+				out.append(it)
+
+## v0.36.0 : l'élément bloque-t-il à la hauteur y (même règle que resolve) ?
+func blocks(it: Dictionary, y: float) -> bool:
+	return _blocks(it, y)
+
 ## Pousse pos (x, z) hors des obstacles et la garde dans la zone de jeu ; renvoie la nouvelle position (y inchangé).
 ## out (facultatif) : reçoit la poussée la plus forte { kind, push, nx, nz } (le bord de la zone compte comme un mur).
 ## ignore : clé d'un obstacle dynamique à ne pas compter.

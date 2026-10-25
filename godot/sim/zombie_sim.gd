@@ -55,6 +55,7 @@ var events: PackedStringArray = PackedStringArray()   ## "knock", "glass", "rumb
 var target: PlayerSim          ## cible poursuivie ce pas (null : personne)
 var slow_t := 0.0              ## v0.27.0 : Veuve noire : secondes de ralentissement restantes
 var slow_mult := 1.0           ## vitesse x slow_mult tant que slow_t > 0
+var car_aim := false            ## v0.36.0 : ce pas, le zombie vise la carrosserie de la voiture du joueur (Rides.car_goal)
 var run_over_until := 0.0      ## J5 : moto ou rame : pas d'autre coup avant ce temps de jeu (écrasement)
 
 # apparition
@@ -354,6 +355,7 @@ func step(dt: float, env: ZombieEnv) -> void:
 		if Vector2(gx - pos.x, gz - pos.z).length() < Rules.LINK_ENTER:
 			link = {"link": L, "dir": int(hop["dir"]), "s": 0.0 if int(hop["dir"]) > 0 else float(L["length"])}
 			return
+	car_aim = false
 	# gong du tram (J5) : à moins de `range` m du gong, un zombie qui n'est pas déjà sur un joueur va vers le tram (sa cible du champ de flux)
 	if env.rides != null:
 		var lure: Dictionary = env.rides.lure
@@ -369,6 +371,13 @@ func step(dt: float, env: ZombieEnv) -> void:
 				gx = tg["x"]
 				gz = tg["z"]
 				chase = false
+		# v0.36.0 : cible dans une voiture : le zombie vient frapper la carrosserie au point le plus proche (la caisse encaisse, voir Rides.cabin_factor)
+		if chase and region == 0 and link.is_empty():
+			var cg: Dictionary = env.rides.car_goal(self)
+			if not cg.is_empty():
+				gx = cg["x"]
+				gz = cg["z"]
+				car_aim = true
 	var dx := gx - pos.x
 	var dz := gz - pos.z
 	var dist := sqrt(dx * dx + dz * dz)
@@ -459,8 +468,8 @@ func step(dt: float, env: ZombieEnv) -> void:
 	if attack_windup >= 0.0:
 		attack_windup -= dt
 		if attack_windup < 0.0:
-			var tdx := target.pos.x - pos.x
-			var tdz := target.pos.z - pos.z
+			var tdx := (gx if car_aim else target.pos.x) - pos.x   # v0.36.0 : en voiture, la portée se mesure à la carrosserie
+			var tdz := (gz if car_aim else target.pos.z) - pos.z
 			if sqrt(tdx * tdx + tdz * tdz) < float(Z["attackRange"]) + 0.5 and absf(target.pos.y - pos.y) < 2.6:
 				strike_target = target
 				strike_damage = attack_damage if attack_damage > 0.0 else float(Z["damage"])

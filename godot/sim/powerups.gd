@@ -12,6 +12,7 @@ var insta_kill := 0.0               ## secondes restantes de Mort instantanée
 var double_points := 0.0            ## secondes restantes de Points doubles
 var bonus_zones := {}               ## zones extérieures dont le bonus d'ouverture a déjà été posé
 var collected: Array[String] = []   ## journal des bonus ramassés (tests, statistiques)
+var last_fuel := 2.5                ## v0.36.0 : litres du dernier bidon ramassé (annonce : 8 L pour une voiture)
 var _next_id := 1
 
 func reset() -> void:
@@ -81,8 +82,9 @@ func fuel_pickup(g: Node) -> VehicleSim:
 		for v: VehicleSim in g.rides.vehicles:
 			if v.usable() and v.has_tank() and (best == null or v.fuel_frac() < best.fuel_frac()):
 				best = v
-	if best != null:
-		best.fuel = clampf(best.fuel + float(F["jerrican"]), 0.0, float(best.def["tank"]))
+	if best != null:   # v0.36.0 : une voiture reçoit un bidon de voiture (def.jerrican), une moto celui de CONFIG
+		best.fuel = clampf(best.fuel + float(best.def.get("jerrican", F["jerrican"])), 0.0, float(best.def["tank"]))
+	last_fuel = float(best.def.get("jerrican", F["jerrican"])) if best != null else float(F["jerrican"])
 	return best
 
 ## Effet du bonus ramassé (collectPowerup).
@@ -92,7 +94,7 @@ func collect(g: Node, pu: Dictionary) -> void:
 	match t:
 		"fuel":
 			fuel_pickup(g)
-			g.announce("ESSENCE !", ("Bidon : +%s L" % str(Config.at("vehicles.fuel.jerrican"))).replace(".", ","))
+			g.announce("ESSENCE !", ("Bidon : +%s L" % String.num(last_fuel)).replace(".", ","))
 		"max_ammo":
 			g.arms.max_ammo()
 			g.announce("MUNITIONS MAX !", "Réserves pleines pour toute l’équipe")

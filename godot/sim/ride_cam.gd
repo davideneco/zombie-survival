@@ -93,9 +93,10 @@ func update(dt: float, ride: Variant, foot: Vector3, p: PlayerSim, aiming: bool,
 	var d := Vector3(-sy * cos(pitch), sin(pitch), -cy * cos(pitch))
 	var t: Vector3
 	if ride != null:
-		t = ride["v"].eye_world(ride["seat"])
+		var car: bool = ride["v"] is CarSim   # v0.36.0 : voiture : pivot au milieu du toit, quelle que soit la place
+		t = ride["v"].cam_pivot(ride["seat"]) if car else ride["v"].eye_world(ride["seat"])
 		t.y += float(C["pivotUp"])
-		if not ride["v"].is_driver(ride["seat"]):
+		if not car and not ride["v"].is_driver(ride["seat"]):
 			t.x += cy * float(C["pivotRight"])
 			t.z -= sy * float(C["pivotRight"])   # passager : épaule droite
 	elif foot_third:
