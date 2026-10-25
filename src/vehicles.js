@@ -47,7 +47,7 @@ export class Vehicle {
     this.speed = 0; this.vLat = 0; this.steer = 0; this.steerAngle = 0;
     this.lean = 0; this.rollVel = 0; this.pitch = 0; this.pitchVel = 0; this.suspY = 0; this.suspVel = 0;
     this.wheelRot = 0; this.throttle = 0; this.braking = false; this.handbraking = false; this.brakePress = 0;
-    this.gear = 1; this.gearLabel = 'N'; this.rpm = 0.18; this.rpmVal = this.def.idleRpm || 900; this.shiftT = 0;
+    this.gear = 1; this.gearLabel = 'N'; this.rpm = 0.18; this.rpmVal = this.def.idleRpm || 900; this.shiftT = 0; this.shiftCd = 0;
     this.crashT = 0; this.sendT = 0; this.hitT = 0;
     this.hp = this.def.hp; this.state = 'ok'; this.burnT = 0; this.wreckT = 0; this.hpDirty = false; this.hpSendT = 0;
     this.respawnRound = 0; this.respawnPending = false; this.respawnRetry = 0; this.fxAcc = 0; this.alarmT = 0;
@@ -86,8 +86,37 @@ export class Vehicle {
   syncNet() {
     this.net = {
       x: this.pos.x, z: this.pos.z, yaw: this.yaw, speed: this.speed, steer: this.steer, lean: this.lean,
-      pitch: this.pitch || 0, suspY: this.suspY || 0, vLat: this.vLat || 0, braking: !!this.braking, throttle: this.throttle || 0,
+      pitch: this.pitch || 0, suspY: this.suspY || 0, vLat: this.vLat || 0, braking: !!this.braking, throttle: this.throttle || 0, gear: this.gear || 1,
     };
+  }
+
+  triggerShiftFx(isUp) {
+    const D = this.def;
+    this.shiftT = D.isSuv ? 0.10 : 0.075;
+    this.shiftCd = 0.26;
+    if (D.isCar && isUp && this.throttle > 0 && Math.abs(this.speed) > 4) {
+      const pts = this.model.exhaustPoints || [[0, 0.3, 2.15]];
+      for (const ep of pts) {
+        this.toWorld(ep, tmpV);
+        fx.emit(tmpV.x, tmpV.y, tmpV.z, { count: 3, color: [0xff7a18, 0xffb040, 0x66ccff], speed: 1.8, up: 0.2, size: 0.18, life: 0.22, grav: 0, spread: 0.25 });
+      }
+      this.pitchVel = (this.pitchVel || 0) - 0.26;
+    }
+  }
+
+  shiftUp() {
+    const maxG = this.def.gears || (this.def.isCar ? 6 : 5);
+    if ((this.gear || 1) >= maxG) return false;
+    this.gear = (this.gear || 1) + 1;
+    this.triggerShiftFx(true);
+    return true;
+  }
+
+  shiftDown() {
+    if ((this.gear || 1) <= 1) return false;
+    this.gear = (this.gear || 1) - 1;
+    this.triggerShiftFx(false);
+    return true;
   }
 
   // point local de la moto -> monde (sans tenir compte de l'inclinaison, négligeable pour une position)
@@ -136,7 +165,7 @@ export class Vehicle {
         g.net.send({
           t: 'v_state', id: this.id, x: r2(this.pos.x), z: r2(this.pos.z), yaw: r2(this.yaw),
           spd: r2(this.speed), st: r2(this.steer), ln: r2(this.lean), fu: r1(this.fuel),
-          pt: r2(this.pitch || 0), sy: r2(this.suspY || 0), vl: r2(this.vLat || 0), br: this.braking ? 1 : 0, th: this.throttle || 0,
+          pt: r2(this.pitch || 0), sy: r2(this.suspY || 0), vl: r2(this.vLat || 0), br: this.braking ? 1 : 0, th: this.throttle || 0, gr: this.gear || 1,
         });
       }
     }
@@ -279,14 +308,20 @@ export class Vehicle {
     if (dry && !this.dryNoted) { this.dryNoted = true; g.sfx.cough?.(1); g.hud.announce('PANNE SÈCHE', `Plus d'essence : ${D.det || 'la'} ${(D.hudName || 'moto').toLowerCase()} n'avance plus qu'au pas`, 3500); }
     if (!dry && this.fuel > 0) this.dryNoted = false;
 
-    // vitesse : courbe de couple par rapport, freinage progressif réaliste, coupure de passage de rapport, résistance aérodynamique quadratique
+    // vitesse : courbe de couple par rapport, boîte automatique ou manuelle, freinage progressif réaliste
     const isRwd = D.drivetrain === 'RWD', isAwd = D.drivetrain === 'AWD';
-    const aeroDrag = D.isCar ? (0.0085 * sp * Math.abs(sp) + D.drag * Math.abs(sp) + 0.45) : (D.drag * Math.abs(sp) + 0.65);
+    const aeroDrag = D.isCar ? (0.0065 * sp * Math.abs(sp) + D.drag * Math.abs(sp) + 0.42) : (D.drag * Math.abs(sp) + 0.60);
     const coast = () => { const drag = aeroDrag * dt; sp = Math.abs(sp) <= drag ? 0 : sp - Math.sign(sp) * drag; };
     if (this.shiftT > 0) this.shiftT = Math.max(0, this.shiftT - dt);
+    if (this.shiftCd > 0) this.shiftCd = Math.max(0, this.shiftCd - dt);
     this.throttle = 0;
     this.braking = false;
     this.handbraking = !!hb;
+
+    const gears = D.gears || (D.isCar ? 6 : 5);
+    const tops = D.gearTopSpeeds;
+    this.gear = clamp(this.gear || 1, 1, gears);
+    const isManual = !!(this.hasTank && g.settings?.manualGearbox);
 
     // Pression de freinage progressive (attaque hydraulique réaliste en ~0,28 s sur GT et ~0,35 s sur le 4x4 au lieu d'un blocage instantané)
     const wantServiceBrake = (fwdKey && sp < -0.2) || (backKey && sp > 0.25);
@@ -297,6 +332,9 @@ export class Vehicle {
     }
     const effBrake = D.brake * (0.25 + 0.75 * this.brakePress) + 0.004 * sp * sp;
 
+    const curGearTop = tops ? tops[this.gear - 1] : (D.maxSpeed * (this.gear / gears));
+    const prevGearTop = tops ? (this.gear > 1 ? tops[this.gear - 2] : 0) : (D.maxSpeed * ((this.gear - 1) / gears));
+
     if (fwdKey && !backKey) {
       this.throttle = 1;
       if (sp < -0.2) {
@@ -304,20 +342,34 @@ export class Vehicle {
         this.braking = true;
       } else if (dry) {
         if (sp < FU.pushSpeed) sp = Math.min(FU.pushSpeed, sp + FU.pushAccel * dt); else coast();
-      } else if (miss || this.shiftT > 0.04) {
-        // Coupure d'injection pendant le passage de rapport supérieur
-        if (this.shiftT <= 0) this.throttle = 0;
+      } else if (miss) {
+        this.throttle = 0;
         coast();
       } else {
         const ratio = Math.abs(sp) / D.maxSpeed;
         // AWD (4x4) : très fort couple au décollage (4 roues motrices), s'essouffle à haute vitesse
         // RWD (Voiture GT) : montée en régime rageuse et allonge jusqu'à 140 km/h
-        const torqueCurve = isAwd
-          ? Math.max(0.16, 1.18 - 0.98 * (ratio ** 1.15))
+        let torqueCurve = isAwd
+          ? Math.max(0.24, 1.20 - 0.88 * (ratio ** 1.2))
           : D.isCar
-            ? Math.max(0.22, 1.06 - 0.80 * (ratio ** 1.45))
-            : Math.max(0.15, 1 - ratio * 0.85);
-        sp += D.accel * torqueCurve * dt;
+            ? Math.max(0.28, 1.12 - 0.74 * (ratio ** 1.45))
+            : Math.max(0.22, 1.05 - ratio * 0.78);
+
+        if (isManual) {
+          // En boîte manuelle : sous-régime si rapport trop haut à basse vitesse, et rupteur au sommet du rapport engagé
+          if (this.gear > 1 && sp < prevGearTop * 0.65) {
+            torqueCurve *= clamp(0.32 + 0.68 * (sp / Math.max(1, prevGearTop * 0.65)), 0.32, 1);
+          }
+          if (sp >= curGearTop) {
+            // Rupteur du rapport engagé (ou frein moteur si rétrogradage à haute vitesse)
+            sp = Math.max(curGearTop, sp - D.brake * 0.55 * dt);
+            torqueCurve = 0;
+          }
+        }
+        // Pendant un passage de rapport (shiftT), le véhicule conserve son élan sans retomber sous le seuil du rapport
+        const shiftMult = this.shiftT > 0 ? 0.35 : 1.0;
+        sp += D.accel * torqueCurve * shiftMult * dt;
+        if (isManual && sp > curGearTop && torqueCurve > 0) sp = curGearTop;
       }
     } else if (backKey && !fwdKey) {
       this.throttle = -1;
@@ -327,7 +379,28 @@ export class Vehicle {
       } else {
         sp = Math.max(-(dry ? Math.min(D.reverseSpeed, FU.pushSpeed) : D.reverseSpeed), sp - (dry ? FU.pushAccel : D.accel * 0.48) * dt);
       }
-    } else coast();
+    } else {
+      coast();
+      // Frein moteur supplémentaire en boîte manuelle si on relâche les gaz à très haut régime
+      if (isManual && sp > curGearTop) {
+        sp = Math.max(curGearTop, sp - D.brake * 0.65 * dt);
+      }
+    }
+
+    // Gestion automatique des rapports en mode AUTO (avec hystérésis large pour éviter tout pompage entre deux rapports)
+    if (this.hasTank && !isManual) {
+      if (sp < 0.8) {
+        this.gear = 1;
+      } else if (this.shiftCd <= 0) {
+        const upThresh = curGearTop * (this.throttle > 0 ? 0.92 : 0.78);
+        const downThresh = prevGearTop * (this.throttle > 0 ? 0.72 : 0.58);
+        if (this.gear < gears && sp >= upThresh) {
+          this.shiftUp();
+        } else if (this.gear > 1 && sp < downThresh) {
+          this.shiftDown();
+        }
+      }
+    }
 
     if (hb) {
       this.braking = true;
@@ -592,68 +665,58 @@ export class Vehicle {
     if (!running && this.engine) this.stopEngine();
 
     const gears = D.gears || (D.isCar ? 6 : 5);
+    const tops = D.gearTopSpeeds;
     const absSp = Math.abs(this.speed);
     const ratio = clamp(absSp / D.maxSpeed, 0, 1);
+    const isManual = !!(this.hasTank && g.settings?.manualGearbox);
 
-    // Calcul du rapport engagé à partir de l'étagement réel de la boîte (gearTopSpeeds)
-    let gearIdx = 0;
-    let gearFrac = 0;
-    if (D.gearTopSpeeds && D.gearTopSpeeds.length) {
-      const tops = D.gearTopSpeeds;
-      gearIdx = tops.findIndex((t) => absSp <= t);
-      if (gearIdx < 0) gearIdx = tops.length - 1;
-      const prevTop = gearIdx > 0 ? tops[gearIdx - 1] * 0.62 : 0;
-      const curTop = tops[gearIdx];
-      gearFrac = clamp((absSp - prevTop) / Math.max(1, curTop - prevTop), 0, 1);
-    } else {
-      gearIdx = Math.min(gears - 1, Math.floor(ratio * gears));
-      const band = 1 / gears;
-      const low = gearIdx > 0 ? (gearIdx - 0.35) * band : 0;
-      const high = (gearIdx + 1) * band;
-      gearFrac = clamp((ratio - low) / Math.max(0.05, high - low), 0, 1);
-    }
-
-    if (D.isCar && gearIdx !== this.gear) {
-      if (gearIdx > this.gear && this.throttle > 0 && absSp > 5) {
-        this.shiftT = D.isSuv ? 0.16 : 0.11; // Coupure d'embrayage/injection au passage de rapport
-        const pts = this.model.exhaustPoints || [[0, 0.3, 2.15]];
-        for (const ep of pts) {
-          this.toWorld(ep, tmpV);
-          fx.emit(tmpV.x, tmpV.y, tmpV.z, { count: 3, color: [0xff7a18, 0xffb040, 0x66ccff], speed: 1.8, up: 0.2, size: 0.18, life: 0.22, grav: 0, spread: 0.25 });
-        }
-        this.pitchVel = (this.pitchVel || 0) - 0.32;
+    if (!local) {
+      if (this.net?.gear) {
+        this.gear = clamp(this.net.gear, 1, gears);
+      } else if (tops && tops.length) {
+        const idx = tops.findIndex((t) => absSp <= t * 0.92);
+        this.gear = idx >= 0 ? idx + 1 : gears;
       }
-      this.gear = gearIdx;
-    } else {
-      this.gear = gearIdx;
     }
+    this.gear = clamp(this.gear || 1, 1, gears);
+
+    // Calcul du régime moteur à partir du rapport réellement engagé (this.gear : 1..gears)
+    const curTop = tops ? tops[this.gear - 1] : (D.maxSpeed * (this.gear / gears));
+    const prevTop = tops ? (this.gear > 1 ? tops[this.gear - 2] : 0) : (D.maxSpeed * ((this.gear - 1) / gears));
+    const lowSp = this.gear > 1 ? prevTop * 0.48 : 0;
+    let gearFrac = clamp((absSp - lowSp) / Math.max(1, curTop - lowSp), 0, 1.05);
 
     // Indication du rapport engagé ('N', 'R', '1'..'6') et régime moteur (tr/min)
-    const idleRpm = D.idleRpm || 900, redlineRpm = D.redlineRpm || 7500;
+    const idleRpm = D.idleRpm || 900, redlineRpm = D.redlineRpm || 7500, maxRpm = D.maxRpm || 8500;
     if (this.speed < -0.25) {
       this.gearLabel = 'R';
       gearFrac = clamp(absSp / D.reverseSpeed, 0, 1);
-    } else if (absSp < 0.35 && this.throttle === 0) {
+    } else if (absSp < 0.35 && this.throttle === 0 && !isManual) {
       this.gearLabel = 'N';
       gearFrac = 0;
     } else {
-      this.gearLabel = String(gearIdx + 1);
+      this.gearLabel = String(this.gear);
     }
 
+    // Oscillation du rupteur si on maintient l'accélérateur au sommet du rapport en boîte manuelle
+    const atLimiter = isManual && this.throttle > 0 && absSp >= curTop * 0.985;
+    const limiterBounce = atLimiter ? Math.sin(g.time * 62) * 0.04 : 0;
+
     const targetRpmNorm = running
-      ? clamp(0.16 + 0.76 * gearFrac + (this.throttle > 0 ? 0.08 : 0) - (this.shiftT > 0 ? 0.18 : 0), 0.14, 1.0)
+      ? clamp(0.16 + 0.78 * gearFrac + (this.throttle > 0 ? 0.06 : 0) - (this.shiftT > 0 ? 0.16 : 0) + limiterBounce, 0.14, 1.08)
       : 0;
-    this.rpm = (this.rpm || 0.16) + (targetRpmNorm - (this.rpm || 0.16)) * Math.min(1, dt * 14);
-    this.rpmVal = running ? Math.round(idleRpm + (redlineRpm - idleRpm) * ((this.rpm - 0.14) / 0.86)) : 0;
+    this.rpm = (this.rpm || 0.16) + (targetRpmNorm - (this.rpm || 0.16)) * Math.min(1, dt * 16);
+    this.rpmVal = running ? Math.min(maxRpm, Math.round(idleRpm + (redlineRpm - idleRpm) * ((this.rpm - 0.14) / 0.86))) : 0;
 
     if (!this.engine) return;
     const d = g.player.camera.position.distanceTo(this.group.position);
-    this.engine.set(this.rpm, this.throttle, ratio, local ? 1 : clamp(1 - d / 55, 0, 1) ** 2);
+    this.engine.set(clamp(this.rpm, 0, 1), this.throttle, ratio, local ? 1 : clamp(1 - d / 55, 0, 1) ** 2);
   }
   stopEngine() { if (this.engine) { this.engine.stop(); this.engine = null; } }
 
   hudInfo() {
-    const D = this.def;
+    const D = this.def, g = this.game;
+    const isManual = !!(this.hasTank && g.settings?.manualGearbox);
     return {
       speed: this.speed,
       vmax: D.maxSpeed,
@@ -669,6 +732,7 @@ export class Vehicle {
       maxRpm: D.maxRpm || 8500,
       gear: this.gearLabel || '1',
       gears: D.gears || (D.isCar ? 6 : 5),
+      manual: isManual,
       drivetrain: D.drivetrain || null,
       isCar: !!D.isCar,
       braking: !!this.braking,
@@ -923,9 +987,42 @@ export function installVehicles(game, { world, hud, sfx, scene }) {
       v.syncNet();
       if (v.isTram) sfx.tramChime?.(true, 0.6); else sfx.mount?.(v.type);
       const B = game.binds, kE = B.label('interact'), kV = B.label('vehicleView');
+      const kMode = B.label('gearMode'), kUp = B.label('gearUp'), kDn = B.label('gearDown');
       if (v.isTram) { const [a, b] = this.tramEnterText(v, seat); hud.announce(a, b, 4500); }
-      else hud.announce(v.def.name, seat === 0 ? `${B.moveLabel()} : conduire · ${B.label('jump')} : ${v.hasTank ? 'frein à main' : 'frein'} · ${kE} : descendre` : (world.isCircuitTest ? `Passager à bord · ${kV} : changer de vue · ${kE} : descendre` : `Vous êtes passager : tirez ! · ${kE} : descendre`), 3500);
+      else {
+        const gearHint = v.hasTank ? ` · ${kMode} : Auto/Manuel · ${kUp}/${kDn} : Rapports +/-` : '';
+        hud.announce(v.def.name, seat === 0 ? `${B.moveLabel()} : conduire · ${B.label('jump')} : ${v.hasTank ? 'frein à main' : 'frein'}${gearHint} · ${kE} : descendre` : (world.isCircuitTest ? `Passager à bord · ${kV} : changer de vue · ${kE} : descendre` : `Vous êtes passager : tirez ! · ${kE} : descendre`), 3500);
+      }
       this.refreshRiders();
+    },
+
+    toggleGearboxMode() {
+      this.settings.manualGearbox = !this.settings.manualGearbox;
+      this.saveSettings?.();
+      this.syncGearboxBtn?.();
+      const isMan = !!this.settings.manualGearbox;
+      const B = this.binds;
+      const sub = isMan
+        ? `${B.tag('gearUp')} Rapport + · ${B.tag('gearDown')} Rapport − · ${B.tag('gearMode')} repasser en Auto`
+        : `Passage automatique des rapports · ${B.tag('gearMode')} passer en Manuel`;
+      hud.announce(isMan ? 'BOÎTE MANUELLE' : 'BOÎTE AUTOMATIQUE', sub, 2200);
+    },
+
+    vehicleShiftUp() {
+      const rv = this.player?.vehicle;
+      if (!rv || rv.seat !== 0 || rv.v.isTram || !rv.v.hasTank) return;
+      if (rv.v.shiftUp()) {
+        // En mode auto, un passage aux palettes maintient le rapport choisi pendant 1,4 s avant de reprendre l'automatisme
+        if (!this.settings?.manualGearbox) rv.v.shiftCd = 1.4;
+      }
+    },
+
+    vehicleShiftDown() {
+      const rv = this.player?.vehicle;
+      if (!rv || rv.seat !== 0 || rv.v.isTram || !rv.v.hasTank) return;
+      if (rv.v.shiftDown()) {
+        if (!this.settings?.manualGearbox) rv.v.shiftCd = 1.4;
+      }
     },
 
     leaveVehicle(force = false) {
@@ -1016,7 +1113,7 @@ export function installVehicles(game, { world, hud, sfx, scene }) {
         if (!v || v.seats[0] === myId()) return;
         v.net = {
           x: m.x, z: m.z, yaw: m.yaw, speed: m.spd, steer: m.st, lean: m.ln,
-          pitch: m.pt || 0, suspY: m.sy || 0, vLat: m.vl || 0, braking: !!m.br, throttle: m.th || 0,
+          pitch: m.pt || 0, suspY: m.sy || 0, vLat: m.vl || 0, braking: !!m.br, throttle: m.th || 0, gear: m.gr || 1,
         };
         if (m.fu != null && performance.now() > v.fuelLock) v.fuel = clamp(+m.fu, 0, v.def.tank); // anciens messages : pas de `fu`
       });

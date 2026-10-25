@@ -247,8 +247,11 @@ export class Player {
       if (B.is('interact', e)) this.game.interact();
       if (B.is('torch', e)) this.setTorch(!this.torchOn);
       if (B.is('grenade', e)) this.throwGrenade();
-      if (this.vehicle) { // moto, rame : bascule troisième / première personne, gong et portes de la rame
+      if (this.vehicle) { // voiture, moto, rame : bascule troisième / première personne, boîte auto/manuelle, rapports +/-, gong et portes
         if (B.is('vehicleView', e)) this.game.toggleVehicleView?.();
+        else if (B.is('gearMode', e)) this.game.toggleGearboxMode?.();
+        else if (B.is('gearUp', e)) this.game.vehicleShiftUp?.();
+        else if (B.is('gearDown', e)) this.game.vehicleShiftDown?.();
         else if (B.is('tramGong', e)) this.game.tramGong?.();
         else if (B.is('tramDoors', e)) this.game.tramDoors?.();
         else if (B.is('tramSwitch', e)) this.game.tramSwitch?.();

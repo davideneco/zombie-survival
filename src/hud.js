@@ -208,7 +208,8 @@ export class Hud {
     if (!ctx) return;
     const rpm = Math.round(info.rpm || 0);
     const gear = info.gear || '1';
-    const key = `${kmh}|${ Math.round(rpm / 25) }|${gear}|${info.drivetrain || ''}|${info.braking ? 1 : 0}|${info.drifting ? 1 : 0}|${hot ? 1 : 0}`;
+    const isMan = !!info.manual;
+    const key = `${kmh}|${ Math.round(rpm / 25) }|${gear}|${isMan ? 1 : 0}|${info.drivetrain || ''}|${info.braking ? 1 : 0}|${info.drifting ? 1 : 0}|${hot ? 1 : 0}`;
     this._set('vcluster', key, () => {
       const W = 380, H = 142;
       ctx.clearRect(0, 0, W, H);
@@ -319,21 +320,21 @@ export class Hud {
         ctx.fill();
       }
 
-      // Boîtier du rapport engagé
+      // Boîtier du rapport engagé + mode de boîte (AUTO / MANUEL)
       ctx.fillStyle = 'rgba(22, 27, 36, 0.95)';
-      ctx.strokeStyle = rpm >= redRpm * 0.95 ? '#ff3b30' : 'rgba(130, 145, 165, 0.45)';
+      ctx.strokeStyle = rpm >= redRpm * 0.95 ? '#ff3b30' : isMan ? '#f5a623' : 'rgba(130, 145, 165, 0.45)';
       ctx.lineWidth = 1.5;
       ctx.beginPath();
-      ctx.roundRect(cx - 22, 30, 44, 46, 7);
+      ctx.roundRect(cx - 26, 29, 52, 48, 7);
       ctx.fill();
       ctx.stroke();
 
-      ctx.fillStyle = '#8b94a2';
+      ctx.fillStyle = isMan ? '#ffb848' : '#58df88';
       ctx.font = 'bold 7.5px Arial, sans-serif';
-      ctx.fillText('RAPPORT', cx, 39);
+      ctx.fillText(isMan ? 'MANUEL' : 'AUTO', cx, 38);
       ctx.fillStyle = gear === 'R' ? '#ff5252' : gear === 'N' ? '#8892a0' : '#ffd24a';
       ctx.font = 'bold 26px Arial, sans-serif';
-      ctx.fillText(String(gear), cx, 59);
+      ctx.fillText(String(gear), cx, 60);
 
       // Badge de transmission (PROPULSION RWD / 4X4 AWD)
       if (info.drivetrain) {

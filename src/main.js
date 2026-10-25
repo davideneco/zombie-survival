@@ -71,7 +71,7 @@ scene.add(moon, moon.target);
 const MOON_OFFSET = new THREE.Vector3(25, 55, 15);
 
 // ------------------------------------------------------- Options (client)
-const DEFAULT_SETTINGS = { brightness: 1.4, fov: 80, sens: 1, volume: 1, music: 0.5, quality: 1, tpVehicle: true, chat: true, cinema: true, halo: true }; // chat : afficher le chat écrit (Options) ; tpVehicle : vue à la troisième personne sur une moto (touche « changer de vue »)
+const DEFAULT_SETTINGS = { brightness: 1.4, fov: 80, sens: 1, volume: 1, music: 0.5, quality: 1, tpVehicle: true, chat: true, cinema: true, halo: true, manualGearbox: false }; // chat : afficher le chat écrit (Options) ; tpVehicle : vue à la troisième personne ; manualGearbox : boîte manuelle ou automatique
 const settings = { ...DEFAULT_SETTINGS };
 try { Object.assign(settings, JSON.parse(localStorage.getItem('zombie_settings') || '{}')); } catch {}
 
@@ -1483,8 +1483,22 @@ const game = {
     let promptText = null;
     hud.setVehicle(p.vehicle ? p.vehicle.v.hudInfo() : null); // tableau de bord complet (compte-tours, vitesse, rapport, PV, essence)
     if (p.vehicle) {
-      const kE = game.binds.tag('interact');
-      promptText = p.vehicle.v.isTram ? this.tramRideHint(p.vehicle.v, p.vehicle.seat) : p.vehicle.v.state === 'burning' ? `SAUTEZ ! ${kE}` : p.vehicle.seat === 0 ? `${kE} Descendre` : `${kE} Descendre · clic gauche : tirer`;
+      const B = game.binds, kE = B.tag('interact');
+      if (p.vehicle.v.isTram) promptText = this.tramRideHint(p.vehicle.v, p.vehicle.seat);
+      else if (p.vehicle.v.state === 'burning') promptText = `SAUTEZ ! ${kE}`;
+      else if (p.vehicle.seat === 0) {
+        if (p.vehicle.v.hasTank) {
+          const isMan = !!settings.manualGearbox;
+          const kMode = B.tag('gearMode'), kUp = B.tag('gearUp'), kDn = B.tag('gearDown');
+          promptText = isMan
+            ? `${kUp}/${kDn} Rapports +/- · ${kMode} Boîte Auto · ${kE} Descendre`
+            : `${kMode} Boîte Manuelle · ${kUp}/${kDn} Rapports · ${kE} Descendre`;
+        } else {
+          promptText = `${kE} Descendre`;
+        }
+      } else {
+        promptText = `${kE} Descendre · clic gauche : tirer`;
+      }
     } else if (downedTeammate) {
       const left = Math.max(0, this.reviveTime() - this.reviveTimer).toFixed(1);
       promptText = `${game.binds.tag('interact')} Maintenir pour réanimer ${downedTeammate.name} (${left}s)`;
@@ -2292,6 +2306,14 @@ const btnHalo = document.getElementById('btnHalo');
 const syncHalo = () => { btnHalo.textContent = `HALO (HAUTE) : ${settings.halo !== false ? 'OUI' : 'NON'}`; };
 btnHalo.addEventListener('click', () => { settings.halo = settings.halo === false; syncHalo(); gfx.applyHalo(); game.saveSettings(); });
 syncHalo();
+
+const btnGearbox = document.getElementById('btnGearbox');
+const syncGearbox = () => { if (btnGearbox) btnGearbox.textContent = `BOÎTE DE VITESSES : ${settings.manualGearbox ? 'MANUELLE' : 'AUTOMATIQUE'}`; };
+game.syncGearboxBtn = syncGearbox;
+if (btnGearbox) {
+  btnGearbox.addEventListener('click', () => { settings.manualGearbox = !settings.manualGearbox; syncGearbox(); game.saveSettings(); });
+}
+syncGearbox();
 
 const openOptions = (back) => game.ui.openOptions(back);
 
