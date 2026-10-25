@@ -24,6 +24,7 @@ const VIEW_PATHS := {
 	"ARENA": "res://scenes/world/arena.tscn",
 	"WORLD": "res://scenes/world/world.tscn",
 	"AlpineView": "res://scenes/world/alpine_view.gd",
+	"LabView": "res://scenes/world/vehicle_lab_view.gd",
 	"HUD": "res://scenes/ui/hud.tscn",
 	"WeaponView": "res://scenes/weapon_view.gd",
 	"RidesView": "res://scenes/world/rides_view.gd",
@@ -57,6 +58,8 @@ static var WORLD: PackedScene:
 	get: return _view_res("WORLD")
 static var AlpineView: GDScript:   # v0.34.0 : Station des Aiguilles
 	get: return _view_res("AlpineView")
+static var LabView: GDScript:   # v0.37.0 : carte de test des véhicules
+	get: return _view_res("LabView")
 static var HUD: PackedScene:
 	get: return _view_res("HUD")
 const Menus := preload("res://scenes/ui/menus.gd")
@@ -183,6 +186,7 @@ var _prev_eye := Vector3.ZERO    # J5 : œil (caméra) au pas précédent, pour 
 var _mount := ""                  # --mount=moto|grosseMoto|velo|tram|voiture : monte sur la machine la plus proche de l'arrivée
 var _car_idx := 0                 # v0.36.0 : --car=N
 var _car_pass := 0                # v0.36.0 : --car-passengers=N
+var _veh_at: Array = []           # v0.37.0 : --veh-at=x,z,cap[,km/h]
 var _car_zombies := 0             # v0.36.0 : --car-zombies=N
 var _car_lights := -1             # v0.36.0 : --car-lights=0|1 (sinon : allumés la nuit en montant)
 var _auto_fwd := false            # --auto-fwd : accélérateur maintenu (captures et vidéos)
@@ -344,6 +348,8 @@ func _ready() -> void:
 			_car_pass = int(a.substr(17))
 		elif a.begins_with("--car-lights="):
 			_car_lights = int(a.substr(13))
+		elif a.begins_with("--veh-at="):   # v0.37.0 : --mount=… --veh-at=x,z,cap_deg[,km/h] : machine montée placée et lancée (captures du banc d'essai)
+			_veh_at = Array(a.substr(9).split(",")).map(func(q: String) -> float: return float(q))
 		elif a.begins_with("--car-zombies="):   # v0.36.0 : N zombies autour de la voiture montée (captures)
 			_car_zombies = int(a.substr(14))
 		elif a.begins_with("--act="):
@@ -513,6 +519,8 @@ func _map_choice() -> String:
 	if _map != "":
 		return _map
 	var m := String(Game.settings.get_value("map"))
+	if m == "vehicules":   # v0.37.0 : le banc d'essai ignore les modes de jeu
+		return m
 	if _mode_choice() == GameMode.ZONE:   # v0.26.0 : Zone unique : toujours sur la carte de Strasbourg
 		return "strasbourg"
 	if _mode_choice() != GameMode.CLASSIC and m == "arena":   # v0.33.0 / v0.34.0 : Contre la montre, Arsenal : Strasbourg ou la station alpine
@@ -560,7 +568,7 @@ func _start_session() -> void:
 	await _step(0.0)
 	# 1. données de la carte sur un fil de travail (l'interface continue d'animer fond et barre)
 	var th := Thread.new()
-	th.start(func() -> Object: return Arena.load_arena() if map == "arena" else (AlpineMap.load_map() if map == "alpine" else World.load_world()))
+	th.start(func() -> Object: return Arena.load_arena() if map == "arena" else (AlpineMap.load_map() if map == "alpine" else (VehicleLabMap.load_map() if map == "vehicules" else World.load_world())))
 	var tw := Time.get_ticks_msec()
 	while th.is_alive():
 		await _progress(_flow.step_text(), 1.0 - exp(-(Time.get_ticks_msec() - tw) / 700.0))
@@ -688,7 +696,7 @@ func _record_stats() -> void:
 	if not _flow.needs_record():
 		return
 	_flow.mark_recorded()
-	if not _record_ok or Game.player == null or Game.map_name == "arena":
+	if not _record_ok or Game.player == null or Game.map_name == "arena" or Game.lab != null:
 		return
 	if Game.gm != null:   # v0.26.0 : Zone unique : meilleurs scores par zone, à part
 		var zb := Game.stats.record_zone(Game.gm.zone_name, Game.difficulty, Game.round_number, Game.kills, Game.points_earned, Game.time, Game.escaped)
@@ -753,6 +761,8 @@ func _build_scene_nodes(map: String) -> void:
 	add_child(_graphics)
 	_graphics.alpine = map == "alpine"   # v0.34.0 : neige, brouillard de montagne, vent
 	_graphics.setup(_camera, map == "arena")
+	if map == "vehicules":
+		_camera.far = 320.0   # v0.37.0 : tout le banc d'essai (260 m)
 	if map == "alpine":
 		_camera.far = 900.0   # les montagnes autour de la station (le brouillard de montagne est plus léger que celui de la ville)
 	if _sky_arg >= 0.0:
@@ -802,6 +812,8 @@ func _build_scene_nodes(map: String) -> void:
 	_hud_last = {"banner": "", "bar": {}, "mark": "", "fanal": -2.0, "fanal_text": ""}
 	if Game.world != null and Game.world.map_id == "alpine":
 		_arena_node = AlpineView.new()
+	elif Game.lab != null:
+		_arena_node = LabView.new()
 	else:
 		_arena_node = (WORLD if Game.world != null else ARENA).instantiate()
 	add_child(_arena_node)
@@ -1122,6 +1134,7 @@ func _start_mounted() -> void:
 		Game.player.pos.y = 0.0
 		r.try_mount(car, 0)
 		Game.player.yaw = car.yaw
+		_place_mounted(car)
 		if _car_lights >= 0:
 			car.lights = _car_lights == 1
 		for i in _car_zombies:
@@ -1130,11 +1143,22 @@ func _start_mounted() -> void:
 			z.spawn_t = 0.0
 		return
 	for v in r.vehicles:
-		if v.type == _mount:
+		if v.type == _mount or (_mount == "motoneige" and v.def.get("model", "") == "motoneige"):   # v0.37.0 : --mount=motoneige
 			Game.player.pos = Vector3(v.x + 1.0, 0.0, v.z + 0.5)
 			r.try_mount(v, 0)
 			Game.player.yaw = v.yaw
+			_place_mounted(v)
 			return
+
+## v0.37.0 : --veh-at=x,z,cap_deg[,km/h] : la machine montée est placée, orientée et lancée (captures du banc d'essai).
+func _place_mounted(v: Object) -> void:
+	if _veh_at.size() < 3:
+		return
+	v.x = _veh_at[0]
+	v.z = _veh_at[1]
+	v.yaw = deg_to_rad(_veh_at[2])
+	v.speed = _veh_at[3] / 3.6 if _veh_at.size() > 3 else 0.0
+	Game.player.yaw = v.yaw
 
 func _exit_tree() -> void:
 	PerfLog.finish()
@@ -1176,6 +1200,8 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif event is InputEventKey and event.pressed and not event.echo:
 		# les touches viennent de l'InputMap (Options > Touches) : lettre tapée ou touche physique selon la liaison
 		var riding: bool = Game.rides != null and Game.rides.ride != null
+		if Game.lab != null and _lab_key(event as InputEventKey):
+			return
 		if event.is_action_pressed("use"):
 			Game.interact()
 		elif event.is_action_pressed("vehicle_view") and riding:
@@ -1199,6 +1225,23 @@ func _unhandled_input(event: InputEvent) -> void:
 			for i in 3:
 				if event.is_action_pressed("weapon_%d" % (i + 1)):
 					_pending["weapon"] = i
+
+## v0.37.0 : touches du banc d'essai (lettres tapées, fixes : les armes et les achats n'existent pas sur cette carte).
+func _lab_key(e: InputEventKey) -> bool:
+	match e.keycode:
+		KEY_R:
+			Game.lab.service(Game)
+		KEY_X:
+			Game.lab.reset_vehicle(Game)
+		KEY_P:
+			Game.lab.to_hangar(Game)
+		KEY_C:
+			Game.lab.spawn_or_stow(Game)
+		KEY_N:
+			Game.lab.toggle_daynight(Game)
+		_:
+			return false
+	return true
 
 func _physics_process(dt: float) -> void:
 	if not _session_live:
@@ -1390,7 +1433,7 @@ func _session_process(dt: float) -> void:
 		_camera.position = op["pos"]
 		_camera.look_at(op["look"], Vector3.UP)
 	var vcam := Game.view_cam()
-	_weapon_view.hide_gun = (Game.rides != null and Game.rides.driving()) or vcam.external()   # arme de la vue cachée en conduisant et en vue externe (machine, ou 3e personne à pied)
+	_weapon_view.hide_gun = (Game.rides != null and Game.rides.driving()) or vcam.external() or Game.lab != null   # arme de la vue cachée en conduisant et en vue externe (machine, ou 3e personne à pied)
 	Game.view_aspect = get_viewport().get_visible_rect().size.aspect()
 	_camera.fov = 68.0 if orbiting else GraphicsRules.fov_for_aspect(Game.arms.fov(float(Game.settings.get_value("fov"))), Game.view_aspect)
 	_weapon_view.hide_gun = _weapon_view.hide_gun or orbiting

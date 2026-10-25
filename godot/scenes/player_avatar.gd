@@ -128,7 +128,7 @@ func _tick(dt: float) -> void:
 		anim = dbg_pose
 	_char.play(anim, -scale if back else scale)
 	# posture armée
-	var armed := not (p.dead or p.downed)
+	var armed := not (p.dead or p.downed) and Game.lab == null   # v0.37.0 : banc d'essai : mains libres, sans arme
 	_sprint_k = move_toward(_sprint_k, 1.0 if (p.sprinting and arms.aim < 0.05 and not w.reloading and arms.melee_t < 0.0) else 0.0, dt * SPRINT_EASE)
 	_ads_k = move_toward(_ads_k, arms.aim, dt * ADS_EASE)
 	_pose.posed = armed

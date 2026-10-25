@@ -43,6 +43,10 @@ var dry_noted := false
 var seats: Array = []          ## occupant de chaque place (0 : le joueur en solo), null : libre
 var model_seats: Array = []    ## [{ hip: [x, y, z], eye: [x, y, z], ry }] (doubles) (cuits dans vehicles.json)
 var events: PackedStringArray = PackedStringArray()   ## "cough", "beep", "dry", "crash:<impact>" : vidés par Rides (sons, annonces)
+var vy := 0.0                  ## v0.37.0 : relief (World.terrain, carte de test des véhicules) : vitesse verticale (m/s)
+var air := false               ## en l'air (au bout d'une rampe, sur une bosse prise vite)
+var grade := 0.0               ## pente du sol dans l'axe (m/m, + : ça monte devant) : la vue en tire le tangage
+var land_speed := 0.0          ## vitesse verticale du dernier atterrissage (m/s)
 var _bike_hit: Dictionary = {}
 var _fl := {"y": 0.0, "region": 0}
 var _col := {}
@@ -85,6 +89,9 @@ func reset() -> void:
 	dry_noted = false
 	_bike_hit.clear()
 	seats.fill(null)
+	vy = 0.0
+	air = false
+	grade = 0.0
 
 func max_hp() -> float:
 	return float(def["hp"])
@@ -146,6 +153,7 @@ func update(dt: float, g: Object, inp: Dictionary, driven: bool) -> void:
 	else:
 		throttle = 0.0
 		steer_angle = steer * float(def["maxSteer"]) / (1.0 + absf(speed) * 0.12)
+		settle(dt, g)
 	if state != "wreck":
 		dyaw = ang_diff(yaw, prev_yaw)
 		wheel_rot += (speed / wheel_radius) * dt
@@ -159,6 +167,7 @@ func drive(dt: float, g: Object, inp: Dictionary) -> void:
 	var hb: bool = on and bool(inp.get("hb", false))
 	var steer_in: float = float(inp.get("steer", 0.0)) if on else 0.0
 	var sp := speed
+	var tk := traction(g)   # v0.37.0 : 1 sur un sol ordinaire (produits exacts : golden JS inchangés)
 	# essence : réserve (bips), ratés sous missBelow, panne sèche (poussée au pas) ; un vélo n'a rien de tout cela
 	var FU: Dictionary = Config.at("vehicles.fuel")
 	var tank := has_tank()
@@ -193,7 +202,7 @@ func drive(dt: float, g: Object, inp: Dictionary) -> void:
 	if fwd_key and not back_key:
 		throttle = 1.0
 		if sp < 0.0:
-			sp += float(D["brake"]) * dt
+			sp += float(D["brake"]) * dt * tk
 		elif dry:
 			if sp < float(FU["pushSpeed"]):
 				sp = minf(float(FU["pushSpeed"]), sp + float(FU["pushAccel"]) * dt)
@@ -203,19 +212,19 @@ func drive(dt: float, g: Object, inp: Dictionary) -> void:
 			throttle = 0.0
 			sp = _coast(sp, dt)
 		else:
-			sp += float(D["accel"]) * maxf(0.1, 1.0 - sp / float(D["maxSpeed"])) * dt
+			sp += float(D["accel"]) * maxf(0.1, 1.0 - sp / float(D["maxSpeed"])) * dt * tk
 	elif back_key and not fwd_key:
 		throttle = -1.0
 		if sp > 0.3:
-			sp = sp - float(D["brake"]) * dt
+			sp = sp - float(D["brake"]) * dt * tk
 		else:
 			var lim := minf(float(D["reverseSpeed"]), float(FU["pushSpeed"])) if dry else float(D["reverseSpeed"])
 			var acc := float(FU["pushAccel"]) if dry else float(D["accel"]) * 0.5
-			sp = maxf(-lim, sp - acc * dt)
+			sp = maxf(-lim, sp - acc * dt * tk)
 	else:
 		sp = _coast(sp, dt)
 	if hb:
-		var b := float(D["brake"]) * 1.1 * dt
+		var b := float(D["brake"]) * 1.1 * dt * tk
 		sp = 0.0 if absf(sp) <= b else sp - signf(sp) * b
 	sp = clampf(sp, -float(D["reverseSpeed"]), float(D["maxSpeed"]))
 	# consommation : ralenti + gaz (marche arrière x 0,6) ; moteur coupé (en feu) ou réservoir vide : rien
@@ -226,7 +235,7 @@ func drive(dt: float, g: Object, inp: Dictionary) -> void:
 	steer += (steer_in - steer) * minf(1.0, dt * 7.0)
 	steer_angle = steer * float(D["maxSteer"]) / (1.0 + absf(sp) * 0.12)
 	var yaw_rate := -(sp / float(D["wheelbase"])) * tan(steer_angle) * (1.5 if hb else 1.0)
-	var max_yaw := (float(D["grip"]) * (1.6 if hb else 1.0)) / maxf(3.0, absf(sp))
+	var max_yaw := (float(D["grip"]) * (1.6 if hb else 1.0)) / maxf(3.0, absf(sp)) * tk
 	yaw_rate = clampf(yaw_rate, -max_yaw, max_yaw)
 	yaw += yaw_rate * dt
 	lean += (clampf(yaw_rate * absf(sp) * float(D.get("leanK", 0.035)), -0.55, 0.55) - lean) * minf(1.0, dt * 6.0)
@@ -237,7 +246,7 @@ func drive(dt: float, g: Object, inp: Dictionary) -> void:
 	var oz := z
 	var wx := ox + fx * sp * dt
 	var wz := oz + fz * sp * dt
-	var want := Vector3(wx, 0.1, wz)
+	var want := Vector3(wx, y + 0.1, wz)
 	_col.clear()
 	var p: Vector3 = g.collision.resolve(want, float(D["radius"]), _col, null, true)
 	var cx := p.x - want.x   # poussée du décor : différence de deux valeurs simple précision, exacte ; les positions restent en doubles
@@ -259,11 +268,85 @@ func drive(dt: float, g: Object, inp: Dictionary) -> void:
 				var kind: Variant = _col.get("kind")
 				crash(absf(sp) * into, String(kind) if kind != null else "wall", g)
 				sp *= 1.0 - 0.92 * into * into
+		sp = follow_terrain(dt, g, ox, oz, sp, float(D["wheelbase"]) / 2.0)
 	sp = collide_bikes(sp, dt, g)
 	speed = sp
 	if roadkill(g):   # arrêtée net par un zombie au contact : on ne le traverse pas
 		x = ox
 		z = oz
+
+# ------------------------------------------------------------------ v0.37.0 : relief et adhérence (World.terrain)
+const GRAVITY := 9.81
+const STEP_UP := 0.35   ## m : saut de relief franchi d'un pas ; au-delà (flanc d'une rampe, bord d'un plateau) : un obstacle
+
+static func terrain_of(g: Object) -> Object:
+	var w: Object = g.world
+	return w.get("terrain") if w != null else null   # (get : une doublure de test sans relief)
+
+## Adhérence du pas : 1 sans relief ; 0 en l'air ; sinon celle du sol (boue, glace).
+func traction(g: Object) -> float:
+	var T := terrain_of(g)
+	if T == null:
+		return 1.0
+	return 0.0 if air else float(T.grip(x, z))
+
+## Le relief monte d'un coup de plus de STEP_UP sous (px, pz) en venant de (dx, dz) (pas du déplacement, m) ?
+func terrain_wall(T: Object, px: float, pz: float, dx: float, dz: float) -> bool:
+	var l := sqrt(dx * dx + dz * dz)
+	if l < 1e-6:
+		return false
+	var k := maxf(l, 0.25) / l
+	return float(T.height(px, pz)) - float(T.height(px - dx * k, pz - dz * k)) > STEP_UP
+
+## Après le déplacement (depuis ox, oz) : suit le relief (montée, descente, décollage au bout d'une rampe, chute, atterrissage) ; la pente
+## freine ou pousse ; un flanc trop haut arrête la machine comme un mur. half : demi-longueur pour la pente (tangage). Renvoie la vitesse.
+func follow_terrain(dt: float, g: Object, ox: float, oz: float, sp: float, half: float) -> float:
+	var T := terrain_of(g)
+	if T == null:
+		return sp
+	var fx := -sin(yaw)
+	var fz := -cos(yaw)
+	if not air and (terrain_wall(T, x, z, x - ox, z - oz) or terrain_wall(T, x + fx * half, z + fz * half, x - ox, z - oz)):
+		x = ox
+		z = oz
+		crash(absf(sp), "wall", g)
+		return -sp * 0.15
+	var h := float(T.height(x, z))
+	if air:
+		vy -= GRAVITY * dt
+		y += vy * dt
+		if y <= h:
+			land_speed = -vy
+			y = h
+			vy = 0.0
+			air = false
+			events.append("land")
+			crash(land_speed, "prop", g)
+		return sp
+	if h < y + vy * dt - GRAVITY * dt * dt - 0.01:   # le sol se dérobe plus vite que la chute libre : on décolle
+		air = true
+		y += vy * dt
+		vy -= GRAVITY * dt
+		return sp
+	vy = (h - y) / dt
+	y = h
+	grade = (float(T.height(x + fx * half, z + fz * half)) - float(T.height(x - fx * half, z - fz * half))) / (2.0 * half)
+	return sp - GRAVITY * grade / sqrt(1.0 + grade * grade) * dt
+
+## Machine sans conducteur : retombe sur le relief.
+func settle(dt: float, g: Object) -> void:
+	var T := terrain_of(g)
+	if T == null:
+		return
+	var h := float(T.height(x, z))
+	if y > h + 0.01:
+		vy -= GRAVITY * dt
+		y = maxf(h, y + vy * dt)
+		air = y > h
+	else:
+		y = h
+		vy = 0.0
+		air = false
 
 func _coast(sp: float, dt: float) -> float:
 	var drag := (float(def["drag"]) * absf(sp) + 0.8) * dt

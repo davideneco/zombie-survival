@@ -44,6 +44,8 @@ var _mat: ShaderMaterial
 var _glass_mat: ShaderMaterial
 var _wheels: Array[Node3D] = []        ## nœuds qui tournent (axe x)
 var _spin_sign: Array[float] = []      ## sens de rotation (roues gauches retournées de 180°)
+var _y_prev := 0.0                     ## v0.37.0 : hauteur du relief (banc d'essai)
+var _y_cur := 0.0
 var _knuckles: Array[Node3D] = []      ## pivots des roues avant (braquage)
 var _steering: Node3D
 var _spots: Array[SpotLight3D] = []
@@ -899,6 +901,8 @@ func _make_fx() -> void:
 func remember() -> void:
 	_prev = _cur
 	_cur = Vector3(sim.x, sim.z, sim.yaw)
+	_y_prev = _y_cur   # v0.37.0 : relief du banc d'essai (0 ailleurs)
+	_y_cur = sim.y
 
 ## Nœud qui porte les places (la caisse : les passagers suivent tangage et roulis).
 func seat_parent() -> Node3D:
@@ -919,8 +923,8 @@ func apply(f: float) -> void:
 	var yaw := _prev.z + VehicleSim.ang_diff(_cur.z, _prev.z) * f
 	visible = sim.state != "gone"
 	var wreck := sim.state == "wreck"
-	position = Vector3(x, -0.1 if wreck else 0.0, z)
-	rotation = Vector3(0, yaw, 0)
+	position = Vector3(x, (-0.1 if wreck else 0.0) + lerpf(_y_prev, _y_cur, f), z)
+	rotation = Vector3(atan(sim.grade), yaw, 0)
 	_body.rotation = Vector3(-sim.pitch, 0, -sim.roll) if not wreck else Vector3(0.02, 0, 0.03)
 	for k in _knuckles:
 		k.rotation.y = -sim.steer_angle

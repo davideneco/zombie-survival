@@ -68,6 +68,11 @@ func _build_tram() -> void:
 	var td: Variant = data.get("tram")
 	if td == null:
 		return
+	var own: bool = td.has("lines")   # v0.37.0 : voie propre à la carte (banc d'essai) : ni réseau de Strasbourg, ni aiguillage, ni arrêt
+	if own:
+		T = T.duplicate()
+		T["lines"] = td["lines"]
+		T.erase("junction")
 	net = TramTrack.build_tracks(T)
 	var by_id: Dictionary = net["by_id"]
 	var jn := TramTrack.build_junction(T["junction"], by_id, float(T.get("step", 1.0))) if T.has("junction") else {}
@@ -84,12 +89,15 @@ func _build_tram() -> void:
 			list.append(e)
 		list.sort_custom(func(a, b): return a["s"] < b["s"])
 		t.stops = list
-	var line: TramTrack = by_id[T["car"]["start"]["line"]]
-	var stop: Dictionary = line.stops[0]
-	for st: Dictionary in line.stops:
-		if st["name"] == T["car"]["start"]["stop"]:
-			stop = st
-	var t0 := TramSim.new(0, net, line, float(stop["s"]), td)
+	var line: TramTrack = net["tracks"][0] if own else by_id[T["car"]["start"]["line"]]
+	var start_s := float(td.get("startS", 0.0))
+	if not own:
+		var stop: Dictionary = line.stops[0]
+		for st: Dictionary in line.stops:
+			if st["name"] == T["car"]["start"]["stop"]:
+				stop = st
+		start_s = float(stop["s"])
+	var t0 := TramSim.new(0, net, line, start_s, td)
 	t0.reset(null)
 	t0.spawn = {"x": t0.pos.x, "z": t0.pos.z, "yaw": t0.yaw}
 	trams.append(t0)

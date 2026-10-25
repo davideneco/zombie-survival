@@ -42,10 +42,13 @@ static func _h(v: float) -> float:
 	return INF if v < 0.0 else v
 
 static func load_map() -> World:
+	return build(data(), "alpine")
+
+## Un World depuis un plan au format de data/alpine.json (v0.37.0 : aussi la carte de test des véhicules, VehicleLabMap).
+static func build(D: Dictionary, id: String) -> World:
 	var t0 := Time.get_ticks_msec()
-	var D := data()
 	var w := World.new()
-	w.map_id = "alpine"
+	w.map_id = id
 	w.furniture_on = false
 	w.flow_range = Rules.ALPINE_FLOW_RANGE   # v0.34.11 : le champ couvre toute la station (sinon un zombie à plus de 160 m de marche fonce dans les murs)
 	var half := float(D["half"])
@@ -329,9 +332,11 @@ static func _build_objects(w: World, D: Dictionary) -> void:
 	var spawns: Array = []
 	for v: Dictionary in D["vehicles"]:
 		spawns.append({"type": v["type"], "x": v["x"], "z": v["z"], "yaw": v["yaw"], "model": v.get("model", "")})
-	var pk: Dictionary = D["parking"]
-	var pts2: Array = [{"x": pk["x"], "z": pk["z"]}, {"x": pk["pump"]["x"], "z": pk["pump"]["z"]}, {"x": pk["sign"]["x"], "z": pk["sign"]["z"]}]
-	var parkings: Array = [{"zone": w.zone_of(float(pk["x"]), float(pk["z"])), "name": pk["name"], "x": pk["x"], "z": pk["z"], "yaw": pk["yaw"], "size": pk["size"], "points": pts2}]
+	var parkings: Array = []
+	if D.has("parking"):
+		var pk: Dictionary = D["parking"]
+		var pts2: Array = [{"x": pk["x"], "z": pk["z"]}, {"x": pk["pump"]["x"], "z": pk["pump"]["z"]}, {"x": pk["sign"]["x"], "z": pk["sign"]["z"]}]
+		parkings = [{"zone": w.zone_of(float(pk["x"]), float(pk["z"])), "name": pk["name"], "x": pk["x"], "z": pk["z"], "yaw": pk["yaw"], "size": pk["size"], "points": pts2}]
 	var half := w.half_x
 	w.objects = {"start": _pos(w.start_pos.x, w.start_pos.z), "startZone": w.start_zone, "half": half, "zones": zones, "doors": w.doors,
 		"machines": machines, "wallWeapons": walls, "stations": stations, "vehicleSpawns": spawns, "parkings": parkings, "bikeStations": [],

@@ -65,6 +65,8 @@ var paint := 0
 var key := ""            ## clé de la boîte dynamique de la voiture dans la collision du monde
 var _items: Array = []
 var _fl2 := {"y": 0.0, "region": 0}
+var _mx := 0.0
+var _mz := 0.0
 
 func _init(id_: int, sp: Dictionary) -> void:
 	super(id_, "voiture", sp)
@@ -157,6 +159,7 @@ func drive(dt: float, g: Object, inp: Dictionary) -> void:
 	var steer_in: float = float(inp.get("steer", 0.0))
 	var sp := speed
 	var sp0 := speed
+	var tk := traction(g)   # v0.37.0 : relief et adhérence (1 sur un sol ordinaire)
 	var fs := _fuel_tick(dt, g, on)
 	var dry: bool = fs[0]
 	var miss: bool = fs[1]
@@ -166,26 +169,26 @@ func drive(dt: float, g: Object, inp: Dictionary) -> void:
 	if fwd_key and not back_key:
 		throttle = 1.0
 		if sp < -0.3:
-			sp = minf(0.0, sp + float(D["brake"]) * dt)
+			sp = minf(0.0, sp + float(D["brake"]) * dt * tk)
 		elif dry:
 			sp = minf(float(FU["pushSpeed"]), sp + float(FU["pushAccel"]) * dt) if sp < float(FU["pushSpeed"]) else _coast(sp, dt)
 		elif miss:
 			throttle = 0.0
 			sp = _coast(sp, dt)
 		else:
-			sp += float(D["accel"]) * maxf(0.08, 1.0 - sp / float(D["maxSpeed"])) * dt
+			sp += float(D["accel"]) * maxf(0.08, 1.0 - sp / float(D["maxSpeed"])) * dt * tk
 	elif back_key and not fwd_key:
 		throttle = -1.0
 		if sp > 0.3:
-			sp = maxf(0.0, sp - float(D["brake"]) * dt)
+			sp = maxf(0.0, sp - float(D["brake"]) * dt * tk)
 		else:
 			var lim := minf(float(D["reverseSpeed"]), float(FU["pushSpeed"])) if dry else float(D["reverseSpeed"])
 			var acc := float(FU["pushAccel"]) if dry else float(D["accel"]) * 0.6
-			sp = maxf(-lim, sp - acc * dt)
+			sp = maxf(-lim, sp - acc * dt * tk)
 	else:
 		sp = _coast(sp, dt)
 	if hb:   # frein à main : roues arrière bloquées
-		var b := float(D["brake"]) * 0.55 * dt
+		var b := float(D["brake"]) * 0.55 * dt * tk
 		sp = 0.0 if absf(sp) <= b else sp - signf(sp) * b
 	sp = clampf(sp, -float(D["reverseSpeed"]), float(D["maxSpeed"]))
 	brake_lamp = hb or (fwd_key and sp0 < -0.3) or (back_key and sp0 > 0.3)
@@ -198,7 +201,7 @@ func drive(dt: float, g: Object, inp: Dictionary) -> void:
 	steer += (steer_in - steer) * minf(1.0, dt * float(D["steerRate"]))
 	steer_angle = steer * float(D["maxSteer"]) / (1.0 + absf(sp) * float(D["steerFade"]))
 	var yr := -(sp / float(D["wheelbase"])) * tan(steer_angle) * (float(D["hbYaw"]) if hb else 1.0)
-	var lim_yaw := float(D["grip"]) * (1.5 if hb else 1.12) / maxf(3.0, absf(sp))
+	var lim_yaw := float(D["grip"]) * (1.5 if hb else 1.12) / maxf(3.0, absf(sp)) * tk
 	yr = clampf(yr, -lim_yaw, lim_yaw)
 	# la vitesse vit dans le repère monde : la caisse tourne, la vitesse suit par l'adhérence des pneus (bornée : dérapage)
 	var fx := -sin(yaw)
@@ -219,7 +222,7 @@ func drive(dt: float, g: Object, inp: Dictionary) -> void:
 	var loose := hb or unsettle_t > 0.0
 	if unsettle_t > 0.0:
 		unsettle_t -= dt
-	sl = move_toward(sl, 0.0, float(D["hbGrip"] if loose else D["latGrip"]) * dt)
+	sl = move_toward(sl, 0.0, float(D["hbGrip"] if loose else D["latGrip"]) * dt * tk)
 	sl *= 1.0 - minf(1.0, float(D["hbDamp"] if loose else D["slipDamp"]) * dt)   # amortie : la glisse reste légère en virage serré
 	sp -= signf(sp) * minf(absf(sp), absf(sl) * 0.9 * dt)   # la glisse freine
 	slip = sl
@@ -234,6 +237,8 @@ func drive(dt: float, g: Object, inp: Dictionary) -> void:
 	x += vx * dt
 	z += vz * dt
 	var hit := _resolve(g, ox, oz)
+	_mx = x - ox
+	_mz = z - oz
 	if _stepped(g):   # marche, trou : on ne passe pas
 		x = ox
 		z = oz
@@ -271,6 +276,7 @@ func drive(dt: float, g: Object, inp: Dictionary) -> void:
 		fz = -cos(yaw)
 		sp = vx * fx + vz * fz
 		slip = vx * cos(yaw) - vz * sin(yaw)
+	sp = follow_terrain(dt, g, ox, oz, clampf(sp, -float(D["reverseSpeed"]), float(D["maxSpeed"])), 1.3)
 	sp = clampf(sp, -float(D["reverseSpeed"]), float(D["maxSpeed"]))
 	speed = sp
 	_push_bikes(g)
@@ -321,6 +327,9 @@ func _stepped(g: Object) -> bool:
 		var w := to_world([p[0], 0.0, p[1]])
 		g.world.floor_at(w.x, w.z, 0.1, _fl2)
 		if int(_fl2["region"]) != 0 or absf(float(_fl2["y"])) > 0.25:
+			return true
+		var T := terrain_of(g)   # v0.37.0 : flanc d'une rampe, bord d'un plateau (le pas vient de _mx, _mz)
+		if T != null and not air and terrain_wall(T, w.x, w.z, _mx, _mz):
 			return true
 	return false
 

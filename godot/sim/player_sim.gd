@@ -188,6 +188,8 @@ func step(dt: float, time: float, input: Dictionary, col: Collision, levels: Lev
 		levels.floor_at(pos.x, pos.z, pos.y, _floor)
 		ground = _floor["y"]
 		region = _floor["region"]
+	if world != null and world.terrain != null:   # v0.37.0 : rampes, bosses et pente de la carte de test des véhicules
+		ground = maxf(ground, float(world.terrain.height(pos.x, pos.z)))
 	on_ground = pos.y <= ground + Rules.SPAWN_ON_GROUND_EPS and vy <= 0.5
 	vault_cd = maxf(0.0, vault_cd - dt)
 	vault_ready = on_ground and vault.is_empty() and not downed and not dead and not locked and vault_cd <= 0.0 and not _check_vault(col, world, levels).is_empty()

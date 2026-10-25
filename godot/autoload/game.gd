@@ -105,6 +105,7 @@ var time_up := false       ## Contre la montre : le chrono est arrivé à 0 (fin
 var pfx := PerkFx.new()    ## v0.27.0 : nouveaux atouts (sim/perk_fx.gd) : recharges, gouttes, tombe, Bastion
 var points_earned := 0     ## v0.26.0 : total des points gagnés (somme des points_gained), dépenses non déduites : score du mode Zone unique
 var settings: Settings     ## J7 : réglages du joueur et touches (user://settings.cfg, ou --settings=chemin)
+var lab: VehicleLab        ## v0.37.0 : carte de test des véhicules (map "vehicules") : épreuves, télémétrie ; null ailleurs (= world.terrain)
 var watch := ZombieWatch.new()   ## v0.34.10 : zombies immobiles, téléportations, apparitions (sim/zombie_watch.gd ; journal : --zombie-stuck-log[=chemin])
 
 func _init() -> void:
@@ -182,10 +183,13 @@ func new_game(seed_value: int = -1, map: String = "", weapons: Array = [], prelo
 	else:
 		if map_name == "alpine":   # v0.34.0 : Station des Aiguilles (sim/alpine_map.gd)
 			world = preloaded if preloaded is World and (preloaded as World).map_id == "alpine" else AlpineMap.load_map()
+		elif map_name == "vehicules":   # v0.37.0 : carte de test des véhicules (sim/vehicle_lab_map.gd)
+			world = preloaded if preloaded is World and (preloaded as World).map_id == "vehicules" else VehicleLabMap.load_map()
 		else:
 			world = preloaded if preloaded is World else World.load_world()   # preloaded : chargé sur un fil de travail pendant l'écran de chargement
 		arena = null
 		collision = world.collision
+	lab = world.terrain as VehicleLab if world != null else null
 	gm = null
 	if world != null and world.map_id == "strasbourg" and GameMode.valid(mode) == GameMode.ZONE:   # v0.26.0 : Zone unique (portes murées, sortie, machines de base)
 		gm = GameMode.new(GameMode.ZONE, zone_pick)
@@ -203,7 +207,7 @@ func new_game(seed_value: int = -1, map: String = "", weapons: Array = [], prelo
 	timed = null
 	arsenal = null
 	time_up = false
-	if world != null and gm == null:   # v0.33.0 : Contre la montre, Arsenal aléatoire : toute la carte, sans finale
+	if world != null and gm == null and lab == null:   # v0.33.0 : Contre la montre, Arsenal aléatoire : toute la carte, sans finale
 		match GameMode.valid(mode):
 			GameMode.TIMED:
 				timed = TimedMode.new()
@@ -217,16 +221,24 @@ func new_game(seed_value: int = -1, map: String = "", weapons: Array = [], prelo
 	elif timed != null or arsenal != null:
 		machines = Machines.new(self, GameMode.without_finale(world.objects["machines"]))
 	else:
-		machines = Machines.new(self, world.objects["machines"]) if world != null else null
+		machines = Machines.new(self, world.objects["machines"]) if world != null and lab == null else null
 	if arsenal != null:   # l'arme de la manche 1 remplace les armes de départ
 		arsenal.roll(arms, 1)
 	director = RoundDirector.new()
 	director.reset()
 	zombies.clear()
 	shake = 0.0
-	rides = (Rides.new(self, AlpineMap.rides_data()) if world.map_id == "alpine" else Rides.new(self)) if world != null else null
-	if rides != null and world.map_id == "alpine":
+	if world == null:
+		rides = null
+	elif world.map_id == "alpine":
+		rides = Rides.new(self, AlpineMap.rides_data())
 		AlpineMap.dress_vehicles(rides)
+	elif lab != null:   # v0.37.0 : toutes les machines du jeu, sans arme ni grenade
+		rides = Rides.new(self, VehicleLabMap.rides_data())
+		VehicleLabMap.dress(rides)
+		arms.grenades = 0
+	else:
+		rides = Rides.new(self)
 	unstick = Unstick.new() if world != null else null
 	if unstick != null:
 		unstick.done.connect(func(a: Vector2, b: Vector2, d: float, c: bool) -> void:
@@ -242,7 +254,7 @@ func new_game(seed_value: int = -1, map: String = "", weapons: Array = [], prelo
 	env.levels = world.levels if world != null and not world.levels.links.is_empty() else null
 	env.rng = rng
 	env.rides = rides
-	finale = (AlpineFinale.new(self) if world.map_id == "alpine" else FinaleSim.new(self)) if world != null else null
+	finale = (AlpineFinale.new(self) if world.map_id == "alpine" else FinaleSim.new(self)) if world != null and lab == null else null
 	finale_done = false
 	eternal = false
 	daynight = DayNight.new()
@@ -284,6 +296,7 @@ func unload() -> void:
 	unstick = null
 	env = null
 	finale = null
+	lab = null
 	gm = null
 	escaped = false
 	timed = null
@@ -334,10 +347,12 @@ func step(dt: float, input: Dictionary) -> void:
 	shake = maxf(0.0, shake - shake * dt * 3.0)
 	var arms_input := input
 	var foot_tp := foot_third_wanted()
+	if lab != null:   # v0.37.0 : banc d'essai : ni arme, ni grenade, ni couteau
+		arms_input = {"mz": input.get("mz", 0.0)}
 	if rides != null:
 		rides.cam.foot_third = foot_tp
 		rides.step(dt, input)   # motos et rame d'abord, puis le joueur (il suit la selle, ou marche dans la rame)
-		if rides.attached():
+		if rides.attached() and lab == null:
 			arms_input = input.duplicate()
 			arms_input["knife"] = false   # pas de couteau assis ou dans la rame ; le conducteur ne tire ni ne recharge
 			if rides.driving():
@@ -374,6 +389,14 @@ func step(dt: float, input: Dictionary) -> void:
 	pfx.step(self, dt)
 	if machines != null:
 		machines.step(dt)
+	if lab != null:   # v0.37.0 : banc d'essai : mesures, plots ; pas de manche, de zombie ni de fin de partie (le joueur ne meurt pas)
+		lab.step(dt, self, input)
+		player.health = player.max_health
+		player.dead = false
+		player.downed = false
+		player.down_event = false
+		player.flop_request = false
+		return
 	# manches
 	var round_ev := director.step(dt, alive_count()) if (finale == null or not finale.active()) else RoundDirector.NONE
 	match round_ev:
@@ -505,6 +528,8 @@ func on_zombie_killed(z: ZombieSim, head := false) -> void:
 	pfx.on_kill(self, z)   # v0.27.0 : Vautour
 
 func _end_game() -> void:
+	if lab != null:
+		return
 	over = true
 	game_over.emit()
 

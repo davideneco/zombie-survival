@@ -91,4 +91,4 @@ func _menu_scripts(t: Node) -> void:
 	for p: String in paths.values():
 		if not ResourceLoader.exists(p):
 			missing += 1
-	t.check(paths.size() == 16 and missing == 0, "main.gd: %d game views loaded at the start of a game, %d missing" % [paths.size(), missing])
+	t.check(paths.size() == 17 and missing == 0, "main.gd: %d game views loaded at the start of a game, %d missing" % [paths.size(), missing])

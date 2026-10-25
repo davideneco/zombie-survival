@@ -54,6 +54,9 @@ var _cinema: ColorRect
 var _crosshair: Control
 var _hit: Hitmarker
 var _round_num: Label
+var _round_small: Label
+var _lab_l: Label          ## v0.37.0 : télémétrie du banc d'essai
+var _lab_keys: Label
 var _points: Label
 var _perks_row: HBoxContainer
 var _weapon: Label
@@ -135,6 +138,8 @@ func _ready() -> void:
 	_build_center()
 	_build_vehicle()
 	_build_finale()
+	if Game.lab != null:
+		_build_lab()
 	Game.points_gained.connect(_on_points)
 	Game.hit_confirmed.connect(show_hit)
 	Game.powerup_collected.connect(_on_powerup)
@@ -146,6 +151,20 @@ func _ready() -> void:
 	binds.changed.connect(refresh_keys)
 	_cinema.visible = bool(Game.settings.get_value("cinema"))
 	refresh_keys()
+
+## v0.37.0 : banc d'essai : ni manche, ni points, ni arme ; la télémétrie à gauche, les touches en bas.
+func _build_lab() -> void:
+	for n: Control in [_round_num, _round_small, _points, _weapon, _caliber, _inv, _ammo, _nades, _perks_row]:
+		n.visible = false
+		n.modulate.a = 0.0
+	var bg := PanelContainer.new()
+	bg.add_theme_stylebox_override("panel", UiTheme.box(Color(0, 0, 0, 0.5), Color("444444"), 1, 6, 10))
+	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	UiTheme.place(bg, 0, 0, 24, 180, 430, 10)
+	root.add_child(bg)
+	_lab_l = _lbl(bg, "", 15, Color("e8ecf0"), HORIZONTAL_ALIGNMENT_LEFT, false)
+	_lab_keys = _lbl(root, VehicleLab.KEYS_HELP, 13, Color("bbbbbb"), HORIZONTAL_ALIGNMENT_CENTER, false)
+	UiTheme.place(_lab_keys, 0.5, 0, -520, 84, 1040, 20)
 
 func _lbl(parent: Node, text: String, size: int, color: Color, align := HORIZONTAL_ALIGNMENT_LEFT, heading := true) -> Label:
 	var l := UiTheme.label(text, size, color, UiTheme.heading() if heading else UiTheme.body(), 5)
@@ -204,6 +223,7 @@ func _build_top() -> void:
 func _build_left() -> void:
 	var small := _lbl(root, "MANCHE", 16, Color("cccccc"))
 	UiTheme.place(small, 0, 1, 27, -118, 200, 22)
+	_round_small = small
 	_round_num = _lbl(root, "1", 80, Color("a31616"))
 	UiTheme.place(_round_num, 0, 1, 24, -112, 240, 100)
 	_points = _lbl(root, "0", 34, UiTheme.GOLD)
@@ -537,6 +557,8 @@ func _tick(dt: float) -> void:
 	if p == null:
 		return
 	_update_basic(dt, p)
+	if _lab_l != null:
+		_lab_l.text = Game.lab.hud_text()
 	_update_vehicle()
 	_update_perks_buffs(dt)
 	_update_downed(p)

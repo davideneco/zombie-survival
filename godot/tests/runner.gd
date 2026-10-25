@@ -43,7 +43,7 @@ func same(a: Variant, b: Variant, message: String, tol := 1e-6) -> void:
 		check(a == b, "%s : %s != %s" % [message, a, b])
 
 func _ready() -> void:
-	var suites: Array[String] = ["j0", "j1", "j2", "j3", "j4", "j5", "j6", "j7", "j8", "j9", "j10", "j11", "j13", "j14", "j16", "j18", "j19", "j20", "j22", "j23", "j24", "j25", "j26", "j27", "j28", "j29", "j30", "j31", "j32", "j33", "j34", "j35", "j36", "j37", "j38", "j39", "j40", "j41", "j42", "j43"]
+	var suites: Array[String] = ["j0", "j1", "j2", "j3", "j4", "j5", "j6", "j7", "j8", "j9", "j10", "j11", "j13", "j14", "j16", "j18", "j19", "j20", "j22", "j23", "j24", "j25", "j26", "j27", "j28", "j29", "j30", "j31", "j32", "j33", "j34", "j35", "j36", "j37", "j38", "j39", "j40", "j41", "j42", "j43", "j44"]
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with("--suite="):
 			suites = [arg.substr(8)]

@@ -13,7 +13,7 @@ signal quit_requested
 
 const MapView := preload("res://scenes/ui/map_view.gd")
 const Backdrop := preload("res://scenes/ui/menu_backdrop.gd")
-const MAP_NAMES := {"strasbourg": "STRASBOURG", "alpine": "STATION DES AIGUILLES", "arena": "ARÈNE DE TEST"}
+const MAP_NAMES := {"strasbourg": "STRASBOURG", "alpine": "STATION DES AIGUILLES", "arena": "ARÈNE DE TEST", "vehicules": "BANC D'ESSAI DES VÉHICULES"}
 
 var stack := UiStack.new()
 var settings: Settings
@@ -295,9 +295,10 @@ func _build_mapdiff(col: Control) -> void:
 	p.add_child(mrow)
 	var descs := {"strasbourg": "La Grande Île au complet : portes, machines, véhicules, tram, cathédrale et fin de partie.",
 		"alpine": "Station de ski abandonnée en hiver : chalets, hôtel, église, télésiège, lac gelé, motoneiges, tempête et nuit. 6 zones.",
-		"arena": "Petite arène plate pour essayer les armes : pas de ville, de machines ni de véhicules."}
+		"arena": "Petite arène plate pour essayer les armes : pas de ville, de machines ni de véhicules.",
+		"vehicules": "Tous les véhicules dans un hangar, piste, tremplins, slalom, boue, glace, mur de crash et télémétrie. Sans zombies ni armes."}
 	for m: String in Settings.MAPS:
-		_map_cards[m] = _card(mrow, "%s\n%s" % [MAP_NAMES[m], descs[m]], 300, 112, func() -> void: settings.set_value("map", m))
+		_map_cards[m] = _card(mrow, "%s\n%s" % [MAP_NAMES[m], descs[m]], 252, 132, func() -> void: settings.set_value("map", m))
 	_hint(p, "DIFFICULTÉ (vie et vitesse des zombies)")
 	var drow := HBoxContainer.new()
 	drow.alignment = BoxContainer.ALIGNMENT_CENTER
@@ -306,7 +307,7 @@ func _build_mapdiff(col: Control) -> void:
 	for d: Dictionary in Difficulty.LIST:
 		var id: String = d["id"]
 		_diff_cards[id] = _card(drow, "%s\n%s" % [d["name"], d["desc"]], 224, 110, func() -> void: settings.set_value("difficulty", id))
-	_hint(p, "Statistiques par difficulté : Strasbourg ; la Station des Aiguilles a ses records à part. Zone unique : Strasbourg seulement ; Contre la montre et Arsenal aléatoire : Strasbourg ou la station.")
+	_hint(p, "Statistiques par difficulté : Strasbourg ; la Station des Aiguilles a ses records à part. Zone unique : Strasbourg seulement ; Contre la montre et Arsenal aléatoire : Strasbourg ou la station. Banc d'essai : ni mode, ni score.")
 	_btn(p, "RETOUR", func() -> void: _back(), "GoButton", 240)
 
 ## v0.34.0 : nom d'une ligne « autres modes » des statistiques ("alpine" : Classique sur la Station des Aiguilles).
@@ -1214,7 +1215,7 @@ func _sync() -> void:
 func _refresh_summary() -> void:
 	var m := String(settings.get_value("map"))
 	var mode := GameMode.valid(String(settings.get_value("mode")))
-	var where: String = MAP_NAMES.get(m, m) if mode == GameMode.CLASSIC else ("ZONE UNIQUE : %s" % ZoneCatalog.name_of(int(settings.get_value("zone"))).to_upper() if mode == GameMode.ZONE else GameMode.name_of(mode))
+	var where: String = MAP_NAMES.get(m, m) if mode == GameMode.CLASSIC or m == "vehicules" else ("ZONE UNIQUE : %s" % ZoneCatalog.name_of(int(settings.get_value("zone"))).to_upper() if mode == GameMode.ZONE else GameMode.name_of(mode))
 	_summary.text = "%s  ·  %s  ·  %s" % [String(CharacterDefs.of_slot(int(settings.get_value("char")))["name"]), where, Difficulty.name_of(String(settings.get_value("difficulty")))]
 
 ## Donne le focus clavier / manette au premier contrôle utile du panneau affiché (sauf Touches : la capture d'une touche ne doit pas déclencher un bouton).

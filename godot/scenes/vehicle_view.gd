@@ -23,6 +23,8 @@ var _wreck_look := false
 var _prev := Vector3.ZERO     ## x, z, yaw au pas précédent (interpolation)
 var _cur := Vector3.ZERO
 var _lean_prev := 0.0
+var _y_prev := 0.0
+var _y_cur := 0.0
 var _sled := false            ## v0.34.0 : motoneige (penche moins qu'une moto)
 
 static func mat(color: Color, rough := 0.6, metal := 0.2, emissive := 0.0) -> StandardMaterial3D:
@@ -404,6 +406,8 @@ func _make_fx() -> void:
 func remember() -> void:
 	_prev = _cur
 	_cur = Vector3(sim.x, sim.z, sim.yaw)
+	_y_prev = _y_cur   # v0.37.0 : relief du banc d'essai (0 ailleurs)
+	_y_cur = sim.y
 
 func _process(_dt: float) -> void:
 	var _pt := PerfLog.t()
@@ -427,8 +431,8 @@ func apply(f: float) -> void:
 		_wreck(true)
 	else:
 		_wreck(false)
-		position = Vector3(x, 0, z)
-		rotation = Vector3(0, yaw, sim.lean * (0.25 if _sled else 1.0))
+		position = Vector3(x, lerpf(_y_prev, _y_cur, f), z)
+		rotation = Vector3(atan(sim.grade), yaw, sim.lean * (0.25 if _sled else 1.0))
 		if _steer != null:
 			_steer.rotation.y = -sim.steer_angle
 		for w in _wheels:
