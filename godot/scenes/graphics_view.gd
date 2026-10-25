@@ -238,13 +238,30 @@ func set_torch(on: bool) -> void:
 	_update_torch()
 
 func _update_torch() -> void:
-	torch.light_energy = float(Config.at("graphics.torch.intensity")) * THREE_TO_GODOT * float(zone_k["torch"]) * dbg_torch_k * _torch_day if torch_on else 0.0
-	torch.visible = torch_on
+	var lit := torch_on and not _in_car()   # v0.36.0 : en voiture, ce sont les phares qui éclairent (la torche de la caméra éclairerait l'habitacle)
+	torch.light_energy = float(Config.at("graphics.torch.intensity")) * THREE_TO_GODOT * float(zone_k["torch"]) * dbg_torch_k * _torch_day if lit else 0.0
+	torch.visible = lit
 
+static func _in_car() -> bool:
+	return Game.rides != null and Game.rides.car_of_player() != null
+
+signal car_lights_toggled(on: bool)   ## v0.36.0 : la touche de la lampe allume ou éteint les phares de la voiture (conducteur)
+
+var _was_car := false
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo and event.is_action_pressed("torch") and Game.playing and not Game.over:
+		if Game.rides != null and Game.rides.toggle_car_lights():
+			car_lights_toggled.emit(Game.rides.car_of_player().lights)
+			return
 		set_torch(not torch_on)
 		torch_toggled.emit(torch_on)
+
+func _physics_process(_dt: float) -> void:
+	var c := _in_car()
+	if c != _was_car:   # montée / descente de voiture : la torche s'éteint ou revient tout de suite
+		_was_car = c
+		if torch != null:
+			_update_torch()
 
 func _build_cinema() -> void:
 	_cinema_layer = CanvasLayer.new()

@@ -25,8 +25,12 @@ func setup(cam: Camera3D) -> void:
 	if r == null:
 		return
 	for v in r.vehicles:
-		var vv := Node3D.new()
-		vv.set_script(VehicleView)
+		var vv: Node3D
+		if v is CarSim:   # v0.36.0 : voiture conduisible
+			vv = CarView.new()
+		else:
+			vv = Node3D.new()
+			vv.set_script(VehicleView)
 		add_child(vv)
 		vv.setup(v)
 		_vehicle_views.append(vv)
@@ -307,7 +311,7 @@ func _update_rider(r: Rides) -> void:
 	else:
 		for vv in _vehicle_views:
 			if vv.sim == v:
-				parent = vv
+				parent = vv.seat_parent() if vv is CarView else vv
 	if parent == null:
 		_unmount_rider()
 		return

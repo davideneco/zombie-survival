@@ -216,7 +216,7 @@ func play(anim: String, speed := 1.0, blend := 0.18) -> void:
 
 ## Animation assise d'une place : machine (type "moto", "grosseMoto", "velo" ou "tram") et conducteur ou passager.
 static func seat_anim(is_tram: bool, kind: String, driver: bool) -> String:
-	if is_tram:
+	if is_tram or kind == "voiture":   # v0.36.0 : en voiture, assis comme dans la rame (mains au volant pour le conducteur)
 		return "Sit_Tram_Drive" if driver else "Sit_Tram"
 	return "Sit_Bike" if kind == "velo" else "Sit_Moto"
 
