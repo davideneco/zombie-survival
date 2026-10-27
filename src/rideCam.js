@@ -87,8 +87,8 @@ export class RideCam {
         veh.v.toWorld(veh.v.def.isSuv ? [0, 1.72, 0.35] : [0, 1.32, 0.25], t);
         t.y += C.pivotUp;
       } else if (veh.v.def.isPlane && this.k > 0.25) {
-        veh.v.toWorld([0, 1.35, 0.65], t);
-        t.y += C.pivotUp;
+        veh.v.toWorld([0, 1.6, 0.45], t);
+        t.y += C.pivotUp; // pivot au-dessus du fuselage : l'avion se place dans le bas de l'écran, le réticule reste dégagé
       } else {
         veh.v.eyeWorld(veh.seat, t);
         t.y += C.pivotUp;
@@ -96,7 +96,7 @@ export class RideCam {
       }
     } else t.set(foot.x, foot.y, foot.z); // sortie de moto : le pivot rejoint l'œil du joueur à pied
     if (!this.hasPivot) { this.pivot.copy(t); this.hasPivot = true; }
-    else this.pivot.lerp(t, 1 - Math.exp(-C.follow * dt));
+    else this.pivot.lerp(t, 1 - Math.exp(-C.follow * (veh?.v.def.isPlane ? 3 : 1) * dt)); // un avion file à 50 m/s : le pivot ne doit pas traîner
     const pv = this.pivot;
 
     // collision : trois rayons parallèles pivot -> caméra (au centre, puis ±rayOffset), médiane
@@ -170,8 +170,9 @@ export class RideCam {
     const C = CONFIG.vehicles.cam, p = this.p;
     if (this.k < 0.5) return;
     const isPlane = !!veh.v.def.isPlane;
-    const minP = isPlane ? Math.max(-1.35, (veh.v.pitch || 0) - 0.85) : C.pitchMin;
-    const maxP = isPlane ? Math.min(1.35, (veh.v.pitch || 0) + 0.85) : C.pitchMax;
+    const pilot = isPlane && veh.v.isDriver(veh.seat); // le mitrailleur arrière peut viser presque à la verticale (les zombies sont en bas)
+    const minP = pilot ? Math.max(-1.35, (veh.v.pitch || 0) - 0.85) : isPlane ? -1.4 : C.pitchMin;
+    const maxP = pilot ? Math.min(1.35, (veh.v.pitch || 0) + 0.85) : isPlane ? 1.0 : C.pitchMax;
     p.pitch = clamp(p.pitch, minP, maxP);
     if (veh.v.isDriver(veh.seat) && sinceMouse > C.recenterAfter) { // regard libre ; sans souris depuis 1,5 s : la vue revient derrière le véhicule
       const dy = angDiff(veh.v.seatYaw(veh.seat) + (veh.v.model.seats[veh.seat].ry || 0), p.yaw);

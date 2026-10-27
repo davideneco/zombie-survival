@@ -206,10 +206,11 @@ export class Hud {
   drawCluster(info, kmh, hot) {
     const ctx = this.clusterCtx;
     if (!ctx) return;
+    if (info.isPlane) { this.drawPlaneCluster(info, kmh); return; }
     const rpm = Math.round(info.rpm || 0);
     const gear = info.gear || '1';
     const isMan = !!info.manual;
-    const key = `${kmh}|${ Math.round(rpm / 25) }|${gear}|${isMan ? 1 : 0}|${info.drivetrain || ''}|${info.braking ? 1 : 0}|${info.drifting ? 1 : 0}|${hot ? 1 : 0}|${info.isPlane ? 1 : 0}|${info.alt || 0}|${info.pitchDeg || 0}`;
+    const key = `${kmh}|${ Math.round(rpm / 25) }|${gear}|${isMan ? 1 : 0}|${info.drivetrain || ''}|${info.braking ? 1 : 0}|${info.drifting ? 1 : 0}|${hot ? 1 : 0}`;
     this._set('vcluster', key, () => {
       const W = 380, H = 142;
       ctx.clearRect(0, 0, W, H);
@@ -227,8 +228,8 @@ export class Hud {
 
       // ==================== CADRAN GAUCHE : COMPTE-TOURS (tr/min) ====================
       const lx = 80, ly = 74, lr = 54;
-      const maxRpm = info.maxRpm || (info.isPlane ? 3600 : 8500);
-      const redRpm = info.redlineRpm || (info.isPlane ? 3200 : 7500);
+      const maxRpm = info.maxRpm || 8500;
+      const redRpm = info.redlineRpm || 7500;
       const maxK = Math.ceil(maxRpm / 1000);
       const dispMaxRpm = maxK * 1000;
       const rpmFrac = Math.min(1, Math.max(0, rpm / dispMaxRpm));
@@ -320,76 +321,49 @@ export class Hud {
         ctx.fill();
       }
 
-      // Boîtier du rapport engagé ou mode vol / altitude
+      // Boîtier du rapport engagé + mode de boîte (AUTO / MANUEL)
       ctx.fillStyle = 'rgba(22, 27, 36, 0.95)';
-      ctx.strokeStyle = info.isPlane ? '#38b8f0' : (rpm >= redRpm * 0.95 ? '#ff3b30' : isMan ? '#f5a623' : 'rgba(130, 145, 165, 0.45)');
+      ctx.strokeStyle = rpm >= redRpm * 0.95 ? '#ff3b30' : isMan ? '#f5a623' : 'rgba(130, 145, 165, 0.45)';
       ctx.lineWidth = 1.5;
       ctx.beginPath();
-      ctx.roundRect(cx - (info.isPlane ? 34 : 26), 29, (info.isPlane ? 68 : 52), 48, 7);
+      ctx.roundRect(cx - 26, 29, 52, 48, 7);
       ctx.fill();
       ctx.stroke();
 
-      if (info.isPlane) {
-        ctx.fillStyle = gear === 'VOL' ? '#38b8f0' : '#ffd24a';
-        ctx.font = 'bold 8px Arial, sans-serif';
-        ctx.fillText(gear === 'VOL' ? 'EN VOL' : 'AU SOL', cx, 39);
-        ctx.fillStyle = '#ffffff';
-        ctx.font = 'bold 17px Arial, sans-serif';
-        ctx.fillText(`${info.alt || 0} m`, cx, 55);
-        ctx.fillStyle = '#8ea2b4';
-        ctx.font = '7.5px Arial, sans-serif';
-        ctx.fillText(`CABRÉ ${info.pitchDeg > 0 ? '+' : ''}${info.pitchDeg || 0}°`, cx, 69);
-      } else {
-        ctx.fillStyle = isMan ? '#ffb848' : '#58df88';
-        ctx.font = 'bold 7.5px Arial, sans-serif';
-        ctx.fillText(isMan ? 'MANUEL' : 'AUTO', cx, 38);
-        ctx.fillStyle = gear === 'R' ? '#ff5252' : gear === 'N' ? '#8892a0' : '#ffd24a';
-        ctx.font = 'bold 26px Arial, sans-serif';
-        ctx.fillText(String(gear), cx, 60);
-      }
+      ctx.fillStyle = isMan ? '#ffb848' : '#58df88';
+      ctx.font = 'bold 7.5px Arial, sans-serif';
+      ctx.fillText(isMan ? 'MANUEL' : 'AUTO', cx, 38);
+      ctx.fillStyle = gear === 'R' ? '#ff5252' : gear === 'N' ? '#8892a0' : '#ffd24a';
+      ctx.font = 'bold 26px Arial, sans-serif';
+      ctx.fillText(String(gear), cx, 60);
 
-      // Badge de transmission (PROPULSION RWD / 4X4 AWD / CHASSEUR HÉLICE)
+      // Badge de transmission (PROPULSION RWD / 4X4 AWD)
       if (info.drivetrain) {
-        const isProp = info.drivetrain === 'PROP';
         const isRwd = info.drivetrain === 'RWD';
-        ctx.fillStyle = isProp ? 'rgba(56, 184, 240, 0.22)' : isRwd ? 'rgba(235, 95, 35, 0.22)' : 'rgba(40, 175, 235, 0.22)';
-        ctx.strokeStyle = isProp ? '#38b8f0' : isRwd ? '#f07838' : '#38b8f0';
+        ctx.fillStyle = isRwd ? 'rgba(235, 95, 35, 0.22)' : 'rgba(40, 175, 235, 0.22)';
+        ctx.strokeStyle = isRwd ? '#f07838' : '#38b8f0';
         ctx.lineWidth = 1;
         ctx.beginPath();
-        ctx.roundRect(cx - (isProp ? 44 : 38), 82, (isProp ? 88 : 76), 17, 4);
+        ctx.roundRect(cx - 38, 82, 76, 17, 4);
         ctx.fill();
         ctx.stroke();
-        ctx.fillStyle = isProp ? '#74d4ff' : isRwd ? '#ff9c64' : '#74d4ff';
+        ctx.fillStyle = isRwd ? '#ff9c64' : '#74d4ff';
         ctx.font = 'bold 8.5px Arial, sans-serif';
-        ctx.fillText(isProp ? 'CHASSEUR · HÉLICE' : isRwd ? 'PROPULSION · RWD' : '4X4 · AWD', cx, 91);
+        ctx.fillText(isRwd ? 'PROPULSION · RWD' : '4X4 · AWD', cx, 91);
       }
 
-      // Témoins bas (FREIN / DRIFT ou MITRAIL. / AÉROFREIN)
-      if (info.isPlane) {
-        ctx.fillStyle = 'rgba(56, 184, 240, 0.9)';
-        ctx.beginPath(); ctx.roundRect(cx - 42, 104, 40, 15, 3); ctx.fill();
-        ctx.fillStyle = '#fff';
-        ctx.font = 'bold 7.5px Arial, sans-serif';
-        ctx.fillText('MITRAIL.', cx - 22, 112);
+      // Témoins FREIN / DRIFT
+      ctx.fillStyle = info.braking ? 'rgba(235, 40, 40, 0.9)' : 'rgba(255,255,255,0.08)';
+      ctx.beginPath(); ctx.roundRect(cx - 38, 104, 36, 15, 3); ctx.fill();
+      ctx.fillStyle = info.braking ? '#fff' : '#606875';
+      ctx.font = 'bold 8px Arial, sans-serif';
+      ctx.fillText('FREIN', cx - 20, 112);
 
-        ctx.fillStyle = info.braking ? 'rgba(235, 40, 40, 0.9)' : 'rgba(255,255,255,0.08)';
-        ctx.beginPath(); ctx.roundRect(cx + 2, 104, 40, 15, 3); ctx.fill();
-        ctx.fillStyle = info.braking ? '#fff' : '#606875';
-        ctx.font = 'bold 7.5px Arial, sans-serif';
-        ctx.fillText(gear === 'VOL' ? 'AÉROFREIN' : 'FREIN', cx + 22, 112);
-      } else {
-        ctx.fillStyle = info.braking ? 'rgba(235, 40, 40, 0.9)' : 'rgba(255,255,255,0.08)';
-        ctx.beginPath(); ctx.roundRect(cx - 38, 104, 36, 15, 3); ctx.fill();
-        ctx.fillStyle = info.braking ? '#fff' : '#606875';
-        ctx.font = 'bold 8px Arial, sans-serif';
-        ctx.fillText('FREIN', cx - 20, 112);
-
-        ctx.fillStyle = info.drifting ? 'rgba(245, 155, 25, 0.92)' : 'rgba(255,255,255,0.08)';
-        ctx.beginPath(); ctx.roundRect(cx + 2, 104, 36, 15, 3); ctx.fill();
-        ctx.fillStyle = info.drifting ? '#111' : '#606875';
-        ctx.font = 'bold 8px Arial, sans-serif';
-        ctx.fillText('DRIFT', cx + 20, 112);
-      }
+      ctx.fillStyle = info.drifting ? 'rgba(245, 155, 25, 0.92)' : 'rgba(255,255,255,0.08)';
+      ctx.beginPath(); ctx.roundRect(cx + 2, 104, 36, 15, 3); ctx.fill();
+      ctx.fillStyle = info.drifting ? '#111' : '#606875';
+      ctx.font = 'bold 8px Arial, sans-serif';
+      ctx.fillText('DRIFT', cx + 20, 112);
 
       // ==================== CADRAN DROIT : COMPTEUR DE VITESSE (km/h) ====================
       const rx = 300, ry = 74, rr = 54;
@@ -461,6 +435,96 @@ export class Hud {
       ctx.fillStyle = spdCol;
       ctx.beginPath(); ctx.arc(rx, ry, 2.5, 0, Math.PI * 2); ctx.fill();
 
+      ctx.restore();
+    });
+  }
+
+  // Planche de bord de l'avion (v0.69.0) : horizon artificiel + altitude à gauche, anémomètre à droite, au centre manette des gaz, chauffe des mitrailleuses
+  // et alarme de décrochage. Même canevas que le tableau de bord des motos (380 x 142).
+  drawPlaneCluster(info, kmh) {
+    const ctx = this.clusterCtx;
+    const alt = Math.round(info.alt || 0), pit = Math.round((info.pitch || 0) * 20) / 20, bank = Math.round((info.lean || 0) * 40) / 40;
+    const thr = Math.round((info.throttle || 0) * 50), heat = Math.round((info.heat || 0) * 40), vy = Math.round(info.vy || 0);
+    const key = `${kmh}|${alt}|${pit}|${bank}|${thr}|${heat}|${vy}|${info.stall ? 1 : 0}|${info.locked ? 1 : 0}|${info.airborne ? 1 : 0}|${info.braking ? 1 : 0}`;
+    this._set('vcluster', key, () => {
+      const W = 380, H = 142;
+      ctx.clearRect(0, 0, W, H);
+      ctx.save();
+      ctx.fillStyle = 'rgba(10, 13, 18, 0.84)'; ctx.strokeStyle = 'rgba(140, 155, 175, 0.35)'; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.roundRect(6, 6, W - 12, H - 10, 16); ctx.fill(); ctx.stroke();
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+
+      // ---- horizon artificiel (gauche)
+      const hx = 80, hy = 74, hr = 54;
+      ctx.save();
+      ctx.beginPath(); ctx.arc(hx, hy, hr - 2, 0, Math.PI * 2); ctx.clip();
+      ctx.translate(hx, hy);
+      ctx.rotate(info.lean || 0);                       // incliné à droite (lean < 0) : l'horizon bascule à gauche, comme dans un vrai cockpit
+      const off = Math.max(-1, Math.min(1, (info.pitch || 0) / 0.8)) * 44 + 0; // cabré : l'horizon descend
+      ctx.fillStyle = '#3b6f94'; ctx.fillRect(-90, -120 + off, 180, 120);
+      ctx.fillStyle = '#6a5036'; ctx.fillRect(-90, off, 180, 120);
+      ctx.strokeStyle = '#e8eef4'; ctx.lineWidth = 1.6;
+      ctx.beginPath(); ctx.moveTo(-90, off); ctx.lineTo(90, off); ctx.stroke();
+      ctx.lineWidth = 1; ctx.fillStyle = '#e8eef4'; ctx.font = 'bold 7px Arial, sans-serif';
+      for (const d of [-20, -10, 10, 20]) {              // échelle d'assiette tous les 10 degrés
+        const y = off - d * 0.96;                        // 10 degrés = 0,175 rad = 9,6 px (au-dessus de l'horizon pour un nez cabré)
+        const w = Math.abs(d) === 20 ? 22 : 14;
+        ctx.beginPath(); ctx.moveTo(-w, y); ctx.lineTo(w, y); ctx.stroke();
+        ctx.fillText(String(Math.abs(d)), w + 8, y);
+      }
+      ctx.restore();
+      ctx.strokeStyle = '#28303c'; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(hx, hy, hr - 2, 0, Math.PI * 2); ctx.stroke();
+      ctx.strokeStyle = '#ffcf40'; ctx.lineWidth = 2.4;  // maquette d'avion fixe
+      ctx.beginPath(); ctx.moveTo(hx - 24, hy); ctx.lineTo(hx - 8, hy); ctx.lineTo(hx - 8, hy + 5); ctx.moveTo(hx + 24, hy); ctx.lineTo(hx + 8, hy); ctx.lineTo(hx + 8, hy + 5); ctx.stroke();
+      ctx.fillStyle = '#ffcf40'; ctx.beginPath(); ctx.arc(hx, hy, 2.4, 0, Math.PI * 2); ctx.fill();
+      // altitude (hauteur au-dessus du sol) et taux de montée
+      ctx.fillStyle = 'rgba(8,10,14,0.82)'; ctx.beginPath(); ctx.roundRect(hx - 30, hy + 30, 60, 20, 5); ctx.fill();
+      ctx.fillStyle = '#ffffff'; ctx.font = 'bold 13px Arial, sans-serif'; ctx.fillText(`${alt} m`, hx - 4, hy + 40);
+      ctx.fillStyle = vy > 1 ? '#58df88' : vy < -4 ? '#ff7a5a' : '#8ea2b4'; ctx.font = 'bold 8px Arial, sans-serif'; ctx.fillText(vy > 1 ? '▲' : vy < -1 ? '▼' : '', hx + 24, hy + 40);
+
+      // ---- centre : gaz, mitrailleuses, état
+      const cx = 190;
+      ctx.fillStyle = '#7e8896'; ctx.font = 'bold 7.5px Arial, sans-serif'; ctx.fillText('GAZ', cx - 22, 20);
+      ctx.fillText('MITRAIL.', cx + 22, 20);
+      for (const [bx, v, col] of [[cx - 30, info.throttle || 0, '#38b8f0'], [cx + 14, info.heat || 0, info.locked ? '#ff3b30' : info.heat > 0.7 ? '#f5a623' : '#ffd24a']]) {
+        ctx.fillStyle = 'rgba(255,255,255,0.1)'; ctx.beginPath(); ctx.roundRect(bx, 28, 16, 62, 4); ctx.fill();
+        ctx.fillStyle = col; const h = 62 * v; ctx.beginPath(); ctx.roundRect(bx, 28 + 62 - h, 16, h, 4); ctx.fill();
+      }
+      ctx.fillStyle = '#e8eef4'; ctx.font = 'bold 9px Arial, sans-serif';
+      ctx.fillText(`${Math.round((info.throttle || 0) * 100)}%`, cx - 22, 99);
+      ctx.fillStyle = info.locked ? '#ff6a58' : '#8ea2b4'; ctx.fillText(info.locked ? 'SURCH.' : 'OK', cx + 22, 99);
+      // voyants
+      const lamp = (x, label, on, col) => {
+        ctx.fillStyle = on ? col : 'rgba(255,255,255,0.08)'; ctx.beginPath(); ctx.roundRect(x, 110, 54, 15, 3); ctx.fill();
+        ctx.fillStyle = on ? '#111' : '#606875'; ctx.font = 'bold 8px Arial, sans-serif'; ctx.fillText(label, x + 27, 118);
+      };
+      if (info.stall && Math.floor(performance.now() / 180) % 2 === 0) lamp(163, 'DÉCROCHAGE', true, '#ff3b30');
+      else if (info.stall) lamp(163, 'DÉCROCHAGE', false);
+      else lamp(163, info.braking ? 'FREIN' : info.airborne ? 'EN VOL' : 'AU SOL', true, info.braking ? '#ff6a58' : info.airborne ? '#7fd0f4' : '#ffd24a');
+
+      // ---- anémomètre (droite)
+      const rx = 300, ry = 74, rr = 54, a0 = Math.PI * 0.75, aSpan = Math.PI * 1.5;
+      const maxK = Math.ceil(info.vmax * 3.6 * 1.1 / 40) * 40;
+      const f = (k) => Math.min(1, Math.max(0, k / maxK));
+      ctx.fillStyle = 'rgba(18, 22, 29, 0.95)'; ctx.beginPath(); ctx.arc(rx, ry, rr, 0, Math.PI * 2); ctx.fill();
+      ctx.lineWidth = 4; ctx.strokeStyle = '#28303c'; ctx.beginPath(); ctx.arc(rx, ry, rr - 4, a0, a0 + aSpan); ctx.stroke();
+      const stallK = info.stallSpeed * 3.6, toK = info.takeoffSpeed * 3.6;
+      ctx.lineWidth = 5; ctx.strokeStyle = 'rgba(235, 45, 45, 0.85)'; ctx.beginPath(); ctx.arc(rx, ry, rr - 4, a0, a0 + aSpan * f(stallK)); ctx.stroke(); // zone de décrochage
+      ctx.strokeStyle = 'rgba(255, 190, 60, 0.85)'; ctx.beginPath(); ctx.arc(rx, ry, rr - 4, a0 + aSpan * f(stallK), a0 + aSpan * f(toK)); ctx.stroke(); // zone de décollage
+      const col = info.stall ? '#ff4a3a' : '#38b6ff';
+      if (kmh > 0) { ctx.strokeStyle = col; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(rx, ry, rr - 10, a0, a0 + aSpan * f(kmh)); ctx.stroke(); }
+      for (let v = 0; v <= maxK; v += 40) {
+        const ang = a0 + aSpan * f(v), c = Math.cos(ang), s = Math.sin(ang);
+        ctx.strokeStyle = '#d0d6e0'; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.moveTo(rx + c * (rr - 9), ry + s * (rr - 9)); ctx.lineTo(rx + c * (rr - 2), ry + s * (rr - 2)); ctx.stroke();
+        ctx.fillStyle = '#b8c0cc'; ctx.font = 'bold 8px Arial, sans-serif'; ctx.fillText(String(v), rx + c * (rr - 18), ry + s * (rr - 18));
+      }
+      ctx.fillStyle = '#7e8896'; ctx.font = 'bold 7.5px Arial, sans-serif'; ctx.fillText('VITESSE', rx, ry - 14);
+      ctx.fillStyle = info.stall ? '#ff5848' : '#ffffff'; ctx.font = 'bold 17px Arial, sans-serif'; ctx.fillText(`${kmh}`, rx, ry + 24);
+      ctx.fillStyle = '#8b94a2'; ctx.font = 'bold 8px Arial, sans-serif'; ctx.fillText('KM/H', rx, ry + 36);
+      const sAng = a0 + aSpan * f(kmh);
+      ctx.strokeStyle = col; ctx.lineWidth = 2.4; ctx.beginPath(); ctx.moveTo(rx - Math.cos(sAng) * 7, ry - Math.sin(sAng) * 7); ctx.lineTo(rx + Math.cos(sAng) * (rr - 8), ry + Math.sin(sAng) * (rr - 8)); ctx.stroke();
+      ctx.fillStyle = '#252b34'; ctx.beginPath(); ctx.arc(rx, ry, 5.5, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = col; ctx.beginPath(); ctx.arc(rx, ry, 2.5, 0, Math.PI * 2); ctx.fill();
       ctx.restore();
     });
   }

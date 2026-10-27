@@ -370,9 +370,9 @@ export const CONFIG = {
         pump: { dx: -4.5, dz: 0.5 }, sign: { dx: 4.5, dz: 3.5 },
         rect: { w: 12, d: 12 },
       },
-      // place Kléber : 1 4x4 tout-terrain et 1 avion de chasse
+      // place Kléber : 1 4x4 tout-terrain et 1 avion de chasse, nez vers l'est (environ 75 m de dégagement sur 10 m de large : piste de décollage, voir types.avion)
       {
-        zone: 'Place Kléber', x: -200, z: -145, yaw: 0,
+        zone: 'Place Kléber', x: -204, z: -132, yaw: -Math.PI / 2,
         bays: [{ type: 'suv', dx: -2.8 }, { type: 'avion', dx: 3.2 }],
         slots: [-2.8, 3.2],
         pump: { dx: -6.0, dz: 0 }, sign: { dx: 6.0, dz: 3.5 },
@@ -496,15 +496,31 @@ export const CONFIG = {
         wheelbase: 1.05, maxSteer: 0.72, grip: 13, radius: 0.4, bikeRadius: 0.3, roadkill: { K: 0, vmin: 99, slowdown: 1 },
         crash: { minSpeed: 6, damagePerMs: 4, maxDamage: 25 }, blast: null, wreckTime: 10, respawnRounds: 1, fx: false, wreckLift: 0.36, cullDist: 90, leanK: 0.05,
       },
-      // Avion de chasse / voltige (v0.68.0) : biplace (pilote + mitrailleur arrière), hélice animée, roulage, décollage (Espace pour cabrer au-dessus de takeoffSpeed),
-      // vol 3D libre (assiette, roulis, altitude), atterrissage en douceur ou crash à forte vitesse de chute, et doubles mitrailleuses d'ailes (clic gauche).
+      // Avion de chasse / voltige (v0.68.0, refonte v0.69.0) : biplace (pilote + mitrailleur arrière), hélice animée, roulage, décollage, vol 3D
+      // (manette des gaz W/S, Q/D inclinaison + virage, Espace cabre, Maj/C/Ctrl pique), atterrissage ou crash selon la vitesse de chute, mitrailleuses d'ailes (clic gauche).
       avion: {
         name: 'AVION DE CHASSE', hudName: 'AVION', det: "l'", isPlane: true, drivetrain: 'PROP', seats: 2, camArm: 9.0, hp: 2000, tank: 70, idle: 0.005, gas: 0.022, perSpeed: 0.020,
-        maxSpeed: 52.0, takeoffSpeed: 17.5, stallSpeed: 12.0, climbRate: 14.0, maxAlt: 150.0, accel: 15.5, brake: 11.0, reverseSpeed: 2.5, drag: 0.045,
-        wheelbase: 3.55, maxSteer: 0.52, steerRate: 5.5, steerSpeedFactor: 0.06, grip: 20, radius: 2.2, bikeRadius: 1.8, roadkill: { K: 75, vmin: 8.0, slowdown: 0.98 },
-        gears: 1, idleRpm: 800, redlineRpm: 3200, maxRpm: 3600,
+        maxSpeed: 58.0, takeoffSpeed: 17.5, stallSpeed: 12.5, maxAlt: 220.0, accel: 14.0, brake: 9.0, reverseSpeed: 2.5, drag: 0.045,
+        wheelbase: 3.55, maxSteer: 0.52, grip: 20, radius: 2.3, bikeRadius: 1.8, roadkill: { K: 75, vmin: 8.0, slowdown: 0.98 },
+        gears: 1, idleRpm: 800, redlineRpm: 2900, maxRpm: 3300,
         crash: { minSpeed: 16, damagePerMs: 2.0, maxDamage: 45 }, wreckLift: 0.65,
         gunDamage: 140, gunRate: 0.085,
+        // Modèle de vol (arcade). Vitesses en m/s, angles en rad.
+        plane: {
+          throttleRate: 0.9,             // vitesse de la manette des gaz (par seconde) ; elle garde sa position sans touche
+          rollResist: 1.2, airbrake: 7,  // résistance au roulage (m/s²) ; freinage aérodynamique en vol (S, gaz coupés)
+          pitchMax: 0.55, pitchRate: 3.0, rotatePitch: 0.2, liftoffPitch: 0.08, // assiette maximale, réactivité de la gouverne, assiette de rotation au sol, assiette minimale au décollage
+          maxBank: 0.95, rollRate: 3.2, turnRate: 1.2, turnRef: 34, // inclinaison maximale, réactivité des ailerons, virage (rad/s à inclinaison 90 °), vitesse de référence
+          climbK: 0.75,                  // part de la vitesse convertie en montée à l'assiette maximale
+          edgeMargin: 80,                // distance au bord de la carte où l'avion est ramené vers l'intérieur
+          gravPitch: 6.5,                // un nez cabré freine (nez piqué accélère), en m/s² par unité de sin(assiette)
+          sinkRate: 22, stallDrop: 0.6, bankSink: 6, vyResponse: 3.2, // chute de décrochage, nez qui plonge au décrochage, perte de portance en virage serré, réactivité verticale
+          cushion: 3.5,                  // hauteur sous laquelle l'effet de sol amortit la descente (atterrissage facile)
+          hardLanding: 9.5, maxLandBank: 0.55, noseDown: 0.25, landingDamage: 120, // vitesse de chute fatale à l'atterrissage, inclinaison maximale, assiette piquée maximale, PV perdus par m/s au-delà
+          wallDamage: 90, wallDamagePerMs: 12, // choc contre un mur en vol : PV de base + PV par m/s
+          gunRange: 260, gunCone: 0.5,   // portée des mitrailleuses ; écart maximal (rad) entre le tir et l'axe du nez
+          heatPerShot: 0.032, heatCool: 0.15, heatLock: 2.5, // chauffe par coup, refroidissement par seconde, blocage après surchauffe (s)
+        },
       },
     },
   },
