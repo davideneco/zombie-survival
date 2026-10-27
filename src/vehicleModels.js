@@ -930,14 +930,6 @@ export function buildSuv(variant = 0) {
   };
 }
 
-// ---------------------------------------------------------------- AVION : monoplan de chasse biplace à hélice (v0.69.0)
-// Repère du véhicule : origine au sol à la verticale de l'axe des roues, nez vers -z. Hiérarchie :
-//   root > body (pivote en tangage / roulis autour de l'axe des roues principales) > hull (repère du véhicule : sièges, train)
-//        > fuselage (tout sauf le train : se cabre de PLANE_REST_PITCH au sol, position trois points, et se met à plat une fois en l'air)
-const PLANE_REST_PITCH = 0.12;
-const PLANE_AXIS_Y = 1.18;         // hauteur de l'axe du fuselage à plat
-const PLANE_PIVOT = [0, 0.33, -0.55]; // axe des roues principales
-
 // Colorie un maillage selon l'orientation de ses faces : dessus = top, ventre = bottom (dégradé doux entre les deux)
 function paintBelly(geo, top, bottom, lo = -0.75, hi = -0.3) {
   const n = geo.attributes.normal, c = new Float32Array(n.count * 3), a = new THREE.Color(top), b = new THREE.Color(bottom), o = new THREE.Color();
@@ -980,227 +972,152 @@ function finGeo(pts, thick) {
   return g;
 }
 
-export function buildAvion(variant = 0) {
+// ---------------------------------------------------------------- HÉLICOPTÈRE : transport armé à rotor quadripale (v0.70.0)
+// Repère du véhicule : origine au sol sous le centre de la cabine, nez vers -z. Hiérarchie :
+//   root > body (pivote en tangage / roulis autour du centre de masse) > hull (repère du véhicule : sièges, patins, rotors)
+// Le fuselage est une coque ouverte (portes latérales béantes) : les passagers assis sur le seuil, jambes dans le vide, se voient de l'extérieur.
+const HELI_PIVOT = [0, 1.45, 0.2];
+const HELI_AXIS_Y = 1.3;           // axe du fuselage
+const HELI_HUB = [0, 3.4, 0.6];    // moyeu du rotor principal
+
+export function buildHelico(variant = 0) {
   const M = mats();
   const v = Math.abs(variant) % 4;
-  // Livrées sourdes (tons désaturés) : dessus, ventre, ornements, pièces sombres
+  // Livrées sourdes : dessus, ventre, ornements, pièces sombres
   const PALETTES = [
-    { body: 0x56604a, belly: 0x9aa0a2, trim: 0xb8964a, dark: 0x2a2f26 }, // 0: chasseur kaki, ventre gris clair, bande ocre
-    { body: 0xb9953f, belly: 0x2e3034, trim: 0x1d1e21, dark: 0x1a1c20 }, // 1: voltige jaune moutarde, ventre sombre
-    { body: 0x2d3036, belly: 0x1f2125, trim: 0x8a3030, dark: 0x15161a }, // 2: furtif graphite, filets cramoisis
-    { body: 0x2c4864, belly: 0xc3cad0, trim: 0x9a3b34, dark: 0x1b2c42 }, // 3: aéronavale bleu marine, ventre clair
+    { body: 0x4a5640, belly: 0x7d8580, trim: 0xb8964a, dark: 0x252a22 }, // 0: transport militaire vert armée
+    { body: 0xc9ccd0, belly: 0xa9adb2, trim: 0xa43a32, dark: 0x2a2d33 }, // 1: secours blanc et rouge
+    { body: 0x2b2e34, belly: 0x1d1f23, trim: 0x8a3030, dark: 0x131417 }, // 2: opérations de nuit graphite
+    { body: 0x32506e, belly: 0xb9c1c8, trim: 0xc7ccd1, dark: 0x1a2a40 }, // 3: police bleu marine
   ];
   const P = PALETTES[v];
-  const paint = reflective(std(0xffffff, 0.42, 0.32, { vertexColors: true }), 0.85);
+  const paint = reflective(std(0xffffff, 0.42, 0.3, { vertexColors: true, side: THREE.DoubleSide }), 0.85);
+  const paintSolid = reflective(std(0xffffff, 0.42, 0.3, { vertexColors: true }), 0.85);
   const trimMat = reflective(std(P.trim, 0.45, 0.25), 0.7);
-  const darkMat = std(P.dark, 0.7, 0.35);
+  const darkMat = std(P.dark, 0.7, 0.35, { side: THREE.DoubleSide });
   const metal = reflective(std(0x3b4048, 0.5, 0.65), 1.0);
-  const cowlMat = reflective(std(0x5d646d, 0.4, 0.7), 1.1);
-  const glassMat = std(0x5c8296, 0.08, 0.2, { transparent: true, opacity: 0.32, depthWrite: false });
+  const glassMat = std(0x5c8296, 0.08, 0.2, { transparent: true, opacity: 0.3, depthWrite: false });
   const frameMat = std(P.dark, 0.5, 0.5);
-  const white = std(0xc9ced2, 0.6, 0.1);
-  const lampMat = std(0xfff2d0, 0.3, 0, { emissive: 0xffe0a0, emissiveIntensity: 2.6 });
+  const lampMat = std(0xfff2d0, 0.3, 0, { emissive: 0xffe0a0, emissiveIntensity: 3 });
+  const bladeMat = std(0x1a1c1f, 0.6, 0.3);
+  const tipMat = std(0xcaa83a, 0.45, 0.2);
 
   const root = new THREE.Group();
-  const body = new THREE.Group(); body.position.set(...PLANE_PIVOT); root.add(body);
-  const hull = new THREE.Group(); hull.position.set(-PLANE_PIVOT[0], -PLANE_PIVOT[1], -PLANE_PIVOT[2]); body.add(hull);
-  const fus = new THREE.Group(); fus.position.y = PLANE_AXIS_Y; fus.rotation.x = PLANE_REST_PITCH; hull.add(fus);
+  const body = new THREE.Group(); body.position.set(...HELI_PIVOT); root.add(body);
+  const hull = new THREE.Group(); hull.position.set(-HELI_PIVOT[0], -HELI_PIVOT[1], -HELI_PIVOT[2]); body.add(hull);
+  const fus = new THREE.Group(); fus.position.y = HELI_AXIS_Y; hull.add(fus); // coordonnées du fuselage : y = 0 sur l'axe
 
-  // 1. Fuselage de révolution (ventre clair dégradé), capot moteur, entrée d'air, cône d'hélice
-  const fuselageGeo = paintBelly(lathe([[-1.35, 0.50], [-0.9, 0.54], [-0.3, 0.56], [0.4, 0.53], [1.2, 0.47], [2.0, 0.38], [2.8, 0.28], [3.5, 0.19], [4.1, 0.10], [4.3, 0.05], [4.32, 0]]), P.body, P.belly);
-  fus.add(new THREE.Mesh(fuselageGeo, paint));
-  const cowl = new THREE.Mesh(lathe([[-2.52, 0.43], [-2.46, 0.5], [-2.2, 0.535], [-1.7, 0.55], [-1.3, 0.52]]), cowlMat);
-  fus.add(cowl);
-  const intake = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, 0.04, 24).rotateX(Math.PI / 2), darkMat);
-  intake.position.z = -2.46; fus.add(intake);
-  for (let k = 0; k < 9; k++) { // culasses du moteur en étoile, visibles derrière l'entrée d'air
-    const a = (k / 9) * Math.PI * 2;
-    ball(fus, 0.075, 0.075, 0.1, metal, Math.cos(a) * 0.3, Math.sin(a) * 0.3, -2.4);
+  // 1. Coque ouverte (fond arrondi, bords au niveau du seuil des portes), cloison arrière et capot moteur
+  const shellProfile = [[-3.05, 0], [-3.0, 0.25], [-2.75, 0.52], [-2.3, 0.78], [-1.7, 0.94], [-0.9, 1.0], [0.4, 1.0], [1.3, 0.96], [1.7, 0.9]];
+  const shell = new THREE.Mesh(paintBelly(new THREE.LatheGeometry(shellProfile.map(([z, r]) => new THREE.Vector2(r, z)), 28, -1.05, 2.1).rotateX(Math.PI / 2), P.body, P.belly, -0.9, -0.5), paint);
+  fus.add(shell);
+  box(fus, 1.55, 0.1, 2.9, M.black, 0, -0.5, 0.0);                    // plancher de cabine
+  box(fus, 1.4, 0.06, 0.4, darkMat, 0, -0.45, -1.9);                  // plancher du poste de pilotage
+  for (const sx of [-1, 1]) {                                         // seuils de portes et rail de porte coulissante
+    box(fus, 0.1, 0.07, 3.1, trimMat, sx * 0.9, -0.5, 0.05);
+    box(fus, 0.05, 0.05, 2.5, M.steel, sx * 0.96, 0.95, 0.4);
   }
-  box(fus, 0.34, 0.34, 0.08, metal, 0, 0, -2.42);
-  fus.add(new THREE.Mesh(new THREE.TorusGeometry(0.48, 0.022, 8, 28), M.chrome)).position.z = -2.5; // lèvre de capot chromée
-  const spinner = new THREE.Mesh(lathe([[-3.02, 0], [-2.96, 0.05], [-2.82, 0.12], [-2.64, 0.185], [-2.5, 0.205]], 20), M.chrome);
-  fus.add(spinner);
-  // échappements en étoile sur les flancs du capot
-  for (const sx of [-1, 1]) for (let i = 0; i < 5; i++) {
-    const z = -2.0 + i * 0.17, a = -0.35 - i * 0.07;
-    tube(fus, [sx * 0.5, -0.12 + i * 0.01, z], [sx * 0.62, -0.2 + i * 0.01, z + 0.07], 0.034, M.steel, 8);
-    ball(fus, 0.04, 0.04, 0.05, darkMat, sx * 0.64, -0.21 + i * 0.01, z + 0.08);
-  }
-  // prise d'air sous le ventre et radiateur d'huile
-  box(fus, 0.34, 0.16, 0.44, darkMat, 0, -0.52, -0.2);
-  box(fus, 0.28, 0.1, 0.05, M.black, 0, -0.55, -0.43);
-  // dos : carénage de verrière
-  ball(fus, 0.32, 0.17, 1.15, paint, 0, 0.5, 1.75).geometry = paintBelly(new THREE.SphereGeometry(1, 20, 12), P.body, P.body);
-  // bande d'ornement autour du fuselage (cocarde de flanc)
-  const band = new THREE.Mesh(lathe([[2.55, 0.318], [2.6, 0.322], [2.9, 0.305], [2.95, 0.3]], 28), trimMat); fus.add(band);
-  for (const sx of [-1, 1]) {
-    const d = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.008, 24).rotateZ(Math.PI / 2), white);
-    d.position.set(sx * 0.52, 0.04, 1.55); fus.add(d);
-    const d2 = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.13, 0.012, 24).rotateZ(Math.PI / 2), trimMat);
-    d2.position.set(sx * 0.521, 0.04, 1.55); fus.add(d2);
-    const d3 = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.016, 20).rotateZ(Math.PI / 2), white);
-    d3.position.set(sx * 0.522, 0.04, 1.55); fus.add(d3);
-  }
-
-  // 2. Ailes basses effilées (dièdre léger), bord d'attaque, saumons, feux de position, pitot
-  const wingMat = paint;
-  const WING_Y = -0.32;
-  const navMats = {};
-  for (const sx of [-1, 1]) {
-    const w = new THREE.Group();
-    w.position.set(sx * 0.3, WING_Y, -0.05);
-    w.rotation.z = -sx * 0.05;                       // dièdre
-    const mesh = new THREE.Mesh(paintBelly(wingGeo(3.45, -0.72, 0.88, -0.28, 0.3, 0.16), P.body, P.belly, -0.6, -0.15), wingMat);
-    mesh.scale.x = sx;
-    w.add(mesh);
-    // bord d'attaque bicolore (ornement) et saumon sombre
-    const le = new THREE.Mesh(wingGeo(3.0, -0.72, -0.5, -0.29, -0.14, 0.17), trimMat);
-    le.scale.x = sx; w.add(le);
-    box(w, 0.1, 0.045, 0.5, darkMat, sx * 3.42, 0.0, 0.02);
-    // cocarde sur le dessus de l'aile
-    for (const [r, m, dy] of [[0.34, white, 0.082], [0.25, trimMat, 0.088], [0.13, white, 0.094]]) {
-      const d = new THREE.Mesh(new THREE.CylinderGeometry(r, r, 0.006, 28), m); d.position.set(sx * 2.0, dy, 0.1); w.add(d);
-    }
-    // lignes de panneaux (volets, trappes)
-    box(w, 1.35, 0.004, 0.012, M.black, sx * 1.15, 0.088, 0.46);
-    box(w, 1.2, 0.004, 0.012, M.black, sx * 2.45, 0.075, 0.26);
-    box(w, 0.012, 0.004, 0.55, M.black, sx * 1.8, 0.085, 0.6);
-    // feu de position (rouge à gauche, vert à droite) au bout de l'aile
-    const navCol = sx < 0 ? 0xc43a3a : 0x3aa84e;
-    const navMat = std(navCol, 0.25, 0, { emissive: navCol, emissiveIntensity: 3.2 });
-    navMats[sx] = navMat;
-    ball(w, 0.05, 0.04, 0.09, navMat, sx * 3.5, 0.03, -0.1);
-    // phare d'atterrissage encastré dans le bord d'attaque
-    ball(w, 0.075, 0.05, 0.05, lampMat, sx * 0.95, -0.02, -0.66);
-    // mitrailleuse d'aile : chemise, canon, cache-flamme (dépasse du bord d'attaque)
-    const gx = sx * 1.35;
-    tube(w, [gx, 0.0, -0.45], [gx, 0.0, -1.0], 0.052, darkMat, 10);
-    tube(w, [gx, 0.0, -1.0], [gx, 0.0, -1.32], 0.03, M.steel, 10);
-    tube(w, [gx, 0.0, -1.28], [gx, 0.0, -1.38], 0.042, M.black, 10);
-    fus.add(w);
-  }
-  // pitot sur l'aile gauche
-  tube(fus, [-1.9, WING_Y - 0.06, -0.62], [-1.9, WING_Y - 0.08, -1.05], 0.012, M.chrome, 6);
-  // raccords aile / fuselage
-  for (const sx of [-1, 1]) ball(fus, 0.42, 0.1, 0.95, paint, sx * 0.52, -0.3, 0.05).geometry = paintBelly(new THREE.SphereGeometry(1, 16, 10), P.body, P.belly, -0.6, -0.1);
-
-  // ailerons articulés (charnière au bord de fuite de l'aile)
-  const mkAileron = (sx) => {
-    const g = new THREE.Group();
-    g.position.set(sx * 2.45, WING_Y + 0.0, 0.5);
-    const m = new THREE.Mesh(wingGeo(1.5, 0.0, 0.3, 0.0, 0.22, 0.07), trimMat);
-    m.scale.x = sx; m.position.x = -sx * 0.75; g.add(m);
-    fus.add(g);
-    return g;
-  };
-  const aileronL = mkAileron(-1), aileronR = mkAileron(1);
-
-  // 3. Empennage : dérive, gouvernail articulé, plan horizontal et gouverne de profondeur
-  fus.add(new THREE.Mesh(paintBelly(finGeo([[2.7, 0.2], [3.45, 1.32], [3.88, 1.34], [3.88, 0.2]], 0.07), P.body, P.body), paint));
-  const rudder = new THREE.Group(); rudder.position.set(0, 0, 3.88); fus.add(rudder);
-  rudder.add(new THREE.Mesh(finGeo([[0, 0.2], [0, 1.34], [0.26, 1.28], [0.52, 0.62], [0.48, 0.2]], 0.05), trimMat));
-  box(fus, 0.08, 0.06, 0.1, darkMat, 0, 1.36, 3.62);
-  const strobeMat = std(0xffffff, 0.2, 0, { emissive: 0xffffff, emissiveIntensity: 4 });
-  const tailLamp = ball(fus, 0.035, 0.035, 0.05, strobeMat, 0, 1.4, 3.66);
-  for (const sx of [-1, 1]) {
-    const tp = new THREE.Mesh(paintBelly(wingGeo(1.25, 3.05, 3.8, 3.45, 3.78, 0.1), P.body, P.belly, -0.6, -0.15), paint);
-    tp.scale.x = sx; tp.position.set(0, 0.1, 0); fus.add(tp);
-  }
-  const elevator = new THREE.Group(); elevator.position.set(0, 0.1, 3.8); fus.add(elevator);
-  for (const sx of [-1, 1]) {
-    const em = new THREE.Mesh(wingGeo(1.22, 0, 0.34, 0, 0.26, 0.07), trimMat);
-    em.scale.x = sx; elevator.add(em);
-  }
-  // antenne et fil
-  tube(fus, [0, 0.62, 0.95], [0, 0.9, 0.9], 0.012, M.steel, 6);
-  tube(fus, [0, 0.9, 0.9], [0, 1.3, 3.5], 0.004, M.black, 4);
-
-  // 4. Cockpit biplace : baignoire sombre, deux sièges harnachés, tableau de bord, manche, verrière
-  box(fus, 0.62, 0.1, 2.5, darkMat, 0, 0.0, 0.2);
-  const PILOT_HIP = [0, 1.12, -0.45], GUN_HIP = [0, 1.12, 0.78]; // repère du véhicule
-  for (const [hx, hy, hz] of [PILOT_HIP, GUN_HIP]) {
-    const sy = hy - PLANE_AXIS_Y;
-    box(fus, 0.44, 0.1, 0.44, M.seat, 0, sy - 0.02, hz);
-    box(fus, 0.42, 0.5, 0.08, M.seat, 0, sy + 0.24, hz + 0.24, -0.12);
-    box(fus, 0.5, 0.06, 0.05, trimMat, 0, sy + 0.26, hz + 0.1, 0, 0, 0.0); // harnais
-  }
-  box(fus, 0.6, 0.28, 0.1, M.black, 0, 0.3, -0.98, -0.5);
+  // sièges : banquettes latérales (face à l'extérieur) et siège du pilote
+  for (const sx of [-1, 1]) { box(fus, 0.52, 0.12, 2.0, M.seat, sx * 0.55, -0.4, 0.45); box(fus, 0.08, 0.5, 2.0, M.seat, sx * 0.25, -0.15, 0.45); }
+  box(fus, 0.5, 0.12, 0.5, M.seat, 0, -0.38, -1.65); box(fus, 0.5, 0.55, 0.1, M.seat, 0, -0.1, -1.4, -0.1);
+  // tableau de bord et manche
+  box(fus, 0.9, 0.3, 0.12, M.black, 0, -0.05, -2.45, -0.5);
   const screenMat = std(0x0c2533, 0.2, 0.1, { emissive: 0x2fb4c8, emissiveIntensity: 1.6 });
-  box(fus, 0.4, 0.14, 0.02, screenMat, 0, 0.34, -0.945, -0.5);
-  for (const dx of [-0.2, 0, 0.2]) ball(fus, 0.035, 0.035, 0.012, std(0xd8d4c8, 0.4, 0.2, { emissive: 0xd8d4c8, emissiveIntensity: 0.5 }), dx, 0.23, -0.93);
-  tube(fus, [0, -0.18, -0.52], [0, 0.06, -0.48], 0.016, M.black, 8);
-  ball(fus, 0.03, 0.03, 0.03, M.rubber, 0, 0.08, -0.48);
-  box(fus, 0.34, 0.05, 0.05, std(0xd8d4c8, 0.4, 0.2, { emissive: 0xffd070, emissiveIntensity: 1.4 }), 0, 0.46, -1.0, -0.25); // collimateur de tir
-  // verrière en bulle : vitrage ellipsoïdal, arceaux, cadre de pare-brise
-  const canopy = new THREE.Mesh(new THREE.SphereGeometry(1, 28, 14, 0, Math.PI * 2, 0, Math.PI / 2), glassMat);
-  canopy.scale.set(0.4, 0.42, 1.38); canopy.position.set(0, 0.5, 0.12); fus.add(canopy);
-  for (const dz of [-1.12, -0.55, 0.12, 0.8, 1.22]) {
-    const f = Math.sqrt(Math.max(0.02, 1 - (dz / 1.38) ** 2));
-    const rib = new THREE.Mesh(new THREE.TorusGeometry(1, 0.03, 6, 20, Math.PI), frameMat);
-    rib.scale.set(0.4 * f, 0.42 * f, 1); rib.position.set(0, 0.5, 0.12 + dz); fus.add(rib);
-  }
-  tube(fus, [0, 0.9, -0.85], [0, 0.9, 1.05], 0.02, frameMat, 6); // arête supérieure
-
-  // 5. Hélice tripale à pales vrillées, disque de flou
-  const propeller = new THREE.Group(); propeller.position.set(0, 0, -2.56); fus.add(propeller);
-  ball(propeller, 0.2, 0.2, 0.08, M.chrome, 0, 0, 0.04);
-  for (let k = 0; k < 3; k++) {
-    const pg = new THREE.Group(); pg.rotation.z = (k * Math.PI * 2) / 3; propeller.add(pg);
-    const bl = box(pg, 0.17, 0.74, 0.02, M.black, 0, 0.58, 0, 0, 0.32, 0);   // pale vrillée
-    bl.scale.x = 1;
-    box(pg, 0.19, 0.16, 0.022, std(0xcaa83a, 0.45, 0.2), 0, 0.9, 0, 0, 0.32, 0); // bout de pale ocre
-    tube(pg, [0, 0.2, 0], [0, 0.32, 0], 0.035, M.chrome, 8);
-  }
-  const propBlur = new THREE.Mesh(new THREE.CircleGeometry(0.97, 36), std(0xd0d4d8, 0.8, 0, { transparent: true, opacity: 0.13, side: THREE.DoubleSide, depthWrite: false }));
-  propBlur.position.set(0, 0, -2.6); propBlur.visible = false; fus.add(propBlur);
-
-  // 6. Train d'atterrissage : jambes oléopneumatiques, carénages, roues principales ; roulette de queue (portée par le fuselage)
-  const R = 0.33, halfTw = 1.05, wZ = PLANE_PIVOT[2];
-  const wheels = [];
+  box(fus, 0.5, 0.16, 0.02, screenMat, 0, 0.0, -2.4, -0.5);
+  tube(fus, [0.0, -0.45, -2.0], [0.0, -0.1, -2.05], 0.018, M.black, 8);
+  // cloison, capot moteur, boîte de transmission, échappements
+  const aft = new THREE.Mesh(paintBelly(lathe([[1.4, 0.2], [1.55, 0.7], [2.0, 0.88], [2.5, 0.7], [3.0, 0.42], [3.3, 0.3]]), P.body, P.belly), paintSolid);
+  fus.add(aft);
+  const hump = ball(fus, 0.78, 0.55, 1.4, paintSolid, 0, 1.15, 0.85); hump.geometry = paintBelly(new THREE.SphereGeometry(1, 20, 12), P.body, P.body);
   for (const sx of [-1, 1]) {
-    const top = [sx * 0.6, 0.95, -0.38], axle = [sx * halfTw, R, wZ];
-    tube(hull, top, axle, 0.05, M.steel, 8);
-    tube(hull, [top[0], top[1], top[2]], [sx * 0.82, 0.62, -0.46], 0.07, M.chrome, 8); // fourreau d'amortisseur
-    tube(hull, [sx * 0.55, 0.9, -0.1], [sx * 0.95, 0.5, wZ + 0.05], 0.025, darkMat, 6); // contre-fiche
-    box(hull, 0.025, 0.55, 0.34, darkMat, sx * 0.88, 0.62, -0.46, 0, 0, -sx * 0.5); // trappe de train
-    const w = wheel(R, 0.09, 0.18, M.steel); w.position.set(sx * halfTw, R, wZ); hull.add(w); wheels.push(w);
-    box(hull, 0.05, 0.05, 0.05, M.steel, sx * (halfTw + 0.1), R, wZ);
+    tube(fus, [sx * 0.35, 1.5, 1.6], [sx * 0.42, 1.75, 2.3], 0.11, M.steel, 10);
+    ball(fus, 0.1, 0.1, 0.06, darkMat, sx * 0.42, 1.77, 2.33);
+    box(fus, 0.4, 0.2, 0.3, darkMat, sx * 0.5, 0.95, 0.2);              // entrées d'air du moteur
   }
-  const tailWheel = wheel(0.12, 0.04, 0.08, M.steel);
-  tailWheel.position.set(0, -0.63, 3.62); fus.add(tailWheel); wheels.push(tailWheel);
-  tube(fus, [0, -0.2, 3.38], [0, -0.63, 3.62], 0.03, M.steel, 6);
+  // toit de cabine sur piliers
+  const roof = ball(fus, 1.0, 0.1, 1.45, paintSolid, 0, 1.05, -0.05); roof.geometry = paintBelly(new THREE.SphereGeometry(1, 24, 10), P.body, P.belly, -0.9, -0.4);
+  for (const [px, pz] of [[-0.92, -1.05], [0.92, -1.05], [-0.92, 1.25], [0.92, 1.25]]) tube(fus, [px * 0.96, -0.5, pz], [px * 0.9, 1.0, pz], 0.045, frameMat, 6);
+  // 2. Verrière avant (dôme vitré, arceaux) et projecteur sous le nez
+  const canopy = new THREE.Mesh(new THREE.SphereGeometry(1, 28, 14, 0, Math.PI * 2, 0, Math.PI / 2), glassMat);
+  canopy.scale.set(0.97, 0.82, 1.55); canopy.position.set(0, 0.02, -1.75); fus.add(canopy);
+  for (const dz of [-1.35, -0.7, -0.05, 0.6, 1.1]) {
+    const f = Math.sqrt(Math.max(0.03, 1 - (dz / 1.55) ** 2));
+    const rib = new THREE.Mesh(new THREE.TorusGeometry(1, 0.03, 6, 20, Math.PI), frameMat);
+    rib.scale.set(0.97 * f, 0.82 * f, 1); rib.position.set(0, 0.02, -1.75 + dz); fus.add(rib);
+  }
+  ball(fus, 0.14, 0.1, 0.16, lampMat, 0, -0.85, -2.55);
+  // mitrailleuse rotative de nez (pilote) : support et deux canons
+  ball(fus, 0.22, 0.18, 0.3, darkMat, 0, -0.78, -2.3);
+  for (const sx of [-1, 1]) { tube(fus, [sx * 0.14, -0.8, -2.35], [sx * 0.14, -0.8, -3.3], 0.034, M.steel, 8); tube(fus, [sx * 0.14, -0.8, -3.22], [sx * 0.14, -0.8, -3.34], 0.048, M.black, 8); }
+
+  // 3. Poutre de queue, dérive, stabilisateur, rotor anti-couple
+  const boom = new THREE.Mesh(paintBelly(lathe([[2.9, 0.34], [4.0, 0.27], [5.2, 0.19], [6.4, 0.13], [6.9, 0.1], [6.95, 0]]), P.body, P.belly), paintSolid);
+  boom.position.y = 0.72; fus.add(boom);
+  fus.add(new THREE.Mesh(paintBelly(finGeo([[5.7, 0.7], [6.2, 2.0], [6.85, 2.05], [7.0, 0.7]], 0.08), P.body, P.body), paintSolid));
+  fus.add(new THREE.Mesh(finGeo([[6.05, 0.1], [6.5, 0.7], [6.9, 0.7], [6.95, 0.1]], 0.06), trimMat));
+  for (const sx of [-1, 1]) {
+    const st = new THREE.Mesh(paintBelly(wingGeo(1.15, 5.9, 6.4, 6.15, 6.4, 0.08), P.body, P.belly, -0.6, -0.15), paintSolid);
+    st.scale.x = sx; st.position.y = 0.78; fus.add(st);
+  }
+  const tailRotor = new THREE.Group(); tailRotor.position.set(0.16, 1.45, 6.75); fus.add(tailRotor);
+  ball(tailRotor, 0.05, 0.1, 0.1, M.chrome, 0.02, 0, 0);
+  for (let k = 0; k < 2; k++) { const bg = new THREE.Group(); bg.rotation.x = k * Math.PI / 2; tailRotor.add(bg); box(bg, 0.025, 1.0, 0.13, bladeMat, 0.04, 0, 0).position.y = 0; }
+  const tailBlur = new THREE.Mesh(new THREE.CircleGeometry(0.52, 24).rotateY(Math.PI / 2), std(0xd0d4d8, 0.8, 0, { transparent: true, opacity: 0.14, side: THREE.DoubleSide, depthWrite: false }));
+  tailBlur.position.set(0.05, 0, 0); tailBlur.visible = false; tailRotor.add(tailBlur);
+  const strobeMat = std(0xffffff, 0.2, 0, { emissive: 0xffffff, emissiveIntensity: 4 });
+  const tailLamp = ball(fus, 0.04, 0.04, 0.05, strobeMat, 0, 2.1, 6.85);
+  for (const sx of [-1, 1]) { const c = sx < 0 ? 0xc43a3a : 0x3aa84e; ball(fus, 0.05, 0.05, 0.07, std(c, 0.25, 0, { emissive: c, emissiveIntensity: 3 }), sx * 1.0, 0.6, -0.9); }
+
+  // 4. Mât, moyeu, rotor principal quadripale et disque de flou
+  tube(hull, [HELI_HUB[0], HELI_AXIS_Y + 1.2, HELI_HUB[2]], [HELI_HUB[0], HELI_HUB[1] - 0.05, HELI_HUB[2]], 0.11, M.steel, 10);
+  const rotor = new THREE.Group(); rotor.position.set(...HELI_HUB); hull.add(rotor);
+  rotor.add(new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.26, 0.2, 14), M.chrome));
+  for (let k = 0; k < 4; k++) {
+    const bg = new THREE.Group(); bg.rotation.y = (k * Math.PI) / 2; rotor.add(bg);
+    box(bg, 4.5, 0.035, 0.36, bladeMat, 2.6, 0, 0, 0, 0, 0.03);          // pale (légère conicité)
+    box(bg, 0.34, 0.04, 0.37, tipMat, 4.8, 0.08, 0, 0, 0, 0.03);         // bout de pale
+    box(bg, 0.5, 0.07, 0.2, M.steel, 0.55, 0, 0);                         // pied de pale
+  }
+  const rotorBlur = new THREE.Mesh(new THREE.CircleGeometry(4.95, 56).rotateX(-Math.PI / 2), std(0xd0d4d8, 0.8, 0, { transparent: true, opacity: 0.1, side: THREE.DoubleSide, depthWrite: false }));
+  rotorBlur.position.set(HELI_HUB[0], HELI_HUB[1] + 0.02, HELI_HUB[2]); rotorBlur.visible = false; hull.add(rotorBlur);
+
+  // 5. Patins d'atterrissage
+  for (const sx of [-1, 1]) {
+    tube(hull, [sx * 1.08, 0.12, -1.9], [sx * 1.08, 0.12, 2.0], 0.05, M.steel, 8);
+    tube(hull, [sx * 1.08, 0.12, -1.9], [sx * 1.08, 0.36, -2.35], 0.05, M.steel, 8);
+    for (const z of [-0.8, 1.1]) tube(hull, [sx * 0.8, 0.62, z], [sx * 1.08, 0.12, z], 0.042, M.steel, 8);
+  }
+  tube(hull, [-1.08, 0.12, -0.8], [1.08, 0.12, -0.8], 0.035, M.steel, 8);
+  tube(hull, [-1.08, 0.12, 1.1], [1.08, 0.12, 1.1], 0.035, M.steel, 8);
 
   finish(root);
-  canopy.castShadow = false; propBlur.castShadow = false;
+  canopy.castShadow = false; rotorBlur.castShadow = false; tailBlur.castShadow = false;
 
+  const PILOT = [0, 0.95, -1.65];
+  const seatsList = [{ hip: PILOT, eye: [PILOT[0], PILOT[1] + 0.72, PILOT[2]] }];
+  for (const [sx, sz] of [[-1, -0.05], [1, -0.05], [-1, 0.95], [1, 0.95]]) { // passagers : face aux portes, buste libre de 2 rad autour de l'axe de leur siège
+    const hip = [sx * 0.55, 0.95, sz];
+    seatsList.push({ hip, eye: [hip[0], hip[1] + 0.72, hip[2]], ry: sx < 0 ? Math.PI / 2 : -Math.PI / 2, twist: 2.1 });
+  }
   return {
     group: root,
     body,
     hull,
-    fuselage: fus,
     seatRoot: hull,
-    restPitch: PLANE_REST_PITCH,
-    tailArm: 4.2,
-    propeller,
-    propBlur,
-    elevator,
-    rudder,
-    aileronL,
-    aileronR,
+    rotor,
+    rotorBlur,
+    tailRotor,
+    tailBlur,
     strobe: strobeMat,
     tail: tailLamp,
-    wheels,
-    wheelRadius: R,
-    length: 7.4,
-    width: 7.6,
-    exhaustPoints: [[-0.6, 0.98, -1.9], [0.6, 0.98, -1.9]],
-    gunMuzzles: [[-1.65, WING_Y - 0.02, -1.4], [1.65, WING_Y - 0.02, -1.4]], // repère du fuselage
-    seats: [
-      { hip: PILOT_HIP, eye: [PILOT_HIP[0], PILOT_HIP[1] + 0.72, PILOT_HIP[2]] },
-      { hip: GUN_HIP, eye: [GUN_HIP[0], GUN_HIP[1] + 0.72, GUN_HIP[2]] },
-    ],
+    wheels: [],
+    wheelRadius: 0.3,
+    length: 10,
+    width: 3,
+    exhaustPoints: [[-0.42, 3.05, 1.7], [0.42, 3.05, 1.7]],
+    gunMuzzles: [[-0.14, HELI_AXIS_Y - 0.8, -3.34], [0.14, HELI_AXIS_Y - 0.8, -3.34]], // repère du véhicule
+    seats: seatsList,
   };
 }
 
-export const BUILDERS = { moto: buildMoto, grosseMoto: buildGrosseMoto, velo: buildVelo, voiture: buildVoiture, suv: buildSuv, avion: buildAvion };
+export const BUILDERS = { moto: buildMoto, grosseMoto: buildGrosseMoto, velo: buildVelo, voiture: buildVoiture, suv: buildSuv, helico: buildHelico };

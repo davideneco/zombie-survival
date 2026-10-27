@@ -86,9 +86,9 @@ export class RideCam {
       if (veh.v.def.isCar && this.k > 0.25) {
         veh.v.toWorld(veh.v.def.isSuv ? [0, 1.72, 0.35] : [0, 1.32, 0.25], t);
         t.y += C.pivotUp;
-      } else if (veh.v.def.isPlane && this.k > 0.25) {
-        veh.v.toWorld([0, 1.6, 0.45], t);
-        t.y += C.pivotUp; // pivot au-dessus du fuselage : l'avion se place dans le bas de l'écran, le réticule reste dégagé
+      } else if (veh.v.def.isHeli && this.k > 0.25) {
+        veh.v.toWorld([0, 2.4, 0.2], t);
+        t.y += C.pivotUp; // pivot centré au-dessus de la cabine : la vue tourne autour de l'hélicoptère, pour tous les occupants
       } else {
         veh.v.eyeWorld(veh.seat, t);
         t.y += C.pivotUp;
@@ -96,7 +96,7 @@ export class RideCam {
       }
     } else t.set(foot.x, foot.y, foot.z); // sortie de moto : le pivot rejoint l'œil du joueur à pied
     if (!this.hasPivot) { this.pivot.copy(t); this.hasPivot = true; }
-    else this.pivot.lerp(t, 1 - Math.exp(-C.follow * (veh?.v.def.isPlane ? 3 : 1) * dt)); // un avion file à 50 m/s : le pivot ne doit pas traîner
+    else this.pivot.lerp(t, 1 - Math.exp(-C.follow * (veh?.v.def.isHeli ? 3 : 1) * dt)); // un hélicoptère file à 40 m/s : le pivot ne doit pas traîner
     const pv = this.pivot;
 
     // collision : trois rayons parallèles pivot -> caméra (au centre, puis ±rayOffset), médiane
@@ -169,15 +169,15 @@ export class RideCam {
   steer(dt, veh, sinceMouse) {
     const C = CONFIG.vehicles.cam, p = this.p;
     if (this.k < 0.5) return;
-    const isPlane = !!veh.v.def.isPlane;
-    const pilot = isPlane && veh.v.isDriver(veh.seat); // le mitrailleur arrière peut viser presque à la verticale (les zombies sont en bas)
-    const minP = pilot ? Math.max(-1.35, (veh.v.pitch || 0) - 0.85) : isPlane ? -1.4 : C.pitchMin;
-    const maxP = pilot ? Math.min(1.35, (veh.v.pitch || 0) + 0.85) : isPlane ? 1.0 : C.pitchMax;
+    const isHeli = !!veh.v.def.isHeli;
+    const pilot = isHeli && veh.v.isDriver(veh.seat); // les passagers peuvent viser presque à la verticale (les zombies sont en bas)
+    const minP = pilot ? Math.max(-1.35, (veh.v.pitch || 0) - 0.85) : isHeli ? -1.45 : C.pitchMin;
+    const maxP = pilot ? Math.min(1.35, (veh.v.pitch || 0) + 0.85) : isHeli ? 1.0 : C.pitchMax;
     p.pitch = clamp(p.pitch, minP, maxP);
     if (veh.v.isDriver(veh.seat) && sinceMouse > C.recenterAfter) { // regard libre ; sans souris depuis 1,5 s : la vue revient derrière le véhicule
       const dy = angDiff(veh.v.seatYaw(veh.seat) + (veh.v.model.seats[veh.seat].ry || 0), p.yaw);
       p.yaw += Math.sign(dy) * Math.min(Math.abs(dy), C.recenterRate * dt);
-      const targetP = isPlane ? (veh.v.pitch * 0.75 + C.recenterPitch) : C.recenterPitch;
+      const targetP = isHeli ? (veh.v.pitch * 0.75 + C.recenterPitch) : C.recenterPitch;
       const dp = targetP - p.pitch;
       p.pitch += Math.sign(dp) * Math.min(Math.abs(dp), C.recenterRate * 0.4 * dt);
     }

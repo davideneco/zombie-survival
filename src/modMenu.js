@@ -361,10 +361,10 @@ export function installModMenu(game, { world, hud, sfx }) {
       target = { x: 16, y: 0, z: -12 }; label = 'Aire de Drift / Skidpad';
     } else if (type === 'circuit_bumps') {
       target = { x: -86, y: 0, z: 28 }; label = 'Banc d\'Essai Suspension';
-    } else if (type === 'plane') {
-      const av = (game.vehicles || []).find((v) => v.type === 'avion');
-      if (av) { target = { x: av.pos.x, y: av.pos.y, z: av.pos.z }; label = 'Avion de Chasse'; }
-      else { target = { x: -65, y: 0, z: -115 }; label = 'Piste d\'Aviation'; }
+    } else if (type === 'heli') {
+      const av = (game.vehicles || []).find((v) => v.type === 'helico');
+      if (av) { target = { x: av.pos.x, y: av.pos.y, z: av.pos.z }; label = 'Hélicoptère'; }
+      else { target = { x: -65, y: 0, z: -115 }; label = 'Aire d\'Hélicoptère'; }
     } else if (type === 'tram') {
       const tr = game.tramRides?.[0] || game.trams?.[0];
       if (tr) {
@@ -860,13 +860,13 @@ export function installModMenu(game, { world, hud, sfx }) {
                 <b>〰️ BANC DE SUSPENSION</b>
                 <small>Vibreurs rapprochés pour tester les amortisseurs</small>
               </button>
-              <button class="mod-btn mod-btn-accent" data-tp-poi="plane">
-                <b>🛩️ AVION DE CHASSE</b>
-                <small>Ligne droite & piste de décollage</small>
+              <button class="mod-btn mod-btn-accent" data-tp-poi="heli">
+                <b>🚁 HÉLICOPTÈRE</b>
+                <small>Ligne droite & aire d'envol</small>
               </button>
             ` : `
-              <button class="mod-btn mod-btn-accent" data-tp-poi="plane">
-                <b>🛩️ AVION DE CHASSE</b>
+              <button class="mod-btn mod-btn-accent" data-tp-poi="heli">
+                <b>🚁 HÉLICOPTÈRE</b>
                 <small>Emplacement Place Kléber</small>
               </button>
               <button class="mod-btn mod-btn-sub" data-tp-poi="cathedral_inside">

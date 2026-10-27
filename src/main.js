@@ -1554,8 +1554,8 @@ const game = {
       if (p.vehicle.v.isTram) promptText = this.tramRideHint(p.vehicle.v, p.vehicle.seat);
       else if (p.vehicle.v.state === 'burning') promptText = `SAUTEZ ! ${kE}`;
       else if (p.vehicle.seat === 0) {
-        if (p.vehicle.v.def.isPlane) {
-          promptText = `${B.tag('jump')} Cabrer · ${B.tag('sprint')} Piquer · Clic : Mitrailleuses · ${kE} Descendre`;
+        if (p.vehicle.v.def.isHeli) {
+          promptText = `${B.tag('jump')} Monter · ${B.tag('sprint')} Baisser · Clic : Tirer · ${kE} Sortir`;
         } else if (p.vehicle.v.hasTank) {
           const isMan = !!settings.manualGearbox;
           const kMode = B.tag('gearMode'), kUp = B.tag('gearUp'), kDn = B.tag('gearDown');

@@ -1,6 +1,6 @@
 # Zombie Survival — fiche de référence
 
-Version du jeu : **v0.69.0** (package 0.69.0). Générée automatiquement par `node tools/make-docs.mjs` à partir de `src/config.js` et du jeu.
+Version du jeu : **v0.70.0** (package 0.70.0). Générée automatiquement par `node tools/make-docs.mjs` à partir de `src/config.js` et du jeu.
 Carte annotée : [carte.png](carte.png). Armes de profil : [armes.png](armes.png). Les mêmes tableaux en tableur : dossier [csv/](csv/).
 
 Pour demander une modification, citez la ligne (ex. « Mitrailleuse RPK : chargeur 100 », « Mastodonte à 3000 pts », « porte P3 à 500 pts », « mettre la boîte mystère dans la zone Temple-Neuf »).
@@ -611,15 +611,15 @@ Prix d'une porte : le plus cher des deux prix de zone (colonne « Prix de la por
 
 ## Motos (deux parkings au panneau bleu « P », avec chacun une borne plein + réparation : place Gutenberg, 2 motos ; place Broglie, 1 moto)
 
-| Réglage | MOTO | GROSSE MOTO | VOITURE GT | 4X4 TOUT-TERRAIN | AVION DE CHASSE | Unité |
+| Réglage | MOTO | GROSSE MOTO | VOITURE GT | 4X4 TOUT-TERRAIN | HÉLICOPTÈRE | Unité |
 |---|---|---|---|---|---|---|
-| Places | 1 | 2 | 2 | 4 | 2 |  |
-| Points de vie | 300 | 500 | 1400 | 2400 | 2000 | PV |
-| Vitesse max | 110 | 95 | 140 | 105 | 209 | km/h |
-| Réservoir | 6 | 10 | 40 | 55 | 70 | L |
-| Autonomie à fond | 3 | 4 | 13,3 | 15,8 | 24,8 | min |
-| Seuil d'écrasement | 32 | 25 | 14 | 13 | 29 | km/h (en dessous : aucun dégât, un zombie arrête la moto) |
-| Dégâts d'écrasement au seuil / à la vitesse max | 58 / 488 | 67 / 636 | 83 / 2028 | 101 / 2102 | 240 / 4350 | PV de zombie |
+| Places | 1 | 2 | 2 | 4 | 5 |  |
+| Points de vie | 300 | 500 | 1400 | 2400 | 2600 | PV |
+| Vitesse max | 110 | 95 | 140 | 105 | 144 | km/h |
+| Réservoir | 6 | 10 | 40 | 55 | 90 | L |
+| Autonomie à fond | 3 | 4 | 13,3 | 15,8 | 39,5 | min |
+| Seuil d'écrasement | 32 | 25 | 14 | 13 | 356 | km/h (en dessous : aucun dégât, un zombie arrête la moto) |
+| Dégâts d'écrasement au seuil / à la vitesse max | 58 / 488 | 67 / 636 | 83 / 2028 | 101 / 2102 | 0 / 0 | PV de zombie |
 | Usure par écrasement | 5 (zombie tué) / 12 (survivant) | idem | idem | idem | idem | PV de la moto |
 | Choc contre un objet physique (voiture, mobilier, arbre, machine…) | (vitesse perdue - 6) x 5 | idem | idem | idem | idem | PV de la moto |
 | Choc contre un mur (façade, quai, parapet, porte, marche, bord de l'île) | aucun dégât pour la moto | idem | idem | idem | idem | le pilote se blesse comme pour un objet |

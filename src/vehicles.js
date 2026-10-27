@@ -54,6 +54,7 @@ export class Vehicle {
     this.respawnRound = 0; this.respawnPending = false; this.respawnRetry = 0; this.fxAcc = 0; this.alarmT = 0;
     this.fuel = this.def.tank; this.fuelLock = 0; this.missCd = 1; this.missT = 0; this.beepT = 0; this.dryNoted = false;
     this.isAirborne = false; this.agl = 0; this.vy = 0; this.propRot = 0; this.gunCd = 0; this.gunBarrel = 0; this.gunHeat = 0; this.gunLock = 0; this.stall = false;
+    if (this.def.isHeli) { this.rpmVal = 0; this.hvx = 0; this.hvz = 0; this.yawVel = 0; } // rotor à l'arrêt
     this.seats.fill(null);
     this.setWreckLook(false);
     this.group.visible = true;
@@ -147,7 +148,7 @@ export class Vehicle {
     if (this.hitT > 0) this.hitT -= dt;
     if (this.state === 'wreck') {
       this.speed = 0; this.dyaw = 0; this.throttle = 0;
-      if (this.def.isPlane) this.fallPlane(dt); // l'épave d'un avion détruit en vol tombe jusqu'au sol
+      if (this.def.isHeli) this.fallHeli(dt); // l'épave d'un hélicoptère détruit en vol tombe jusqu'au sol
       this.wreckT -= dt;
       if (this.wreckT <= 0) {
         if (g.world?.isCircuitTest && !g.isClient) {
@@ -158,7 +159,7 @@ export class Vehicle {
         this.state = 'gone'; this.group.visible = false; return;
       }
     } else if (local) {
-      if (this.def.isPlane) this.drivePlane(dt);
+      if (this.def.isHeli) this.driveHeli(dt);
       else this.drive(dt);
     } else this.follow(dt);
     if (this.state !== 'wreck') this.dyaw = angDiff(this.yaw, prevYaw);
@@ -173,7 +174,7 @@ export class Vehicle {
           t: 'v_state', id: this.id, x: r2(this.pos.x), y: r2(this.pos.y || 0), z: r2(this.pos.z), yaw: r2(this.yaw),
           spd: r2(this.speed), st: r2(this.steer), ln: r2(this.lean), fu: r1(this.fuel),
           pt: r2(this.pitch || 0), sy: r2(this.suspY || 0), vl: r2(this.vLat || 0), br: this.braking ? 1 : 0, th: this.throttle || 0, gr: this.gear || 1,
-          ...(this.def.isPlane ? { rp: Math.round(this.rpmVal || 0), ag: r1(this.agl || 0) } : null),
+          ...(this.def.isHeli ? { rp: Math.round(this.rpmVal || 0), ag: r1(this.agl || 0) } : null),
         });
       }
     }
@@ -219,21 +220,13 @@ export class Vehicle {
       this.group.position.y += this.def.wreckLift ?? 0.45;
       return;
     }
-    if (this.def.isPlane) {
+    if (this.def.isHeli) {
       this.group.rotation.set(0, this.yaw, 0);
-      const pit = this.pitch || 0, lean = this.lean || 0, agl = this.state === 'wreck' ? 0 : Math.max(0, this.agl ?? this.pos.y);
-      m.body.rotation.set(pit, 0, lean);
-      // au sol l'avion repose sur trois points (nez cabré) ; en l'air le fuselage se met à plat, et la queue ne s'enfonce pas dans le sol quand le nez se lève
-      m.fuselage.rotation.x = m.restPitch * (1 - Math.min(1, agl / 1.6));
-      m.body.position.y = m.wheelRadius + Math.max(0, Math.sin(pit)) * m.tailArm * Math.max(0, 1 - agl / 2.2);
-      m.propeller.rotation.z = -(this.propRot || 0);
-      m.propBlur.visible = (this.rpmVal || 0) > 1500 && this.state === 'ok';
-      m.rudder.rotation.y = -(this.steerAngle || 0) * 0.7;
-      m.elevator.rotation.x = -clamp(pit / 0.5, -1, 1) * 0.45;
-      m.aileronL.rotation.x = clamp(-lean / 0.9, -1, 1) * 0.45;
-      m.aileronR.rotation.x = -clamp(-lean / 0.9, -1, 1) * 0.45;
-      this.wheelRot += (this.speed / m.wheelRadius) * dt;
-      for (const w of m.wheels) w.rotation.x = -this.wheelRot;
+      m.body.rotation.set(this.pitch || 0, 0, this.lean || 0);
+      const rk = (this.rpmVal || 0) / this.def.maxRpm;
+      m.rotor.rotation.y = this.propRot || 0;
+      m.tailRotor.rotation.x = (this.propRot || 0) * 3;
+      m.rotorBlur.visible = m.tailBlur.visible = rk > 0.6 && this.state === 'ok';
       m.strobe.emissiveIntensity = (this.hasDriver && this.state === 'ok') ? (Math.sin(performance.now() * 0.012) > 0.85 ? 7 : 0.4) : 0.6; // feu à éclats
       return;
     }
@@ -291,10 +284,10 @@ export class Vehicle {
     this.steerAngle = this.steer * this.def.maxSteer / (1 + Math.abs(this.speed) * (this.def.isCar ? 0.085 : 0.12));
     this.throttle = n.throttle || 0;
     this.braking = !!n.braking;
-    if (this.def.isPlane) {
+    if (this.def.isHeli) {
       this.agl = n.agl ?? this.pos.y;
-      this.rpmVal = (this.rpmVal || this.def.idleRpm) + ((n.rpm || this.def.idleRpm) - (this.rpmVal || this.def.idleRpm)) * k;
-      this.propRot = (this.propRot || 0) + (this.rpmVal / 60) * Math.PI * 2 * dt;
+      this.rpmVal = (this.rpmVal || 0) + ((n.rpm || 0) - (this.rpmVal || 0)) * k;
+      this.propRot = (this.propRot || 0) + (this.rpmVal / this.def.maxRpm) * Math.PI * 2 * 5 * dt;
     }
     if (this.def.isCar && (Math.abs(this.vLat) > 2.2 || (this.braking && Math.abs(this.speed) > 8))) {
       this.emitDriftFx(dt);
@@ -319,167 +312,123 @@ export class Vehicle {
     }
   }
 
-  // ------------------------------------------------------------------ pilotage avion (client du pilote)
-  // Vol arcade (CONFIG.vehicles.types.avion.plane) : W / S = manette des gaz (elle garde sa position), Q / D = direction au sol, inclinaison + virage en vol,
-  // Espace = cabrer, Maj / C / Ctrl = piquer ; sans touche l'avion se remet à plat. La vitesse vient de la poussée, de la traînée et de l'assiette (cabrer freine),
-  // la montée de l'assiette et de la portance (sous la vitesse de décrochage l'avion chute et plonge du nez). Pilote mort ou avion en feu : plus de commandes.
-  drivePlane(dt) {
-    const D = this.def, P = D.plane, g = this.game, K = g.player.keys, B = g.binds;
+  // ------------------------------------------------------------------ pilotage hélicoptère (client du pilote)
+  // Vol arcade (CONFIG.vehicles.types.helico.heli) : W / S = avant / arrière, A / D = rotation, Espace = monte, Maj / C / Ctrl = descend ; sans touche l'hélicoptère
+  // fait du sur-place (il garde son altitude, freine et se redresse). Le rotor met du temps à monter en régime : il faut qu'il soit prêt pour décoller. Moteur coupé
+  // (panne sèche, hélicoptère en feu) : plus de commandes, il descend en autorotation (chute lente, atterrissage possible).
+  driveHeli(dt) {
+    const D = this.def, P = D.heli, g = this.game, K = g.player.keys, B = g.binds;
     const on = this.state === 'ok';
     const key = (id) => on && B.down(id, K);
-    const thrUp = key('forward'), thrDn = key('back'), pitchUp = key('jump');
-    const pitchDn = on && (B.down('sprint', K) || !!K['KeyC'] || !!K['ControlLeft']);
-    const steerIn = (key('right') ? 1 : 0) - (key('left') ? 1 : 0);
-    let sp = this.speed;
+    const fwd = key('forward'), back = key('back'), up = key('jump');
+    const down = on && (B.down('sprint', K) || !!K['KeyC'] || !!K['ControlLeft']);
+    const yawIn = (key('left') ? 1 : 0) - (key('right') ? 1 : 0); // > 0 : à gauche (le cap augmente)
 
-    // sol sous l'avion (hors étages d'immeubles : on ne se pose que dehors) et hauteur au-dessus
+    // sol sous l'appareil (hors étages d'immeubles : on ne se pose que dehors) et hauteur au-dessus
     let gy = 0;
     if (g.world.floorAt) { g.world.floorAt(this.pos.x, this.pos.z, 0.2, fl); gy = fl.y; }
     let agl = this.pos.y - gy;
-    let air = agl > 0.12;
+    let air = agl > 0.1;
 
-    // essence
-    const frac = this.fuelFrac, dry = this.hasTank && this.fuel <= 0, powered = on && !dry;
-    if (powered) this.fuel = Math.max(0, this.fuel - (D.idle + D.gas * (this.throttle || 0) + D.perSpeed * (Math.abs(sp) / D.maxSpeed)) * dt);
-    if (this.hasTank && on && frac < CONFIG.vehicles.fuel.lowBelow) {
+    // essence et régime du rotor
+    const dry = this.hasTank && this.fuel <= 0, powered = on && !dry;
+    const moving = fwd || back || up || down || yawIn !== 0;
+    if (powered) this.fuel = Math.max(0, this.fuel - (D.idle + D.gas * (up ? 1 : moving ? 0.5 : 0) + D.perSpeed * (Math.abs(this.speed) / D.maxSpeed)) * dt);
+    if (this.hasTank && on && this.fuelFrac < CONFIG.vehicles.fuel.lowBelow) {
       this.beepT = (this.beepT || 0) - dt;
       if (this.beepT <= 0) { this.beepT = CONFIG.vehicles.fuel.lowBeep; g.sfx.beep?.(); }
     }
+    let rk = (this.rpmVal || 0) / D.maxRpm;
+    rk = clamp(rk + (powered ? P.rotorUp : -P.rotorDown) * dt, 0, 1);
+    this.rpmVal = rk * D.maxRpm;
+    this.propRot = (this.propRot || 0) + rk * Math.PI * 2 * 5 * dt; // 5 tours par seconde à plein régime
+    const lift = clamp((rk - 0.5) / (P.rotorReady - 0.5), 0, 1);
+    this.stall = !powered && air && on; // moteur coupé en vol : voyant du tableau de bord
 
-    // manette des gaz ; moteur coupé (panne sèche, avion en feu) : elle retombe
-    if (powered) this.throttle = clamp((this.throttle || 0) + ((thrUp ? 1 : 0) - (thrDn ? 1 : 0)) * P.throttleRate * dt, 0, 1);
-    else this.throttle = Math.max(0, (this.throttle || 0) - dt * 0.8);
-    const power = powered ? this.throttle : 0;
-    const rpmT = powered ? D.idleRpm + (0.12 + 0.88 * power) * (D.maxRpm - D.idleRpm) : 0;
-    this.rpmVal = (this.rpmVal || D.idleRpm) + (rpmT - (this.rpmVal || D.idleRpm)) * Math.min(1, dt * 3.5);
-    this.propRot = (this.propRot || 0) + (this.rpmVal / 60) * Math.PI * 2 * dt * (air ? 1 : 0.8);
-
-    // vitesse : poussée - traînée (en v², maxSpeed à pleins gaz en palier) - gravité sur l'assiette
-    const r = Math.abs(sp) / D.maxSpeed;
-    let acc = D.accel * (power - r * r) - P.gravPitch * Math.sin(this.pitch || 0);
-    this.braking = false;
-    if (air) {
-      if (thrDn && power < 0.05) { acc -= P.airbrake * Math.min(1, r * 1.6); this.braking = true; } // aérofrein : S, gaz coupés
-      sp = Math.max(0, sp + acc * dt);
-    } else {
-      sp += acc * dt * (sp >= 0 ? 1 : 0);
-      if (sp > 0) {
-        const brk = thrDn && power < 0.05 ? D.brake : 0;
-        this.braking = brk > 0 && sp > 0.5;
-        sp = Math.max(0, sp - (P.rollResist + brk) * dt);
-      } else if (sp < 0) sp = Math.min(0, sp + P.rollResist * dt);
-      if (thrDn && power < 0.05 && sp <= 0.3) sp = Math.max(-D.reverseSpeed, sp - 2 * dt); // marche arrière lente au parking
-      else if (thrUp && sp < 0) sp = Math.min(0, sp + 4 * dt);
-    }
-    sp = clamp(sp, -D.reverseSpeed, D.maxSpeed * 1.25);
-
-    // assiette (tangage)
-    const stalled = air && sp < D.stallSpeed;
-    let pT = pitchUp ? P.pitchMax : pitchDn ? -P.pitchMax * 0.85 : 0;
-    if (!air) pT = pitchUp && sp >= D.takeoffSpeed * 0.9 ? P.rotatePitch : 0; // au sol le nez ne se lève qu'à la vitesse de rotation
-    if (stalled) pT = Math.min(pT, -P.stallDrop * (1 - sp / D.stallSpeed)); // décrochage : le nez plonge pour reprendre de la vitesse
-    this.pitch = (this.pitch || 0) + (pT - (this.pitch || 0)) * Math.min(1, dt * P.pitchRate);
-    this.stall = stalled && on;
-    if (this.stall) {
-      this.beepT2 = (this.beepT2 || 0) - dt;
-      if (this.beepT2 <= 0) { this.beepT2 = 0.45; g.sfx.beep?.(); }
-    }
-
-    // bord de la carte : en vol l'avion est ramené doucement vers l'intérieur (la vue d'ensemble s'arrête là)
-    const mv = g.world.mapView, hx = mv ? mv.halfX : 400, hz = mv ? mv.halfZ : 400;
-    let edgeK = 0, edgeTurn = 0;
-    if (air) {
-      edgeK = Math.min(1, Math.max(0, Math.abs(this.pos.x) - (hx - P.edgeMargin), Math.abs(this.pos.z) - (hz - P.edgeMargin)) / (P.edgeMargin * 0.6));
-      if (edgeK > 0 && this.pos.x * -Math.sin(this.yaw) + this.pos.z * -Math.cos(this.yaw) > 0) {
-        const diff = angDiff(Math.atan2(this.pos.x, this.pos.z), this.yaw); // cap du centre de la carte - cap actuel
-        if (Math.abs(diff) > 2.6) { this.edgeDir = this.edgeDir || (diff >= 0 ? 1 : -1); edgeTurn = this.edgeDir; } // plein face au bord : on garde le même sens de virage
-        else { this.edgeDir = 0; edgeTurn = clamp(diff * 2, -1, 1); }
-      } else { edgeK = 0; this.edgeDir = 0; }
-      if (edgeK > 0.05 && on) { this.edgeNote = (this.edgeNote || 0) - dt; if (this.edgeNote <= 0) { this.edgeNote = 3; this.game.hud.announce('LIMITE DE ZONE', 'Demi-tour automatique', 1500); } }
-    }
-
-    // direction : roulette de queue au sol, ailerons en vol (l'inclinaison fait virer l'avion)
-    if (!air) {
-      const st = steerIn * D.maxSteer;
-      this.steerAngle = (this.steerAngle || 0) + (st - (this.steerAngle || 0)) * Math.min(1, dt * 6);
-      this.yaw -= this.steerAngle * 1.6 * clamp(sp / 6, -1, 1) / (1 + Math.abs(sp) / 12) * dt;
-      this.lean = (this.lean || 0) * Math.max(0, 1 - dt * 8);
-    } else {
-      const rollT = edgeK > 0 ? -edgeTurn * P.maxBank * 0.7 * edgeK + -steerIn * P.maxBank * (1 - edgeK) : -steerIn * P.maxBank;
-      this.lean = (this.lean || 0) + (rollT - (this.lean || 0)) * Math.min(1, dt * P.rollRate);
-      this.yaw += Math.sin(this.lean) * P.turnRate * clamp(P.turnRef / Math.max(sp, 1), 0.55, 1.4) * dt;
-      this.steerAngle = (this.steerAngle || 0) + (-steerIn * 0.45 - (this.steerAngle || 0)) * Math.min(1, dt * 5);
-    }
-
-    // verticale : décollage, portance, plafond, effet de sol, atterrissage
-    if (!air) {
-      this.vy = 0; this.pos.y = gy;
-      if (on && sp >= D.takeoffSpeed && this.pitch > P.liftoffPitch) {
-        this.vy = 2 + Math.sin(this.pitch) * sp * 0.6;
-        this.pos.y = gy + 0.3; agl = 0.3; air = true;
-        g.sfx.mount?.('avion');
+    // vitesse verticale : monter / descendre, sur-place, effet de sol, autorotation
+    let vyT = (up ? P.climb : 0) * lift - (down ? P.descend : 0) - (1 - lift) * (air ? P.sink : 0);
+    if (this.pos.y > D.maxAlt - 20) vyT = Math.min(vyT, (D.maxAlt - this.pos.y) * 0.5);
+    if (agl < P.cushion && vyT < 0 && lift > 0.3) vyT = Math.max(vyT, -(0.7 + agl * 1.3)); // effet de sol : une descente douce se pose en douceur
+    if (!air && vyT < 0) vyT = 0;
+    this.vy = (this.vy || 0) + (vyT - (this.vy || 0)) * Math.min(1, dt * P.vyResponse);
+    this.pos.y += this.vy * dt;
+    agl = this.pos.y - gy;
+    if (agl <= 0.02) { // contact avec le sol
+      if (this.vy < -1 && air) {
+        const sink = -this.vy;
+        if (sink > P.hardLanding) {
+          if (this.hitT <= 0) { this.hitT = 0.5; g.damageVehicle(this, (sink - 4) * P.landingDamage, 'crash'); }
+          this.crash(sink * 2.2, 'prop');
+        } else g.sfx.crash?.(0.1);
       }
-    } else {
-      const liftK = clamp((sp - D.stallSpeed * 0.6) / (D.stallSpeed * 0.4), 0, 1);
-      let vyT = Math.sin(this.pitch) * sp * P.climbK * liftK - (1 - liftK) * P.sinkRate - (1 - Math.cos(this.lean)) * P.bankSink;
-      if (liftK >= 1 && agl < P.cushion && vyT < 0) vyT = Math.max(vyT, -(1.5 + agl * 1.4)); // effet de sol : une descente douce se pose en douceur
-      if (this.pos.y > D.maxAlt - 25) vyT = Math.min(vyT, (D.maxAlt - this.pos.y) * 0.4);
-      this.vy = (this.vy || 0) + (vyT - (this.vy || 0)) * Math.min(1, dt * P.vyResponse);
-      this.pos.y += this.vy * dt;
-      agl = this.pos.y - gy;
-      if (agl <= 0.02) { // contact avec le sol
-        const sink = Math.max(-this.vy, -Math.sin(this.pitch) * sp * 0.5), hard = sink > P.hardLanding || Math.abs(this.lean) > P.maxLandBank || this.pitch < -P.noseDown; // piqué : l'effet de sol ne sauve pas l'avion
-        this.pos.y = gy; agl = 0;
-        if (hard) {
-          if (this.hitT <= 0) { this.hitT = 0.5; g.damageVehicle(this, Math.max(1, sink - P.hardLanding * 0.6) * P.landingDamage, 'crash'); }
-          this.crash(sink * 2.2 + sp * 0.3, 'prop'); // (hitT déjà posé : l'usure du choc ne s'ajoute pas aux dégâts d'atterrissage)
-          sp *= 0.6;
-        } else {
-          g.sfx.crash?.(0.1);
-          this.touchdownFx();
-        }
-        this.vy = 0; air = false;
-        this.lean *= 0.3;
-      }
+      this.pos.y = gy; agl = 0; this.vy = Math.max(0, this.vy);
     }
+    air = agl > 0.1;
     this.isAirborne = air;
     this.agl = agl;
 
-    // déplacement horizontal et collisions (en vol seuls les obstacles plus hauts que l'avion comptent)
-    const lx = hx - D.radius - 1, lz = hz - D.radius - 1; // le bord de la carte n'est pas un mur : on ne le heurte pas
-    const nx = clamp(this.pos.x - Math.sin(this.yaw) * sp * dt, -lx, lx), nz = clamp(this.pos.z - Math.cos(this.yaw) * sp * dt, -lz, lz);
+    // vitesse horizontale : le cap donne la direction de la poussée ; la dérive latérale s'estompe
+    const sy = Math.sin(this.yaw), cy = Math.cos(this.yaw), fx = -sy, fz = -cy, rx = cy, rz = -sy;
+    const spT = (!air && vyT <= 0) || lift < 0.5 ? 0 : fwd ? D.maxSpeed : back ? -D.reverseSpeed : 0; // posé : le patin freine
+    const rate = (spT === 0 ? P.brakeRate : P.hRate) * (air ? 1 : 3);
+    this.hvx = (this.hvx || 0) + (fx * spT - (this.hvx || 0)) * Math.min(1, dt * rate);
+    this.hvz = (this.hvz || 0) + (fz * spT - (this.hvz || 0)) * Math.min(1, dt * rate);
+    const lat0 = this.hvx * rx + this.hvz * rz;
+    this.hvx -= rx * lat0 * Math.min(1, dt * P.latDamp); this.hvz -= rz * lat0 * Math.min(1, dt * P.latDamp);
+    const sp = this.hvx * fx + this.hvz * fz;
+
+    // rotation, inclinaison du fuselage (nez baissé en avançant, penché dans les virages)
+    this.yawVel = (this.yawVel || 0) + (yawIn * P.yawRate * (air ? 1 : 0.5) * lift - (this.yawVel || 0)) * Math.min(1, dt * P.yawResponse);
+    this.yaw += this.yawVel * dt;
+    const spRatio = clamp(sp / D.maxSpeed, -1, 1);
+    this.pitch = (this.pitch || 0) + ((air ? -spRatio * P.maxTilt : 0) - (this.pitch || 0)) * Math.min(1, dt * 3);
+    const leanT = air ? clamp((this.yawVel || 0) / P.yawRate, -1, 1) * P.maxBank * (0.35 + Math.abs(spRatio) * 0.65) : 0;
+    this.lean = (this.lean || 0) + (leanT - (this.lean || 0)) * Math.min(1, dt * 3);
+    this.steerAngle = (this.yawVel || 0) * 0.2;
+    this.throttle = clamp(0.5 + (this.vy || 0) / (2 * P.climb), 0, 1);
+
+    // déplacement, bord de la carte (on s'y arrête sans le heurter) et collisions (en vol seuls les obstacles plus hauts que l'appareil comptent)
+    const mv = g.world.mapView, hx = mv ? mv.halfX : 400, hz = mv ? mv.halfZ : 400;
+    const lx = hx - D.radius - 1, lz = hz - D.radius - 1;
+    let nx = this.pos.x + this.hvx * dt, nz = this.pos.z + this.hvz * dt;
+    if (Math.abs(nx) > lx || Math.abs(nz) > lz) {
+      nx = clamp(nx, -lx, lx); nz = clamp(nz, -lz, lz);
+      if (Math.abs(nx) >= lx) this.hvx = 0;
+      if (Math.abs(nz) >= lz) this.hvz = 0;
+      this.edgeNote = (this.edgeNote || 0) - dt;
+      if (this.edgeNote <= 0) { this.edgeNote = 3; g.hud.announce('LIMITE DE ZONE', 'Faites demi-tour', 1500); }
+    }
     const q = { x: nx, y: this.pos.y + (air ? 0 : 0.1), z: nz };
     colOut.kind = null; colOut.push = 0;
     g.world.collide(q, D.radius, colOut);
     if (Math.hypot(q.x - nx, q.z - nz) > 1e-3) {
-      if (air) {
-        if (this.hitT <= 0) { this.hitT = 0.5; g.damageVehicle(this, P.wallDamage + Math.abs(sp) * P.wallDamagePerMs, 'crash'); }
-        this.crash(Math.abs(sp), 'wall');
-        sp *= 0.35;
-      } else {
-        this.crash(Math.abs(sp), colOut.kind || 'wall');
-        sp *= 0.25;
-      }
+      const hit = Math.hypot(this.hvx, this.hvz);
+      if (air && this.hitT <= 0 && hit > 2) { this.hitT = 0.5; g.damageVehicle(this, P.wallDamage + hit * P.wallDamagePerMs, 'crash'); }
+      this.crash(hit, colOut.kind || 'wall');
+      this.hvx *= 0.35; this.hvz *= 0.35;
     }
     this.pos.x = q.x; this.pos.z = q.z;
-    this.speed = sp;
+    this.speed = this.hvx * fx + this.hvz * fz;
+    this.vLat = this.hvx * rx + this.hvz * rz;
 
-    // l'hélice et l'aile écrasent les zombies au ras du sol
-    this.roadkill();
-    this.updateStrafeGuns(dt);
+    this.rotorWash(dt, gy, agl, lift);
+    this.updateNoseGun(dt);
     this.syncNet();
   }
 
-  // Poussière et fumée des roues quand l'avion se pose
-  touchdownFx() {
-    for (const sx of [-1.05, 1.05]) {
-      const c = Math.cos(this.yaw), s = Math.sin(this.yaw);
-      fx.emit(this.pos.x + c * sx - s * -0.55, this.pos.y + 0.1, this.pos.z - s * sx - c * -0.55, { count: 4, color: [0xe2e4e8, 0xc0c4cc, 0x9ea2a8], speed: 1.4, up: 0.5, size: 0.3, life: 0.8, grav: -0.15, spread: 0.3 });
-    }
+  // Le souffle du rotor près du sol : poussière soulevée en couronne sous l'appareil
+  rotorWash(dt, gy, agl, lift) {
+    const P = this.def.heli, cam = this.game.player.camera.position;
+    if (lift < 0.5 || agl > P.washHeight || Math.hypot(cam.x - this.pos.x, cam.z - this.pos.z) > 70) return;
+    this.washT = (this.washT || 0) - dt;
+    if (this.washT > 0) return;
+    this.washT = 0.06;
+    const k = 1 - agl / P.washHeight;
+    fx.emit(this.pos.x, gy + 0.2, this.pos.z, { count: 3, color: [0xcfc8ba, 0xb9b2a4, 0x8e887c], speed: 3 + 6 * k, up: 0.5, size: 0.45, life: 0.9, grav: -0.15, spread: 5 * (0.4 + k) });
   }
 
-  // Chute libre de l'épave (avion détruit en vol)
-  fallPlane(dt) {
+  // Chute libre de l'épave (hélicoptère détruit en vol)
+  fallHeli(dt) {
     const g = this.game;
     let gy = 0;
     if (g.world.floorAt) { g.world.floorAt(this.pos.x, this.pos.z, 0.2, fl); gy = fl.y; }
@@ -487,10 +436,10 @@ export class Vehicle {
     else this.vy = 0;
   }
 
-  // Mitrailleuses d'ailes (pilote, clic gauche maintenu) : elles convergent sur le point visé par la caméra (dans un cône autour du nez), pas d'étui à recharger mais
-  // une chauffe : surchauffe = blocage quelques secondes. Impacts : zombies (dégâts gunDamage), murs et sol (étincelles, poussière).
-  updateStrafeGuns(dt) {
-    const g = this.game, D = this.def, P = D.plane, pl = g.player, w = g.world;
+  // Mitrailleuse de nez (pilote, clic gauche maintenu) : elle converge sur le point visé par la caméra (dans un cône autour du nez, donc vers le bas aussi), pas d'étui à
+  // recharger mais une chauffe : surchauffe = blocage quelques secondes. Impacts : zombies (dégâts gunDamage), murs et sol (poussière). Les passagers, eux, tirent avec leur arme.
+  updateNoseGun(dt) {
+    const g = this.game, D = this.def, P = D.heli, pl = g.player, w = g.world;
     this.gunCd = Math.max(0, this.gunCd - dt);
     this.gunHeat = Math.max(0, (this.gunHeat || 0) - P.heatCool * (this.gunLock > 0 ? 2 : 1) * dt);
     if (this.gunLock > 0) { this.gunLock -= dt; if (this.gunLock <= 0) this.gunHeat = Math.min(this.gunHeat, 0.3); }
@@ -500,20 +449,20 @@ export class Vehicle {
     this.gunHeat += P.heatPerShot;
     if (this.gunHeat >= 1) { this.gunLock = P.heatLock; g.sfx.beep?.(); }
 
-    // bouche du canon (dans le repère incliné du fuselage)
+    // bouche du canon (dans le repère incliné de l'appareil)
     const m = this.model, o = gunO, d = gunD, nose = gunN, aim = gunA;
-    m.fuselage.updateWorldMatrix(true, false);
-    m.fuselage.localToWorld(o.set(...m.gunMuzzles[this.gunBarrel]));
+    m.hull.updateWorldMatrix(true, false);
+    m.hull.localToWorld(o.set(...m.gunMuzzles[this.gunBarrel]));
     // direction : vers le point visé par la caméra, bornée à un cône autour du nez
     const yaw = pl.yaw, pit = pl.pitch + (pl.recoil || 0), cp = Math.cos(pit);
     aim.set(-Math.sin(yaw) * cp, Math.sin(pit), -Math.cos(yaw) * cp);
     const cam = pl.camera.position;
     let tgt = P.gunRange;
     if (w.rayHit) tgt = Math.min(tgt, w.rayHit(cam.x, cam.y, cam.z, aim.x, aim.y, aim.z, P.gunRange));
-    tgt = Math.max(tgt, 40);
+    tgt = Math.max(tgt, 30);
     d.set(cam.x + aim.x * tgt - o.x, cam.y + aim.y * tgt - o.y, cam.z + aim.z * tgt - o.z).normalize();
-    const cy = Math.cos(this.yaw), cpn = Math.cos(this.pitch || 0);
-    nose.set(-Math.sin(this.yaw) * cpn, Math.sin(this.pitch || 0), -cy * cpn);
+    const cpn = Math.cos(this.pitch || 0);
+    nose.set(-Math.sin(this.yaw) * cpn, Math.sin(this.pitch || 0), -Math.cos(this.yaw) * cpn);
     const ang = Math.acos(clamp(d.dot(nose), -1, 1));
     if (ang > P.gunCone) d.lerpVectors(nose, d, P.gunCone / ang).normalize();
 
@@ -828,6 +777,7 @@ export class Vehicle {
     const reach = this.def.wheelbase / 2 + this.def.bikeRadius;
     for (const o of g.vehicles) {
       if (o === this || (o.state !== 'ok' && o.state !== 'burning')) continue;
+      if (Math.abs((o.pos.y || 0) - (this.pos.y || 0)) > 3) continue; // un hélicoptère en vol passe au-dessus
       if (Math.hypot(o.pos.x - this.pos.x, o.pos.z - this.pos.z) > reach + o.def.wheelbase / 2 + o.def.bikeRadius) continue;
       const b = o.bikeCircles(o._cb ??= []);
       let pen = 0, nx = 0, nz = 0;
@@ -927,13 +877,11 @@ export class Vehicle {
     const ratio = clamp(absSp / D.maxSpeed, 0, 1);
     const isManual = !!(this.hasTank && g.settings?.manualGearbox);
 
-    if (this.def.isPlane) {
+    if (this.def.isHeli) {
       this.gearLabel = this.isAirborne ? 'VOL' : 'SOL';
-      const idleRpm = D.idleRpm || 800, maxRpm = D.maxRpm || 3600;
-      const rpmNorm = clamp(((this.rpmVal || idleRpm) - idleRpm) / Math.max(1, maxRpm - idleRpm), 0, 1);
       if (this.engine) {
         const d = g.player.camera.position.distanceTo(this.group.position);
-        this.engine.set(rpmNorm, this.throttle || 0, ratio, local ? 1 : clamp(1 - d / 65, 0, 1) ** 2);
+        this.engine.set(clamp((this.rpmVal || 0) / D.maxRpm, 0, 1), this.throttle || 0, ratio, local ? 1 : clamp(1 - d / 90, 0, 1) ** 2);
       }
       return;
     }
@@ -1003,10 +951,10 @@ export class Vehicle {
       manual: isManual,
       drivetrain: D.drivetrain || null,
       isCar: !!D.isCar,
-      isPlane: !!D.isPlane,
-      ...(D.isPlane ? {
-        alt: Math.max(0, this.agl || 0), pitch: this.pitch || 0, lean: this.lean || 0, vy: this.vy || 0, throttle: this.throttle || 0, stallSpeed: D.stallSpeed,
-        stall: !!this.stall, heat: this.gunHeat || 0, locked: (this.gunLock || 0) > 0, airborne: !!this.isAirborne, takeoffSpeed: D.takeoffSpeed,
+      isHeli: !!D.isHeli,
+      ...(D.isHeli ? {
+        alt: Math.max(0, this.agl || 0), pitch: this.pitch || 0, lean: this.lean || 0, vy: this.vy || 0, rotor: clamp((this.rpmVal || 0) / D.maxRpm, 0, 1),
+        stall: !!this.stall, heat: this.gunHeat || 0, locked: (this.gunLock || 0) > 0, airborne: !!this.isAirborne,
       } : null),
       braking: !!this.braking,
       drifting: !!(D.isCar && (this.handbraking || Math.abs(this.vLat || 0) > 2.1)),
@@ -1083,7 +1031,7 @@ export function installVehicles(game, { world, hud, sfx, scene }) {
       for (const st of world.bikeStations || []) st.group.visible = Math.hypot(st.x - c.x, st.z - c.z) < sd;
     },
 
-    // Moto ou avion le plus proche avec une place libre : { v, seat } (conducteur/pilote d'abord)
+    // Moto, voiture ou hélicoptère le plus proche avec une place libre : { v, seat } (conducteur/pilote d'abord)
     nearVehicle() {
       const p = this.player;
       if (p.vehicle || p.downed || p.dead) return null;
@@ -1092,7 +1040,7 @@ export function installVehicles(game, { world, hud, sfx, scene }) {
         if (!v.usable) continue; // en feu, épave ou disparue : on ne monte pas
         const seat = v.freeSeat();
         if (seat < 0) continue;
-        const reach = v.def.isPlane ? 4.8 : bd;
+        const reach = v.def.isHeli ? 5.5 : bd;
         const d = Math.hypot(p.pos.x - v.pos.x, p.pos.z - v.pos.z);
         if (d < reach) {
           if (!best || d < best.d) best = { v, seat, d };
@@ -1103,9 +1051,9 @@ export function installVehicles(game, { world, hud, sfx, scene }) {
 
     vehiclePrompt(nv) {
       if (nv.v.isTram) return this.tramPrompt(nv);
-      const v = nv.v, role = v.def.seats > 1 ? (nv.seat === 0 ? (v.def.isPlane ? ' — pilote' : ' — conducteur') : (v.def.isPlane ? ' — mitrailleur' : ' — passager')) : '';
+      const v = nv.v, role = v.def.seats > 1 ? (nv.seat === 0 ? (v.def.isHeli ? ' — pilote' : ' — conducteur') : ' — passager') : '';
       const fuel = v.hasTank ? ` · essence ${Math.round(v.fuelFrac * 100)} %` : ''; // un vélo n'a pas de réservoir
-      const verb = (v.def.isCar || v.def.isPlane) ? 'Monter dans' : 'Monter sur';
+      const verb = (v.def.isCar || v.def.isHeli) ? 'Monter dans' : 'Monter sur';
       return `${game.binds.tag('interact')} ${verb} ${v.def.det || 'la'} ${v.def.name.toLowerCase()}${role} (PV ${Math.round(v.hpFrac * 100)} %${fuel})`;
     },
 
@@ -1265,10 +1213,10 @@ export function installVehicles(game, { world, hud, sfx, scene }) {
       const B = game.binds, kE = B.label('interact'), kV = B.label('vehicleView');
       const kMode = B.label('gearMode'), kUp = B.label('gearUp'), kDn = B.label('gearDown');
       if (v.isTram) { const [a, b] = this.tramEnterText(v, seat); hud.announce(a, b, 4500); }
-      else if (v.def.isPlane) {
+      else if (v.def.isHeli) {
         hud.announce(v.def.name, seat === 0
-          ? `${B.label('forward')}/${B.label('back')} gaz · ${B.label('left')}/${B.label('right')} virer · ${B.label('jump')} cabrer · ${B.label('sprint')} piquer`
-          : `Mitrailleur de bord : tirez ! · ${kE} : descendre (au sol)`, 5000);
+          ? `${B.label('forward')}/${B.label('back')} avancer · ${B.label('left')}/${B.label('right')} tourner · ${B.label('jump')} monter · ${B.label('sprint')} descendre · clic : mitrailleuse`
+          : `Passager : tirez sur les zombies en dessous ! · ${kE} : descendre (au sol)`, 5000);
       } else {
         const gearHint = v.hasTank ? ` · ${kMode} : Auto/Manuel · ${kUp}/${kDn} : Rapports +/-` : '';
         hud.announce(v.def.name, seat === 0 ? `${B.moveLabel()} : conduire · ${B.label('jump')} : ${v.hasTank ? 'frein à main' : 'frein'}${gearHint} · ${kE} : descendre` : (world.isCircuitTest ? `Passager à bord · ${kV} : changer de vue · ${kE} : descendre` : `Vous êtes passager : tirez ! · ${kE} : descendre`), 3500);
@@ -1310,13 +1258,13 @@ export function installVehicles(game, { world, hud, sfx, scene }) {
       if (!rv) return;
       const { v, seat } = rv;
       if (v.isTram) { this.leaveTram(v, seat, force); return; }
-      if (v.def.isPlane && !force && v.state === 'ok' && (v.agl || 0) > 2.5) { hud.announce('EN VOL', 'Atterrissez avant de descendre', 1800); return; } // pas de saut sans parachute (avion en feu : on peut sauter)
+      if (v.def.isHeli && !force && v.state === 'ok' && v.seats[0] != null && (v.agl || 0) > 2.5) { hud.announce('EN VOL', 'Posez l\'hélicoptère avant de descendre', 1800); return; } // pas de saut sans parachute (appareil en feu ou sans pilote : on peut sauter)
       // on descend du côté de la portière du siège (gauche pour conducteur/arrière-gauche, droite pour passager/arrière-droit)
       const c = Math.cos(v.yaw), s = Math.sin(v.yaw);
       v.hipWorld(seat, pt);
       let ex = pt.x, ez = pt.z;
       const prefSide = (v.model.seats[seat]?.hip?.[0] ?? 0) < -0.05 ? -1 : (seat === 0 ? -1 : 1);
-      const stepOut = v.def.isCar ? 1.35 : 1.0;
+      const stepOut = v.def.isCar ? 1.35 : v.def.isHeli ? 2.0 : 1.0;
       for (const side of [prefSide, -prefSide]) {
         const q = { x: pt.x + c * side * stepOut, y: 0.1, z: pt.z - s * side * stepOut };
         world.collide(q, 0.4);
@@ -1326,13 +1274,15 @@ export function installVehicles(game, { world, hud, sfx, scene }) {
       const sp = v.speed, fx = -s, fz = -c;
       world.floorAt?.(ex, ez, 0.1, fl);
       const groundY = world.floorAt ? fl.y : 0;
-      const leaveY = v.def.isPlane && (v.pos.y || 0) > groundY + 1.8 ? v.pos.y : groundY;
+      const leaveY = v.def.isHeli && (v.pos.y || 0) > groundY + 1.8 ? v.pos.y : groundY;
       p.pos.set(ex, leaveY, ez);
       p.vel.set(clamp(fx * sp * 0.3, -6, 6), 0, clamp(fz * sp * 0.3, -6, 6));
       p.vy = 0; p.vehicle = null;
       if (seat === 0) { // le conducteur descend : la moto s'arrête là
-        v.speed = 0; v.steer = 0; v.lean = 0; v.throttle = 0; v.syncNet();
-        if (this.isMultiplayer) this.net?.send({ t: 'v_state', id: v.id, x: r2(v.pos.x), z: r2(v.pos.z), yaw: r2(v.yaw), spd: 0, st: 0, ln: 0, fu: r1(v.fuel) }); // l'essence passe au prochain conducteur
+        v.speed = 0; v.steer = 0; v.lean = 0; v.throttle = 0;
+        if (v.def.isHeli) { v.hvx = v.hvz = 0; v.rpmVal = 0; v.yawVel = 0; } // le pilote coupe le moteur : le rotor s'arrête
+        v.syncNet();
+        if (this.isMultiplayer) this.net?.send({ t: 'v_state', id: v.id, x: r2(v.pos.x), y: r2(v.pos.y || 0), z: r2(v.pos.z), yaw: r2(v.yaw), spd: 0, st: 0, ln: 0, fu: r1(v.fuel) }); // l'essence passe au prochain conducteur
       }
       sfx.knock?.(0.5);
       this.freeMySeat(v, seat);

@@ -471,27 +471,27 @@ export class Sfx {
   // set(rpm 0..1, accélérateur -1..1, vitesse 0..1, volume 0..1) ; stop() l'éteint.
   createEngine(kind) {
     if (!this.ctx) return null;
-    const c = this.ctx, isSuv = kind === 'suv', isCar = kind === 'voiture' || isSuv, isPlane = kind === 'avion', big = kind === 'grosseMoto' || isCar || isPlane;
+    const c = this.ctx, isSuv = kind === 'suv', isCar = kind === 'voiture' || isSuv, isHeli = kind === 'helico', big = kind === 'grosseMoto' || isCar || isHeli;
     const out = c.createGain(); out.gain.value = 0;
-    const am = c.createGain(); am.gain.value = isPlane ? 0.70 : isSuv ? 0.62 : isCar ? 0.55 : big ? 0.62 : 0.8;
-    const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = isPlane ? 850 : isSuv ? 620 : isCar ? 750 : 900; lp.Q.value = 2;
+    const am = c.createGain(); am.gain.value = isHeli ? 0.8 : isSuv ? 0.62 : isCar ? 0.55 : big ? 0.62 : 0.8;
+    const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = isHeli ? 420 : isSuv ? 620 : isCar ? 750 : 900; lp.Q.value = 2;
     const osc = (type, gain) => { const o = c.createOscillator(), g = c.createGain(); o.type = type; g.gain.value = gain; o.connect(g).connect(lp); o.start(); return o; };
-    const o1 = osc('sawtooth', isPlane ? 0.65 : isCar ? 0.6 : 0.5), o2 = osc('square', isPlane ? 0.32 : isCar ? 0.28 : 0.22), sub = osc('sine', isPlane ? 0.9 : isSuv ? 0.85 : big ? 0.7 : 0.4);
+    const o1 = osc('sawtooth', isHeli ? 0.5 : isCar ? 0.6 : 0.5), o2 = osc('square', isHeli ? 0.2 : isCar ? 0.28 : 0.22), sub = osc('sine', isHeli ? 1.0 : isSuv ? 0.85 : big ? 0.7 : 0.4);
     lp.connect(am).connect(out);
     const lfo = c.createOscillator(), lg = c.createGain();
-    lfo.frequency.value = isPlane ? 14 : 10; lg.gain.value = isPlane ? 0.42 : big ? 0.38 : 0.18; lfo.connect(lg).connect(am.gain); lfo.start();
+    lfo.frequency.value = isHeli ? 12 : 10; lg.gain.value = isHeli ? 0.8 : big ? 0.38 : 0.18; // hélicoptère : le claquement des pales (4 pales x 5 tours / s = 20 Hz) module tout le son lfo.connect(lg).connect(am.gain); lfo.start();
     const wind = c.createBufferSource(), wf = c.createBiquadFilter(), wg = c.createGain();
     wind.buffer = this.noiseBuf; wind.loop = true; wf.type = 'bandpass'; wf.frequency.value = 700; wf.Q.value = 0.6; wg.gain.value = 0;
     wind.connect(wf).connect(wg).connect(out); wind.start();
     out.connect(this.bus);
-    const base = isPlane ? 24 : isSuv ? 26 : isCar ? 32 : big ? 34 : 52, span = isPlane ? 110 : isSuv ? 70 : isCar ? 85 : big ? 95 : 175;
+    const base = isHeli ? 18 : isSuv ? 26 : isCar ? 32 : big ? 34 : 52, span = isHeli ? 30 : isSuv ? 70 : isCar ? 85 : big ? 95 : 175;
     return {
       set: (rpm, throttle, ratio, vol) => {
         const t = c.currentTime, f = base + rpm * span;
         o1.frequency.setTargetAtTime(f, t, 0.04); o2.frequency.setTargetAtTime(f * 1.006, t, 0.04); sub.frequency.setTargetAtTime(f * 0.5, t, 0.04);
-        lp.frequency.setTargetAtTime((isPlane ? 450 : isSuv ? 320 : isCar ? 400 : 500) + rpm * 1800 + Math.max(0, throttle) * 600, t, 0.05);
-        lfo.frequency.setTargetAtTime(isPlane ? 8 + rpm * 26 : big ? 5 + rpm * 17 : 12 + rpm * 44, t, 0.05);
-        wf.frequency.setTargetAtTime(500 + ratio * 1500, t, 0.1); wg.gain.setTargetAtTime(ratio * (isPlane ? 0.45 : 0.3), t, 0.1);
+        lp.frequency.setTargetAtTime((isHeli ? 300 : isSuv ? 320 : isCar ? 400 : 500) + rpm * 1800 + Math.max(0, throttle) * 600, t, 0.05);
+        lfo.frequency.setTargetAtTime(isHeli ? 3 + rpm * 17 : big ? 5 + rpm * 17 : 12 + rpm * 44, t, 0.05);
+        wf.frequency.setTargetAtTime(500 + ratio * 1500, t, 0.1); wg.gain.setTargetAtTime(isHeli ? 0.1 + rpm * 0.35 + ratio * 0.2 : ratio * 0.3, t, 0.1); // hélicoptère : le souffle du rotor
         out.gain.setTargetAtTime(vol * (0.16 + 0.1 * rpm + Math.max(0, throttle) * 0.06), t, 0.05);
       },
       stop: () => {
@@ -503,11 +503,10 @@ export class Sfx {
   }
   mount(kind) { // démarreur puis un coup d'accélérateur ; vélo : claquement de selle et cliquetis de roue libre
     if (!this.ctx) return;
-    if (kind === 'avion') {
-      this._noise(0.35, 0.45, 550, 'lowpass');
-      this._tone('sawtooth', 32, 65, 0.5, 0.35, { at: 0.1, dist: true });
-      this._tone('sawtooth', 65, 125, 0.6, 0.4, { at: 0.45, dist: true });
-      this._tone('sawtooth', 125, 55, 0.5, 0.35, { at: 0.9, dist: true });
+    if (kind === 'helico') { // turbine qui démarre : sifflement qui monte puis claquement des pales
+      this._noise(0.5, 0.35, 900, 'lowpass');
+      this._tone('sine', 300, 1400, 1.6, 0.18, { at: 0.1 });
+      for (let i = 0; i < 10; i++) this._noise(0.12, 0.3, 260, 'lowpass', { at: 0.5 + i * (0.22 - i * 0.012) });
       return;
     }
     if (kind === 'velo') {

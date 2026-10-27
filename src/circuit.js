@@ -586,9 +586,9 @@ export async function buildCircuitWorld(scene, renderer, gameRef = null) {
     { type: 'grosseMoto', x: -10, z: -70, yaw: 0 },
     { type: 'velo', x: -5, z: -70, yaw: 0 },
     { type: 'velo', x: -2, z: -70, yaw: 0 },
-    // 6) Avions de Chasse et Voltige (v0.68.0) : 1 sur la piste de décollage (ligne droite) et 1 au paddock voltige
-    { type: 'avion', x: -65, z: -115, yaw: -Math.PI / 2, variant: 0 }, // Face à la ligne droite principale (runway vers l'Est !)
-    { type: 'avion', x: 8, z: -70, yaw: 0, variant: 1 },               // Paddock Voltige Sport Jaune Corsa
+    // 6) Hélicoptères (v0.70.0) : 1 près de la ligne droite et 1 au paddock
+    { type: 'helico', x: -65, z: -115, yaw: -Math.PI / 2, variant: 0 },
+    { type: 'helico', x: 8, z: -70, yaw: 0, variant: 1 },
   ];
 
   // Station Essence & Réparation Gratuite dans le Paddock
