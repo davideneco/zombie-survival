@@ -86,6 +86,9 @@ export class RideCam {
       if (veh.v.def.isCar && this.k > 0.25) {
         veh.v.toWorld(veh.v.def.isSuv ? [0, 1.72, 0.35] : [0, 1.32, 0.25], t);
         t.y += C.pivotUp;
+      } else if (veh.v.def.isPlane && this.k > 0.25) {
+        veh.v.toWorld([0, 1.35, 0.65], t);
+        t.y += C.pivotUp;
       } else {
         veh.v.eyeWorld(veh.seat, t);
         t.y += C.pivotUp;
@@ -166,11 +169,15 @@ export class RideCam {
   steer(dt, veh, sinceMouse) {
     const C = CONFIG.vehicles.cam, p = this.p;
     if (this.k < 0.5) return;
-    p.pitch = clamp(p.pitch, C.pitchMin, C.pitchMax);
-    if (veh.v.isDriver(veh.seat) && sinceMouse > C.recenterAfter) { // regard libre ; sans souris depuis 1,5 s : la vue revient derrière la moto (la rame : derrière la cabine) à 2 rad/s
+    const isPlane = !!veh.v.def.isPlane;
+    const minP = isPlane ? Math.max(-1.35, (veh.v.pitch || 0) - 0.85) : C.pitchMin;
+    const maxP = isPlane ? Math.min(1.35, (veh.v.pitch || 0) + 0.85) : C.pitchMax;
+    p.pitch = clamp(p.pitch, minP, maxP);
+    if (veh.v.isDriver(veh.seat) && sinceMouse > C.recenterAfter) { // regard libre ; sans souris depuis 1,5 s : la vue revient derrière le véhicule
       const dy = angDiff(veh.v.seatYaw(veh.seat) + (veh.v.model.seats[veh.seat].ry || 0), p.yaw);
       p.yaw += Math.sign(dy) * Math.min(Math.abs(dy), C.recenterRate * dt);
-      const dp = C.recenterPitch - p.pitch;
+      const targetP = isPlane ? (veh.v.pitch * 0.75 + C.recenterPitch) : C.recenterPitch;
+      const dp = targetP - p.pitch;
       p.pitch += Math.sign(dp) * Math.min(Math.abs(dp), C.recenterRate * 0.4 * dt);
     }
   }

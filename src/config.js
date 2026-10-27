@@ -370,13 +370,13 @@ export const CONFIG = {
         pump: { dx: -4.5, dz: 0.5 }, sign: { dx: 4.5, dz: 3.5 },
         rect: { w: 12, d: 12 },
       },
-      // place Kléber : 1 4x4 tout-terrain
+      // place Kléber : 1 4x4 tout-terrain et 1 avion de chasse
       {
         zone: 'Place Kléber', x: -200, z: -145, yaw: 0,
-        bays: [{ type: 'suv', dx: 0 }],
-        slots: [0],
-        pump: { dx: -3.6, dz: 0 }, sign: { dx: 3.6, dz: 3.5 },
-        rect: { w: 10, d: 12 },
+        bays: [{ type: 'suv', dx: -2.8 }, { type: 'avion', dx: 3.2 }],
+        slots: [-2.8, 3.2],
+        pump: { dx: -6.0, dz: 0 }, sign: { dx: 6.0, dz: 3.5 },
+        rect: { w: 15, d: 12 },
       },
     ],
     // Stations de vélos (v0.43.0) : vélos GRATUITS répartis sur l'île, 1 ou 2 par station (`bikes`), jamais plus d'une station par zone. Chaque station est
@@ -415,6 +415,7 @@ export const CONFIG = {
       { type: 'moto', zone: 'Place Gutenberg' },
       { type: 'grosseMoto', zone: 'Place Broglie' },
       { type: 'suv', zone: 'Place Kléber' },
+      { type: 'avion', zone: 'Place Kléber' },
     ],
     // Écraser un zombie (propre à chaque moto, voir `roadkill` des types) : sous la vitesse vmin, aucun dégât et la moto est stoppée
     // par le zombie (vitesse plafonnée à stopSpeed, arrêt net au contact) ; au-dessus, dégâts = K x v x r avec
@@ -494,6 +495,16 @@ export const CONFIG = {
         name: 'VÉLO', hudName: 'VÉLO', det: 'le', seats: 1, camArm: 3.0, hp: 150, tank: 0, maxSpeed: 12, accel: 4.5, brake: 10, reverseSpeed: 1.2, drag: 0.1,
         wheelbase: 1.05, maxSteer: 0.72, grip: 13, radius: 0.4, bikeRadius: 0.3, roadkill: { K: 0, vmin: 99, slowdown: 1 },
         crash: { minSpeed: 6, damagePerMs: 4, maxDamage: 25 }, blast: null, wreckTime: 10, respawnRounds: 1, fx: false, wreckLift: 0.36, cullDist: 90, leanK: 0.05,
+      },
+      // Avion de chasse / voltige (v0.68.0) : biplace (pilote + mitrailleur arrière), hélice animée, roulage, décollage (Espace pour cabrer au-dessus de takeoffSpeed),
+      // vol 3D libre (assiette, roulis, altitude), atterrissage en douceur ou crash à forte vitesse de chute, et doubles mitrailleuses d'ailes (clic gauche).
+      avion: {
+        name: 'AVION DE CHASSE', hudName: 'AVION', det: "l'", isPlane: true, drivetrain: 'PROP', seats: 2, camArm: 9.0, hp: 2000, tank: 70, idle: 0.005, gas: 0.022, perSpeed: 0.020,
+        maxSpeed: 52.0, takeoffSpeed: 17.5, stallSpeed: 12.0, climbRate: 14.0, maxAlt: 150.0, accel: 15.5, brake: 11.0, reverseSpeed: 2.5, drag: 0.045,
+        wheelbase: 3.55, maxSteer: 0.52, steerRate: 5.5, steerSpeedFactor: 0.06, grip: 20, radius: 2.2, bikeRadius: 1.8, roadkill: { K: 75, vmin: 8.0, slowdown: 0.98 },
+        gears: 1, idleRpm: 800, redlineRpm: 3200, maxRpm: 3600,
+        crash: { minSpeed: 16, damagePerMs: 2.0, maxDamage: 45 }, wreckLift: 0.65,
+        gunDamage: 140, gunRate: 0.085,
       },
     },
   },

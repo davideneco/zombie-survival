@@ -209,7 +209,7 @@ export class Hud {
     const rpm = Math.round(info.rpm || 0);
     const gear = info.gear || '1';
     const isMan = !!info.manual;
-    const key = `${kmh}|${ Math.round(rpm / 25) }|${gear}|${isMan ? 1 : 0}|${info.drivetrain || ''}|${info.braking ? 1 : 0}|${info.drifting ? 1 : 0}|${hot ? 1 : 0}`;
+    const key = `${kmh}|${ Math.round(rpm / 25) }|${gear}|${isMan ? 1 : 0}|${info.drivetrain || ''}|${info.braking ? 1 : 0}|${info.drifting ? 1 : 0}|${hot ? 1 : 0}|${info.isPlane ? 1 : 0}|${info.alt || 0}|${info.pitchDeg || 0}`;
     this._set('vcluster', key, () => {
       const W = 380, H = 142;
       ctx.clearRect(0, 0, W, H);
@@ -227,8 +227,8 @@ export class Hud {
 
       // ==================== CADRAN GAUCHE : COMPTE-TOURS (tr/min) ====================
       const lx = 80, ly = 74, lr = 54;
-      const maxRpm = info.maxRpm || 8500;
-      const redRpm = info.redlineRpm || 7500;
+      const maxRpm = info.maxRpm || (info.isPlane ? 3600 : 8500);
+      const redRpm = info.redlineRpm || (info.isPlane ? 3200 : 7500);
       const maxK = Math.ceil(maxRpm / 1000);
       const dispMaxRpm = maxK * 1000;
       const rpmFrac = Math.min(1, Math.max(0, rpm / dispMaxRpm));
@@ -320,49 +320,76 @@ export class Hud {
         ctx.fill();
       }
 
-      // Boîtier du rapport engagé + mode de boîte (AUTO / MANUEL)
+      // Boîtier du rapport engagé ou mode vol / altitude
       ctx.fillStyle = 'rgba(22, 27, 36, 0.95)';
-      ctx.strokeStyle = rpm >= redRpm * 0.95 ? '#ff3b30' : isMan ? '#f5a623' : 'rgba(130, 145, 165, 0.45)';
+      ctx.strokeStyle = info.isPlane ? '#38b8f0' : (rpm >= redRpm * 0.95 ? '#ff3b30' : isMan ? '#f5a623' : 'rgba(130, 145, 165, 0.45)');
       ctx.lineWidth = 1.5;
       ctx.beginPath();
-      ctx.roundRect(cx - 26, 29, 52, 48, 7);
+      ctx.roundRect(cx - (info.isPlane ? 34 : 26), 29, (info.isPlane ? 68 : 52), 48, 7);
       ctx.fill();
       ctx.stroke();
 
-      ctx.fillStyle = isMan ? '#ffb848' : '#58df88';
-      ctx.font = 'bold 7.5px Arial, sans-serif';
-      ctx.fillText(isMan ? 'MANUEL' : 'AUTO', cx, 38);
-      ctx.fillStyle = gear === 'R' ? '#ff5252' : gear === 'N' ? '#8892a0' : '#ffd24a';
-      ctx.font = 'bold 26px Arial, sans-serif';
-      ctx.fillText(String(gear), cx, 60);
-
-      // Badge de transmission (PROPULSION RWD / 4X4 AWD)
-      if (info.drivetrain) {
-        const isRwd = info.drivetrain === 'RWD';
-        ctx.fillStyle = isRwd ? 'rgba(235, 95, 35, 0.22)' : 'rgba(40, 175, 235, 0.22)';
-        ctx.strokeStyle = isRwd ? '#f07838' : '#38b8f0';
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.roundRect(cx - 38, 82, 76, 17, 4);
-        ctx.fill();
-        ctx.stroke();
-        ctx.fillStyle = isRwd ? '#ff9c64' : '#74d4ff';
-        ctx.font = 'bold 8.5px Arial, sans-serif';
-        ctx.fillText(isRwd ? 'PROPULSION · RWD' : '4X4 · AWD', cx, 91);
+      if (info.isPlane) {
+        ctx.fillStyle = gear === 'VOL' ? '#38b8f0' : '#ffd24a';
+        ctx.font = 'bold 8px Arial, sans-serif';
+        ctx.fillText(gear === 'VOL' ? 'EN VOL' : 'AU SOL', cx, 39);
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 17px Arial, sans-serif';
+        ctx.fillText(`${info.alt || 0} m`, cx, 55);
+        ctx.fillStyle = '#8ea2b4';
+        ctx.font = '7.5px Arial, sans-serif';
+        ctx.fillText(`CABRÉ ${info.pitchDeg > 0 ? '+' : ''}${info.pitchDeg || 0}°`, cx, 69);
+      } else {
+        ctx.fillStyle = isMan ? '#ffb848' : '#58df88';
+        ctx.font = 'bold 7.5px Arial, sans-serif';
+        ctx.fillText(isMan ? 'MANUEL' : 'AUTO', cx, 38);
+        ctx.fillStyle = gear === 'R' ? '#ff5252' : gear === 'N' ? '#8892a0' : '#ffd24a';
+        ctx.font = 'bold 26px Arial, sans-serif';
+        ctx.fillText(String(gear), cx, 60);
       }
 
-      // Témoins FREIN / DRIFT
-      ctx.fillStyle = info.braking ? 'rgba(235, 40, 40, 0.9)' : 'rgba(255,255,255,0.08)';
-      ctx.beginPath(); ctx.roundRect(cx - 38, 104, 36, 15, 3); ctx.fill();
-      ctx.fillStyle = info.braking ? '#fff' : '#606875';
-      ctx.font = 'bold 8px Arial, sans-serif';
-      ctx.fillText('FREIN', cx - 20, 112);
+      // Badge de transmission (PROPULSION RWD / 4X4 AWD / CHASSEUR HÉLICE)
+      if (info.drivetrain) {
+        const isProp = info.drivetrain === 'PROP';
+        const isRwd = info.drivetrain === 'RWD';
+        ctx.fillStyle = isProp ? 'rgba(56, 184, 240, 0.22)' : isRwd ? 'rgba(235, 95, 35, 0.22)' : 'rgba(40, 175, 235, 0.22)';
+        ctx.strokeStyle = isProp ? '#38b8f0' : isRwd ? '#f07838' : '#38b8f0';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.roundRect(cx - (isProp ? 44 : 38), 82, (isProp ? 88 : 76), 17, 4);
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = isProp ? '#74d4ff' : isRwd ? '#ff9c64' : '#74d4ff';
+        ctx.font = 'bold 8.5px Arial, sans-serif';
+        ctx.fillText(isProp ? 'CHASSEUR · HÉLICE' : isRwd ? 'PROPULSION · RWD' : '4X4 · AWD', cx, 91);
+      }
 
-      ctx.fillStyle = info.drifting ? 'rgba(245, 155, 25, 0.92)' : 'rgba(255,255,255,0.08)';
-      ctx.beginPath(); ctx.roundRect(cx + 2, 104, 36, 15, 3); ctx.fill();
-      ctx.fillStyle = info.drifting ? '#111' : '#606875';
-      ctx.font = 'bold 8px Arial, sans-serif';
-      ctx.fillText('DRIFT', cx + 20, 112);
+      // Témoins bas (FREIN / DRIFT ou MITRAIL. / AÉROFREIN)
+      if (info.isPlane) {
+        ctx.fillStyle = 'rgba(56, 184, 240, 0.9)';
+        ctx.beginPath(); ctx.roundRect(cx - 42, 104, 40, 15, 3); ctx.fill();
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 7.5px Arial, sans-serif';
+        ctx.fillText('MITRAIL.', cx - 22, 112);
+
+        ctx.fillStyle = info.braking ? 'rgba(235, 40, 40, 0.9)' : 'rgba(255,255,255,0.08)';
+        ctx.beginPath(); ctx.roundRect(cx + 2, 104, 40, 15, 3); ctx.fill();
+        ctx.fillStyle = info.braking ? '#fff' : '#606875';
+        ctx.font = 'bold 7.5px Arial, sans-serif';
+        ctx.fillText(gear === 'VOL' ? 'AÉROFREIN' : 'FREIN', cx + 22, 112);
+      } else {
+        ctx.fillStyle = info.braking ? 'rgba(235, 40, 40, 0.9)' : 'rgba(255,255,255,0.08)';
+        ctx.beginPath(); ctx.roundRect(cx - 38, 104, 36, 15, 3); ctx.fill();
+        ctx.fillStyle = info.braking ? '#fff' : '#606875';
+        ctx.font = 'bold 8px Arial, sans-serif';
+        ctx.fillText('FREIN', cx - 20, 112);
+
+        ctx.fillStyle = info.drifting ? 'rgba(245, 155, 25, 0.92)' : 'rgba(255,255,255,0.08)';
+        ctx.beginPath(); ctx.roundRect(cx + 2, 104, 36, 15, 3); ctx.fill();
+        ctx.fillStyle = info.drifting ? '#111' : '#606875';
+        ctx.font = 'bold 8px Arial, sans-serif';
+        ctx.fillText('DRIFT', cx + 20, 112);
+      }
 
       // ==================== CADRAN DROIT : COMPTEUR DE VITESSE (km/h) ====================
       const rx = 300, ry = 74, rr = 54;

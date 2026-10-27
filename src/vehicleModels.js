@@ -930,4 +930,213 @@ export function buildSuv(variant = 0) {
   };
 }
 
-export const BUILDERS = { moto: buildMoto, grosseMoto: buildGrosseMoto, velo: buildVelo, voiture: buildVoiture, suv: buildSuv };
+// ---------------------------------------------------------------- AVION : Monoplan de chasse & voltige à hélice
+export function buildAvion(variant = 0) {
+  const M = mats();
+  const v = Math.abs(variant) % 4;
+
+  // Couleurs de carrosserie selon la variante
+  const PALETTES = [
+    { body: 0x3d5038, belly: 0x8ea2b0, trim: 0xdca323, dark: 0x242d22 }, // 0: Spitfire Vert Kaki & Bande Jaune
+    { body: 0xe6a817, belly: 0x222428, trim: 0x181a1d, dark: 0x1a1c20 }, // 1: Jaune Voltige Sport & Bandes Noires
+    { body: 0x1c1e22, belly: 0x141518, trim: 0xb52424, dark: 0x111215 }, // 2: Furtif Stealth Graphite & Cramoisi
+    { body: 0x1d3a5e, belly: 0xe5eaef, trim: 0xb3261e, dark: 0x16293f }, // 3: Aéronavale Bleu Marine & Blanc
+  ];
+  const P = PALETTES[v];
+  const bodyMat = reflective(std(P.body, 0.45, 0.35), 0.85);
+  const bellyMat = std(P.belly, 0.55, 0.25);
+  const trimMat = std(P.trim, 0.40, 0.30);
+  const darkTrim = std(P.dark, 0.65, 0.40);
+  const cowlMat = std(0x282c32, 0.52, 0.58);
+  const glassMat = std(0x42687c, 0.12, 0.15, { transparent: true, opacity: 0.38 });
+  const yellowTip = std(0xffd020, 0.3, 0.2);
+
+  const root = new THREE.Group();
+  const body = new THREE.Group();
+  root.add(body);
+
+  // 1. Fuselage profilé
+  // Corps central
+  box(body, 0.94, 0.88, 3.4, bodyMat, 0, 0.68, 0.15);
+  // Ventre inférieur
+  box(body, 0.86, 0.28, 3.2, bellyMat, 0, 0.32, 0.15);
+  // Nez moteur / Capot
+  box(body, 0.88, 0.82, 1.25, cowlMat, 0, 0.70, -1.75);
+  box(body, 0.82, 0.74, 0.35, darkTrim, 0, 0.70, -2.40); // Masque radiateur avant
+
+  // Cône de nez / Spinner chromé
+  ball(body, 0.22, 0.22, 0.30, M.chrome, 0, 0.70, -2.55);
+
+  // Échappements latéraux (3 pipes par côté)
+  for (const sx of [-1, 1]) {
+    for (let i = 0; i < 3; i++) {
+      const zOff = -1.45 - i * 0.22;
+      tube(body, [sx * 0.44, 0.64, zOff], [sx * 0.58, 0.58, zOff + 0.05], 0.032, M.steel, 8);
+    }
+  }
+
+  // Fuselage arrière effilé vers l'empennage
+  box(body, 0.58, 0.62, 1.6, bodyMat, 0, 0.72, 2.3);
+  box(body, 0.32, 0.45, 1.2, bodyMat, 0, 0.76, 3.3);
+
+  // 2. Ailes principales et armement
+  // Demi-ailes gauche et droite (envergure totale ~7.2 m)
+  for (const sx of [-1, 1]) {
+    const wX = sx * 2.05;
+    // Section principale
+    box(body, 3.15, 0.11, 1.25, bodyMat, wX, 0.62, -0.15, 0, 0, -sx * 0.038); // Dièdre positif
+    // Bord d'attaque bicolore
+    box(body, 3.15, 0.09, 0.22, trimMat, wX, 0.62, -0.72, 0, 0, -sx * 0.038);
+    // Saumon d'aile profilé
+    box(body, 0.15, 0.08, 0.95, darkTrim, sx * 3.65, 0.75, -0.15);
+
+    // Feux de navigation réglementaires (Rouge à bâbord/gauche, Vert à tribord/droite)
+    const navCol = sx < 0 ? 0xff2020 : 0x22ff38;
+    const navMat = std(navCol, 0.2, 0, { emissive: navCol, emissiveIntensity: 4.5 });
+    box(body, 0.08, 0.06, 0.14, navMat, sx * 3.72, 0.75, -0.55);
+  }
+
+  // Ailerons mobiles
+  const aileronL = box(body, 1.35, 0.04, 0.24, trimMat, -2.55, 0.60, 0.48);
+  const aileronR = box(body, 1.35, 0.04, 0.24, trimMat, 2.55, 0.60, 0.48);
+
+  // Mitrailleuses lourdes d'ailes (2 canons jumelés sous les ailes)
+  for (const sx of [-1, 1]) {
+    const gunX = sx * 1.65;
+    // Corps et chemise de canon
+    tube(body, [gunX, 0.55, -0.3], [gunX, 0.55, -1.05], 0.045, darkTrim, 8);
+    // Tube du canon perforé
+    tube(body, [gunX, 0.55, -1.05], [gunX, 0.55, -1.45], 0.026, M.steel, 8);
+    // Cache-flamme
+    tube(body, [gunX, 0.55, -1.42], [gunX, 0.55, -1.48], 0.038, M.steel, 8);
+  }
+
+  // 3. Empennage et gouvernes arrières
+  // Dérive verticale (stabilisateur)
+  box(body, 0.08, 1.30, 0.95, bodyMat, 0, 1.32, 3.45, -0.25, 0, 0);
+  box(body, 0.07, 0.35, 0.85, trimMat, 0, 1.72, 3.55, -0.25, 0, 0);
+
+  // Gouvernail de direction mobile
+  const rudder = box(body, 0.06, 1.15, 0.45, trimMat, 0, 1.28, 4.05, -0.22, 0, 0);
+
+  // Feu à éclat blanc au sommet de la dérive (strobe)
+  const strobeMat = std(0xffffff, 0.1, 0, { emissive: 0xffffff, emissiveIntensity: 5.0 });
+  const tailLamp = ball(body, 0.035, 0.035, 0.035, strobeMat, 0, 1.95, 3.42);
+
+  // Stabilisateurs horizontaux et gouverne de profondeur
+  box(body, 2.30, 0.06, 0.65, bodyMat, 0, 0.76, 3.55);
+  const elevator = box(body, 2.24, 0.04, 0.28, trimMat, 0, 0.76, 3.96);
+
+  // 4. Cockpit biplace détaillé & Verrière
+  // Baignoire cockpit
+  box(body, 0.62, 0.45, 1.75, darkTrim, 0, 0.65, 0.15);
+  // Sièges pilote (avant) et copilote / mitrailleur (arrière)
+  box(body, 0.44, 0.42, 0.42, M.seat, 0, 0.46, -0.32);
+  box(body, 0.44, 0.42, 0.42, M.seat, 0, 0.48, 0.68);
+  // Tableau de bord pilote avec instrumentation
+  box(body, 0.54, 0.32, 0.08, M.black, 0, 0.80, -0.72);
+  const avionicsScreen = std(0x0c2536, 0.2, 0.1, { emissive: 0x00e5ff, emissiveIntensity: 1.8 });
+  box(body, 0.42, 0.18, 0.02, avionicsScreen, 0, 0.82, -0.67);
+  // Manche à balai (joystick)
+  tube(body, [0, 0.45, -0.45], [0, 0.68, -0.42], 0.016, M.black, 8);
+  ball(body, 0.025, 0.025, 0.025, M.rubber, 0, 0.69, -0.42);
+
+  // Verrière transparente en bulle aérodynamique
+  box(body, 0.64, 0.36, 0.04, glassMat, 0, 0.98, -0.74, 0.44, 0, 0); // Pare-brise
+  box(body, 0.62, 0.28, 1.45, glassMat, 0, 1.10, 0.05);               // Dôme central
+  box(body, 0.60, 0.32, 0.04, glassMat, 0, 0.96, 0.84, -0.38, 0, 0);  // Verrière arrière
+  // Arceaux de verrière
+  tube(body, [-0.31, 0.86, -0.68], [0.31, 0.86, -0.68], 0.022, darkTrim);
+  tube(body, [-0.31, 0.86, 0.18], [0.31, 0.86, 0.18], 0.022, darkTrim);
+  tube(body, [-0.31, 0.86, 0.82], [0.31, 0.86, 0.82], 0.022, darkTrim);
+
+  // 5. Hélice tripale et disque de flou de rotation
+  const propGroup = new THREE.Group();
+  propGroup.position.set(0, 0.70, -2.58);
+  body.add(propGroup);
+
+  // Cône central de l'hélice
+  ball(propGroup, 0.15, 0.15, 0.18, M.chrome, 0, 0, 0);
+  // 3 pales aérodynamiques à 120 degrés
+  for (let k = 0; k < 3; k++) {
+    const ang = (k * Math.PI * 2) / 3;
+    const pG = new THREE.Group();
+    pG.rotation.z = ang;
+    // Corps de la pale noir mat
+    box(pG, 0.11, 0.82, 0.022, M.black, 0, 0.48, 0, 0, 0.25, 0);
+    // Extrémité jaune sécurité haute visibilité
+    box(pG, 0.11, 0.14, 0.024, yellowTip, 0, 0.85, 0, 0, 0.25, 0);
+    propGroup.add(pG);
+  }
+
+  // Disque transparent de rotation rapide de l'hélice (visible à plein régime)
+  const blurGeo = new THREE.CylinderGeometry(0.96, 0.96, 0.015, 28).rotateX(Math.PI / 2);
+  const blurMat = std(0xffffff, 0.3, 0.1, { transparent: true, opacity: 0.24 });
+  const propBlur = new THREE.Mesh(blurGeo, blurMat);
+  propBlur.position.set(0, 0.70, -2.57);
+  propBlur.visible = false;
+  body.add(propBlur);
+
+  // 6. Train d'atterrissage robuste (2 roues avant + roulette de queue)
+  const R_main = 0.28;
+  const halfTw = 1.05;
+  const wZ = -0.58;
+
+  // Jambes de train avant en acier profilé
+  for (const sx of [-1, 1]) {
+    tube(body, [sx * 0.42, 0.45, -0.45], [sx * halfTw, R_main, wZ], 0.042, M.steel, 8);
+    tube(body, [sx * 0.25, 0.45, -0.25], [sx * halfTw, R_main, wZ], 0.030, darkTrim, 8);
+  }
+
+  const wFL = wheel(R_main, 0.075, 0.16, M.steel);
+  wFL.position.set(-halfTw, R_main, wZ);
+  root.add(wFL);
+
+  const wFR = wheel(R_main, 0.075, 0.16, M.steel);
+  wFR.position.set(halfTw, R_main, wZ);
+  root.add(wFR);
+
+  // Roulette de queue
+  const R_tail = 0.11;
+  const tailZ = 3.65;
+  tube(body, [0, 0.52, 3.50], [0, R_tail, tailZ], 0.024, M.steel, 6);
+  const wTail = wheel(R_tail, 0.035, 0.07, M.steel);
+  wTail.position.set(0, R_tail, tailZ);
+  root.add(wTail);
+
+  // 7. Projecteurs d'atterrissage (SpotLights sous les ailes)
+  const spotL = new THREE.SpotLight(0xfff8e7, 36, 95, 0.55, 0.50, 1.15);
+  spotL.position.set(-0.75, 0.58, -0.25);
+  spotL.target.position.set(-0.75, 0.0, -45);
+  body.add(spotL, spotL.target);
+
+  const spotR = new THREE.SpotLight(0xfff8e7, 36, 95, 0.55, 0.50, 1.15);
+  spotR.position.set(0.75, 0.58, -0.25);
+  spotR.target.position.set(0.75, 0.0, -45);
+  body.add(spotR, spotR.target);
+
+  return {
+    group: finish(root),
+    body,
+    propeller: propGroup,
+    propBlur,
+    elevator,
+    rudder,
+    aileronL,
+    aileronR,
+    wheels: [wFL, wFR, wTail],
+    wheelRadius: R_main,
+    length: 5.8,
+    width: 7.3,
+    tail: tailLamp,
+    headlights: [spotL, spotR],
+    exhaustPoints: [[-0.54, 0.60, -1.45], [0.54, 0.60, -1.45]],
+    gunMuzzles: [[-1.65, 0.55, -1.48], [1.65, 0.55, -1.48]],
+    seats: [
+      { hip: [0, 0.46, -0.32], eye: [0, 1.18, -0.32] }, // Pilote (avant)
+      { hip: [0, 0.48, 0.68], eye: [0, 1.20, 0.68] },   // Passager / Mitrailleur (arrière)
+    ],
+  };
+}
+
+export const BUILDERS = { moto: buildMoto, grosseMoto: buildGrosseMoto, velo: buildVelo, voiture: buildVoiture, suv: buildSuv, avion: buildAvion };

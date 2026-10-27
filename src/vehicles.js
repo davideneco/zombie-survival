@@ -52,6 +52,7 @@ export class Vehicle {
     this.hp = this.def.hp; this.state = 'ok'; this.burnT = 0; this.wreckT = 0; this.hpDirty = false; this.hpSendT = 0;
     this.respawnRound = 0; this.respawnPending = false; this.respawnRetry = 0; this.fxAcc = 0; this.alarmT = 0;
     this.fuel = this.def.tank; this.fuelLock = 0; this.missCd = 1; this.missT = 0; this.beepT = 0; this.dryNoted = false;
+    this.isAirborne = false; this.vy = 0; this.propRot = 0; this.gunCd = 0; this.gunBarrel = 0;
     this.seats.fill(null);
     this.setWreckLook(false);
     this.group.visible = true;
@@ -85,8 +86,9 @@ export class Vehicle {
   // état cible (reçu du conducteur) vers lequel on interpole quand on ne conduit pas
   syncNet() {
     this.net = {
-      x: this.pos.x, z: this.pos.z, yaw: this.yaw, speed: this.speed, steer: this.steer, lean: this.lean,
+      x: this.pos.x, y: this.pos.y || 0, z: this.pos.z, yaw: this.yaw, speed: this.speed, steer: this.steer, lean: this.lean,
       pitch: this.pitch || 0, suspY: this.suspY || 0, vLat: this.vLat || 0, braking: !!this.braking, throttle: this.throttle || 0, gear: this.gear || 1,
+      rpm: this.rpmVal || 0,
     };
   }
 
@@ -153,7 +155,10 @@ export class Vehicle {
         }
         this.state = 'gone'; this.group.visible = false; return;
       }
-    } else if (local) this.drive(dt); else this.follow(dt);
+    } else if (local) {
+      if (this.def.isPlane) this.drivePlane(dt);
+      else this.drive(dt);
+    } else this.follow(dt);
     if (this.state !== 'wreck') this.dyaw = angDiff(this.yaw, prevYaw);
     this.apply(dt);
     this.updateEngine(dt, local);
@@ -163,7 +168,7 @@ export class Vehicle {
       if (this.sendT <= 0) {
         this.sendT = 0.05;
         g.net.send({
-          t: 'v_state', id: this.id, x: r2(this.pos.x), z: r2(this.pos.z), yaw: r2(this.yaw),
+          t: 'v_state', id: this.id, x: r2(this.pos.x), y: r2(this.pos.y || 0), z: r2(this.pos.z), yaw: r2(this.yaw),
           spd: r2(this.speed), st: r2(this.steer), ln: r2(this.lean), fu: r1(this.fuel),
           pt: r2(this.pitch || 0), sy: r2(this.suspY || 0), vl: r2(this.vLat || 0), br: this.braking ? 1 : 0, th: this.throttle || 0, gr: this.gear || 1,
         });
@@ -211,6 +216,29 @@ export class Vehicle {
       this.group.position.y += this.def.wreckLift ?? 0.45;
       return;
     }
+    if (this.def.isPlane) {
+      this.group.rotation.set(0, this.yaw, 0);
+      if (m.body) {
+        m.body.rotation.set(this.pitch || 0, 0, this.lean || 0);
+      }
+      if (m.propeller) {
+        m.propeller.rotation.z = -(this.propRot || 0);
+      }
+      if (m.propBlur) {
+        m.propBlur.visible = (this.rpmVal || 0) > 850 && this.state === 'ok';
+      }
+      if (m.rudder) m.rudder.rotation.y = -(this.steerAngle || 0) * 0.7;
+      if (m.elevator) m.elevator.rotation.x = (this.pitch || 0) * 0.8;
+      if (m.aileronL) m.aileronL.rotation.x = (this.lean || 0) * 0.5;
+      if (m.aileronR) m.aileronR.rotation.x = -(this.lean || 0) * 0.5;
+      this.wheelRot += (this.speed / (m.wheelRadius || 0.28)) * dt;
+      for (const w of m.wheels || []) w.rotation.x = -this.wheelRot;
+      if (m.headlights) {
+        const lightsOn = this.hasDriver && this.state === 'ok';
+        for (const h of m.headlights) h.visible = lightsOn;
+      }
+      return;
+    }
     if (m.body) {
       // Les 4 roues restent plaquées à plat sur l'asphalte tandis que la carrosserie suspendue tangue, roule et rebondit
       this.group.rotation.set(0, this.yaw, 0);
@@ -249,8 +277,11 @@ export class Vehicle {
   // Moto ou voiture d'un autre joueur (ou garée) : on rejoint doucement le dernier état reçu (suspension, feux stop et fumée de drift compris)
   follow(dt) {
     const n = this.net, k = Math.min(1, dt * 10);
-    if (Math.hypot(n.x - this.pos.x, n.z - this.pos.z) > 15) { this.pos.x = n.x; this.pos.z = n.z; this.yaw = n.yaw; }
+    if (Math.hypot(n.x - this.pos.x, (n.y ?? 0) - this.pos.y, n.z - this.pos.z) > 20) {
+      this.pos.x = n.x; this.pos.y = n.y ?? 0; this.pos.z = n.z; this.yaw = n.yaw;
+    }
     this.pos.x += (n.x - this.pos.x) * k;
+    if (n.y != null) this.pos.y += (n.y - this.pos.y) * k;
     this.pos.z += (n.z - this.pos.z) * k;
     this.yaw += angDiff(n.yaw, this.yaw) * k;
     this.speed += (n.speed - this.speed) * k;
@@ -262,6 +293,10 @@ export class Vehicle {
     this.steerAngle = this.steer * this.def.maxSteer / (1 + Math.abs(this.speed) * (this.def.isCar ? 0.085 : 0.12));
     this.throttle = n.throttle || 0;
     this.braking = !!n.braking;
+    if (this.def.isPlane) {
+      this.rpmVal = (this.rpmVal || this.def.idleRpm) + ((n.rpm || this.def.idleRpm) - (this.rpmVal || this.def.idleRpm)) * k;
+      this.propRot = (this.propRot || 0) + (this.rpmVal / 60) * Math.PI * 2 * dt;
+    }
     if (this.def.isCar && (Math.abs(this.vLat) > 2.2 || (this.braking && Math.abs(this.speed) > 8))) {
       this.emitDriftFx(dt);
     }
@@ -281,6 +316,250 @@ export class Vehicle {
         fx.emit(wx, this.pos.y + 0.03, wz, {
           count: 1, color: [0x151618, 0x222428], speed: 0.2, up: 0.02, size: 0.16, life: 1.8, grav: 0, spread: 0.08,
         });
+      }
+    }
+  }
+
+  // ------------------------------------------------------------------ pilotage avion (client du pilote)
+  drivePlane(dt) {
+    const D = this.def, g = this.game, K = g.player.keys;
+    const on = this.state === 'ok';
+    const B = g.binds;
+    const fwdKey = on && B.down('forward', K);
+    const backKey = on && B.down('back', K);
+    const jumpKey = on && B.down('jump', K);
+    const crouchKey = on && (B.down('crouch', K) || K['KeyC'] || K['ControlLeft']);
+    const steerIn = on ? (B.down('right', K) ? 1 : 0) - (B.down('left', K) ? 1 : 0) : 0;
+    let sp = this.speed;
+
+    // Essence
+    const FU = CONFIG.vehicles.fuel, tank = this.hasTank, frac = this.fuelFrac, dry = tank && on && this.fuel <= 0;
+    if (on && tank && !dry) {
+      const burn = (fwdKey ? D.gas : D.idle) + D.perSpeed * (Math.abs(sp) / D.maxSpeed);
+      this.fuel = Math.max(0, this.fuel - burn * dt);
+    }
+    if (tank && on && frac < FU.lowBelow) {
+      this.beepT = (this.beepT || 0) - dt;
+      if (this.beepT <= 0) { this.beepT = FU.lowBeep; g.sfx.beep?.(); }
+    }
+
+    // Altitude du sol local
+    let groundY = 0;
+    if (g.world.floorAt) {
+      g.world.floorAt(this.pos.x, this.pos.z, 0.1, fl);
+      groundY = fl.y || 0;
+    }
+    const isAirborne = (this.pos.y > groundY + 0.22);
+    this.isAirborne = isAirborne;
+
+    // Accélération / Poussée
+    if (on && !dry) {
+      if (fwdKey) {
+        this.throttle = Math.min(1, (this.throttle || 0) + dt * 2.2);
+        sp += D.accel * dt;
+      } else if (backKey) {
+        this.throttle = Math.max(0, (this.throttle || 0) - dt * 2.8);
+        if (!isAirborne) {
+          sp = Math.max(0, sp - D.brake * dt);
+          if (sp < 0.2 && backKey) sp = Math.max(-D.reverseSpeed, sp - 3 * dt);
+        } else {
+          sp = Math.max(D.stallSpeed * 0.75, sp - 7.5 * dt);
+        }
+      } else {
+        this.throttle = Math.max(0.18, (this.throttle || 0) - dt * 0.75);
+        sp *= Math.max(0, 1 - D.drag * dt);
+      }
+    } else {
+      this.throttle = Math.max(0, (this.throttle || 0) - dt * 2.0);
+      sp *= Math.max(0, 1 - (D.drag * 3) * dt);
+    }
+    // Piquer du nez fait prendre de la vitesse, cabrer en consomme
+    sp = clamp(sp, -D.reverseSpeed, D.maxSpeed * (1 + Math.max(0, -(this.pitch || 0)) * 0.35));
+
+    // Régime moteur (RPM) & rotation de l'hélice
+    const targetRpm = on ? (D.idleRpm + (this.throttle || 0) * (D.maxRpm - D.idleRpm)) : 0;
+    this.rpmVal = (this.rpmVal || D.idleRpm) + (targetRpm - (this.rpmVal || D.idleRpm)) * Math.min(1, dt * 6.5);
+    this.propRot = (this.propRot || 0) + (this.rpmVal / 60) * Math.PI * 2 * dt;
+
+    // Assiette (Tangage / Pitch)
+    const pitchUp = on && (jumpKey || K['ArrowDown'] || (isAirborne && backKey && sp > 10));
+    const pitchDown = on && (crouchKey || K['ArrowUp']);
+    let pitchTarget = 0;
+    if (pitchUp) pitchTarget = 0.52;
+    else if (pitchDown) pitchTarget = -0.52;
+    else if (!isAirborne) pitchTarget = 0.05; // Légère assiette positive train classique
+
+    // Décrochage en vol : le nez pique pour récupérer de la vitesse
+    if (isAirborne && sp < D.stallSpeed) {
+      pitchTarget = -0.45;
+    }
+
+    this.pitch = (this.pitch || 0) + (pitchTarget - (this.pitch || 0)) * Math.min(1, dt * 3.6);
+
+    // Direction (Lacet / Roulis)
+    if (!isAirborne) {
+      // Roulage au sol : roulette de queue et gouvernail
+      const steerTarget = steerIn * D.maxSteer;
+      this.steerAngle = (this.steerAngle || 0) + (steerTarget - (this.steerAngle || 0)) * Math.min(1, dt * D.steerRate);
+      if (Math.abs(sp) > 0.2) {
+        this.yaw -= this.steerAngle * (sp / D.takeoffSpeed) * 1.6 * dt;
+      }
+      this.lean = (this.lean || 0) * Math.max(0, 1 - dt * 9);
+    } else {
+      // Vol : les touches Gauche / Droite inclinent les ailes en roulis (banking)
+      const rollTarget = -steerIn * 0.72;
+      this.lean = (this.lean || 0) + (rollTarget - (this.lean || 0)) * Math.min(1, dt * 4.5);
+      // Le virage aérodynamique s'induit naturellement du roulis
+      const turnRate = 1.30;
+      this.yaw += -Math.sin(this.lean) * turnRate * (sp / D.takeoffSpeed) * dt;
+      this.steerAngle = -steerIn * 0.45;
+    }
+
+    // Portance aérodynamique & Dynamique verticale
+    if (!isAirborne) {
+      if (sp >= D.takeoffSpeed && this.pitch > 0.10) {
+        // Décollage !
+        this.vy = Math.sin(this.pitch) * sp * 0.82 + 1.2;
+        this.pos.y += this.vy * dt;
+        this.isAirborne = true;
+      } else {
+        this.pos.y = groundY;
+        this.vy = 0;
+      }
+    } else {
+      // Équilibre portance / pesanteur
+      const lift = Math.cos(this.lean) * (sp / D.takeoffSpeed) * 9.8 * Math.cos(this.pitch);
+      const verticalThrust = Math.sin(this.pitch) * sp * 0.85;
+      this.vy = ((this.vy || 0) + (lift - 9.8) * dt) * 0.65 + verticalThrust * 0.35;
+      this.pos.y += this.vy * dt;
+
+      // Plafond d'altitude max
+      if (this.pos.y > D.maxAlt) {
+        this.pos.y = D.maxAlt;
+        this.vy = Math.min(0, this.vy);
+      }
+
+      // Atterrissage ou impact au sol
+      if (this.pos.y <= groundY + 0.05) {
+        this.pos.y = groundY;
+        if ((this.vy || 0) < -6.5) {
+          // Crash à l'atterrissage
+          this.crash(Math.abs(this.vy) * 2.5, 'prop');
+          g.damageVehicle(this, Math.abs(this.vy) * 25, 'crash');
+        } else {
+          // Atterrissage en douceur
+          if (this.isAirborne) {
+            g.sfx.crash?.(0.12);
+            this.emitDriftFx(0.08);
+          }
+        }
+        this.vy = 0;
+        this.isAirborne = false;
+        this.pitch *= 0.3;
+        this.lean *= 0.3;
+      }
+    }
+
+    // Déplacement longitudinal 3D
+    const fwdX = -Math.sin(this.yaw) * Math.cos(this.pitch || 0);
+    const fwdZ = -Math.cos(this.yaw) * Math.cos(this.pitch || 0);
+    const ox = this.pos.x, oz = this.pos.z;
+    const nx = ox + fwdX * sp * dt;
+    const nz = oz + fwdZ * sp * dt;
+
+    if (!this.isAirborne) {
+      const p = { x: nx, y: this.pos.y + 0.1, z: nz };
+      colOut.kind = null; colOut.push = 0;
+      g.world.collide(p, D.radius, colOut);
+      const cx = p.x - nx, cz = p.z - nz, cl = Math.hypot(cx, cz);
+      if (cl > 1e-4) {
+        this.crash(Math.abs(sp), colOut.kind || 'wall');
+        sp *= 0.25;
+      }
+      this.pos.x = p.x;
+      this.pos.z = p.z;
+    } else {
+      const p = { x: nx, y: this.pos.y, z: nz };
+      colOut.kind = null; colOut.push = 0;
+      g.world.collide(p, D.radius, colOut);
+      const cx = p.x - nx, cz = p.z - nz, cl = Math.hypot(cx, cz);
+      if (cl > 1e-4) {
+        this.crash(Math.abs(sp), 'wall');
+        g.damageVehicle(this, 120, 'crash');
+        sp *= 0.35;
+        this.pos.x = p.x;
+        this.pos.z = p.z;
+      } else {
+        this.pos.x = nx;
+        this.pos.z = nz;
+      }
+    }
+
+    this.speed = sp;
+    this.roadkill();
+    this.updateStrafeGuns(dt);
+    this.syncNet();
+  }
+
+  // Tirs de mitrailleuses d'ailes (pilote assis, clic gauche maintenu)
+  updateStrafeGuns(dt) {
+    const g = this.game, D = this.def;
+    if (this.gunCd > 0) this.gunCd -= dt;
+    const local = this.state !== 'wreck' && this.seats[0] != null && this.seats[0] === g.localId();
+    if (!local || this.state !== 'ok') return;
+    if (g.player.keys.click && this.gunCd <= 0) {
+      this.gunCd = D.gunRate || 0.085;
+      this.gunBarrel = ((this.gunBarrel || 0) + 1) % 2;
+      const muzzles = this.model.gunMuzzles || [[-1.65, 0.55, -1.48], [1.65, 0.55, -1.48]];
+      const gunMuzzle = muzzles[this.gunBarrel];
+      this.toWorld(gunMuzzle, tmpV);
+
+      // Direction du tir dans l'espace 3D
+      const cp = Math.cos(this.pitch || 0), sp = Math.sin(this.pitch || 0);
+      const cy = Math.cos(this.yaw), sy = Math.sin(this.yaw);
+      const dirX = -sy * cp, dirY = sp, dirZ = -cy * cp;
+      const dir = new THREE.Vector3(dirX, dirY, dirZ).normalize();
+
+      // Flash de bouche et flamme
+      fx.emit(tmpV.x, tmpV.y, tmpV.z, {
+        count: 4, color: [0xffea77, 0xffa500, 0xffffff], speed: 4.5, size: 0.18, life: 0.05, spread: 0.12, glow: true,
+      });
+
+      // Bruitage et recul
+      g.sfx.gun?.('p90', 1.0, 0);
+      g.player.recoil = Math.min(0.04, (g.player.recoil || 0) + 0.012);
+
+      // Détection d'impact contre les zombies (jusqu'à 160 m)
+      const maxRange = 160;
+      let closestZ = null, closestDist = maxRange, hitPoint = null;
+      for (const z of g.zombies) {
+        if (!z.targetable) continue;
+        const toZ = new THREE.Vector3(z.pos.x - tmpV.x, (z.pos.y + 1.0) - tmpV.y, z.pos.z - tmpV.z);
+        const proj = toZ.dot(dir);
+        if (proj <= 0 || proj > maxRange) continue;
+        const perp = toZ.clone().subScaledVector(dir, proj);
+        if (perp.length() < 1.45 && proj < closestDist) {
+          closestDist = proj;
+          closestZ = z;
+          hitPoint = tmpV.clone().addScaledVector(dir, proj);
+        }
+      }
+
+      if (closestZ && hitPoint) {
+        const dmg = D.gunDamage || 140;
+        g.hitZombie(closestZ, false, hitPoint, dmg, 1);
+        fx.emit(hitPoint.x, hitPoint.y, hitPoint.z, {
+          count: 5, color: [0x8b0000, 0x5a0000, 0x330000], speed: 2.0, size: 0.16, life: 0.35, grav: 3.5,
+        });
+      } else if (dirY < -0.01) {
+        const tGround = (0 - tmpV.y) / dirY;
+        if (tGround > 0 && tGround < maxRange) {
+          const gx = tmpV.x + dirX * tGround;
+          const gz = tmpV.z + dirZ * tGround;
+          fx.emit(gx, 0.05, gz, {
+            count: 4, color: [0x554433, 0x887766, 0xffcc33], speed: 2.5, size: 0.18, life: 0.4, grav: 1.8,
+          });
+        }
       }
     }
   }
@@ -620,6 +899,7 @@ export class Vehicle {
     let blocked = false;
     for (const z of g.zombies) {
       if (!z.targetable || z.isBoss) continue;
+      if (Math.abs((z.pos.y || 0) - (this.pos.y || 0)) > 2.2) continue;
       const d = Math.hypot(z.pos.x - cx, z.pos.z - cz);
       if (d > reach) continue;
       if (fast) {
@@ -669,6 +949,17 @@ export class Vehicle {
     const absSp = Math.abs(this.speed);
     const ratio = clamp(absSp / D.maxSpeed, 0, 1);
     const isManual = !!(this.hasTank && g.settings?.manualGearbox);
+
+    if (this.def.isPlane) {
+      this.gearLabel = this.isAirborne ? 'VOL' : 'SOL';
+      const idleRpm = D.idleRpm || 800, maxRpm = D.maxRpm || 3600;
+      const rpmNorm = clamp(((this.rpmVal || idleRpm) - idleRpm) / Math.max(1, maxRpm - idleRpm), 0, 1);
+      if (this.engine) {
+        const d = g.player.camera.position.distanceTo(this.group.position);
+        this.engine.set(rpmNorm, this.throttle || 0, ratio, local ? 1 : clamp(1 - d / 65, 0, 1) ** 2);
+      }
+      return;
+    }
 
     if (!local) {
       if (this.net?.gear) {
@@ -730,11 +1021,14 @@ export class Vehicle {
       idleRpm: D.idleRpm || 900,
       redlineRpm: D.redlineRpm || 7500,
       maxRpm: D.maxRpm || 8500,
-      gear: this.gearLabel || '1',
+      gear: D.isPlane ? (this.isAirborne ? 'VOL' : 'SOL') : (this.gearLabel || '1'),
       gears: D.gears || (D.isCar ? 6 : 5),
       manual: isManual,
       drivetrain: D.drivetrain || null,
       isCar: !!D.isCar,
+      isPlane: !!D.isPlane,
+      alt: Math.max(0, Math.round(this.pos.y || 0)),
+      pitchDeg: Math.round(((this.pitch || 0) * 180) / Math.PI),
       braking: !!this.braking,
       drifting: !!(D.isCar && (this.handbraking || Math.abs(this.vLat || 0) > 2.1)),
     };
@@ -810,7 +1104,7 @@ export function installVehicles(game, { world, hud, sfx, scene }) {
       for (const st of world.bikeStations || []) st.group.visible = Math.hypot(st.x - c.x, st.z - c.z) < sd;
     },
 
-    // Moto la plus proche avec une place libre : { v, seat } (conducteur d'abord)
+    // Moto ou avion le plus proche avec une place libre : { v, seat } (conducteur/pilote d'abord)
     nearVehicle() {
       const p = this.player;
       if (p.vehicle || p.downed || p.dead) return null;
@@ -819,17 +1113,20 @@ export function installVehicles(game, { world, hud, sfx, scene }) {
         if (!v.usable) continue; // en feu, épave ou disparue : on ne monte pas
         const seat = v.freeSeat();
         if (seat < 0) continue;
+        const reach = v.def.isPlane ? 4.8 : bd;
         const d = Math.hypot(p.pos.x - v.pos.x, p.pos.z - v.pos.z);
-        if (d < bd) { bd = d; best = { v, seat }; }
+        if (d < reach) {
+          if (!best || d < best.d) best = { v, seat, d };
+        }
       }
-      return best || this.nearTram?.() || null;
+      return (best ? { v: best.v, seat: best.seat } : null) || this.nearTram?.() || null;
     },
 
     vehiclePrompt(nv) {
       if (nv.v.isTram) return this.tramPrompt(nv);
-      const v = nv.v, role = v.def.seats > 1 ? (nv.seat === 0 ? ' — conducteur' : ' — passager') : '';
+      const v = nv.v, role = v.def.seats > 1 ? (nv.seat === 0 ? (v.def.isPlane ? ' — pilote' : ' — conducteur') : (v.def.isPlane ? ' — mitrailleur' : ' — passager')) : '';
       const fuel = v.hasTank ? ` · essence ${Math.round(v.fuelFrac * 100)} %` : ''; // un vélo n'a pas de réservoir
-      const verb = v.def.isCar ? 'Monter dans' : 'Monter sur';
+      const verb = (v.def.isCar || v.def.isPlane) ? 'Monter dans' : 'Monter sur';
       return `${game.binds.tag('interact')} ${verb} ${v.def.det || 'la'} ${v.def.name.toLowerCase()}${role} (PV ${Math.round(v.hpFrac * 100)} %${fuel})`;
     },
 
@@ -989,7 +1286,11 @@ export function installVehicles(game, { world, hud, sfx, scene }) {
       const B = game.binds, kE = B.label('interact'), kV = B.label('vehicleView');
       const kMode = B.label('gearMode'), kUp = B.label('gearUp'), kDn = B.label('gearDown');
       if (v.isTram) { const [a, b] = this.tramEnterText(v, seat); hud.announce(a, b, 4500); }
-      else {
+      else if (v.def.isPlane) {
+        hud.announce(v.def.name, seat === 0
+          ? `${B.moveLabel()} : Gaz / Roulis · ${B.label('jump')} : Cabrer · Clic Gauche : Mitrailleuses · ${kE} : Sauter`
+          : `Mitrailleur de bord · Vue aérienne · Tirez ! · ${kE} : Sauter`, 4500);
+      } else {
         const gearHint = v.hasTank ? ` · ${kMode} : Auto/Manuel · ${kUp}/${kDn} : Rapports +/-` : '';
         hud.announce(v.def.name, seat === 0 ? `${B.moveLabel()} : conduire · ${B.label('jump')} : ${v.hasTank ? 'frein à main' : 'frein'}${gearHint} · ${kE} : descendre` : (world.isCircuitTest ? `Passager à bord · ${kV} : changer de vue · ${kE} : descendre` : `Vous êtes passager : tirez ! · ${kE} : descendre`), 3500);
       }
@@ -1044,7 +1345,9 @@ export function installVehicles(game, { world, hud, sfx, scene }) {
       }
       const sp = v.speed, fx = -s, fz = -c;
       world.floorAt?.(ex, ez, 0.1, fl);
-      p.pos.set(ex, world.floorAt ? fl.y : 0, ez);
+      const groundY = world.floorAt ? fl.y : 0;
+      const leaveY = v.def.isPlane && (v.pos.y || 0) > groundY + 1.8 ? v.pos.y : groundY;
+      p.pos.set(ex, leaveY, ez);
       p.vel.set(clamp(fx * sp * 0.3, -6, 6), 0, clamp(fz * sp * 0.3, -6, 6));
       p.vy = 0; p.vehicle = null;
       if (seat === 0) { // le conducteur descend : la moto s'arrête là
@@ -1175,7 +1478,7 @@ export function installVehicles(game, { world, hud, sfx, scene }) {
         ...this.vehicles.map((v) => ({
           id: v.id, type: v.type, var: v.variant || 0,
           sx: r2(v.spawn.x), sz: r2(v.spawn.z), syaw: r2(v.spawn.yaw),
-          x: v.pos.x, z: v.pos.z, yaw: v.yaw, seats: v.seats,
+          x: v.pos.x, y: r2(v.pos.y || 0), z: v.pos.z, yaw: v.yaw, seats: v.seats,
           hp: r2(v.hp), fu: r2(v.fuel), st: v.state, wreck: r2(v.wreckT), back: v.respawnRound,
         })),
         ...(this.tramSnapshot?.() || []),
@@ -1191,7 +1494,7 @@ export function installVehicles(game, { world, hud, sfx, scene }) {
         }
         const v = this.vehicles[s.id];
         if (!v) continue;
-        v.pos.set(s.x, 0, s.z); v.yaw = s.yaw; v.speed = 0; v.seats = s.seats.slice(); v.syncNet(); v.apply();
+        v.pos.set(s.x, s.y || 0, s.z); v.yaw = s.yaw; v.speed = 0; v.seats = s.seats.slice(); v.syncNet(); v.apply();
         if (s.hp != null) v.hp = clamp(+s.hp, 0, v.maxHp);
         if (s.fu != null) v.fuel = clamp(+s.fu, 0, v.def.tank);
         v.respawnRound = s.back || 0;
