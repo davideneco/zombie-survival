@@ -346,6 +346,13 @@ export class Zombie {
   }
 
   // Retourne true si le zombie meurt.
+  // Veuve noire : vitesse x (1 - frac) pendant `time` s (le plus fort ralentissement l'emporte)
+  slow(frac, time) {
+    const k = 1 - frac;
+    if (this.slowT > 0 && this.slowK < k) { this.slowT = Math.max(this.slowT, time); return; }
+    this.slowK = k; this.slowT = Math.max(this.slowT || 0, time);
+  }
+
   damage(amount, isHead = false) {
     if (this.dead) return false;
     this.health -= amount * (this.armor || 1);
@@ -479,6 +486,7 @@ export class Zombie {
 
   // ----------------------------------------------------------- Update
   update(dt, player, others, world) {
+    if (this.slowT > 0) this.slowT -= dt; // Veuve noire : toile qui ralentit
     this._updateMound(dt);
 
     // ----- Mort : chute + tâche de sang -----
@@ -629,7 +637,7 @@ export class Zombie {
         [dirx, dirz] = [dirx * c - dirz * s, dirx * s + dirz * c];
       }
       const bx = this.pos.x, bz = this.pos.z;
-      const sp = this.limp ? this.speed * 0.8 : this.speed;
+      const sp = (this.limp ? this.speed * 0.8 : this.speed) * (this.slowT > 0 ? this.slowK : 1);
       if (!visible && this.vaultCd <= 0 && !this.crawler && !this.region && this._tryVault(dirx, dirz, world, nav)) return; // le champ de flux traverse un obstacle bas : on l'enjambe
       this.pos.x += dirx * sp * dt;
       this.pos.z += dirz * sp * dt;
@@ -763,7 +771,7 @@ export class Zombie {
     }
     const inRange = d3 < Z.attackRange + 0.2 && Math.abs(dy) < 2.2;
     if (inRange) moving = false;
-    const sp = this.limp ? this.speed * 0.8 : this.speed;
+    const sp = (this.limp ? this.speed * 0.8 : this.speed) * (this.slowT > 0 ? this.slowK : 1);
     const tmp = this._lk || (this._lk = { x: 0, y: 0, z: 0, yaw: 0 });
     if (moving) k.s += k.dir * sp * 0.9 * dt;
     lv.pointOn(L, k.s, tmp);

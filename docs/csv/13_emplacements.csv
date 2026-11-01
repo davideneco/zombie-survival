@@ -10,130 +10,139 @@
 9;Arme au mur;MP5;Temple-Neuf;1200;-43;-120
 10;Arme au mur;FAMAS F1;Temple-Neuf;1300;-12;-101
 11;Atout;STAMIN-UP;Temple-Neuf;2000;-48;-86
-12;BOÎTE MYSTÈRE (emplacement possible);BOÎTE MYSTÈRE (emplacement possible);Temple-Neuf;950;-40;-97
-13;Borne de munitions;Borne de munitions;Rue des Orfèvres;;21;-11
-14;Arme au mur;FAMAS F1;Rue des Orfèvres;1300;24;-64
-15;Arme au mur;MP40;Rue des Orfèvres;800;12;-77
-16;Atout;SPEED COLA;Rue des Orfèvres;3000;32;-44
-17;BOÎTE MYSTÈRE (emplacement possible);BOÎTE MYSTÈRE (emplacement possible);Rue des Orfèvres;950;11;-86
-18;Borne de munitions;Borne de munitions;Rue du Dôme;;104;-142
-19;Arme au mur;L96A1;Rue du Dôme;1750;110;-144
-20;Arme au mur;DRAGUNOV SVD;Rue du Dôme;2000;129;-127
-21;Arme au mur;AREX ZERO 1;Rue du Dôme;700;125;-133
-22;BOÎTE MYSTÈRE (emplacement possible);BOÎTE MYSTÈRE (emplacement possible);Rue du Dôme;950;106;-134
-23;Borne de munitions;Borne de munitions;Grandes Arcades;;-106;-69
-24;Arme au mur;AK-47;Grandes Arcades;1600;-98;-52
-25;Arme au mur;FN P90;Grandes Arcades;1800;-87;-46
-26;Arme au mur;REMINGTON 870;Grandes Arcades;750;-110;-30
-27;Atout;MULE KICK;Grandes Arcades;4000;-94;-46
-28;BOÎTE MYSTÈRE (emplacement possible);BOÎTE MYSTÈRE (emplacement possible);Grandes Arcades;950;-82;-25
-29;Borne de munitions;Borne de munitions;Place Kléber;;-199;-166
-30;Arme au mur;M4A1;Place Kléber;1200;-224;-144
-31;Arme au mur;RPK;Place Kléber;2500;-191;-122
-32;Arme au mur;M249 SAW;Place Kléber;3000;-213;-166
-33;Atout;MASTODONTE;Place Kléber;2500;-168;-135
-34;BOÎTE MYSTÈRE (emplacement possible);BOÎTE MYSTÈRE (emplacement possible);Place Kléber;950;-165;-152
-35;Borne de munitions;Borne de munitions;Place Gutenberg;;-10;115
-36;Arme au mur;REMINGTON 870;Place Gutenberg;750;-14;66
-37;Arme au mur;SCAR-H;Place Gutenberg;2500;-24;79
-38;Arme au mur;PKM;Place Gutenberg;3200;-14;84
-39;Atout;DOUBLE TAP;Place Gutenberg;2000;-34;91
-40;BOÎTE MYSTÈRE (emplacement possible);BOÎTE MYSTÈRE (emplacement possible);Place Gutenberg;950;5;110
-41;Borne de munitions;Borne de munitions;Cathédrale;;100;37
-42;Arme au mur;DESERT EAGLE;Cathédrale;1500;123;26
-43;Arme au mur;M4A1;Cathédrale;1200;93;32
-44;Arme au mur;COLT PYTHON .357;Cathédrale;2000;117;45
-45;BOÎTE MYSTÈRE (emplacement possible);BOÎTE MYSTÈRE (emplacement possible);Cathédrale;950;125;53
-46;Borne de munitions;Borne de munitions;Intérieur de la Cathédrale;;193;37
-47;Arme au mur;BARRETT M82;Intérieur de la Cathédrale;5000;187;49
-48;PACK-A-PUNCH;PACK-A-PUNCH;Intérieur de la Cathédrale;5000;223;14
-49;HORLOGE ASTRONOMIQUE;HORLOGE ASTRONOMIQUE;Intérieur de la Cathédrale;0;228;35
-50;BOÎTE MYSTÈRE (emplacement possible);BOÎTE MYSTÈRE (emplacement possible);Intérieur de la Cathédrale;950;188;21
-51;Borne de munitions;Borne de munitions;Homme de Fer;;-293;-224
-52;Arme au mur;FN P90;Homme de Fer;1800;-298;-230
-53;Arme au mur;ARBALÈTE;Homme de Fer;2000;-272;-227
-54;Arme au mur;M79;Homme de Fer;2500;-308;-203
-55;Atout;PHD FLOPPER;Homme de Fer;2000;-283;-176
-56;BOÎTE MYSTÈRE (emplacement possible);BOÎTE MYSTÈRE (emplacement possible);Homme de Fer;950;-301;-187
-57;Borne de munitions;Borne de munitions;Saint-Pierre-le-Jeune;;-128;-334
-58;Arme au mur;COLT PYTHON .357;Saint-Pierre-le-Jeune;2000;-125;-338
-59;Arme au mur;MP5;Saint-Pierre-le-Jeune;1200;-117;-325
-60;Atout;STAMIN-UP;Saint-Pierre-le-Jeune;2000;-120;-353
-61;BOÎTE MYSTÈRE (emplacement possible);BOÎTE MYSTÈRE (emplacement possible);Saint-Pierre-le-Jeune;950;-153;-309
-62;Borne de munitions;Borne de munitions;Grand'Rue;;-404;16
-63;Arme au mur;MP5;Grand'Rue;1200;-406;30
-64;Arme au mur;REMINGTON 870;Grand'Rue;750;-374;8
-65;Atout;SPEED COLA;Grand'Rue;3000;-376;-2
-66;BOÎTE MYSTÈRE (emplacement possible);BOÎTE MYSTÈRE (emplacement possible);Grand'Rue;950;-394;-2
-67;Borne de munitions;Borne de munitions;Grand Séminaire;;327;-56
-68;Arme au mur;REMINGTON 870;Grand Séminaire;750;308;-34
-69;Arme au mur;M4A1;Grand Séminaire;1200;323;-45
-70;Atout;RÉANIMATION RAPIDE;Grand Séminaire;1500;314;-32
-71;BOÎTE MYSTÈRE (emplacement possible);BOÎTE MYSTÈRE (emplacement possible);Grand Séminaire;950;304;-50
-72;Borne de munitions;Borne de munitions;Palais Rohan;;263;126
-73;Arme au mur;AK-47;Palais Rohan;1600;262;117
-74;Arme au mur;AREX ZERO 1;Palais Rohan;700;272;123
-75;Atout;DOUBLE TAP;Palais Rohan;2000;271;143
-76;BOÎTE MYSTÈRE (emplacement possible);BOÎTE MYSTÈRE (emplacement possible);Palais Rohan;950;275;133
-77;Borne de munitions;Borne de munitions;Musée historique;;205;212
-78;Arme au mur;AREX ZERO 1;Musée historique;700;191;212
-79;Arme au mur;SCAR-H;Musée historique;2500;190;204
-80;Arme au mur;MP40;Musée historique;800;175;229
-81;BOÎTE MYSTÈRE (emplacement possible);BOÎTE MYSTÈRE (emplacement possible);Musée historique;950;186;195
-82;Borne de munitions;Borne de munitions;Place Broglie;;167;-365
-83;Arme au mur;MP40;Place Broglie;800;176;-344
-84;Arme au mur;FAMAS F1;Place Broglie;1300;127;-333
-85;Arme au mur;RPK;Place Broglie;2500;144;-331
-86;Atout;MASTODONTE;Place Broglie;2500;157;-311
-87;BOÎTE MYSTÈRE (emplacement possible);BOÎTE MYSTÈRE (emplacement possible);Place Broglie;950;140;-341
-88;Borne de munitions;Borne de munitions;Quai Schoepflin;;-23;-462
-89;Arme au mur;DRAGUNOV SVD;Quai Schoepflin;2000;-12;-450
-90;Arme au mur;MP5;Quai Schoepflin;1200;-4;-463
-91;BOÎTE MYSTÈRE (emplacement possible);BOÎTE MYSTÈRE (emplacement possible);Quai Schoepflin;950;-12;-455
-92;Borne de munitions;Borne de munitions;Hôtel de Neuwiller;;-488;-261
-93;Arme au mur;FAMAS F1;Hôtel de Neuwiller;1300;-468;-278
-94;Arme au mur;SAIGA-12;Hôtel de Neuwiller;3000;-452;-285
-95;BOÎTE MYSTÈRE (emplacement possible);BOÎTE MYSTÈRE (emplacement possible);Hôtel de Neuwiller;950;-472;-272
-96;Borne de munitions;Borne de munitions;Monument Stoeber;;-476;-140
-97;Arme au mur;SCAR-H;Monument Stoeber;2500;-498;-136
-98;Arme au mur;FN P90;Monument Stoeber;1800;-493;-176
-99;BOÎTE MYSTÈRE (emplacement possible);BOÎTE MYSTÈRE (emplacement possible);Monument Stoeber;950;-483;-151
-100;Borne de munitions;Borne de munitions;Ancienne Douane;;21;345
-101;Arme au mur;L96A1;Ancienne Douane;1750;37;321
-102;Arme au mur;REMINGTON 870;Ancienne Douane;750;13;335
-103;Atout;PHD FLOPPER;Ancienne Douane;2000;26;325
-104;BOÎTE MYSTÈRE (emplacement possible);BOÎTE MYSTÈRE (emplacement possible);Ancienne Douane;950;22;329
-105;Borne de munitions;Borne de munitions;Saint-Thomas;;-245;244
-106;Arme au mur;SAIGA-12;Saint-Thomas;3000;-222;248
-107;Arme au mur;M4A1;Saint-Thomas;1200;-200;253
-108;Atout;MULE KICK;Saint-Thomas;4000;-243;229
-109;BOÎTE MYSTÈRE (emplacement possible);BOÎTE MYSTÈRE (emplacement possible);Saint-Thomas;950;-214;257
-110;Borne de munitions;Borne de munitions;Église Réformée;;-319;164
-111;Arme au mur;MP40;Église Réformée;800;-328;162
-112;Arme au mur;AK-47;Église Réformée;1600;-347;184
-113;BOÎTE MYSTÈRE (emplacement possible);BOÎTE MYSTÈRE (emplacement possible);Église Réformée;950;-309;189
-114;Borne de munitions;Borne de munitions;Opéra;;235;-459
-115;Arme au mur;DESERT EAGLE;Opéra;1500;244;-447
-116;Arme au mur;MG42;Opéra;4000;237;-436
-117;Atout;SPEED COLA;Opéra;3000;278;-455
-118;BOÎTE MYSTÈRE (emplacement possible);BOÎTE MYSTÈRE (emplacement possible);Opéra;950;245;-439
-119;Borne de munitions;Borne de munitions;Préfecture;;422;-339
-120;Arme au mur;PKM;Préfecture;3200;369;-338
-121;Arme au mur;M4A1;Préfecture;1200;413;-351
-122;BOÎTE MYSTÈRE (emplacement possible);BOÎTE MYSTÈRE (emplacement possible);Préfecture;950;364;-332
-123;Borne de munitions;Borne de munitions;Saint-Étienne;;544;-115
-124;Arme au mur;M249 SAW;Saint-Étienne;3000;539;-99
-125;Arme au mur;SCAR-H;Saint-Étienne;2500;556;-74
-126;Atout;STAMIN-UP;Saint-Étienne;2000;558;-90
-127;BOÎTE MYSTÈRE (emplacement possible);BOÎTE MYSTÈRE (emplacement possible);Saint-Étienne;950;516;-101
-128;Borne de munitions;Borne de munitions;Saint-Pierre-le-Vieux;;-625;-41
-129;Arme au mur;DESERT EAGLE;Saint-Pierre-le-Vieux;1500;-620;-33
-130;Arme au mur;REMINGTON 870;Saint-Pierre-le-Vieux;750;-608;-40
-131;Atout;RÉANIMATION RAPIDE;Saint-Pierre-le-Vieux;1500;-638;-42
-132;BOÎTE MYSTÈRE (emplacement possible);BOÎTE MYSTÈRE (emplacement possible);Saint-Pierre-le-Vieux;950;-647;-44
-133;Borne de munitions;Borne de munitions;Petite France;;-688;141
-134;Arme au mur;BARRETT M82;Petite France;5000;-670;113
-135;Arme au mur;SAIGA-12;Petite France;3000;-687;133
-136;Arme au mur;MP5;Petite France;1200;-673;123
-137;Atout;MASTODONTE;Petite France;2500;-677;134
-138;BOÎTE MYSTÈRE (emplacement possible);BOÎTE MYSTÈRE (emplacement possible);Petite France;950;-697;145
+12;Atout;CARTOUCHIÈRE;Temple-Neuf;1500;-40;-97
+13;BOÎTE MYSTÈRE (emplacement possible);BOÎTE MYSTÈRE (emplacement possible);Temple-Neuf;950;-34;-113
+14;Borne de munitions;Borne de munitions;Rue des Orfèvres;;12;-83
+15;Arme au mur;FAMAS F1;Rue des Orfèvres;1300;16;-71
+16;Arme au mur;MP40;Rue des Orfèvres;800;22;-59
+17;Atout;SPEED COLA;Rue des Orfèvres;3000;17;-9
+18;Atout;ŒIL-DE-LYNX;Rue des Orfèvres;1500;32;-44
+19;BOÎTE MYSTÈRE (emplacement possible);BOÎTE MYSTÈRE (emplacement possible);Rue des Orfèvres;950;20;-66
+20;Borne de munitions;Borne de munitions;Rue du Dôme;;113;-140
+21;Arme au mur;L96A1;Rue du Dôme;1750;81;-123
+22;Arme au mur;DRAGUNOV SVD;Rue du Dôme;2000;90;-123
+23;Arme au mur;AREX ZERO 1;Rue du Dôme;700;94;-143
+24;BOÎTE MYSTÈRE (emplacement possible);BOÎTE MYSTÈRE (emplacement possible);Rue du Dôme;950;82;-117
+25;Borne de munitions;Borne de munitions;Grandes Arcades;;-103;-65
+26;Arme au mur;AK-47;Grandes Arcades;1600;-108;-42
+27;Arme au mur;FN P90;Grandes Arcades;1800;-109;-69
+28;Arme au mur;REMINGTON 870;Grandes Arcades;750;-80;-43
+29;Atout;MULE KICK;Grandes Arcades;4000;-90;-47
+30;Atout;SIXIÈME SENS;Grandes Arcades;2000;-124;-16
+31;BOÎTE MYSTÈRE (emplacement possible);BOÎTE MYSTÈRE (emplacement possible);Grandes Arcades;950;-94;-50
+32;Borne de munitions;Borne de munitions;Place Kléber;;-175;-145
+33;Arme au mur;M4A1;Place Kléber;1200;-218;-122
+34;Arme au mur;RPK;Place Kléber;2500;-186;-124
+35;Arme au mur;M249 SAW;Place Kléber;3000;-213;-168
+36;Atout;MASTODONTE;Place Kléber;2500;-213;-123
+37;Atout;BASTION;Place Kléber;2500;-172;-140
+38;BOÎTE MYSTÈRE (emplacement possible);BOÎTE MYSTÈRE (emplacement possible);Place Kléber;950;-222;-138
+39;Borne de munitions;Borne de munitions;Place Gutenberg;;-14;79
+40;Arme au mur;REMINGTON 870;Place Gutenberg;750;3;86
+41;Arme au mur;SCAR-H;Place Gutenberg;2500;9;94
+42;Arme au mur;PKM;Place Gutenberg;3200;-15;110
+43;Atout;DOUBLE TAP;Place Gutenberg;2000;-24;71
+44;Atout;CERISE-FOUDRE;Place Gutenberg;2000;-27;83
+45;BOÎTE MYSTÈRE (emplacement possible);BOÎTE MYSTÈRE (emplacement possible);Place Gutenberg;950;-10;61
+46;Borne de munitions;Borne de munitions;Cathédrale;;113;54
+47;Arme au mur;DESERT EAGLE;Cathédrale;1500;122;19
+48;Arme au mur;M4A1;Cathédrale;1200;117;32
+49;Arme au mur;COLT PYTHON .357;Cathédrale;2000;126;54
+50;BOÎTE MYSTÈRE (emplacement possible);BOÎTE MYSTÈRE (emplacement possible);Cathédrale;950;113;49
+51;Borne de munitions;Borne de munitions;Intérieur de la Cathédrale;;196;26
+52;Arme au mur;BARRETT M82;Intérieur de la Cathédrale;5000;207;26
+53;PACK-A-PUNCH;PACK-A-PUNCH;Intérieur de la Cathédrale;5000;223;14
+54;HORLOGE ASTRONOMIQUE;HORLOGE ASTRONOMIQUE;Intérieur de la Cathédrale;0;228;35
+55;BOÎTE MYSTÈRE (emplacement possible);BOÎTE MYSTÈRE (emplacement possible);Intérieur de la Cathédrale;950;192;33
+56;Borne de munitions;Borne de munitions;Homme de Fer;;-313;-194
+57;Arme au mur;FN P90;Homme de Fer;1800;-286;-181
+58;Arme au mur;ARBALÈTE;Homme de Fer;2000;-288;-228
+59;Arme au mur;M79;Homme de Fer;2500;-275;-205
+60;Atout;PHD FLOPPER;Homme de Fer;2000;-316;-199
+61;BOÎTE MYSTÈRE (emplacement possible);BOÎTE MYSTÈRE (emplacement possible);Homme de Fer;950;-282;-172
+62;Borne de munitions;Borne de munitions;Saint-Pierre-le-Jeune;;-128;-334
+63;Arme au mur;COLT PYTHON .357;Saint-Pierre-le-Jeune;2000;-125;-338
+64;Arme au mur;MP5;Saint-Pierre-le-Jeune;1200;-117;-325
+65;Atout;STAMIN-UP;Saint-Pierre-le-Jeune;2000;-120;-353
+66;Atout;VAUTOUR;Saint-Pierre-le-Jeune;3000;-153;-309
+67;BOÎTE MYSTÈRE (emplacement possible);BOÎTE MYSTÈRE (emplacement possible);Saint-Pierre-le-Jeune;950;-123;-345
+68;Borne de munitions;Borne de munitions;Grand'Rue;;-392;-14
+69;Arme au mur;MP5;Grand'Rue;1200;-384;-2
+70;Arme au mur;REMINGTON 870;Grand'Rue;750;-390;0
+71;Atout;SPEED COLA;Grand'Rue;3000;-391;-20
+72;BOÎTE MYSTÈRE (emplacement possible);BOÎTE MYSTÈRE (emplacement possible);Grand'Rue;950;-421;35
+73;Borne de munitions;Borne de munitions;Grand Séminaire;;312;-38
+74;Arme au mur;REMINGTON 870;Grand Séminaire;750;312;-48
+75;Arme au mur;M4A1;Grand Séminaire;1200;299;-52
+76;Atout;RÉANIMATION RAPIDE;Grand Séminaire;1500;326;-52
+77;BOÎTE MYSTÈRE (emplacement possible);BOÎTE MYSTÈRE (emplacement possible);Grand Séminaire;950;329;-41
+78;Borne de munitions;Borne de munitions;Palais Rohan;;272;115
+79;Arme au mur;AK-47;Palais Rohan;1600;228;139
+80;Arme au mur;AREX ZERO 1;Palais Rohan;700;265;127
+81;Atout;DOUBLE TAP;Palais Rohan;2000;275;134
+82;Atout;PIERRE TOMBALE;Palais Rohan;2000;278;116
+83;BOÎTE MYSTÈRE (emplacement possible);BOÎTE MYSTÈRE (emplacement possible);Palais Rohan;950;263;133
+84;Borne de munitions;Borne de munitions;Musée historique;;190;200
+85;Arme au mur;AREX ZERO 1;Musée historique;700;191;195
+86;Arme au mur;SCAR-H;Musée historique;2500;195;218
+87;Arme au mur;MP40;Musée historique;800;179;234
+88;BOÎTE MYSTÈRE (emplacement possible);BOÎTE MYSTÈRE (emplacement possible);Musée historique;950;203;211
+89;Borne de munitions;Borne de munitions;Place Broglie;;140;-342
+90;Arme au mur;MP40;Place Broglie;800;149;-350
+91;Arme au mur;FAMAS F1;Place Broglie;1300;147;-354
+92;Arme au mur;RPK;Place Broglie;2500;166;-365
+93;Atout;MASTODONTE;Place Broglie;2500;163;-337
+94;BOÎTE MYSTÈRE (emplacement possible);BOÎTE MYSTÈRE (emplacement possible);Place Broglie;950;146;-376
+95;Borne de munitions;Borne de munitions;Quai Schoepflin;;-40;-462
+96;Arme au mur;DRAGUNOV SVD;Quai Schoepflin;2000;-14;-459
+97;Arme au mur;MP5;Quai Schoepflin;1200;-15;-479
+98;BOÎTE MYSTÈRE (emplacement possible);BOÎTE MYSTÈRE (emplacement possible);Quai Schoepflin;950;-27;-467
+99;Borne de munitions;Borne de munitions;Hôtel de Neuwiller;;-458;-282
+100;Arme au mur;FAMAS F1;Hôtel de Neuwiller;1300;-481;-268
+101;Arme au mur;SAIGA-12;Hôtel de Neuwiller;3000;-494;-262
+102;BOÎTE MYSTÈRE (emplacement possible);BOÎTE MYSTÈRE (emplacement possible);Hôtel de Neuwiller;950;-484;-263
+103;Borne de munitions;Borne de munitions;Monument Stoeber;;-473;-126
+104;Arme au mur;SCAR-H;Monument Stoeber;2500;-499;-174
+105;Arme au mur;FN P90;Monument Stoeber;1800;-496;-170
+106;BOÎTE MYSTÈRE (emplacement possible);BOÎTE MYSTÈRE (emplacement possible);Monument Stoeber;950;-495;-163
+107;Borne de munitions;Borne de munitions;Ancienne Douane;;24;346
+108;Arme au mur;L96A1;Ancienne Douane;1750;3;332
+109;Arme au mur;REMINGTON 870;Ancienne Douane;750;53;317
+110;Atout;PHD FLOPPER;Ancienne Douane;2000;31;322
+111;Atout;VEUVE NOIRE;Ancienne Douane;4000;1;341
+112;BOÎTE MYSTÈRE (emplacement possible);BOÎTE MYSTÈRE (emplacement possible);Ancienne Douane;950;25;352
+113;Borne de munitions;Borne de munitions;Saint-Thomas;;-238;261
+114;Arme au mur;SAIGA-12;Saint-Thomas;3000;-259;244
+115;Arme au mur;M4A1;Saint-Thomas;1200;-223;264
+116;Atout;MULE KICK;Saint-Thomas;4000;-261;256
+117;BOÎTE MYSTÈRE (emplacement possible);BOÎTE MYSTÈRE (emplacement possible);Saint-Thomas;950;-231;242
+118;Borne de munitions;Borne de munitions;Église Réformée;;-349;190
+119;Arme au mur;MP40;Église Réformée;800;-358;159
+120;Arme au mur;AK-47;Église Réformée;1600;-312;193
+121;BOÎTE MYSTÈRE (emplacement possible);BOÎTE MYSTÈRE (emplacement possible);Église Réformée;950;-315;166
+122;Borne de munitions;Borne de munitions;Opéra;;274;-465
+123;Arme au mur;DESERT EAGLE;Opéra;1500;258;-470
+124;Arme au mur;MG42;Opéra;4000;246;-468
+125;Atout;SPEED COLA;Opéra;3000;258;-437
+126;Atout;ULTIME VOLONTÉ;Opéra;4000;246;-421
+127;BOÎTE MYSTÈRE (emplacement possible);BOÎTE MYSTÈRE (emplacement possible);Opéra;950;230;-442
+128;Borne de munitions;Borne de munitions;Préfecture;;407;-362
+129;Arme au mur;PKM;Préfecture;3200;379;-313
+130;Arme au mur;M4A1;Préfecture;1200;416;-354
+131;BOÎTE MYSTÈRE (emplacement possible);BOÎTE MYSTÈRE (emplacement possible);Préfecture;950;428;-337
+132;Borne de munitions;Borne de munitions;Saint-Étienne;;563;-91
+133;Arme au mur;M249 SAW;Saint-Étienne;3000;534;-120
+134;Arme au mur;SCAR-H;Saint-Étienne;2500;547;-83
+135;Atout;STAMIN-UP;Saint-Étienne;2000;552;-74
+136;BOÎTE MYSTÈRE (emplacement possible);BOÎTE MYSTÈRE (emplacement possible);Saint-Étienne;950;569;-66
+137;Borne de munitions;Borne de munitions;Saint-Pierre-le-Vieux;;-625;-41
+138;Arme au mur;DESERT EAGLE;Saint-Pierre-le-Vieux;1500;-600;-27
+139;Arme au mur;REMINGTON 870;Saint-Pierre-le-Vieux;750;-618;-43
+140;Atout;RÉANIMATION RAPIDE;Saint-Pierre-le-Vieux;1500;-611;-36
+141;BOÎTE MYSTÈRE (emplacement possible);BOÎTE MYSTÈRE (emplacement possible);Saint-Pierre-le-Vieux;950;-631;-42
+142;Borne de munitions;Borne de munitions;Petite France;;-669;124
+143;Arme au mur;BARRETT M82;Petite France;5000;-692;144
+144;Arme au mur;SAIGA-12;Petite France;3000;-680;130
+145;Arme au mur;MP5;Petite France;1200;-703;144
+146;Atout;MASTODONTE;Petite France;2500;-673;119
+147;BOÎTE MYSTÈRE (emplacement possible);BOÎTE MYSTÈRE (emplacement possible);Petite France;950;-686;142

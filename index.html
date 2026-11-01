@@ -57,6 +57,8 @@
     @keyframes pulse { 0% { opacity: 0.85; transform: scale(0.98); } 100% { opacity: 1; transform: scale(1.03); } }
 
     #round { position: absolute; left: 24px; bottom: 18px; font-size: 80px; color: #a31616; text-shadow: 0 0 8px #000; letter-spacing: 2px; }
+    #clock { position: absolute; left: 24px; top: 152px; font-size: 18px; color: #c9c2a8; text-shadow: 0 0 6px #000; letter-spacing: 3px; display: none; }
+    #clock small { color: #8c8672; margin-left: 8px; font-size: 12px; }
     #round small { display: block; font-size: 16px; color: #ccc; letter-spacing: 3px; margin-bottom: -14px; }
 
     #points { position: absolute; left: 24px; bottom: 130px; font-size: 34px; color: #ffd24a; text-shadow: 0 0 4px #000; }
@@ -702,6 +704,7 @@
     <div id="hitmarker"><i></i><i></i></div>
     <div id="powerupBar"></div>
 
+    <div id="clock"></div>
     <div id="round"><small>MANCHE</small><span id="roundNum">1</span></div>
     <div id="points">0</div>
 
@@ -804,6 +807,7 @@
       <button class="btn btn-sub btn-wide" id="btnChatShow" style="font-size:18px">AFFICHER LE CHAT : OUI</button>
       <button class="btn btn-sub btn-wide" id="btnCinema" style="font-size:18px">EFFETS CINÉMA : OUI</button>
       <button class="btn btn-sub btn-wide" id="btnHalo" style="font-size:18px">HALO (HAUTE) : OUI</button>
+      <button class="btn btn-sub btn-wide" id="btnDayCycle" style="font-size:18px">CYCLE JOUR / NUIT : AUTO</button>
       <button class="btn btn-sub btn-wide" id="btnGearbox" style="font-size:18px">BOÎTE DE VITESSES : AUTOMATIQUE</button>
       <button class="btn btn-sub btn-wide" id="btnKeys" style="font-size:18px">TOUCHES</button>
       <button class="btn btn-sub btn-wide" id="btnFullscreen" style="font-size:18px">PLEIN ÉCRAN : NON</button>

@@ -572,7 +572,7 @@ export class Hud {
     if (!ctx) return;
     const w = 120, h = 120;
     const cx = w / 2, cy = h / 2, r = w / 2 - 3;
-    const maxRange = 36; // mètres affichés sur le radar
+    const maxRange = 36 * (player?.game?.perkFx?.radarMult() ?? 1); // mètres affichés sur le radar (Sixième sens : x1,6)
 
     ctx.clearRect(0, 0, w, h);
 

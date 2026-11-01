@@ -9,6 +9,7 @@ import { Boss } from './boss.js';
 import { Tanner } from './tanner.js';
 import { Angel } from './angel.js';
 import { installSummit } from './summit.js';
+import { installPerkFx } from './perkFx.js';
 import { installFinale } from './finale.js';
 import { Hud } from './hud.js';
 import { Scoreboard } from './scoreboard.js';
@@ -71,7 +72,7 @@ scene.add(moon, moon.target);
 const MOON_OFFSET = new THREE.Vector3(25, 55, 15);
 
 // ------------------------------------------------------- Options (client)
-const DEFAULT_SETTINGS = { brightness: 1.4, fov: 80, sens: 1, volume: 1, music: 0.5, quality: 1, tpVehicle: true, chat: true, cinema: true, halo: true, manualGearbox: false }; // chat : afficher le chat écrit (Options) ; tpVehicle : vue à la troisième personne ; manualGearbox : boîte manuelle ou automatique
+const DEFAULT_SETTINGS = { brightness: 1.4, fov: 80, sens: 1, volume: 1, music: 0.5, quality: 1, tpVehicle: true, chat: true, cinema: true, halo: true, manualGearbox: false, dayCycle: 'auto' }; // chat : afficher le chat écrit (Options) ; tpVehicle : vue à la troisième personne ; manualGearbox : boîte manuelle ou automatique
 const settings = { ...DEFAULT_SETTINGS };
 try { Object.assign(settings, JSON.parse(localStorage.getItem('zombie_settings') || '{}')); } catch {}
 
@@ -275,6 +276,7 @@ const game = {
       }
       // Chance d'apparition d'un bonus COD ; le Bourreau, lui, lâche toujours des munitions max
       this.onFinaleKill(z);
+      if (fromPid == null) this.perkFx?.onKill(z); // Vautour
       this.maybeDropFuel(z.pos); // bidon d'essence (rare, seulement si une moto est à moitié vide)
       if (z.isAngel) { /* l'Ange tourne hors de la tour : ses points suffisent */ }
       else if (z.isBoss) this.spawnPowerup(z.pos, null, 'max_ammo');
@@ -685,6 +687,7 @@ const game = {
     if (m.type === 'clock') return this.finalePrompt(m);
     if (m.type === 'perk') {
       if (p.perks[m.id]) return `${m.name} (déjà acquis)`;
+      if (this.perkFx?.full()) return `${m.name} — ${this.perkFx.slots} atouts au maximum`;
       return `${game.binds.tag('interact')} ${m.name} — ${CONFIG.perks[m.id].desc} (${this.perkPrice(m.id)} pts)`;
     }
     if (m.type === 'pap') return this.papPrompt(m);
@@ -704,6 +707,7 @@ const game = {
     }
     if (m.type === 'perk') {
       if (p.perks[m.id]) return;
+      if (this.perkFx?.full()) { sfx.deny(); hud.announce('ATOUTS AU MAXIMUM', `${this.perkFx.slots} atouts portés au plus`, 2000); return; }
       const price = this.perkPrice(m.id);
       if (this.points < price) { sfx.deny(); return; }
       this.points -= price;
@@ -1120,7 +1124,8 @@ const game = {
       else if (name === 'emerge') { sfx.dirt(v); sfx.groan(Math.min(1, v * 1.4)); }
     };
     const crawl = !knight && !pest && this.round >= Zc.crawlerRound && Math.random() < Zc.crawlerChance;
-    const hp = knight ? Math.round(this.zombieHealth * IK.healthMult) : pest ? Math.round(this.zombieHealth * PE.healthMult) : this.zombieHealth;
+    const nm = this.summitFx?.nightHealthMult?.() ?? 1; // cycle jour / nuit : un peu plus de vie la nuit
+    const hp = Math.round((knight ? this.zombieHealth * IK.healthMult : pest ? this.zombieHealth * PE.healthMult : this.zombieHealth) * nm);
     const kind = knight ? 'armored' : pest ? 'bloat' : null;
     const z = new Zombie(scene, spawn, hp, speed, onEvent, null, { crawler: crawl, kind });
     if (knight) z.ironKnight = true;
@@ -1197,6 +1202,7 @@ const game = {
     if (resetStats) this.resetBox();
     if (resetStats) { this.finale = null; this.finaleDone = false; this.eternal = false; this.blessed = false; this.freeDoors = false; this.dawnOn = false; hud.setBanner?.(null); hud.setBossBar?.(null); hud.setFanal?.(null); }
     this.summitFx?.clear();
+    this.perkFx?.reset();
     this.clearBossFx?.();
     fx.clear();
 
@@ -1317,6 +1323,7 @@ const game = {
     p.update(dt, this.time);
     this.summitFx?.cameraStep(dt); // vue orbitale de l'Aube : prend la caméra après le joueur
     this.summitFx?.step(dt);
+    this.perkFx?.update(dt);
     this.unstick?.update(dt);
 
     // Mise à jour des coéquipiers
@@ -1615,6 +1622,7 @@ game.player = new Player(camera, scene, world, game);
 hud.setWeapon(game.player.curCfg.name, game.player.curCfg.caliber);
 installKeybinds(game, { hud }); // game.binds : touches modifiables (Options > Touches)
 installMachineFx(game, { world, hud, sfx, fx });
+installPerkFx(game, { scene, fx, hud, sfx }); // neuf atouts supplémentaires (perkFx.js)
 installSummit(game, { world, scene, hud, sfx, fx, hemi, moon, moonOffset: MOON_OFFSET, camera }); // Acte V : faisceau, Fanal, ciel de l'Aube, vue orbitale
 installFinale(game, { world, scene, hud, sfx, fx });
 gfx.attach(game, { world }); // ciel, torche, reflets d'ambiance, ombres de contact (graphics.js)
@@ -2391,6 +2399,20 @@ const syncHalo = () => { btnHalo.textContent = `HALO (HAUTE) : ${settings.halo !
 btnHalo.addEventListener('click', () => { settings.halo = settings.halo === false; syncHalo(); gfx.applyHalo(); game.saveSettings(); });
 syncHalo();
 
+// Cycle jour / nuit (summit.js) : auto (le temps passe), toujours nuit, toujours jour ; effectif dès la prochaine partie pour l'heure de départ, tout de suite pour le ciel
+const btnDay = document.getElementById('btnDayCycle');
+const DAY_LABELS = { auto: 'AUTO', night: 'TOUJOURS NUIT', day: 'TOUJOURS JOUR' };
+const syncDay = () => { if (btnDay) btnDay.textContent = `CYCLE JOUR / NUIT : ${DAY_LABELS[settings.dayCycle] || 'AUTO'}`; };
+if (btnDay) btnDay.addEventListener('click', () => { settings.dayCycle = settings.dayCycle === 'auto' ? 'night' : settings.dayCycle === 'night' ? 'day' : 'auto'; syncDay(); game.saveSettings(); });
+syncDay();
+const clockEl = document.getElementById('clock');
+let clockTxt = null;
+const updateClock = () => { // horloge du HUD (auto seulement)
+  const fx_ = game.summitFx, show = !!fx_ && fx_.clockVisible() && game.started && !game.over;
+  const txt = show ? `${fx_.clockText()}<small>${fx_.phaseName()}</small>` : '';
+  if (txt !== clockTxt) { clockTxt = txt; clockEl.style.display = show ? 'block' : 'none'; clockEl.innerHTML = txt; }
+};
+
 const btnGearbox = document.getElementById('btnGearbox');
 const syncGearbox = () => { if (btnGearbox) btnGearbox.textContent = `BOÎTE DE VITESSES : ${settings.manualGearbox ? 'MANUELLE' : 'AUTOMATIQUE'}`; };
 game.syncGearboxBtn = syncGearbox;
@@ -2588,8 +2610,9 @@ function frame() {
   // Solo : le menu pause fige le jeu. En multijoueur la partie continue.
   const frozen = !game.isMultiplayer && !game.playing && game.started && !game.over && !q.has('debug');
   if (game.started && !game.over && !frozen) game.update(dt);
-  else if (frozen) game.summitFx?.step(dt); // le ciel de l'Aube continue pendant la pause du solo
+  else if (frozen) game.summitFx?.step(dt, true); // le ciel de l'Aube continue pendant la pause du solo
   hud.update(dt);
+  updateClock();
   game.scoreboard?.update(dt);
   game.chat?.update(dt);
   updateMusicMood();

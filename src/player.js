@@ -60,6 +60,9 @@ export class Player {
     const s = { ...base, ...papStats(base, lv) };
     if (this.perks.doubletap) { s.fireRate *= 1.33; s.damage *= 1.25; }
     if (this.perks.speedcola) s.reloadTime *= 0.5;
+    const PF = CONFIG.perkFx;
+    if (this.perks.deadshot) { s.headMult = (s.headMult || 1) * PF.deadshot.headMult; s.spread *= PF.deadshot.spreadMult; } // Œil-de-lynx
+    if (this.perks.bandolier) s.maxReserve = Math.round(s.maxReserve * PF.bandolier.reserveMult); // Cartouchière
     w._statsKey = key;
     w._stats = s;
     return s;
@@ -728,6 +731,7 @@ export class Player {
     g.sfx.knife?.(target.kind === 'armored' || target.isBoss ? 'metal' : 'flesh');
     const bossHit = target.isBoss && !target.mini ? { back: target.isBack(this.pos.x, this.pos.z), ax: this.pos.x, az: this.pos.z } : null; // le Bourreau : dos décidé par la position de l'attaquant
     g.hitZombie(target, head, point, g.meleeDamage(target, head, back), 1, null, true, bossHit);
+    g.perkFx?.onKnife(target); // Veuve noire : couteau collant
     if (this.hasAxe) { // Hache du Bourreau : touche aussi le zombie le plus proche de la cible (à moins de K.axe.splash m)
       const A = K.axe;
       let extra = 0;
@@ -821,7 +825,7 @@ export class Player {
         if (seen.has(z)) continue;
         seen.add(z);
         // chute des dégâts selon la distance, propre à chaque zombie touché (calcul côté tireur : z_hit inchangé)
-        const dmg = cfg.damage * falloffMult(cfg, h.distance);
+        const dmg = cfg.damage * falloffMult(cfg, h.distance) * (this.game.perkFx?.critMult() ?? 1); // Sixième sens : coup critique
         this.game.hitZombie(z, h.object.userData.head, h.point, dmg, cfg.headMult, null, false, cfg.id === 'raygun' ? { ray: true } : null);
         if (cfg.ether && Math.random() < cfg.ether.chance) this.game.splash(h.point, cfg.ether.radius, dmg * cfg.ether.frac, cfg.ether.color); // Éther (niveau III)
         end = h.point;
@@ -892,6 +896,7 @@ export class Player {
     const cfg = this.curCfg;
     const w = this.curW;
     if (this.world.isCircuitTest || w.reloading || w.ammo >= cfg.magSize || w.reserve <= 0) return;
+    this.game.perkFx?.onReload(w, cfg); // Cerise-foudre (munitions restantes avant le rechargement)
     w.reloading = true;
     w.reloadT = 0;
     this.game.sfx.reload(cfg.cat, cfg.reloadTime);
@@ -924,6 +929,8 @@ export class Player {
   hurt(amount, src = null) {
     if (this.godMode || this.downed || this.dead) return;
     if (this.perks.phdflopper && (src === 'blast' || src === 'crash')) return; // PHD Flopper : immunité aux explosions et aux chocs
+    if (this.game.perkFx) { amount = this.game.perkFx.filterDamage(amount); if (amount <= 0) return; } // Bastion, Ultime Volonté
+    if (!src) this.game.perkFx?.onStruck(); // Veuve noire : coup de zombie
     this.health -= amount;
     this.lastHurt = this.game.time;
     this.game.hud.damage();
@@ -945,6 +952,7 @@ export class Player {
     this.downed = true;
     this.bleedout = 45;
     this.health = 0;
+    this.game.perkFx?.onDown(); // Pierre tombale : la tombe garde les atouts
     if (!this.game.blessed) this.clearPerks(); // à terre : on perd tous ses atouts (sauf sous la Bénédiction de l'Aube)
     if (solo && hadQR) {
       this.selfRevive = 4;

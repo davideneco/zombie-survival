@@ -6,3 +6,12 @@ quickrevive;RÉANIMATION RAPIDE;R;Solo : se relève seul · Co-op : réanime 2x 
 mulekick;MULE KICK;K;Porter 3 armes;4000;4000;Grandes Arcades, Saint-Thomas
 staminup;STAMIN-UP;E;Course plus rapide;2000;2000;Temple-Neuf, Saint-Pierre-le-Jeune, Saint-Étienne
 phdflopper;PHD FLOPPER;P;Immunisé aux explosions et aux chocs · saut en sprint : onde explosive;2000;2000;Homme de Fer, Ancienne Douane
+deadshot;ŒIL-DE-LYNX;L;Tirs à la tête +50 % · dispersion -35 %;1500;1500;Rue des Orfèvres
+electriccherry;CERISE-FOUDRE;F;Recharger libère une décharge électrique (chargeur vide : plus forte);2000;2000;Place Gutenberg
+widowswine;VEUVE NOIRE;N;Frappé : une toile englue les zombies proches · couteau collant;4000;4000;Ancienne Douane
+vultureaid;VAUTOUR;V;Les zombies lâchent parfois des munitions ou des points;3000;3000;Saint-Pierre-le-Jeune
+tombstone;PIERRE TOMBALE;T;À terre : vos atouts restent dans une tombe à récupérer;2000;2000;Palais Rohan
+dyingwish;ULTIME VOLONTÉ;U;Un coup fatal vous laisse debout, invulnérable 4 s (recharge 150 s);4000;4000;Opéra
+stronghold;BASTION;B;Immobile (3 m) : -30 % de dégâts reçus;2500;2500;Place Kléber
+deathperception;SIXIÈME SENS;6;Radar élargi · 10 % de coups critiques (dégâts x2);2000;2000;Grandes Arcades
+bandolier;CARTOUCHIÈRE;C;Réserve de munitions +50 %;1500;1500;Temple-Neuf

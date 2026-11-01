@@ -97,34 +97,43 @@ export function installSummit(game, { world, scene, hud, sfx, fx, hemi, moon, mo
 
   // ----------------------------------------------------------------- le ciel
   const sky = { phase: 'night', t: 0, k: 0, apply: null };
+  // Le vrai look de nuit (réglé dans main.js) : k = 0 le retrouve exactement ; l'aube et le jour viennent des tables SKY (k >= 0,5).
+  const NIGHT = { bg: scene.background.clone(), fog: scene.fog.color.clone(), density: scene.fog.density, hemiSky: hemi.color.clone(), hemiGround: hemi.groundColor.clone(), moon: moon.color.clone(), hemiI: 0.28, moonI: 0.42 };
+  const dn = { hour: CONFIG.dayNight.startHour, days: 0, cycle: false, lastK: -1, acc: 0, sunEl: -30, sunAz: 0 };
   const tmpC = new THREE.Color(), tmpD = new THREE.Color();
-  const pickC = (arr, k, out) => (k < 0.5 ? lerpHex(out, arr[0], arr[1], sm(k * 2)) : lerpHex(out, arr[1], arr[2], sm((k - 0.5) * 2)));
-  const pickN = (arr, k) => (k < 0.5 ? arr[0] + (arr[1] - arr[0]) * sm(k * 2) : arr[1] + (arr[2] - arr[1]) * sm((k - 0.5) * 2));
+  const pickC = (arr, k, out, night) => (k < 0.5 ? (night ? out.copy(night).lerp(C3(arr[1]), sm(k * 2)) : lerpHex(out, arr[0], arr[1], sm(k * 2))) : lerpHex(out, arr[1], arr[2], sm((k - 0.5) * 2)));
+  const pickN = (arr, k, night = arr[0]) => (k < 0.5 ? night + (arr[1] - night) * sm(k * 2) : arr[1] + (arr[2] - arr[1]) * sm((k - 0.5) * 2));
   const pickS = (arr, k) => { const css = (a, b, u) => `#${tmpC.copy(C3(a)).lerp(C3(b), u).getHexString()}`; return k < 0.5 ? css(arr[0], arr[1], sm(k * 2)) : css(arr[1], arr[2], sm((k - 0.5) * 2)); };
   const applySky = () => {
     const k = sky.k, b = game.settings?.brightness ?? 1.4;
-    pickC(SKY.bg, k, scene.background);
-    pickC(SKY.fog, k, scene.fog.color); scene.fog.density = pickN(SKY.density, k) * (CONFIG.map === 'arena' ? 1.15 : 1);
-    pickC(SKY.hemiSky, k, hemi.color); pickC(SKY.hemiGround, k, hemi.groundColor); hemi.intensity = pickN(SKY.hemi, k) * b;
-    pickC(SKY.sun, k, moon.color); moon.intensity = pickN(SKY.sunI, k);
+    pickC(SKY.bg, k, scene.background, NIGHT.bg);
+    pickC(SKY.fog, k, scene.fog.color, NIGHT.fog); scene.fog.density = pickN(SKY.density, k, NIGHT.density) * (CONFIG.map === 'arena' ? 1.15 : 1);
+    pickC(SKY.hemiSky, k, hemi.color, NIGHT.hemiSky); pickC(SKY.hemiGround, k, hemi.groundColor, NIGHT.hemiGround); hemi.intensity = pickN(SKY.hemi, k, NIGHT.hemiI) * b;
+    pickC(SKY.sun, k, moon.color, NIGHT.moon); moon.intensity = pickN(SKY.sunI, k, NIGHT.moonI);
     const i0 = k < 0.5 ? 0 : 1, i1 = k < 0.5 ? 1 : 2, u = k < 0.5 ? sm(k * 2) : sm((k - 0.5) * 2);
     moonOffset.set(SKY.sunPos[i0][0] + (SKY.sunPos[i1][0] - SKY.sunPos[i0][0]) * u, SKY.sunPos[i0][1] + (SKY.sunPos[i1][1] - SKY.sunPos[i0][1]) * u, SKY.sunPos[i0][2] + (SKY.sunPos[i1][2] - SKY.sunPos[i0][2]) * u);
+    if (dn.cycle) { // cycle jour / nuit : la lumière suit la vraie position du soleil (hauteur >= 14° pour garder des ombres lisibles), fondue depuis la lune
+      const el = Math.max(14, dn.sunEl) * DEG, az = dn.sunAz * DEG, uu = sm(Math.min(1, k * 2));
+      moonOffset.set(SKY.sunPos[0][0] + (Math.cos(el) * Math.cos(az) * 70 - SKY.sunPos[0][0]) * uu, SKY.sunPos[0][1] + (Math.sin(el) * 70 - SKY.sunPos[0][1]) * uu, SKY.sunPos[0][2] + (Math.cos(el) * Math.sin(az) * 70 - SKY.sunPos[0][2]) * uu);
+    }
     world.sky?.setGradient(pickS(SKY.domeTop, k), pickS(SKY.domeMid, k), pickS(SKY.domeBot, k));
     if (world.sky?.stars) world.sky.stars.visible = k < 0.28;
     game.gfx?.onSky(k); // dôme (lune, nuages) et reflets d'ambiance suivent l'Aube (graphics.js)
     world.setLampScale?.(1 - 0.92 * sm(Math.min(1, k * 1.3)));
     if (sun) { // monte à l'est (+x) de -4° à 38° d'élévation
-      sun.visible = k > 0.02;
-      const el = (-4 + 42 * sm(k)) * DEG, az = 20 * DEG, R = 270;
+      sun.visible = dn.cycle ? dn.sunEl > -3 : k > 0.02;
+      const el = (dn.cycle ? dn.sunEl : -4 + 42 * sm(k)) * DEG, az = (dn.cycle ? dn.sunAz : 20) * DEG, R = 270;
       sun.position.set(Math.cos(el) * Math.cos(az) * R, Math.sin(el) * R, Math.cos(el) * Math.sin(az) * R);
-      sun.material.opacity = Math.min(1, k * 5) * (1 - 0.35 * sm(Math.max(0, k - 0.6) / 0.4));
+      sun.material.opacity = Math.min(1, dn.cycle ? Math.max(0, dn.sunEl + 3) / 8 : k * 5) * (1 - 0.35 * sm(Math.max(0, k - 0.6) / 0.4));
     }
     if (beam) { const f = 1 - 0.55 * sm(Math.max(0, k - 0.3) / 0.7); beam.k = f; }
   };
   sky.apply = applySky;
   // phase : 'dawn' (k de 0 à 1 en dawn.sky s), 'day' (60 s), 'dusk' (k de 1 à 0), 'night'. `from` : secondes déjà écoulées de l'aube
   const startDawn = (from = 0) => { if (!sun) sun = buildSun(); sky.phase = 'dawn'; sky.t = from; };
-  const skyStep = (dt) => {
+  const skyStep = (dt, paused) => {
+    if (cycleOn()) { cycleStep(dt, paused); return; }
+    if (dn.cycle) cycleStep(dt, paused); // le cycle s'arrête (Aube, Nuit éternelle)
     if (sky.phase === 'night' && sky.k === 0) return;
     const D = S().dawn, E = S().eternal;
     sky.t += dt;
@@ -133,7 +142,29 @@ export function installSummit(game, { world, scene, hud, sfx, fx, hemi, moon, mo
     else if (sky.phase === 'dusk') { sky.k = Math.max(0, 1 - sky.t / E.dusk); if (sky.t >= E.dusk) { sky.phase = 'night'; sky.k = 0; } }
     applySky();
   };
-  const resetSky = () => { sky.phase = 'night'; sky.t = 0; sky.k = 0; applySky(); if (sun) { sun.visible = false; } };
+  // ----------------------------------------------------------------- cycle jour / nuit (v0.71.0)
+  const DN = () => CONFIG.dayNight;
+  const sunElevation = (h) => DN().sunMaxElev * Math.sin(Math.PI * (h - DN().sunrise) / (DN().sunset - DN().sunrise));
+  const sunAzimuth = (h) => DN().sunAzimuthRise + 180 * (h - DN().sunrise) / (DN().sunset - DN().sunrise);
+  const kOfElevation = (e) => (e <= -8 ? 0 : e < 5 ? 0.5 * (e + 8) / 13 : e < 35 ? 0.5 + 0.5 * (e - 5) / 30 : 1); // -8° nuit, 5° aube dorée, 35° plein jour
+  const mode = () => game.settings?.dayCycle || 'auto'; // 'auto' | 'night' | 'day'
+  const startHour = () => (mode() === 'day' ? DN().fixedDayHour : mode() === 'night' ? 0 : DN().startHour);
+  const cycleOn = () => !game.dawnOn && !game.eternal && sky.phase === 'night';
+  const cycleStep = (dt, paused) => {
+    if (!cycleOn()) { if (dn.cycle) { dn.cycle = false; if (sun) sun.visible = false; } return; }
+    if (!sun) sun = buildSun();
+    if (!dn.cycle) { dn.cycle = true; dn.lastK = -1; }
+    if (!paused) {
+      if (mode() === 'auto') { dn.hour += 24 * dt / (DN().dayMinutes * 60); if (dn.hour >= 24) { dn.hour -= 24; dn.days++; } }
+      else dn.hour = startHour();
+    }
+    dn.sunEl = sunElevation(dn.hour); dn.sunAz = sunAzimuth(dn.hour);
+    const target = kOfElevation(dn.sunEl), step = DN().easeRate * dt;
+    sky.k = Math.abs(target - sky.k) <= step ? target : sky.k + Math.sign(target - sky.k) * step;
+    dn.acc += dt;
+    if (dn.lastK < 0 || (dn.acc > 0.2 && Math.abs(sky.k - dn.lastK) > 0.0004) || (mode() === 'auto' && dn.acc > 0.5)) { dn.acc = 0; dn.lastK = sky.k; applySky(); }
+  };
+  const resetSky = () => { sky.phase = 'night'; sky.t = 0; dn.hour = startHour(); dn.days = 0; dn.sunEl = sunElevation(dn.hour); dn.sunAz = sunAzimuth(dn.hour); sky.k = kOfElevation(dn.sunEl); dn.cycle = false; dn.lastK = -1; applySky(); if (sun) { sun.visible = false; } };
 
   // ----------------------------------------------------------------- vue orbitale
   const orbit = { on: false, t: 0, dur: 12, a0: 0, onEnd: null };
@@ -163,7 +194,7 @@ export function installSummit(game, { world, scene, hud, sfx, fx, hemi, moon, mo
   };
 
   // ----------------------------------------------------------------- mise à jour (toutes les images : jeu normal et pause du solo)
-  const step = (dt) => {
+  const step = (dt, paused = false) => {
     if (beam) { // le faisceau palpite ; ignition : plus large et plus clair
       const t = performance.now() / 1000, pulse = 0.9 + 0.1 * Math.sin(t * 2.4), w = beam.boost || 1;
       beam.inner.material.opacity = 0.7 * pulse * beam.k * Math.min(1.3, w); beam.outer.material.opacity = 0.32 * pulse * beam.k * w;
@@ -183,7 +214,7 @@ export function installSummit(game, { world, scene, hud, sfx, fx, hemi, moon, mo
       F.glow.material.opacity = F.lit ? 0.22 : 0.2 * F.p; F.glow.scale.setScalar(F.lit ? 1.5 : 0.7 + 0.6 * F.p);
       if (F.lit && Math.random() < dt * 30) fx.emit(fanalPos.x, fanalPos.y + 1.6, fanalPos.z, { count: 1, color: [0xffc060, 0xfff0c0, 0xff8a20], speed: 0.5, up: 2.6, size: 0.1, life: 1.2, grav: -1, spread: 0.3, glow: true });
     }
-    skyStep(dt);
+    skyStep(dt, paused);
   };
 
   // ----------------------------------------------------------------- API
@@ -195,8 +226,13 @@ export function installSummit(game, { world, scene, hud, sfx, fx, hemi, moon, mo
     show() { api.showBeam(); api.showFanal(); },
     setFanal(p, lit) { api.showFanal(); if (fanal) { fanal.p = Math.max(0, Math.min(1, p || 0)); if (lit) fanal.lit = 1; } },
     boost(w) { if (beam) beam.boost = w; },
+    // cycle jour / nuit : heure du HUD (pas de clockMinutes), moment de la journée, bonus de vie nocturne des zombies
+    clockText() { const m = Math.floor(dn.hour * 60 / DN().clockMinutes) * DN().clockMinutes; return `${String(Math.floor(m / 60) % 24).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`; },
+    clockVisible() { return dn.cycle && mode() === 'auto'; },
+    phaseName() { const k = sky.k; return k < 0.12 ? 'NUIT' : k < 0.7 ? (dn.hour < 12 ? 'AUBE' : 'CRÉPUSCULE') : 'JOUR'; },
+    nightHealthMult() { return dn.cycle && mode() === 'auto' && sky.k < DN().nightBelowK ? DN().nightZombieHealth : 1; },
     startDawn, startOrbit, endOrbit, cameraStep, skyStep, resetSky, step,
-    get dawnT() { return sky.phase === 'dawn' ? sky.t : sky.phase === 'night' && sky.k === 0 ? 0 : S().dawn.sky; },
+    get dawnT() { return sky.phase === 'dawn' ? sky.t : sky.phase === 'night' && (sky.k === 0 || dn.cycle) ? 0 : S().dawn.sky; },
     clear() { // nouvelle partie
       endOrbit(); game.camLock = false;
       dispose(beam?.g); dispose(fanal?.g); beam = null; fanal = null;

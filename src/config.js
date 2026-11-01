@@ -42,12 +42,12 @@ export const STRASBOURG_SECTOR = {
   outerDecor: { carArea: 6000, junkArea: 2500, bikeMax: 30, chaletRadius: 40 },
   zones: [
     { name: 'Marché-Neuf', start: true, items: ['station', 'wall:m1911', 'wall:shotgun', 'wall:smg', 'perk:quickrevive', 'box'] },
-    { name: 'Temple-Neuf', seed: { x: -35, z: -95 }, doorPrice: 750, items: ['station', 'wall:arex', 'wall:mp5', 'wall:famas', 'perk:staminup', 'box'] },
-    { name: 'Rue des Orfèvres', seed: { x: 40, z: -70 }, doorPrice: 750, items: ['station', 'wall:famas', 'wall:smg', 'perk:speedcola', 'box'] },
+    { name: 'Temple-Neuf', seed: { x: -35, z: -95 }, doorPrice: 750, items: ['station', 'wall:arex', 'wall:mp5', 'wall:famas', 'perk:staminup', 'perk:bandolier', 'box'] },
+    { name: 'Rue des Orfèvres', seed: { x: 40, z: -70 }, doorPrice: 750, items: ['station', 'wall:famas', 'wall:smg', 'perk:speedcola', 'perk:deadshot', 'box'] },
     { name: 'Rue du Dôme', seed: { x: 110, z: -111 }, doorPrice: 1000, items: ['station', 'wall:sniper', 'wall:svd', 'wall:arex', 'box'] },
-    { name: 'Grandes Arcades', seed: { x: -110, z: -45 }, doorPrice: 1000, items: ['station', 'wall:ak47', 'wall:p90', 'wall:shotgun', 'perk:mulekick', 'box'] },
-    { name: 'Place Kléber', seed: { x: -199, z: -145 }, doorPrice: 1250, items: ['station', 'wall:rifle', 'wall:lmg', 'wall:m249', 'perk:juggernog', 'box'] },
-    { name: 'Place Gutenberg', seed: { x: -20, z: 90 }, doorPrice: 1250, items: ['station', 'wall:shotgun', 'wall:scar', 'wall:pkm', 'perk:doubletap', 'box'] },
+    { name: 'Grandes Arcades', seed: { x: -110, z: -45 }, doorPrice: 1000, items: ['station', 'wall:ak47', 'wall:p90', 'wall:shotgun', 'perk:mulekick', 'perk:deathperception', 'box'] },
+    { name: 'Place Kléber', seed: { x: -199, z: -145 }, doorPrice: 1250, items: ['station', 'wall:rifle', 'wall:lmg', 'wall:m249', 'perk:juggernog', 'perk:stronghold', 'box'] },
+    { name: 'Place Gutenberg', seed: { x: -20, z: 90 }, doorPrice: 1250, items: ['station', 'wall:shotgun', 'wall:scar', 'wall:pkm', 'perk:doubletap', 'perk:electriccherry', 'box'] },
     { name: 'Cathédrale', seed: { x: 103, z: 33 }, doorPrice: 1000, items: ['station', 'wall:deagle', 'wall:rifle', 'wall:magnum', 'box'] },
     // fin de partie : l'intérieur de la cathédrale, derrière le grand portail (porte la plus chère)
     { name: 'Intérieur de la Cathédrale', seed: 'cathedral', portal: true, doorPrice: 5000, items: ['pap', 'clock', 'station', 'box', 'wall:barrett'] },
@@ -59,21 +59,21 @@ export const STRASBOURG_SECTOR = {
     // les zones `outer` ont leur propre générateur). Noms tirés des monuments OpenStreetMap ; « Grand'Rue » et « Quai Schoepflin »
     // sont des noms déduits du plan (à confirmer). Armes premium au mur (v0.28.0) : magnum 2000, saiga 3000, mg42 4000, barrett 5000.
     // palier A : 1500
-    { name: 'Saint-Pierre-le-Jeune', outer: true, seed: { x: -140, z: -340 }, doorPrice: 1500, items: ['station', 'wall:magnum', 'wall:mp5', 'perk:staminup', 'box'] },
+    { name: 'Saint-Pierre-le-Jeune', outer: true, seed: { x: -140, z: -340 }, doorPrice: 1500, items: ['station', 'wall:magnum', 'wall:mp5', 'perk:staminup', 'perk:vultureaid', 'box'] },
     { name: "Grand'Rue", outer: true, seed: { x: -400, z: 10 }, doorPrice: 1500, items: ['station', 'wall:mp5', 'wall:shotgun', 'perk:speedcola', 'box'] },
     { name: 'Grand Séminaire', outer: true, seed: { x: 300, z: -60 }, doorPrice: 1500, items: ['station', 'wall:shotgun', 'wall:rifle', 'perk:quickrevive', 'box'] },
-    { name: 'Palais Rohan', outer: true, seed: { x: 260, z: 140 }, doorPrice: 1500, items: ['station', 'wall:ak47', 'wall:arex', 'perk:doubletap', 'box'] },
+    { name: 'Palais Rohan', outer: true, seed: { x: 260, z: 140 }, doorPrice: 1500, items: ['station', 'wall:ak47', 'wall:arex', 'perk:doubletap', 'perk:tombstone', 'box'] },
     { name: 'Musée historique', outer: true, seed: { x: 200, z: 215 }, doorPrice: 1500, items: ['station', 'wall:arex', 'wall:scar', 'wall:smg', 'box'] },
     // palier B : 2000
     { name: 'Place Broglie', outer: true, seed: { x: 150, z: -345 }, doorPrice: 2000, chalets: 4, items: ['station', 'wall:smg', 'wall:famas', 'wall:lmg', 'perk:juggernog', 'box'] },
     { name: 'Quai Schoepflin', outer: true, seed: { x: -20, z: -470 }, doorPrice: 2000, items: ['station', 'wall:svd', 'wall:mp5', 'box'] },
     { name: 'Hôtel de Neuwiller', outer: true, seed: { x: -450, z: -250 }, doorPrice: 2000, items: ['station', 'wall:famas', 'wall:saiga', 'box'] },
     { name: 'Monument Stoeber', outer: true, seed: { x: -490, z: -150 }, doorPrice: 2000, items: ['station', 'wall:scar', 'wall:p90', 'box'] },
-    { name: 'Ancienne Douane', outer: true, seed: { x: 30, z: 330 }, doorPrice: 2000, items: ['station', 'wall:sniper', 'wall:shotgun', 'perk:phdflopper', 'box'] },
+    { name: 'Ancienne Douane', outer: true, seed: { x: 30, z: 330 }, doorPrice: 2000, items: ['station', 'wall:sniper', 'wall:shotgun', 'perk:phdflopper', 'perk:widowswine', 'box'] },
     { name: 'Saint-Thomas', outer: true, seed: { x: -230, z: 250 }, doorPrice: 2000, items: ['station', 'wall:saiga', 'wall:rifle', 'perk:mulekick', 'box'] },
     { name: 'Église Réformée', outer: true, seed: { x: -330, z: 170 }, doorPrice: 2000, items: ['station', 'wall:smg', 'wall:ak47', 'box'] },
     // palier C : 2500
-    { name: 'Opéra', outer: true, seed: { x: 250, z: -450 }, doorPrice: 2500, items: ['station', 'wall:deagle', 'wall:mg42', 'perk:speedcola', 'box'] },
+    { name: 'Opéra', outer: true, seed: { x: 250, z: -450 }, doorPrice: 2500, items: ['station', 'wall:deagle', 'wall:mg42', 'perk:speedcola', 'perk:dyingwish', 'box'] },
     { name: 'Préfecture', outer: true, seed: { x: 400, z: -340 }, doorPrice: 2500, items: ['station', 'wall:pkm', 'wall:rifle', 'box'] },
     { name: 'Saint-Étienne', outer: true, seed: { x: 540, z: -90 }, doorPrice: 2500, items: ['station', 'wall:m249', 'wall:scar', 'perk:staminup', 'box'] },
     { name: 'Saint-Pierre-le-Vieux', outer: true, seed: { x: -620, z: -60 }, doorPrice: 2500, items: ['station', 'wall:deagle', 'wall:shotgun', 'perk:quickrevive', 'box'] },
@@ -207,6 +207,44 @@ export const CONFIG = {
     mulekick: { name: 'MULE KICK', desc: 'Porter 3 armes', price: 4000, color: '#3f7d3a', letter: 'K' },
     staminup: { name: 'STAMIN-UP', desc: 'Course plus rapide', price: 2000, color: '#e8d24a', letter: 'E' },
     phdflopper: { name: 'PHD FLOPPER', desc: 'Immunisé aux explosions et aux chocs · saut en sprint : onde explosive', price: 2000, color: '#8d3fd1', letter: 'P' },
+    // v0.71.0 : neuf atouts repris du port Godot (effets : perkFx.js, réglages : CONFIG.perkFx)
+    deadshot: { name: 'ŒIL-DE-LYNX', desc: 'Tirs à la tête +50 % · dispersion -35 %', price: 1500, color: '#6e1f2a', letter: 'L' },
+    electriccherry: { name: 'CERISE-FOUDRE', desc: 'Recharger libère une décharge électrique (chargeur vide : plus forte)', price: 2000, color: '#ff4f8b', letter: 'F' },
+    widowswine: { name: 'VEUVE NOIRE', desc: 'Frappé : une toile englue les zombies proches · couteau collant', price: 4000, color: '#3a1846', letter: 'N' },
+    vultureaid: { name: 'VAUTOUR', desc: 'Les zombies lâchent parfois des munitions ou des points', price: 3000, color: '#7a8b2a', letter: 'V' },
+    tombstone: { name: 'PIERRE TOMBALE', desc: 'À terre : vos atouts restent dans une tombe à récupérer', price: 2000, color: '#5f6368', letter: 'T' },
+    dyingwish: { name: 'ULTIME VOLONTÉ', desc: 'Un coup fatal vous laisse debout, invulnérable 4 s (recharge 150 s)', price: 4000, color: '#d9d4c5', letter: 'U' },
+    stronghold: { name: 'BASTION', desc: 'Immobile (3 m) : -30 % de dégâts reçus', price: 2500, color: '#2c4f7c', letter: 'B' },
+    deathperception: { name: 'SIXIÈME SENS', desc: 'Radar élargi · 10 % de coups critiques (dégâts x2)', price: 2000, color: '#1fb5a3', letter: '6' },
+    bandolier: { name: 'CARTOUCHIÈRE', desc: 'Réserve de munitions +50 %', price: 1500, color: '#9a5b25', letter: 'C' },
+  },
+  // Réglages des neuf nouveaux atouts. slots : atouts portés au plus (la Bénédiction de l'Aube et le menu Mod lèvent la limite).
+  perkFx: {
+    slots: 4,
+    deadshot: { headMult: 1.5, spreadMult: 0.65 },
+    bandolier: { reserveMult: 1.5 },
+    electriccherry: { radius: 2.5, radiusEmpty: 2.0, healthFrac: 1.25, minEmpty: 0.15, cooldown: 2.5 },     // dégâts = vie d'un zombie de la manche x healthFrac x (chargeur vide : 0..1)
+    widowswine: { radius: 5.0, slow: 0.35, time: 6.0, cooldown: 20.0, knifeSlow: 0.5, knifeTime: 3.0 },
+    vultureaid: { chance: 0.12, ammoShare: 0.6, ammoFrac: 0.2, points: 50, life: 20.0, pickup: 1.6 },
+    tombstone: { life: 90.0, pickup: 1.8, arm: 5.0 },
+    dyingwish: { invuln: 4.0, cooldown: 150.0 },
+    stronghold: { radius: 3.0, settle: 1.5, damageMult: 0.7 },
+    deathperception: { critChance: 0.10, critMult: 2.0, radarMult: 1.6 },
+  },
+  // Cycle jour / nuit (v0.71.0, repris du port Godot ; summit.js). Réglage du joueur : Options > « Cycle jour / nuit » (auto, toujours nuit, toujours jour).
+  // En auto la nuit (ciel k sous nightBelowK) les zombies ont nightZombieHealth x de vie à leur apparition. L'Aube de la finale reprend la main sur le ciel ;
+  // ensuite la Nuit éternelle fige la nuit.
+  dayNight: {
+    dayMinutes: 14,          // minutes réelles pour 24 h de jeu
+    startHour: 9,            // heure au début d'une partie (auto)
+    sunrise: 6, sunset: 18,
+    sunMaxElev: 58,          // degrés à midi
+    sunAzimuthRise: 20,      // degrés au lever (+180 au coucher)
+    fixedDayHour: 10,        // « toujours jour »
+    nightZombieHealth: 1.1,
+    nightBelowK: 0.3,
+    easeRate: 0.35,          // variation maximale du ciel par seconde (changement de réglage)
+    clockMinutes: 15,        // l'horloge du HUD avance par pas de 15 minutes de jeu
   },
   // PHD Flopper : immunité totale aux dégâts 'blast' (grenades, M79, pestiférés) et 'crash' (choc de moto), pas aux coups de zombie ni
   // du Bourreau. Plongeon : sauter pendant un sprint, ou tomber de fallHeight m ou plus, au moins minAir s en l'air -> à l'atterrissage,
