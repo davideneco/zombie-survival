@@ -527,6 +527,10 @@ export function createArchitecture({ renderer, plasterImg, plaster2Img, roofP, r
             relief.cornice(x0, z0, x1, z1, nx, nz, fy, bandC, 0.75);
           }
         }
+        // chaînage d'angle (v0.73.0) : à l'angle de départ de chaque mur entier, de la base au toit (pas pour les colombages)
+        if (st.main.style !== 'timber' && t0 === 0 && y0 <= base + 0.01 && y1 - base > 4) {
+          relief.quoin(ax + nx * 0.005, az + nz * 0.005, base + 0.1, y1 - 0.2, nx, nz, hexC(W.cornice).multiplyScalar(dirt * 0.88).multiply(tint));
+        }
         // soubassement de pierre au pied des murs hors boutiques (v0.72.0)
         if (base === 0 && y0 <= 0.01 && !shopGF && y1 > 3.5) relief.plinth(x0, z0, x1, z1, nx, nz, 0.88, hexC(W.cornice).multiplyScalar(dirt * 0.78).multiply(tint));
       }

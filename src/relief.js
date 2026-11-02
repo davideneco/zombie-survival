@@ -67,18 +67,26 @@ function plinthGeometry() {
   ]);
 }
 
+// Chaînage d'angle (v0.73.0) : pierres d'angle en besace (largeurs alternées 0,5 / 0,32 m, 0,45 m de haut, 4 cm de saillie), 4 assises = 1,8 m.
+// Origine : l'angle du mur au pied du motif ; les pierres s'étendent vers -x local (= le long du mur, depuis son point de départ) ; z vers l'extérieur
+function quoinGeometry() {
+  const parts = [];
+  for (let i = 0; i < 4; i++) { const w = i % 2 ? 0.32 : 0.5; parts.push(boxFaces(w, 0.4, 0.04, -w / 2, i * 0.45 + 0.2, 0.02, [4, 2, 0, 1])); }
+  return merge(parts);
+}
+
 const hash2 = (x, z) => { const s = Math.sin(x * 127.1 + z * 311.7) * 43758.5453; return s - Math.floor(s); }; // 0..1, déterministe
 
 export function createRelief() {
   const fine = new Map(), coarse = new Map(); // tuiles : clé -> données
-  const mk = (cx, cz, half) => ({ cx, cz, half, win: [], bal: [], cor: [], pl: [], pos: [], nor: [], col: [], idx: [] });
+  const mk = (cx, cz, half) => ({ cx, cz, half, win: [], bal: [], cor: [], pl: [], qu: [], pos: [], nor: [], col: [], idx: [] });
   const getTile = (map, size, x, z) => {
     const ix = Math.floor(x / size), iz = Math.floor(z / size), k = ix * 8192 + iz;
     let t = map.get(k);
     if (!t) map.set(k, t = mk((ix + 0.5) * size, (iz + 0.5) * size, size * 0.7072));
     return t;
   };
-  let count = { windows: 0, balconies: 0, cornices: 0, plinths: 0, staticTris: 0 };
+  let count = { windows: 0, balconies: 0, cornices: 0, plinths: 0, quoins: 0, staticTris: 0 };
   const _c = new THREE.Color();
 
   // ---- géométrie statique (tuyaux, cheminées) : couleurs de sommet
@@ -98,9 +106,9 @@ export function createRelief() {
     if (cap) { const base = t.pos.length / 3; t.pos.push(x, y1, z); t.nor.push(0, 1, 0); t.col.push(col.r, col.g, col.b); for (let i = 0; i <= sides; i++) { const a = rot + (i / sides) * Math.PI * 2; t.pos.push(x + Math.cos(a) * r, y1, z + Math.sin(a) * r); t.nor.push(0, 1, 0); t.col.push(col.r, col.g, col.b); } for (let i = 0; i < sides; i++) t.idx.push(base, base + 2 + i, base + 1 + i); }
   };
 
-  const snap = (map) => new Map([...map].map(([k, t]) => [k, [t.win.length, t.bal.length, t.cor.length, t.pos.length, t.nor.length, t.col.length, t.idx.length, t.pl.length]]));
+  const snap = (map) => new Map([...map].map(([k, t]) => [k, [t.win.length, t.bal.length, t.cor.length, t.pos.length, t.nor.length, t.col.length, t.idx.length, t.pl.length, t.qu.length]]));
   const restore = (map, m) => {
-    for (const [k, t] of map) { const s = m.get(k) || [0, 0, 0, 0, 0, 0, 0, 0]; t.pl.length = s[7]; t.win.length = s[0]; t.bal.length = s[1]; t.cor.length = s[2]; t.pos.length = s[3]; t.nor.length = s[4]; t.col.length = s[5]; t.idx.length = s[6]; }
+    for (const [k, t] of map) { const s = m.get(k) || [0, 0, 0, 0, 0, 0, 0, 0, 0]; t.qu.length = s[8]; t.pl.length = s[7]; t.win.length = s[0]; t.bal.length = s[1]; t.cor.length = s[2]; t.pos.length = s[3]; t.nor.length = s[4]; t.col.length = s[5]; t.idx.length = s[6]; }
   };
 
   const api = {
@@ -119,6 +127,11 @@ export function createRelief() {
     cornice(ax, az, bx, bz, nx, nz, y, color, sy = 1) {
       const mx = (ax + bx) / 2, mz = (az + bz) / 2, len = Math.hypot(bx - ax, bz - az);
       getTile(coarse, COARSE, mx, mz).cor.push(mx, y, mz, Math.atan2(nx, nz), len, sy, color.r, color.g, color.b);
+    },
+    // Chaînage d'angle : colonne de pierres (tuiles de 1,8 m) de y0 à y1 à l'angle (x, z) d'un mur de normale (nx, nz), qui s'éloigne dans le sens du mur
+    quoin(x, z, y0, y1, nx, nz, color) {
+      const t = getTile(coarse, COARSE, x, z), yaw = Math.atan2(nx, nz);
+      for (let y = y0; y < y1 - 0.5; y += 1.8) t.qu.push(x, y, z, yaw, 1, 1, color.r, color.g, color.b);
     },
     // Soubassement de pierre au pied d'un mur (de A à B) ; y : sommet du rebord
     plinth(ax, az, bx, bz, nx, nz, y, color) {
@@ -139,7 +152,7 @@ export function createRelief() {
 
     // Construit les maillages et les ajoute à la scène ; ils portent userData.lod (le préchauffage des shaders ne les affiche pas tous)
     finish(scene) {
-      const trim = trimGeometry(), balc = balconyGeometry(), corn = corniceGeometry(), plin = plinthGeometry();
+      const trim = trimGeometry(), balc = balconyGeometry(), corn = corniceGeometry(), plin = plinthGeometry(), quo = quoinGeometry();
       const trimMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.88 });
       const balMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.55, metalness: 0.5, side: THREE.DoubleSide });
       const staticMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, side: THREE.DoubleSide });
@@ -162,7 +175,7 @@ export function createRelief() {
         T.meshes.push(mesh);
         return n;
       };
-      count = { windows: 0, balconies: 0, cornices: 0, plinths: 0, staticTris: 0 };
+      count = { windows: 0, balconies: 0, cornices: 0, plinths: 0, quoins: 0, staticTris: 0 };
       api.tiles = [];
       for (const t of fine.values()) {
         const T = { cx: t.cx, cz: t.cz, half: t.half, meshes: [] };
@@ -174,6 +187,7 @@ export function createRelief() {
         count.balconies += inst(t.bal, balc, balMat, 'relief:balconies', T);
         count.cornices += inst(t.cor, corn, trimMat, 'relief:cornices', T);
         count.plinths += inst(t.pl, plin, trimMat, 'relief:plinths', T);
+        count.quoins += inst(t.qu, quo, trimMat, 'relief:quoins', T);
         if (t.idx.length) {
           const g = new THREE.BufferGeometry();
           g.setAttribute('position', new THREE.Float32BufferAttribute(t.pos, 3));
