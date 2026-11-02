@@ -59,18 +59,26 @@ function corniceGeometry() {
   ]);
 }
 
+// Soubassement (v0.72.0) : bloc de pierre au pied du mur (7 cm de saillie) coiffé d'un rebord. Longueur 1 m à étirer ; origine : plan du mur, sommet du rebord (y = 0), z vers l'extérieur
+function plinthGeometry() {
+  return merge([
+    boxFaces(1, 0.8, 0.07, 0, -0.48, 0.035, [4, 2]),   // dé de pierre (sa face haute est sous le rebord)
+    boxFaces(1, 0.09, 0.12, 0, -0.045, 0.06, [4, 2, 3]), // rebord
+  ]);
+}
+
 const hash2 = (x, z) => { const s = Math.sin(x * 127.1 + z * 311.7) * 43758.5453; return s - Math.floor(s); }; // 0..1, déterministe
 
 export function createRelief() {
   const fine = new Map(), coarse = new Map(); // tuiles : clé -> données
-  const mk = (cx, cz, half) => ({ cx, cz, half, win: [], bal: [], cor: [], pos: [], nor: [], col: [], idx: [] });
+  const mk = (cx, cz, half) => ({ cx, cz, half, win: [], bal: [], cor: [], pl: [], pos: [], nor: [], col: [], idx: [] });
   const getTile = (map, size, x, z) => {
     const ix = Math.floor(x / size), iz = Math.floor(z / size), k = ix * 8192 + iz;
     let t = map.get(k);
     if (!t) map.set(k, t = mk((ix + 0.5) * size, (iz + 0.5) * size, size * 0.7072));
     return t;
   };
-  let count = { windows: 0, balconies: 0, cornices: 0, staticTris: 0 };
+  let count = { windows: 0, balconies: 0, cornices: 0, plinths: 0, staticTris: 0 };
   const _c = new THREE.Color();
 
   // ---- géométrie statique (tuyaux, cheminées) : couleurs de sommet
@@ -90,9 +98,9 @@ export function createRelief() {
     if (cap) { const base = t.pos.length / 3; t.pos.push(x, y1, z); t.nor.push(0, 1, 0); t.col.push(col.r, col.g, col.b); for (let i = 0; i <= sides; i++) { const a = rot + (i / sides) * Math.PI * 2; t.pos.push(x + Math.cos(a) * r, y1, z + Math.sin(a) * r); t.nor.push(0, 1, 0); t.col.push(col.r, col.g, col.b); } for (let i = 0; i < sides; i++) t.idx.push(base, base + 2 + i, base + 1 + i); }
   };
 
-  const snap = (map) => new Map([...map].map(([k, t]) => [k, [t.win.length, t.bal.length, t.cor.length, t.pos.length, t.nor.length, t.col.length, t.idx.length]]));
+  const snap = (map) => new Map([...map].map(([k, t]) => [k, [t.win.length, t.bal.length, t.cor.length, t.pos.length, t.nor.length, t.col.length, t.idx.length, t.pl.length]]));
   const restore = (map, m) => {
-    for (const [k, t] of map) { const s = m.get(k) || [0, 0, 0, 0, 0, 0, 0]; t.win.length = s[0]; t.bal.length = s[1]; t.cor.length = s[2]; t.pos.length = s[3]; t.nor.length = s[4]; t.col.length = s[5]; t.idx.length = s[6]; }
+    for (const [k, t] of map) { const s = m.get(k) || [0, 0, 0, 0, 0, 0, 0, 0]; t.pl.length = s[7]; t.win.length = s[0]; t.bal.length = s[1]; t.cor.length = s[2]; t.pos.length = s[3]; t.nor.length = s[4]; t.col.length = s[5]; t.idx.length = s[6]; }
   };
 
   const api = {
@@ -107,10 +115,15 @@ export function createRelief() {
       getTile(fine, FINE, x, z).win.push(x, y, z, yaw, sx, sy, color.r, color.g, color.b);
       if (balcony) getTile(coarse, COARSE, x, z).bal.push(x, y, z, yaw, sx, 1, color.r * 0.45, color.g * 0.45, color.b * 0.45);
     },
-    // Corniche en haut d'un mur (de A à B) à la hauteur y ; (nx, nz) : sortant
-    cornice(ax, az, bx, bz, nx, nz, y, color) {
+    // Corniche en haut d'un mur (de A à B) à la hauteur y ; (nx, nz) : sortant. sy : échelle verticale (1 : corniche, ~0,7 : bandeau d'étage)
+    cornice(ax, az, bx, bz, nx, nz, y, color, sy = 1) {
       const mx = (ax + bx) / 2, mz = (az + bz) / 2, len = Math.hypot(bx - ax, bz - az);
-      getTile(coarse, COARSE, mx, mz).cor.push(mx, y, mz, Math.atan2(nx, nz), len, 1, color.r, color.g, color.b);
+      getTile(coarse, COARSE, mx, mz).cor.push(mx, y, mz, Math.atan2(nx, nz), len, sy, color.r, color.g, color.b);
+    },
+    // Soubassement de pierre au pied d'un mur (de A à B) ; y : sommet du rebord
+    plinth(ax, az, bx, bz, nx, nz, y, color) {
+      const mx = (ax + bx) / 2, mz = (az + bz) / 2, len = Math.hypot(bx - ax, bz - az);
+      getTile(coarse, COARSE, mx, mz).pl.push(mx, y, mz, Math.atan2(nx, nz), len, 1, color.r, color.g, color.b);
     },
     // Descente de gouttière (tuyau gris-vert, section carrée à pans coupés)
     pipe(x, z, y0, y1) {
@@ -126,7 +139,7 @@ export function createRelief() {
 
     // Construit les maillages et les ajoute à la scène ; ils portent userData.lod (le préchauffage des shaders ne les affiche pas tous)
     finish(scene) {
-      const trim = trimGeometry(), balc = balconyGeometry(), corn = corniceGeometry();
+      const trim = trimGeometry(), balc = balconyGeometry(), corn = corniceGeometry(), plin = plinthGeometry();
       const trimMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.88 });
       const balMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.55, metalness: 0.5, side: THREE.DoubleSide });
       const staticMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, side: THREE.DoubleSide });
@@ -149,7 +162,7 @@ export function createRelief() {
         T.meshes.push(mesh);
         return n;
       };
-      count = { windows: 0, balconies: 0, cornices: 0, staticTris: 0 };
+      count = { windows: 0, balconies: 0, cornices: 0, plinths: 0, staticTris: 0 };
       api.tiles = [];
       for (const t of fine.values()) {
         const T = { cx: t.cx, cz: t.cz, half: t.half, meshes: [] };
@@ -160,6 +173,7 @@ export function createRelief() {
         const T = { cx: t.cx, cz: t.cz, half: t.half, meshes: [] };
         count.balconies += inst(t.bal, balc, balMat, 'relief:balconies', T);
         count.cornices += inst(t.cor, corn, trimMat, 'relief:cornices', T);
+        count.plinths += inst(t.pl, plin, trimMat, 'relief:plinths', T);
         if (t.idx.length) {
           const g = new THREE.BufferGeometry();
           g.setAttribute('position', new THREE.Float32BufferAttribute(t.pos, 3));

@@ -1250,8 +1250,15 @@ const game = {
     const rx = Math.cos(yaw), rz = -Math.sin(yaw);
     const isCoop = this.isMultiplayer || this.remotes.size > 0;
     const side = isCoop ? (slot === 0 ? -0.8 : (slot === 1 ? 0.8 : (slot - 0.5) * 1.2)) : 0;
-    const px = sp.x + rx * side;
-    const pz = sp.z + rz * side;
+    let px = sp.x + rx * side;
+    let pz = sp.z + rz * side;
+    // garde-fou : un point de départ pris dans un mur ou un bâtiment (case bloquée de la grille) est ramené sur la case libre la plus proche,
+    // à défaut au départ de la carte, pour ne jamais apparaître enfermé
+    const nav = world.nav;
+    if (nav && nav.isBlockedAt?.(px, pz)) {
+      const f = nav.nearestFree(px, pz, 40); // [ix, iz] (rayon en cases)
+      if (f) { px = nav.worldX(f[0]); pz = nav.worldZ(f[1]); } else { px = world.startPos.x; pz = world.startPos.z; }
+    }
 
     if (this.player) {
       this.player.pos.set(px, 0, pz);

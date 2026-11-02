@@ -316,7 +316,7 @@ function material(renderer, set, repeatSafe = true, params = {}) {
   const aniso = renderer.capabilities.getMaxAnisotropy();
   const mk = (c, srgb) => { const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = aniso; if (srgb) t.colorSpace = THREE.SRGBColorSpace; return t; };
   return new THREE.MeshStandardMaterial({
-    map: mk(set.cMap, true), bumpMap: mk(set.cBump, false), bumpScale: 2.2,
+    map: mk(set.cMap, true), bumpMap: mk(set.cBump, false), bumpScale: 3.2,
     emissiveMap: mk(set.cEmis, true), emissive: 0xffaa44, emissiveIntensity: 1.5,
     roughness: 0.82, vertexColors: true, side: THREE.DoubleSide, ...params,
   });
@@ -517,6 +517,18 @@ export function createArchitecture({ renderer, plasterImg, plaster2Img, roofP, r
       }
       if (y1 - y0 > 2.5 && (t1 - t0) * len >= 2.2) { // corniche en haut du mur (pas sur les petits morceaux)
         relief.cornice(x0, z0, x1, z1, nx, nz, y1, hexC(W.cornice).multiplyScalar(dirt).multiply(tint));
+        // bandeaux d'étage (v0.72.0) : un cordon de pierre saillant à chaque plancher, sous les appuis de fenêtre (pas sur les colombages : leurs poutres sont dessinées)
+        if (st.main.style !== 'timber') {
+          const bandC = hexC(W.cornice).multiplyScalar(dirt * 0.95).multiply(tint);
+          for (let n = 1; n < 60; n++) {
+            const fy = gf + n * FLOOR_H + 0.35;
+            if (fy > y1 - 0.6) break;
+            if (fy < y0 + 0.3) continue;
+            relief.cornice(x0, z0, x1, z1, nx, nz, fy, bandC, 0.75);
+          }
+        }
+        // soubassement de pierre au pied des murs hors boutiques (v0.72.0)
+        if (base === 0 && y0 <= 0.01 && !shopGF && y1 > 3.5) relief.plinth(x0, z0, x1, z1, nx, nz, 0.88, hexC(W.cornice).multiplyScalar(dirt * 0.78).multiply(tint));
       }
       if (t0 === 0 && y0 <= base + 0.01 && y1 - base > 5 && hash2(ax * 0.9, az * 1.1) < 0.45) { // descente de gouttière au coin de départ
         relief.pipe(ax + ux * 0.2 + nx * 0.06, az + uz * 0.2 + nz * 0.06, base + 0.05, y1 - 0.3);
