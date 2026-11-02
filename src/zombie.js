@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { CONFIG } from './config.js';
 import { fx } from './fx.js';
+import { terrainY } from './terrain.js';
 import { morionGeometry, cuirassGeometry, pauldronGeometry } from './ironArmor.js';
 import { reflective } from './envmap.js';
 import { skinAssets, skinTextures, zombieMaterial, setCell, zombieGeometries, CELLS, hashId } from './zombieSkin.js';
@@ -188,7 +189,7 @@ export class Zombie {
         new THREE.SphereGeometry(0.75, 12, 6, 0, Math.PI * 2, 0, Math.PI / 2),
         new THREE.MeshStandardMaterial({ color: 0x3a2e23, roughness: 1 })
       );
-      this.mound.position.set(spawn.pos.x, 0, spawn.pos.z);
+      this.mound.position.set(spawn.pos.x, terrainY(spawn.pos.x, spawn.pos.z), spawn.pos.z);
       this.mound.scale.set(0.2, 0.05, 0.2);
       this.mound.receiveShadow = true;
       this.scene.add(this.mound);
@@ -335,7 +336,7 @@ export class Zombie {
     this.spawnT = 0;
     this.group.visible = true;
     this.group.rotation.set(0, this.yaw, 0);
-    this.pos.y = 0;
+    this.pos.y = terrainY(this.pos.x, this.pos.z);
     if (this.spawnType === 'window') {
       this.pos.copy(this.spawn.outside);
       if (this.quad && this.quad.userData && this.quad.userData.broke) this.quad.userData.broke();
@@ -435,12 +436,12 @@ export class Zombie {
       const ease = t * t * (3 - 2 * t);
       this.pos.x = sp.inside.x + (sp.outside.x - sp.inside.x) * ease;
       this.pos.z = sp.inside.z + (sp.outside.z - sp.inside.z) * ease;
-      this.pos.y = 0.7 * Math.exp(-(((t - 0.45) / 0.24) ** 2));
+      this.pos.y = terrainY(this.pos.x, this.pos.z) + 0.7 * Math.exp(-(((t - 0.45) / 0.24) ** 2));
       this.yaw = sp.yaw;
       this.group.rotation.set(0.5 * Math.sin(Math.PI * t), this.yaw, 0);
       this.walkT += dt * 2.2;
       this._pose(this.walkT, 0.5, 1, 0.35, 0.2);
-      if (this.spawnT <= 0) { this.pos.copy(sp.outside); this.pos.y = 0; this.group.rotation.x = 0; }
+      if (this.spawnT <= 0) { this.pos.copy(sp.outside); this.pos.y = terrainY(this.pos.x, this.pos.z); this.group.rotation.x = 0; }
       return;
     }
 
@@ -464,7 +465,7 @@ export class Zombie {
     const t = Math.min(1, (e - GND_DELAY) / GND_RISE);
     const ease = 1 - Math.pow(1 - t, 2.2);
     this.pos.x = sp.pos.x; this.pos.z = sp.pos.z;
-    this.pos.y = -1.95 + 1.95 * ease;
+    this.pos.y = terrainY(this.pos.x, this.pos.z) - 1.95 + 1.95 * ease;
     this.group.rotation.set(0.35 * (1 - t), this.yaw, 0);
     if (t < 0.9 && Math.random() < dt * 10) fx.dirt(sp.pos.x, 0.1, sp.pos.z, 2);
     m.scale.set(1.1 + t * 0.2, 0.37 * (1 - t * 0.6), 1.1 + t * 0.2);
@@ -472,7 +473,7 @@ export class Zombie {
     // les bras sortent en premier, tendus vers le haut puis vers l'avant
     if (this.crawler) this._poseCrawl(this.walkT, false);
     else this._pose(this.walkT, 0.15, 1.7 - t * 0.7, 0.2 + 0.25 * (1 - t), 0.3 - t * 0.1);
-    if (this.spawnT <= 0) { this.pos.y = 0; this.group.rotation.x = 0; }
+    if (this.spawnT <= 0) { this.pos.y = terrainY(this.pos.x, this.pos.z); this.group.rotation.x = 0; }
   }
 
   _updateMound(dt) {
@@ -552,7 +553,7 @@ export class Zombie {
 
     const Z = CONFIG.zombie;
     const lv = world.levels, hasLv = !!lv && lv.links.length > 0;
-    if (!this.link) this.pos.y = this.region && lv ? lv.regions[this.region].y : 0; // le zombie reste à la hauteur de son étage
+    if (!this.link) this.pos.y = (this.region && lv ? lv.regions[this.region].y : 0) + terrainY(this.pos.x, this.pos.z); // le zombie reste à la hauteur de son étage
     const zr = this.link ? (this.link.dir > 0 ? this.link.link.b : this.link.link.a) : this.region;
 
     let target = player;
@@ -734,7 +735,7 @@ export class Zombie {
     if (!h || h.tOut - h.tIn > 1.3 || -(dirx * h.nx + dirz * h.nz) < Math.cos((V.maxAngle * Math.PI) / 180)) return false;
     const lx = this.pos.x + dirx * (h.tOut + 0.5), lz = this.pos.z + dirz * (h.tOut + 0.5);
     const q = this._vq || (this._vq = { x: 0, y: 0, z: 0 });
-    q.x = lx; q.y = 0; q.z = lz; world.collide(q, CONFIG.zombie.radius);
+    q.x = lx; q.y = terrainY(lx, lz); q.z = lz; world.collide(q, CONFIG.zombie.radius);
     if (Math.hypot(q.x - lx, q.z - lz) > 0.05 || nav.isBlockedAt(lx, lz)) return false;
     if (!(nav.walkDistance(lx, lz) < nav.walkDistance(this.pos.x, this.pos.z) - 0.3)) return false; // pas de progrès : inutile
     this.vault = { t: 0, x0: this.pos.x, z0: this.pos.z, x1: lx, z1: lz };
@@ -747,14 +748,14 @@ export class Zombie {
     v.t += dt;
     const u = Math.min(1, v.t / V.time), e = u * u * (3 - 2 * u);
     this.pos.x = v.x0 + (v.x1 - v.x0) * e; this.pos.z = v.z0 + (v.z1 - v.z0) * e;
-    this.pos.y = V.arc * Math.sin(Math.PI * u);
+    this.pos.y = terrainY(this.pos.x, this.pos.z) + V.arc * Math.sin(Math.PI * u);
     this.yaw = Math.atan2(v.x1 - v.x0, v.z1 - v.z0);
     this.group.rotation.set(0, this.yaw, 0);
     this.walkT += dt * 6;
     this.attacking = false;
     if (this.crawler) this._poseCrawl(this.walkT, false);
     else this._pose(this.walkT, 0.8, 1.6, 0.4, 0.2);
-    if (u >= 1) { this.vault = null; this.vaultCd = V.cooldown; this.pos.y = 0; this.noProgress = 0; this.stuckT = 0; }
+    if (u >= 1) { this.vault = null; this.vaultCd = V.cooldown; this.pos.y = terrainY(this.pos.x, this.pos.z); this.noProgress = 0; this.stuckT = 0; }
   }
 
   // Sur un escalier : le zombie suit le chemin 3D du lien (ou va à la rencontre du joueur qui s'y trouve) et frappe sur place

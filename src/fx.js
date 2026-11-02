@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { terrainY } from './terrain.js';
 import { CONFIG } from './config.js';
 
 // Effets visuels légers (v0.47.0 : particules en vraies images) : particules instanciées (sang en gouttes, fumée douce, poussière, éclats, étincelles,
@@ -262,7 +263,7 @@ class Fx {
     if (!this.scene) return;
     const sc = size * (0.8 + Math.random() * 0.5);
     _q.setFromEuler(new THREE.Euler(-Math.PI / 2, 0, Math.random() * Math.PI * 2, 'XYZ'));
-    _m.compose(_p.set(x, 0.02 + Math.random() * 0.004, z), _q, _s.set(sc, sc, 1));
+    _m.compose(_p.set(x, terrainY(x, z) + 0.02 + Math.random() * 0.004, z), _q, _s.set(sc, sc, 1));
     this._putDecal(_m, Math.floor(Math.random() * 4), color);
   }
 

@@ -10,6 +10,7 @@ import { Tanner } from './tanner.js';
 import { Angel } from './angel.js';
 import { installSummit } from './summit.js';
 import { installPerkFx } from './perkFx.js';
+import { terrainY } from './terrain.js';
 import { installFinale } from './finale.js';
 import { Hud } from './hud.js';
 import { Scoreboard } from './scoreboard.js';
@@ -531,7 +532,7 @@ const game = {
     halo.scale.setScalar(0.9);
     grp.add(halo);
 
-    grp.position.set(pos.x, Math.max(0, pos.y || 0) + 0.9, pos.z);
+    grp.position.set(pos.x, Math.max(terrainY(pos.x, pos.z), pos.y || 0) + 0.9, pos.z);
     scene.add(grp);
 
     const pu = {
@@ -540,7 +541,7 @@ const game = {
       grp,
       life: CONFIG.powerups.duration,
       maxLife: CONFIG.powerups.duration,
-      baseY: Math.max(0, pos.y || 0) + 0.9, // à la hauteur de l'étage où le zombie est tombé (terrasse de la flèche…)
+      baseY: Math.max(terrainY(pos.x, pos.z), pos.y || 0) + 0.9, // à la hauteur de l'étage où le zombie est tombé (terrasse de la flèche…)
     };
     this.powerups.push(pu);
 

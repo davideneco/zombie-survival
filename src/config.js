@@ -231,6 +231,9 @@ export const CONFIG = {
     stronghold: { radius: 3.0, settle: 1.5, damageMult: 0.7 },
     deathperception: { critChance: 0.10, critMult: 2.0, radarMult: 1.6 },
   },
+  // Relief du terrain (v0.74.0, terrain.js). Mètres. undulation : amplitude de l'ondulation douce des rues et places (échelles wave1 / wave2 en m) ;
+  // bank : profondeur des berges à l'eau (l'eau est posée à -bank) sur bankReach m ; parvis : surélévation de la place devant la cathédrale.
+  terrain: { enabled: true, undulation: 0.3, wave1: 90, wave2: 35, bank: 0.6, bankReach: 10, parvis: { x: 110, z: 36, h: 0.4, r: 22, edge: 12 }, groundEdge: 5 },
   // Cycle jour / nuit (v0.71.0 ; summit.js). Réglage du joueur : Options > « Cycle jour / nuit » (auto, toujours nuit, toujours jour).
   // En auto la nuit (ciel k sous nightBelowK) les zombies ont nightZombieHealth x de vie à leur apparition. L'Aube de la finale reprend la main sur le ciel ;
   // ensuite la Nuit éternelle fige la nuit.

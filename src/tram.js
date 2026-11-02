@@ -3,6 +3,7 @@ import { CONFIG } from './config.js';
 import { carGeometries, atlas, HDF } from './hommedefer.js';
 import { fx } from './fx.js';
 import { interiorOf } from './tramInterior.js';
+import { patchObject } from './terrain.js';
 
 // =====================================================================
 //  Rame de tram conduisible (v0.39.0).
@@ -502,6 +503,7 @@ export function installTram(game, { world, hud, sfx, scene }) {
       if (!info) return;
       const line = info.net.byId[T.car.start.line], stop = line.stops.find((s) => s.name === T.car.start.stop) || line.stops[0];
       const t = new Tram(this, scene, 0, line, stop.s);
+      patchObject(t.group); // relief : la rame suit le terrain comme les rails
       t.spawn = { x: t.pos.x, z: t.pos.z, yaw: t.yaw };
       this.trams.push(t);
       world.trams = this.trams;

@@ -1,6 +1,7 @@
 import { makeSkyDome } from './sky.js';
 import { createTrees } from './trees.js';
 import { createGround } from './ground.js';
+import { installTerrain, terrainY, terrainWaterY, terrainOn, patchObject, tessellate } from './terrain.js';
 import { contact } from './contact.js';
 import * as THREE from 'three';
 import { CONFIG } from './config.js';
@@ -189,6 +190,7 @@ export async function buildRealWorld(scene, renderer) {
 
   // ---------------------------------------------------------------- Île jouable (délimitée par l'eau)
   const isl = computeIsland(data, CONFIG.startHint.x, CONFIG.startHint.z);
+  installTerrain(isl); // relief du terrain (v0.74.0) : carte de hauteur ; no-op si désactivé
   const onIsland = (x, z) => {
     const i = Math.floor((x + isl.hx) / isl.cell), j = Math.floor((z + isl.hz) / isl.cell);
     return i >= 0 && j >= 0 && i < isl.nx && j < isl.nz && isl.island[j * isl.nx + i] === 1;
@@ -204,9 +206,10 @@ export async function buildRealWorld(scene, renderer) {
   const GROUND_W = halfX * 2 + 60, GROUND_H = halfZ * 2 + 60, GROUND_TILE = 2.2; // GROUND_TILE : taille réelle approx. d'une tuile de pavés (m)
   let groundMesh = null;
   {
-    const geo = new THREE.PlaneGeometry(GROUND_W, GROUND_H);
+    let geo = new THREE.PlaneGeometry(GROUND_W, GROUND_H);
     const uv = geo.attributes.uv;
     for (let i = 0; i < uv.count; i++) uv.setXY(i, (uv.getX(i) * GROUND_W) / GROUND_TILE, (uv.getY(i) * GROUND_H) / GROUND_TILE);
+    if (terrainOn()) geo = tessellate(geo, CONFIG.terrain.groundEdge); // le sol doit avoir des sommets pour épouser le relief
     const mat = new THREE.MeshStandardMaterial({
       map: cobble.map, normalMap: cobble.normalMap, roughnessMap: cobble.roughnessMap,
       color: 0x8a8680, normalScale: new THREE.Vector2(1.2, 1.2),
@@ -227,7 +230,7 @@ export async function buildRealWorld(scene, renderer) {
     const pos = geo.attributes.position, uv = geo.attributes.uv;
     for (let i = 0; i < uv.count; i++) uv.setXY(i, (pos.getX(i) + hw) / GROUND_TILE, (pos.getY(i) + hh) / GROUND_TILE);
     groundMesh.geometry.dispose();
-    groundMesh.geometry = geo;
+    groundMesh.geometry = terrainOn() ? tessellate(geo, CONFIG.terrain.groundEdge) : geo;
   };
 
   // ---------------------------------------------------------------- Eau (rivière Ill et canaux)
@@ -239,9 +242,10 @@ export async function buildRealWorld(scene, renderer) {
       color: 0x0f2a3c, roughness: 0.08, metalness: 0.6, normalMap: waterNormal, normalScale: new THREE.Vector2(0.6, 0.6),
       side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2,
     });
+    const WATER_Y = terrainOn() ? terrainWaterY() : 0.04; // l'eau reste à niveau fixe : les berges descendent jusqu'à elle
     const pos = [], idx = [];
     const uvs = [];
-    const addTri = (a, b, c) => { const base = pos.length / 3; pos.push(a[0], 0.04, a[1], b[0], 0.04, b[1], c[0], 0.04, c[1]); uvs.push(a[0], a[1], b[0], b[1], c[0], c[1]); idx.push(base, base + 2, base + 1); };
+    const addTri = (a, b, c) => { const base = pos.length / 3; pos.push(a[0], WATER_Y, a[1], b[0], WATER_Y, b[1], c[0], WATER_Y, c[1]); uvs.push(a[0], a[1], b[0], b[1], c[0], c[1]); idx.push(base, base + 2, base + 1); };
     for (const w of data.water) {
       if (!w.line) {
         const pts = cleanRing(w.pts);
@@ -269,6 +273,7 @@ export async function buildRealWorld(scene, renderer) {
     const nrm = g.attributes.normal;
     for (let i = 0; i < nrm.count; i++) nrm.setXYZ(i, 0, 1, 0);
     const mesh = new THREE.Mesh(g, waterMat);
+    mesh.userData.noTerrain = true; // niveau d'eau fixe
     mesh.receiveShadow = true;
     scene.add(mesh);
   }
@@ -2142,6 +2147,7 @@ export async function buildRealWorld(scene, renderer) {
   assignLights(startPos.x, startPos.z);
 
   const stationPos = stations[0];
+  patchObject(scene, (o) => o.userData.noTerrain); // relief : tout le décor déjà construit suit le terrain (les corps dynamiques gardent une hauteur absolue)
   return {
     half: Math.max(halfX, halfZ), blockers, spawnPoints: [], windowSpawns, pickWindow, pickGround,
     stationPos, stations, wallWeapons, vehicleSpawns, parkings, bikeStations, bikeCheck, doors, openDoor, zoneOf, startPos, nav, collision, machines, boxes, setActiveBox,
@@ -2155,9 +2161,11 @@ export async function buildRealWorld(scene, renderer) {
     relief: arch.relief, // façades en relief (v0.45.0) : relief.setRange(m) selon la qualité
     ground: groundApi, // sol (v0.46.0) : champ de distance aux façades, plaques d'égout
     trees: treesApi, // arbres (v0.46.0) : trees.setMode('ball' | 'cards' | 'cards+branches') selon la qualité
-    floorAt: (x, z, y, out) => levels.floorAt(x, z, y, out),
-    collide: (pos, r, out, ignore) => collision.resolve(pos, r, out, ignore),
-    rayHit: (ox, oy, oz, dx, dy, dz, maxT) => collision.rayHit(ox, oy, oz, dx, dy, dz, maxT),
+    // Sol : les planchers (étages, escaliers, ponts) sont dessinés relativement au terrain, que le shader leur ajoute ; les hauteurs rendues sont absolues
+    terrainY,
+    floorAt: (x, z, y, out) => { const t = terrainY(x, z); levels.floorAt(x, z, y - t, out); out.y += t; return out; },
+    collide: (pos, r, out, ignore) => { const t = terrainY(pos.x, pos.z); pos.y -= t; try { return collision.resolve(pos, r, out, ignore); } finally { pos.y += t; } },
+    rayHit: (ox, oy, oz, dx, dy, dz, maxT) => collision.rayHit(ox, oy - terrainY(ox, oz), oz, dx, dy, dz, maxT),
     // Hauteur du plafond à l'aplomb de (x, z) : voûtes de la cathédrale, passage sous immeuble (PASSAGE_H), sinon rien (ciel ouvert)
     ceilingAt: (x, z) => {
       const c = cath ? cath.ceilAt(x, z) : null;

@@ -1,4 +1,5 @@
 import { CONFIG } from './config.js';
+import { terrainY } from './terrain.js';
 import { carDoorStarts } from './hommedefer.js';
 
 // =====================================================================
@@ -126,7 +127,7 @@ export function installTramWalk(game, { world, hud, sfx }) {
       O.y += (floor - O.y) * Math.min(1, dt * W.enterEase);
       if (Math.abs(floor - O.y) < 0.002) O.y = floor;
       t.walkToWorld(O.u, O.w, O.y, tmp);
-      p.pos.set(tmp.x, tmp.y, tmp.z);
+      p.pos.set(tmp.x, tmp.y + terrainY(tmp.x, tmp.z), tmp.z);
     },
     tramMoveWarn(p, t) {
       if (this.time < (this.tramWarnUntil || 0)) return;
@@ -139,7 +140,7 @@ export function installTramWalk(game, { world, hud, sfx }) {
     tramStepOut(p, t, forced = false) {
       const O = p.onTram;
       t.walkToWorld(O.u, O.w, 0, tmp);
-      p.pos.set(tmp.x, Math.max(0, O.y - 0.01), tmp.z);
+      p.pos.set(tmp.x, Math.max(0, O.y - 0.01) + terrainY(tmp.x, tmp.z), tmp.z);
       p.onTram = null; p.vy = 0; p.wasGrounded = true;
       world.collide(p.pos, CONFIG.player.radius);
       sfx.knock?.(0.35);
@@ -158,7 +159,7 @@ export function installTramWalk(game, { world, hud, sfx }) {
       const p = this.player, t = nv.v, I = t.interior, span = I.spans[nv.door];
       if (!span || p.vehicle || p.onTram) return;
       t.frame((span[0] + span[1]) / 2, f1);
-      p.onTram = { v: t, u: (span[0] + span[1]) / 2, w: nv.side * (W.wall - 0.05), y: Math.min(p.pos.y, T.car.floor - 0.05), fy: f1.yaw };
+      p.onTram = { v: t, u: (span[0] + span[1]) / 2, w: nv.side * (W.wall - 0.05), y: Math.min(p.pos.y - terrainY(p.pos.x, p.pos.z), T.car.floor - 0.05), fy: f1.yaw };
       p.vel.set(0, 0, 0); p.vy = 0;
       sfx.knock?.(0.35);
       this.sendPlayerState?.();
@@ -174,7 +175,7 @@ export function installTramWalk(game, { world, hud, sfx }) {
       p.onTram.u = pt.u; p.onTram.w = pt.w;
       p.vehicle = null; p.vel.set(0, 0, 0); p.vy = 0; p.wasGrounded = true;
       v.walkToWorld(pt.u, pt.w, T.car.floor, tmp);
-      p.pos.set(tmp.x, tmp.y, tmp.z);
+      p.pos.set(tmp.x, tmp.y + terrainY(tmp.x, tmp.z), tmp.z);
       p.mouseDown = false; p.aiming = false;
     },
 
@@ -187,7 +188,7 @@ export function installTramWalk(game, { world, hud, sfx }) {
       p.onTram = { v: t, u: pt.u, w: pt.w, y: T.car.floor, fy: f1.yaw };
       p.vehicle = null; p.vel.set(0, 0, 0); p.vy = 0; p.wasGrounded = true; p.region = 0;
       t.walkToWorld(pt.u, pt.w, T.car.floor, tmp);
-      p.pos.set(tmp.x, tmp.y, tmp.z);
+      p.pos.set(tmp.x, tmp.y + terrainY(tmp.x, tmp.z), tmp.z);
       this.sendPlayerState?.();
     },
 
@@ -200,7 +201,7 @@ export function installTramWalk(game, { world, hud, sfx }) {
         if (Math.abs(p.pos.x - t.pos.x) > 20 || Math.abs(p.pos.z - t.pos.z) > 20) continue;
         t.worldToWalk(p.pos.x, p.pos.z, loc);
         const aw = Math.abs(loc.w);
-        if (aw > W.boardW || aw < W.wall - 0.1 || p.pos.y > 0.4) continue;
+        if (aw > W.boardW || aw < W.wall - 0.1 || p.pos.y - terrainY(p.pos.x, p.pos.z) > 0.4) continue;
         const di = doorIndexAt(t.interior, loc.u, -0.2);
         if (di < 0) continue;
         t.frame(loc.u, f2);
