@@ -2,13 +2,6 @@
 
 A co-op survival game against waves of zombies, set in the **Grande Île of Strasbourg**, rebuilt from OpenStreetMap and IGN BD TOPO data (buildings with real photogrammetric heights, quays, squares, street furniture, the cathedral). Play solo or with up to **4 players**.
 
-There are two versions of the same game:
-
-| Version | Where | Tech | Status |
-|---|---|---|---|
-| **Browser** (this page) | `main` branch | [Three.js](https://threejs.org/), [Vite](https://vite.dev/), Node.js WebSocket relay | complete, solo and multiplayer, deployed on Render |
-| **Godot port** | `godot-port` branch, [`godot/`](https://github.com/davideneco/zombie-survival/tree/godot-port/godot) folder | Godot 4.7 (GDScript, Forward+) | complete solo game, Windows export; multiplayer not ported yet |
-
 The game's text and menus are in French.
 
 ## How it works
@@ -20,7 +13,9 @@ You start at place du Marché-Neuf with a pistol, an assault rifle and 500 point
 **Spending them**:
 - **Doors**: 27 zones built around real places (place Kléber, place Gutenberg, the cathedral, Petite France, Homme de Fer…). The further from the start, the pricier the door.
 - **Wall weapons** (chalk outlines) and their ammo.
-- **Perks**: Mastodonte (extra health), Speed Cola, Double Tap, Quick Revive, Mule Kick, Stamin-Up, PHD Flopper.
+- **Perks** (16, at most 4 carried at once): Mastodonte (extra health), Speed Cola, Double Tap, Quick Revive, Mule Kick, Stamin-Up, PHD Flopper, plus Œil-de-lynx (headshots, accuracy), Cerise-foudre (shock on reload), Veuve noire (web slows zombies), Vautour (ammo / point drops), Pierre tombale (get your perks back after going down), Ultime Volonté (survive a lethal hit), Bastion (less damage while standing still), Sixième sens (wider radar, critical hits), Cartouchière (more reserve ammo).
+
+**Day / night cycle**: a full day lasts 14 real minutes (clock under the radar); zombies spawn with 10 % more health at night. In Options, "Cycle jour / nuit" can be set to auto, always night or always day.
 - **Mystery box**: a random weapon; the box then moves.
 - **Pack-a-Punch**: 3 levels, inside the cathedral.
 
@@ -114,9 +109,8 @@ Drop `theme.mp3` (or `.ogg`, `.m4a`, `.wav`) in `public/music/` to replace the s
 | `src/` | The game (ES modules); balance in `src/config.js` |
 | `server/` | Multiplayer relay (`rooms.mjs`) and production server (`prod.mjs`) |
 | `public/` | Map (`data/area.json`), textures, music |
-| `tools/` | OSM extraction, doc generation, stuck detection, baking and golden files for the Godot port |
-| `docs/` | Reference, annotated map, CSV; `GODOT_PORT.md` (plan and log of the port, French) |
-| `godot/` | Godot port (`godot-port` branch) |
+| `tools/` | OSM extraction, doc generation, stuck detection |
+| `docs/` | Reference, annotated map, CSV |
 | `.agents/` | Agent skills & roles (`explorer`, `game-designer`, `gameplay-coder`, `gui-test-debugger`, `playtest-bug-hunter`) |
 | `GEMINI.md` / `AGENTS.md` | Development rules and guidelines for AI pair programmers |
 
@@ -125,5 +119,4 @@ To check a change: `npx vite build`, then play a game with `?debug` in the URL.
 ## Credits
 
 - Map data: © [OpenStreetMap](https://www.openstreetmap.org/copyright) contributors (ODbL) and [IGN BD TOPO](https://geoservices.ign.fr/bdtopo) (Licence Ouverte Etalab 2.0).
-- 3D engine: [Three.js](https://threejs.org/). Port: [Godot](https://godotengine.org/).
-- Godot port weapons: Quaternius and Tabasco; zombies: Quaternius; details and licences in `godot/assets/*/LICENSE.txt`.
+- 3D engine: [Three.js](https://threejs.org/).

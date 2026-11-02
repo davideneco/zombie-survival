@@ -207,7 +207,7 @@ export const CONFIG = {
     mulekick: { name: 'MULE KICK', desc: 'Porter 3 armes', price: 4000, color: '#3f7d3a', letter: 'K' },
     staminup: { name: 'STAMIN-UP', desc: 'Course plus rapide', price: 2000, color: '#e8d24a', letter: 'E' },
     phdflopper: { name: 'PHD FLOPPER', desc: 'Immunisé aux explosions et aux chocs · saut en sprint : onde explosive', price: 2000, color: '#8d3fd1', letter: 'P' },
-    // v0.71.0 : neuf atouts repris du port Godot (effets : perkFx.js, réglages : CONFIG.perkFx)
+    // v0.71.0 : neuf atouts supplémentaires (effets : perkFx.js, réglages : CONFIG.perkFx)
     deadshot: { name: 'ŒIL-DE-LYNX', desc: 'Tirs à la tête +50 % · dispersion -35 %', price: 1500, color: '#6e1f2a', letter: 'L' },
     electriccherry: { name: 'CERISE-FOUDRE', desc: 'Recharger libère une décharge électrique (chargeur vide : plus forte)', price: 2000, color: '#ff4f8b', letter: 'F' },
     widowswine: { name: 'VEUVE NOIRE', desc: 'Frappé : une toile englue les zombies proches · couteau collant', price: 4000, color: '#3a1846', letter: 'N' },
@@ -231,7 +231,7 @@ export const CONFIG = {
     stronghold: { radius: 3.0, settle: 1.5, damageMult: 0.7 },
     deathperception: { critChance: 0.10, critMult: 2.0, radarMult: 1.6 },
   },
-  // Cycle jour / nuit (v0.71.0, repris du port Godot ; summit.js). Réglage du joueur : Options > « Cycle jour / nuit » (auto, toujours nuit, toujours jour).
+  // Cycle jour / nuit (v0.71.0 ; summit.js). Réglage du joueur : Options > « Cycle jour / nuit » (auto, toujours nuit, toujours jour).
   // En auto la nuit (ciel k sous nightBelowK) les zombies ont nightZombieHealth x de vie à leur apparition. L'Aube de la finale reprend la main sur le ciel ;
   // ensuite la Nuit éternelle fige la nuit.
   dayNight: {

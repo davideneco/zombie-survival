@@ -18,6 +18,4 @@ Track down gameplay and networking defects, determine root causes, fix them, and
 - For multi-instance network tests, disable rendering (`game.renderer.render = () => {}`) to minimize resource consumption.
 - Re-run the reproduction script to confirm resolution.
 
-### Godot Regression Testing
-- Add regression tests under `godot/tests/` and run `tools/godot-check.sh`.
 - For hitching or frame pacing issues, analyze with `--perf-log=FILE` and `--perf-soak=N`.

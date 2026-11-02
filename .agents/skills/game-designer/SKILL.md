@@ -17,4 +17,3 @@ Design game mechanics and systems for Zombie Survival, ensuring balance, perform
     1. What the host simulates (e.g. zombie spawns, AI pathfinding, boss states).
     2. What is synchronized over WebSockets (e.g. entity health, positions, events).
     3. What stays purely local (e.g. view interpolation, particle FX, HUD).
-- Note: The Godot port is solo-only for now.

@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { CONFIG } from './config.js';
 
 // =====================================================================
-//  Neuf atouts supplémentaires (v0.71.0), repris du port Godot (sim/perk_fx.gd). Réglages : CONFIG.perkFx ; fiches (nom, prix, couleur) : CONFIG.perks.
+//  Neuf atouts supplémentaires (v0.71.0). Réglages : CONFIG.perkFx ; fiches (nom, prix, couleur) : CONFIG.perks.
 //    deadshot ŒIL-DE-LYNX : tête x1,5, dispersion x0,65 (player.js, statsOf)         bandolier CARTOUCHIÈRE : réserve x1,5 (player.js, statsOf)
 //    electriccherry : recharger libère une décharge, d'autant plus forte que le chargeur était vide
 //    widowswine : frappé par un zombie, une toile ralentit les zombies proches ; le couteau ralentit sa cible

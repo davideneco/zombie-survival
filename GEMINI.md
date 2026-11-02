@@ -1,6 +1,6 @@
 # Zombie Survival
 
-Co-op zombie survival in Strasbourg. Two versions: browser (`main`: Three.js + Vite dev server with built-in WebSocket relay, deployed on Render from `main`) and Godot 4.7 port (`godot-port`, `godot/`: GDScript, solo only). Port docs: `docs/GODOT_PORT.md` (plan/log, French), `godot/README.md`.
+Co-op zombie survival in Strasbourg. Browser game (`main`: Three.js + Vite dev server with built-in WebSocket relay, deployed on Render from `main`).
 
 ## Core Guidelines
 - **Language**: Communicate with the user in French. Write code, commit messages, and documentation in English (keep existing French game text and docs unchanged).
@@ -10,9 +10,8 @@ Co-op zombie survival in Strasbourg. Two versions: browser (`main`: Three.js + V
   - Implementation (JS or GDScript) -> `gameplay-coder`
   - Odd behaviour or gameplay bug -> `playtest-bug-hunter`
   - Visual/UI bug requiring screenshots -> `gui-test-debugger`
-- **Audio Assets**: Never commit copyrighted music (`public/music/theme.*`, `godot/assets/audio/music/theme.*` are git-ignored).
+- **Audio Assets**: Never commit copyrighted music (`public/music/theme.*` is git-ignored).
 - **Verification**: Report honestly what has been verified vs not verified. Never push to `main` without explicit confirmation (pushing to `main` redeploys the live game on Render).
-- **Concurrency**: Do not run two Godot processes on `godot/` at once (corrupts import cache).
 
 ## Browser (`main`)
 - Modern ES modules; all balance values in `src/config.js` (never hardcoded in logic).
@@ -37,12 +36,3 @@ Co-op zombie survival in Strasbourg. Two versions: browser (`main`: Three.js + V
 - **Geometry & Detailing**:
   - Never leave bare sharp `BoxGeometry` cubes ("Roblox look"): add sub-mesh details (chamfers, corner brackets, frames, rims, handles, footing pads) to catch specular highlights on edges.
   - Avoid flat cardboard ground: provide normal maps, puddle variations, and roughness variations.
-
-## Godot Port (`godot-port`)
-- Own version: `config/version` in `godot/project.godot`; commit subject ends with `(godot vX.Y.Z)`; leave `package.json` untouched.
-- **Critical**: NEVER rewrite `godot/project.godot` with a script. Use `sed -i`, then verify `wc -l` = 28 and `run/main_scene="res://scenes/main.tscn"`.
-- Verification: `tools/godot-check.sh [suite]` (regenerates config and golden files from JS, imports, runs headless tests; expect 0 failures) plus visual validation via real screenshots (`xvfb-run`). Headless alone is insufficient.
-- Pure simulation logic in `godot/sim/` (checked against JS golden files); scenes and views in `godot/scenes/`.
-- `godot/data/golden/j8.json` changes on each export: `git checkout` it before committing.
-- Baked assets (world, textures, audio) are git-ignored; regenerate with `tools/bake-*.mjs`.
-- Windows export: `tools/export-windows.sh` (never commit the zip).
