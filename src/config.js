@@ -464,6 +464,10 @@ export const CONFIG = {
     roadkill: { cooldown: 0.5, rampSpeed: 6, stopSpeed: 1.5, contactStop: 0.55 },
     // Choc contre un mur : au-dessus de minSpeed (vitesse perdue dans le choc), les occupants perdent damagePerMs PV par m/s en trop
     // (jamais mortel : il leur reste au moins 1 PV)
+    // Collisions de carrosserie des voitures (vehicleCrash.js) : impulsions (restitution, frottement au mur, rotation), dégâts selon la vitesse normale
+    // d'approche v (m/s) : fraction de la barre de PV = fracAtRef x ((v - free) / (ref - free)) ^ power ; bosses : profondeur (v - dentFrom) x dentScale (plafonnée à dentMax)
+    body: { restitution: 0.18, friction: 0.32, spinDamp: 4.5, maxSpin: 2.0, minImpact: 2.5, cooldown: 0.35, free: 4, ref: 25, fracAtRef: 0.55, power: 1.6,
+      dentFrom: 3, dentScale: 0.035, dentMax: 0.42, dentRadius: 0.85, glassFrom: 0.22, pull: 0.22 },
     crash: { minSpeed: 10, damagePerMs: 3.5, maxDamage: 45 },
     // Points de vie des motos (type.hp) et dégâts qu'elles subissent. Seul l'hôte écrit les PV (v_dmg -> v_hp).
     //  - choc contre un objet physique (voiture, mobilier, arbre, machine… : obstacle de nature 'prop') : max(0, impact - crashFree) x crashPerMs
@@ -518,14 +522,14 @@ export const CONFIG = {
         maxSpeed: 39.0, accel: 16.8, brake: 9.8, reverseSpeed: 8.5, drag: 0.08,
         wheelbase: 2.60, maxSteer: 0.65, steerRate: 10.5, steerSpeedFactor: 0.052, grip: 22, radius: 1.15, bikeRadius: 1.15, roadkill: { K: 52, vmin: 4, slowdown: 0.95 },
         gears: 6, gearTopSpeeds: [7.6, 13.4, 19.6, 26.0, 32.5, 39.0], idleRpm: 900, redlineRpm: 7500, maxRpm: 8500,
-        leanK: -0.016, crash: { minSpeed: 14, damagePerMs: 2.0, maxDamage: 35 }, wreckLift: 0.75,
+        leanK: -0.016, crash: { minSpeed: 14, damagePerMs: 2.0, maxDamage: 35 }, wreckLift: 0.75, body: { r: 0.95, off: 1.3, inertia: 2.5 },
       },
       suv: {
         name: '4X4 TOUT-TERRAIN', hudName: '4X4', det: 'le', isCar: true, isSuv: true, drivetrain: 'AWD', seats: 4, camArm: 6.4, hp: 2400, tank: 55, idle: 0.006, gas: 0.024, perSpeed: 0.028,
         maxSpeed: 29.2, accel: 13.6, brake: 6.8, reverseSpeed: 7.0, drag: 0.11,
         wheelbase: 3.12, maxSteer: 0.40, steerRate: 4.8, steerSpeedFactor: 0.095, grip: 14.5, radius: 1.25, bikeRadius: 1.25, roadkill: { K: 72, vmin: 3.5, slowdown: 0.97 },
         gears: 5, gearTopSpeeds: [6.0, 11.2, 16.8, 22.8, 29.2], idleRpm: 750, redlineRpm: 4800, maxRpm: 5500,
-        leanK: -0.028, crash: { minSpeed: 16, damagePerMs: 1.5, maxDamage: 28 }, wreckLift: 0.92,
+        leanK: -0.028, crash: { minSpeed: 16, damagePerMs: 1.5, maxDamage: 28 }, wreckLift: 0.92, body: { r: 1.02, off: 1.45, inertia: 3.1 },
       },
       // Vélo (v0.43.0) : gratuit, réparti par stations (bikeStations), une place, pas de réservoir (tank 0 : aucune jauge, aucune panne sèche, aucun bidon),
       // jamais d'écrasement (roadkill.vmin 99 : un zombie au contact arrête le vélo net, comme une moto lente), le cycliste ne tire pas (conducteur).

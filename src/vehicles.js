@@ -2,6 +2,8 @@ import * as THREE from 'three';
 import { CONFIG } from './config.js';
 import { BUILDERS, wreckMaterial } from './vehicleModels.js';
 import { fx } from './fx.js';
+import { terrainY } from './terrain.js';
+import { bodyMethods } from './vehicleCrash.js';
 
 // Motos et vélos : conduite, places (conducteur / passager), collisions, zombies écrasés, synchro réseau.
 //  - Le client du CONDUCTEUR simule la moto et diffuse son état 20 fois par seconde ; tous les autres l'interpolent.
@@ -43,8 +45,9 @@ export class Vehicle {
 
   reset() {
     const s = this.spawn;
-    this.pos.set(s.x, 0, s.z);
+    this.pos.set(s.x, terrainY(s.x, s.z), s.z); // relief : la voiture suit le terrain
     this.yaw = s.yaw; this.dyaw = 0;
+    this.spin = 0; this.impactCd = 0; this.lastImpact = 0; this.resetDents?.();
     this.speed = 0; this.vLat = 0; this.steer = 0; this.steerAngle = 0;
     this.lean = 0; this.rollVel = 0; this.pitch = 0; this.pitchVel = 0; this.suspY = 0; this.suspVel = 0;
     this.wheelRot = 0; this.throttle = 0; this.braking = false; this.handbraking = false; this.brakePress = 0;
@@ -146,6 +149,7 @@ export class Vehicle {
     const prevYaw = this.yaw;
     if (this.crashT > 0) this.crashT -= dt;
     if (this.hitT > 0) this.hitT -= dt;
+    if (this.impactCd > 0) this.impactCd -= dt;
     if (this.state === 'wreck') {
       this.speed = 0; this.dyaw = 0; this.throttle = 0;
       if (this.def.isHeli) this.fallHeli(dt); // l'épave d'un hélicoptère détruit en vol tombe jusqu'au sol
@@ -680,6 +684,10 @@ export class Vehicle {
     }
 
     this.yaw += yawRate * dt;
+    if (D.body) { // chocs : rotation transmise par l'impulsion (s'amortit : les pneus la reprennent), voiture tirée de travers si le train avant est abîmé
+      this.yaw += ((this.spin || 0) + this.damagePull(sp)) * dt;
+      this.spin = (this.spin || 0) * Math.exp(-CONFIG.vehicles.body.spinDamp * dt);
+    }
 
     // Suspension 3D à ressort-amortisseur (Roulis, Tangage, Rebond vertical sur vibreurs)
     if (D.isCar) {
@@ -730,17 +738,29 @@ export class Vehicle {
     const vLat = this.vLat || 0;
     const vx = fwdX * sp + rx * vLat, vz = fwdZ * sp + rz * vLat;
     const ox = this.pos.x, oz = this.pos.z;
+    if (D.body) { // voiture : carrosserie à trois cercles et réponse par impulsions (vehicleCrash.js)
+      sp = this.collideBody(sp, dt);
+      g.world.floorAt?.(this.pos.x, this.pos.z, 0.1, fl);
+      if (g.world.floorAt && (fl.region !== 0 || Math.abs(fl.y - terrainY(this.pos.x, this.pos.z)) > 0.25)) { // marche, trou : on ne passe pas
+        this.pos.x = ox; this.pos.z = oz; this.crash(Math.abs(sp), 'wall'); sp = -sp * 0.15; this.vLat = 0;
+      }
+      this.pos.y = terrainY(this.pos.x, this.pos.z);
+      this.speed = sp;
+      if (this.roadkill()) { this.pos.x = ox; this.pos.z = oz; }
+      this.syncNet();
+      return;
+    }
     const p = { x: ox + vx * dt, y: 0.1, z: oz + vz * dt };
     colOut.kind = null; colOut.push = 0;
     g.world.collide(p, D.radius, colOut);
     const cx = p.x - (ox + vx * dt), cz = p.z - (oz + vz * dt), cl = Math.hypot(cx, cz);
     g.world.floorAt?.(p.x, p.z, 0.1, fl);
-    if (g.world.floorAt && (fl.region !== 0 || Math.abs(fl.y) > 0.25)) { // marche, trou : on ne passe pas
+    if (g.world.floorAt && (fl.region !== 0 || Math.abs(fl.y - terrainY(p.x, p.z)) > 0.25)) { // marche, trou : on ne passe pas
       this.crash(Math.abs(sp), 'wall'); // marche, trou : de l'architecture
       sp = -sp * 0.15;
       this.vLat = 0;
     } else {
-      this.pos.x = p.x; this.pos.z = p.z;
+      this.pos.x = p.x; this.pos.z = p.z; this.pos.y = terrainY(p.x, p.z); // relief
       if (cl > 1e-4) { // poussée du mur : plus on fonce dedans de face, plus on perd de vitesse
         const into = clamp(-(fwdX * cx + fwdZ * cz) / cl * Math.sign(sp || 1), 0, 1);
         this.vLat *= 0.35;
@@ -852,7 +872,7 @@ export class Vehicle {
     if (impact < 3) return;
     g.shake = Math.max(g.shake || 0, Math.min(1, impact / 22));
     g.sfx.crash?.(Math.min(1, impact / 20));
-    const D = CONFIG.vehicles.damage, wear = kind === 'moto' ? 0 : Math.max(0, impact - D.crashFree) * D.crashPerMs * (kind === 'wall' ? D.wall : 1);
+    const D = CONFIG.vehicles.damage, wear = kind === 'moto' || kind === 'body' ? 0 : Math.max(0, impact - D.crashFree) * D.crashPerMs * (kind === 'wall' ? D.wall : 1);
     if (wear > 0 && this.hitT <= 0) { this.hitT = 0.5; g.damageVehicle(this, wear, 'crash'); } // un choc compte une fois (même mur, images suivantes)
     if (impact < C.minSpeed || this.crashT > 0) return;
     this.crashT = 0.8;
@@ -963,6 +983,8 @@ export class Vehicle {
 }
 
 // ====================================================================== installation dans le jeu
+Object.assign(Vehicle.prototype, bodyMethods); // collisions de carrosserie et dégâts extérieurs (vehicleCrash.js)
+
 export function installVehicles(game, { world, hud, sfx, scene }) {
   const myId = () => game.net?.id ?? 0;
   const R = () => CONFIG.vehicles;
@@ -1350,6 +1372,12 @@ export function installVehicles(game, { world, hud, sfx, scene }) {
         };
         if (m.fu != null && performance.now() > v.fuelLock) v.fuel = clamp(+m.fu, 0, v.def.tank); // anciens messages : pas de `fu`
       });
+      net.on('v_dent', (m) => { // bosse d'une voiture d'un autre joueur
+        const v = this.vehicles[m.id];
+        if (!v || !v.def.body || !(+m.a > 0)) return;
+        v.dent(+m.x || 0, 0.55, +m.z || 0, +m.dx || 0, +m.dz || 0, clamp(+m.a, 0, 0.6), clamp(+m.r || 1, 0.3, 3));
+        if (+m.a > CONFIG.vehicles.body.glassFrom) v.breakGlass(+m.x || 0, +m.z || 0, 1.7);
+      });
       net.on('v_horn', (m) => {
         const v = this.vehicles[m.id];
         if (!v) return;
@@ -1509,6 +1537,7 @@ export function installVehicles(game, { world, hud, sfx, scene }) {
       const sv = this.serviceOf(v);
       if (!sv.needed || sv.cost > paid) { refund(paid); return; } // déjà en parfait état, ou plus abîmée depuis : on rend tout
       v.hp = v.maxHp;
+      v.resetDents?.(); // carrosserie remise à neuf
       this.flushVehicleHp(v);
       this.setFuel(v, v.def.tank, true);
       refund(paid - sv.cost);
