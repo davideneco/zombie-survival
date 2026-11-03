@@ -1,0 +1,39 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Weapon sheet</title>
+<style>html,body{margin:0;background:#2a2d33}canvas{display:block}</style></head>
+<body>
+<script type="module">
+// Planche-contact des modèles d'armes (outil de développement) : /tools/weapon-sheet.html?ids=m1911,rifle&view=side|three&cols=6
+import * as THREE from 'three';
+import { buildWeaponModels } from '/src/viewmodels.js';
+import { CONFIG } from '/src/config.js';
+const q = new URLSearchParams(location.search);
+const view = q.get('view') || 'side', cols = +(q.get('cols') || 6), cw = +(q.get('cw') || 360), ch = +(q.get('ch') || 230);
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.outputColorSpace = THREE.SRGBColorSpace; renderer.shadowMap.enabled = false;
+const scene = new THREE.Scene(); scene.background = new THREE.Color(0x30343b);
+scene.add(new THREE.HemisphereLight(0xdfe6ff, 0x6a5e50, 3.2));
+const key = new THREE.DirectionalLight(0xfff0dd, 4.5); key.position.set(2, 3, 2); scene.add(key);
+const rim = new THREE.DirectionalLight(0x8fb0ff, 2.2); rim.position.set(-2, 1, -2); scene.add(rim);
+const holder = new THREE.Group(); scene.add(holder);
+const { vms } = buildWeaponModels(holder);
+const ids = (q.get('ids') ? q.get('ids').split(',') : Object.keys(vms)).filter((i) => vms[i]);
+const rows = Math.ceil(ids.length / cols);
+renderer.setSize(cols * cw, rows * ch); renderer.setPixelRatio(1); document.body.appendChild(renderer.domElement);
+renderer.setScissorTest(true);
+const cam = new THREE.PerspectiveCamera(30, cw / ch, 0.01, 10);
+const box = new THREE.Box3(), c = new THREE.Vector3(), s = new THREE.Vector3();
+ids.forEach((id, i) => {
+  for (const g of Object.values(vms)) g.visible = false;
+  const g = vms[id]; g.visible = true;
+  g.traverse((o) => { if (o.userData.skin) o.visible = q.get('hands') === '1'; });
+  box.setFromObject(g); box.getCenter(c); box.getSize(s);
+  const half = Math.tan(THREE.MathUtils.degToRad(cam.fov / 2)), need = Math.max(s.z / 2 / (half * cam.aspect), s.y / 2 / half) * 1.18 + s.x / 2;
+  if (view === 'side') cam.position.set(c.x + need, c.y, c.z); else cam.position.set(c.x + need * 0.62, c.y + need * 0.38, c.z + need * 0.72);
+  cam.lookAt(c);
+  const col = i % cols, row = Math.floor(i / cols);
+  renderer.setViewport(col * cw, (rows - 1 - row) * ch, cw, ch); renderer.setScissor(col * cw, (rows - 1 - row) * ch, cw, ch);
+  renderer.render(scene, cam);
+});
+window.__ids = ids; window.__done = true;
+</script></body></html>
