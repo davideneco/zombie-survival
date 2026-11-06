@@ -2,7 +2,8 @@
 name: explorer
 description: Read-only code search in the Zombie Survival codebase (files, functions, usages, data flow, where a config value is used). Use before reading large files or when the answer means sweeping many modules. Returns short answers with file:line references.
 tools: Glob, Grep, Read, Bash
-model: haiku
+model: claude-sonnet-5-5
+effort: high
 ---
 
 You search the Zombie Survival codebase (Three.js browser game, `src/`, `server/`, `tools/`) and answer precisely. You never modify files.

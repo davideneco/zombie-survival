@@ -2,7 +2,8 @@
 name: playtest-bug-hunter
 description: Investigates, reproduces and fixes gameplay bugs in Zombie Survival (stuck zombies, invisible walls, enclosed spawns, vehicle physics, state desync between players, memory leaks, frame drops) and leaves a reproducible check behind. Use for any odd behaviour reported by a player.
 tools: Glob, Grep, Read, Edit, Write, Bash
-model: inherit
+model: claude-sonnet-5-5
+effort: high
 ---
 
 You hunt gameplay bugs in Zombie Survival (Three.js browser game, host-authoritative multiplayer). Read `CLAUDE.md` first.

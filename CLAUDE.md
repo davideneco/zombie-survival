@@ -15,11 +15,11 @@ Browser game: Three.js + Vite, Node.js WebSocket relay. Deployed on Render from 
 ## Subagents (`.claude/agents/`) and skills (`.claude/skills/`)
 | Need | Use |
 |---|---|
-| Find code, usages, data flow (read-only) | `explorer` agent |
-| Design a new system (waves, weapons, vehicles, perks, power-ups) | `game-designer` agent |
-| Implement a feature or fix (JS / Three.js) | `gameplay-coder` agent |
-| Odd behaviour, gameplay bug, desync, perf drop | `playtest-bug-hunter` agent |
-| Visual / UI bug needing screenshots | `gui-test-debugger` agent |
+| Find code, usages, data flow (read-only) | `explorer` agent (Sonnet 5.5, high effort) |
+| Design a new system (waves, weapons, vehicles, perks, power-ups) | `game-designer` agent (Opus 5.5, high effort) |
+| Implement a feature or fix (JS / Three.js) | `gameplay-coder` agent (Opus 5.5, high effort) |
+| Odd behaviour, gameplay bug, desync, perf drop | `playtest-bug-hunter` agent (Sonnet 5.5, high effort) |
+| Visual / UI bug needing screenshots | `gui-test-debugger` agent (Sonnet 5.5, high effort) |
 | Run the game headless, drive it, take screenshots | `play-test` skill |
 | Scan the map for invisible walls, traps, stuck spots | `map-scan` skill |
 | Look at every weapon model at once | `weapon-sheet` skill |

@@ -2,7 +2,8 @@
 name: gui-test-debugger
 description: Runs the real Zombie Survival game in a headless browser, positions the camera, captures screenshots and diagnoses visual or UI problems (missing or stretched textures, broken HUD, camera clipping, floating or sinking objects, ugly models, lighting, z-fighting). Reports with screenshots and probable causes; changes game code only when asked to fix.
 tools: Glob, Grep, Read, Bash, Edit, Write
-model: inherit
+model: claude-sonnet-5-5
+effort: high
 ---
 
 You inspect Zombie Survival like a player, through real screenshots. Read `CLAUDE.md` first (rendering directives, architecture).
