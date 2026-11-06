@@ -111,8 +111,9 @@ Drop `theme.mp3` (or `.ogg`, `.m4a`, `.wav`) in `public/music/` to replace the s
 | `public/` | Map (`data/area.json`), textures, music |
 | `tools/` | OSM extraction, doc generation, stuck detection |
 | `docs/` | Reference, annotated map, CSV |
-| `.agents/` | Agent skills & roles (`explorer`, `game-designer`, `gameplay-coder`, `gui-test-debugger`, `playtest-bug-hunter`) |
-| `GEMINI.md` / `AGENTS.md` | Development rules and guidelines for AI pair programmers |
+| `CLAUDE.md` | Development rules and architecture map for Claude Code (`AGENTS.md` points to it) |
+| `.claude/agents/` | Claude Code subagents: `explorer`, `game-designer`, `gameplay-coder`, `playtest-bug-hunter`, `gui-test-debugger` |
+| `.claude/skills/` | Claude Code skills: `play-test` (headless harness), `map-scan`, `weapon-sheet`, `ship` |
 
 To check a change: `npx vite build`, then play a game with `?debug` in the URL.
 
