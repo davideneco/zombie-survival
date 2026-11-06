@@ -1,6 +1,7 @@
 import { makeSkyDome } from './sky.js';
 import { createTrees } from './trees.js';
 import { createGround } from './ground.js';
+import { createInteriors } from './interiors.js';
 import { installTerrain, terrainY, terrainWaterY, terrainOn, patchObject, tessellate } from './terrain.js';
 import { contact } from './contact.js';
 import * as THREE from 'three';
@@ -280,6 +281,8 @@ export async function buildRealWorld(scene, renderer) {
 
   // ---------------------------------------------------------------- Bâtiments
   const arch = createArchitecture({ renderer, plasterImg, plaster2Img, roofP, rnd });
+  const interiors = createInteriors(); // rez-de-chaussée praticables (v0.78.0)
+  const roomQueue = [];
 
   const facadeSegs = []; // [ax,az,bx,bz,nx,nz,bays,len] : pour placer les fenêtres d'apparition
   const blds = [];
@@ -440,6 +443,29 @@ export async function buildRealWorld(scene, renderer) {
     const commercial = !!g.tags.amenity || ['retail', 'commercial', 'hotel'].includes(g.tags.building);
     arch.building(g.pts, g.tags, g.h, () => [], { inSector: near, shop: commercial || (near && rnd() < 0.38), passageH: PASSAGE_H, ghost: true });
   };
+  // Porte d'un intérieur (v0.78.0) : la plus longue arête dont l'extérieur donne sur la rue (ni bâtiment, ni eau, ni passage), au milieu de l'arête
+  const IN = CONFIG.interiors, dHash = (x, z) => { const v = Math.sin(x * 12.9898 + z * 78.233) * 43758.5453; return v - Math.floor(v); };
+  const chooseDoor = (pts, h) => {
+    if (!IN?.enabled || (h || 0) < IN.minHeight) return null;
+    const area = Math.abs(polyArea(pts));
+    if (area < IN.minArea || area > IN.maxArea || !interiors.valid(pts)) return null;
+    let best = null, bestS = -1;
+    for (let i = 0; i < pts.length; i++) {
+      const [ax, az] = pts[i], [bx, bz] = pts[(i + 1) % pts.length], dx = bx - ax, dz = bz - az, len = Math.hypot(dx, dz);
+      if (len < IN.door + 1.4) continue;
+      const ux = dx / len, uz = dz / len, mx = (ax + bx) / 2, mz = (az + bz) / 2;
+      let nx = uz, nz = -ux;
+      if (pointInPoly(mx + nx * 0.3, mz + nz * 0.3, pts)) { nx = -nx; nz = -nz; }
+      const free = (s, d) => { const x = mx + ux * s + nx * d, z = mz + uz * s + nz * d; return !insideBuilding(x, z) && onIsland(x, z); };
+      if (!free(0, 1.5) || !free(0, 4) || !free(-IN.door / 2, 1.2) || !free(IN.door / 2, 1.2)) continue;
+      if (distToPassage(passages, mx, mz) < 4) continue;
+      const t0 = 0.5 - IN.door / 2 / len, t1 = 0.5 + IN.door / 2 / len;
+      if (cutIntervals(passages, ax, az, bx, bz, axisInside).some(([c0, c1]) => c1 > t0 - 0.05 && c0 < t1 + 0.05)) continue;
+      const sc = len + dHash(mx, mz) * 2;
+      if (sc > bestS) { bestS = sc; best = { i, t0, t1 }; }
+    }
+    return best;
+  };
   for (const [k, bld] of blds.entries()) {
     for (const g of bld.ghosts) ghostBuild(g);
     const pts = bld.pts;
@@ -463,14 +489,16 @@ export async function buildRealWorld(scene, renderer) {
       continue;
     }
     const partial = hasParts.has(k);
+    const door = partial ? null : chooseDoor(pts, bld.h);
     if (partial) { for (const q of partsOf.get(k) || []) if (Math.abs(polyArea(q.pts)) > 1) polygons.push({ pts: q.pts }); }
-    else polygons.push({ pts });
+    else polygons.push({ pts, room: !!door }); // une pièce reste pleine pour la navigation jusqu'à la fin (rien n'y est placé), puis est évidée
     const edgeCuts = [];
     for (let i = 0; i < pts.length; i++) {
       const [ax, az] = pts[i], [bx, bz] = pts[(i + 1) % pts.length];
       const dx = bx - ax, dz = bz - az, len = Math.hypot(dx, dz);
       // ouvertures des passages sous immeubles : pas de mur en bas, seulement le linteau au-dessus
       const cuts = len >= 0.05 ? cutIntervals(passages, ax, az, bx, bz, axisInside) : [];
+      if (door && door.i === i) { cuts.push([door.t0, door.t1]); cuts.sort((p, q) => p[0] - q[0]); } // porte de l'intérieur
       edgeCuts.push(cuts);
       let solid = [];
       let t = 0;
@@ -488,7 +516,9 @@ export async function buildRealWorld(scene, renderer) {
     const near = Math.hypot(cx - CONFIG.startHint.x, cz - CONFIG.startHint.z) < 420; // détails (boutiques, lucarnes) près du secteur
     const commercial = !!bld.tags.amenity || ['retail', 'commercial', 'hotel'].includes(bld.tags.building);
     arch.building(pts, bld.tags, bld.h, (i) => edgeCuts[i], { inSector: near, shop: commercial || (near && rnd() < 0.38), passageH: PASSAGE_H, ignH: bld.ignH });
+    if (door) roomQueue.push({ pts, edgeCuts, door });
   }
+  for (const q of roomQueue) interiors.addRoom(q.pts, q.edgeCuts, q.door);
 
   for (const g of tailGhosts) ghostBuild(g);
 
@@ -1071,7 +1101,7 @@ export async function buildRealWorld(scene, renderer) {
 
   // Fenêtre libre à distance [minD, maxD] du point (px, pz), dans une zone ouverte ou celle du joueur
   const pickWindow = (px, pz, minD, maxD, now, allowAnyZone = false) => {
-    const pZone = zoneOf(px, pz);
+    const pZone = zoneOf(px, pz), pRoom = interiors.roomOf(px, pz);
     const c0x = Math.floor((px - maxD) / WIN_CELL), c1x = Math.floor((px + maxD) / WIN_CELL);
     const c0z = Math.floor((pz - maxD) / WIN_CELL), c1z = Math.floor((pz + maxD) / WIN_CELL);
     const ok = [];
@@ -1080,6 +1110,8 @@ export async function buildRealWorld(scene, renderer) {
       if (!arr) continue;
       for (const w of arr) {
         if (w.busyUntil > now) continue;
+        if (w.room === undefined) w.room = interiors.roomOf(w.inside.x, w.inside.z); // fenêtre d'une pièce : le zombie y apparaît avant d'enjamber
+        if (pRoom >= 0 && w.room === pRoom) continue; // jamais sous les yeux du joueur, dans la pièce où il se trouve
         if (!allowAnyZone && !zoneOpen[w.zone] && (pZone < 0 || w.zone !== pZone)) continue;
         const d = Math.hypot(w.outside.x - px, w.outside.z - pz);
         if (d >= minD && d <= maxD) ok.push(w);
@@ -2068,6 +2100,8 @@ export async function buildRealWorld(scene, renderer) {
 
   // ---------------------------------------------------------------- Finalisation navigation
   for (const c of trackTrees) c.off = true; // les arbres de la voie du tram n'existent plus (v0.38.0)
+  interiors.finish(scene, collision, lightSources); // murs intérieurs, étagères, plafonniers (après tous les placements)
+  nav.polys = polygons.filter((p) => !p.room);      // les pièces sont évidées : la grille finale les rend praticables
   applyMapFixes();
   collision.build();
   levels.build();
@@ -2075,6 +2109,34 @@ export async function buildRealWorld(scene, renderer) {
   // Les portes sont ouvertes pour construire la grille, puis leurs cases sont bloquées une par une.
   for (const d of doors) for (const s of d.segs) s.off = true;
   nav.build();
+  // Pièces dont la porte est bouchée côté rue (décor posé devant, rue étroite) : aucune case libre de la pièce n'est reliée à la rue. Le joueur
+  // pourrait s'y glisser hors d'atteinte des zombies : on les ferme par une porte pleine (visible, avec collision) et la pièce redevient pleine.
+  {
+    const { labels } = nav.components();
+    const sealed = [];
+    for (const r of interiors.rooms) {
+      if (!r.door) continue;
+      const a = r.pts[r.door.i], b = r.pts[(r.door.i + 1) % r.pts.length], len = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
+      const tm = (r.door.t0 + r.door.t1) / 2, mx = a[0] + (b[0] - a[0]) * tm, mz = a[1] + (b[1] - a[1]) * tm;
+      let nx = (b[1] - a[1]) / len, nz = -(b[0] - a[0]) / len;
+      if (pointInPoly(mx + nx * 0.3, mz + nz * 0.3, r.pts)) { nx = -nx; nz = -nz; }
+      const out = labels[nav.idx(nav.cx(mx + nx * 1.6), nav.cz(mz + nz * 1.6))];
+      let good = false;
+      for (let iz = nav.cz(r.minZ); iz <= nav.cz(r.maxZ) && !good; iz++) for (let ix = nav.cx(r.minX); ix <= nav.cx(r.maxX); ix++) {
+        const l = labels[nav.idx(ix, iz)];
+        if (out && l === out && pointInPoly(nav.worldX(ix), nav.worldZ(iz), r.inner)) { good = true; break; }
+      }
+      if (!good) sealed.push(r);
+    }
+    for (const r of sealed) {
+      const [x0, z0, x1, z1] = interiors.closeDoor(scene, r);
+      collision.addSegment(x0, z0, x1, z1);
+      const poly = polygons.find((q) => q.pts === r.src);
+      if (poly) poly.room = false;
+    }
+    interiors.sealed = sealed.length;
+    if (sealed.length) { nav.polys = polygons.filter((p) => !p.room); collision.build(); nav.build(); }
+  }
   for (const d of doors) {
     for (const s of d.segs) {
       s.off = false;
@@ -2094,6 +2156,29 @@ export async function buildRealWorld(scene, renderer) {
     }
   }
   nav.invalidate();
+
+  // Pièces : elles prennent la zone de la rue sur laquelle donne leur porte (affichage de la zone, apparitions des zombies, portes payantes)
+  let roomsReachable = 0;
+  for (const r of interiors.rooms) {
+    if (!r.door || r.sealed) continue;
+    const a = r.pts[r.door.i], b = r.pts[(r.door.i + 1) % r.pts.length], len = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
+    const tm = (r.door.t0 + r.door.t1) / 2, mx = a[0] + (b[0] - a[0]) * tm, mz = a[1] + (b[1] - a[1]) * tm;
+    let nx = (b[1] - a[1]) / len, nz = -(b[0] - a[0]) / len;
+    if (pointInPoly(mx + nx * 0.3, mz + nz * 0.3, r.pts)) { nx = -nx; nz = -nz; }
+    r.outside = [mx + nx * 1.6, mz + nz * 1.6];
+    const zi = zoneOf(r.outside[0], r.outside[1]), zi1 = zoneOf1(r.outside[0], r.outside[1]);
+    r.zone = zi;
+    const oc = nav.idx(nav.cx(r.outside[0]), nav.cz(r.outside[1]));
+    if (!nav.blocked[oc]) roomsReachable++;
+    for (let iz = Math.max(0, nav.cz(r.minZ)); iz <= Math.min(nav.nz - 1, nav.cz(r.maxZ)); iz++) {
+      for (let ix = Math.max(0, nav.cx(r.minX)); ix <= Math.min(nav.nx - 1, nav.cx(r.maxX)); ix++) {
+        if (!pointInPoly(nav.worldX(ix), nav.worldZ(iz), r.pts)) continue;
+        const i = nav.idx(ix, iz);
+        zoneLabelWide[i] = zi; zoneLabelWide1[i] = zi1;
+      }
+    }
+  }
+  interiors.reachable = roomsReachable;
 
   const openingDoors = [];
   function openDoor(id) {
@@ -2158,6 +2243,7 @@ export async function buildRealWorld(scene, renderer) {
     levels, hdf: hdfInfo, tram: tramInfo, mapFixes: { partWalls, fountains: fountainCircles.length }, // v0.35.2 : murs ajoutés aux façades des parties 3D (tests, outils)
    
     sky: skyApi, setLampScale: (k) => { lampScale = k; lightTimer = 0; },
+    interiors, roomOf: (x, z) => interiors.roomOf(x, z), // rez-de-chaussée praticables (v0.78.0)
     relief: arch.relief, // façades en relief (v0.45.0) : relief.setRange(m) selon la qualité
     ground: groundApi, // sol (v0.46.0) : champ de distance aux façades, plaques d'égout
     trees: treesApi, // arbres (v0.46.0) : trees.setMode('ball' | 'cards' | 'cards+branches') selon la qualité
@@ -2170,7 +2256,8 @@ export async function buildRealWorld(scene, renderer) {
     ceilingAt: (x, z) => {
       const c = cath ? cath.ceilAt(x, z) : null;
       if (c != null) return c;
-      return axisInside(x, z) ? PASSAGE_H : Infinity;
+      if (axisInside(x, z)) return PASSAGE_H;
+      return interiors.roomOf(x, z) >= 0 ? CONFIG.interiors.height : Infinity; // plafond des rez-de-chaussée
     },
     update(px, pz, dt) {
       sky.position.set(px, 0, pz);
@@ -2186,7 +2273,7 @@ export async function buildRealWorld(scene, renderer) {
       lightTimer -= dt;
       if (lightTimer <= 0) { lightTimer = 0.4; assignLights(px, pz); }
       reliefTimer -= dt;
-      if (reliefTimer <= 0) { reliefTimer = 0.25; arch.relief.update(px, pz); } // détail des façades coupé au-delà de la portée de la qualité
+      if (reliefTimer <= 0) { reliefTimer = 0.25; arch.relief.update(px, pz); interiors.update(px, pz); } // détail des façades coupé au-delà de la portée de la qualité
     },
     mapName: 'Grande Île, Strasbourg',
   };

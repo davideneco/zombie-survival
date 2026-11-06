@@ -3,7 +3,7 @@
 //   node tools/stuck-scan.mjs [url] [dossier-sortie]
 //     url             jeu déjà lancé (npm run dev, vite preview…) ; défaut http://localhost:5173/
 //     dossier-sortie  défaut ./stuck-scan-out (report.json, hotspots.png, liens.txt)
-//   variables : ONLY=comp,pockets,bots,rays,zfight (étapes à lancer ; défaut toutes) · SEED=1 · BOTS=200 · BOT_SECONDS=60 · RAYS=2000
+//   variables : ONLY=comp,pockets,bots,rays,walk,zfight (étapes à lancer ; défaut toutes) · WALKS=4000 · SEED=1 · BOTS=200 · BOT_SECONDS=60 · RAYS=2000
 //               PLAYWRIGHT=/chemin/vers/playwright/index.mjs (si le module n'est pas résoluble) · CHROME=/chemin/chrome (sinon celui de Playwright)
 //
 // Étapes (toutes portes ouvertes) :
@@ -21,7 +21,7 @@ import path from 'path';
 
 const URL_ = process.argv[2] || 'http://localhost:5173/';
 const OUT = path.resolve(process.argv[3] || 'stuck-scan-out');
-const ONLY = (process.env.ONLY || 'comp,pockets,bots,rays,zfight').split(',');
+const ONLY = (process.env.ONLY || 'comp,pockets,bots,rays,walk,zfight').split(',');
 const OPTS = { seed: +(process.env.SEED || 1), bots: +(process.env.BOTS || 200), botSeconds: +(process.env.BOT_SECONDS || 60), rays: +(process.env.RAYS || 2000) };
 fs.mkdirSync(OUT, { recursive: true });
 
@@ -265,6 +265,68 @@ if (ONLY.includes('rays')) {
   log('rays', report.steps.rays.tested, 'rayons : invisibles', report.steps.rays.invisibleRaw, ', traversables', report.steps.rays.passableRaw);
 }
 
+// ---------------------------------------------------------------------------------------------------------------------- étape walk
+// (v0.78.0) Murs invisibles « à pied » : depuis des cases libres, on avance pas à pas (0,15 m) avec la vraie collision du joueur (rayon 0,4).
+// Au premier blocage, des rayons à 0,3 / 0,9 / 1,6 m (et décalés de ±0,25 m) cherchent un maillage visible jusqu'à 0,8 m derrière le point de
+// contact : aucun = obstacle invisible (bas ou haut), que le test « rays » (hauteur d'œil seulement) ne voyait pas.
+if (ONLY.includes('walk')) {
+  report.steps.walk = await page.evaluate((o) => {
+    const w = game.world, nav = w.nav, col = w.collision, THREE = game.THREE;
+    for (const d of w.doors) game.openDoor(d.id);
+    nav.invalidate();
+    const { labels, sizes } = nav.components();
+    let mainL = 0; for (let i = 1; i < sizes.length; i++) if (sizes[i] > (sizes[mainL] || 0)) mainL = i;
+    const meshes = [];
+    game.scene.traverse((m) => {
+      const vis = (q) => { for (let k = q; k; k = k.parent) if (!k.visible || k === game.camera) return false; return true; };
+      if (!m.isMesh || m.userData.zombie || !m.geometry) return;
+      const mat = Array.isArray(m.material) ? m.material[0] : m.material;
+      if (!mat || (mat.transparent && mat.opacity < 0.2) || mat.blending === THREE.AdditiveBlending) return;
+      if (!vis(m) && !m.userData.lod) return; // les détails coupés par la distance (relief, intérieurs) comptent : ils sont là quand on s'approche
+      m.updateMatrixWorld(true); if (m.isInstancedMesh && !m.boundingSphere) m.computeBoundingSphere(); meshes.push(m);
+    });
+    const wasVis = new Map(); for (const m of meshes) { wasVis.set(m, m.visible); m.visible = true; } // le Raycaster ignore les maillages masqués
+    let s = (o.seed * 7919) >>> 0; const rnd = () => ((s = (Math.imul(s, 1664525) + 1013904223) >>> 0) / 4294967296);
+    const rc = new THREE.Raycaster(), q = { x: 0, y: 0, z: 0 }, out = { kind: null, push: 0, nx: 0, nz: 0 };
+    const found = []; let tested = 0, blocked = 0;
+    for (let tries = 0; tested < o.walks && tries < o.walks * 30; tries++) {
+      const ix = Math.floor(rnd() * nav.nx), iz = Math.floor(rnd() * nav.nz);
+      if (labels[nav.idx(ix, iz)] !== mainL) continue;
+      tested++;
+      const x0 = nav.worldX(ix), z0 = nav.worldZ(iz), a = rnd() * 6.283, dx = Math.cos(a), dz = Math.sin(a);
+      let hit = -1;
+      for (let d = 0.15; d < 8; d += 0.15) {
+        const tx = x0 + dx * d, tz = z0 + dz * d;
+        q.x = tx; q.z = tz; q.y = w.terrainY(tx, tz) + 0.1; out.push = 0;
+        w.collide(q, 0.4, out);
+        if (Math.hypot(q.x - tx, q.z - tz) > 0.04) { hit = d; break; }
+      }
+      if (hit < 0) continue;
+      blocked++;
+      const reach = hit + 0.4 + 0.8;
+      let seen = false;
+      for (const h of [0.3, 0.9, 1.6]) {
+        for (const off of [0, -0.25, 0.25]) {
+          rc.set(new THREE.Vector3(x0 - dz * off, h, z0 + dx * off), new THREE.Vector3(dx, 0, dz)); rc.far = reach;
+          if (rc.intersectObjects(meshes, false).length) { seen = true; break; }
+        }
+        if (seen) break;
+      }
+      if (seen) continue;
+      const hx = x0 + dx * (hit + 0.4), hz = z0 + dz * (hit + 0.4);
+      let ob = null, bd = 0.6;
+      for (const sg of col.segs) { if (sg.off) continue; const ex = sg.bx - sg.ax, ez = sg.bz - sg.az, l2 = ex * ex + ez * ez || 1; let t = ((hx - sg.ax) * ex + (hz - sg.az) * ez) / l2; t = Math.max(0, Math.min(1, t)); const d = Math.hypot(hx - sg.ax - ex * t, hz - sg.az - ez * t); if (d < bd) { bd = d; ob = { type: 'segment', h: sg.h, y0: sg.y0, kind: sg.kind, len: +Math.sqrt(l2).toFixed(2) }; } }
+      for (const c of col.circles) { if (c.off) continue; const d = Math.abs(Math.hypot(c.x - hx, c.z - hz) - c.r); if (d < bd) { bd = d; ob = { type: 'cercle', h: c.h, y0: c.y0, kind: c.kind, r: c.r }; } }
+      found.push({ x: +hx.toFixed(1), z: +hz.toFixed(1), from: [+x0.toFixed(1), +z0.toFixed(1)], a: +a.toFixed(2), ob, zone: w.zoneNames[w.zoneOf(hx, hz)] ?? null });
+    }
+    for (const [m, v] of wasVis) m.visible = v;
+    const group = []; for (const f of found) { const g = group.find((q2) => Math.hypot(q2.x - f.x, q2.z - f.z) < 2.5); if (g) g.n++; else group.push({ ...f, n: 1 }); }
+    group.sort((a2, b2) => b2.n - a2.n);
+    return { tested, blocked, invisibleRaw: found.length, invisible: group.slice(0, 150) };
+  }, { ...OPTS, walks: +(process.env.WALKS || 4000) });
+  log('walk', report.steps.walk.tested, 'marches,', report.steps.walk.blocked, 'blocages, invisibles', report.steps.walk.invisibleRaw);
+}
+
 // -------------------------------------------------------------------------------------------------------------------- étape zfight
 if (ONLY.includes('zfight')) {
   report.steps.zfight = await page.evaluate(() => {
@@ -376,6 +438,7 @@ if (report.steps.rays) {
   add('Murs invisibles (collision sans maillage)', report.steps.rays.invisible, (t) => `(${t.x} ; ${t.z}) · ${t.zone || '?'} · x${t.n} · ${link(t.from[0], t.from[1], -t.a - Math.PI / 2 + 0, 0)}`);
   add('Murs traversables (maillage sans collision)', report.steps.rays.passable, (t) => `(${t.x} ; ${t.z}) · ${t.mesh} · épaisseur ${t.thick} m · x${t.n} · ${link(t.from[0], t.from[1], -t.a - Math.PI / 2, 0)}`);
 }
+if (report.steps.walk) add('Obstacles invisibles à pied (0,3 / 0,9 / 1,6 m)', report.steps.walk.invisible, (t) => `(${t.x} ; ${t.z}) · ${t.zone || '?'} · ${t.ob ? `${t.ob.type} ${t.ob.kind || ''} h=${t.ob.h ?? '∞'}` : '?'} · x${t.n} · ${link(t.from[0], t.from[1], -t.a - Math.PI / 2 + 0, 0)}`);
 if (report.steps.zfight) add('Z-fighting (plans coplanaires de deux maillages, même sens)', report.steps.zfight.top, (t) => {
     const h = Math.hypot(t.nx, t.nz), ux = h > 0.2 ? t.nx / h : 1, uz = h > 0.2 ? t.nz / h : 0; // direction horizontale de la face (sinon : au hasard pour un sol ou un toit)
     const cx = t.x + ux * 9, cz = t.z + uz * 9, yaw = Math.atan2(-(t.x - cx), -(t.z - cz)), pitch = Math.atan2(t.y - 1.7, 9);
@@ -404,5 +467,5 @@ const png = await page.evaluate((spots) => {
 }, spots);
 fs.writeFileSync(path.join(OUT, 'hotspots.png'), Buffer.from(png.split(',')[1], 'base64'));
 log('terminé :', OUT, '· erreurs console :', errors.length);
-console.log(JSON.stringify({ comp: report.steps.comp && { components: report.steps.comp.components, pockets: report.steps.comp.pockets, touching: report.steps.comp.pocketsTouching }, pockets: report.steps.pockets?.stats, pocketTraps: report.steps.pockets?.traps.length, bots: report.steps.bots && { n: report.steps.bots.bots, flagged: report.steps.bots.flagged, spots: report.steps.bots.spots.length }, invisibleWalls: report.steps.rays?.invisible.length, passableWalls: report.steps.rays?.passable.length, zfightPairs: report.steps.zfight?.pairs, errors: errors.length }));
+console.log(JSON.stringify({ comp: report.steps.comp && { components: report.steps.comp.components, pockets: report.steps.comp.pockets, touching: report.steps.comp.pocketsTouching }, pockets: report.steps.pockets?.stats, pocketTraps: report.steps.pockets?.traps.length, bots: report.steps.bots && { n: report.steps.bots.bots, flagged: report.steps.bots.flagged, spots: report.steps.bots.spots.length }, invisibleWalls: report.steps.rays?.invisible.length, walkInvisible: report.steps.walk?.invisible.length, passableWalls: report.steps.rays?.passable.length, zfightPairs: report.steps.zfight?.pairs, errors: errors.length }));
 await browser.close();
