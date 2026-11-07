@@ -1,6 +1,6 @@
 # Zombie Survival — fiche de référence
 
-Version du jeu : **v0.78.2** (package 0.78.2). Générée automatiquement par `node tools/make-docs.mjs` à partir de `src/config.js` et du jeu.
+Version du jeu : **v0.79.0** (package 0.79.0). Générée automatiquement par `node tools/make-docs.mjs` à partir de `src/config.js` et du jeu.
 Carte annotée : [carte.png](carte.png). Armes de profil : [armes.png](armes.png). Les mêmes tableaux en tableur : dossier [csv/](csv/).
 
 Pour demander une modification, citez la ligne (ex. « Mitrailleuse RPK : chargeur 100 », « Mastodonte à 3000 pts », « porte P3 à 500 pts », « mettre la boîte mystère dans la zone Temple-Neuf »).
@@ -8,7 +8,7 @@ Pour demander une modification, citez la ligne (ex. « Mitrailleuse RPK : charge
 ## Grande Île
 
 Toute la Grande Île de Strasbourg est jouable : on commence place du Marché-Neuf et on ouvre les zones l'une après l'autre en payant les portes.
-Elle est découpée en 27 zones, chacune construite autour d'un vrai lieu : chaque rue va à la zone la plus proche à pied (jusqu'à 95 m pour les 10 zones d'origine, sans limite pour les 17 zones extérieures), et les portes se trouvent entre deux zones voisines (une porte ouvre toute la limite entre les deux zones).
+Elle est découpée en 30 zones, chacune construite autour d'un vrai lieu : chaque rue va à la zone la plus proche à pied (jusqu'à 95 m pour les 10 zones d'origine, sans limite pour les 17 zones extérieures), et les portes se trouvent entre deux zones voisines (une porte ouvre toute la limite entre les deux zones). Les 3 zones de la Gare de Strasbourg (quais, hall, place) forment une aire séparée, reliée à l'île par le tram (arrêt « Gare Centrale » ↔ Homme de Fer).
 Prix d'une porte : le plus cher des deux prix de zone (colonne « Prix de la porte ») ; zones extérieures : palier A 1500, B 2000, C 2500 pts. Le contenu de chaque zone se règle dans `src/config.js` → `sector.zones[].items`.
 À la première ouverture d'une zone extérieure, un bonus apparaît. La boîte mystère ne se déplace que dans une zone déjà ouverte. « Grand'Rue » et « Quai Schoepflin » sont des noms déduits du plan (à confirmer).
 
@@ -16,16 +16,16 @@ Prix d'une porte : le plus cher des deux prix de zone (colonne « Prix de la por
 
 | id | Arme | Catégorie | Calibre | Type | Dégâts par balle | Plombs par tir | Multiplicateur tête | Cadence (tirs/s) | DPS approx. | Chargeur | Réserve départ | Réserve max | Rechargement (s) | Dispersion | Portée (m) | Zombies traversés | Explosion rayon (m) | Explosion dégâts | Prix au mur (pts) | Prix munitions (pts) | Où l'obtenir |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| m1911 | COLT M1911 | pistolet | .45 ACP | coup par coup | 50 | 1 | 2,6 | 5,5 | 275 | 7 | 42 | 84 | 1,5 | 0,01 | 50 | 1 |  |  | 400 | 150 | mur Marché-Neuf, boîte mystère, arme de départ |
+| m1911 | COLT M1911 | pistolet | .45 ACP | coup par coup | 50 | 1 | 2,6 | 5,5 | 275 | 7 | 42 | 84 | 1,5 | 0,01 | 50 | 1 |  |  | 400 | 150 | mur Marché-Neuf, mur Quais, boîte mystère, arme de départ |
 | arex | AREX ZERO 1 | pistolet | 9 mm | coup par coup | 29 | 1 | 2,2 | 7,5 | 217,5 | 17 | 68 | 136 | 1,4 | 0,009 | 55 | 1 |  |  | 700 | 250 | mur Temple-Neuf, mur Rue du Dôme, mur Palais Rohan, mur Musée historique, boîte mystère |
 | deagle | DESERT EAGLE | pistolet | .50 AE | coup par coup | 160 | 1 | 3 | 2,4 | 384 | 7 | 35 | 56 | 1,9 | 0,011 | 70 | 2 |  |  | 1500 | 600 | mur Cathédrale, mur Opéra, mur Saint-Pierre-le-Vieux, boîte mystère |
 | magnum | COLT PYTHON .357 | pistolet | .357 Magnum | coup par coup | 143 | 1 | 3 | 3,2 | 457,6 | 6 | 48 | 72 | 2,2 | 0,006 | 80 | 2 |  |  | 2000 | 500 | mur Cathédrale, mur Saint-Pierre-le-Jeune, boîte mystère |
 | rifle | M4A1 | fusil d'assaut | 5,56 mm | automatique | 36 | 1 | 2,4 | 12,5 | 450 | 30 | 120 | 180 | 1,8 | 0,012 | 90 | 1 |  |  | 1200 | 300 | mur Place Kléber, mur Cathédrale, mur Grand Séminaire, mur Saint-Thomas, mur Préfecture, boîte mystère, arme de départ |
 | ak47 | AK-47 | fusil d'assaut | 7,62×39 mm | automatique | 54 | 1 | 2,3 | 10 | 540 | 30 | 120 | 210 | 2,4 | 0,017 | 90 | 1 |  |  | 1600 | 600 | mur Grandes Arcades, mur Palais Rohan, mur Église Réformée, boîte mystère |
-| famas | FAMAS F1 | fusil d'assaut | 5,56 mm | automatique | 40 | 1 | 2,4 | 15 | 600 | 25 | 125 | 225 | 2,2 | 0,014 | 85 | 1 |  |  | 1300 | 500 | mur Temple-Neuf, mur Rue des Orfèvres, mur Place Broglie, mur Hôtel de Neuwiller, boîte mystère |
+| famas | FAMAS F1 | fusil d'assaut | 5,56 mm | automatique | 40 | 1 | 2,4 | 15 | 600 | 25 | 125 | 225 | 2,2 | 0,014 | 85 | 1 |  |  | 1300 | 500 | mur Temple-Neuf, mur Rue des Orfèvres, mur Place Broglie, mur Hôtel de Neuwiller, mur Place de la Gare, boîte mystère |
 | scar | SCAR-H | fusil d'assaut | 7,62×51 mm | automatique | 78 | 1 | 2,5 | 10 | 780 | 20 | 100 | 180 | 2,3 | 0,018 | 100 | 2 |  |  | 2500 | 800 | mur Place Gutenberg, mur Musée historique, mur Monument Stoeber, mur Saint-Étienne, boîte mystère |
 | smg | MP40 | pistolet-mitrailleur | 9 mm | automatique | 30 | 1 | 2,2 | 8,3 | 249 | 32 | 128 | 224 | 1,5 | 0,022 | 65 | 1 |  |  | 800 | 500 | mur Marché-Neuf, mur Rue des Orfèvres, mur Musée historique, mur Place Broglie, mur Église Réformée, boîte mystère |
-| mp5 | MP5 | pistolet-mitrailleur | 9 mm | automatique | 26 | 1 | 2,2 | 13 | 338 | 30 | 150 | 270 | 1,8 | 0,017 | 65 | 1 |  |  | 1200 | 500 | mur Temple-Neuf, mur Saint-Pierre-le-Jeune, mur Grand'Rue, mur Quai Schoepflin, mur Petite France, boîte mystère |
+| mp5 | MP5 | pistolet-mitrailleur | 9 mm | automatique | 26 | 1 | 2,2 | 13 | 338 | 30 | 150 | 270 | 1,8 | 0,017 | 65 | 1 |  |  | 1200 | 500 | mur Temple-Neuf, mur Saint-Pierre-le-Jeune, mur Grand'Rue, mur Quai Schoepflin, mur Petite France, mur Hall de la Gare, boîte mystère |
 | p90 | FN P90 | pistolet-mitrailleur | 5,7×28 mm | automatique | 22 | 1 | 2 | 15 | 330 | 50 | 200 | 350 | 2,6 | 0,02 | 70 | 2 |  |  | 1800 | 700 | mur Grandes Arcades, mur Homme de Fer, mur Monument Stoeber, boîte mystère |
 | lmg | RPK | mitrailleuse | 7,62×39 mm | automatique | 51 | 1 | 2 | 10 | 510 | 75 | 300 | 450 | 3,6 | 0,028 | 90 | 1 |  |  | 2500 | 1000 | mur Place Kléber, mur Place Broglie, boîte mystère |
 | m249 | M249 SAW | mitrailleuse | 5,56 mm | automatique | 40 | 1 | 2 | 12,5 | 500 | 100 | 300 | 500 | 4,2 | 0,032 | 90 | 1 |  |  | 3000 | 1200 | mur Place Kléber, mur Saint-Étienne, boîte mystère |
@@ -34,7 +34,7 @@ Prix d'une porte : le plus cher des deux prix de zone (colonne « Prix de la por
 | sniper | L96A1 | fusil de précision | 7,62×51 mm Match | coup par coup | 340 | 1 | 3,5 | 1,1 | 374 | 5 | 30 | 45 | 2,8 | 0,0015 | 200 | 4 |  |  | 1750 | 700 | mur Rue du Dôme, mur Ancienne Douane, boîte mystère |
 | svd | DRAGUNOV SVD | fusil de précision | 7,62×54R 7N1 | coup par coup | 230 | 1 | 3 | 3 | 690 | 10 | 40 | 70 | 2,6 | 0,004 | 180 | 3 |  |  | 2000 | 800 | mur Rue du Dôme, mur Quai Schoepflin, boîte mystère |
 | barrett | BARRETT M82 | fusil de précision | .50 BMG | coup par coup | 700 | 1 | 3 | 1,2 | 840 | 10 | 30 | 50 | 3,4 | 0,002 | 220 | 6 |  |  | 5000 | 1500 | mur Intérieur de la Cathédrale, mur Petite France, boîte mystère |
-| shotgun | REMINGTON 870 | fusil à pompe | 12 ga | pompe | 30 | 8 | 1,8 | 1,3 | 312 | 6 | 30 | 48 | 2,4 | 0,046 | 35 | 1 |  |  | 750 | 350 | mur Marché-Neuf, mur Grandes Arcades, mur Place Gutenberg, mur Grand'Rue, mur Grand Séminaire, mur Ancienne Douane, mur Saint-Pierre-le-Vieux, boîte mystère |
+| shotgun | REMINGTON 870 | fusil à pompe | 12 ga | pompe | 30 | 8 | 1,8 | 1,3 | 312 | 6 | 30 | 48 | 2,4 | 0,046 | 35 | 1 |  |  | 750 | 350 | mur Marché-Neuf, mur Grandes Arcades, mur Place Gutenberg, mur Grand'Rue, mur Grand Séminaire, mur Ancienne Douane, mur Saint-Pierre-le-Vieux, mur Quais, boîte mystère |
 | saiga | SAIGA-12 | fusil à pompe | 12 ga | coup par coup | 27 | 8 | 1,8 | 3,5 | 756 | 8 | 32 | 64 | 2,6 | 0,05 | 35 | 1 |  |  | 3000 | 700 | mur Hôtel de Neuwiller, mur Saint-Thomas, mur Petite France, boîte mystère |
 | crossbow | ARBALÈTE | spéciale | carreau 20″ | coup par coup | 420 | 1 | 3 | 1 | 420 | 1 | 20 | 40 | 1,7 | 0,003 | 80 | 6 |  |  | 2000 | 700 | mur Homme de Fer, boîte mystère |
 | m79 | M79 | spéciale | 40×46 mm | launcher | 150 | 1 | 1 | 1 | 150 | 1 | 11 | 24 | 2,2 | 0,004 | 150 | 1 |  |  | 2500 | 1500 | mur Homme de Fer, boîte mystère |
@@ -149,9 +149,9 @@ Prix d'une porte : le plus cher des deux prix de zone (colonne « Prix de la por
 | juggernog | MASTODONTE | M | Santé max 250 | 2500 | 2500 | Place Kléber, Place Broglie, Petite France |
 | speedcola | SPEED COLA | S | Rechargement 2x plus rapide | 3000 | 3000 | Rue des Orfèvres, Grand'Rue, Opéra |
 | doubletap | DOUBLE TAP | D | Cadence +33 %, dégâts +25 % | 2000 | 2000 | Place Gutenberg, Palais Rohan |
-| quickrevive | RÉANIMATION RAPIDE | R | Solo : se relève seul · Co-op : réanime 2x plus vite | 1500 | 500 | Marché-Neuf, Grand Séminaire, Saint-Pierre-le-Vieux |
+| quickrevive | RÉANIMATION RAPIDE | R | Solo : se relève seul · Co-op : réanime 2x plus vite | 1500 | 500 | Marché-Neuf, Grand Séminaire, Saint-Pierre-le-Vieux, Hall de la Gare |
 | mulekick | MULE KICK | K | Porter 3 armes | 4000 | 4000 | Grandes Arcades, Saint-Thomas |
-| staminup | STAMIN-UP | E | Course plus rapide | 2000 | 2000 | Temple-Neuf, Saint-Pierre-le-Jeune, Saint-Étienne |
+| staminup | STAMIN-UP | E | Course plus rapide | 2000 | 2000 | Temple-Neuf, Saint-Pierre-le-Jeune, Saint-Étienne, Place de la Gare |
 | phdflopper | PHD FLOPPER | P | Immunisé aux explosions et aux chocs · saut en sprint : onde explosive | 2000 | 2000 | Homme de Fer, Ancienne Douane |
 | deadshot | ŒIL-DE-LYNX | L | Tirs à la tête +50 % · dispersion -35 % | 1500 | 1500 | Rue des Orfèvres |
 | electriccherry | CERISE-FOUDRE | F | Recharger libère une décharge électrique (chargeur vide : plus forte) | 2000 | 2000 | Place Gutenberg |
@@ -300,6 +300,9 @@ Prix d'une porte : le plus cher des deux prix de zone (colonne « Prix de la por
 | Saint-Étienne |  | extérieure | 14384 | 2500 | 544 ; -86 | P55, P56 | station, wall:m249, wall:scar, perk:staminup, box | 1 | M249 SAW, SCAR-H | STAMIN-UP, BOÎTE MYSTÈRE |
 | Saint-Pierre-le-Vieux |  | extérieure | 10495 | 2500 | -615 ; -55 | P1, P2, P5 | station, wall:deagle, wall:shotgun, perk:quickrevive, box | 1 | DESERT EAGLE, REMINGTON 870 | RÉANIMATION RAPIDE, BOÎTE MYSTÈRE |
 | Petite France |  | extérieure | 8275 | 2500 | -673 ; 136 | P1, P4 | station, wall:barrett, wall:saiga, wall:mp5, perk:juggernog, box | 1 | BARRETT M82, SAIGA-12, MP5 | MASTODONTE, BOÎTE MYSTÈRE |
+| Quais |  | gare (aire séparée, tram) | 3132 | 750 | -1059 ; -333 | P57 | station, wall:m1911, wall:shotgun | 1 | COLT M1911, REMINGTON 870 |  |
+| Hall de la Gare |  | gare (aire séparée, tram) | 3315 | 750 | -1011 ; -306 | P57, P58 | station, wall:mp5, perk:quickrevive, box | 1 | MP5 | RÉANIMATION RAPIDE, BOÎTE MYSTÈRE |
+| Place de la Gare |  | gare (aire séparée, tram) | 20818 | 1000 | -969 ; -289 | P58 | station, wall:famas, perk:staminup | 1 | FAMAS F1 | STAMIN-UP |
 
 ## Portes
 
@@ -361,6 +364,8 @@ Prix d'une porte : le plus cher des deux prix de zone (colonne « Prix de la por
 | P54 | 2500 | Grand Séminaire | Préfecture |
 | P55 | 2500 | Grand Séminaire | Saint-Étienne |
 | P56 | 2500 | Préfecture | Saint-Étienne |
+| P57 | 750 | Quais | Hall de la Gare |
+| P58 | 1000 | Hall de la Gare | Place de la Gare |
 
 ## Emplacements
 
@@ -513,13 +518,23 @@ Prix d'une porte : le plus cher des deux prix de zone (colonne « Prix de la por
 | 145 | Arme au mur | MP5 | Petite France | 1200 | -696 | 146 |
 | 146 | Atout | MASTODONTE | Petite France | 2500 | -670 | 127 |
 | 147 | BOÎTE MYSTÈRE (emplacement possible) | BOÎTE MYSTÈRE (emplacement possible) | Petite France | 950 | -704 | 149 |
+| 148 | Borne de munitions | Borne de munitions | Quais |  | -1020 | -351 |
+| 149 | Arme au mur | COLT M1911 | Quais | 400 | -1055 | -290 |
+| 150 | Arme au mur | REMINGTON 870 | Quais | 750 | -1012 | -364 |
+| 151 | Borne de munitions | Borne de munitions | Hall de la Gare |  | -1044 | -295 |
+| 152 | Arme au mur | MP5 | Hall de la Gare | 1200 | -1013 | -337 |
+| 153 | Atout | RÉANIMATION RAPIDE | Hall de la Gare | 1500 | -1009 | -333 |
+| 154 | BOÎTE MYSTÈRE (emplacement possible) | BOÎTE MYSTÈRE (emplacement possible) | Hall de la Gare | 950 | -1034 | -290 |
+| 155 | Borne de munitions | Borne de munitions | Place de la Gare |  | -935 | -385 |
+| 156 | Arme au mur | FAMAS F1 | Place de la Gare | 1300 | -975 | -396 |
+| 157 | Atout | STAMIN-UP | Place de la Gare | 2000 | -1066 | -232 |
 
 ## Fin de partie : L'Heure du Jugement (horloge astronomique, intérieur de la cathédrale)
 
 | Réglage | Valeur | Unité |
 |---|---|---|
 | Manche minimale | 12 |  |
-| Zones ouvertes au moins | 18 | (les 10 zones d'origine + 8 zones extérieures) : l'horloge affiche « n/18 quartiers ouverts » |
+| Zones ouvertes au moins | 18 | (les 10 zones d'origine + 8 zones extérieures ou de la gare) : l'horloge affiche « n/18 quartiers ouverts » |
 | Prix | 0 | pts |
 | Santé du Bourreau (1 joueur) | 350000 | (+70 % par joueur en plus) |
 | Zombies simultanés (vague) | 28 |  |

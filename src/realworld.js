@@ -21,6 +21,7 @@ import { planTram, buildTramNetwork } from './tramNet.js';
 import { parkingLayout, buildParkingDecor } from './parking.js';
 import { bikeStationLayout, buildBikeStationDecor } from './bikeStation.js';
 import { makePerkMachine, makeAmmoStation, makeWallBuy, addPosts, makeMysteryBox, makePackAPunch, makeAstronomicalClock } from './machines.js';
+import { loadGareData, buildGare } from './gare/index.js';
 
 // =====================================================================
 //  Monde réel : la Grande Île de Strasbourg (données OpenStreetMap)
@@ -176,7 +177,7 @@ const NO_EDGE = -2; // (détection des portes) pas de limite entre deux cases
 
 export async function buildRealWorld(scene, renderer) {
   const rnd = seeded(20240611);
-  const data = await (await fetch('/data/area.json')).json();
+  const [data, gareData] = await Promise.all([fetch('/data/area.json').then((r) => r.json()), loadGareData()]); // gare : Gare de Strasbourg (v0.79.0, src/gare/)
   const halfX = data.half, halfZ = data.halfZ || data.half;
   const Z = CONFIG.sector;
 
@@ -1468,6 +1469,7 @@ export async function buildRealWorld(scene, renderer) {
   const parkings = [];      // parkings des motos (voir parking.js) ; vide si repli
   let bikeCheck = null;     // (outil de test) vérification d'une station de vélos
   const bikeStations = [];  // stations de vélos (voir bikeStation.js) : { index, zone, name, x, z, yaw, size, group }
+  let addMachineRef = null;  // (gare) addMachine is block-scoped : the station places its machines at the end of the build
   {
     const placed = [];
     // Un atout trop près d'une porte gêne : son invite [E] (rayon 2,6 m) prend le pas sur celle de la porte (rayon 3,4 m),
@@ -1546,6 +1548,7 @@ export async function buildRealWorld(scene, renderer) {
       machines.push(entry);
       lightSources.push({ x: x + Math.sin(g.rotation.y) * 1.2, y: h + 0.6, z: z + Math.cos(g.rotation.y) * 1.2, color: new THREE.Color(color).getHex(), intensity: 7, dist: 8, box: type === 'box' ? entry : null });
     };
+    addMachineRef = addMachine;
     // zones `outer` : tout objet à plus de 4 m d'une porte si possible (6,5 m pour un atout, comme avant : voir PERK_DOOR_GAPS)
     const OUTER_DOOR_GAPS = [8, 6.5, 4, 0];
     Z.zones.forEach((zone, zi) => {
@@ -2098,6 +2101,24 @@ export async function buildRealWorld(scene, renderer) {
   }
   };
 
+  // ---------------------------------------------------------------- Gare de Strasbourg (v0.79.0, src/gare/) : built last, with its own draws, so
+  // nothing of the island moves ; its zones are the `pocket: 'gare'` zones at the end of CONFIG.sector.zones, its doors the last doors
+  let gare = null;
+  if (gareData) {
+    const sceneBefore = new Set(scene.children);
+    gare = buildGare({
+      data: gareData, scene, collision, levels, lightSources, props, zoneNames: ZONE_NAMES, createArchitecture, createTrees, renderer, plasterImg, plaster2Img, roofP,
+      pbr: { sand: sandP, cobble, plaster, metal: metalP }, tiled, barkMat: tiled(barkP, 1, 2, { color: 0x8a8076 }),
+    });
+    if (gare) {
+      gare.makeDoors({ doorList: doors, zonePrice: (zi) => Z.zones[zi].doorPrice ?? Z.basePrice });
+      collision.build(); // the wall weapons look for a wall with rays
+      for (const [zi, c] of Object.entries(gare.zoneCenters)) { seeds[zi] = [c.x, c.z]; zoneCenters[zi] = { name: c.name, x: c.x, z: c.z }; zoneArea[zi] = c.area; }
+      gare.placeItems({ addStation, addWallBuy, addMachine: addMachineRef, stations, wallWeapons, wallColors: WALL_COLORS });
+      for (const o of scene.children) if (!sceneBefore.has(o) && o !== gare.root) { scene.remove(o); gare.root.add(o); }
+    }
+  }
+
   // ---------------------------------------------------------------- Finalisation navigation
   for (const c of trackTrees) c.off = true; // les arbres de la voie du tram n'existent plus (v0.38.0)
   interiors.finish(scene, collision, lightSources); // murs intérieurs, étagères, plafonniers (après tous les placements)
@@ -2105,7 +2126,9 @@ export async function buildRealWorld(scene, renderer) {
   applyMapFixes();
   collision.build();
   levels.build();
+  gare?.beforeNavs();
   levels.buildNavs(NavGrid, collision);
+  gare?.finishNav();
   // Les portes sont ouvertes pour construire la grille, puis leurs cases sont bloquées une par une.
   for (const d of doors) for (const s of d.segs) s.off = true;
   nav.build();
@@ -2204,9 +2227,10 @@ export async function buildRealWorld(scene, renderer) {
     d.name = ZONE_NAMES[d.opens];
     for (const s of d.segs) s.off = true;
     if (d.leaves) { d.opening = 0; openingDoors.push(d); for (const m of d.meshes) m.traverse((o) => { if (o.isMesh && o.geometry.type === 'PlaneGeometry') o.visible = false; }); }
-    else for (const m of d.meshes) { scene.remove(m); }
-    for (const i of d.cells) nav.blocked[i] = 0;
-    nav.invalidate();
+    else for (const m of d.meshes) { m.parent?.remove(m); }
+    const dn = d.nav || nav; // station doors : cells of the station's own grid
+    for (const i of d.cells) dn.blocked[i] = 0;
+    dn.invalidate();
     zoneOpen[d.a] = zoneOpen[d.b] = true;
     lightTimer = 0;
     return true;
@@ -2224,7 +2248,7 @@ export async function buildRealWorld(scene, renderer) {
   let lightTimer = 0, lampScale = 1; // lampScale : l'Aube éteint peu à peu les lampadaires (summit.js)
   const assignLights = (px, pz) => {
     const sorted = lightSources
-      .filter((s) => !(s.door && s.door.open) && !(s.box && !s.box.active))
+      .filter((s) => !(s.door && s.door.open) && !(s.box && !s.box.active) && !s.off)
       .map((s) => ({ s, d: (s.x - px) ** 2 + (s.z - pz) ** 2 }))
       .sort((a, b) => a.d - b.d)
       .slice(0, LIGHTS);
@@ -2246,12 +2270,35 @@ export async function buildRealWorld(scene, renderer) {
 
   const stationPos = stations[0];
   patchObject(scene, (o) => o.userData.noTerrain); // relief : tout le décor déjà construit suit le terrain (les corps dynamiques gardent une hauteur absolue)
+  // ---- areas (v0.79.0) : the island and the station. Only the local player's area is drawn (the other one is hidden : 130 m away, behind fog).
+  const islandRoots = gare ? scene.children.filter((o) => o !== gare.root && o !== sky && !o.isLight) : [];
+  let localArea = 'island';
+  const areaOf = (x, z) => (gare && gare.inArea(x, z) ? 'gare' : 'island');
+  if (gare) gare.arch.relief.setRange(0); // the station's surrounding buildings are background : painted windows only (draw calls)
+  if (gare) { gare.root.visible = false; if (treesApi) { const sm = treesApi.setMode.bind(treesApi); treesApi.setMode = (m) => { sm(m); gare.trees?.setMode(m); }; } }
+  const islandMap = { image: mapImage, view: { halfX, halfZ, scale: MAP_SCALE }, crop: { x0: Math.max(-halfX, secMinX - 40), x1: Math.min(halfX, secMaxX + 40), z0: Math.max(-halfZ, secMinZ - 40), z1: Math.min(halfZ, secMaxZ + 40) }, title: 'GRANDE ÎLE — STRASBOURG' };
+  const curMap = () => (localArea === 'gare' && gare ? gare.map : islandMap);
+  const zoneOfAll = (x, z) => (gare && gare.inArea(x, z) ? gare.zoneOf(x, z) : zoneOf(x, z));
   return {
-    half: Math.max(halfX, halfZ), blockers, spawnPoints: [], windowSpawns, pickWindow, pickGround,
-    stationPos, stations, wallWeapons, vehicleSpawns, parkings, bikeStations, bikeCheck, doors, openDoor, zoneOf, startPos, nav, collision, machines, boxes, setActiveBox,
-    zoneNames: ZONE_NAMES, zoneCenters, startZone, sealedPoints, mapImage, mapView: { halfX, halfZ, scale: MAP_SCALE },
+    half: Math.max(halfX, halfZ), blockers, spawnPoints: [], windowSpawns,
+    pickWindow: (px, pz, ...a) => (gare && gare.inArea(px, pz) ? null : pickWindow(px, pz, ...a)),
+    pickGround: (px, pz, minD, maxD, allowAnyZone = false) => (gare && gare.inArea(px, pz) ? gare.pickGround(px, pz, minD, maxD, (zi) => allowAnyZone || !!zoneOpen[zi]) : pickGround(px, pz, minD, maxD, allowAnyZone)),
+    stationPos, stations, wallWeapons, vehicleSpawns, parkings, bikeStations, bikeCheck, doors, openDoor, zoneOf: zoneOfAll, startPos, nav, collision, machines, boxes, setActiveBox,
+    zoneNames: ZONE_NAMES, zoneCenters, startZone, sealedPoints,
+    get mapImage() { return curMap().image; }, get mapView() { return curMap().view; }, get mapCrop() { return curMap().crop; }, get mapTitle() { return curMap().title; },
+    gare, areaOf, lightSources,
+    navAt: (x, z) => (gare && gare.inArea(x, z) && gare.nav ? gare.nav : nav), // grid of the area of a point
+    regionAt: (x, z) => (gare && gare.inRegion(x, z) ? gare.region : 0),      // floor region of a spawn point (station zombies use its grid)
+    get localArea() { return localArea; },
+    // shows only the local player's area (local only : each client draws its own)
+    setLocalArea(area) {
+      if (!gare || area === localArea) return;
+      localArea = area;
+      for (const o of islandRoots) o.visible = area !== 'gare';
+      gare.root.visible = area === 'gare';
+      lightTimer = 0;
+    },
     isZoneOpen: (i) => !!zoneOpen[i], setZoneOpen: (i, open = true) => { zoneOpen[i] = open; }, zoneArea, zoneOf1, // zoneOf1 : zone d'après le découpage d'origine (outils de test)
-    mapCrop: { x0: Math.max(-halfX, secMinX - 40), x1: Math.min(halfX, secMaxX + 40), z0: Math.max(-halfZ, secMinZ - 40), z1: Math.min(halfZ, secMaxZ + 40) }, mapTitle: 'GRANDE ÎLE — STRASBOURG',
     cathedral: cath ? { seed: cath.seed, clock: cath.clock, insideInner: cath.insideInner, inner: cath.inner, P: cath.P, S: cath.S, T: cath.T, ceilAt: cath.ceilAt, info: cathInfo } : null,
     levels, hdf: hdfInfo, tram: tramInfo, mapFixes: { partWalls, fountains: fountainCircles.length }, // v0.35.2 : murs ajoutés aux façades des parties 3D (tests, outils)
    

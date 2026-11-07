@@ -14,6 +14,23 @@ export class Collision {
     this.dyn = new Map(); // obstacles DYNAMIQUES (v0.39.0) : clé -> { boxes } ; boîtes orientées qui bougent (rames du tram), mises à jour par leur propriétaire
     this.grid = new Map();
     this.stamp = 0;
+    this.bounds = []; // extra playable rectangles { x0, x1, z0, z1 } beyond ±halfX / ±halfZ (v0.79.0 : the station area)
+  }
+
+  // Another playable rectangle (union with the main one) : positions are clamped to the rectangle they are in, or the nearest one
+  addBounds(b) { this.bounds.push({ ...b }); }
+  _clamp(x, z, radius, out) {
+    const limX = this.halfX - radius, limZ = this.halfZ - radius;
+    let qx = Math.max(-limX, Math.min(limX, x)), qz = Math.max(-limZ, Math.min(limZ, z));
+    if (this.bounds.length && (qx !== x || qz !== z)) {
+      let best = (qx - x) ** 2 + (qz - z) ** 2;
+      for (const b of this.bounds) {
+        const bx = Math.max(b.x0 + radius, Math.min(b.x1 - radius, x)), bz = Math.max(b.z0 + radius, Math.min(b.z1 - radius, z)), d = (bx - x) ** 2 + (bz - z) ** 2;
+        if (d < best) { best = d; qx = bx; qz = bz; }
+      }
+    }
+    out[0] = qx; out[1] = qz;
+    return out;
   }
 
   // h : hauteur du dessus de l'obstacle (les balles passent au-dessus) ; y0 : hauteur du dessous (obstacles d'étage :
@@ -215,8 +232,7 @@ export class Collision {
         }
       }
     }
-    const limX = this.halfX - radius, limZ = this.halfZ - radius;
-    const qx = Math.max(-limX, Math.min(limX, pos.x)), qz = Math.max(-limZ, Math.min(limZ, pos.z));
+    const q = this._clamp(pos.x, pos.z, radius, this._cq || (this._cq = [0, 0])), qx = q[0], qz = q[1];
     if (out) {
       const edge = Math.hypot(qx - pos.x, qz - pos.z);
       if (edge > bestPush) { bestPush = edge; bestKind = 'wall'; bnx = (qx - pos.x) / edge; bnz = (qz - pos.z) / edge; }

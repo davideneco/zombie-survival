@@ -28,6 +28,7 @@ import { makeDisplay } from './weaponDisplay.js';
 import { installUi } from './ui.js';
 import { installModMenu } from './modMenu.js';
 import { installUnstick } from './unstick.js';
+import { installTransfer } from './transfer.js';
 import { installKeybinds } from './keybinds.js';
 import { installKeysMenu } from './keysMenu.js';
 import { installChat } from './chat.js';
@@ -642,6 +643,9 @@ const game = {
     // 4c) Sous-station du tram (Homme de Fer) : 2000 pts, une fois pour l'équipe
     if (this.nearSubstation?.()) { this.useSubstation(); return; }
 
+    // 4d) Borne du tram de transfert (Gare Centrale <-> Homme de Fer)
+    if (this.nearTransfer?.()) { this.useTransfer(); return; }
+
     // 5) Moto ou rame : monter (avant la porte : les motos sont posées loin des portes)
     const nv = this.nearVehicle();
     if (nv) { if (nv.foot) this.boardTramOnFoot(nv); else this.tryMount(nv.v, nv.seat); return; }
@@ -1123,6 +1127,7 @@ const game = {
     const hp = Math.round((knight ? this.zombieHealth * IK.healthMult : pest ? this.zombieHealth * PE.healthMult : this.zombieHealth) * nm);
     const kind = knight ? 'armored' : pest ? 'bloat' : null;
     const z = new Zombie(scene, spawn, hp, speed, onEvent, null, { crawler: crawl, kind });
+    z.region = world.regionAt?.(sx0, sz0) || 0; // station zombies walk on the station's own grid (v0.79.0)
     if (knight) z.ironKnight = true;
     if (pest) z.pestilent = true;
     this.zombies.push(z);
@@ -1143,6 +1148,7 @@ const game = {
         spd: speed, // avant les réductions de vitesse de la variante et du rampant : le client les réapplique dans makeKind / makeCrawler
         crawl: crawl ? 1 : 0,
         kind,
+        ...(z.region ? { region: z.region } : null),
       });
     }
   },
@@ -1223,9 +1229,11 @@ const game = {
       this.applySpawnPoint(this.activeSpawn, this.mySlot || 1);
     }
     this.resetVehicles?.();
+    this.resetTransfer?.();
   },
 
   pickRandomSpawn() {
+    if (this.startArea === 'gare' && world.gare) { this.activeSpawn = world.gare.start; return this.activeSpawn; } // départ « Gare Centrale » (menu)
     if (!CONFIG.spawnPoints?.length) return null;
     const sp = CONFIG.spawnPoints[Math.floor(Math.random() * CONFIG.spawnPoints.length)];
     this.activeSpawn = sp;
@@ -1243,7 +1251,7 @@ const game = {
     let pz = sp.z + rz * side;
     // garde-fou : un point de départ pris dans un mur ou un bâtiment (case bloquée de la grille) est ramené sur la case libre la plus proche,
     // à défaut au départ de la carte, pour ne jamais apparaître enfermé
-    const nav = world.nav;
+    const nav = world.navAt ? world.navAt(px, pz) : world.nav; // the station has its own grid
     if (nav && nav.isBlockedAt?.(px, pz)) {
       const f = nav.nearestFree(px, pz, 40); // [ix, iz] (rayon en cases)
       if (f) { px = nav.worldX(f[0]); pz = nav.worldZ(f[1]); } else { px = world.startPos.x; pz = world.startPos.z; }
@@ -1274,7 +1282,8 @@ const game = {
       }
 
       if (world.boxes?.length) {
-        const bIdx = world.boxes.findIndex((b) => b.zone === zi);
+        let bIdx = world.boxes.findIndex((b) => b.zone === zi);
+        if (bIdx < 0 && sp.area) bIdx = world.boxes.findIndex((b) => CONFIG.sector.zones[b.zone]?.pocket === sp.area); // station start : the station's box
         if (bIdx >= 0) world.setActiveBox?.(bIdx);
       }
     }
@@ -1316,7 +1325,9 @@ const game = {
     // Le joueur local n'est contrôlable que si le pointer lock est actif
     this.player.active = this.playing;
     this.updateVehicles(dt);
+    this.updateTransfer?.(dt); // tram transfer (v0.79.0) : decor car, ride, fade, teleport
     p.update(dt, this.time);
+    world.setLocalArea?.(world.areaOf(p.pos.x, p.pos.z)); // only the local player's area is drawn (island or station)
     this.summitFx?.cameraStep(dt); // vue orbitale de l'Aube : prend la caméra après le joueur
     this.summitFx?.step(dt);
     this.perkFx?.update(dt);
@@ -1594,6 +1605,8 @@ const game = {
       promptText = this.pumpPrompt(this.nearPump());
     } else if (this.nearSubstation?.()) {
       promptText = this.substationPrompt();
+    } else if (this.nearTransfer?.()) {
+      promptText = this.transferPrompt();
     } else if (this.nearVehicle()) {
       promptText = this.vehiclePrompt(this.nearVehicle());
     } else if (this.nearDoor()) {
@@ -1627,6 +1640,16 @@ RemotePlayer.rideOf = (id) => game.rideById(id); // coéquipiers debout dans une
 installLauncher(game, { world, scene, fx });
 installModMenu(game, { world, hud, sfx });
 installUnstick(game, { world, hud, sfx });
+installTransfer(game, { world, hud, sfx, scene }); // tram Gare Centrale <-> Homme de Fer (v0.79.0)
+{ // menu : « Départ » (Grande Île au hasard / Gare Centrale), remembered locally
+  const sel = document.getElementById('startArea');
+  if (sel) {
+    sel.value = localStorage.getItem('zombie_start') === 'gare' && world.gare ? 'gare' : 'island';
+    sel.disabled = !world.gare;
+    game.startArea = sel.value;
+    sel.addEventListener('change', () => { game.startArea = sel.value; game.activeSpawn = null; try { localStorage.setItem('zombie_start', sel.value); } catch { /* private mode */ } });
+  }
+}
 game.initVehicles();
 game.initTrams();
 game.player.setCharacter(charOf(game.charPref));
@@ -1702,6 +1725,7 @@ function refreshLobby() {
 
 function setupNetworkHandlers(net) {
   game.bindVehicleNet(net);
+  game.onTransferNet?.(net); // tram transfer : xf_req, xf_call, xf_go, xf_left
   // Déconnexion
   net.on('disconnect', () => {
     hud.announce('DÉCONNECTÉ', 'Perte de connexion au serveur', 4000);
@@ -1851,7 +1875,7 @@ function setupNetworkHandlers(net) {
     if (m.run) z.runner = true;
     if (m.fin) { z.skipSpawn(); z.pos.set(m.x, m.y || 0, m.z); if (m.boss && !m.tanner && !m.angel) z.group.visible = false; }
     z.net = { x: m.x, z: m.z, y: m.y || 0, yaw: 0, atk: false, bs: m.angel ? 25 : m.boss && !m.tanner ? 9 : 0 };
-    if (m.angel) z.region = m.region || 0;
+    if (m.angel || m.region) z.region = m.region || 0;
     game.zombies.push(z);
   });
 
@@ -1859,6 +1883,7 @@ function setupNetworkHandlers(net) {
     const z = game.zombies.find((zb) => zb.id === m.id);
     if (z && !z.dead) {
       z.startSpawn({ type: 'ground', pos: new THREE.Vector3(m.x, 0, m.z) });
+      if (m.region != null) z.region = m.region; // moved to another area (tram transfer)
       if (z.net) { z.net.x = m.x; z.net.z = m.z; z.net.y = 0; }
     }
   });
@@ -2485,6 +2510,7 @@ if (q.has('host') || q.has('join')) {
 }
 if (q.has('debug')) {
   const pl = game.player;
+  if (q.has('gare') && world.gare) { game.startArea = 'gare'; game.pickRandomSpawn(); game.applySpawnPoint(game.activeSpawn, 0); } // ?debug&gare : start at the station
   if (q.has('x')) pl.pos.x = parseFloat(q.get('x'));
   if (q.has('z')) pl.pos.z = parseFloat(q.get('z'));
   if (q.has('yaw')) pl.yaw = parseFloat(q.get('yaw'));

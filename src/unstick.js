@@ -15,7 +15,7 @@ export function installUnstick(game, { world, hud, sfx }) {
   };
   game.unstick = st;
 
-  const nav = () => world.nav;
+  const nav = () => (world.navAt ? world.navAt(game.player.pos.x, game.player.pos.z) : world.nav); // the station has its own grid (v0.79.0)
 
   // Étiquette de la case de (x, z) : composante de la case libre la plus proche (à moins de 1 m), 0 = aucune
   st.labelAt = (x, z) => {
@@ -34,10 +34,10 @@ export function installUnstick(game, { world, hud, sfx }) {
     return best;
   };
   // Composante principale : celle de la case de départ
-  st.main = () => {
-    const n = nav(); if (!n) return 0;
+  st.main = (n = nav()) => {
+    if (!n) return 0;
     const { labels, sizes } = n.components();
-    const s = world.startPos, l = labels[n.idx(n.cx(s.x), n.cz(s.z))];
+    const s = world.gare && n === world.gare.nav ? world.gare.start : world.startPos, l = labels[n.idx(n.cx(s.x), n.cz(s.z))];
     if (l) return l;
     let best = 1; for (let i = 2; i < sizes.length; i++) if (sizes[i] > sizes[best]) best = i; // départ bloqué (ne devrait pas arriver) : la plus grande
     return best;
@@ -46,7 +46,7 @@ export function installUnstick(game, { world, hud, sfx }) {
   // Case d'arrivée : libre, de la composante principale, zone ouverte, sans poussée de collision, la plus proche à moins de maxDist m
   st.findSpot = (x, z) => {
     const n = nav(); if (!n) return null;
-    const { labels } = n.components(), main = st.main();
+    const { labels } = n.components(), main = st.main(n);
     const ix0 = n.cx(x), iz0 = n.cz(z), maxR = Math.ceil(U.maxDist / n.cell);
     const q = { x: 0, y: 0, z: 0 };
     for (let r = 0; r <= maxR; r++) {
@@ -77,7 +77,7 @@ export function installUnstick(game, { world, hud, sfx }) {
 
   st.trigger = () => {
     const p = game.player;
-    if (st.cool > 0 || p.vehicle || p.downed || p.dead || p.region) return false;
+    if (st.cool > 0 || p.vehicle || p.downed || p.dead || (p.region && p.region !== world.gare?.region)) return false;
     if (p.onTram) { // coincé dans une rame : on est reposé dans l'allée, au plus près (repère local de la rame, jamais hors de la caisse)
       const O = p.onTram, from = { u: +O.u.toFixed(2), w: +O.w.toFixed(2) };
       game.placeInTram(O.v, O.u, 0);

@@ -2,11 +2,15 @@
 // local (mètres) utilisable par le jeu.
 //
 // Usage :  node tools/fetch-osm.mjs <lat> <lon> [demi-largeur E-O en m] [demi-hauteur N-S en m]
-// Exemple : node tools/fetch-osm.mjs 48.5825207 7.7485590 110
-//           node tools/fetch-osm.mjs 48.5822 7.7485 820 560   (Grande Île de Strasbourg)
+// Exemple : node tools/fetch-osm.mjs 48.5822 7.7485 820 560   (Grande Île de Strasbourg)
+// --origin lat,lon : origine du repère local distincte du centre de la zone téléchargée (v0.79.0 : données de la gare dans le repère de area.json)
+//           node tools/fetch-osm.mjs 48.5851 7.7345 180 180 public/data/gare-osm.json --origin 48.5822,7.7485
 import fs from 'node:fs';
 
-const [lat0, lon0, halfArg, halfZArg, outArg] = process.argv.slice(2);
+const argv = process.argv.slice(2);
+const oi = argv.indexOf('--origin');
+const ORIGIN = oi >= 0 ? argv.splice(oi, 2)[1].split(',').map(parseFloat) : null;
+const [lat0, lon0, halfArg, halfZArg, outArg] = argv;
 if (!lat0 || !lon0) {
   console.error('Usage: node tools/fetch-osm.mjs <lat> <lon> [demi-taille en m] [demi-hauteur en m] [chemin de sortie]');
   process.exit(1);
@@ -16,6 +20,8 @@ const OUT_PATH = outArg || 'public/data/area.json';
 
 const mPerDegLat = 111320;
 const mPerDegLon = 111320 * Math.cos((LAT * Math.PI) / 180);
+const OLAT = ORIGIN ? ORIGIN[0] : LAT, OLON = ORIGIN ? ORIGIN[1] : LON; // origine du repère local
+const mPerDegLonO = 111320 * Math.cos((OLAT * Math.PI) / 180);
 const dLat = HALFZ / mPerDegLat, dLon = HALF / mPerDegLon;
 const bbox = `${LAT - dLat},${LON - dLon},${LAT + dLat},${LON + dLon}`;
 
@@ -73,15 +79,15 @@ async function fetchOverpass() {
 
 // lat/lon -> mètres locaux. x = est, z = sud (convention Three.js : -z = nord)
 const toLocal = (p) => [
-  +((p.lon - LON) * mPerDegLon).toFixed(2),
-  +(-(p.lat - LAT) * mPerDegLat).toFixed(2),
+  +((p.lon - OLON) * mPerDegLonO).toFixed(2),
+  +(-(p.lat - OLAT) * mPerDegLat).toFixed(2),
 ];
 const ring = (geom) => geom.map(toLocal);
 
 const raw = await fetchOverpass();
 fs.mkdirSync('data', { recursive: true });
 
-const out = { center: { lat: LAT, lon: LON }, half: HALF, halfZ: HALFZ, buildings: [], parts: [], passages: [], roads: [], rails: [], platforms: [], water: [], trees: [], lamps: [], furniture: [], extraFurniture: [], parks: [], barriers: [] };
+const out = { center: { lat: OLAT, lon: OLON }, bboxCenter: { lat: LAT, lon: LON }, half: HALF, halfZ: HALFZ, buildings: [], parts: [], passages: [], roads: [], rails: [], platforms: [], water: [], trees: [], lamps: [], furniture: [], extraFurniture: [], parks: [], barriers: [] };
 
 // étiquettes OSM utiles au rendu (style de façade, toit, couleurs, monuments)
 const KEEP = ['building', 'building:part', 'building:levels', 'building:min_level', 'roof:shape', 'roof:levels', 'roof:height', 'roof:direction',
@@ -114,10 +120,12 @@ for (const el of raw.elements) {
     if (t.tunnel === 'building_passage' || (t.highway && t.covered === 'yes')) out.passages.push({ pts, width: parseFloat(t.width) || null, name: t.name || null });
     else if (t['building:part']) out.parts.push({ pts, tags: tagsOf(t) });
     else if (t.building) out.buildings.push({ pts, h: heightOf(t), name: t.name || null, tags: tagsOf(t) });
+    // voies ferrées avant les routes (un quai est souvent railway=platform + highway=platform) ; étiquettes de voie gardées (v0.79.0)
+    else if (t.railway === 'rail') out.rails.push({ pts, ref: t['railway:track_ref'] || t.ref || null, service: t.service || null, electrified: t.electrified || null, maxspeed: parseFloat(t.maxspeed) || null });
+    else if (t.railway === 'platform') out.platforms.push({ pts, ref: t.ref || null });
     else if (t.highway) out.roads.push({ pts, type: t.highway, width: parseFloat(t.width) || null, bridge: !!t.bridge, area: t.area === 'yes' });
     else if (t.waterway || t.natural === 'water') out.water.push({ pts, line: !!t.waterway, width: parseFloat(t.width) || null });
-    else if (t.railway === 'rail') out.rails.push({ pts });
-    else if (t.railway === 'platform' || t.public_transport === 'platform') out.platforms.push({ pts, ref: t.ref || null });
+    else if (t.public_transport === 'platform') out.platforms.push({ pts, ref: t.ref || null });
     else if (t.barrier) out.barriers.push({ pts, type: t.barrier });
     else if (t.leisure || t.landuse) out.parks.push({ pts, kind: t.leisure || t.landuse });
   } else if (el.type === 'relation' && el.members) {

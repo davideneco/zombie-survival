@@ -2,6 +2,15 @@
 
 Chaque changement est poussé sur `main` (déploiement Render) avec un nouveau numéro de version et sa description ici.
 
+## v0.79.0 (2026-11-07)
+- Gare de Strasbourg : nouvelle zone jouable séparée, placée à ses vraies coordonnées et construite d'après les vrais contours (bâtiment de 1883, verrière de 2007 sur sa vraie courbe, halle à deux nefs, hall, quais posés sur les voies SNCF réelles, rame à l'arrêt, passerelles, place de la Gare avec l'arrêt de tram « Gare Centrale »).
+- 3 zones à ouvrir : Quais, Hall de la Gare (porte 750 pts), Place de la Gare (1 000 pts), avec leur propre grille de navigation pour les zombies, armes au mur et points d'apparition.
+- Tram de transfert : bornes à Gare Centrale et à Homme de Fer (quais B, C, F). [E] appelle le tram (départ dans 8 s), les joueurs à bord partent ensemble : trajet animé de 7 s, fondu au noir, arrivée à l'autre arrêt. En multijoueur, c'est l'hôte qui décide qui monte.
+- Menu : nouvelle option « Départ : Gare Centrale » ; `?debug&gare` démarre à la gare.
+- Données : outil `tools/fetch-rail.mjs` (voies SNCF Réseau, contours OSM, altitude IGN), fichiers `public/data/gare.json` et `rail.json`.
+- Vérifié : build ; partie lancée à la gare sans erreur ; captures regardées (quais, place de la Gare, verrière, intérieur du tram) ; aller gare → Homme de Fer en solo (arrivée sur l'île, zone Homme de Fer, sans erreur). Selon le développeur : aller-retour à deux joueurs testé.
+- Limites connues : le serveur Overpass (OSM) n'était pas joignable, les contours OSM viennent d'une extraction déjà présente dans le dépôt ; deux vues de la gare dépassent le budget d'appels de dessin (342 à 392 au lieu de 300) ; un joueur qui rejoint en cours de partie apparaît au départ choisi ; les zombies de la gare n'enjambent pas les fenêtres. Non vérifié : performances sur une vraie carte graphique, partie complète.
+
 ## v0.78.3 (2026-11-07)
 - Conception de l'intro en train et de la gare de Strasbourg : spécification complète dans `docs/TRAIN_INTRO_SPEC.md` (train qui suit les vraies voies SNCF, gare modélisée fidèlement, liaison gare–ville par le tram avec animation, combat en mouvement, plan en 8 étapes).
 - Sources de données identifiées et testées : voies SNCF Réseau (data.gouv.fr / ressources.data.sncf.com), altitude réelle IGN RGE ALTI, maquette 3D et LiDAR de l'Eurométropole de Strasbourg.

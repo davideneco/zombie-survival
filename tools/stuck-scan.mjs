@@ -5,6 +5,7 @@
 //     dossier-sortie  défaut ./stuck-scan-out (report.json, hotspots.png, liens.txt)
 //   variables : ONLY=comp,pockets,bots,rays,walk,zfight (étapes à lancer ; défaut toutes) · WALKS=4000 · SEED=1 · BOTS=200 · BOT_SECONDS=60 · RAYS=2000
 //               PLAYWRIGHT=/chemin/vers/playwright/index.mjs (si le module n'est pas résoluble) · CHROME=/chemin/chrome (sinon celui de Playwright)
+//               AREA=gare : étapes comp et pockets sur la grille de la Gare de Strasbourg (v0.79.0) au lieu de celle de l'île
 //
 // Étapes (toutes portes ouvertes) :
 //   comp     composantes connexes des cases libres de world.nav (NavGrid.components) : la principale contient le départ.
@@ -22,7 +23,8 @@ import path from 'path';
 const URL_ = process.argv[2] || 'http://localhost:5173/';
 const OUT = path.resolve(process.argv[3] || 'stuck-scan-out');
 const ONLY = (process.env.ONLY || 'comp,pockets,bots,rays,walk,zfight').split(',');
-const OPTS = { seed: +(process.env.SEED || 1), bots: +(process.env.BOTS || 200), botSeconds: +(process.env.BOT_SECONDS || 60), rays: +(process.env.RAYS || 2000) };
+const AREA = process.env.AREA === 'gare' ? 'gare' : 'island';
+const OPTS = { area: AREA, seed: +(process.env.SEED || 1), bots: +(process.env.BOTS || 200), botSeconds: +(process.env.BOT_SECONDS || 60), rays: +(process.env.RAYS || 2000) };
 fs.mkdirSync(OUT, { recursive: true });
 
 async function loadPlaywright() {
@@ -52,10 +54,11 @@ const log = (...a) => console.log(`[${((Date.now() - t0) / 1000).toFixed(0).padS
 
 // ---------------------------------------------------------------------------------------------------------------- étape comp
 if (ONLY.includes('comp') || ONLY.includes('pockets')) {
-  report.steps.comp = await page.evaluate(() => {
-    const w = game.world, nav = w.nav;
+  report.steps.comp = await page.evaluate((AREA) => {
+    const w = game.world, nav = AREA === 'gare' ? w.gare.nav : w.nav;
     for (const d of w.doors) game.openDoor(d.id); // toutes les portes ouvertes
-    const comp = nav.components(), main = game.unstick.main(), { labels, sizes } = comp, { nx, nz } = nav;
+    const comp = nav.components(), main = game.unstick.main(nav), { labels, sizes } = comp, { nx, nz } = nav;
+    const inArea = (x, z) => (w.areaOf ? w.areaOf(x, z) : 'island') === AREA;
     const acc = new Map();
     for (let iz = 0; iz < nz; iz++) for (let ix = 0; ix < nx; ix++) {
       const l = labels[iz * nx + ix];
@@ -90,8 +93,8 @@ if (ONLY.includes('comp') || ONLY.includes('pockets')) {
       for (let dz = -R; dz <= R; dz++) for (let dx = -R; dx <= R; dx++) { const jx = ix + dx, jz = iz + dz; if (nav.inside(jx, jz) && labels[nav.idx(jx, jz)] === main && Math.hypot(dx, dz) * nav.cell <= r) return true; }
       return false;
     };
-    const check = (kind, name, x, z) => { if (x == null || z == null) return; if (!reach(x, z)) unreachable.push({ kind, name, x: +x.toFixed(1), z: +z.toFixed(1), zone: w.zoneNames[w.zoneOf(x, z)] ?? null }); };
-    check('départ', 'startPos', w.startPos.x, w.startPos.z);
+    const check = (kind, name, x, z) => { if (x == null || z == null || !inArea(x, z)) return; if (!reach(x, z)) unreachable.push({ kind, name, x: +x.toFixed(1), z: +z.toFixed(1), zone: w.zoneNames[w.zoneOf(x, z)] ?? null }); };
+    if (AREA === 'gare') check('départ', 'gare.start', w.gare.start.x, w.gare.start.z); else check('départ', 'startPos', w.startPos.x, w.startPos.z);
     for (const st of w.stations || []) check('borne de munitions', '', st.x, st.z);
     for (const m of w.machines || []) check('machine', m.type + (m.id ? ':' + m.id : ''), m.pos.x, m.pos.z);
     for (const ww of w.wallWeapons || []) check('arme au mur', ww.id, ww.pos.x, ww.pos.z);
@@ -100,14 +103,14 @@ if (ONLY.includes('comp') || ONLY.includes('pockets')) {
     return { unreachable, cell: nav.cell, components: sizes.length - 1, mainSize: sizes[main], mainArea: +(sizes[main] * nav.cell * nav.cell).toFixed(0), pockets: pockets.length,
       pocketsTouching: pockets.filter((p) => p.gap != null && p.gap <= 3).length, pocketsInZone: pockets.filter((p) => p.zone).length,
       biggest: pockets.sort((a, b) => b.size - a.size).slice(0, 12).map(({ pc, mc, ...r }) => r) };
-  });
+  }, AREA);
   log('comp', JSON.stringify(report.steps.comp).slice(0, 300));
 }
 
 // -------------------------------------------------------------------------------------------------------------- étape pockets
 if (ONLY.includes('pockets')) {
-  report.steps.pockets = await page.evaluate(() => {
-    const w = game.world, nav = w.nav, p = game.player, main = game.unstick.main(), { labels } = nav.components();
+  report.steps.pockets = await page.evaluate((AREA) => {
+    const w = game.world, nav = AREA === 'gare' ? w.gare.nav : w.nav, p = game.player, main = game.unstick.main(nav), { labels } = nav.components();
     const dt = 0.05, traps = [], stats = { tested: 0, enterable: 0, trapped: 0, unreachable: 0 };
     const labelNear = (x, z) => {
       const ix = nav.cx(x), iz = nav.cz(z);
@@ -152,7 +155,7 @@ if (ONLY.includes('pockets')) {
       if (exited && !exited.ok) { stats.trapped++; traps.push({ id: k.id, size: k.size, area: k.area, zone: k.zone, x: +k.pc[0].toFixed(1), z: +k.pc[1].toFixed(1), entry: entered, stuckAt: { x: +exited.x.toFixed(2), z: +exited.z.toFixed(2) }, fromDir: exited.dir }); }
     }
     return { stats, traps };
-  });
+  }, AREA);
   log('pockets', JSON.stringify(report.steps.pockets.stats), 'pièges :', report.steps.pockets.traps.length);
 }
 

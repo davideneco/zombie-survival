@@ -44,7 +44,8 @@ async function buildDataInNode() {
   THREE.TextureLoader.prototype.load = function (_url, onLoad) { const t = new THREE.Texture(); if (onLoad) setTimeout(() => onLoad(t), 0); return t; };
   globalThis.location = { search: '' };
   globalThis.fetch = async (url) => {
-    if (url.includes('area.json')) return { ok: true, json: async () => JSON.parse(fs.readFileSync(path.join(ROOT, 'public/data/area.json'), 'utf8')) };
+    const m = String(url).match(/\/data\/(area|gare|rail)\.json$/); // l'île et la Gare de Strasbourg (v0.79.0)
+    if (m) return { ok: true, json: async () => JSON.parse(fs.readFileSync(path.join(ROOT, `public/data/${m[1]}.json`), 'utf8')) };
     throw new Error('Unexpected fetch: ' + url);
   };
   const { buildRealWorld } = await import(path.join(ROOT, 'src/realworld.js'));
@@ -125,7 +126,7 @@ for (let r = 1; r <= 30; r++) rounds.push([r, Math.round(4 + r * 3), Math.round(
 table('09_manches', 'Manches', ['Manche', 'Zombies solo', 'Zombies 2 joueurs', 'Zombies 3 joueurs', 'Zombies 4 joueurs', 'Santé d\'un zombie', 'Vitesse de base (m/s)', 'Intervalle d\'apparition (s)'], rounds);
 table('10_bonus', 'Bonus', ['Bonus', 'Effet', 'Durée (s)'], [['Munitions max', 'Réserves pleines + grenades au maximum', ''], ['Mort instantanée', 'Tout zombie touché meurt', C.powerups.buffDuration], ['Bombe', 'Tue tous les zombies, +400 pts', ''], ['Points doubles', 'Points x2', C.powerups.buffDuration], ['Bidon d\'essence', `+${String(C.vehicles.fuel.jerrican).replace('.', ',')} L pour une moto (rare : seulement si une moto est à moitié vide, voir Motos)`, ''], ['(règle) Chance de lâcher un bonus', `${C.powerups.dropChance * 100} % par zombie tué`, ''], ['(règle) Bonus d\'ouverture', `${C.powerups.openingBonus.map((t) => ({ max_ammo: 'Munitions max', double_points: 'Points doubles' })[t] || t).join(' ou ')} à la première ouverture d'une zone extérieure`, ''], ['(règle) Durée au sol', '', C.powerups.duration]]);
 table('11_zones', 'Zones de la Grande Île', ['Zone', 'Départ', 'Type', 'Surface (m²)', 'Prix de la porte (pts)', 'Lieu (x ; z en m)', 'Portes', 'Contenu prévu (config)', 'Bornes', 'Armes au mur', 'Machines'],
-  D.zones.map((z) => [z.name, z.i === D.zones.findIndex((q) => S.zones[q.i]?.start) ? 'oui' : '', S.zones[z.i].outer ? 'extérieure' : 'secteur d\'origine', z.area, S.zones[z.i].start ? 0 : S.zones[z.i].doorPrice ?? '', z.seed ? `${z.seed.x} ; ${z.seed.z}` : '',
+  D.zones.map((z) => [z.name, z.i === D.zones.findIndex((q) => S.zones[q.i]?.start) ? 'oui' : '', S.zones[z.i].pocket ? 'gare (aire séparée, tram)' : S.zones[z.i].outer ? 'extérieure' : 'secteur d\'origine', z.area, S.zones[z.i].start ? 0 : S.zones[z.i].doorPrice ?? '', z.seed ? `${z.seed.x} ; ${z.seed.z}` : '',
     D.doors.filter((d) => d.a === z.i || d.b === z.i).map((d) => `P${d.n}`).join(', '), (S.zones[z.i].items || []).join(', '),
     D.stations.filter((s) => s.zone === z.i).length, D.walls.filter((v) => v.zone === z.i).map((v) => W[v.id].name).join(', '),
     D.machines.filter((m) => m.zone === z.i).map((m) => m.name).join(', ')]));
@@ -134,7 +135,7 @@ table('13_emplacements', 'Emplacements', ['N° sur la carte', 'Type', 'Nom', 'Zo
   D.items.map((it) => [it.n, it.label.split(' : ')[0].split(' — ')[0], (it.id ? W[it.id].name : it.label.replace(/^Atout : /, '').split(' — ')[0]), zname(it.zone), it.price ?? (it.label.match(/(\d+) pts/)?.[1] ?? ''), it.x, it.z]));
 const Fn = C.finale;
 table('16_finale', 'Fin de partie : L\'Heure du Jugement (horloge astronomique, intérieur de la cathédrale)', ['Réglage', 'Valeur', 'Unité'], [
-  ['Manche minimale', Fn.minRound, ''], ['Zones ouvertes au moins', Fn.minZones, `(les ${D.zones.filter((z) => !S.zones[z.i].outer).length} zones d'origine + ${Fn.minZones - D.zones.filter((z) => !S.zones[z.i].outer).length} zones extérieures) : l'horloge affiche « n/${Fn.minZones} quartiers ouverts »`],
+  ['Manche minimale', Fn.minRound, ''], ['Zones ouvertes au moins', Fn.minZones, `(les ${D.zones.filter((z) => !S.zones[z.i].outer && !S.zones[z.i].pocket).length} zones d'origine + ${Fn.minZones - D.zones.filter((z) => !S.zones[z.i].outer && !S.zones[z.i].pocket).length} zones extérieures ou de la gare) : l'horloge affiche « n/${Fn.minZones} quartiers ouverts »`],
   ['Prix', Fn.price, 'pts'], ['Santé du Bourreau (1 joueur)', Fn.bossHealth, '(+70 % par joueur en plus)'], ['Zombies simultanés (vague)', Fn.maxAlive, ''], ['Répit entre deux vagues', Fn.breather, 's']]);
 const zhp = (r) => (r < C.zombie.health.softRound ? C.zombie.health.base + r * C.zombie.health.perRound : Math.round(C.zombie.health.hardBase * Math.pow(C.zombie.health.hardGrowth, r - C.zombie.health.softRound + 1)));
 const FB = Fn.boss, pc = (x) => `${Math.round(x * 100)} %`, f1 = (x) => String(x).replace('.', ',');
@@ -315,7 +316,7 @@ Pour demander une modification, citez la ligne (ex. « Mitrailleuse RPK : charge
 ## Grande Île
 
 Toute la Grande Île de Strasbourg est jouable : on commence place du Marché-Neuf et on ouvre les zones l'une après l'autre en payant les portes.
-Elle est découpée en ${D.zones.length} zones, chacune construite autour d'un vrai lieu : chaque rue va à la zone la plus proche à pied (jusqu'à ${S.maxDist} m pour les ${D.zones.filter((z) => !S.zones[z.i].outer).length} zones d'origine, sans limite pour les ${D.zones.filter((z) => S.zones[z.i].outer).length} zones extérieures), et les portes se trouvent entre deux zones voisines (une porte ouvre toute la limite entre les deux zones).
+Elle est découpée en ${D.zones.length} zones, chacune construite autour d'un vrai lieu : chaque rue va à la zone la plus proche à pied (jusqu'à ${S.maxDist} m pour les ${D.zones.filter((z) => !S.zones[z.i].outer && !S.zones[z.i].pocket).length} zones d'origine, sans limite pour les ${D.zones.filter((z) => S.zones[z.i].outer).length} zones extérieures), et les portes se trouvent entre deux zones voisines (une porte ouvre toute la limite entre les deux zones). Les ${D.zones.filter((z) => S.zones[z.i].pocket).length} zones de la Gare de Strasbourg (quais, hall, place) forment une aire séparée, reliée à l'île par le tram (arrêt « Gare Centrale » ↔ Homme de Fer).
 Prix d'une porte : le plus cher des deux prix de zone (colonne « Prix de la porte ») ; zones extérieures : palier A 1500, B 2000, C 2500 pts. Le contenu de chaque zone se règle dans \`src/config.js\` → \`sector.zones[].items\`.
 À la première ouverture d'une zone extérieure, un bonus apparaît. La boîte mystère ne se déplace que dans une zone déjà ouverte. « Grand'Rue » et « Quai Schoepflin » sont des noms déduits du plan (à confirmer).
 

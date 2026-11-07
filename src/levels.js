@@ -26,15 +26,17 @@ export class Levels {
   }
 
   // kind : 'floor' (étage plat) | 'stair' (escalier : région intermédiaire)
-  addRegion(name, y, kind = 'floor') {
-    const r = { id: this.regions.length, name, y, kind, bbox: [Infinity, Infinity, -Infinity, -Infinity], tris: [], spawns: [], link: null };
+  // opts (v0.79.0) : ground (its floor wins over the implicit city ground at the same height : a separate area at y = 0),
+  // navCell / navMaxCost / navMargin (its nav grid ; default 0.5 m, unbounded field, 0.4 m)
+  addRegion(name, y, kind = 'floor', opts = {}) {
+    const r = { id: this.regions.length, name, y, kind, bbox: [Infinity, Infinity, -Infinity, -Infinity], tris: [], spawns: [], link: null, ...opts };
     this.regions.push(r);
     return r.id;
   }
 
   addTri(region, a, b, c) {
     const R = this.regions[region];
-    const t = { region, x0: a[0], y0: a[1], z0: a[2], x1: b[0], y1: b[1], z1: b[2], x2: c[0], y2: c[1], z2: c[2] };
+    const t = { region, x0: a[0], y0: a[1], z0: a[2], x1: b[0], y1: b[1], z1: b[2], x2: c[0], y2: c[1], z2: c[2], wins: !!R.ground };
     const det = (t.z1 - t.z2) * (t.x0 - t.x2) + (t.x2 - t.x1) * (t.z0 - t.z2);
     if (Math.abs(det) < 1e-9) return;
     t.det = det;
@@ -118,7 +120,7 @@ export class Levels {
         const l2 = 1 - l0 - l1;
         if (l0 < -1e-6 || l1 < -1e-6 || l2 < -1e-6) continue;
         const h = l0 * t.y0 + l1 * t.y1 + l2 * t.y2;
-        if (h <= y + STEP && h > best) { best = h; reg = t.region; }
+        if (h <= y + STEP && (h > best || (t.wins && h === best && reg === 0))) { best = h; reg = t.region; }
       }
     }
     if (best === -Infinity) best = y; // sous tout plancher connu : on ne bouge pas (ne devrait pas arriver)
@@ -148,7 +150,7 @@ export class Levels {
     for (const R of this.regions) {
       if (R.kind !== 'floor' || !R.tris.length) continue;
       const x0 = R.bbox[0] - 1, z0 = R.bbox[1] - 1, x1 = R.bbox[2] + 1, z1 = R.bbox[3] + 1;
-      const nav = new NavGrid((x1 - x0) / 2, (z1 - z0) / 2, collision, [], cell, margin);
+      const nav = new NavGrid((x1 - x0) / 2, (z1 - z0) / 2, collision, [], R.navCell ?? cell, R.navMargin ?? margin, R.navMaxCost ?? Infinity);
       nav.ox = x0; nav.oz = z0;
       nav.walkable = (x, z) => this.inRegion(R.id, x, z);
       nav.segFilter = (it) => collision._blocks(it, R.y);

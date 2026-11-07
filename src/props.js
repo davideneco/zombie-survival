@@ -636,5 +636,5 @@ export function createProps() {
     return g;
   }
 
-  return { place, finish, gate, sealWall, portalDoors, sizes: { car: P.car.size, bench: P.bench.size }, M };
+  return { place, finish, gate, sealWall, portalDoors, sizes: { car: P.car.size, bench: P.bench.size }, M, lib: P }; // lib : [[geometry, material]…] per type (the station builds its own instances)
 }

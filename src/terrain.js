@@ -23,13 +23,17 @@ const sstep = (a, b, x) => smooth(Math.min(1, Math.max(0, (x - a) / (b - a))));
 let data = null; // { h: Float32Array, nx, nz, hx, hz, cell, water: number, tex, uniforms }
 
 // Hauteur du terrain en (x, z) : interpolation bilinéaire de la grille (0 si le relief n'est pas installé)
+// Outside the grid (v0.79.0 : the station area) the relief fades to 0 over FADE m ; the vertex shader applies the same fade.
+const FADE = 20;
 export function terrainY(x, z) {
   if (!data) return 0;
   const { h, nx, nz, hx, hz, cell } = data;
+  const out = Math.max(Math.abs(x) - hx, Math.abs(z) - hz, 0);
+  if (out >= FADE) return 0;
   let u = (x + hx) / cell - 0.5, v = (z + hz) / cell - 0.5;
   u = Math.min(nx - 1.001, Math.max(0, u)); v = Math.min(nz - 1.001, Math.max(0, v));
   const i = Math.floor(u), j = Math.floor(v), fx = u - i, fz = v - j, k = j * nx + i;
-  return h[k] * (1 - fx) * (1 - fz) + h[k + 1] * fx * (1 - fz) + h[k + nx] * (1 - fx) * fz + h[k + nx + 1] * fx * fz;
+  return (h[k] * (1 - fx) * (1 - fz) + h[k + 1] * fx * (1 - fz) + h[k + nx] * (1 - fx) * fz + h[k + nx + 1] * fx * fz) * (1 - out / FADE);
 }
 export const terrainWaterY = () => (data ? data.water : 0);
 export const terrainOn = () => !!data;
@@ -89,6 +93,7 @@ const VERT_CHUNK = /* glsl */`
   #endif
   tWorld = modelMatrix * tWorld;
   float tOff = texture2D( tTerrain, (tWorld.xz + uTerrain.xy) / uTerrain.zw ).r;
+  tOff *= 1.0 - clamp( max( max( abs( tWorld.x ) - uTerrain.x, abs( tWorld.z ) - uTerrain.y ), 0.0 ) / 20.0, 0.0, 1.0 ); // fade outside the grid (terrainY)
   mvPosition = modelViewMatrix * mvPosition;
   mvPosition.xyz += ( viewMatrix * vec4( 0.0, tOff, 0.0, 0.0 ) ).xyz;
   gl_Position = projectionMatrix * mvPosition;

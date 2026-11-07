@@ -120,4 +120,5 @@ To check a change: `npx vite build`, then play a game with `?debug` in the URL.
 ## Credits
 
 - Map data: © [OpenStreetMap](https://www.openstreetmap.org/copyright) contributors (ODbL) and [IGN BD TOPO](https://geoservices.ign.fr/bdtopo) (Licence Ouverte Etalab 2.0).
+- Gare de Strasbourg area (`public/data/gare.json`, `public/data/rail.json`, built by `tools/fetch-rail.mjs`): railway track shapes from SNCF Réseau, « Fichier de formes des voies du Réseau Ferré National » ([ressources.data.sncf.com](https://ressources.data.sncf.com/explore/dataset/formes-des-lignes-du-rfn/), ODbL); station outlines, platforms, trees and furniture © OpenStreetMap contributors (ODbL); CTS tram tracks and building heights from IGN BD TOPO via data.geopf.fr (Licence Ouverte Etalab 2.0).
 - 3D engine: [Three.js](https://threejs.org/).

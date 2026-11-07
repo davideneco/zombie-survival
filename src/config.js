@@ -60,6 +60,11 @@ export const STRASBOURG_SECTOR = {
     { name: 'Saint-Étienne', outer: true, seed: { x: 540, z: -90 }, doorPrice: 2500, items: ['station', 'wall:m249', 'wall:scar', 'perk:staminup', 'box'] },
     { name: 'Saint-Pierre-le-Vieux', outer: true, seed: { x: -620, z: -60 }, doorPrice: 2500, items: ['station', 'wall:deagle', 'wall:shotgun', 'perk:quickrevive', 'box'] },
     { name: 'Petite France', outer: true, seed: { x: -660, z: 150 }, doorPrice: 2500, items: ['station', 'wall:barrett', 'wall:saiga', 'wall:mp5', 'perk:juggernog', 'box'] },
+    // ---- Gare de Strasbourg (v0.79.0, src/gare/) : zones d'une aire séparée (pocket: 'gare'), reliée à l'île par le tram (src/transfer.js).
+    // Ajoutées en dernier, sans `seed` : les zones de l'île, leurs portes et leurs tirages ne changent pas. Emplacements fixes (src/gare/plan.js).
+    { name: 'Quais', pocket: 'gare', isolatedRnd: true, doorPrice: 750, items: ['station', 'wall:m1911', 'wall:shotgun'] },
+    { name: 'Hall de la Gare', pocket: 'gare', isolatedRnd: true, doorPrice: 750, items: ['station', 'wall:mp5', 'perk:quickrevive', 'box'] },
+    { name: 'Place de la Gare', pocket: 'gare', isolatedRnd: true, doorPrice: 1000, items: ['station', 'wall:famas', 'perk:staminup'] },
   ],
 };
 
@@ -76,6 +81,8 @@ export const CONFIG = {
     { x: -31.5, z: -95.5, yaw: -1.2, name: 'Temple-Neuf', zone: 'Temple-Neuf' },
     { x: -229.5, z: 250.5, yaw: 0, name: 'Place Saint-Thomas', zone: 'Saint-Thomas' },
   ],
+  // départ « Gare Centrale » (option du menu, ?debug&gare) : quai 1, devant la sortie du hall ; position calculée par src/gare/plan.js
+  gareSpawn: { name: 'Gare Centrale — Quai 1', zone: 'Quais', area: 'gare' },
   cityHint: { x: -199, z: -145 },
   breaches: 3,
   sector: STRASBOURG_SECTOR,
@@ -536,6 +543,36 @@ export const CONFIG = {
   //  - B / C / F : du pont Kuss (Alt Winmärik) à l'Homme de Fer, puis rue de la Mésange, place Broglie et l'Opéra (pont du Théâtre)
   // stops : arrêts { name, at: [x, z] (projeté sur la voie), len (quai, m) } ; chaque bout de ligne porte un heurtoir. Une porte de zone fermée qui
   // coupe une voie est un heurtoir avec feu rouge (la rame freine d'elle-même) ; l'ouvrir libère le tronçon.
+  // ------------------------------------------------------------------ Gare de Strasbourg (v0.79.0, src/gare/). Aire jouable séparée à ses
+  // vraies coordonnées (repère de area.json, données public/data/gare.json et rail.json : tools/fetch-rail.mjs). Repère local de la gare :
+  // u le long des voies (vers le nord-nord-est), v vers le parvis ; origine au milieu du bâtiment historique (calculés d'après le contour OSM).
+  gare: {
+    enabled: true,
+    margin: 6,                // m autour du plan : limite des collisions et de la grille de navigation
+    navCell: 0.75,            // case de la grille de navigation de l'aire (m)
+    navMaxCost: 2400,         // portée du champ de flux (coût : 10 par case, soit ~180 m)
+    playU: [-62, 62],         // quais jouables : de .. à .. (m le long des voies, depuis le milieu du bâtiment ; sous la halle)
+    crossingU: [-50, 46],     // passerelles en planches au-dessus des voies entre le quai 1 et le quai 2/3 (milieu, m), largeur crossingW
+    crossingW: 4.5,
+    hall: { u0: -28, u1: 26, height: 13 },       // salle des pas perdus (u, hauteur sous plafond)
+    building: { wing: 15.5, pavilion: 18.5, center: 23, roof: 5.5 },  // hauteurs : corniche des ailes, pavillons d'angle, pavillon central, toit
+    verriere: { height: 15.5, ribEvery: 3.0, entranceW: 7 },        // verrière de 2007 : hauteur contre la façade, pas des arcs, entrée sur le parvis
+    shed: { spring: 7.5, crown: 15.5, archEvery: 9.2 },               // halle des quais (1883) : naissance et faîte des arcs, pas des fermes
+    platformY: 0,             // dessus des quais (m) ; ballast : railY sous les quais
+    railY: -0.95,
+    lightsMax: 8,             // lumières ponctuelles (réserve commune : CONFIG.graphics, voir realworld.js)
+    spawnEvery: 9,            // m entre deux points d'apparition le long des bords de quai et des limites du parvis
+  },
+
+  // ------------------------------------------------------------------ Tram de transfert (v0.79.0, src/transfer.js) : arrêt « Gare Centrale »
+  // (parvis, ligne C réelle) <-> quai B / C / F de l'Homme de Fer. Interagir avec la borne : le tram arrive (countdown s), tous les joueurs debout à
+  // moins de boardRadius m de la rame partent (ride s d'animation, fondu fade s), puis sont téléportés. cooldown : s entre deux départs d'un arrêt.
+  transfer: {
+    countdown: 8, ride: 7, fade: 0.8, cooldown: 20, price: 0, boardRadius: 6, reach: 2.6,
+    accel: 1.6, approach: 60,   // m/s² au départ ; m parcourus par la rame qui arrive
+    hdf: { line: 'BCF', stop: 'Homme de Fer', side: 1, terminal: 5.5 },   // côté du quai (1 : droite de la voie), recul de la borne (m le long de la voie)
+  },
+
   tram: {
     minRadius: 25, step: 1, clearHalf: 3.25, decorGap: 5, furnitureGap: 4, itemGap: 4.6, lampGap: 3.9, treeGap: 4.1,
     rail: { gauge: 1.435, bed: 3.0, element: 4, curveElement: 2, curveBelow: 300 },
