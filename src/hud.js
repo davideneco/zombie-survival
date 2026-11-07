@@ -206,7 +206,6 @@ export class Hud {
   drawCluster(info, kmh, hot) {
     const ctx = this.clusterCtx;
     if (!ctx) return;
-    if (info.isHeli) { this.drawHeliCluster(info, kmh); return; }
     const rpm = Math.round(info.rpm || 0);
     const gear = info.gear || '1';
     const isMan = !!info.manual;
@@ -435,93 +434,6 @@ export class Hud {
       ctx.fillStyle = spdCol;
       ctx.beginPath(); ctx.arc(rx, ry, 2.5, 0, Math.PI * 2); ctx.fill();
 
-      ctx.restore();
-    });
-  }
-
-  // Planche de bord de l'hélicoptère (v0.70.0) : horizon artificiel + altitude à gauche, badin à droite, au centre régime du rotor, chauffe de la mitrailleuse
-  // et voyant moteur coupé. Même canevas que le tableau de bord des motos (380 x 142).
-  drawHeliCluster(info, kmh) {
-    const ctx = this.clusterCtx;
-    const alt = Math.round(info.alt || 0), pit = Math.round((info.pitch || 0) * 20) / 20, bank = Math.round((info.lean || 0) * 40) / 40;
-    const thr = Math.round((info.rotor || 0) * 50), heat = Math.round((info.heat || 0) * 40), vy = Math.round(info.vy || 0);
-    const key = `${kmh}|${alt}|${pit}|${bank}|${thr}|${heat}|${vy}|${info.stall ? 1 : 0}|${info.locked ? 1 : 0}|${info.airborne ? 1 : 0}`;
-    this._set('vcluster', key, () => {
-      const W = 380, H = 142;
-      ctx.clearRect(0, 0, W, H);
-      ctx.save();
-      ctx.fillStyle = 'rgba(10, 13, 18, 0.84)'; ctx.strokeStyle = 'rgba(140, 155, 175, 0.35)'; ctx.lineWidth = 1.5;
-      ctx.beginPath(); ctx.roundRect(6, 6, W - 12, H - 10, 16); ctx.fill(); ctx.stroke();
-      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-
-      // ---- horizon artificiel (gauche)
-      const hx = 80, hy = 74, hr = 54;
-      ctx.save();
-      ctx.beginPath(); ctx.arc(hx, hy, hr - 2, 0, Math.PI * 2); ctx.clip();
-      ctx.translate(hx, hy);
-      ctx.rotate(info.lean || 0);                       // incliné à droite (lean < 0) : l'horizon bascule à gauche, comme dans un vrai cockpit
-      const off = Math.max(-1, Math.min(1, (info.pitch || 0) / 0.8)) * 44 + 0; // cabré : l'horizon descend
-      ctx.fillStyle = '#3b6f94'; ctx.fillRect(-90, -120 + off, 180, 120);
-      ctx.fillStyle = '#6a5036'; ctx.fillRect(-90, off, 180, 120);
-      ctx.strokeStyle = '#e8eef4'; ctx.lineWidth = 1.6;
-      ctx.beginPath(); ctx.moveTo(-90, off); ctx.lineTo(90, off); ctx.stroke();
-      ctx.lineWidth = 1; ctx.fillStyle = '#e8eef4'; ctx.font = 'bold 7px Arial, sans-serif';
-      for (const d of [-20, -10, 10, 20]) {              // échelle d'assiette tous les 10 degrés
-        const y = off - d * 0.96;                        // 10 degrés = 0,175 rad = 9,6 px (au-dessus de l'horizon pour un nez cabré)
-        const w = Math.abs(d) === 20 ? 22 : 14;
-        ctx.beginPath(); ctx.moveTo(-w, y); ctx.lineTo(w, y); ctx.stroke();
-        ctx.fillText(String(Math.abs(d)), w + 8, y);
-      }
-      ctx.restore();
-      ctx.strokeStyle = '#28303c'; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(hx, hy, hr - 2, 0, Math.PI * 2); ctx.stroke();
-      ctx.strokeStyle = '#ffcf40'; ctx.lineWidth = 2.4;  // maquette d'appareil fixe
-      ctx.beginPath(); ctx.moveTo(hx - 24, hy); ctx.lineTo(hx - 8, hy); ctx.lineTo(hx - 8, hy + 5); ctx.moveTo(hx + 24, hy); ctx.lineTo(hx + 8, hy); ctx.lineTo(hx + 8, hy + 5); ctx.stroke();
-      ctx.fillStyle = '#ffcf40'; ctx.beginPath(); ctx.arc(hx, hy, 2.4, 0, Math.PI * 2); ctx.fill();
-      // altitude (hauteur au-dessus du sol) et taux de montée
-      ctx.fillStyle = 'rgba(8,10,14,0.82)'; ctx.beginPath(); ctx.roundRect(hx - 30, hy + 30, 60, 20, 5); ctx.fill();
-      ctx.fillStyle = '#ffffff'; ctx.font = 'bold 13px Arial, sans-serif'; ctx.fillText(`${alt} m`, hx - 4, hy + 40);
-      ctx.fillStyle = vy > 1 ? '#58df88' : vy < -4 ? '#ff7a5a' : '#8ea2b4'; ctx.font = 'bold 8px Arial, sans-serif'; ctx.fillText(vy > 1 ? '▲' : vy < -1 ? '▼' : '', hx + 24, hy + 40);
-
-      // ---- centre : gaz, mitrailleuses, état
-      const cx = 190;
-      ctx.fillStyle = '#7e8896'; ctx.font = 'bold 7.5px Arial, sans-serif'; ctx.fillText('ROTOR', cx - 22, 20);
-      ctx.fillText('MITRAIL.', cx + 22, 20);
-      for (const [bx, v, col] of [[cx - 30, info.rotor || 0, (info.rotor || 0) < 0.9 ? '#f5a623' : '#38b8f0'], [cx + 14, info.heat || 0, info.locked ? '#ff3b30' : info.heat > 0.7 ? '#f5a623' : '#ffd24a']]) {
-        ctx.fillStyle = 'rgba(255,255,255,0.1)'; ctx.beginPath(); ctx.roundRect(bx, 28, 16, 62, 4); ctx.fill();
-        ctx.fillStyle = col; const h = 62 * v; ctx.beginPath(); ctx.roundRect(bx, 28 + 62 - h, 16, h, 4); ctx.fill();
-      }
-      ctx.fillStyle = '#e8eef4'; ctx.font = 'bold 9px Arial, sans-serif';
-      ctx.fillText(`${Math.round((info.rotor || 0) * 100)}%`, cx - 22, 99);
-      ctx.fillStyle = info.locked ? '#ff6a58' : '#8ea2b4'; ctx.fillText(info.locked ? 'SURCH.' : 'OK', cx + 22, 99);
-      // voyants
-      const lamp = (x, label, on, col) => {
-        ctx.fillStyle = on ? col : 'rgba(255,255,255,0.08)'; ctx.beginPath(); ctx.roundRect(x, 110, 54, 15, 3); ctx.fill();
-        ctx.fillStyle = on ? '#111' : '#606875'; ctx.font = 'bold 8px Arial, sans-serif'; ctx.fillText(label, x + 27, 118);
-      };
-      if (info.stall && Math.floor(performance.now() / 180) % 2 === 0) lamp(163, 'MOTEUR HS', true, '#ff3b30');
-      else if (info.stall) lamp(163, 'MOTEUR HS', false);
-      else lamp(163, info.airborne ? 'EN VOL' : 'AU SOL', true, info.airborne ? '#7fd0f4' : '#ffd24a');
-
-      // ---- anémomètre (droite)
-      const rx = 300, ry = 74, rr = 54, a0 = Math.PI * 0.75, aSpan = Math.PI * 1.5;
-      const maxK = Math.ceil(info.vmax * 3.6 * 1.1 / 40) * 40;
-      const f = (k) => Math.min(1, Math.max(0, k / maxK));
-      ctx.fillStyle = 'rgba(18, 22, 29, 0.95)'; ctx.beginPath(); ctx.arc(rx, ry, rr, 0, Math.PI * 2); ctx.fill();
-      ctx.lineWidth = 4; ctx.strokeStyle = '#28303c'; ctx.beginPath(); ctx.arc(rx, ry, rr - 4, a0, a0 + aSpan); ctx.stroke();
-      const col = '#38b6ff';
-      if (kmh > 0) { ctx.strokeStyle = col; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(rx, ry, rr - 10, a0, a0 + aSpan * f(kmh)); ctx.stroke(); }
-      for (let v = 0; v <= maxK; v += 40) {
-        const ang = a0 + aSpan * f(v), c = Math.cos(ang), s = Math.sin(ang);
-        ctx.strokeStyle = '#d0d6e0'; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.moveTo(rx + c * (rr - 9), ry + s * (rr - 9)); ctx.lineTo(rx + c * (rr - 2), ry + s * (rr - 2)); ctx.stroke();
-        ctx.fillStyle = '#b8c0cc'; ctx.font = 'bold 8px Arial, sans-serif'; ctx.fillText(String(v), rx + c * (rr - 18), ry + s * (rr - 18));
-      }
-      ctx.fillStyle = '#7e8896'; ctx.font = 'bold 7.5px Arial, sans-serif'; ctx.fillText('VITESSE', rx, ry - 14);
-      ctx.fillStyle = '#ffffff'; ctx.font = 'bold 17px Arial, sans-serif'; ctx.fillText(`${kmh}`, rx, ry + 24);
-      ctx.fillStyle = '#8b94a2'; ctx.font = 'bold 8px Arial, sans-serif'; ctx.fillText('KM/H', rx, ry + 36);
-      const sAng = a0 + aSpan * f(kmh);
-      ctx.strokeStyle = col; ctx.lineWidth = 2.4; ctx.beginPath(); ctx.moveTo(rx - Math.cos(sAng) * 7, ry - Math.sin(sAng) * 7); ctx.lineTo(rx + Math.cos(sAng) * (rr - 8), ry + Math.sin(sAng) * (rr - 8)); ctx.stroke();
-      ctx.fillStyle = '#252b34'; ctx.beginPath(); ctx.arc(rx, ry, 5.5, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = col; ctx.beginPath(); ctx.arc(rx, ry, 2.5, 0, Math.PI * 2); ctx.fill();
       ctx.restore();
     });
   }

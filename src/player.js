@@ -488,15 +488,15 @@ export class Player {
     // lunette : on cache l'arme quand on vise au fusil de précision
     // (on cache le modèle de l'arme, pas le groupe entier qui contient la lumière de tir)
     // (jamais le groupe entier : il porte la lumière de tir, et masquer une lumière recompile tous les shaders)
-    this.vms[w.id].visible = !this.world.isCircuitTest && !this.locked && !(cfg.adsFov && this.aim > 0.8) && !this.driving && !this.ride.external; // vue externe : c'est le personnage qui tient l'arme
+    this.vms[w.id].visible = !this.locked && !(cfg.adsFov && this.aim > 0.8) && !this.driving && !this.ride.external; // vue externe : c'est le personnage qui tient l'arme
     const pk = papPulse(w.pap | 0, now); // niveau III : le reflet pulse
     if (pk !== 1 && this.tintMats) for (const m of this.tintMats) m.emissiveIntensity = PAP_INTENSITY * pk;
     const bolts = this.bolts[w.id];
     if (bolts) { const show = w.ammo > 0 && (!w.reloading || w.reloadT > cfg.reloadTime * 0.6); for (const b of bolts) b.visible = show; } // le carreau n'est là que si l'arme est chargée
 
     // ---- tir & rechargement ----
-    if (this.downed || this.dead || this.world.isCircuitTest) {
-      // Aucun tir quand le joueur est à terre ou sur le circuit de test
+    if (this.downed || this.dead) {
+      // Aucun tir quand le joueur est à terre
     } else if (w.reloading) {
       w.reloadT += dt;
       if (w.reloadT >= cfg.reloadTime) {
@@ -662,7 +662,7 @@ export class Player {
   // Lance un coup de couteau (touche V, ou clic gauche chargeur ET réserve vides). Renvoie false si impossible (recharge du coup, à terre…).
   melee(now) {
     const K = CONFIG.knife;
-    if (this.world.isCircuitTest || this.downed || this.dead || this.vehicle || this.locked || this.vault || this.meleeT >= 0 || now < this.nextMelee || !this.game.started) return false;
+    if (this.downed || this.dead || this.vehicle || this.locked || this.vault || this.meleeT >= 0 || now < this.nextMelee || !this.game.started) return false;
     this.nextMelee = now + K.cooldown;
     this.meleeT = 0; this.meleeHit = false;
     this.mc = (this.mc + 1) & 255;
@@ -881,7 +881,7 @@ export class Player {
   // Lance-grenades sous canon (clic molette) : un obus de 40 mm, comme celui du M79 ordinaire (niveau 0), cooldown s entre deux coups
   fireGL(now) {
     const w = this.curW, cfg = this.curCfg;
-    if (this.world.isCircuitTest || !cfg.gl || w.gl <= 0 || now < (this.nextGL || 0) || this.locked || this.vault || this.downed || this.dead || this.driving) return false;
+    if (!cfg.gl || w.gl <= 0 || now < (this.nextGL || 0) || this.locked || this.vault || this.downed || this.dead || this.driving) return false;
     w.gl--;
     this.nextGL = now + cfg.gl.cooldown;
     this.kick = 1; this.recoil += 0.04;
@@ -895,7 +895,7 @@ export class Player {
   reload() {
     const cfg = this.curCfg;
     const w = this.curW;
-    if (this.world.isCircuitTest || w.reloading || w.ammo >= cfg.magSize || w.reserve <= 0) return;
+    if (w.reloading || w.ammo >= cfg.magSize || w.reserve <= 0) return;
     this.game.perkFx?.onReload(w, cfg); // Cerise-foudre (munitions restantes avant le rechargement)
     w.reloading = true;
     w.reloadT = 0;
@@ -903,7 +903,7 @@ export class Player {
   }
 
   throwGrenade() {
-    if (this.world.isCircuitTest || this.downed || this.dead || this.grenades <= 0 || this.driving) return;
+    if (this.downed || this.dead || this.grenades <= 0 || this.driving) return;
     this.grenades--;
     this.camera.updateMatrixWorld(true);
     const dir = new THREE.Vector3(0, 0, -1).applyQuaternion(this.camera.quaternion);

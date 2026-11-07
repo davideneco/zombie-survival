@@ -519,8 +519,8 @@ export class Avatar {
     const pitch = s.pitch || 0;
     this.pitchG.rotation.x = pitch * 0.8 - this.torsoG.rotation.x;
     this.headG.rotation.x = pitch * 0.5 - this.torsoG.rotation.x;
-    // conducteur ou mode circuit de test : pas d'arme dans les mains
-    if (s.seat === 1 || CONFIG.map === 'circuit') {
+    // conducteur : pas d'arme dans les mains
+    if (s.seat === 1) {
       this.weapon.visible = false;
       this.flash.visible = false;
       this.pitchG.rotation.x = -this.torsoG.rotation.x;

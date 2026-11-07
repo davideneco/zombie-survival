@@ -107,7 +107,7 @@ export function installSummit(game, { world, scene, hud, sfx, fx, hemi, moon, mo
   const applySky = () => {
     const k = sky.k, b = game.settings?.brightness ?? 1.4;
     pickC(SKY.bg, k, scene.background, NIGHT.bg);
-    pickC(SKY.fog, k, scene.fog.color, NIGHT.fog); scene.fog.density = pickN(SKY.density, k, NIGHT.density) * (CONFIG.map === 'arena' ? 1.15 : 1);
+    pickC(SKY.fog, k, scene.fog.color, NIGHT.fog); scene.fog.density = pickN(SKY.density, k, NIGHT.density);
     pickC(SKY.hemiSky, k, hemi.color, NIGHT.hemiSky); pickC(SKY.hemiGround, k, hemi.groundColor, NIGHT.hemiGround); hemi.intensity = pickN(SKY.hemi, k, NIGHT.hemiI) * b;
     pickC(SKY.sun, k, moon.color, NIGHT.moon); moon.intensity = pickN(SKY.sunI, k, NIGHT.moonI);
     const i0 = k < 0.5 ? 0 : 1, i1 = k < 0.5 ? 1 : 2, u = k < 0.5 ? sm(k * 2) : sm((k - 0.5) * 2);

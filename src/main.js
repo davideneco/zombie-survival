@@ -1,8 +1,6 @@
 import * as THREE from 'three';
-import { CONFIG, papAmmoMult, setMap } from './config.js';
-import { buildWorld } from './world.js';
+import { CONFIG, papAmmoMult } from './config.js';
 import { buildRealWorld } from './realworld.js';
-import { buildCircuitWorld } from './circuit.js';
 import { Player } from './player.js';
 import { Zombie, zombieTextures } from './zombie.js';
 import { Boss } from './boss.js';
@@ -53,7 +51,7 @@ document.body.prepend(renderer.domElement);
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x04060c); // nuit d'encre Call of Duty Zombies
-scene.fog = new THREE.FogExp2(0x050810, CONFIG.map === 'arena' ? 0.024 : 0.021); // brouillard sombre de distance
+scene.fog = new THREE.FogExp2(0x050810, 0.021); // brouillard sombre de distance
 
 // au-delà de ~150 m le brouillard cache tout : inutile de dessiner plus loin
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.05, 170);
@@ -101,11 +99,7 @@ window.addEventListener('resize', () => {
 fx.init(scene);
 const hud = new Hud();
 const sfx = new Sfx();
-const world = CONFIG.map === 'arena'
-  ? buildWorld(scene)
-  : CONFIG.map === 'circuit'
-    ? await buildCircuitWorld(scene, renderer)
-    : await buildRealWorld(scene, renderer);
+const world = await buildRealWorld(scene, renderer);
 
 let nextPuId = 1;
 
@@ -1217,7 +1211,7 @@ const game = {
       if (this.player) this.player.statDowns = 0;
       this.round = 0;
     }
-    this.intermission = (!world.isCircuitTest && (this.isHost || !this.isMultiplayer)) ? 2 : 0;
+    this.intermission = (this.isHost || !this.isMultiplayer) ? 2 : 0;
     this.toSpawn = 0;
     this.buffs.instaKill = 0;
     this.buffs.doublePoints = 0;
@@ -1229,23 +1223,17 @@ const game = {
       this.applySpawnPoint(this.activeSpawn, this.mySlot || 1);
     }
     this.resetVehicles?.();
-    if (world.isCircuitTest) {
-      for (const id of ['round', 'points', 'stats', 'perks', 'crosshair']) {
-        const el = document.getElementById(id);
-        if (el) el.style.display = 'none';
-      }
-    }
   },
 
   pickRandomSpawn() {
-    if (world.isCircuitTest || !CONFIG.spawnPoints?.length) return null;
+    if (!CONFIG.spawnPoints?.length) return null;
     const sp = CONFIG.spawnPoints[Math.floor(Math.random() * CONFIG.spawnPoints.length)];
     this.activeSpawn = sp;
     return sp;
   },
 
   applySpawnPoint(sp, slot = 0) {
-    if (!sp || world.isCircuitTest) return;
+    if (!sp) return;
     this.activeSpawn = sp;
     const yaw = sp.yaw || 0;
     const rx = Math.cos(yaw), rz = -Math.sin(yaw);
@@ -1383,8 +1371,8 @@ const game = {
     this.updateMiniBar(dt);
     this.updateFinale(dt);
 
-    // Gestion des manches (Hôte ou Solo UNIQUEMENT) — en pause pendant l'Heure du Jugement ou sur le circuit de test
-    if (!world.isCircuitTest && (this.isHost || !this.isMultiplayer) && !this.finale) {
+    // Gestion des manches (Hôte ou Solo UNIQUEMENT) — en pause pendant l'Heure du Jugement
+    if ((this.isHost || !this.isMultiplayer) && !this.finale) {
       const alive = this.zombies.filter((z) => !z.dead).length;
       if (this.toSpawn > 0) {
         this.spawnTimer -= dt;
@@ -1569,9 +1557,7 @@ const game = {
       if (p.vehicle.v.isTram) promptText = this.tramRideHint(p.vehicle.v, p.vehicle.seat);
       else if (p.vehicle.v.state === 'burning') promptText = `SAUTEZ ! ${kE}`;
       else if (p.vehicle.seat === 0) {
-        if (p.vehicle.v.def.isHeli) {
-          promptText = `${B.tag('jump')} Monter · ${B.tag('sprint')} Baisser · Clic : Tirer · ${kE} Sortir`;
-        } else if (p.vehicle.v.hasTank) {
+        if (p.vehicle.v.hasTank) {
           const isMan = !!settings.manualGearbox;
           const kMode = B.tag('gearMode'), kUp = B.tag('gearUp'), kDn = B.tag('gearDown');
           promptText = isMan
@@ -2021,15 +2007,6 @@ function setupNetworkHandlers(net) {
 
   // Synchronisation globale (pour le nouveau client qui rejoint)
   net.onHost('sync', (m) => {
-    // Si l'hôte est sur une autre carte (ex: Circuit vs Strasbourg), on bascule automatiquement sur sa carte et on rejoint le salon
-    if (m.map && m.map !== CONFIG.map) {
-      localStorage.setItem('zombie_map', m.map);
-      const u = new URL(location.href);
-      u.searchParams.set('map', m.map);
-      if (game.roomCode) u.searchParams.set('join', game.roomCode);
-      location.href = u.toString();
-      return;
-    }
     // même version, mêmes portes (identifiants et prix) que l'hôte : sinon la partie est incohérente, on quitte
     if ((m.v && m.v !== GAME_V) || (m.dh && m.dh !== doorsHash())) {
       alert(`Version du jeu différente de celle de l'hôte (${m.v || '?'} contre ${GAME_V}) : les portes ne correspondent pas. Rechargez la page pour récupérer la dernière version.`);
@@ -2066,16 +2043,6 @@ function setupNetworkHandlers(net) {
       if (zd.angel) z.region = 1;
       game.zombies.push(z);
     }
-  });
-
-  // Changement de carte déclenché par l'hôte en cours de salon / partie
-  net.onHost('map_change', (m) => {
-    if (!m.map) return;
-    localStorage.setItem('zombie_map', m.map);
-    const u = new URL(location.href);
-    u.searchParams.set('map', m.map);
-    if (m.code || game.roomCode) u.searchParams.set('join', m.code || game.roomCode);
-    setTimeout(() => { location.href = u.toString(); }, 250);
   });
 
   // Démarrage par l'hôte
@@ -2237,15 +2204,6 @@ async function joinRoom(rawCode, retries = 0) {
     });
 
     net.on('joined', (m) => {
-      if (m.map && m.map !== CONFIG.map) {
-        net.close();
-        localStorage.setItem('zombie_map', m.map);
-        const u = new URL(location.href);
-        u.searchParams.set('map', m.map);
-        u.searchParams.set('join', m.code || code);
-        location.href = u.toString();
-        return;
-      }
       net.id = m.id;
       game.mySlot = m.slot || 0;
       game.player.setCharacter(charOf(game.mySlot));
@@ -2437,42 +2395,6 @@ hud.el.optionsPanel.addEventListener('click', (e) => e.stopPropagation());
 document.getElementById('btnPlay').addEventListener('click', () => hud.showPanel('menuPanel'));
 document.getElementById('btnOptions').addEventListener('click', () => openOptions('titlePanel'));
 document.getElementById('btnPauseOptions').addEventListener('click', () => openOptions('pausePanel'));
-const syncMapBtns = () => {
-  const isCircuit = CONFIG.map === 'circuit';
-  const menuBtn = document.getElementById('btnSelectMap');
-  if (menuBtn) {
-    menuBtn.textContent = isCircuit
-      ? '🏁 CARTE : CIRCUIT D\'ESSAIS VÉHICULES (CHANGER)'
-      : '🗺️ CARTE : GRANDE ÎLE DE STRASBOURG (CHANGER)';
-  }
-  const pauseBtn = document.getElementById('btnPauseMap');
-  if (pauseBtn) {
-    pauseBtn.textContent = isCircuit
-      ? '🗺️ ALLER SUR : GRANDE ÎLE DE STRASBOURG'
-      : '🏁 ALLER SUR : CIRCUIT D\'ESSAIS VÉHICULES';
-  }
-};
-syncMapBtns();
-game.changeMap = (targetMap) => {
-  if (game.isMultiplayer && game.isHost && game.roomCode) {
-    game.net?.send({ t: 'map_change', map: targetMap, code: game.roomCode });
-    localStorage.setItem('zombie_map', targetMap);
-    const u = new URL(location.href);
-    u.searchParams.set('map', targetMap);
-    u.searchParams.set('host', game.roomCode);
-    location.href = u.toString();
-    return;
-  }
-  setMap(targetMap);
-};
-document.getElementById('btnSelectMap')?.addEventListener('click', (e) => {
-  e.stopPropagation();
-  game.changeMap(CONFIG.map === 'circuit' ? 'strasbourg' : 'circuit');
-});
-document.getElementById('btnPauseMap')?.addEventListener('click', (e) => {
-  e.stopPropagation();
-  game.changeMap(CONFIG.map === 'circuit' ? 'strasbourg' : 'circuit');
-});
 document.getElementById('btnModMenu')?.addEventListener('click', () => {
   if (game.isMultiplayer && !game.isHost) {
     hud.popup("Menu Mods réservé à l'hôte", 'warning');
@@ -2540,8 +2462,8 @@ precompileShaders();
 
 game.reset(true);
 hud.showMenu(
-  world.isCircuitTest ? 'CIRCUIT DE TEST' : 'ZOMBIE SURVIVAL',
-  world.isCircuitTest ? `${world.mapName}<br>Piste Grand Prix, Aire de Drift & Banc de Suspension.` : `${world.mapName}<br>Survivez seul ou en coopération.`
+  'ZOMBIE SURVIVAL',
+  `${world.mapName}<br>Survivez seul ou en coopération.`
 );
 
 // Mode debug : ?debug&x=0&z=0&yaw=0&pitch=0, ou reconnexion auto salon : ?host=ABCD / ?join=ABCD

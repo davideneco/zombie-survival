@@ -63,7 +63,7 @@ function onMessage(ws, raw) {
     if (ws.room) leave(ws);
     const reqCode = typeof msg.code === 'string' ? msg.code.toUpperCase().trim() : '';
     const code = (/^[A-Z]{4}$/.test(reqCode) && !rooms.has(reqCode)) ? reqCode : makeCode();
-    const map = msg.map === 'circuit' ? 'circuit' : 'strasbourg';
+    const map = 'strasbourg'; // une seule carte
     const room = { code, host: ws.pid, started: false, map, members: new Map() };
     const slot0 = freeSlot(room, msg.slot);
     room.members.set(ws.pid, { id: ws.pid, name, ws, slot: slot0 });

@@ -12,26 +12,8 @@ export const PAP_LEVELS = [
   { roman: 'III', price: 20000, color: 0xff6a10, tracer: 0xff8a30, flash: 0xffb060, dmg: 5, ray: 3, head: 1.4, pierce: 4, mag: 1.5, magX: 1.33, reserve: 2.5, reload: 0.75, spread: 0.7, ammo: 5, pulseHz: 2 },
 ];
 
-function getInitialMap() {
-  if (typeof window === 'undefined') return 'strasbourg';
-  const q = new URLSearchParams(window.location.search).get('map');
-  if (q === 'circuit' || q === 'strasbourg' || q === 'arena') return q;
-  try {
-    const saved = localStorage.getItem('zombie_map');
-    if (saved === 'circuit' || saved === 'strasbourg') return saved;
-  } catch (_) {}
-  return 'strasbourg';
-}
-
-export const CURRENT_MAP = getInitialMap();
-
-export function setMap(mapName) {
-  try { localStorage.setItem('zombie_map', mapName); } catch (_) {}
-  const url = new URL(window.location.href);
-  if (mapName === 'strasbourg') url.searchParams.delete('map');
-  else url.searchParams.set('map', mapName);
-  window.location.href = url.toString();
-}
+// Une seule carte : la Grande Île de Strasbourg (v0.78.1 : circuit d'essais et arène de test retirés)
+export const CURRENT_MAP = 'strasbourg';
 
 export const STRASBOURG_SECTOR = {
   maxDist: 95,        // rayon d'une zone d'origine (m, en distance de marche) ; les zones `outer` n'ont pas de limite
@@ -82,8 +64,8 @@ export const STRASBOURG_SECTOR = {
 };
 
 export const CONFIG = {
-  map: CURRENT_MAP, // 'strasbourg' (Grande Île), 'circuit' (Circuit d'Essais Véhicules) ou 'arena'
-  startHint: CURRENT_MAP === 'circuit' ? { x: -88, z: -18 } : { x: 4.3, z: -35.7 },
+  map: CURRENT_MAP, // 'strasbourg' (Grande Île) : la seule carte
+  startHint: { x: 4.3, z: -35.7 },
   spawnPoints: [
     { x: -0.6, z: -30.9, yaw: 0, name: 'Place du Marché-Neuf', zone: 'Marché-Neuf' },
     { x: -195.0, z: -142.0, yaw: 1.57, name: 'Place Kléber', zone: 'Place Kléber' },
@@ -94,11 +76,10 @@ export const CONFIG = {
     { x: -31.5, z: -95.5, yaw: -1.2, name: 'Temple-Neuf', zone: 'Temple-Neuf' },
     { x: -229.5, z: 250.5, yaw: 0, name: 'Place Saint-Thomas', zone: 'Saint-Thomas' },
   ],
-  cityHint: CURRENT_MAP === 'circuit' ? { x: 0, z: 0 } : { x: -199, z: -145 },
+  cityHint: { x: -199, z: -145 },
   breaches: 3,
   sector: STRASBOURG_SECTOR,
 
-  arenaHalf: 30,    // arène de test : 60 x 60 m
 
   player: {
     radius: 0.4,
@@ -416,11 +397,11 @@ export const CONFIG = {
         pump: { dx: -4.5, dz: 0.5 }, sign: { dx: 4.5, dz: 3.5 },
         rect: { w: 12, d: 12 },
       },
-      // place Kléber : 1 4x4 tout-terrain et 1 hélicoptère (voir types.helico)
+      // place Kléber : 1 4x4 tout-terrain
       {
         zone: 'Place Kléber', x: -204, z: -132, yaw: -Math.PI / 2,
-        bays: [{ type: 'suv', dx: -2.8 }, { type: 'helico', dx: 3.6 }],
-        slots: [-2.8, 3.6],
+        bays: [{ type: 'suv', dx: -2.8 }],
+        slots: [-2.8],
         pump: { dx: -6.0, dz: 0 }, sign: { dx: 6.0, dz: 3.5 },
         rect: { w: 15, d: 12 },
       },
@@ -461,7 +442,6 @@ export const CONFIG = {
       { type: 'moto', zone: 'Place Gutenberg' },
       { type: 'grosseMoto', zone: 'Place Broglie' },
       { type: 'suv', zone: 'Place Kléber' },
-      { type: 'helico', zone: 'Place Kléber' },
     ],
     // Écraser un zombie (propre à chaque moto, voir `roadkill` des types) : sous la vitesse vmin, aucun dégât et la moto est stoppée
     // par le zombie (vitesse plafonnée à stopSpeed, arrêt net au contact) ; au-dessus, dégâts = K x v x r avec
@@ -545,31 +525,6 @@ export const CONFIG = {
         name: 'VÉLO', hudName: 'VÉLO', det: 'le', seats: 1, camArm: 3.0, hp: 150, tank: 0, maxSpeed: 12, accel: 4.5, brake: 10, reverseSpeed: 1.2, drag: 0.1,
         wheelbase: 1.05, maxSteer: 0.72, grip: 13, radius: 0.4, bikeRadius: 0.3, roadkill: { K: 0, vmin: 99, slowdown: 1 },
         crash: { minSpeed: 6, damagePerMs: 4, maxDamage: 25 }, blast: null, wreckTime: 10, respawnRounds: 1, fx: false, wreckLift: 0.36, cullDist: 90, leanK: 0.05,
-      },
-      // Hélicoptère de transport armé (v0.70.0, remplace l'avion) : 1 pilote + 4 passagers qui tirent avec leur propre arme sur les zombies en dessous.
-      // Pilotage : W/S avant/arrière, A/D rotation, Espace monte, Maj/C/Ctrl descend ; sans touche il fait du sur-place. Le pilote a une mitrailleuse de nez (clic gauche).
-      helico: {
-        name: 'HÉLICOPTÈRE', hudName: 'HÉLICO', det: "l'", isHeli: true, drivetrain: 'ROTOR', seats: 5, camArm: 13.0, hp: 2600, tank: 90, idle: 0.006, gas: 0.020, perSpeed: 0.012,
-        maxSpeed: 40.0, accel: 12.0, brake: 12.0, reverseSpeed: 11.0, drag: 0.05,
-        wheelbase: 3.0, maxSteer: 0.5, grip: 20, radius: 3.0, bikeRadius: 2.6, roadkill: { K: 0, vmin: 99, slowdown: 1 },
-        gears: 1, idleRpm: 0, redlineRpm: 3000, maxRpm: 3300,
-        crash: { minSpeed: 14, damagePerMs: 2.0, maxDamage: 40 }, wreckLift: 0.5,
-        gunDamage: 110, gunRate: 0.075,
-        // Modèle de vol (arcade). Vitesses en m/s, angles en rad.
-        heli: {
-          rotorUp: 0.45, rotorDown: 0.25, rotorReady: 0.9, // montée en régime / ralentissement du rotor (par seconde), régime minimal pour décoller
-          climb: 9.0, descend: 7.0, vyResponse: 2.6,       // vitesses verticales maximales et réactivité
-          hRate: 1.6, brakeRate: 2.0, latDamp: 2.5,        // réactivité de la vitesse horizontale (accélération / lâcher de touche), amortissement de la dérive latérale
-          yawRate: 1.5, yawResponse: 4.0,                  // rotation maximale (rad/s) et réactivité
-          maxTilt: 0.3, maxBank: 0.3,                      // inclinaison du fuselage à pleine vitesse / en virage
-          maxAlt: 180, cushion: 2.5,                       // plafond ; hauteur sous laquelle l'effet de sol amortit la descente
-          hardLanding: 7.0, landingDamage: 150,            // vitesse de chute fatale à l'atterrissage, PV perdus par m/s au-delà de 4
-          sink: 6.0,                                       // chute sans moteur (autorotation : le rotor freine la chute)
-          wallDamage: 80, wallDamagePerMs: 14,             // choc contre un mur : PV de base + PV par m/s
-          washHeight: 14,                                  // hauteur sous laquelle le rotor soulève poussière et fumée
-          gunRange: 220, gunCone: 1.0,                     // portée de la mitrailleuse de nez ; écart maximal (rad) entre le tir et l'axe du nez
-          heatPerShot: 0.03, heatCool: 0.15, heatLock: 2.5, // chauffe par coup, refroidissement par seconde, blocage après surchauffe (s)
-        },
       },
     },
   },
