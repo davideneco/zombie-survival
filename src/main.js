@@ -21,8 +21,9 @@ import { makeTeddy } from './machines.js';
 import { installMachineFx } from './machineFx.js';
 import { installVehicles } from './vehicles.js';
 import { installTram } from './tram.js';
-import { installTramWalk } from './tramInterior.js';
+import { installTramWalk, pushOut } from './tramInterior.js';
 import { installTrain } from './train.js';
+import { installIntro } from './intro.js';
 import { wreckMaterial } from './vehicleModels.js';
 import { installLauncher } from './launcher.js';
 import { makeDisplay } from './weaponDisplay.js';
@@ -800,6 +801,10 @@ const game = {
     for (let i = this.grenadesLive.length - 1; i >= 0; i--) {
       const g = this.grenadesLive[i];
       g.t -= dt;
+      if (g.tram?.isTrain && this.trainGrenadeStep(g, g.tram, dt, G)) { // inside the train (v0.81.0) : simulated in the coach frame
+        if (g.t <= 0) { scene.remove(g.mesh); this.grenadesLive.splice(i, 1); this.explode(g.pos, CONFIG.grenade.radius, CONFIG.grenade.damage, g.mine ? null : g.owner, 0xff8a2a, true); }
+        continue;
+      }
       g.vel.y -= G * dt;
       const before = g.pos.clone();
       g.pos.addScaledVector(g.vel, dt);
@@ -840,6 +845,38 @@ const game = {
         this.explode(g.pos, CONFIG.grenade.radius, CONFIG.grenade.damage, g.mine ? null : g.owner, 0xff8a2a, true);
       }
     }
+  },
+
+  // A grenade thrown inside the regional train (v0.81.0) : simulated in the frame of the train (u along, w right, y up), so it flies, bounces
+  // and rests in the coach whatever the train does (speed, braking, curves). The throw velocity carries the train speed (player.js, `nade`) :
+  // removed at the first step. Walls, ends, ceiling, floor, and the seats / partitions (pushOut, below the seat backs). false : not inside.
+  trainGrenadeStep(g, t, dt, G) {
+    let L = g.tl;
+    if (!L) {
+      const tl = t.worldToWalk(g.pos.x, g.pos.z, this._gtl || (this._gtl = { u: 0, w: 0 })), I = t.interior;
+      if (tl.w === 99 || Math.abs(tl.w) > t.walkCfg.wall + 0.3 || tl.u < I.u0 - 0.5 || tl.u > I.u1 + 0.5) return false;
+      const q = t.frame(tl.u, this._gtf || (this._gtf = {}));
+      L = g.tl = { u: tl.u, w: tl.w, y: g.pos.y, vu: g.vel.x * q.tx + g.vel.z * q.tz - t.v, vw: -g.vel.x * q.tz + g.vel.z * q.tx, vy: g.vel.y, p: { u: 0, w: 0 } };
+    }
+    const I = t.interior, wall = t.walkCfg.wall - 0.12, floor = t.floorY + 0.09, ceil = t.ceilY - 0.1;
+    L.vy -= G * dt; L.u += L.vu * dt; L.w += L.vw * dt; L.y += L.vy * dt;
+    if (Math.abs(L.w) > wall) { const sd = Math.sign(L.w); L.w = sd * wall; if (L.vw * sd > 0) L.vw *= -0.6; }
+    if (L.u < I.u0 + 0.12) { L.u = I.u0 + 0.12; if (L.vu < 0) L.vu *= -0.6; }
+    if (L.u > I.u1 - 0.12) { L.u = I.u1 - 0.12; if (L.vu > 0) L.vu *= -0.6; }
+    if (L.y < floor + 1.05) { // seats, partitions, end walls (the gangways and partition doors stay open)
+      const p = L.p; p.u = L.u; p.w = L.w;
+      if (pushOut(t.walkLists(L.u, false), p, 0.12) > 0) {
+        const du = p.u - L.u, dw = p.w - L.w, l = Math.hypot(du, dw) || 1, nu = du / l, nw = dw / l, dot = L.vu * nu + L.vw * nw;
+        if (dot < 0) { L.vu -= 1.6 * dot * nu; L.vw -= 1.6 * dot * nw; }
+        L.u = p.u; L.w = p.w;
+      }
+    }
+    if (L.y > ceil) { L.y = ceil; if (L.vy > 0) L.vy *= -0.3; }
+    if (L.y < floor) { L.y = floor; L.vy = Math.abs(L.vy) * 0.35; L.vu *= 0.6; L.vw *= 0.6; if (L.vy < 0.6) L.vy = 0; }
+    t.walkToWorld(L.u, L.w, L.y, g.pos);
+    g.mesh.position.copy(g.pos);
+    if (Math.abs(L.vu) + Math.abs(L.vw) > 0.05 || L.vy) g.mesh.rotation.x += dt * 8;
+    return true;
   },
 
   // Explosion : effets pour tout le monde ; dégâts aux zombies calculés par l'hôte (ou en solo).
@@ -1247,10 +1284,12 @@ const game = {
     }
     this.resetVehicles?.();
     this.resetTransfer?.();
+    this.introReset?.(); // train intro (v0.81.0) : starts when the start spot is the intro's, otherwise the train is parked
   },
 
   pickRandomSpawn() {
     if (this.startArea === 'gare' && world.gare) { this.activeSpawn = world.gare.start; return this.activeSpawn; } // départ « Gare Centrale » (menu)
+    if (this.startArea === 'intro' && this.introSpawn) { this.activeSpawn = this.introSpawn; return this.activeSpawn; } // départ « Train » (v0.81.0, intro.js)
     if (!CONFIG.spawnPoints?.length) return null;
     const sp = CONFIG.spawnPoints[Math.floor(Math.random() * CONFIG.spawnPoints.length)];
     this.activeSpawn = sp;
@@ -1311,7 +1350,7 @@ const game = {
       rp.yaw = yaw;
     }
 
-    hud.announce('ZONE DE DÉPART', sp.name.toUpperCase(), 3500);
+    if (!sp.intro) hud.announce('ZONE DE DÉPART', sp.name.toUpperCase(), 3500); // (the train intro has its own title card)
   },
 
   gameOver() {
@@ -1343,6 +1382,7 @@ const game = {
     this.player.active = this.playing;
     this.updateVehicles(dt);
     this.updateTransfer?.(dt); // tram transfer (v0.79.0) : decor car, ride, fade, teleport
+    this.updateIntro?.(dt);    // train intro (v0.81.0) : clock, train pose, doors, announcements, skip
     this.updateTrain?.(dt);    // regional train (v0.80.0) : LED flicker
     p.update(dt, this.time);
     world.setLocalArea?.(world.areaOf(p.pos.x, p.pos.z)); // only the local player's area is drawn (island or station)
@@ -1415,7 +1455,7 @@ const game = {
         hud.announce('MANCHE TERMINÉE', 'La prochaine arrive…', 4000);
         if (this.isHost) this.net?.send({ t: 'round_end' });
       }
-      if (this.intermission > 0) {
+      if (this.intermission > 0 && !this.introBlocksRound?.()) { // (no round during the train intro : intro.js starts round 1 after the stop)
         this.intermission -= dt;
         if (this.intermission <= 0) this.startRound();
       }
@@ -1655,17 +1695,23 @@ installVehicles(game, { world, scene, hud, sfx });
 installTram(game, { world, scene, hud, sfx });
 installTramWalk(game, { world, hud, sfx }); // intérieur praticable de la rame (v0.40.0)
 installTrain(game, { world, hud }); // regional train parked at quai 1 of the station (v0.80.0) : walk frame, zombies boarding
+installIntro(game, { world, hud, sfx }); // train intro (v0.81.0) : the ride into the station, then round 1
 RemotePlayer.rideOf = (id) => game.rideById(id); // coéquipiers debout dans une rame : leur position est dans le repère de la rame
 installLauncher(game, { world, scene, fx });
 installModMenu(game, { world, hud, sfx });
 installUnstick(game, { world, hud, sfx });
 installTransfer(game, { world, hud, sfx, scene }); // tram Gare Centrale <-> Homme de Fer (v0.79.0)
-{ // menu : « Départ » (Grande Île au hasard / Gare Centrale), remembered locally
-  const sel = document.getElementById('startArea');
+{ // menu : « Départ » (train intro / Gare Centrale / Grande Île au hasard), remembered locally ; default CONFIG.start (v0.81.0)
+  const sel = document.getElementById('startArea'), qs = new URLSearchParams(location.search);
+  const ok = (v) => (v === 'intro' ? !!game.introAvailable : v === 'gare' ? !!world.gare : v === 'island');
+  let v = localStorage.getItem('zombie_start') || (CONFIG.start === 'classic' ? 'island' : CONFIG.start);
+  if (qs.has('debug')) v = qs.has('intro') ? 'intro' : qs.has('gare') ? 'gare' : 'island'; // ?debug alone : the classic start (test harness)
+  if (!ok(v)) v = ok('intro') ? 'intro' : 'island';
+  game.startArea = v;
   if (sel) {
-    sel.value = localStorage.getItem('zombie_start') === 'gare' && world.gare ? 'gare' : 'island';
+    for (const o of sel.options) o.disabled = !ok(o.value);
+    sel.value = v;
     sel.disabled = !world.gare;
-    game.startArea = sel.value;
     sel.addEventListener('change', () => { game.startArea = sel.value; game.activeSpawn = null; try { localStorage.setItem('zombie_start', sel.value); } catch { /* private mode */ } });
   }
 }
@@ -1745,6 +1791,7 @@ function refreshLobby() {
 function setupNetworkHandlers(net) {
   game.bindVehicleNet(net);
   game.onTransferNet?.(net); // tram transfer : xf_req, xf_call, xf_go, xf_left
+  game.onIntroNet?.(net); // train intro : tn_sync, intro_skip
   // Déconnexion
   net.on('disconnect', () => {
     hud.announce('DÉCONNECTÉ', 'Perte de connexion au serveur', 4000);
@@ -1795,6 +1842,7 @@ function setupNetworkHandlers(net) {
         finaleDone: game.finaleDone,
         summit: game.finaleDone && (game.finale || game.dawnOn) ? { st: game.summitState?.() || null, fan: game.finale?.fan || 0, dawn: game.dawnOn ? Math.round((game.time - game.dawnT0) * 10) / 10 : null, eternal: !!game.eternal } : null, // Acte V en cours (ou Aube passée)
         vehicles: game.vehicleSnapshot(),
+        intro: game.introState?.() || null, // train intro running : { tau, ph } (the joiner stands in the train)
         zombies: game.zombies.map((z) => ({
           id: z.id,
           st: z.spawnType,
@@ -2087,6 +2135,7 @@ function setupNetworkHandlers(net) {
       if (zd.angel) z.region = 1;
       game.zombies.push(z);
     }
+    if (m.intro) game.introJoin?.(m.intro); // train intro running (v0.81.0)
   });
 
   // Démarrage par l'hôte
@@ -2302,7 +2351,7 @@ hud.el.btnStartGame.addEventListener('click', (e) => {
   game.started = true;
   if (!game.activeSpawn) game.pickRandomSpawn();
   game.applySpawnPoint(game.activeSpawn, 0);
-  game.net.send({ t: 'start', sp: game.activeSpawn });
+  game.net.send({ t: 'start', sp: game.activeSpawn, ...(game.activeSpawn?.intro ? { intro: { tau: 0 } } : null) });
   hud.hideOverlay();
   game.reset(false);
   lockAndPlay();
@@ -2531,6 +2580,7 @@ if (q.has('debug')) {
   const pl = game.player;
   if (q.has('gare') && world.gare) { game.startArea = 'gare'; game.pickRandomSpawn(); game.applySpawnPoint(game.activeSpawn, 0); } // ?debug&gare : start at the station
   if (q.has('gare') && q.has('train') && game.train) { const t = game.train; game.placeInTram(t, t.veh[2].uc + 3.4, 0); } // ?debug&gare&train : standing in the aisle of the middle coach
+  // ?debug&intro : the train intro (the start area was chosen before the first reset : the player already stands in the train at τ = 0)
   if (q.has('x')) pl.pos.x = parseFloat(q.get('x'));
   if (q.has('z')) pl.pos.z = parseFloat(q.get('z'));
   if (q.has('yaw')) pl.yaw = parseFloat(q.get('yaw'));
@@ -2586,7 +2636,7 @@ function frame() {
   // Solo : le menu pause fige le jeu. En multijoueur la partie continue.
   const frozen = !game.isMultiplayer && !game.playing && game.started && !game.over && !q.has('debug');
   if (game.started && !game.over && !frozen) game.update(dt);
-  else if (frozen) game.summitFx?.step(dt, true); // le ciel de l'Aube continue pendant la pause du solo
+  else if (frozen) { game.summitFx?.step(dt, true); game.introFrozen?.(); } // le ciel de l'Aube continue pendant la pause du solo (the train intro's rolling sound stops)
   hud.update(dt);
   updateClock();
   game.scoreboard?.update(dt);

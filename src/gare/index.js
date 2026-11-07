@@ -4,6 +4,8 @@ import { planGare } from './plan.js';
 import { buildGareMeshes } from './build.js';
 import { buildIntroRoute, buildRailNet } from '../railNet.js';
 import { Train } from '../train.js';
+import { buildRideScenery } from '../rideScenery.js';
+import { introProfile } from '../intro.js';
 
 // =====================================================================
 //  Gare de Strasbourg (v0.79.0) : a separate small playable area at its real coordinates (same frame as area.json), joined to the
@@ -104,6 +106,20 @@ export function buildGare(ctx) {
     try { train = new Train(route, { parent: root, collision, lightSources, region, y0: G.railY + CONFIG.railNet.railTop, envMap }); }
     catch (e) { console.warn('[gare] train', e); }
   }
+
+  // ---------------------------------------------------------------- trackside scenery of the intro ride (v0.81.0, rideScenery.js)
+  let scenery = null;
+  if (route && train && CONFIG.intro?.enabled) {
+    try {
+      const P = introProfile(), s0 = route.parkHeadS - P.D, W = CONFIG.intro.scenery.wreck;
+      const midU = train.L / 2 - train.veh[Math.min(2, train.n - 1)].uc; // nose -> middle of the second coach (where the players stand)
+      scenery = buildRideScenery({ route, plan, rail: data.rail, gare: data.gare, sFrom: Math.max(0, s0 - CONFIG.intro.scenery.from), wreckS: s0 + P.dist(W.at) - midU, groundMat: railNet.groundMat, groundY: railNet.groundY });
+      root.add(scenery.root);
+    } catch (e) { console.warn('[gare] ride scenery', e); }
+  }
+  // the train's approach counts as the station area (areaOf : the station is drawn, not the island) : within `corridor` m of the route
+  const _pr = {};
+  const inCorridor = (x, z) => !!route && route.track.project(x, z, CONFIG.intro?.corridor ?? 60, _pr).d < Infinity;
 
   // ---------------------------------------------------------------- light spots (pooled point lights of realworld.js)
   for (const l of plan.lights) { const [x, z] = W(...l.l); lightSources.push({ x, y: l.y, z, color: l.color, intensity: l.intensity, dist: l.dist }); }
@@ -262,8 +278,8 @@ export function buildGare(ctx) {
 
   const start = { ...CONFIG.gareSpawn, x: plan.start.x, z: plan.start.z, yaw: plan.start.yaw };
   const api = {
-    plan, root, region, trees, arch, nav, doors, spawns, zoneIdx, zoneCenters, start, route, railNet, train,
-    bounds: plan.bounds, inArea, zoneOf,
+    plan, root, region, trees, arch, nav, doors, spawns, zoneIdx, zoneCenters, start, route, railNet, train, scenery,
+    bounds: plan.bounds, inArea, inCorridor, zoneOf,
     inRegion: (x, z) => inArea(x, z) && levels.inRegion(region, x, z),
     makeDoors, placeItems, beforeNavs, finishNav, pickGround, cullItems,
     stop: plan.stop, map: { image: map, view: { halfX: -plan.bounds.x0, halfZ: -plan.bounds.z0, scale: mapScale }, crop: { ...plan.bounds }, title: 'GARE CENTRALE — STRASBOURG' },

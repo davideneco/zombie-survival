@@ -99,7 +99,7 @@ export function installSummit(game, { world, scene, hud, sfx, fx, hemi, moon, mo
   const sky = { phase: 'night', t: 0, k: 0, apply: null };
   // Le vrai look de nuit (réglé dans main.js) : k = 0 le retrouve exactement ; l'aube et le jour viennent des tables SKY (k >= 0,5).
   const NIGHT = { bg: scene.background.clone(), fog: scene.fog.color.clone(), density: scene.fog.density, hemiSky: hemi.color.clone(), hemiGround: hemi.groundColor.clone(), moon: moon.color.clone(), hemiI: 0.28, moonI: 0.42 };
-  const dn = { hour: CONFIG.dayNight.startHour, days: 0, cycle: false, lastK: -1, acc: 0, sunEl: -30, sunAz: 0 };
+  const dn = { hour: CONFIG.dayNight.startHour, days: 0, cycle: false, lastK: -1, acc: 0, sunEl: -30, sunAz: 0, hold: null }; // hold : hour held during the train intro (v0.81.0)
   const tmpC = new THREE.Color(), tmpD = new THREE.Color();
   const pickC = (arr, k, out, night) => (k < 0.5 ? (night ? out.copy(night).lerp(C3(arr[1]), sm(k * 2)) : lerpHex(out, arr[0], arr[1], sm(k * 2))) : lerpHex(out, arr[1], arr[2], sm((k - 0.5) * 2)));
   const pickN = (arr, k, night = arr[0]) => (k < 0.5 ? night + (arr[1] - night) * sm(k * 2) : arr[1] + (arr[2] - arr[1]) * sm((k - 0.5) * 2));
@@ -149,14 +149,15 @@ export function installSummit(game, { world, scene, hud, sfx, fx, hemi, moon, mo
   const sunAzimuth = (h) => DN().sunAzimuthRise + 180 * (h - DN().sunrise) / (DN().sunset - DN().sunrise);
   const kOfElevation = (e) => (e <= -8 ? 0 : e < 5 ? 0.5 * (e + 8) / 13 : e < 35 ? 0.5 + 0.5 * (e - 5) / 30 : 1); // -8° nuit, 5° aube dorée, 35° plein jour
   const mode = () => game.settings?.dayCycle || 'auto'; // 'auto' | 'night' | 'day'
-  const startHour = () => (mode() === 'day' ? DN().fixedDayHour : mode() === 'night' ? 0 : DN().startHour);
+  const startHour = () => (dn.hold != null ? dn.hold : mode() === 'day' ? DN().fixedDayHour : mode() === 'night' ? 0 : DN().startHour);
   const cycleOn = () => !game.dawnOn && !game.eternal && sky.phase === 'night';
   const cycleStep = (dt, paused) => {
     if (!cycleOn()) { if (dn.cycle) { dn.cycle = false; if (sun) sun.visible = false; } return; }
     if (!sun) sun = buildSun();
     if (!dn.cycle) { dn.cycle = true; dn.lastK = -1; }
     if (!paused) {
-      if (mode() === 'auto') { dn.hour += 24 * dt / (DN().dayMinutes * 60); if (dn.hour >= 24) { dn.hour -= 24; dn.days++; } }
+      if (dn.hold != null) dn.hour = dn.hold; // the train intro : night, the clock stands still
+      else if (mode() === 'auto') { dn.hour += 24 * dt / (DN().dayMinutes * 60); if (dn.hour >= 24) { dn.hour -= 24; dn.days++; } }
       else dn.hour = startHour();
     }
     dn.sunEl = sunElevation(dn.hour); dn.sunAz = sunAzimuth(dn.hour);
@@ -231,6 +232,14 @@ export function installSummit(game, { world, scene, hud, sfx, fx, hemi, moon, mo
     clockText() { const m = Math.floor(dn.hour * 60 / DN().clockMinutes) * DN().clockMinutes; return `${String(Math.floor(m / 60) % 24).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`; },
     clockVisible() { return dn.cycle && mode() === 'auto'; },
     phaseName() { const k = sky.k; return k < 0.12 ? 'NUIT' : k < 0.7 ? (dn.hour < 12 ? 'AUBE' : 'CRÉPUSCULE') : 'JOUR'; },
+    // train intro (v0.81.0) : hold the night at `hour` (any day / night setting) ; null : release (auto : the clock resumes from that hour,
+    // fixed settings : the sky eases back to their hour)
+    holdNight(hour) {
+      if (hour == null) { if (dn.hold == null) return; dn.hold = null; if (mode() !== 'auto') dn.hour = startHour(); dn.lastK = -1; return; }
+      dn.hold = hour; dn.hour = hour; dn.sunEl = sunElevation(hour); dn.sunAz = sunAzimuth(hour);
+      if (cycleOn()) { sky.k = kOfElevation(dn.sunEl); dn.lastK = -1; applySky(); }
+    },
+    get nightHeld() { return dn.hold != null; },
     nightHealthMult() { return dn.cycle && mode() === 'auto' && sky.k < DN().nightBelowK ? DN().nightZombieHealth : 1; },
     startDawn, startOrbit, endOrbit, cameraStep, skyStep, resetSky, step,
     get dawnT() { return sky.phase === 'dawn' ? sky.t : sky.phase === 'night' && (sky.k === 0 || dn.cycle) ? 0 : S().dawn.sky; },

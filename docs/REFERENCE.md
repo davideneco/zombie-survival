@@ -1,6 +1,6 @@
 # Zombie Survival — fiche de référence
 
-Version du jeu : **v0.79.1** (package 0.79.1). Générée automatiquement par `node tools/make-docs.mjs` à partir de `src/config.js` et du jeu.
+Version du jeu : **v0.80.0** (package 0.80.0). Générée automatiquement par `node tools/make-docs.mjs` à partir de `src/config.js` et du jeu.
 Carte annotée : [carte.png](carte.png). Armes de profil : [armes.png](armes.png). Les mêmes tableaux en tableur : dossier [csv/](csv/).
 
 Pour demander une modification, citez la ligne (ex. « Mitrailleuse RPK : chargeur 100 », « Mastodonte à 3000 pts », « porte P3 à 500 pts », « mettre la boîte mystère dans la zone Temple-Neuf »).
@@ -641,6 +641,21 @@ Prix d'une porte : le plus cher des deux prix de zone (colonne « Prix de la por
 | Voies | profil de rail extrudé (0,15 m), traverses tous les 0,6 m, prisme de ballast 3,1 / 4,9 m | itinéraire du sud-ouest lissé ; la voie du quai 1 est décalée pour laisser 0,2 m entre la caisse et le bord du quai |
 | Caténaire | poteaux tous les 55 m à 3,1 m de l'axe, fil de contact à 5,6 m, porteur à 6,9 m | hors de la gare, en tronçons de 200 m (une maille par matériau et par tronçon, sans ombres) |
 | Débogage | ?debug&gare&train : debout dans l'allée de la voiture du milieu |  |
+
+## Départ : l'intro en train (arrivée en gare de Strasbourg)
+
+| Réglage | Valeur | Remarque |
+|---|---|---|
+| Départ par défaut | intro en train | menu « Départ » : intro en train / Gare Centrale / Classique (Grande Île) ; le choix est retenu ; ?debug seul garde le départ classique, ?debug&intro lance l'intro |
+| Trajet | 1217 m en 95 s depuis le sud-ouest, arrêt au quai 1 | vitesses (s : km/h) 0 : 80 · 26 : 80 · 36 : 15 · 52 : 15 · 60 : 50 · 78 : 50 · 95 : 0 ; la position du train ne dépend que de l'horloge de l'intro |
+| Ouverture | carton noir « TRAIN RÉGIONAL 17412 — DIRECTION STRASBOURG » (4 s, fondu 2,5 s) | nuit : l'horloge reste à 3 h pendant le trajet (le cycle jour / nuit reprend ensuite) |
+| Annonces | 5.5 s : Mesdames et messieurs, dans quelques minutes notre train arrivera en gare de Strasbourg, son terminus… · 12.8 s : … (grésillements — des cris dans le haut-parleur) … · 26 s : RALENTISSEMENT — Obstacle sur la voie · 79 s : Strasbourg. Strasbourg, terminus de ce train. | à l'arrivée : « STRASBOURG — Terminus. Tout le monde descend. » |
+| Dans le train | debout en voiture 2 et 3 (arrivants en cours de route : voiture 3), portes verrouillées | on marche dans l'allée et les intercirculations en roulant ; balancement de la caméra 0,4° / 0,015 m, secousse à chaque joint de rail (25 m) |
+| Arrivée | portes ouvertes en 1,6 s ; manche 1 5 s après l'arrêt (zone Quais) | pas de zombies pendant le trajet pour l'instant (étape 4 : crochets introHooks) |
+| Passer l'intro | maintenir Espace 1,5 s | solo : le joueur ; coop : l'hôte seulement ; le train arrive à quai, portes ouvertes |
+| Grenades dans le train | simulées dans le repère de la voiture | elles gardent la vitesse du train, rebondissent sur les parois, les sièges et le plafond, et restent posées au freinage |
+| Décor du trajet | clôtures, 520 arbres, 700 buissons, 90 bâtiments, 90 lampadaires, signaux, wagons déraillés à 44 s | instanciés, en tronçons de 300 m dessinés à moins de 190 m ; sol sombre de 460 m autour de la caméra |
+| Réseau | l'hôte envoie tn_sync (τ, phase) toutes les 0,5 s ; intro_skip | le client avance τ lui-même et rattrape l'hôte (+ demi-ping, plafonné à 0,5 s) ; arrivant : sync.intro |
 
 ## Tram : l'aiguillage du nœud de Homme de Fer (croisement des lignes A / D et B / C / F)
 

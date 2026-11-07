@@ -58,11 +58,15 @@ export class Collision {
   setDynamic(key, boxes, kind = 'prop') {
     let e = this.dyn.get(key);
     if (!e) this.dyn.set(key, e = { boxes: [], kind });
-    e.boxes.length = 0;
+    // (the box objects are reused : the moving train updates its boxes every frame, v0.81.0)
+    let n = 0;
     for (const b of boxes) {
       const c = Math.cos(b.rot), s = Math.sin(b.rot), hx = b.w / 2, hz = b.d / 2;
-      e.boxes.push({ x: b.x, z: b.z, hx, hz, c, s, h: b.h ?? 3.4, r2: (Math.hypot(hx, hz) + 1.2) ** 2 });
+      const o = e.boxes[n] || (e.boxes[n] = {});
+      o.x = b.x; o.z = b.z; o.hx = hx; o.hz = hz; o.c = c; o.s = s; o.h = b.h ?? 3.4; o.r2 = (Math.hypot(hx, hz) + 1.2) ** 2;
+      n++;
     }
+    e.boxes.length = n;
   }
   clearDynamic(key) { this.dyn.delete(key); }
 

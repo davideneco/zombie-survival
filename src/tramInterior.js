@@ -107,7 +107,9 @@ export function installTramWalk(game, { world, hud, sfx }) {
       if (t.state === 'gone') { this.tramWalkOff(); return; }
       const I = t.interior, Wc = t.walkCfg || W;
       t.frame(O.u, f1);
-      p.yaw += angDiff(f1.yaw, O.fy); O.fy = f1.yaw; // la vue tourne avec la rame (virages)
+      const dyw = angDiff(f1.yaw, O.fy); // la vue tourne avec la rame (virages)
+      if (t.isTrain && Math.abs(dyw) > 0.03) { const st = dyw * Math.min(1, dt * 6); p.yaw += st; O.fy += st; } // train : crossing a gangway in a curve (rigid coaches) eases the step
+      else { p.yaw += dyw; O.fy = f1.yaw; }
       // vitesse (monde) -> repère de la rame
       pt.u = O.u + (p.vel.x * f1.tx + p.vel.z * f1.tz) * dt;
       pt.w = O.w + (-p.vel.x * f1.tz + p.vel.z * f1.tx) * dt;

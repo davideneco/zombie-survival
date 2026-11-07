@@ -16,6 +16,8 @@ import { pushOut, doorIndexAt } from './tramInterior.js';
 //  Zombies (host) : a zombie of the station whose target stands in the train goes to the door spot nearest to it (trainGoal), steps in, then
 //  walks the aisle in (u, w) (trainZombieStep) : the aisle is a corridor, no flow field needed. It leaves by a door when its target leaves.
 //  The parked train sends nothing on the network : it is the same everywhere ; players use p_state (vh = TRAIN_ID, lx, ly, lz, lyw).
+//  v0.81.0 (intro.js) : the train also MOVES (setPose(s, v), setDoors(f)) : its pose is a pure function of the intro clock, so it sends
+//  nothing either. Coach lights follow it (`dyn` light sources), the collision boxes are updated in place, passengers get a camera sway.
 // =====================================================================
 
 export const TRAIN_ID = 900;
@@ -53,13 +55,34 @@ export class Train {
     this.interior = this.buildInterior();
     // ---- meshes
     this.buildMeshes(opts);
+    // pooled lights : one cold LED light per coach ; `dyn` : the light pool follows them every frame (realworld.js) while the train moves
+    const Lc = T.light;
+    this.lights = this.veh.filter((v) => !v.loco).map((v) => ({ veh: v, x: 0, y: this.railY + Lc.y, z: 0, color: Lc.color, intensity: Lc.intensity, dist: Lc.dist, dyn: true }));
+    for (const l of this.lights) opts.lightSources?.push(l);
+    this._dynBoxes = this.veh.map(() => ({ x: 0, z: 0, w: 0, d: T.width, rot: 0, h: this.railY + T.height }));
     this.s = route.parkHeadS;
     this.apply();
-    // pooled lights : one cold LED light per coach (parked : fixed spots)
-    const Lc = T.light;
-    for (const v of this.veh) if (!v.loco) { const p = this.walkToWorld(v.uc, 0, this.railY + Lc.y, {}); opts.lightSources?.push({ x: p.x, y: p.y, z: p.z, color: Lc.color, intensity: Lc.intensity, dist: Lc.dist }); }
     this.flickT = 0;
+    // camera sway (local look) : roll (rad), bob (m) ; rail joints : distance since the last joint, pending wheel jolts (s)
+    this.sway = { roll: 0, bob: 0, curve: 0, t: 0, jointD: 0, jolts: new Float32Array(8).fill(-1), kick: 0 };
+    this.onJoint = null; // (speed) => void : rail joint under the train (intro.js plays the clack)
   }
+
+  // ------------------------------------------------------------------ moving (intro.js) : nose abscissa s, speed v (m/s), doors 0..1
+  setPose(s, v) {
+    this.v = v; this.speed = Math.abs(v);
+    if (s === this.s && this._posed) return;
+    this.s = s; this._posed = true;
+    this.apply();
+  }
+  setDoors(f) {
+    f = clamp(f, 0, 1);
+    if (f === this.doors.f) return;
+    this.doors.f = f; this.doors.open = f >= this.walkCfg.doorOpen;
+    this.applyDoors();
+  }
+  // back to the parked state of v0.80.0 (quai 1, doors open, stopped)
+  park() { this.v = 0; this.speed = 0; this.s = this.route.parkHeadS; this.apply(); this.setDoors(1); }
 
   // ------------------------------------------------------------------ walk API (same as Tram : tramInterior.js, remote.js, main.js)
   get usable() { return this.state === 'ok'; }
@@ -183,9 +206,13 @@ export class Train {
       for (const im of this.coachMeshes) im.setMatrixAt(v.i - 1, _m);
     }
     for (const im of this.coachMeshes) { im.instanceMatrix.needsUpdate = true; im.computeBoundingSphere(); }
-    this.applyDoors();
-    // world collision : one oriented box per vehicle (dynamic : bullets and camera rays pass, see collision.js)
-    this.collision?.setDynamic(this.dynKey, this.veh.map((v) => ({ x: v.x, z: v.z, w: v.len, d: T.width, rot: Math.atan2(v.tz, v.tx), h: this.railY + T.height })));
+    this.applyDoors(); // (the leaves ride with the coaches)
+    // coach lights follow their coach
+    if (this.lights) for (const l of this.lights) { l.x = l.veh.x; l.z = l.veh.z; }
+    // world collision : one oriented box per vehicle (dynamic : bullets and camera rays pass, see collision.js) ; no allocation (every frame)
+    const D = this._dynBoxes;
+    for (const v of this.veh) { const o = D[v.i]; o.x = v.x; o.z = v.z; o.w = v.len; o.rot = Math.atan2(v.tz, v.tx); }
+    this.collision?.setDynamic(this.dynKey, D);
   }
   applyDoors() {
     const T = CONFIG.train, f = this.doors.f, Wd = T.width / 2, Lay = this.lay;
@@ -219,8 +246,8 @@ export class Train {
     const cam = game?.player?.camera;
     if (cam) {
       _fr.setFromProjectionMatrix(_pm.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse));
-      let any = false;
-      for (const v of this.veh) if (!v.loco) { _sph.center.set(v.x, this.railY + 2, v.z); _sph.radius = v.len / 2 + 1.5; if (_fr.intersectsSphere(_sph)) { any = true; break; } }
+      let any = game.player?.onTram?.v === this; // standing inside : always drawn (the frustum is the last frame's : stale after a skip)
+      if (!any) for (const v of this.veh) if (!v.loco) { _sph.center.set(v.x, this.railY + 2, v.z); _sph.radius = v.len / 2 + 1.5; if (_fr.intersectsSphere(_sph)) { any = true; break; } }
       for (const im of this.coachMeshes) im.visible = any;
       for (const im of this.leafMeshes) im.visible = any;
     }
@@ -228,6 +255,33 @@ export class Train {
     const F = CONFIG.train.flicker;
     this.flickT -= dt;
     if (this.flickT <= 0) { this.flickT = (0.3 + Math.random()) / F.hz; this.mats.flicker.emissiveIntensity = Math.random() < F.rate ? 0.04 : 0.4 + Math.random() * 0.8; }
+    this.updateSway(dt);
+  }
+
+  // camera sway of the passengers (local look, no allocation) : a slow roll and bob that grow with speed, a lean in curves (lateral
+  // acceleration v² κ, κ the signed curvature at the middle of the train), and a small kick at each wheelset crossing a rail joint
+  updateSway(dt) {
+    const S = this.sway, W = CONFIG.train.sway, sp = this.speed, k = Math.min(1, sp / W.refSpeed);
+    if (!dt) return;
+    S.t += dt * (0.6 + 0.4 * k);
+    const tr = this.track, a = this._sa || (this._sa = {}), b = this._sb || (this._sb = {}), sm = this.s - this.L / 2;
+    tr.at(sm - 6, a); tr.at(sm + 6, b);
+    const kappa = (a.tx * b.tz - a.tz * b.tx) / 12, lean = clamp(-kappa * sp * sp * W.curve, -2.5, 2.5) * (Math.PI / 180);
+    S.curve += (lean - S.curve) * Math.min(1, dt * 1.5);
+    // rail joints : the wheelsets of a coach cross a joint at 0, axle, bogie, bogie + axle m
+    if (sp > 0.3) {
+      S.jointD += sp * dt;
+      if (S.jointD >= W.joint) {
+        S.jointD -= W.joint;
+        const J = S.jolts, B = CONFIG.train.bogie, off = this._joff || (this._joff = [0, W.axle, B, B + W.axle]);
+        let n = 0; for (const d of off) { for (; n < J.length; n++) if (J[n] < 0) { J[n] = d / sp; break; } }
+        this.onJoint?.(sp);
+      }
+    }
+    for (let i = 0; i < S.jolts.length; i++) if (S.jolts[i] >= 0) { S.jolts[i] -= dt; if (S.jolts[i] < 0) { S.kick = W.jolt * (0.6 + 0.4 * k); S.jolts[i] = -1; } }
+    S.kick *= Math.max(0, 1 - dt * 14);
+    S.roll = k * W.roll * (Math.PI / 180) * (Math.sin(S.t * 2 * Math.PI * W.hz * 0.5) + 0.35 * Math.sin(S.t * 2 * Math.PI * W.hz * 1.3 + 1.1)) + S.curve;
+    S.bob = k * W.bob * Math.sin(S.t * 2 * Math.PI * W.hz) - S.kick;
   }
 }
 
@@ -235,7 +289,7 @@ export class Train {
 // game.train : the parked train (world.gare.train) ; walk frames : trams + train ; zombies boarding ; prompts
 export function installTrain(game, { world, hud }) {
   const t = world.gare?.train;
-  if (world.gare) game.updateTrain = (dt) => { world.gare.cullItems?.(game.player.camera.position, dt); t?.update(dt, game); }; // station items cull, LED flicker
+  if (world.gare) game.updateTrain = (dt) => { world.gare.cullItems?.(game.player.camera.position, dt); world.gare.scenery?.update(game.player.camera.position); t?.update(dt, game); }; // station items cull, far ground of the ride, LED flicker, sway
   if (!t) return;
   const T = CONFIG.train, W = T.walk, Z = T.zombie;
   game.train = t;
@@ -339,7 +393,11 @@ export function installTrain(game, { world, hud }) {
     // prompt standing in the train
     trainWalkHint() {
       const O = game.player.onTram;
+      const intro = game.introHint?.(); // the intro ride : speed, skip (intro.js)
+      if (intro) return intro;
       for (const c of t.interior.cab) if (Math.abs(O.u - c.u) < W.cabReach) return c.text;
+      if (t.speed > 0.5) return `${game.binds.moveLabel()} : marcher · train en marche (${Math.round(t.speed * 3.6)} km/h)`;
+      if (!t.walkOpen()) return `${game.binds.moveLabel()} : marcher · portes fermées`;
       return `${game.binds.moveLabel()} : marcher · train à quai, portes ouvertes : marchez vers une porte pour descendre`;
     },
   });

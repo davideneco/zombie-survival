@@ -2254,6 +2254,7 @@ export async function buildRealWorld(scene, renderer) {
       .slice(0, LIGHTS);
     lightPool.forEach((l, i) => {
       const e = sorted[i];
+      l.userData.src = e ? e.s : null;
       if (!e) { l.intensity = 0; return; }
       l.color.setHex(e.s.color); l.intensity = e.s.intensity * lampScale; l.distance = e.s.dist; l.position.set(e.s.x, e.s.y, e.s.z);
     });
@@ -2273,7 +2274,7 @@ export async function buildRealWorld(scene, renderer) {
   // ---- areas (v0.79.0) : the island and the station. Only the local player's area is drawn (the other one is hidden : 130 m away, behind fog).
   const islandRoots = gare ? scene.children.filter((o) => o !== gare.root && o !== sky && !o.isLight) : [];
   let localArea = 'island';
-  const areaOf = (x, z) => (gare && gare.inArea(x, z) ? 'gare' : 'island');
+  const areaOf = (x, z) => (gare && (gare.inArea(x, z) || ((Math.abs(x) > halfX || Math.abs(z) > halfZ) && gare.inCorridor(x, z))) ? 'gare' : 'island'); // (the train's approach belongs to the station area, v0.81.0)
   if (gare) gare.arch.relief.setRange(0); // the station's surrounding buildings are background : painted windows only (draw calls)
   if (gare) { gare.root.visible = false; if (treesApi) { const sm = treesApi.setMode.bind(treesApi); treesApi.setMode = (m) => { sm(m); gare.trees?.setMode(m); }; } }
   const islandMap = { image: mapImage, view: { halfX, halfZ, scale: MAP_SCALE }, crop: { x0: Math.max(-halfX, secMinX - 40), x1: Math.min(halfX, secMaxX + 40), z0: Math.max(-halfZ, secMinZ - 40), z1: Math.min(halfZ, secMaxZ + 40) }, title: 'GRANDE ÎLE — STRASBOURG' };
@@ -2332,6 +2333,7 @@ export async function buildRealWorld(scene, renderer) {
       tramInfo?.update(dt); // feux des portes sur les voies (vert une fois la porte ouverte)
       lightTimer -= dt;
       if (lightTimer <= 0) { lightTimer = 0.4; assignLights(px, pz); }
+      for (const l of lightPool) { const src = l.userData.src; if (src && src.dyn) l.position.set(src.x, src.y, src.z); } // moving sources (the train's coach lights, v0.81.0)
       reliefTimer -= dt;
       if (reliefTimer <= 0) { reliefTimer = 0.25; arch.relief.update(px, pz); interiors.update(px, pz); } // détail des façades coupé au-delà de la portée de la qualité
     },

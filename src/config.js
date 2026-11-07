@@ -83,6 +83,9 @@ export const CONFIG = {
   ],
   // départ « Gare Centrale » (option du menu, ?debug&gare) : quai 1, devant la sortie du hall ; position calculée par src/gare/plan.js
   gareSpawn: { name: 'Gare Centrale — Quai 1', zone: 'Quais', area: 'gare' },
+  // Default start (v0.81.0, lobby option « Départ ») : 'intro' (the train ride into the station, src/intro.js), 'gare' (quai 1 directly) or
+  // 'classic' (a random spot of the Grande Île). The player's last choice is remembered locally ; ?debug alone keeps the classic start.
+  start: 'intro',
   cityHint: { x: -199, z: -145 },
   breaches: 3,
   sector: STRASBOURG_SECTOR,
@@ -606,6 +609,53 @@ export const CONFIG = {
     zombie: { radius: 0.3, doorSpot: 0.75, enter: 1.0, speedK: 0.9 },
     light: { color: 0xc8dcff, intensity: 1.2, dist: 11, y: 1.95 },   // one pooled point light per coach (cold LED), y above the rail head
     flicker: { hz: 9, rate: 0.35 },              // the faulty LED strips : flicker frequency, share of time off
+    // camera sway of a player standing in the moving train (local only) : roll (deg) and bob (m) at full speed (refSpeed m/s), frequency (Hz) ;
+    // curve : extra roll (deg) per m/s² of lateral acceleration ; jolt : bob kick (m) at each rail joint (joint m apart, axle and bogie spacing in m)
+    sway: { roll: 0.4, bob: 0.015, hz: 1.4, refSpeed: 22, curve: 0.35, jolt: 0.006, joint: 25, axle: 2.6 },
+  },
+
+  // ------------------------------------------------------------------ Train intro (v0.81.0, src/intro.js) : the game starts in the moving regional
+  // train, which comes from the south-west and stops at quai 1 of the station ; then round 1 starts at the station (zone Quais).
+  // The train abscissa s(τ) is a pure function of the intro clock τ (s) : the speed profile below is integrated exactly (linear speed between
+  // the keys) and the stop lands on the parked position (CONFIG.train.park). The host owns τ (tn_sync twice a second) ; clients follow.
+  intro: {
+    enabled: true,
+    profile: [[0, 22.2], [26, 22.2], [36, 4.2], [52, 4.2], [60, 13.9], [78, 13.9], [95, 0]],  // [τ s, speed m/s] : 80 km/h, 15 km/h past the obstacle, 50 km/h, stop at 95 s
+    card: 4.0, fadeIn: 2.5,       // s : black title card, then the picture fades in over the last fadeIn s of it
+    title: 'TRAIN RÉGIONAL 17412 — DIRECTION STRASBOURG',
+    doorTime: 1.6,                // s : the doors open at the stop
+    roundDelay: 5,                // s after the stop : round 1 starts at the station
+    skipHold: 1.5,                // s : hold [jump] (Espace) to skip the ride (solo : anyone ; co-op : the host)
+    hour: 3.0,                    // night : the game clock is held at this hour during the ride (auto day / night : the cycle resumes from it)
+    slots: [[2, 3.4], [2, -3.0], [3, 3.4], [3, -3.0]],   // [vehicle (1 : first coach), u from the coach centre] of the player slots ; late joiners : coach 3
+    lateCoach: 3,
+    corridor: 60,                 // m : points this close to the route (outside the island) belong to the station area (drawn while riding)
+    sync: 0.5,                    // s between two tn_sync of the host
+    nudge: 2,                     // 1/s : a client's τ converges toward the host τ (+ half the ping) ; snaps past 1 s of error
+    maxPing: 0.5,                 // s : the ping used for that lead is capped (a stalled tab measures absurd pings)
+    // on-board announcements (French) at τ (s) : chime, subtitle (text) for dur s ; static : radio static and screams after it ; big : title / sub
+    announce: [
+      { at: 5.5, chime: true, dur: 7, text: 'Mesdames et messieurs, dans quelques minutes notre train arrivera en gare de Strasbourg, son terminus…' },
+      { at: 12.8, dur: 3.2, static: true, text: '… (grésillements — des cris dans le haut-parleur) …' },
+      { at: 26, big: true, dur: 4, title: 'RALENTISSEMENT', sub: 'Obstacle sur la voie' },
+      { at: 79, chime: true, dur: 6, text: 'Strasbourg. Strasbourg, terminus de ce train.' },
+    ],
+    arrival: { title: 'STRASBOURG — Terminus.', sub: 'Tout le monde descend.' },
+    // phase 4 hooks (zombies during the ride ; not active yet) : game.introHooks[id](τ) is called at τ ; counts are solo, × (1 + 0.75 per extra player)
+    events: [{ at: 8, id: 'track' }, { at: 30, id: 'breach' }, { at: 55, id: 'roof' }, { at: 95, id: 'trackbed' }],
+    trackZombies: 4, sideZombies: 6, breachers: 6, gangway: 3,
+    breach: { grab: 3.0, climb: 1.2, maxHanging: 4, maxHanging4p: 8 },
+    healthRound: 1, roadkillPoints: 0,
+    // trackside scenery of the ride (src/rideScenery.js, instanced, no shadows) : from `from` m behind the train start to `clip` m before the
+    // station ; things stay `clear` m away from every track ; far ground : a dark plane of `ground` m around the camera under the track strip
+    scenery: {
+      from: 160, clip: 40, clear: 4.5, ground: 460, seed: 1741,
+      chunk: 300, chunkView: 190,               // m : instances binned along the route ; a chunk is drawn while the camera is within chunkView m of it
+      fenceGap: 3.2, fenceEvery: 3.0,          // fence : m beyond the outermost track of its side, post spacing (m)
+      trees: 520, bushes: 700, buildings: 90, lamps: 90, signalEvery: 280,   // counts (whole ride) ; signals : one every n m along the route
+      band: [8, 120],                           // m from the route : lateral range of trees, bushes and buildings
+      wreck: { at: 44, side: -1, off: 7.5, n: 3 },   // derailed wagons : beside the train at τ = at (s), side (-1 : left), off m from the route, count
+    },
   },
 
   // ------------------------------------------------------------------ Tram de transfert (v0.79.0, src/transfer.js) : arrêt « Gare Centrale »

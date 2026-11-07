@@ -210,6 +210,16 @@ function groundTex() { // trackside : cinder path, dry weeds, mud ; 256 px = 8 m
   });
 }
 
+// trackside ground (cinder, weeds, mud ; 8 m texture tile) : the strip along the route, and the far ground of the ride (rideScenery.js)
+let GROUND = null;
+export function trackGroundMaterial() {
+  if (GROUND) return GROUND;
+  const gc = groundTex();
+  GROUND = new THREE.MeshStandardMaterial({ map: new THREE.CanvasTexture(gc), normalMap: normalFromCanvas(gc, 1.5), roughness: 0.95, metalness: 0, color: 0x9a968c });
+  GROUND.map.colorSpace = THREE.SRGBColorSpace; GROUND.map.wrapS = GROUND.map.wrapT = THREE.RepeatWrapping; GROUND.map.anisotropy = 4;
+  return GROUND;
+}
+
 // ------------------------------------------------------------------ the approach (outside the station clip)
 // mats : { ballast, sleeper, rail, steel, iron } (the station's materials : same shaders) ; returns { root, chunks }
 export function buildRailNet({ rail, plan, route, mats }) {
@@ -221,9 +231,7 @@ export function buildRailNet({ rail, plan, route, mats }) {
   const tr = route.track;
   const inClip = (x, z) => { const [u, v] = plan.L(x, z); return inStationClip(plan, u, v); };
   const _pr = {};
-  const gc = groundTex();
-  const groundMat = new THREE.MeshStandardMaterial({ map: new THREE.CanvasTexture(gc), normalMap: normalFromCanvas(gc, 1.5), roughness: 0.95, metalness: 0, color: 0x9a968c });
-  groundMat.map.colorSpace = THREE.SRGBColorSpace; groundMat.map.wrapS = groundMat.map.wrapT = THREE.RepeatWrapping; groundMat.map.anisotropy = 4;
+  const groundMat = trackGroundMaterial();
   const chunks = new Map(); // key -> { mat -> [geometry] }
   const key = (x, z) => `${Math.floor(x / R.chunk)},${Math.floor(z / R.chunk)}`;
   const put = (k, mat, g) => { let c = chunks.get(k); if (!c) chunks.set(k, c = new Map()); let l = c.get(mat); if (!l) c.set(mat, l = []); l.push(g); };
@@ -296,7 +304,8 @@ export function buildRailNet({ rail, plan, route, mats }) {
     const gy = y0 - R.ballast.h - 0.02, wd = R.corridor;
     for (const run of runs(routePts, (x, z) => !inClip(x, z))) {
       const F = frames(simplify(run.pts, 0.2));
-      put(run.k, groundMat, sweep(F, [[-wd, gy - 0.4], [-R.ballast.foot / 2 - 0.4, gy], [R.ballast.foot / 2 + 0.4, gy], [wd, gy - 0.4]], { k: 1 / 8 }));
+      // (v0.81.0 : a skirt past the edges dips under the far ground of the ride, rideScenery.js : a clean seam, no coplanar faces)
+      put(run.k, groundMat, sweep(F, [[-wd - 2, gy - 1.3], [-wd, gy - 0.4], [-R.ballast.foot / 2 - 0.4, gy], [R.ballast.foot / 2 + 0.4, gy], [wd, gy - 0.4], [wd + 2, gy - 1.3]], { k: 1 / 8 }));
     }
   }
   // 4) one mesh per material per chunk
@@ -312,7 +321,7 @@ export function buildRailNet({ rail, plan, route, mats }) {
     }
     root.add(grp);
   }
-  return { root, chunks: chunks.size, meshes: n };
+  return { root, chunks: chunks.size, meshes: n, groundMat, groundY: y0 - R.ballast.h - 0.02 };
 }
 
 // position / normal / uv only, non-indexed

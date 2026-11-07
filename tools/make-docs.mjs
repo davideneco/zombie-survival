@@ -226,6 +226,23 @@ table('23_tram_interieur', 'Tram : l\'intérieur praticable (on marche dans la r
     ['Caténaire', `poteaux tous les ${RN.mast.every} m à ${fr2(RN.mast.offset)} m de l'axe, fil de contact à ${fr2(RN.wire.contact)} m, porteur à ${fr2(RN.wire.messenger)} m`, `hors de la gare, en tronçons de ${RN.chunk} m (une maille par matériau et par tronçon, sans ombres)`],
     ['Débogage', '?debug&gare&train : debout dans l\'allée de la voiture du milieu', '']]);
 }
+// ---- intro en train (v0.81.0)
+{
+  const I = C.intro, P = I.profile, SW = C.train.sway, SC = I.scenery;
+  let D = 0; for (let i = 1; i < P.length; i++) D += ((P[i][0] - P[i - 1][0]) * (P[i][1] + P[i - 1][1])) / 2;
+  const startLabel = { intro: 'intro en train', gare: 'Gare Centrale (quai 1)', classic: 'Grande Île au hasard' }[C.start] || C.start;
+  table('26_intro', 'Départ : l\'intro en train (arrivée en gare de Strasbourg)', ['Réglage', 'Valeur', 'Remarque'], [
+    ['Départ par défaut', startLabel, 'menu « Départ » : intro en train / Gare Centrale / Classique (Grande Île) ; le choix est retenu ; ?debug seul garde le départ classique, ?debug&intro lance l\'intro'],
+    ['Trajet', `${Math.round(D)} m en ${P[P.length - 1][0]} s depuis le sud-ouest, arrêt au quai 1`, `vitesses (s : km/h) ${P.map(([t, v]) => `${t} : ${Math.round(v * 3.6)}`).join(' · ')} ; la position du train ne dépend que de l'horloge de l'intro`],
+    ['Ouverture', `carton noir « ${I.title} » (${fr2(I.card)} s, fondu ${fr2(I.fadeIn)} s)`, `nuit : l'horloge reste à ${I.hour} h pendant le trajet (le cycle jour / nuit reprend ensuite)`],
+    ['Annonces', I.announce.map((a) => `${a.at} s : ${a.text || `${a.title} — ${a.sub}`}`).join(' · '), `à l'arrivée : « ${I.arrival.title} ${I.arrival.sub} »`],
+    ['Dans le train', `debout en voiture 2 et 3 (arrivants en cours de route : voiture ${I.lateCoach}), portes verrouillées`, `on marche dans l'allée et les intercirculations en roulant ; balancement de la caméra ${fr2(SW.roll)}° / ${fr2(SW.bob)} m, secousse à chaque joint de rail (${SW.joint} m)`],
+    ['Arrivée', `portes ouvertes en ${fr2(I.doorTime)} s ; manche 1 ${I.roundDelay} s après l'arrêt (zone Quais)`, 'pas de zombies pendant le trajet pour l\'instant (étape 4 : crochets introHooks)'],
+    ['Passer l\'intro', `maintenir ${kn0('jump')} ${fr2(I.skipHold)} s`, 'solo : le joueur ; coop : l\'hôte seulement ; le train arrive à quai, portes ouvertes'],
+    ['Grenades dans le train', 'simulées dans le repère de la voiture', 'elles gardent la vitesse du train, rebondissent sur les parois, les sièges et le plafond, et restent posées au freinage'],
+    ['Décor du trajet', `clôtures, ${SC.trees} arbres, ${SC.bushes} buissons, ${SC.buildings} bâtiments, ${SC.lamps} lampadaires, signaux, wagons déraillés à ${SC.wreck.at} s`, `instanciés, en tronçons de ${SC.chunk} m dessinés à moins de ${SC.chunkView} m ; sol sombre de ${SC.ground} m autour de la caméra`],
+    ['Réseau', `l'hôte envoie tn_sync (τ, phase) toutes les ${fr2(I.sync)} s ; intro_skip`, `le client avance τ lui-même et rattrape l'hôte (+ demi-ping, plafonné à ${fr2(I.maxPing)} s) ; arrivant : sync.intro`]]);
+}
 // ---- tram : les aiguillages (v0.41.0)
 const TJ = TR.junction, jct = (await import(path.join(ROOT, 'src/tramTrack.js'))).buildJunction(TJ, TNET.byId);
 table('24_tram_aiguillages', `Tram : l'aiguillage du nœud de ${TJ.name} (croisement des lignes A / D et B / C / F)`, ['Réglage', 'Valeur', 'Remarque'], [

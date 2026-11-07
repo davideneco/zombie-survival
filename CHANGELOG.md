@@ -2,6 +2,19 @@
 
 Chaque changement est poussé sur `main` (déploiement Render) avec un nouveau numéro de version et sa description ici.
 
+## v0.81.0 (2026-11-07)
+- L'intro en train : la partie commence désormais dans le train régional 17412 qui arrive de nuit en gare de Strasbourg (~95 s) : carton « TRAIN RÉGIONAL 17412 — DIRECTION STRASBOURG », annonces à bord, 80 km/h, « RALENTISSEMENT — Obstacle sur la voie » à 15 km/h devant des wagons déraillés, 50 km/h, arrêt au quai 1 sous la halle.
+- On marche dans les voitures et les intercirculations pendant que le train roule (portes verrouillées), avec un léger roulis et les secousses des joints de rail ; les grenades restent dans la voiture même au freinage ; on peut tirer par les fenêtres.
+- À l'arrêt : « STRASBOURG — Terminus. Tout le monde descend. », portes ouvertes, puis la manche 1 commence 5 s plus tard (zone Quais).
+- Maintenir [Espace] 1,5 s pour passer l'introduction (en coop : l'hôte seulement).
+- Décor le long de la voie : clôtures, arbres, entrepôts, immeubles et maisons aux fenêtres éclairées, lampadaires, signaux ; sol sombre jusqu'à l'horizon.
+- Sons : roulement, joints de rail, crissement des freins, carillon, porte-voix qui grésille, portes.
+- Menu « Départ » : Train régional (par défaut), Gare Centrale, Classique (Grande Île au hasard). `?debug&intro` lance l'intro ; `?debug` seul garde le départ classique.
+- Coop : l'hôte donne le tempo du train, un joueur qui arrive pendant le trajet monte en voiture 3.
+- Vérifié : build ; intro lancée et déroulée jusqu'à τ = 50 sans erreur (train en route, nuit, 142 appels de dessin) ; départ classique sur l'île sans erreur ; captures regardées (intérieur en marche, ralentissement, arrivée « Terminus »). Selon le développeur : trajet complet pas à pas en marchant dans les 3 voitures et les intercirculations à 80 km/h et au freinage sans jamais sortir du train, portes fermées infranchissables, arrêt exact, manche 1 en zone Quais, passage de l'intro, recommencer, départs classique et gare, grenades et tirs dans le train qui roule, 147 à 164 appels de dessin pendant le trajet, test à deux onglets (départ du salon, arrivée en cours de route, avatars dans le train, passage synchronisé).
+- Non vérifié : le son à l'oreille, le ressenti sur un vrai GPU, le multijoueur sur un vrai réseau (l'écart de position du train entre deux joueurs n'a pas pu être mesuré proprement en dessous de 0,5 m dans le banc de test), le bouton REJOUER cliqué.
+- Limites : pas encore de zombies pendant le trajet (phase 4) ; de nuit le décor se lit surtout par les fenêtres éclairées ; le HUD affiche « MANCHE 1 » pendant le trajet ; un joueur qui arrive après l'arrêt apparaît au départ de la gare.
+
 ## v0.80.0 (2026-11-07)
 - Gare : un train régional (locomotive « 17412 » sans marque + 3 voitures) attend au quai 1, portes ouvertes. On y monte depuis le quai, on parcourt les trois voitures (sièges 2+2, porte-bagages, bandeaux LED dont certains clignotent ou sont morts, écrans « Prochain arrêt : Strasbourg », vestibules, WC, sang) et les intercirculations ; la cabine est verrouillée.
 - On tire à travers les fenêtres ; les grenades lancées à l'intérieur rebondissent sur les parois et restent dans la voiture.

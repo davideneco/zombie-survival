@@ -533,6 +533,8 @@ export class Player {
     const eyeH = (this.downed ? 0.55 : P.eye) + (this.vault ? CONFIG.vault.camLift * Math.sin(Math.PI * Math.min(1, this.vault.t / this.vault.dur)) : 0);
     let sh = this.game.shake || 0;
     let ex = this.pos.x, ey = this.pos.y + eyeH + bob, ez = this.pos.z;
+    const sway = !veh && this.onTram ? this.onTram.v.sway : null; // standing in the moving train (train.js, v0.81.0) : roll and bob, local look
+    if (sway) ey += sway.bob;
     if (veh) {
       veh.v.eyeWorld(veh.seat, this._v);
       ex = this._v.x; ey = this._v.y; ez = this._v.z;
@@ -541,7 +543,7 @@ export class Player {
     // vue externe (troisième personne sur une moto, ou sortie de moto en cours) : RideCam pose la caméra ; sinon vue à la première personne
     if (!this.ride.update(dt, veh, { x: this.pos.x, y: this.pos.y + eyeH, z: this.pos.z }, sh)) {
       this.camera.position.set(ex + (sh ? (Math.random() - 0.5) * sh * 0.25 : 0), ey + (sh ? (Math.random() - 0.5) * sh * 0.25 : 0), ez + (sh ? (Math.random() - 0.5) * sh * 0.25 : 0));
-      this.camera.rotation.set(this.pitch + this.recoil, this.yaw, veh ? veh.v.lean * 0.5 : 0);
+      this.camera.rotation.set(this.pitch + this.recoil, this.yaw, veh ? veh.v.lean * 0.5 : sway ? sway.roll : 0);
     }
 
     // ---- animation de l'arme ----
