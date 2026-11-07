@@ -2,6 +2,12 @@
 
 Chaque changement est poussé sur `main` (déploiement Render) avec un nouveau numéro de version et sa description ici.
 
+## v0.79.1 (2026-11-07)
+- OpenStreetMap recontacté : le serveur Overpass coupe toujours la connexion et ses deux miroirs ne répondent pas, mais l'API officielle d'OSM répond. La zone de la gare y a été retéléchargée (8 388 éléments) et comparée à l'extraction du 24/10 utilisée par le jeu : bâtiments, quais et voies inchangés (seuls des lignes de bus/train, plaques commémoratives et toilettes ont été modifiés). Les données du jeu restent donc à jour.
+- L'arrêt de tram « Gare Centrale » du jeu, déduit des rails de l'IGN, est à 2,3 m du vrai arrêt OSM.
+- Outil `tools/fetch-rail.mjs --osm` : passe à l'API OSM quand Overpass ne répond pas, et ne sert plus qu'à vérifier la position de l'arrêt (avant, s'il avait réussi, il aurait placé un arrêt sans voie en tête de liste et cassé le tram de la gare).
+- Aucun changement de jeu. Vérifié : outil lancé avec `--bdtopo --osm` vers des fichiers d'essai (bascule sur l'API OSM, 4 arrêts trouvés, écart 2,3 m) ; données du jeu non régénérées.
+
 ## v0.79.0 (2026-11-07)
 - Gare de Strasbourg : nouvelle zone jouable séparée, placée à ses vraies coordonnées et construite d'après les vrais contours (bâtiment de 1883, verrière de 2007 sur sa vraie courbe, halle à deux nefs, hall, quais posés sur les voies SNCF réelles, rame à l'arrêt, passerelles, place de la Gare avec l'arrêt de tram « Gare Centrale »).
 - 3 zones à ouvrir : Quais, Hall de la Gare (porte 750 pts), Place de la Gare (1 000 pts), avec leur propre grille de navigation pour les zombies, armes au mur et points d'apparition.

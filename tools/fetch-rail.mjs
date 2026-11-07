@@ -9,7 +9,7 @@
 //   --sncf <file>     SNCF Réseau « Fichier de formes des voies du Réseau Ferré National » (GeoJSON, WGS84, ODbL)
 //   --bootstrap-git   OSM extract of the station saved in git (commit 4880783, public/data/gare.json, ODbL) : platforms, outlines
 //   --bdtopo          IGN BD TOPO (Géoplateforme WFS, Licence Ouverte Etalab 2.0) : tram tracks (troncon_de_voie_ferree), building heights
-//   --osm             Overpass (ODbL) : platforms, tram stops (often refused : optional)
+//   --osm             OpenStreetMap (ODbL) tram stop nodes, via Overpass or else the OSM API : cross-check of the derived stop (optional)
 // Downloaded files are data only : parsed with JSON.parse, never executed.
 import fs from 'node:fs';
 import path from 'node:path';
@@ -189,19 +189,30 @@ if (BDTOPO) {
   sources.push({ name: 'IGN BD TOPO (troncon_de_voie_ferree, batiment) via data.geopf.fr', licence: 'Licence Ouverte Etalab 2.0', url: 'https://geoservices.ign.fr/bdtopo', date: now });
 }
 
-// ---------------------------------------------------------------- Overpass (optional, flaky)
+// ---------------------------------------------------------------- OSM tram stops (optional) : Overpass, else the main OSM API (bbox map call)
+// Kept in `rail.osmStops` (points only, with their level) : `rail.stops` holds stops WITH a track (src/gare/plan.js uses the first « Gare Centrale »).
+// They only cross-check the derived stop below. Overpass is often refused from cloud sessions ; the OSM API answers.
 if (OSM) {
   const lon = (x) => LON + x / M_LON, lat = (z) => LAT - z / M_LAT;
-  const bbox = `${lat(GARE_BOX.z1)},${lon(GARE_BOX.x0)},${lat(GARE_BOX.z0)},${lon(GARE_BOX.x1)}`;
-  const q = `[out:json][timeout:90];(way["railway"="platform"](${bbox});node["railway"="tram_stop"](${bbox});node["public_transport"="stop_position"]["tram"="yes"](${bbox}););out geom;`;
+  const isStop = (t = {}) => t.railway === 'tram_stop' || (t.public_transport === 'stop_position' && t.tram === 'yes');
+  const keep = (els, via) => {
+    rail.osmStops = els.filter((el) => el.type === 'node' && isStop(el.tags))
+      .map((el) => ({ name: el.tags.name || null, level: el.tags.level != null ? parseFloat(el.tags.level) : 0, at: toLocal(el.lon, el.lat).map(r1), id: el.id }));
+    sources.push({ name: `OpenStreetMap contributors (${via})`, licence: 'ODbL 1.0', url: 'https://www.openstreetmap.org/copyright', date: now });
+    console.log(`OSM (${via}) : ${rail.osmStops.length} tram stop nodes`);
+  };
   try {
-    const raw = JSON.parse(await fetchText('https://overpass-api.de/api/interpreter', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'data=' + encodeURIComponent(q) }, 3));
-    for (const el of raw.elements || []) {
-      if (el.type === 'node') rail.stops.push({ name: el.tags?.name || null, at: toLocal(el.lon, el.lat).map(r1), src: 'osm' });
-    }
-    sources.push({ name: 'OpenStreetMap contributors (Overpass)', licence: 'ODbL 1.0', url: 'https://www.openstreetmap.org/copyright', date: now });
-    console.log(`Overpass : ${rail.stops.length} tram stops`);
-  } catch (e) { console.log('Overpass skipped :', e.message); }
+    const bbox = `${lat(GARE_BOX.z1)},${lon(GARE_BOX.x0)},${lat(GARE_BOX.z0)},${lon(GARE_BOX.x1)}`;
+    const q = `[out:json][timeout:90];(node["railway"="tram_stop"](${bbox});node["public_transport"="stop_position"]["tram"="yes"](${bbox}););out;`;
+    keep(JSON.parse(await fetchText('https://overpass-api.de/api/interpreter', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'data=' + encodeURIComponent(q) }, 2)).elements || [], 'Overpass');
+  } catch (e) {
+    console.log('Overpass unreachable :', e.message, '— trying the OSM API');
+    try {
+      // the API caps a bbox at 0.25 deg² and 50 000 nodes : the station box is ~0.00003 deg²
+      const bbox = [lon(GARE_BOX.x0), lat(GARE_BOX.z1), lon(GARE_BOX.x1), lat(GARE_BOX.z0)].map((v) => v.toFixed(6)).join(',');
+      keep(JSON.parse(await fetchText(`https://api.openstreetmap.org/api/0.6/map.json?bbox=${bbox}`, {}, 3)).elements || [], 'OSM API');
+    } catch (e2) { console.log('OSM API skipped :', e2.message); }
+  }
 }
 
 // ---------------------------------------------------------------- derived : CTS « Gare Centrale » surface stop (line C), from the BD TOPO tram tracks
@@ -235,6 +246,12 @@ if (!rail.stops.some((s) => /gare centrale/i.test(s.name || ''))) {
     for (let i = 1; i < pts.length && s < back; i++) { const d = Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]); const f = Math.min(1, (back - s) / d); at = [pts[i - 1][0] + (pts[i][0] - pts[i - 1][0]) * f, pts[i - 1][1] + (pts[i][1] - pts[i - 1][1]) * f]; s += d; }
     rail.stops.push({ name: 'Gare Centrale', line: 'C', at: at.map(r1), buffer: pts[0].map(r1), track: pts.map(([x, z]) => [r1(x), r1(z)]), src: 'bdtopo' });
     console.log(`CTS « Gare Centrale » (line C, surface) : stop at (${at.map(r1).join(', ')}), buffer at (${pts[0].map(r1).join(', ')})`);
+    // cross-check against the surface OSM stop nodes (lines A / D are underground : level < 0)
+    const osm = (rail.osmStops || []).filter((s) => /gare centrale/i.test(s.name || '') && !(s.level < 0));
+    if (osm.length) {
+      const d = Math.min(...osm.map((s) => Math.hypot(s.at[0] - at[0], s.at[1] - at[1])));
+      console.log(`  nearest OSM surface stop node : ${d.toFixed(1)} m${d > 15 ? '  (!) more than 15 m : check the derived stop' : ''}`);
+    }
   }
 }
 
