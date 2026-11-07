@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { CONFIG } from '../config.js';
+import { trackGeometry, inStationClip, normalFromCanvas } from '../railNet.js';
 
 // =====================================================================
 //  Gare de Strasbourg (v0.79.0) : meshes. Everything static is built in the station frame of plan.js and merged per material
@@ -11,7 +12,8 @@ import { CONFIG } from '../config.js';
 //      stairs filled with rubble
 //    - the 2007 verrière : glass shell swept along its real curved footprint (quarter-ellipse profile), steel ribs every 3 m, purlins
 //    - the 1883 train shed (two naves of riveted lattice arches on cast-iron columns, roof with a skylight band, glazed end screens)
-//    - platforms (real outlines), edge lines and tactile strips, ballast, rails and sleepers along the real SNCF tracks, a dead train
+//    - platforms (real outlines), edge lines and tactile strips ; the SNCF tracks (railNet.trackGeometry : ballast prism, sleepers, extruded rails),
+//      the quai 1 track along the intro route (v0.80.0 : the parked train of train.js stands on it ; the v0.79 dead train is gone)
 //    - Place de la Gare : paving, roads, the CTS line C stop « Gare Centrale », lamps, barriers, a burnt-out bus
 //  No PointLight here : light spots are returned to the pooled lights of realworld.js.
 // =====================================================================
@@ -75,20 +77,6 @@ const ballastTex = () => canvasTex(256, 256, (x, w, h) => {
   for (let k = 0; k < 2400; k++) { const l = 40 + hash(k, 1) * 70; x.fillStyle = `rgb(${l + 6},${l + 2},${l - 4})`; const s = 2 + hash(k, 3) * 5; x.fillRect(hash(k, 4) * w, hash(k, 5) * h, s, s * 0.8); }
   x.fillStyle = 'rgba(40,24,12,0.25)'; for (let k = 0; k < 30; k++) x.fillRect(hash(k, 6) * w, hash(k, 7) * h, 30, 18); // rust and oil
 }, true, true);
-const coachTex = () => canvasTex(1024, 128, (x, w, h) => { // coach side (24.5 m) : aluminium grey, muted ochre band, windows, doors, dirt
-  const g = x.createLinearGradient(0, 0, 0, h); g.addColorStop(0, '#8d9296'); g.addColorStop(0.75, '#7a7f83'); g.addColorStop(1, '#3d3a36'); x.fillStyle = g; x.fillRect(0, 0, w, h);
-  x.fillStyle = '#8a6a34'; x.fillRect(0, h * 0.7, w, h * 0.08);
-  const M = w / 24.5;
-  for (const d of [1.2, 21.9]) { x.fillStyle = '#4c5156'; x.fillRect(d * M, h * 0.12, 1.4 * M, h * 0.8); x.fillStyle = '#16191c'; x.fillRect((d + 0.15) * M, h * 0.18, 0.5 * M, h * 0.3); x.fillRect((d + 0.75) * M, h * 0.18, 0.5 * M, h * 0.3); }
-  for (let i = 0; i < 8; i++) {
-    const x0 = (3.4 + i * 2.25) * M, broken = hash(i, 9) > 0.7;
-    x.fillStyle = '#0f1418'; x.fillRect(x0, h * 0.2, 1.7 * M, h * 0.34);
-    x.fillStyle = broken ? 'rgba(10,10,10,0.9)' : 'rgba(120,150,170,0.18)'; x.fillRect(x0 + 3, h * 0.22, 1.7 * M - 6, h * 0.12);
-    if (broken) { x.strokeStyle = 'rgba(200,210,220,0.4)'; x.beginPath(); x.moveTo(x0 + 5, h * 0.2); x.lineTo(x0 + 22, h * 0.5); x.lineTo(x0 + 9, h * 0.54); x.stroke(); }
-  }
-  x.fillStyle = 'rgba(30,22,14,0.35)'; for (let k = 0; k < 60; k++) x.fillRect(hash(k, 11) * w, h * (0.55 + hash(k, 12) * 0.4), 2 + hash(k, 13) * 8, h * 0.4);
-  x.fillStyle = 'rgba(90,10,8,0.6)'; x.fillRect(w * 0.42, h * 0.3, 18, 30); x.fillRect(w * 0.43, h * 0.5, 4, 20); // blood
-});
 const boardTex = () => canvasTex(1024, 256, (x, w, h) => { // departures board (emissive : black background, amber dot matrix)
   x.fillStyle = '#000'; x.fillRect(0, 0, w, h);
   x.fillStyle = '#ffb02a'; x.font = 'bold 34px "Courier New", monospace'; x.fillText('DÉPARTS', 22, 42);
@@ -193,7 +181,7 @@ function slab(pts, y0, y1) {
 }
 
 // ------------------------------------------------------------------ main builder
-export function buildGareMeshes({ plan, gare, rail, pbr, tiled, props, envMap }) {
+export function buildGareMeshes({ plan, gare, rail, pbr, tiled, props, envMap, route = null }) {
   const G = CONFIG.gare, B = plan.body, F = plan.frame;
   const root = new THREE.Group(); root.name = 'gare';
   const local = new THREE.Group(); local.name = 'gare:local';
@@ -233,8 +221,6 @@ export function buildGareMeshes({ plan, gare, rail, pbr, tiled, props, envMap })
     wood: new THREE.MeshStandardMaterial({ color: 0x3a2a1f, roughness: 0.8 }),
     rust: new THREE.MeshStandardMaterial({ color: 0x3a2a20, roughness: 0.9, metalness: 0.35 }),
     burnt: new THREE.MeshStandardMaterial({ color: 0x1d1a18, roughness: 0.95, metalness: 0.2 }),
-    coach: new THREE.MeshStandardMaterial({ map: coachTex(), roughness: 0.62, metalness: 0.4 }),
-    coachBody: new THREE.MeshStandardMaterial({ color: 0x6f7478, roughness: 0.6, metalness: 0.45 }),
     rubber: new THREE.MeshStandardMaterial({ color: 0x141414, roughness: 0.92 }),
     rubble: new THREE.MeshStandardMaterial({ color: 0x6a6258, roughness: 0.95, flatShading: true }),
     board: new THREE.MeshStandardMaterial({ map: boardTex(), emissive: 0xffffff, emissiveMap: null, emissiveIntensity: 0.9, roughness: 0.4 }),
@@ -246,6 +232,7 @@ export function buildGareMeshes({ plan, gare, rail, pbr, tiled, props, envMap })
   M.board.emissiveMap = M.board.map;
   for (const k of ['sand', 'sandDark', 'sandTrim']) { M[k].map.repeat.set(0.25, 0.25); M[k].emissive = new THREE.Color(0xe8c49c); M[k].emissiveMap = M[k].map; M[k].emissiveIntensity = k === 'sandDark' ? 0.04 : 0.09; } // floodlit at night
   M.slate.map.repeat.set(0.25, 0.25); M.ballast.map.repeat.set(1 / 3, 1 / 3); M.floor.map.repeat.set(1 / 4.8, 1 / 4.8);
+  M.ballast.normalMap = normalFromCanvas(M.ballast.map.image, 3); M.ballast.normalMap.repeat.set(1 / 3, 1 / 3); M.ballast.normalScale.set(0.8, 0.8); // stones in relief
   if (envMap) for (const k of ['verre', 'glassDark']) M[k].envMap = envMap;
   const buckets = new Map(); // material -> [geometry]
   const add = (mat, g) => { if (!g) return; let l = buckets.get(mat); if (!l) buckets.set(mat, l = []); l.push(keepStd(g)); };
@@ -655,61 +642,32 @@ export function buildGareMeshes({ plan, gare, rail, pbr, tiled, props, envMap })
     }
     // rail yard ground (ballast) under everything west of the building
     add(M.ballast, flatPoly([[-260, -150], [260, -150], [260, B.v0 - 0.2], [-260, B.v0 - 0.2]], bot));
-    // tracks : SNCF Réseau shapes (rail.json) clipped to the station box ; ballast shoulders, two rails, instanced sleepers
-    const sleepers = [], dummy = new THREE.Object3D();
+    // tracks (v0.80.0, railNet.trackGeometry) : SNCF Réseau shapes (rail.json) clipped to the station box, except the pieces the intro route
+    // follows : the route itself is laid instead (moved beside quai 1, see CONFIG.railNet.route). Mesh frame : X = v, Z = -u.
+    const tg = {}, toMesh = ([u, v]) => [v, -u];
+    const offRoute = (x, z) => !route || route.track.project(x, z, 2, _pr).d > 1.6;
+    const _pr = {};
+    let phase = 0;
+    const lay = (pts) => { if (pts.length > 1) trackGeometry(pts.map(toMesh), bot, tg, { phase: (phase += 0.23) % CONFIG.railNet.sleeperEvery }); };
     for (const t of rail.tracks || []) {
       if (t.type === 'OSM') continue;
       let run = [];
-      const flushRun = () => {
-        if (run.length < 2) { run = []; return; }
-        for (let i = 1; i < run.length; i++) {
-          const [a, b] = [run[i - 1], run[i]], len = Math.hypot(b[0] - a[0], b[1] - a[1]);
-          if (len < 0.05) continue;
-          const du = (b[0] - a[0]) / len, dv = (b[1] - a[1]) / len, nu = -dv, nv = du;
-          for (const s of [-1, 1]) { // rails (head + web + foot)
-            const o = s * 0.7175;
-            add(M.rail, beam([a[0] + nu * o, bot + 0.19, a[1] + nv * o], [b[0] + nu * o, bot + 0.19, b[1] + nv * o], 0.07, 0.05));
-            add(M.steel, beam([a[0] + nu * o, bot + 0.11, a[1] + nv * o], [b[0] + nu * o, bot + 0.11, b[1] + nv * o], 0.14, 0.03));
-          }
-          add(M.ballast, flatPoly([[a[0] - nu * 1.6, a[1] - nv * 1.6], [b[0] - nu * 1.6, b[1] - nv * 1.6], [b[0] + nu * 1.6, b[1] + nv * 1.6], [a[0] + nu * 1.6, a[1] + nv * 1.6]].map((q) => q), bot + 0.06));
-          for (let s = 0; s < len; s += 0.62) {
-            const u = a[0] + du * s, v = a[1] + dv * s;
-            dummy.position.set(v, bot + 0.09, -u); dummy.rotation.set(0, Math.atan2(-dv, du), 0); dummy.updateMatrix();
-            sleepers.push(dummy.matrix.clone());
-          }
-        }
-        run = [];
-      };
-      for (const [x, z] of t.pts) {
+      const dense = [];
+      for (let i = 1; i < t.pts.length; i++) { const [ax, az] = t.pts[i - 1], [bx, bz] = t.pts[i], d = Math.hypot(bx - ax, bz - az), n = Math.max(1, Math.ceil(d / 2)); for (let k = i === 1 ? 0 : 1; k <= n; k++) dense.push([ax + ((bx - ax) * k) / n, az + ((bz - az) * k) / n]); }
+      for (const [x, z] of dense) {
         const [u, v] = L(x, z);
-        if (Math.abs(u) < 230 && v > -140 && v < B.v0 - 1) run.push([u, v]); else flushRun();
+        if (inStationClip(plan, u, v) && offRoute(x, z)) run.push([u, v]); else { lay(run); run = []; }
       }
-      flushRun();
+      lay(run);
     }
-    if (sleepers.length) {
-      const sg = new THREE.BoxGeometry(2.5, 0.16, 0.24), im = new THREE.InstancedMesh(sg, M.sleeper, sleepers.length);
-      sleepers.forEach((m, i) => im.setMatrixAt(i, m)); im.receiveShadow = true; im.frustumCulled = false; local.add(im);
+    if (route) { // the route inside the station box
+      let run = [];
+      for (let i = 0; i < route.track.n; i++) { const [u, v] = L(route.track.x[i], route.track.z[i]); if (inStationClip(plan, u, v)) run.push([u, v]); else { lay(run); run = []; } }
+      lay(run);
     }
-    // the dead train on the track west of quai 2/3 : two single-deck coaches, unbranded
-    const trackV = (u) => plan.at(plan.q23W, u) - 1.75;
-    for (const [c0, c1] of [[-56, -31.5], [-30.5, -6]]) {
-      const len = c1 - c0, uc = (c0 + c1) / 2, vc = (trackV(c0) + trackV(c1)) / 2, ang = Math.atan2(trackV(c1) - trackV(c0), len);
-      const grp = [];
-      const prof = new THREE.Shape(); // cross-section : sides, rounded roof
-      prof.moveTo(-1.45, 0); prof.lineTo(1.45, 0); prof.lineTo(1.45, 2.55); prof.quadraticCurveTo(1.42, 3.05, 0.9, 3.25); prof.quadraticCurveTo(0, 3.42, -0.9, 3.25); prof.quadraticCurveTo(-1.42, 3.05, -1.45, 2.55); prof.lineTo(-1.45, 0);
-      const body = extr(prof, len, 0.04); body.translate(0, 0, -len / 2); // along z
-      grp.push([body, M.coachBody]);
-      for (const s of [-1, 1]) { const pl = new THREE.PlaneGeometry(len - 0.3, 2.5); pl.rotateY(s > 0 ? Math.PI / 2 : -Math.PI / 2); pl.translate(s * 1.515, 1.3, 0); grp.push([pl, M.coach]); }
-      grp.push([new THREE.BoxGeometry(2.6, 0.55, len - 3).translate(0, -0.3, 0), M.rubber]);
-      for (const bz of [-len / 2 + 3.6, len / 2 - 3.6]) {
-        grp.push([new THREE.BoxGeometry(2.3, 0.4, 2.9).translate(0, -0.45, bz), M.iron]);
-        for (const wz of [-1.05, 1.05]) for (const s of [-1, 1]) { const w = new THREE.CylinderGeometry(0.46, 0.46, 0.14, 16); w.rotateZ(Math.PI / 2); w.translate(s * 0.72, -0.48, bz + wz); grp.push([w, M.steel]); }
-      }
-      for (const [g, mat] of grp) { // into the station frame : centre (uc, vc), on the rails, along u
-        g.rotateY(-ang); g.translate(vc, bot + 1.15, -uc); add(mat, g);
-      }
-      colliders.push({ u: uc, v: vc, lu: len, lv: 3.0, rot: ang, h: 4.4 });
-    }
+    for (const g of tg.ballast || []) add(M.ballast, g);
+    for (const g of tg.sleeper || []) add(M.sleeper, g);
+    for (const g of tg.rail || []) add(M.rail, g);
     // timber footbridges over the two tracks between quai 1 and quai 2/3 (deck at platform level, trestles, railings)
     for (const c of plan.crossings) {
       add(M.wood, slab(c, top - 0.22, top));
@@ -721,8 +679,6 @@ export function buildGareMeshes({ plan, gare, rail, pbr, tiled, props, envMap })
       }
       for (let u = u0 + 0.25; u < u1; u += 0.3) add(M.rubber, bx(u, u + 0.02, va, vb, top - 0.003, top + 0.002)); // plank joints
     }
-    // gangway bellows between the coaches
-    add(M.rubber, bx(-31.5, -30.5, trackV(-31) - 1.0, trackV(-31) + 1.0, bot + 1.2, bot + 3.6));
   }
 
   // ================================================================ Place de la Gare : paving, roads, tram stop, lamps, barriers
@@ -871,7 +827,7 @@ export function buildGareMeshes({ plan, gare, rail, pbr, tiled, props, envMap })
     }
     flush(local);
   }
-  return { root, local, colliders };
+  return { root, local, colliders, mats: M };
 }
 
 // polygon helpers

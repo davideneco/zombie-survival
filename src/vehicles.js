@@ -851,7 +851,7 @@ export function installVehicles(game, { world, hud, sfx, scene }) {
     },
 
     vehiclePrompt(nv) {
-      if (nv.v.isTram) return this.tramPrompt(nv);
+      if (nv.v.isTram || nv.foot) return this.tramPrompt(nv); // (nv.foot : an open door of a tram or of the train, v0.80.0)
       const v = nv.v, role = v.def.seats > 1 ? (nv.seat === 0 ? ' — conducteur' : ' — passager') : '';
       const fuel = v.hasTank ? ` · essence ${Math.round(v.fuelFrac * 100)} %` : ''; // un vélo n'a pas de réservoir
       const verb = v.def.isCar ? 'Monter dans' : 'Monter sur';

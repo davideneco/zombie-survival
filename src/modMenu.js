@@ -395,7 +395,7 @@ export function installModMenu(game, { world, hud, sfx }) {
     if (!rp) return say(e ? `${e.name} est déconnecté` : 'joueur inconnu', true);
     const p = game.player;
     const trm = rp.tr && !rp.ride ? game.rideById(rp.tr.id) : null;
-    if (trm?.isTram) {
+    if (trm?.walkFrame) {
       if (p.vehicle) game.leaveVehicle(true);
       game.placeInTram(trm, rp.tr.u + 0.8, 0);
       say(`Hôte téléporté dans la rame près de ${e.name}`);

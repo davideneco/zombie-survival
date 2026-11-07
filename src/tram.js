@@ -585,7 +585,7 @@ export function installTram(game, { world, hud, sfx, scene }) {
     },
     tramPrompt(nv) {
       const t = nv.v, seat = nv.seat;
-      if (nv.foot) return `${tag('interact')} Monter dans le tram (porte ouverte, PV ${Math.round(t.hpFrac * 100)} %)`;
+      if (nv.foot) return t.isTrain ? `${tag('interact')} Monter dans le train` : `${tag('interact')} Monter dans le tram (porte ouverte, PV ${Math.round(t.hpFrac * 100)} %)`;
       const role = t.isDriver(seat) ? ` — conducteur (cabine ${seat === 0 ? 'avant' : 'arrière'})` : ' — passager';
       const power = this.tramPowered ? '' : ' · hors tension';
       if (nv.sit) return `${tag('interact')} S'asseoir${role}${power}`;

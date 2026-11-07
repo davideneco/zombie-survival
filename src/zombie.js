@@ -72,6 +72,7 @@ export class Zombie {
     this.crawler = false;
     this.noProgress = 0; // secondes passées sans réussir à avancer (coincé)
     this.region = 0;     // étage (0 = sol de la ville) ; link : escalier en cours d'emprunt
+    this.onTrain = null; // { v, u, w, y, door, st } : dans le train à quai (v0.80.0, train.js), repère de la voiture
     this.link = null;
 
     // Matériaux : un par zombie (le flash de dégâts, le sang et les cendres sont propres à chacun) mais tous sur les MÊMES atlas ; la cellule
@@ -553,7 +554,7 @@ export class Zombie {
 
     const Z = CONFIG.zombie;
     const lv = world.levels, hasLv = !!lv && lv.links.length > 0;
-    if (!this.link) this.pos.y = (this.region && lv ? lv.regions[this.region].y : 0) + terrainY(this.pos.x, this.pos.z); // le zombie reste à la hauteur de son étage
+    if (!this.link && !this.onTrain) this.pos.y = (this.region && lv ? lv.regions[this.region].y : 0) + terrainY(this.pos.x, this.pos.z); // le zombie reste à la hauteur de son étage (dans le train : son plancher)
     const zr = this.link ? (this.link.dir > 0 ? this.link.link.b : this.link.link.a) : this.region;
 
     let target = player;
@@ -578,6 +579,7 @@ export class Zombie {
       else this._pose(this.walkT, 0.15, 0.85, this.runner ? 0.5 : 0.28, 0.18);
       return;
     }
+    if (this.onTrain && this._trainStep(dt, target, world)) return; // dans le train à quai (v0.80.0)
     if (this.link) { this._onLink(dt, target, world); return; }
     if (this.vault) { this._vaultStep(dt); return; }
     this.vaultCd -= dt;
@@ -597,6 +599,8 @@ export class Zombie {
     if (lure && lure.t > 0 && !this.region && !this.link && Math.hypot(lure.x - this.pos.x, lure.z - this.pos.z) < (lure.range || 50) && Math.hypot(gx - this.pos.x, gz - this.pos.z) > 5) { gx = lure.x; gz = lure.z; chase = false; }
     // cible dans une rame aux portes ouvertes (v0.40.0) : le zombie va d'abord devant la porte ouverte la plus proche (il ne peut ni entrer ni traverser la caisse)
     if (chase && !this.region && !this.link) { const tg = world.tramGoal?.(target, this); if (tg) { gx = tg.x; gz = tg.z; chase = false; } }
+    // cible debout dans le train à quai (v0.80.0) : le zombie de la gare va à la porte ouverte la plus proche, puis monte (train.js)
+    if (chase && this.region && !this.link && world.trainGoal) { const tg = world.trainGoal(target, this); if (tg) { gx = tg.x; gz = tg.z; chase = false; } }
     const dx = gx - this.pos.x;
     const dz = gz - this.pos.z;
     const dist = Math.hypot(dx, dz);
@@ -647,7 +651,7 @@ export class Zombie {
         if (o === this || o.dead || o.spawnT > 0) continue;
         const ox = this.pos.x - o.pos.x, oz = this.pos.z - o.pos.z;
         const d = Math.hypot(ox, oz);
-        if (d > 0 && d < 0.8 && o.region === this.region && !o.link) {
+        if (d > 0 && d < 0.8 && o.region === this.region && !o.link && !o.onTrain) {
           const push = (0.8 - d) * 0.5;
           this.pos.x += (ox / d) * push;
           this.pos.z += (oz / d) * push;
@@ -703,7 +707,12 @@ export class Zombie {
       this.walkT += dt * 1.2;
     }
 
-    // ----- Attaque -----
+    this._strikeAndPose(dt, target, inRange, moving, world);
+  }
+
+  // ----- Attaque, puis pose (aussi pour un zombie dans le train : _trainStep) -----
+  _strikeAndPose(dt, target, inRange, moving, world) {
+    const Z = CONFIG.zombie;
     if (this.attackWindup >= 0) {
       this.attackWindup -= dt;
       if (this.attackWindup < 0) {
@@ -724,6 +733,16 @@ export class Zombie {
     if (this.crawler) { this._poseCrawl(this.walkT, attacking); return; }
     const lean = this.runner ? 0.5 : 0.28;
     this._pose(this.walkT, moving ? (this.runner ? 1.25 : 1) : 0.15, attacking ? 1.5 : 0.85, attacking ? lean + 0.3 : lean, attacking ? 0.4 : 0.18);
+  }
+
+  // ----- Dans le train à quai (v0.80.0, voir train.js) : marche dans le repère de la voiture -----
+  _trainStep(dt, target, world) {
+    const r = world.trainZombieStep?.(this, target, dt);
+    if (!r) { this.onTrain = null; return false; }
+    this.attackCd -= dt;
+    this.walkT += dt * (r.moving ? this.speed * (this.runner ? 2.6 : 3.2) : 1.2);
+    this._strikeAndPose(dt, target, r.inRange, r.moving, world);
+    return true;
   }
 
   // Enjambement (zombie) : devant un obstacle enjambable (banc, caisse, barrière…) que le champ de flux traverse, si l'arrivée est libre et

@@ -204,7 +204,7 @@ export function installDebugMenu(game, { world, hud, sfx }) {
     if (!rp) return say(e ? `${e.name} est déconnecté` : 'joueur inconnu', true);
     const p = game.player;
     const trm = rp.tr && !rp.ride ? game.rideById(rp.tr.id) : null;
-    if (trm?.isTram) { // le coéquipier est debout dans la rame : l'hôte y monte, dans l'allée à côté de lui (repère local de la rame)
+    if (trm?.walkFrame) { // le coéquipier est debout dans la rame : l'hôte y monte, dans l'allée à côté de lui (repère local de la rame)
       if (p.vehicle) game.leaveVehicle(true);
       game.placeInTram(trm, rp.tr.u + 0.8, 0);
       say(`hôte téléporté dans la rame près de ${e.name}`);

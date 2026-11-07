@@ -179,7 +179,7 @@ export class RemotePlayer {
     const px = this.pos.x, pz = this.pos.z;
     const tram = this.tr ? RemotePlayer.rideOf?.(this.tr.id) : null;
     let ya, vx, vz; // ya : cap du personnage dans son repère (celui de la rame pour un passager debout)
-    if (tram?.isTram) { // debout dans une rame : le personnage est un enfant du module qui le porte (il suit la rame sans glisser) ; vitesse et sens de marche mesurés dans la rame
+    if (tram?.walkFrame) { // debout dans une rame (ou le train : walkFrame, v0.80.0) : le personnage est un enfant du module qui le porte (il suit la rame sans glisser) ; vitesse et sens de marche mesurés dans la rame
       const T = this.tr, L = this.trL && this.trL.t === tram ? this.trL : (this.trL = { t: tram, u: T.u, w: T.w, y: T.y, yw: T.yw, mod: -1 });
       const pu = L.u, pw = L.w;
       L.u += (T.u - L.u) * k; L.w += (T.w - L.w) * k; L.y += (T.y - L.y) * k;

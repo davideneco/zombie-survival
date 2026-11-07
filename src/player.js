@@ -259,8 +259,8 @@ export class Player {
         else if (B.is('tramDoors', e)) this.game.tramDoors?.();
         else if (B.is('tramSwitch', e)) this.game.tramSwitch?.();
       }
-      else if (this.onTram && B.is('tramGong', e)) this.game.tramGong?.(); // debout dans la rame : gong et portes aussi
-      else if (this.onTram && B.is('tramDoors', e)) this.game.tramDoors?.();
+      else if (this.onTram?.v.isTram && B.is('tramGong', e)) this.game.tramGong?.(); // debout dans la rame : gong et portes aussi (pas dans le train : v0.80.0)
+      else if (this.onTram?.v.isTram && B.is('tramDoors', e)) this.game.tramDoors?.();
       else if (B.is('knife', e)) this.melee(this.game.time); // à pied : couteau
       if (B.isBound(e)) e.preventDefault(); // Espace (défilement), Tab, flèches : le navigateur ne doit pas réagir à une touche du jeu
       if (this.locked) return; // arme dans le Pack-a-Punch
@@ -421,7 +421,7 @@ export class Player {
       this.vel.z += (wz - this.vel.z) * k;
       if (this.onTram) { // debout dans une rame : déplacement, collisions et position monde viennent du repère local de la rame
         this.game.tramWalkStep(this, dt);
-        this.region = 0; this.wasGrounded = true; this.airT = 0; this.jumpSprint = false; this.vy = 0;
+        this.region = this.onTram?.v.walkRegion || 0; this.wasGrounded = true; // (le train de la gare : la région de la gare, ses zombies nous voient) this.airT = 0; this.jumpSprint = false; this.vy = 0;
       } else {
         this.pos.x += this.vel.x * dt;
         this.pos.z += this.vel.z * dt;
@@ -913,7 +913,7 @@ export class Player {
     // vue externe : la grenade part de l'œil du pilote (pas de la caméra, 3 m derrière)
     const o = (this.ride.external ? this.ride.eyeOrigin(this.vehicle, { x: this.pos.x, y: this.pos.y + CONFIG.player.eye, z: this.pos.z }, new THREE.Vector3()) : this.camera.position.clone()).addScaledVector(dir, 0.6);
     const v = dir.multiplyScalar(15).add(new THREE.Vector3(0, 3, 0)).add(new THREE.Vector3(this.vel.x, 0, this.vel.z));
-    if (this.onTram) { const t = this.onTram.v, q = t.frame(this.onTram.u, this._tq || (this._tq = {})); v.x += q.tx * t.v; v.z += q.tz * t.v; } // lancée depuis une rame qui roule : elle garde la vitesse de la rame
+    if (this.onTram) { const t = this.onTram.v, q = t.frame(this.onTram.u, this._tq || (this._tq = {})); v.x += q.tx * t.v; v.z += q.tz * t.v; } // lancée depuis une rame ou le train (walkFrame) qui roule : elle garde sa vitesse
     this.game.throwGrenade(o, v, true);
   }
 

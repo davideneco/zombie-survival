@@ -2,6 +2,8 @@ import * as THREE from 'three';
 import { CONFIG } from '../config.js';
 import { planGare } from './plan.js';
 import { buildGareMeshes } from './build.js';
+import { buildIntroRoute, buildRailNet } from '../railNet.js';
+import { Train } from '../train.js';
 
 // =====================================================================
 //  Gare de Strasbourg (v0.79.0) : a separate small playable area at its real coordinates (same frame as area.json), joined to the
@@ -40,8 +42,11 @@ export function buildGare(ctx) {
   const G = CONFIG.gare;
   const plan = planGare(data.gare, data.rail);
   if (!plan) return null;
-  const { root, colliders } = buildGareMeshes({ plan, gare: data.gare, rail: data.rail, pbr, tiled, props, envMap });
+  const route = buildIntroRoute(data.rail, plan); // v0.80.0 : the south-west approach of the intro, laid beside quai 1 (railNet.js)
+  const { root, colliders, mats } = buildGareMeshes({ plan, gare: data.gare, rail: data.rail, pbr, tiled, props, envMap, route });
   scene.add(root);
+  const railNet = buildRailNet({ rail: data.rail, plan, route, mats: { ballast: mats.ballast, sleeper: mats.sleeper, rail: mats.rail, steel: mats.steel, iron: mats.iron } });
+  root.add(railNet.root);
   const W = plan.W;
 
   // ---------------------------------------------------------------- surrounding buildings (hotels, SNCF offices) : the island's façade builder,
@@ -91,6 +96,13 @@ export function buildGare(ctx) {
     let pts = poly.slice();
     if (polyArea(pts) < 0) pts.reverse();
     try { levels.addPoly(region, pts, 0); } catch (e) { console.warn('[gare] floor polygon', e.message); }
+  }
+
+  // ---------------------------------------------------------------- the regional train, parked at quai 1, doors open (train.js ; v0.80.0)
+  let train = null;
+  if (route) {
+    try { train = new Train(route, { parent: root, collision, lightSources, region, y0: G.railY + CONFIG.railNet.railTop, envMap }); }
+    catch (e) { console.warn('[gare] train', e); }
   }
 
   // ---------------------------------------------------------------- light spots (pooled point lights of realworld.js)
@@ -222,12 +234,38 @@ export function buildGare(ctx) {
   // ---------------------------------------------------------------- map (M) : its own plan
   const mapScale = 1.6, map = drawMap(plan, data.gare, bldPolys, mapScale);
 
+  // ---------------------------------------------------------------- distance cull of the station items (v0.80.0, draw calls) : machines, wall
+  // weapons, ammo stations, the box and door gates are small objects made of many meshes ; past CONFIG.gare.itemCull m from the camera they are
+  // not drawn. Each one is wrapped in a group of its own on the first call (the game keeps showing / hiding the item itself).
+  const baseChildren = new Set(root.children); // everything built so far ; the items come later (makeDoors, placeItems, realworld.js)
+  let culls = null, cullT = 0;
+  const cullItems = (cam, dt) => {
+    if ((cullT -= dt) > 0) return;
+    cullT = 0.25;
+    if (!culls) {
+      culls = [];
+      const box = new THREE.Box3(), sph = new THREE.Sphere();
+      for (const o of [...root.children]) {
+        if (baseChildren.has(o) || o.isLight) continue;
+        let light = false; o.traverse((q) => { if (q.isLight) light = true; });
+        box.setFromObject(o);
+        if (light || box.isEmpty()) continue;
+        box.getBoundingSphere(sph);
+        if (sph.radius > 8) continue;
+        const g = new THREE.Group(); g.name = 'gare:cull'; root.remove(o); g.add(o); root.add(g);
+        culls.push({ g, x: sph.center.x, z: sph.center.z, r: sph.radius });
+      }
+    }
+    const D = CONFIG.gare.itemCull;
+    for (const c of culls) c.g.visible = Math.hypot(c.x - cam.x, c.z - cam.z) - c.r < D;
+  };
+
   const start = { ...CONFIG.gareSpawn, x: plan.start.x, z: plan.start.z, yaw: plan.start.yaw };
   const api = {
-    plan, root, region, trees, arch, nav, doors, spawns, zoneIdx, zoneCenters, start,
+    plan, root, region, trees, arch, nav, doors, spawns, zoneIdx, zoneCenters, start, route, railNet, train,
     bounds: plan.bounds, inArea, zoneOf,
     inRegion: (x, z) => inArea(x, z) && levels.inRegion(region, x, z),
-    makeDoors, placeItems, beforeNavs, finishNav, pickGround,
+    makeDoors, placeItems, beforeNavs, finishNav, pickGround, cullItems,
     stop: plan.stop, map: { image: map, view: { halfX: -plan.bounds.x0, halfZ: -plan.bounds.z0, scale: mapScale }, crop: { ...plan.bounds }, title: 'GARE CENTRALE — STRASBOURG' },
   };
   return api;

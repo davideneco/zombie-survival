@@ -2,6 +2,17 @@
 
 Chaque changement est poussé sur `main` (déploiement Render) avec un nouveau numéro de version et sa description ici.
 
+## v0.80.0 (2026-11-07)
+- Gare : un train régional (locomotive « 17412 » sans marque + 3 voitures) attend au quai 1, portes ouvertes. On y monte depuis le quai, on parcourt les trois voitures (sièges 2+2, porte-bagages, bandeaux LED dont certains clignotent ou sont morts, écrans « Prochain arrêt : Strasbourg », vestibules, WC, sang) et les intercirculations ; la cabine est verrouillée.
+- On tire à travers les fenêtres ; les grenades lancées à l'intérieur rebondissent sur les parois et restent dans la voiture.
+- Les zombies de la gare montent par les portes et suivent l'allée jusqu'au joueur ; ils redescendent quand il est sorti.
+- Voies SNCF redessinées (rails profilés, traverses, ballast en relief) et voie d'approche du sud-ouest (2,1 km) avec sa caténaire : préparation de l'arrivée en train. Passerelles du quai 1 écartées ; la rame morte de la voie 2 est retirée.
+- Moins d'appels de dessin à la gare : machines, armes au mur et grilles à plus de 60 m ne sont plus dessinées (pire vue 395 → 382 avec ombres).
+- `?debug&gare&train` démarre debout dans le train.
+- Vérifié : build ; partie lancée dans le train et sur l'île sans erreur ; captures regardées (intérieur, train à quai, voie d'approche). Selon le développeur : montée, parcours des 3 voitures et des intercirculations, descente, sans blocage ; 7 zombies montés à bord qui frappent le joueur, sortis en ~8 s ; 5 grenades à l'intérieur ; tir par les fenêtres ; à deux joueurs, l'avatar du coéquipier suit le train ; recherche de pièges dans la gare : 0 ; tram de l'île inchangé.
+- Non vérifié : aspect de nuit, test à trois joueurs, vraie carte graphique, partie complète.
+- Limites connues : 6 vues de la gare sur 8 dépassent encore 300 appels de dessin ; les balles traversent toute la caisse ; une grenade lancée du quai rebondit sur le train ; les objets de la gare apparaissent d'un coup à 60 m ; au loin, la voie d'approche n'a qu'une bande de sol de ±24 m (vide au-delà, visible de jour) : à compléter pour l'intro en mouvement.
+
 ## v0.79.1 (2026-11-07)
 - OpenStreetMap recontacté : le serveur Overpass coupe toujours la connexion et ses deux miroirs ne répondent pas, mais l'API officielle d'OSM répond. La zone de la gare y a été retéléchargée (8 388 éléments) et comparée à l'extraction du 24/10 utilisée par le jeu : bâtiments, quais et voies inchangés (seuls des lignes de bus/train, plaques commémoratives et toilettes ont été modifiés). Les données du jeu restent donc à jour.
 - L'arrêt de tram « Gare Centrale » du jeu, déduit des rails de l'IGN, est à 2,3 m du vrai arrêt OSM.

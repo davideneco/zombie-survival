@@ -212,6 +212,20 @@ table('23_tram_interieur', 'Tram : l\'intérieur praticable (on marche dans la r
   ['Zombies', 'ne rentrent pas dans la rame et ne la traversent pas', `une porte ouverte les attire (ils se massent devant, à ${fr2(TW.doorSpot)} m de la caisse) ; ils frappent le joueur à moins de 1,3 m ; ailleurs la caisse encaisse (${TR.zombieHit} PV)`],
   ['Tir, grenades, couteau, réanimation', 'comme à pied', 'la grenade garde la vitesse de la rame, ignore la caisse et rebondit sur le plancher ; pas de fente du couteau'],
   ['Menu mods / triche (F9)', 'F9 : menu mods et téléportation (coéquipiers, zones, armes, atouts, déblocage)', 'accessible en jeu et depuis le menu pause']]);
+// ---- train régional à quai et voies SNCF (v0.80.0)
+{
+  const N = C.train, NW = N.walk, NZ = N.zombie, RN = C.railNet, len = N.loco + N.coaches * N.coach + N.coaches * N.gap;
+  table('25_train', 'Gare : le train régional à quai (quai 1, portes ouvertes) et les voies SNCF', ['Réglage', 'Valeur', 'Remarque'], [
+    ['Composition', `locomotive ${fr2(N.loco)} m + ${N.coaches} voitures de ${fr2(N.coach)} m (${fr2(len)} m), ${fr2(N.width)} m de large, plancher à ${fr2(N.floor)} m au-dessus du rail`, `numéro « ${N.number} », sans marque ; nez de la locomotive à u = ${fr2(N.park.headU)} m (repère de la gare), entre les passerelles`],
+    ['Repère', `une position s sur l'itinéraire ; chaque voiture est rigide entre ses pivots de bogies (${fr2(N.bogie)} m, locomotive ${fr2(N.locoBogie)} m)`, 'u le long du train (continu d\'une voiture à l\'autre), w à droite ; mêmes messages réseau que le tram (p_state vh, lx, ly, lz, lyw)'],
+    ['Intérieur', `sièges 2+2 en carrés, cloisons de vestibule (porte ${fr2(NW.partitionDoor)} m), intercirculations de ${fr2(NW.gangway)} m, WC, porte de cabine verrouillée`, `cercle de ${fr2(NW.radius)} m contre des boîtes ; seules la voiture courante et ses voisines sont testées`],
+    ['Monter / descendre', `pousser contre une porte ouverte côté quai (à moins de ${fr2(NW.boardW)} m de l'axe) ou ${kn0('interact')} ; descendre : dépasser ${fr2(NW.exitW)} m dans une porte`, `posé sur le quai à ${fr2(NW.outW)} m de l'axe ; les portes côté voie restent fermées`],
+    ['Zombies', `ceux de la gare montent par la porte la plus proche (à ${fr2(NZ.doorSpot)} m de la caisse), puis suivent l'allée jusqu'au joueur`, `vitesse x ${fr2(NZ.speedK)} dans le train ; ils redescendent quand leur cible est sortie ; de l'extérieur, la caisse encaisse sauf devant une porte ouverte`],
+    ['Tir, grenades', 'les balles traversent les fenêtres (et la caisse) ; la grenade rebondit sur les parois, le plafond et les bouts du train', 'elle se pose sur le plancher de la voiture'],
+    ['Voies', `profil de rail extrudé (${fr2(RN.railH)} m), traverses tous les ${fr2(RN.sleeperEvery)} m, prisme de ballast ${fr2(RN.ballast.top)} / ${fr2(RN.ballast.foot)} m`, `itinéraire du sud-ouest lissé ; la voie du quai 1 est décalée pour laisser ${fr2(RN.route.gap)} m entre la caisse et le bord du quai`],
+    ['Caténaire', `poteaux tous les ${RN.mast.every} m à ${fr2(RN.mast.offset)} m de l'axe, fil de contact à ${fr2(RN.wire.contact)} m, porteur à ${fr2(RN.wire.messenger)} m`, `hors de la gare, en tronçons de ${RN.chunk} m (une maille par matériau et par tronçon, sans ombres)`],
+    ['Débogage', '?debug&gare&train : debout dans l\'allée de la voiture du milieu', '']]);
+}
 // ---- tram : les aiguillages (v0.41.0)
 const TJ = TR.junction, jct = (await import(path.join(ROOT, 'src/tramTrack.js'))).buildJunction(TJ, TNET.byId);
 table('24_tram_aiguillages', `Tram : l'aiguillage du nœud de ${TJ.name} (croisement des lignes A / D et B / C / F)`, ['Réglage', 'Valeur', 'Remarque'], [

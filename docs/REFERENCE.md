@@ -1,6 +1,6 @@
 # Zombie Survival — fiche de référence
 
-Version du jeu : **v0.79.0** (package 0.79.0). Générée automatiquement par `node tools/make-docs.mjs` à partir de `src/config.js` et du jeu.
+Version du jeu : **v0.79.1** (package 0.79.1). Générée automatiquement par `node tools/make-docs.mjs` à partir de `src/config.js` et du jeu.
 Carte annotée : [carte.png](carte.png). Armes de profil : [armes.png](armes.png). Les mêmes tableaux en tableur : dossier [csv/](csv/).
 
 Pour demander une modification, citez la ligne (ex. « Mitrailleuse RPK : chargeur 100 », « Mastodonte à 3000 pts », « porte P3 à 500 pts », « mettre la boîte mystère dans la zone Temple-Neuf »).
@@ -627,6 +627,20 @@ Prix d'une porte : le plus cher des deux prix de zone (colonne « Prix de la por
 | Zombies | ne rentrent pas dans la rame et ne la traversent pas | une porte ouverte les attire (ils se massent devant, à 0,55 m de la caisse) ; ils frappent le joueur à moins de 1,3 m ; ailleurs la caisse encaisse (2 PV) |
 | Tir, grenades, couteau, réanimation | comme à pied | la grenade garde la vitesse de la rame, ignore la caisse et rebondit sur le plancher ; pas de fente du couteau |
 | Menu mods / triche (F9) | F9 : menu mods et téléportation (coéquipiers, zones, armes, atouts, déblocage) | accessible en jeu et depuis le menu pause |
+
+## Gare : le train régional à quai (quai 1, portes ouvertes) et les voies SNCF
+
+| Réglage | Valeur | Remarque |
+|---|---|---|
+| Composition | locomotive 17,5 m + 3 voitures de 24,5 m (94 m), 2,9 m de large, plancher à 1,1 m au-dessus du rail | numéro « 17412 », sans marque ; nez de la locomotive à u = 47,5 m (repère de la gare), entre les passerelles |
+| Repère | une position s sur l'itinéraire ; chaque voiture est rigide entre ses pivots de bogies (17 m, locomotive 9,6 m) | u le long du train (continu d'une voiture à l'autre), w à droite ; mêmes messages réseau que le tram (p_state vh, lx, ly, lz, lyw) |
+| Intérieur | sièges 2+2 en carrés, cloisons de vestibule (porte 0,9 m), intercirculations de 1 m, WC, porte de cabine verrouillée | cercle de 0,3 m contre des boîtes ; seules la voiture courante et ses voisines sont testées |
+| Monter / descendre | pousser contre une porte ouverte côté quai (à moins de 2,35 m de l'axe) ou E ; descendre : dépasser 1,55 m dans une porte | posé sur le quai à 2,25 m de l'axe ; les portes côté voie restent fermées |
+| Zombies | ceux de la gare montent par la porte la plus proche (à 0,75 m de la caisse), puis suivent l'allée jusqu'au joueur | vitesse x 0,9 dans le train ; ils redescendent quand leur cible est sortie ; de l'extérieur, la caisse encaisse sauf devant une porte ouverte |
+| Tir, grenades | les balles traversent les fenêtres (et la caisse) ; la grenade rebondit sur les parois, le plafond et les bouts du train | elle se pose sur le plancher de la voiture |
+| Voies | profil de rail extrudé (0,15 m), traverses tous les 0,6 m, prisme de ballast 3,1 / 4,9 m | itinéraire du sud-ouest lissé ; la voie du quai 1 est décalée pour laisser 0,2 m entre la caisse et le bord du quai |
+| Caténaire | poteaux tous les 55 m à 3,1 m de l'axe, fil de contact à 5,6 m, porteur à 6,9 m | hors de la gare, en tronçons de 200 m (une maille par matériau et par tronçon, sans ombres) |
+| Débogage | ?debug&gare&train : debout dans l'allée de la voiture du milieu |  |
 
 ## Tram : l'aiguillage du nœud de Homme de Fer (croisement des lignes A / D et B / C / F)
 

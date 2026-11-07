@@ -552,7 +552,7 @@ export const CONFIG = {
     navCell: 0.75,            // case de la grille de navigation de l'aire (m)
     navMaxCost: 2400,         // portée du champ de flux (coût : 10 par case, soit ~180 m)
     playU: [-62, 62],         // quais jouables : de .. à .. (m le long des voies, depuis le milieu du bâtiment ; sous la halle)
-    crossingU: [-50, 46],     // passerelles en planches au-dessus des voies entre le quai 1 et le quai 2/3 (milieu, m), largeur crossingW
+    crossingU: [-54, 52],     // passerelles en planches au-dessus des voies entre le quai 1 et le quai 2/3 (milieu, m), largeur crossingW (v0.80.0 : écartées pour le train à quai)
     crossingW: 4.5,
     hall: { u0: -28, u1: 26, height: 13 },       // salle des pas perdus (u, hauteur sous plafond)
     building: { wing: 15.5, pavilion: 18.5, center: 23, roof: 5.5 },  // hauteurs : corniche des ailes, pavillons d'angle, pavillon central, toit
@@ -562,6 +562,50 @@ export const CONFIG = {
     railY: -0.95,
     lightsMax: 8,             // lumières ponctuelles (réserve commune : CONFIG.graphics, voir realworld.js)
     spawnEvery: 9,            // m entre deux points d'apparition le long des bords de quai et des limites du parvis
+    itemCull: 60,             // m : machines, armes au mur, stations de munitions et grilles de la gare plus loin que ça ne sont pas dessinées (appels de dessin)
+  },
+
+  // ------------------------------------------------------------------ SNCF tracks (v0.80.0, src/railNet.js) : every SNCF track of rail.json around the
+  // station (drawn with the station meshes) and the south-west approach of the intro (one continuous centreline, chunks for frustum culling).
+  // Heights are relative to the ballast top (CONFIG.gare.railY). No shadows.
+  railNet: {
+    gauge: 1.435,             // m between the rail heads (centre to centre : gauge + head width)
+    railTop: 0.215,           // m : rail head above the ballast top
+    railH: 0.15,              // m : rail height (60E1-like profile, a little shorter so the sleepers show)
+    sleeperEvery: 0.6,        // m between sleepers ; sleeper : length across, width along, height
+    sleeper: { len: 2.6, w: 0.3, h: 0.2 },
+    ballast: { top: 3.1, foot: 4.9, h: 0.34 },   // prism : top width, foot width, height (m)
+    chunk: 200,               // m : chunk size of the approach (one mesh per material per chunk)
+    corridor: 24,             // m : neighbouring tracks drawn up to this distance from the route ; ground strip on each side
+    simplify: 0.03,           // m : polyline simplification tolerance (Douglas-Peucker)
+    smooth: { radius: 6, passes: 3 },   // route : moving average (± radius samples, passes) : the SNCF pieces meet with small kinks at the switches
+    mast: { every: 55, offset: 3.1, height: 7.8 },        // catenary masts : spacing (m along the track), offset from the axis, height
+    wire: { contact: 5.6, messenger: 6.9, dropper: 9 },   // m above the rail head ; dropper spacing (m)
+    stationClip: { u: 230, v0: -140 },                    // station frame : tracks with |u| < u and v0 < v < (track-side wall) are drawn by gare/build.js
+    // the quai 1 track of the SNCF shapes runs ~0.85 m too close to the OSM platform edge (a train would overlap the platform) : the route is moved
+    // sideways so a coach side is `gap` m from the edge, with a smooth ramp in : u from blendIn[0] to blendIn[1], out : u from blendOut[0] to blendOut[1]
+    route: { gap: 0.2, blendIn: [-170, -110], blendOut: [75, 150], extendTo: 235 },
+  },
+
+  // ------------------------------------------------------------------ Regional train (v0.80.0, src/train.js, src/trainModel.js) : an electric locomotive
+  // and single-deck coaches, unbranded, number « 17412 ». Parked at quai 1, doors open on the platform side ; players walk inside (moving frame of
+  // the tram : one rigid frame per coach, between its bogie pivots). Lengths in m ; heights above the rail head.
+  train: {
+    loco: 17.5, coach: 24.5, gap: 1.0, coaches: 3,
+    width: 2.9, height: 4.05, floor: 1.10,      // body width, roof height, floor height (the platform is ~0.73 m above the rail head)
+    bogie: 17.0, locoBogie: 9.6,                 // m between bogie pivots (coach, locomotive)
+    doorWidth: 1.3, doorH: 2.0, doorAt: 10.4,    // side doors : width, height, centre (m from the coach centre, both ends)
+    partitionAt: 9.2, windows: 8,                // vestibule partitions (m from the coach centre) ; windows per side in the saloon
+    number: '17412',
+    park: { headU: 47.5 },                       // parked : locomotive nose at this u of the station frame (between the footbridges)
+    // walking inside (same fields as tram.walk) : radius, side walls at `wall` m from the axis (thickness thick), gangway opening, partition door ;
+    // doors pass when open past doorOpen and slower than boardSpeed m/s ; board : push against an open door from up to boardW m off the axis
+    // (the platform edge is gap + width / 2 away), or interact within boardReach ; step off past exitW (put down outW m off the axis, on the platform)
+    walk: { radius: 0.3, wall: 1.32, thick: 0.12, gangway: 1.0, partitionDoor: 0.9, doorOpen: 0.6, boardSpeed: 0.5, boardW: 2.35, boardPush: 0.8, boardReach: 2.6, exitW: 1.55, outW: 2.25, enterEase: 9, cabReach: 2.0 },
+    // zombies of the station board a parked train with open doors : they reach the door spot (doorSpot m outside the body), step in, then walk the aisle
+    zombie: { radius: 0.3, doorSpot: 0.75, enter: 1.0, speedK: 0.9 },
+    light: { color: 0xc8dcff, intensity: 1.2, dist: 11, y: 1.95 },   // one pooled point light per coach (cold LED), y above the rail head
+    flicker: { hz: 9, rate: 0.35 },              // the faulty LED strips : flicker frequency, share of time off
   },
 
   // ------------------------------------------------------------------ Tram de transfert (v0.79.0, src/transfer.js) : arrêt « Gare Centrale »

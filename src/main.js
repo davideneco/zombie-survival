@@ -22,6 +22,7 @@ import { installMachineFx } from './machineFx.js';
 import { installVehicles } from './vehicles.js';
 import { installTram } from './tram.js';
 import { installTramWalk } from './tramInterior.js';
+import { installTrain } from './train.js';
 import { wreckMaterial } from './vehicleModels.js';
 import { installLauncher } from './launcher.js';
 import { makeDisplay } from './weaponDisplay.js';
@@ -377,7 +378,7 @@ const game = {
     const p = this.player;
     p.tregion = lv.endRegion(p.region || 0, p.pos.x, p.pos.z, p.pos.y);
     for (const r of this.remotes.values()) {
-      r.region = lv.regionAt(r.pos.x, r.pos.z, r.pos.y);
+      r.region = r.tr && !r.ride ? (this.rideById(r.tr.id)?.walkRegion ?? lv.regionAt(r.pos.x, r.pos.z, r.pos.y)) : lv.regionAt(r.pos.x, r.pos.z, r.pos.y); // debout dans le train : la région de la gare
       r.tregion = lv.endRegion(r.region, r.pos.x, r.pos.z, r.pos.y);
     }
   },
@@ -804,7 +805,7 @@ const game = {
       g.pos.addScaledVector(g.vel, dt);
       // rebonds sur les murs : on se sert de la collision du monde pour trouver la normale
       const pushed = g.pos.clone();
-      world.collide(pushed, 0.12, null, g.tram ? 'tram' + g.tram.id : null);
+      world.collide(pushed, 0.12, null, g.tram ? g.tram.dynKey || 'tram' + g.tram.id : null);
       const nx = pushed.x - g.pos.x, nz = pushed.z - g.pos.z, l = Math.hypot(nx, nz);
       if (l > 1e-4) {
         const ux = nx / l, uz = nz / l, dot = g.vel.x * ux + g.vel.z * uz;
@@ -812,7 +813,23 @@ const game = {
         g.pos.x = pushed.x; g.pos.z = pushed.z;
       }
       let gy = world.floorAt ? world.floorAt(g.pos.x, g.pos.z, g.pos.y + 0.3, this._gfl || (this._gfl = { y: 0, region: 0 })).y + 0.09 : 0.09;
-      if (g.tram && g.pos.y > 0.2) { const tl = g.tram.worldToWalk(g.pos.x, g.pos.z, this._gtl || (this._gtl = { u: 0, w: 0 })); if (Math.abs(tl.w) < 1.15 && Math.abs(tl.u) < g.tram.interior.uEnd) gy = CONFIG.tram.car.floor + 0.09; } // plancher de la rame
+      if (g.tram && g.pos.y > 0.2) {
+        if (g.tram.walkFloorAt) { // the train (v0.80.0) : its floor, and its side walls bounce the grenade back (it does not fly out through the body)
+          const t = g.tram, tl = t.worldToWalk(g.pos.x, g.pos.z, this._gtl || (this._gtl = { u: 0, w: 0 })), wall = t.walkCfg.wall - 0.12, I = t.interior;
+          if (tl.w !== 99 && tl.u > I.u0 - 0.6 && tl.u < I.u1 + 0.6 && Math.abs(tl.w) < wall + 0.6) {
+            const q = t.frame(tl.u, this._gtf || (this._gtf = {})), rx = -q.tz, rz = q.tx;
+            if (Math.abs(tl.w) > wall) { // side walls
+              const sd = Math.sign(tl.w), vr = g.vel.x * rx + g.vel.z * rz, back = Math.abs(tl.w) - wall;
+              g.pos.x -= rx * sd * back; g.pos.z -= rz * sd * back;
+              if (vr * sd > 0) { g.vel.x -= 1.6 * vr * rx; g.vel.z -= 1.6 * vr * rz; }
+            }
+            const ue = tl.u < I.u0 + 0.12 ? I.u0 + 0.12 - tl.u : tl.u > I.u1 - 0.12 ? I.u1 - 0.12 - tl.u : 0; // closed ends of the train
+            if (ue) { const va = g.vel.x * q.tx + g.vel.z * q.tz; g.pos.x += q.tx * ue; g.pos.z += q.tz * ue; if (va * ue < 0) { g.vel.x -= 1.6 * va * q.tx; g.vel.z -= 1.6 * va * q.tz; } }
+            const ceil = t.ceilY - 0.1; if (g.pos.y > ceil) { g.pos.y = ceil; if (g.vel.y > 0) g.vel.y *= -0.3; } // ceiling
+          }
+          const fy = t.walkFloorAt(g.pos.x, g.pos.z); if (fy != null) gy = fy + 0.09;
+        } else { const tl = g.tram.worldToWalk(g.pos.x, g.pos.z, this._gtl || (this._gtl = { u: 0, w: 0 })); if (Math.abs(tl.w) < 1.15 && Math.abs(tl.u) < g.tram.interior.uEnd) gy = CONFIG.tram.car.floor + 0.09; } // plancher de la rame
+      }
       if (g.pos.y < gy) { g.pos.y = gy; g.vel.y = Math.abs(g.vel.y) * 0.35; g.vel.x *= 0.6; g.vel.z *= 0.6; if (g.vel.y < 0.6) g.vel.y = 0; }
       g.mesh.position.copy(g.pos);
       g.mesh.rotation.x += dt * 8;
@@ -1326,6 +1343,7 @@ const game = {
     this.player.active = this.playing;
     this.updateVehicles(dt);
     this.updateTransfer?.(dt); // tram transfer (v0.79.0) : decor car, ride, fade, teleport
+    this.updateTrain?.(dt);    // regional train (v0.80.0) : LED flicker
     p.update(dt, this.time);
     world.setLocalArea?.(world.areaOf(p.pos.x, p.pos.z)); // only the local player's area is drawn (island or station)
     this.summitFx?.cameraStep(dt); // vue orbitale de l'Aube : prend la caméra après le joueur
@@ -1636,6 +1654,7 @@ gfx.attach(game, { world }); // ciel, torche, reflets d'ambiance, ombres de cont
 installVehicles(game, { world, scene, hud, sfx });
 installTram(game, { world, scene, hud, sfx });
 installTramWalk(game, { world, hud, sfx }); // intérieur praticable de la rame (v0.40.0)
+installTrain(game, { world, hud }); // regional train parked at quai 1 of the station (v0.80.0) : walk frame, zombies boarding
 RemotePlayer.rideOf = (id) => game.rideById(id); // coéquipiers debout dans une rame : leur position est dans le repère de la rame
 installLauncher(game, { world, scene, fx });
 installModMenu(game, { world, hud, sfx });
@@ -1924,7 +1943,7 @@ function setupNetworkHandlers(net) {
   net.on('nade', (m) => {
     const o = new THREE.Vector3(m.o.x, m.o.y, m.o.z), v = new THREE.Vector3(m.v.x, m.v.y, m.v.z);
     if (m.k === 'm79') game.launchShell(o, v, false, m.from, m.pap | 0); // projectile de M79 ; sans k : grenade à main
-    else { game.throwGrenade(o, v, false, m.from); if (m.tr != null) { const t = game.rideById(m.tr | 0); if (t?.isTram) game.grenadesLive[game.grenadesLive.length - 1].tram = t; } } // lancée de l'intérieur d'une rame
+    else { game.throwGrenade(o, v, false, m.from); if (m.tr != null) { const t = game.rideById(m.tr | 0); if (t?.walkFrame) game.grenadesLive[game.grenadesLive.length - 1].tram = t; } } // lancée de l'intérieur d'une rame (ou du train)
   });
   // Fin de partie
   net.on('finale_req', () => { if (game.isHost && !game.finale && !game.finaleDone && game.finaleReady()) game.startFinale(); }); // l'hôte revalide : manche et quartiers ouverts
@@ -2511,6 +2530,7 @@ if (q.has('host') || q.has('join')) {
 if (q.has('debug')) {
   const pl = game.player;
   if (q.has('gare') && world.gare) { game.startArea = 'gare'; game.pickRandomSpawn(); game.applySpawnPoint(game.activeSpawn, 0); } // ?debug&gare : start at the station
+  if (q.has('gare') && q.has('train') && game.train) { const t = game.train; game.placeInTram(t, t.veh[2].uc + 3.4, 0); } // ?debug&gare&train : standing in the aisle of the middle coach
   if (q.has('x')) pl.pos.x = parseFloat(q.get('x'));
   if (q.has('z')) pl.pos.z = parseFloat(q.get('z'));
   if (q.has('yaw')) pl.yaw = parseFloat(q.get('yaw'));
