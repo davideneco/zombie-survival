@@ -34,7 +34,8 @@ function floorTexture(kind) {
   if (kind === 0) { // parquet : lames de 32 px (≈ 12 cm), joints sombres, veinage
     for (let r = 0; r < 8; r++) {
       let off = (r * 97) % N;
-      for (let s = -1; s < 3; s++) {
+      x.fillStyle = 'rgb(140,140,140)'; x.fillRect(0, r * 32, N, 32); // fond de la rangée : aucune zone non peinte (noire) quand la rangée est décalée
+      for (let s = -2; s < 3; s++) {
         const v = 128 + ((r * 37 + s * 53) % 34);
         x.fillStyle = `rgb(${v},${v},${v})`; x.fillRect(off + s * 128, r * 32, 128, 32);
         x.fillStyle = 'rgba(0,0,0,0.35)'; x.fillRect(off + s * 128, r * 32, 2, 32);
@@ -188,11 +189,22 @@ export function createInteriors() {
           // sol : face vers le haut (ordre selon le signe de l'aire du triangle)
           const s = (pb[0] - pa[0]) * (pc[1] - pa[1]) - (pc[0] - pa[0]) * (pb[1] - pa[1]);
           const [q1, q2] = s < 0 ? [pb, pc] : [pc, pb];
-          const base = F.pos.length / 3;
-          F.pos.push(pa[0], FY, pa[1], q1[0], FY, q1[1], q2[0], FY, q2[1]);
-          for (let k = 0; k < 3; k++) { F.nor.push(0, 1, 0); F.col.push(...floorC); }
-          F.uv.push(pa[0] / 2, pa[1] / 2, q1[0] / 2, q1[1] / 2, q2[0] / 2, q2[1] / 2);
-          F.idx.push(base, base + 1, base + 2);
+          // découpé en triangles de 2,5 m au plus : le relief (déplacement des sommets) suit alors le sol de la rue, qui ne perce plus le plancher
+          const stack = [[pa, q1, q2]];
+          while (stack.length) {
+            const [u, v, x] = stack.pop();
+            const e = [[u, v], [v, x], [x, u]].map(([p0, p1]) => (p0[0] - p1[0]) ** 2 + (p0[1] - p1[1]) ** 2), m = e.indexOf(Math.max(...e));
+            if (e[m] > 6.25) {
+              const [p0, p1, p2] = m === 0 ? [u, v, x] : m === 1 ? [v, x, u] : [x, u, v], mid = [(p0[0] + p1[0]) / 2, (p0[1] + p1[1]) / 2];
+              stack.push([p0, mid, p2], [mid, p1, p2]);
+              continue;
+            }
+            const base = F.pos.length / 3;
+            F.pos.push(u[0], FY, u[1], v[0], FY, v[1], x[0], FY, x[1]);
+            for (let k = 0; k < 3; k++) { F.nor.push(0, 1, 0); F.col.push(...floorC); }
+            F.uv.push(u[0] / 2, u[1] / 2, v[0] / 2, v[1] / 2, x[0] / 2, x[1] / 2);
+            F.idx.push(base, base + 1, base + 2);
+          }
           const cb = W.pos.length / 3, cc = [0.4, 0.38, 0.35];
           W.pos.push(pa[0], H, pa[1], q2[0], H, q2[1], q1[0], H, q1[1]); // plafond : face vers le bas
           for (let k = 0; k < 3; k++) { W.nor.push(0, -1, 0); W.col.push(...cc); }
@@ -267,10 +279,20 @@ export function createInteriors() {
       }
       // maillages
       const wallMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.88, metalness: 0.02 });
+      // Lumière d'ambiance réduite à l'intérieur le jour (le ciel n'entre que par la porte) : uAmb multiplie l'éclairage indirect des matériaux des pièces
+      const dimAmbient = (m) => {
+        m.onBeforeCompile = (sh) => {
+          sh.uniforms.uAmb = api.amb;
+          sh.fragmentShader = 'uniform float uAmb;\n' + sh.fragmentShader.replace('#include <lights_fragment_end>', '#include <lights_fragment_end>\n  reflectedLight.indirectDiffuse *= uAmb;\n  reflectedLight.indirectSpecular *= uAmb;');
+        };
+        m.customProgramCacheKey = () => 'interior-amb';
+        return m;
+      };
       const woodMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.62, metalness: 0.02, map: floorTexture(0), polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -2 });
       const tileMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.35, metalness: 0.05, map: floorTexture(1), polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -2 });
       const furnMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.78, metalness: 0.03 });
-      const lampMat = new THREE.MeshStandardMaterial({ color: 0xffe2b0, emissive: 0xffc070, emissiveIntensity: 2.2, roughness: 0.5 });
+      const lampMat = new THREE.MeshStandardMaterial({ color: 0xffe2b0, emissive: 0xffc070, emissiveIntensity: 1.1, roughness: 0.5 });
+      [wallMat, woodMat, tileMat, furnMat].forEach(dimAmbient);
       api.tiles = [];
       for (const t of tiles.values()) {
         const T = { cx: t.cx, cz: t.cz, half: t.half, meshes: [] };
@@ -299,6 +321,9 @@ export function createInteriors() {
       api.apply();
     },
 
+    amb: { value: 1 },
+    // Jour (k = 1) : ambiance intérieure à ambientDay ; nuit (k = 0) : inchangée (le plafonnier éclaire)
+    setDaylight(k) { api.amb.value = 1 - (1 - (C().ambientDay ?? 0.35)) * Math.min(1, Math.max(0, k)); },
     range: CONFIG.interiors?.range ?? 70, px: 1e9, pz: 1e9, tiles: [],
     update(px, pz) { api.px = px; api.pz = pz; api.apply(); },
     apply() {

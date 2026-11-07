@@ -118,6 +118,7 @@ export function installSummit(game, { world, scene, hud, sfx, fx, hemi, moon, mo
     }
     world.sky?.setGradient(pickS(SKY.domeTop, k), pickS(SKY.domeMid, k), pickS(SKY.domeBot, k));
     if (world.sky?.stars) world.sky.stars.visible = k < 0.28;
+    world.interiors?.setDaylight(k); // pièces : moins de lumière du ciel le jour
     game.gfx?.onSky(k); // dôme (lune, nuages) et reflets d'ambiance suivent l'Aube (graphics.js)
     world.setLampScale?.(1 - 0.92 * sm(Math.min(1, k * 1.3)));
     if (sun) { // monte à l'est (+x) de -4° à 38° d'élévation

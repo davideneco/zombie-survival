@@ -2126,7 +2126,20 @@ export async function buildRealWorld(scene, renderer) {
         const l = labels[nav.idx(ix, iz)];
         if (out && l === out && pointInPoly(nav.worldX(ix), nav.worldZ(iz), r.inner)) { good = true; break; }
       }
-      if (!good) sealed.push(r);
+      // un objet de la rue (voiture garée, mobilier) déborde dans la pièce : elle est fermée (sinon obstacle sans image visible à l'intérieur)
+      const invaded = !good ? false : collision.circles.some((c) => !c.off && c.kind === 'prop' && c.x > r.minX && c.x < r.maxX && c.z > r.minZ && c.z < r.maxZ && pointInPoly(c.x, c.z, r.inner))
+        || collision.segs.some((sg) => !sg.off && sg.kind === 'prop' && [[sg.ax, sg.az], [sg.bx, sg.bz]].some(([x, z]) => x > r.minX && x < r.maxX && z > r.minZ && z < r.maxZ && pointInPoly(x, z, r.inner)));
+      // la porte doit se franchir à pied (collision du joueur, rayon 0,4) : de 1,6 m dehors à 1,6 m dedans
+      let walk = good && !invaded;
+      if (walk) {
+        const q = { x: 0, y: 0.1, z: 0 }, o = { kind: null, push: 0, nx: 0, nz: 0 };
+        for (let s2 = -1.6; s2 <= 1.6; s2 += 0.2) {
+          const tx = mx - nx * s2, tz = mz - nz * s2;
+          q.x = tx; q.z = tz; q.y = 0.1; collision.resolve(q, 0.4, o);
+          if (Math.hypot(q.x - tx, q.z - tz) > 0.05) { walk = false; break; }
+        }
+      }
+      if (!good || invaded || !walk) sealed.push(r);
     }
     for (const r of sealed) {
       const [x0, z0, x1, z1] = interiors.closeDoor(scene, r);

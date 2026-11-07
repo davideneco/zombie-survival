@@ -18,6 +18,7 @@ It runs several minutes: start it in the background and wait for `"$SCRATCH/scan
 - `liens.txt`: every finding with coordinates and a `?debug&x&z&yaw&pitch` link that drops the player on the spot; `hotspots.png`: the findings on the map; `report.json`: details.
 - **Trap pockets** (enter but cannot leave) and **stuck bots** are real bugs: fix them.
 - **Invisible walls** (collision without mesh): most hits on thin circles (`kind: prop`, `r ≈ 0.1`) are lamp posts the ray test misses; check a segment (`kind: wall`) with a screenshot before changing anything.
+- **Walk step** (`ONLY=walk WALKS=4000`): walks with the real player collision and, at each block, looks for a visible mesh at 0.3 / 0.9 / 1.6 m. Most hits are false positives: props drawn only near the player (instanced furniture, Morris columns), benches and barriers the rays pass under or over, shelf ends and door-jamb corners hit at a grazing angle. Re-check each hit on the spot (teleport the player there, let the scenery load, raycast again with DoubleSide) and look at a screenshot before changing anything.
 - **Walk-through walls** (mesh without collision): thin decorative meshes (tram platforms, a few cm) are usually harmless.
 - A few hundred small "pockets" are normal: building interiors and courtyards closed off from the street.
 

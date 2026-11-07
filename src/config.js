@@ -215,8 +215,8 @@ export const CONFIG = {
   // Intérieurs des rez-de-chaussée (v0.78.0, interiors.js) : bâtiments ordinaires d'aire minArea..maxArea m², porte de `door` m sur une façade qui
   // donne sur la rue (hauteur doorHeight, celle des passages sous immeubles), murs intérieurs à `wall` m de la façade, plafond à `height` m.
   // shelfChance : part des murs pleins garnis d'étagères ; plafonnier : lightColor / lightIntensity / lightDist ; range : distance d'affichage (m).
-  interiors: { enabled: true, minArea: 25, maxArea: 3000, minHeight: 4, door: 2.4, doorHeight: 3.6, height: 3.6, wall: 0.22, floorY: 0.06,
-    shelfChance: 0.5, lightColor: 0xffc890, lightIntensity: 7, lightDist: 9, range: 70 },
+  interiors: { enabled: true, minArea: 25, maxArea: 3000, minHeight: 4, door: 2.4, doorHeight: 3.6, height: 3.6, wall: 0.22, floorY: 0.08,
+    shelfChance: 0.5, lightColor: 0xffc890, lightIntensity: 7, lightDist: 9, range: 70, ambientDay: 0.35 }, // ambientDay : part de la lumière du ciel à l'intérieur en plein jour
   // Relief du terrain (v0.74.0, terrain.js). Mètres. undulation : amplitude de l'ondulation douce des rues et places (échelles wave1 / wave2 en m) ;
   // bank : profondeur des berges à l'eau (l'eau est posée à -bank) sur bankReach m ; parvis : surélévation de la place devant la cathédrale.
   terrain: { enabled: true, undulation: 0.3, wave1: 90, wave2: 35, bank: 0.6, bankReach: 10, parvis: { x: 110, z: 36, h: 0.4, r: 22, edge: 12 }, groundEdge: 5 },
