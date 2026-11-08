@@ -695,12 +695,13 @@ export const CONFIG = {
     // speeds (m/s, m/s²) : cruise ~45 km/h (a Citadis on its own track), CTS-like acceleration and service braking ; curves are capped at
     // sqrt(aLat * R) ; the intermediate stop is passed at `pass` m/s over ± passLen m ; step : m between two samples of a speed profile
     drive: { cruise: 12.5, accel: 1.3, brake: 1.3, aLat: 1.2, pass: 6.5, passLen: 22, step: 0.25 },
-    legs: { gare: { depart: 40, arrive: 45 }, hdf: { depart: 10, arrive: 11 } },   // m ridden near each stop (departure / arrival legs)
-    middle: { pass: 'Faubourg de Saverne', before: 150, after: 0 },               // middle leg : from `before` m before the passed stop to the bridge middle + after
+    legs: { gare: { depart: 32, arrive: 45 }, hdf: { depart: 10, arrive: 11 } },   // m ridden near each stop (departure / arrival legs)
+    middle: { pass: 'Faubourg de Saverne', before: 70, after: 0 },                 // middle leg : from `before` m before the passed stop to the bridge middle + after
     cut: { out: 0.35, hold: 0.15, in: 0.45 },                                      // s : fade to black, black, fade back in
     // route assembly : blend lengths (m) from the station's stop track into line C and from line C into the island's B / C / F track ; extra m of
-    // that track past Homme de Fer ; bridges : route samples whose terrain is below bridgeBelow m (the Ill), widened by bridgePad m
-    route: { gareBlend: 40, bcfBlend: 40, extra: 140, bridgeBelow: -0.12, bridgePad: 5 },
+    // that track past Homme de Fer ; bridges : runs of route samples whose terrain is below bridgeBelow m and reaches bridgeDeep m (the banks of the
+    // Ill ; the street undulation stays above it), widened by bridgePad m
+    route: { gareBlend: 40, bcfBlend: 40, extra: 140, bridgeBelow: -0.12, bridgeDeep: -0.45, bridgePad: 5 },
     announce: { passAfter: 25 },   // m past the intermediate stop : « Prochain arrêt : … » on the passenger display
     walk: { outW: 1.95, boardSpeed: 0.5 },   // stepping off : put down outW m from the axis ; doors pass below boardSpeed m/s (tram walk settings otherwise)
     light: { color: 0xffe6c0, intensity: 8, dist: 12, y: 2.6 },   // pooled point light inside the car (warm LED)

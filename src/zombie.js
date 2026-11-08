@@ -577,7 +577,7 @@ export class Zombie {
       target = null;
       // seulement les joueurs debout, et atteignables (par les escaliers) : on ignore les joueurs à terre ou morts
       for (const pl of player) {
-        if (!pl || pl.dead || pl.downed) continue;
+        if (!pl || pl.dead || pl.downed || pl.xfSafe) continue; // (xfSafe : riding the transfer tram, v0.83.0)
         let cost = Math.hypot(pl.pos.x - this.pos.x, pl.pos.z - this.pos.z);
         if (hasLv) {
           const pr = pl.tregion || 0;

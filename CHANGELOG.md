@@ -2,6 +2,18 @@
 
 Chaque changement est poussé sur `main` (déploiement Render) avec un nouveau numéro de version et sa description ici.
 
+## v0.83.0 (2026-11-08)
+- Le tram de transfert roule vraiment : le trajet Gare Centrale ↔ Homme de Fer suit le vrai tracé de la ligne C (données OpenStreetMap) : départ du parvis, rue du Faubourg de Saverne (l'arrêt est passé au ralenti), pont sur l'Ill, arrivée à l'Homme de Fer. Fini l'écran noir de la v0.79.
+- On voyage debout dans la rame : on peut y marcher et tourner, les portes restent verrouillées jusqu'à l'arrêt. Annonces « Tram C — direction … » et « Prochain arrêt : … », titre à l'arrivée.
+- Le trajet dure environ 35 s, avec deux courts fondus au noir (~1 s) qui raccourcissent le kilomètre réel et cachent le passage gare ↔ île.
+- Pendant le trajet, aucun zombie ne vous poursuit ni ne vous blesse ; à l'arrivée, les portes s'ouvrent côté quai et la zone d'arrivée s'ouvre comme avant.
+- Nouveau décor entre la gare et l'île : rails et caténaire de la ligne C, pont en grès sur l'Ill, quai de Faubourg de Saverne.
+- En coop, tout le monde voit la même rame avec les coéquipiers debout dedans ; ceux qui restent à quai ne sont pas concernés.
+- Note : la vraie ligne C ne passe pas par Alt Winmärik (c'est la ligne B/F) ; le trajet suit le tracé réel.
+- Vérifié : build ; trajet gare → Homme de Fer lancé dans le jeu (arrivée sur l'île, zone Homme de Fer, PV restés à 100, aucune erreur) ; captures regardées (pont de jour, rue de nuit, arrivée). Selon le développeur : aller et retour en marchant dans la rame sans en sortir, de jour et de nuit ; aucun zombie dans la rame ; deux onglets (départ groupé, et un passager pendant que l'autre reste) ; intro, départ gare et départ classique sans erreur ; 187 à 249 appels de dessin côté gare.
+- Non vérifié : retour de nuit, vraie latence réseau, arrivée en cours de trajet, vraie carte graphique.
+- Limites : un joueur resté à quai voit la rame apparaître/disparaître aux coupes ; la rame peut traverser le tram conductible s'il est sur la voie B/C/F ; si le tram conductible occupe le quai, la rame s'arrête 36 m plus loin ; sur l'île, certaines vues du trajet (pont) dépassent déjà le budget d'appels de dessin (coût de l'île, pas du tram).
+
 ## v0.82.0 (2026-11-08)
 - Les zombies attaquent le train. Pendant le trajet, des zombies longent la voie : abattez-les par les fenêtres. Ceux qui restent sur la voie sont percutés par la locomotive (choc, sang sur le pare-brise, 0 point).
 - Au ralentissement près des wagons déraillés : « Ils s'accrochent aux fenêtres ! ». Des zombies courent le long du train, s'agrippent à une fenêtre, la vitre se fend puis vole en éclats (elle reste cassée, le vent s'engouffre), ils grimpent à l'intérieur et vous poursuivent dans l'allée. Au plus 4 accrochés à la fois (8 à quatre joueurs) ; on peut les abattre à la fenêtre.

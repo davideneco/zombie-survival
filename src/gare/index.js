@@ -278,7 +278,7 @@ export function buildGare(ctx) {
 
   const start = { ...CONFIG.gareSpawn, x: plan.start.x, z: plan.start.z, yaw: plan.start.yaw };
   const api = {
-    plan, root, region, trees, arch, nav, doors, spawns, zoneIdx, zoneCenters, start, route, railNet, train, scenery,
+    plan, root, region, trees, arch, nav, doors, spawns, zoneIdx, zoneCenters, start, route, railNet, train, scenery, rail: data.rail, // (rail : rail.json, the tram transfer's line C route)
     bounds: plan.bounds, inArea, inCorridor, zoneOf,
     inRegion: (x, z) => inArea(x, z) && levels.inRegion(region, x, z),
     makeDoors, placeItems, beforeNavs, finishNav, pickGround, cullItems,

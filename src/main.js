@@ -1106,7 +1106,8 @@ const game = {
   pickSpawn() {
     // Les zombies apparaissent autour d'un joueur vivant tiré au hasard (hôte ou coéquipier).
     const alive = [this.player, ...this.remotes.values()].filter((pl) => !pl.dead && !pl.downed);
-    const pool = alive.length ? alive : [this.player];
+    const ground = alive.filter((pl) => !pl.xfSafe); // (not around a rider of the transfer tram, v0.83.0)
+    const pool = ground.length ? ground : alive.length ? alive : [this.player];
     const pp = this.spawnTarget(pool).pos;
     if (world.pickWindow) {
       if (Math.random() < 0.65) {
@@ -1416,7 +1417,7 @@ const game = {
     // (calculé par tranches à chaque image sur toute la carte, uniquement vers les joueurs debout)
     this.updateLevels(dt);
     if (world.nav && (this.isHost || !this.isMultiplayer)) {
-      const targets = [p, ...this.remotes.values()].filter((pl) => !pl.dead && !pl.downed);
+      const targets = [p, ...this.remotes.values()].filter((pl) => !pl.dead && !pl.downed && !pl.xfSafe); // (riders of the transfer tram : nobody chases them, v0.83.0)
       if (targets.length) {
         const gt = [...this.fieldTargets(0, targets)];
         if (world.lure) gt.push({ x: world.lure.x, z: world.lure.z }); // gong du tram : le champ de flux a une cible de plus (les zombies à moins de 50 m)
@@ -1853,6 +1854,7 @@ function setupNetworkHandlers(net) {
         summit: game.finaleDone && (game.finale || game.dawnOn) ? { st: game.summitState?.() || null, fan: game.finale?.fan || 0, dawn: game.dawnOn ? Math.round((game.time - game.dawnT0) * 10) / 10 : null, eternal: !!game.eternal } : null, // Acte V en cours (ou Aube passée)
         vehicles: game.vehicleSnapshot(),
         intro: game.introState?.() || null, // train intro running : { tau, ph } (the joiner stands in the train)
+        xf: game.transferState?.() || null, // tram transfer running (v0.83.0) : the joiner sees the same car
         zombies: game.zombies.map((z) => ({
           id: z.id,
           st: z.spawnType,
@@ -2152,6 +2154,7 @@ function setupNetworkHandlers(net) {
       game.zombies.push(z);
     }
     if (m.intro) game.introJoin?.(m.intro); // train intro running (v0.81.0)
+    if (m.xf) game.transferJoin?.(m.xf); // tram transfer running (v0.83.0)
     if (m.tnWin) game.rideApplyDamage?.(m.tnWin); // (after introJoin : it resets the train)
   });
 

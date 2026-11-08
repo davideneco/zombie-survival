@@ -62,7 +62,7 @@ export function buildTransferRoute({ gare, tramC, bcf, bcfStopS, terrainY, R }) 
     cHint = fc;
   }
   // 3) line C up to its junction with B / F
-  const J = tramC.junction ? tramC.junction.s : C.length - 1 - R.bcfBlend;
+  const J = Math.round(tramC.junction ? tramC.junction.s : C.length - 1 - R.bcfBlend);
   for (let i = Math.floor(cHint) + 1; i <= J; i++) pts.push(C[i]);
   // 4) blend into the island's B / C / F track over bcfBlend m (the two run side by side there : OSM vs the hand-traced line)
   let bS = 0;
@@ -99,6 +99,8 @@ export function buildTransferRoute({ gare, tramC, bcf, bcfStopS, terrainY, R }) 
   for (let i = 0; i < n; i++) {
     if (h[i] >= R.bridgeBelow) continue;
     let j = i; while (j + 1 < n && h[j + 1] < R.bridgeBelow) j++;
+    let deep = Infinity; for (let k = i; k <= j; k++) deep = Math.min(deep, h[k]);
+    if (deep > R.bridgeDeep) { i = j; continue; } // (a dip of the street, not a river bank)
     const a = Math.max(0, i - R.bridgePad), b = Math.min(n - 1, j + R.bridgePad), ha = terrainY(track.x[Math.max(0, a - 1)], track.z[Math.max(0, a - 1)]), hb = terrainY(track.x[Math.min(n - 1, b + 1)], track.z[Math.min(n - 1, b + 1)]);
     for (let k = a; k <= b; k++) h[k] = Math.max(0, ha + ((hb - ha) * (k - a)) / Math.max(1, b - a)) + 0.02;
     bridges.push({ s0: track.s[a], s1: track.s[b], water: [track.s[i], track.s[j]] });
