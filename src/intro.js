@@ -197,11 +197,10 @@ export function installIntro(game, { world, hud, sfx }) {
     // late joiner (sync from the host)
     introJoin(st) { if (!st || st.ph === 'done' || st.ph === 'off') { end(); return; } begin(st.tau, { late: true }); },
     introState: () => (S.on ? { tau: Math.round(S.tau * 1000) / 1000, ph: S.ph } : null),
-    // prompt standing in the moving train
+    // prompt standing in the moving train : none during the ride (v0.83.1, the skip gauge has its own label) ; null = not riding
     introHint() {
       if (!S.on || S.ph !== 'ride') return null;
-      const kmh = Math.round(train.speed * 3.6);
-      return `${game.binds.moveLabel()} : marcher · train en marche (${kmh} km/h), portes verrouillées`; // (the skip gauge has its own label)
+      return '';
     },
     introDebug: { P, s0, sEnd, S, poseAt },
     // nose abscissa of the train on the route at τ (rideZombies.js places the trackside zombies the train will pass)

@@ -443,10 +443,8 @@ export function installTrain(game, { world, hud }) {
     // prompt standing in the train
     trainWalkHint() {
       const O = game.player.onTram;
-      const intro = game.introHint?.(); // the intro ride : speed, skip (intro.js)
-      if (intro) return intro;
       for (const c of t.interior.cab) if (Math.abs(O.u - c.u) < W.cabReach) return c.text;
-      if (t.speed > 0.5) return `${game.binds.moveLabel()} : marcher · train en marche (${Math.round(t.speed * 3.6)} km/h)`;
+      if (game.introHint?.() != null || t.speed > 0.5) return ''; // no walking hint while the train runs (v0.83.1)
       if (!t.walkOpen()) return `${game.binds.moveLabel()} : marcher · portes fermées`;
       return `${game.binds.moveLabel()} : marcher · train à quai, portes ouvertes : marchez vers une porte pour descendre`;
     },

@@ -360,8 +360,8 @@ export function installTransfer(game, { world, hud, sfx, scene }) {
   // hint while standing in the car
   car.hint = () => {
     const st = S.stop, dest = st ? stops[st.dest] : null, mv = game.binds.moveLabel();
-    if (S.state === STATE.call && st) return `${mv} : marcher · tram C direction ${dest.name} — départ dans ${Math.max(0, Math.ceil(X.countdown - S.t))} s`;
-    if (S.state === STATE.go && S.trip && S.t < S.trip.tArrive) return `${mv} : marcher · tram C direction ${dest.name}, portes verrouillées`;
+    if (S.state === STATE.call && st) return `Tram C direction ${dest.name} — départ dans ${Math.max(0, Math.ceil(X.countdown - S.t))} s`;
+    if (S.state === STATE.go && S.trip && S.t < S.trip.tArrive) return ''; // no hint during the ride (v0.83.1)
     if (car.walkOpen()) return `${mv} : marcher · ${dest ? dest.name : 'terminus'} — portes ouvertes : marchez vers une porte pour descendre`;
     return `${mv} : marcher · portes fermées`;
   };

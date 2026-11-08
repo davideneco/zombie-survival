@@ -2,6 +2,10 @@
 
 Chaque changement est poussé sur `main` (déploiement Render) avec un nouveau numéro de version et sa description ici.
 
+## v0.83.1 (2026-11-08)
+- Plus de texte « ZQSD : marcher · train en marche… » pendant le trajet en train (intro) ni pendant le trajet en tram de transfert : l'écran reste dégagé. Les annonces, l'indication pour passer l'intro, le compte à rebours du tram et le texte de descente à quai restent.
+- Vérifié : build ; intro lancée (aucun texte à τ = 10 s, annonce affichée, capture regardée) ; après le passage de l'intro, le texte de descente à quai réapparaît ; aucune erreur. Non vérifié : trajet en tram rejoué (même changement, une ligne).
+
 ## v0.83.0 (2026-11-08)
 - Le tram de transfert roule vraiment : le trajet Gare Centrale ↔ Homme de Fer suit le vrai tracé de la ligne C (données OpenStreetMap) : départ du parvis, rue du Faubourg de Saverne (l'arrêt est passé au ralenti), pont sur l'Ill, arrivée à l'Homme de Fer. Fini l'écran noir de la v0.79.
 - On voyage debout dans la rame : on peut y marcher et tourner, les portes restent verrouillées jusqu'à l'arrêt. Annonces « Tram C — direction … » et « Prochain arrêt : … », titre à l'arrivée.
