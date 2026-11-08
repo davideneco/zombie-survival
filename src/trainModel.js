@@ -33,7 +33,11 @@ export function coachLayout() {
   }
   const wcBox = { u0: u0 + 0.02, u1: u0 + 1.85, w0: -W.wall, w1: -0.42 };
   blocks.push(wcBox);
-  return { L, h, P, bay, nBay, u0, seats, blocks, wc: wcBox, doorAt: T.doorAt, doorW: T.doorWidth, wall: W.wall };
+  // saloon windows (both sides) : centres along u, width, sill and head heights above the rail head ; legroom : free gaps between facing seats
+  const winW = 1.62, winY0 = 1.95, winY1 = 2.95, pitch = (2 * P) / T.windows, winU = [];
+  for (let i = 0; i < T.windows; i++) winU.push(-P + pitch * (i + 0.5));
+  const legroom = []; for (let b = 0; b < nBay; b++) legroom.push(u0 + b * bay + bay / 2);
+  return { L, h, P, bay, nBay, u0, seats, blocks, wc: wcBox, doorAt: T.doorAt, doorW: T.doorWidth, wall: W.wall, winU, winW, winY0, winY1, legroom };
 }
 
 // ------------------------------------------------------------------ canvas textures
@@ -125,8 +129,67 @@ export function trainMaterials(envMap = null) {
     flicker: new THREE.MeshStandardMaterial({ map: panel, emissiveMap: panel, emissive: 0xdde8ff, emissiveIntensity: 1.0, roughness: 0.4 }),
     decal: new THREE.MeshStandardMaterial({ map: bloodTex(), transparent: true, depthWrite: false, roughness: 0.35, metalness: 0, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4 }),
   };
-  if (envMap) MATS.glass.envMap = envMap;
+  // broken saloon windows (v0.82.0) : cracks over the pane (white hairlines, transparent), jagged shards left in the frame (dirtier glass)
+  MATS.crack = new THREE.MeshStandardMaterial({ map: crackTex(), color: 0xdfe6ea, roughness: 0.2, metalness: 0.1, transparent: true, depthWrite: false, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -2 });
+  MATS.shards = new THREE.MeshStandardMaterial({ color: 0x7c8e96, roughness: 0.12, metalness: 0.25, transparent: true, opacity: 0.55, depthWrite: false, side: THREE.DoubleSide, envMapIntensity: 1.2 });
+  if (envMap) { MATS.glass.envMap = envMap; MATS.shards.envMap = envMap; }
   return MATS;
+}
+// impact cracks : radial hairlines from a point near the bottom middle (where the fists hit), rings around it
+function crackTex() {
+  const c = document.createElement('canvas'); c.width = 256; c.height = 160;
+  const x = c.getContext('2d'), cx = 128, cy = 120;
+  x.clearRect(0, 0, 256, 160); x.lineCap = 'round';
+  for (let k = 0; k < 15; k++) {
+    let a = (k / 15) * TAU + hash(k, 1) * 0.3, px = cx, py = cy;
+    x.strokeStyle = `rgba(235,242,246,${0.55 + hash(k, 2) * 0.35})`; x.lineWidth = 1 + hash(k, 3) * 1.4;
+    x.beginPath(); x.moveTo(px, py);
+    for (let s = 0; s < 9; s++) { a += (hash(k, s, 4) - 0.5) * 0.5; const l = 9 + hash(k, s, 5) * 16; px += Math.cos(a) * l; py += Math.sin(a) * l * 0.8; x.lineTo(px, py); }
+    x.stroke();
+  }
+  for (const r of [10, 24, 40]) { x.strokeStyle = 'rgba(230,238,242,0.45)'; x.lineWidth = 1; x.beginPath(); for (let k = 0; k <= 24; k++) { const a = (k / 24) * TAU, rr = r * (0.8 + hash(k, r) * 0.4); const X = cx + Math.cos(a) * rr, Y = cy + Math.sin(a) * rr * 0.8; if (k) x.lineTo(X, Y); else x.moveTo(X, Y); } x.stroke(); }
+  x.fillStyle = 'rgba(240,245,248,0.5)'; x.beginPath(); x.arc(cx, cy, 6, 0, TAU); x.fill();
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+
+// ------------------------------------------------------------------ saloon window pane, cracks, shards (v0.82.0) : one window centred on u = 0,
+// in the plane w = 0 facing +w (vehicle-local axes, see the header) ; train.js instances them at side * (width / 2 - 0.025), u = window centre
+export function buildWindowGeometry() {
+  const L = coachLayout(), w = L.winW, y0 = L.winY0, y1 = L.winY1;
+  const pane = onSide(new THREE.ShapeGeometry(rrect(-w / 2, y0, w / 2, y1, 0.12), 4), 0, 1);
+  const crack = onSide(new THREE.ShapeGeometry(rrect(-w / 2, y0, w / 2, y1, 0.12), 4), 0.004, 1);
+  { const p = crack.attributes.position, uv = crack.attributes.uv; for (let i = 0; i < p.count; i++) uv.setXY(i, (-p.getZ(i) + w / 2) / w, (p.getY(i) - y0) / (y1 - y0)); }
+  // shards : the frame keeps a jagged rim of glass (deterministic outline, 0.05 to 0.3 m deep)
+  const s = rrect(-w / 2, y0, w / 2, y1, 0.12), hole = new THREE.Path(), n = 34, pts = [];
+  for (let k = 0; k < n; k++) {
+    const f = k / n, per = 2 * (w + (y1 - y0)), d = f * per; let px, py;
+    if (d < w) { px = -w / 2 + d; py = y0; } else if (d < w + (y1 - y0)) { px = w / 2; py = y0 + d - w; } else if (d < 2 * w + (y1 - y0)) { px = w / 2 - (d - w - (y1 - y0)); py = y1; } else { px = -w / 2; py = y1 - (d - 2 * w - (y1 - y0)); }
+    const depth = 0.05 + hash(k, 77) * 0.25 * (k % 3 === 0 ? 1 : 0.45), cxp = 0, cyp = (y0 + y1) / 2, dx = cxp - px, dy = cyp - py, l = Math.hypot(dx, dy) || 1;
+    pts.push([px + (dx / l) * depth, py + (dy / l) * depth]);
+  }
+  pts.forEach(([px, py], i) => (i ? hole.lineTo(px, py) : hole.moveTo(px, py))); hole.closePath();
+  s.holes.push(hole);
+  const shards = onSide(new THREE.ShapeGeometry(s, 4), 0, 1);
+  return { pane, crack, shards };
+}
+// blood thrown on the locomotive's front by a zombie run over (v0.82.0) : `n` splatters (windscreens, buffer beam), front nose (dir +1)
+export function buildCabBlood(n = 4) {
+  const T = CONFIG.train, h = T.loco / 2, phi = Math.atan2(0.4, 1.05), nY = Math.sin(phi), nZ = -Math.cos(phi), out = [];
+  const quarter = (g, qx, qy) => { const uv = g.attributes.uv; for (let i = 0; i < uv.count; i++) uv.setXY(i, (qx + uv.getX(i)) / 2, (qy + uv.getY(i)) / 2); return g; };
+  for (let k = 0; k < n; k++) {
+    let g;
+    if (k < 3) { // over a windscreen (left, right, then the left again larger)
+      const sw = k === 1 ? 1 : -1, d = 0.085 + k * 0.004;
+      g = quarter(new THREE.PlaneGeometry(k === 2 ? 1.15 : 0.85, k === 2 ? 0.95 : 0.7), k === 2 ? 1 : 0, 0);
+      g.rotateZ(hash(k, 5) * TAU); g.translate(0, 0.45 + (hash(k, 6) - 0.5) * 0.3, 0); g.rotateX(-phi); g.rotateY(Math.PI);
+      g.translate(sw * (0.5 + hash(k, 7) * 0.3), 2.38 + nY * d, -(h - 0.38) + nZ * d);
+    } else { // buffer beam and coupler
+      g = quarter(new THREE.PlaneGeometry(1.6, 0.8), 1, 1); g.rotateY(Math.PI); g.translate(0.2, 1.3, -(h + 0.03));
+    }
+    out.push(g);
+  }
+  return out;
 }
 
 // ------------------------------------------------------------------ geometry kit
@@ -261,8 +324,7 @@ function buffers(B, uEnd, dir) { // buffers, coupler hook, buffer beam at the en
 export function buildCoachGeometry() {
   const T = CONFIG.train, Lay = coachLayout(), L = T.coach, h = L / 2, Wd = T.width / 2, F = T.floor, B = buckets();
   const yb = 0.95, yc = 3.25, lin = T.walk.wall + 0.01; // body bottom, cant rail ; inner lining plane
-  const winW = 1.62, winY0 = 1.95, winY1 = 2.95, nW = T.windows, pitch = (2 * Lay.P) / nW;
-  const winU = []; for (let i = 0; i < nW; i++) winU.push(-Lay.P + pitch * (i + 0.5));
+  const { winW, winY0, winY1, winU } = Lay;
   const doorU = [-T.doorAt, T.doorAt], dw = T.doorWidth / 2, dTop = F + T.doorH;
   // ---- sides : skin with window and door openings (extruded), gaskets, door frames, handrails, steps, buttons
   for (const side of [-1, 1]) {
@@ -273,7 +335,7 @@ export function buildCoachGeometry() {
     B.add('body', uvSide(g, ATLAS.coach, L));
     for (const u of winU) {
       const gk = extr(ring(u - winW / 2, winY0, u + winW / 2, winY1, 0.12, 0.045), 0.02, 0, 4); onSide(gk, side * Wd, side); B.add('dark', gk, C.rubber);
-      const pane = new THREE.ShapeGeometry(rrect(u - winW / 2, winY0, u + winW / 2, winY1, 0.12), 4); onSide(pane, side * (Wd - 0.025), side); B.add('glass', pane);
+      // (the panes are their own instances, train.js : a window can crack and break during the intro, v0.82.0 ; buildWindowGeometry)
     }
     for (const u of doorU) {
       const fr = extr(ring(u - dw, F + 0.02, u + dw, dTop, 0.1, 0.07), 0.03, 0, 4); onSide(fr, side * Wd, side); B.add('dark', fr, C.grey);

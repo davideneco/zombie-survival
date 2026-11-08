@@ -638,14 +638,34 @@ export const CONFIG = {
       { at: 5.5, chime: true, dur: 7, text: 'Mesdames et messieurs, dans quelques minutes notre train arrivera en gare de Strasbourg, son terminus…' },
       { at: 12.8, dur: 3.2, static: true, text: '… (grésillements — des cris dans le haut-parleur) …' },
       { at: 26, big: true, dur: 4, title: 'RALENTISSEMENT', sub: 'Obstacle sur la voie' },
+      { at: 33, big: true, quiet: true, dur: 3.2, title: 'ILS S\'ACCROCHENT AUX FENÊTRES !', sub: 'Abattez-les avant qu\'ils ne montent' },   // quiet : no brake squeal
+      { at: 55.6, dur: 3.5, text: '(des pas sur le toit…)' },
       { at: 79, chime: true, dur: 6, text: 'Strasbourg. Strasbourg, terminus de ce train.' },
     ],
     arrival: { title: 'STRASBOURG — Terminus.', sub: 'Tout le monde descend.' },
-    // phase 4 hooks (zombies during the ride ; not active yet) : game.introHooks[id](τ) is called at τ ; counts are solo, × (1 + 0.75 per extra player)
+    // ---- zombies of the ride (v0.82.0, src/rideZombies.js ; the host simulates them) : game.introHooks[id](τ) is called at τ (events) ;
+    // counts are solo, × (1 + 0.75 per extra player) like startRound ; health of round healthRound (100 HP), speed of round 1
     events: [{ at: 8, id: 'track' }, { at: 30, id: 'breach' }, { at: 55, id: 'roof' }, { at: 95, id: 'trackbed' }],
     trackZombies: 4, sideZombies: 6, breachers: 6, gangway: 3,
-    breach: { grab: 3.0, climb: 1.2, maxHanging: 4, maxHanging4p: 8 },
+    trackOnRail: 2,               // of the trackZombies : standing on the track ahead (run over by the locomotive, roadkillPoints each)
+    trackbed: 2,                  // at the stop : zombies climbing out of the track bed onto quai 1 (outside the round count ; round 1 ends when they are dead too)
+    // 4-30 s : the train passes trackside zombies at τ in pass[0..1] (s) ; they appear lead s before (ahead, in the fog), off m from the axis,
+    // walk toward the track ; despawned `lose` m behind the tail (not counted)
+    track: { pass: [12, 27], lead: 5, off: [3.8, 9], lose: 40 },
+    // 30-55 s (15 km/h past the derailed wagons) : side zombies (sideZombies) stand beside the track, passed at τ in pass ; breachers run alongside
+    // (spawned between spawn[0] and spawn[1] s, from back or ahead of their window, `from` m away and `out` m off the body side), up to `run` m/s
+    // faster or slower than the train, at most maxRun m/s on the ground (a faster train leaves them behind, lost `lose` m behind the tail) ;
+    // at the window : hang grab s (attack animation, the glass cracks at crackAt of it, knocks every knock s), smash it (stays broken, wind),
+    // climb in climb s (arc m over the sill), then walk the aisle. Hanging (hang + climb) is capped at maxHanging (maxHanging4p with 4 players) :
+    // the others wait `wait` m behind their window. Hanging pose : `hangOut` m off the body side, feet `hangY` m above the rail head.
+    side: { pass: [36, 52], lead: 8, off: [4, 9] },
+    breach: { grab: 3.0, climb: 1.2, maxHanging: 4, maxHanging4p: 8, spawn: [31, 50], from: [8, 14], out: 3.5, run: 1.7, maxRun: 6.0, lose: 14, wait: 2.6, crackAt: 0.35, knock: 0.45, hangOut: 0.3, hangY: 0.75, arc: 0.9 },
+    // 55-80 s : footsteps on the roof of the last coach (steps every `every` s from its front to its tail), bangs on its tail door (at bangAt, bangs
+    // knocks), the door is forced at forceAt ; then the gangway zombies come in through it, one every gangEvery s
+    roof: { steps: 8, every: 0.7, bangAt: 61.5, bangs: 3, forceAt: 63.5, gangEvery: 1.6 },
     healthRound: 1, roadkillPoints: 0,
+    roadkill: { minSpeed: 3, fling: 0.6, up: 4.5 },   // run over above minSpeed m/s : thrown forward at fling x the train speed, up m/s ; blood on the cab front
+    wind: { reach: 7, gain: 0.5 },                    // wind noise at broken windows : heard up to reach m (along the train), gain at full speed
     // trackside scenery of the ride (src/rideScenery.js, instanced, no shadows) : from `from` m behind the train start to `clip` m before the
     // station ; things stay `clear` m away from every track ; far ground : a dark plane of `ground` m around the camera under the track strip
     scenery: {

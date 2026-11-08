@@ -619,13 +619,14 @@ export class Sfx {
 
   // ------------------------------------------------------------ Regional train (v0.81.0, intro.js)
   // Rolling sound of a passenger inside : low rumble and wheel roar (filtered noise, brighter with speed), traction motor whine, wind, and a
-  // brake squeal (resonant noise + a wavering tone) faded in while braking at low speed. set(speed m/s, brake 0..1, volume 0..1) ; stop().
+  // brake squeal (resonant noise + a wavering tone) faded in while braking at low speed. set(speed m/s, brake 0..1, volume 0..1, gust 0..1) ;
+  // stop(). gust (v0.82.0) : wind roaring in at a broken window near the listener (louder and darker than the cabin wind, grows with speed)
   createTrainSound() {
     if (!this.ctx) return null;
     const c = this.ctx;
     const out = c.createGain(); out.gain.value = 0; out.connect(this.bus);
     const noise = (type, f, q, g) => { const s = c.createBufferSource(), fl = c.createBiquadFilter(), gn = c.createGain(); s.buffer = this.noiseBuf; s.loop = true; fl.type = type; fl.frequency.value = f; fl.Q.value = q; gn.gain.value = g; s.connect(fl).connect(gn).connect(out); s.start(0, Math.random() * 1.5); return { s, fl, gn }; };
-    const rumble = noise('lowpass', 120, 0.7, 0), roar = noise('bandpass', 400, 0.6, 0), wind = noise('highpass', 1800, 0.5, 0);
+    const rumble = noise('lowpass', 120, 0.7, 0), roar = noise('bandpass', 400, 0.6, 0), wind = noise('highpass', 1800, 0.5, 0), gustN = noise('bandpass', 700, 0.4, 0);
     const sq = noise('bandpass', 3200, 18, 0);
     const motor = c.createOscillator(), mg = c.createGain(); motor.type = 'sawtooth'; mg.gain.value = 0; const ml = c.createBiquadFilter(); ml.type = 'lowpass'; ml.frequency.value = 900;
     motor.connect(ml).connect(mg).connect(out); motor.start();
@@ -633,11 +634,12 @@ export class Sfx {
     squeal.type = 'triangle'; squeal.frequency.value = 2900; sg.gain.value = 0; lfo.frequency.value = 5.5; lg.gain.value = 60;
     lfo.connect(lg).connect(squeal.frequency); squeal.connect(sg).connect(out); squeal.start(); lfo.start();
     return {
-      set: (speed, brake, vol) => {
+      set: (speed, brake, vol, gust = 0) => {
         const t = c.currentTime, k = Math.min(1, speed / 22), sqk = brake > 0.05 && speed > 0.4 && speed < 9 ? brake * Math.min(1, (9 - speed) / 4) * Math.min(1, speed / 1.2) : 0;
         rumble.gn.gain.setTargetAtTime((0.25 + 0.55 * k) * Math.min(1, speed / 2), t, 0.15);
         roar.fl.frequency.setTargetAtTime(220 + 900 * k, t, 0.2); roar.gn.gain.setTargetAtTime(0.32 * k, t, 0.15);
         wind.gn.gain.setTargetAtTime(0.05 * k * k, t, 0.2);
+        gustN.gn.gain.setTargetAtTime(gust * (0.08 + 0.5 * k), t, 0.25); gustN.fl.frequency.setTargetAtTime(380 + 900 * k, t, 0.3);
         motor.frequency.setTargetAtTime(60 + 260 * k, t, 0.2); mg.gain.setTargetAtTime(0.025 * Math.min(1, speed / 3) * (1 - 0.6 * brake), t, 0.2);
         sg.gain.setTargetAtTime(0.03 * sqk, t, 0.08); sq.gn.gain.setTargetAtTime(0.18 * sqk, t, 0.08);
         out.gain.setTargetAtTime(vol, t, 0.2);
@@ -645,7 +647,7 @@ export class Sfx {
       stop: () => {
         const t = c.currentTime;
         out.gain.setTargetAtTime(0, t, 0.25);
-        for (const n of [rumble.s, roar.s, wind.s, sq.s, motor, squeal, lfo]) n.stop(t + 1.5);
+        for (const n of [rumble.s, roar.s, wind.s, gustN.s, sq.s, motor, squeal, lfo]) n.stop(t + 1.5);
       },
     };
   }
@@ -655,6 +657,19 @@ export class Sfx {
     this._noise(0.06, 0.32 * v * (0.4 + 0.6 * k), 380, 'lowpass');
     this._tone('sine', 110, 60, 0.07, 0.22 * v * (0.4 + 0.6 * k));
     this._noise(0.02, 0.1 * v * k, 2600, 'bandpass', { q: 3, at: 0.005 });
+  }
+  roofStep(v = 1) { // a heavy step on the coach roof, heard from inside : dull boom of the sheet metal and a creak (v0.82.0)
+    if (!this.ctx || v < 0.03) return;
+    this._noise(0.12, 0.45 * v, 180, 'lowpass');
+    this._tone('sine', 72, 48, 0.16, 0.4 * v);
+    this._noise(0.05, 0.08 * v, 1300, 'bandpass', { q: 3, at: 0.03 });
+  }
+  roadkill(v = 1) { // a body hit by the locomotive at speed : heavy thud, crunch, a wet splash (v0.82.0)
+    if (!this.ctx || v < 0.03) return;
+    this._noise(0.18, 0.9 * v, 260, 'lowpass');
+    this._tone('sine', 95, 38, 0.22, 0.75 * v);
+    this._noise(0.09, 0.4 * v, 1600, 'bandpass', { q: 1.5, at: 0.02 });
+    this._noise(0.3, 0.25 * v, 900, 'lowpass', { at: 0.06 });
   }
   trainChime(v = 1) { // generic two-tone chime before an announcement (not a trademarked jingle)
     if (!this.ctx || v < 0.03) return;

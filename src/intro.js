@@ -2,8 +2,8 @@ import { CONFIG } from './config.js';
 
 // =====================================================================
 //  Train intro (v0.81.0) : the game starts inside the regional train (train.js) that comes from the south-west and stops at quai 1 of
-//  the station ; round 1 starts there CONFIG.intro.roundDelay s after the stop. Phase 3 of docs/TRAIN_INTRO_SPEC.md : no zombies yet
-//  (CONFIG.intro.events call game.introHooks[id] for phase 4).
+//  the station ; round 1 starts there CONFIG.intro.roundDelay s after the stop. v0.82.0 : the zombies of the ride (rideZombies.js) :
+//  CONFIG.intro.events call game.introHooks[id] at τ ; game.rideReset (begin / off) and game.rideOnStop (the stop, a skip) clean up.
 //
 //  Clock : τ (s). The train's nose abscissa s(τ) = s0 + dist(τ) is a PURE function of τ and CONFIG.intro.profile (speed keys, linear in
 //  between, integrated exactly) ; s0 is chosen so that the stop (τ = T) lands on the parked position. Nothing else is simulated.
@@ -95,6 +95,7 @@ export function installIntro(game, { world, hud, sfx }) {
     S.ann = 0; while (S.ann < I.announce.length && I.announce[S.ann].at < tau) S.ann++;
     S.ev = 0; while (S.ev < I.events.length && I.events[S.ev].at < tau) S.ev++;
     hideUi();
+    game.rideReset?.(tau); // (the windows like new, no ride zombie plan ; a late joiner : the roof state from τ)
     if (tau >= S.stopTau) { // already at the station : doors open
       S.ph = 'stopped'; poseAt(tau); train.setDoors(clamp((tau - S.stopTau) / I.doorTime, 0, 1));
       game.summitFx?.holdNight(null);
@@ -107,7 +108,7 @@ export function installIntro(game, { world, hud, sfx }) {
     train.onJoint = (sp) => { if (game.player.onTram?.v === train) sfx.trainClack?.(0.9, sp); };
   }
   // the train stops at quai 1 : doors open, arrival announcement, the night hold ends
-  function stop() {
+  function stop(skipped = false) {
     S.ph = 'stopped';
     S.stopTau = Math.min(S.stopTau, S.tau);
     poseAt(S.stopTau);
@@ -118,6 +119,7 @@ export function installIntro(game, { world, hud, sfx }) {
     sfx.airRelease?.(0.8);
     sfx.trainDoors?.(0.9);
     hud.announce(I.arrival.title, I.arrival.sub, 4500);
+    game.rideOnStop?.(skipped); // ride zombies : released at the station, or removed (skip)
   }
   function finish() {
     S.on = false; S.ph = 'done';
@@ -135,13 +137,14 @@ export function installIntro(game, { world, hud, sfx }) {
     S.sound?.stop(); S.sound = null;
     train.onJoint = null;
     train.park();
+    game.rideReset?.(0);
     if (game.summitFx?.nightHeld) { game.summitFx.holdNight(null); game.summitFx.resetSky(); }
   }
   function skip(tau = S.tau) {
     if (!S.on || S.ph !== 'ride') return;
     S.tau = Math.max(S.tau, tau, P.T);
     if (game.isHost && game.isMultiplayer) game.net?.send({ t: 'intro_skip', tau: S.tau });
-    stop();
+    stop(true);
   }
 
   // ---------------------------------------------------------------- per frame (main.js : before the train and the player)
@@ -164,7 +167,7 @@ export function installIntro(game, { world, hud, sfx }) {
       const a = I.announce[S.ann++];
       if (a.chime) sfx.trainChime?.(0.9);
       if (a.static) sfx.radioStatic?.(a.dur, 0.8);
-      if (a.big) { hud.announce(a.title, a.sub || '', a.dur * 1000); sfx.tramBrake?.(0.6, 14); }
+      if (a.big) { hud.announce(a.title, a.sub || '', a.dur * 1000); if (!a.quiet) sfx.tramBrake?.(0.6, 14); }
       else if (a.text) showSub(a.text, a.dur);
     }
     while (S.ev < I.events.length && tau >= I.events[S.ev].at) { const e = I.events[S.ev++]; try { game.introHooks[e.id]?.(tau, e); } catch (err) { console.warn('[intro] hook', e.id, err); } }
@@ -177,7 +180,7 @@ export function installIntro(game, { world, hud, sfx }) {
     if (w !== skipW) { skipW = w; skipBar.style.width = w + '%'; }
     if (S.hold >= I.skipHold) { S.hold = 0; skip(); }
     // rolling sound (local), host clock
-    if (S.sound) S.sound.set(train.speed, S.ph === 'ride' ? P.braking(tau) : 0, p.onTram?.v === train ? 0.9 : 0.35);
+    if (S.sound) S.sound.set(train.speed, S.ph === 'ride' ? P.braking(tau) : 0, p.onTram?.v === train ? 0.9 : 0.35, game.rideWind?.() || 0);
     if (game.isHost && game.isMultiplayer) { S.syncT -= dt; if (S.syncT <= 0) { S.syncT = I.sync; game.net?.send({ t: 'tn_sync', tau: Math.round(S.tau * 1000) / 1000, ph: S.ph }); } }
   }
 
@@ -201,6 +204,8 @@ export function installIntro(game, { world, hud, sfx }) {
       return `${game.binds.moveLabel()} : marcher · train en marche (${kmh} km/h), portes verrouillées`; // (the skip gauge has its own label)
     },
     introDebug: { P, s0, sEnd, S, poseAt },
+    // nose abscissa of the train on the route at τ (rideZombies.js places the trackside zombies the train will pass)
+    introNoseAt: (tau) => (tau >= S.stopTau ? sEnd : s0 + P.dist(tau)),
   });
 
   // ---------------------------------------------------------------- network
@@ -212,6 +217,6 @@ export function installIntro(game, { world, hud, sfx }) {
       const target = m.tau + Math.min(I.maxPing, (game.netPing || 0) / 1000) / 2, err = target - (S.tau + S.corr);
       if (Math.abs(err) > 1) { S.tau = target; S.corr = 0; } else S.corr += err;
     });
-    net.onHost('intro_skip', (m) => { if (!game.isHost && S.on) { S.tau = Math.max(S.tau, m.tau || P.T); S.corr = 0; if (S.ph === 'ride') stop(); } });
+    net.onHost('intro_skip', (m) => { if (!game.isHost && S.on) { S.tau = Math.max(S.tau, m.tau || P.T); S.corr = 0; if (S.ph === 'ride') stop(true); } });
   };
 }

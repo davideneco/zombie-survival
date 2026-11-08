@@ -73,6 +73,10 @@ export class Zombie {
     this.noProgress = 0; // secondes passées sans réussir à avancer (coincé)
     this.region = 0;     // étage (0 = sol de la ville) ; link : escalier en cours d'emprunt
     this.onTrain = null; // { v, u, w, y, door, st } : dans le train à quai (v0.80.0, train.js), repère de la voiture
+    // v0.82.0 (rideZombies.js) : zombies of the train ride. ride : kind ('track', 'side', 'brch', 'gang') ; rideW : { s, w, lane, rail } a
+    // trackside zombie placed by its route abscissa s and offset w ; onTrain.st 'run' | 'hang' | 'climb' | 'gang' | 'in' : in the frame of the
+    // moving train ; fall : { vx, vy, vz, gy } a corpse thrown off the train (shot off a window, run over)
+    this.ride = null; this.rideW = null; this.fall = null;
     this.link = null;
 
     // Matériaux : un par zombie (le flash de dégâts, le sang et les cendres sont propres à chacun) mais tous sur les MÊMES atlas ; la cellule
@@ -495,6 +499,8 @@ export class Zombie {
     if (this.dead) {
       if (this.ashT != null) { this._ashStep(dt); return; } // l'Aube : il part en cendres
       this.deathT += dt;
+      if (this.onTrain) world.rideCorpse?.(this, dt); // corpse in the moving train : stays in its frame ; outside it : thrown off (v0.82.0)
+      if (this.fall) this._fallStep(dt);
       const p = Math.min(1, this.deathT / 0.6);
       const f = 1 - Math.pow(1 - p, 2);
       const g = this.group;
@@ -505,7 +511,7 @@ export class Zombie {
       this.arms.forEach((a) => { a.shoulder.rotation.x *= 1 - dt * 3; a.shoulder.rotation.z += (a.side * 1.1 - a.shoulder.rotation.z) * dt * 4; a.elbow.rotation.x *= 1 - dt * 3; });
       this.legs.forEach((l, i) => { l.hip.rotation.z += ((i ? 1 : -1) * 0.25 - l.hip.rotation.z) * dt * 4; l.hip.rotation.x *= 1 - dt * 3; l.knee.rotation.x *= 1 - dt * 3; });
       if (!this._decal && this.deathT > 0.4) { this._decal = true; fx.decal(this.pos.x, this.pos.z, 1.7); }
-      if (this.deathT > 2.5) this.pos.y -= dt * 0.8;
+      if (this.deathT > 2.5 && !this.onTrain) this.pos.y -= dt * 0.8; // (in the train : rideCorpse sinks it)
       return;
     }
 
@@ -528,6 +534,8 @@ export class Zombie {
     // ----- Pantin réseau (client) : on suit l'état de l'hôte, sans IA -----
     if (this.net) {
       const n = this.net, k = Math.min(1, dt * 10);
+      if (n.tu != null && world.rideNetStep) { world.rideNetStep(this, n, dt); return; } // in the frame of the train (v0.82.0) : local (u, w, y)
+      if (this.onTrain) { this.onTrain = null; this.group.rotation.x = 0; } // (it got off)
       const bx = this.pos.x, bz = this.pos.z;
       // plus loin que drawRange (m) du joueur local : ni dessiné ni animé (il suit seulement l'hôte) ; le Bourreau garde sa propre visibilité
       if (!this.isBoss && Array.isArray(player) && player[0]) {
@@ -553,6 +561,12 @@ export class Zombie {
     }
 
     const Z = CONFIG.zombie;
+    if (this.rideW && world.rideWalkStep) { // trackside zombie of the train ride (v0.82.0) : placed along the route, walks to the track
+      const mv = world.rideWalkStep(this, dt);
+      this.attacking = false; this.walkT += dt * (mv ? this.speed * 3.2 : 1.2);
+      this._pose(this.walkT, mv ? 1 : 0.15, this.rideW.rail ? 1.25 : 0.85, 0.28, this.rideW.rail ? -0.1 : 0.18);
+      return;
+    }
     const lv = world.levels, hasLv = !!lv && lv.links.length > 0;
     if (!this.link && !this.onTrain) this.pos.y = (this.region && lv ? lv.regions[this.region].y : 0) + terrainY(this.pos.x, this.pos.z); // le zombie reste à la hauteur de son étage (dans le train : son plancher)
     const zr = this.link ? (this.link.dir > 0 ? this.link.link.b : this.link.link.a) : this.region;
@@ -572,6 +586,7 @@ export class Zombie {
         if (cost < bestCost) { bestCost = cost; target = pl; }
       }
     }
+    if (this.onTrain && this._trainStep(dt, target, world)) return; // dans le train (v0.80.0 à quai ; v0.82.0 en marche : il reste dans son repère)
     if (!target) { // personne à poursuivre : il titube sur place
       this.walkT += dt * 1.2;
       this.attacking = false;
@@ -579,7 +594,6 @@ export class Zombie {
       else this._pose(this.walkT, 0.15, 0.85, this.runner ? 0.5 : 0.28, 0.18);
       return;
     }
-    if (this.onTrain && this._trainStep(dt, target, world)) return; // dans le train à quai (v0.80.0)
     if (this.link) { this._onLink(dt, target, world); return; }
     if (this.vault) { this._vaultStep(dt); return; }
     this.vaultCd -= dt;
@@ -739,11 +753,49 @@ export class Zombie {
   _trainStep(dt, target, world) {
     const r = world.trainZombieStep?.(this, target, dt);
     if (!r) { this.onTrain = null; return false; }
+    if (r.pose) { this.attacking = false; this._ridePose(dt, r.pose, r.k || 0, r.rate || 0); return true; } // outside or coming in (v0.82.0)
     this.attackCd -= dt;
     this.walkT += dt * (r.moving ? this.speed * (this.runner ? 2.6 : 3.2) : 1.2);
     this._strikeAndPose(dt, target, r.inRange, r.moving, world);
     return true;
   }
+
+  // ----- Train ride poses (v0.82.0, host and clients) : 'run' alongside (rate : ground speed m/s), 'hang' at a window (fists banging on the
+  // glass, a knock every CONFIG.intro.breach.knock s), 'climb' through it (k : 0..1, dives over the sill), 'walk' (coming in by the gangway)
+  _ridePose(dt, pose, k, rate) {
+    if (pose === 'run') { this.walkT += dt * Math.max(1.2, rate * 2.2); this.group.rotation.x = 0; this._pose(this.walkT, 1.3, 0.9, 0.5, 0.15); return; }
+    if (pose === 'walk') { this.walkT += dt * this.speed * 3.2; this.group.rotation.x = 0; this._pose(this.walkT, 1, 0.85, 0.28, 0.18); return; }
+    if (pose === 'hang') {
+      this.walkT += dt * 7;
+      const b = Math.sin(this.walkT), B = CONFIG.intro.breach;
+      this.group.rotation.x = -0.12;
+      this.legs.forEach((l, i) => { l.hip.rotation.x = 0.35 + Math.sin(this.walkT * 0.3 + i * 2) * 0.12; l.knee.rotation.x = 0.7 + i * 0.25; l.hip.rotation.z = 0; });
+      this.arms.forEach((a, i) => { const s2 = i ? -b : b; a.shoulder.rotation.x = -2.55 + s2 * 0.32; a.shoulder.rotation.z = a.side * 0.18; a.elbow.rotation.x = -0.5 - Math.max(0, s2) * 0.6; });
+      this.spine.rotation.x = 0.05 + b * 0.04; this.spine.rotation.z = 0;
+      this.hips.position.y = 0.95;
+      this.headGroup.rotation.x = -0.25; this.headGroup.rotation.z = b * 0.08; this.headGroup.rotation.y = 0;
+      this.jaw.rotation.x = 0.35 + Math.abs(b) * 0.25;
+      if ((this._knT = (this._knT ?? 0) - dt) <= 0) { this._knT = B.knock * (0.8 + Math.random() * 0.4); this.onEvent('knock', this); }
+      return;
+    }
+    // climb
+    const e = Math.sin(Math.PI * Math.min(1, k));
+    this.walkT += dt * 5;
+    this.group.rotation.x = 0.95 * e;
+    this.legs.forEach((l, i) => { l.hip.rotation.x = -0.9 * e - 0.2 + Math.sin(this.walkT + i * 3) * 0.2; l.knee.rotation.x = 0.4 + 0.9 * e; l.hip.rotation.z = 0; });
+    this.arms.forEach((a, i) => { a.shoulder.rotation.x = -1.6 - 0.5 * (1 - k) + Math.sin(this.walkT + i * 3) * 0.25; a.shoulder.rotation.z = a.side * 0.3; a.elbow.rotation.x = -0.4; });
+    this.spine.rotation.x = 0.35 + 0.3 * e; this.spine.rotation.z = 0; this.hips.position.y = 0.95;
+    this.headGroup.rotation.x = -0.3; this.headGroup.rotation.z = 0; this.jaw.rotation.x = 0.5;
+  }
+  // corpse thrown off the train : ballistic, then it slides to a stop on the ground (gy)
+  _fallStep(dt) {
+    const f = this.fall, p = this.pos;
+    f.vy -= 14 * dt; p.x += f.vx * dt; p.y += f.vy * dt; p.z += f.vz * dt;
+    if (p.y <= f.gy) { p.y = f.gy; f.vy = 0; const k = Math.max(0, 1 - dt * 5); f.vx *= k; f.vz *= k; }
+    if (this.deathT > 2.5) f.gy -= dt * 0.8; // (sinks like the others)
+  }
+  // no spawn mound (zombies placed directly : the ride)
+  dropMound() { if (this.mound) { this.scene.remove(this.mound); this.mound.geometry.dispose(); this.mound.material.dispose(); this.mound = null; } }
 
   // Enjambement (zombie) : devant un obstacle enjambable (banc, caisse, barrière…) que le champ de flux traverse, si l'arrivée est libre et
   // plus proche du joueur (walkDistance) : CONFIG.zombie.vault.time s de saut, sans collision, arme tendue comme à une fenêtre.

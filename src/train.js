@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { CONFIG } from './config.js';
-import { coachLayout, trainMaterials, buildCoachGeometry, buildLocoGeometry, buildDoorLeaf } from './trainModel.js';
+import { coachLayout, trainMaterials, buildCoachGeometry, buildLocoGeometry, buildDoorLeaf, buildWindowGeometry, buildCabBlood } from './trainModel.js';
 import { pushOut, doorIndexAt } from './tramInterior.js';
 
 // =====================================================================
@@ -18,6 +18,9 @@ import { pushOut, doorIndexAt } from './tramInterior.js';
 //  The parked train sends nothing on the network : it is the same everywhere ; players use p_state (vh = TRAIN_ID, lx, ly, lz, lyw).
 //  v0.81.0 (intro.js) : the train also MOVES (setPose(s, v), setDoors(f)) : its pose is a pure function of the intro clock, so it sends
 //  nothing either. Coach lights follow it (`dyn` light sources), the collision boxes are updated in place, passengers get a camera sway.
+//  v0.82.0 (rideZombies.js) : damage of the ride : saloon windows intact / cracked / broken (winSt, synced by the host : tn_win), the tail door
+//  of the last coach forced open (tail, a function of the intro clock), blood on the locomotive's front (roadkills, tn_rk). The panes are their
+//  own InstancedMeshes (pane, crack, shards). Zombies in the train always live in its frame (z.onTrain { u, w, y, st }) : they ride with it.
 // =====================================================================
 
 export const TRAIN_ID = 900;
@@ -67,6 +70,18 @@ export class Train {
     this.sway = { roll: 0, bob: 0, curve: 0, t: 0, jointD: 0, jolts: new Float32Array(8).fill(-1), kick: 0 };
     this.onJoint = null; // (speed) => void : rail joint under the train (intro.js plays the clack)
   }
+
+  // ------------------------------------------------------------------ ride damage (v0.82.0) : windows, tail door, blood on the cab
+  // window index : ((coach - 1) * 2 + (side > 0 ? 1 : 0)) * windows + k ; coach 1..n-1 (0 is the locomotive), side -1 left / +1 right
+  winIndex(ci, sd, k) { return ((ci - 1) * 2 + (sd > 0 ? 1 : 0)) * this.lay.winU.length + k; }
+  winOf(i, out) { const nW = this.lay.winU.length, q = Math.floor(i / nW); out.ci = Math.floor(q / 2) + 1; out.sd = q % 2 ? 1 : -1; out.k = i % nW; out.u = this.veh[out.ci].uc + this.lay.winU[out.k]; return out; }
+  setWin(i, st) { if (this.winSt[i] === st) return false; this.winSt[i] = st; this.winDirty = true; this.applyWindows(); return true; }
+  setTail(f) { f = clamp(f, 0, 1); if (f === this.tail) return; this.tail = f; this.applyDoors(); }
+  addCabBlood() { const m = this.cabBlood[this.cabBloodN % this.cabBlood.length]; m.visible = true; this.cabBloodN++; }
+  // everything back to new (a reset, a new intro)
+  resetDamage() { this.winSt.fill(0); this.winDirty = true; this.applyWindows(); this.setTail(0); for (const m of this.cabBlood) m.visible = false; this.cabBloodN = 0; }
+  damageState() { const w = []; this.winSt.forEach((st, i) => { if (st) w.push(i, st); }); return { w, cb: this.cabBloodN }; }
+  applyDamage(d) { if (!d) return; for (let i = 0; i + 1 < (d.w || []).length; i += 2) this.winSt[d.w[i]] = d.w[i + 1]; this.winDirty = true; this.applyWindows(); for (let k = 0; k < Math.min(d.cb || 0, this.cabBlood.length); k++) this.addCabBlood(); }
 
   // ------------------------------------------------------------------ moving (intro.js) : nose abscissa s, speed v (m/s), doors 0..1
   setPose(s, v) {
@@ -185,6 +200,33 @@ export class Train {
     for (const im of this.leafMeshes) { im.name = 'train:leaf'; im.castShadow = false; im.receiveShadow = true; root.add(im); }
     // per-vehicle carriers (avatars of teammates standing in the train are parented to them, see remote.js)
     this.mods = this.veh.map((v) => { const g = new THREE.Group(); g.name = 'train:carrier:' + v.i; root.add(g); return { g }; });
+    // saloon windows (v0.82.0) : intact / cracked panes, cracks, shards of the broken ones ; lists of window indices per mesh (rebuilt on change)
+    const wg = buildWindowGeometry(), nWin = (this.n - 1) * 2 * this.lay.winU.length;
+    this.winSt = new Uint8Array(nWin); this.winDirty = true; this.winLists = [[], [], []];
+    this.winMeshes = [[wg.pane, M.glass], [wg.crack, M.crack], [wg.shards, M.shards]].map(([g, m], i) => {
+      const im = new THREE.InstancedMesh(g, m, nWin); im.name = 'train:window:' + ['pane', 'crack', 'shards'][i];
+      im.castShadow = false; im.receiveShadow = false; im.frustumCulled = false; im.count = 0; im.userData.noTerrain = true; root.add(im); return im;
+    });
+    this.tail = 0;
+    // blood on the locomotive's front (roadkills) : hidden decals, shown one after the other
+    this.cabBlood = buildCabBlood().map((g) => { const m = new THREE.Mesh(g, M.decal); m.visible = false; m.name = 'train:cabBlood'; this.locoGroup.add(m); return m; });
+    this.cabBloodN = 0;
+  }
+  // window instances : pane (state 0 intact, 1 cracked), crack (1), shards (2) ; matrices follow the coaches (no allocation)
+  applyWindows() {
+    if (!this.winMeshes) return;
+    const L = this.winLists, Wd = CONFIG.train.width / 2 - 0.025, o = this._wo || (this._wo = {});
+    if (this.winDirty) { for (const l of L) l.length = 0; this.winSt.forEach((st, i) => { if (st < 2) L[0].push(i); if (st === 1) L[1].push(i); if (st === 2) L[2].push(i); }); this.winDirty = false; }
+    for (let m = 0; m < 3; m++) {
+      const im = this.winMeshes[m], list = L[m];
+      for (let j = 0; j < list.length; j++) {
+        this.winOf(list[j], o);
+        const v = this.veh[o.ci], c = Math.cos(v.yaw), s = Math.sin(v.yaw), lx = o.sd * Wd, lz = -(o.u - v.uc);
+        _lq.setFromAxisAngle(_up, v.yaw); _lm.compose(_p.set(v.x + c * lx + s * lz, this.railY, v.z - s * lx + c * lz), _lq, _sc);
+        im.setMatrixAt(j, _lm);
+      }
+      im.count = list.length; im.instanceMatrix.needsUpdate = true;
+    }
   }
 
   // ------------------------------------------------------------------ pose (rigid frames), meshes, collision
@@ -207,6 +249,7 @@ export class Train {
     }
     for (const im of this.coachMeshes) { im.instanceMatrix.needsUpdate = true; im.computeBoundingSphere(); }
     this.applyDoors(); // (the leaves ride with the coaches)
+    this.applyWindows();
     // coach lights follow their coach
     if (this.lights) for (const l of this.lights) { l.x = l.veh.x; l.z = l.veh.z; }
     // world collision : one oriented box per vehicle (dynamic : bullets and camera rays pass, see collision.js) ; no allocation (every frame)
@@ -236,7 +279,7 @@ export class Train {
     // closed end doors : toward the locomotive (first coach) and at the tail (last coach), across the gangway opening
     const first = this.veh[1], last = this.veh[this.n - 1], sx = T.walk.gangway / T.doorWidth + 0.06;
     put(first, first.uc + Lay.h - 0.02, 0, Math.PI / 2, sx);
-    put(last, last.uc - Lay.h + 0.02, 0, -Math.PI / 2, sx);
+    put(last, last.uc - Lay.h + 0.02 + 0.06 * (this.tail || 0), (this.tail || 0) * 0.86, -Math.PI / 2 + 0.25 * (this.tail || 0), sx); // (forced open by the gangway zombies : shoved aside, v0.82.0)
     for (const im of this.leafMeshes) { im.count = k; im.instanceMatrix.needsUpdate = true; im.computeBoundingSphere(); }
   }
 
@@ -250,6 +293,7 @@ export class Train {
       if (!any) for (const v of this.veh) if (!v.loco) { _sph.center.set(v.x, this.railY + 2, v.z); _sph.radius = v.len / 2 + 1.5; if (_fr.intersectsSphere(_sph)) { any = true; break; } }
       for (const im of this.coachMeshes) im.visible = any;
       for (const im of this.leafMeshes) im.visible = any;
+      if (this.winMeshes) for (const im of this.winMeshes) im.visible = any && im.count > 0;
     }
     // faulty LED strips : random flicker (local look only)
     const F = CONFIG.train.flicker;
@@ -336,25 +380,31 @@ export function installTrain(game, { world, hud }) {
       }
       return { x: tmp.x, z: tmp.z };
     },
-    // one step of a zombie inside the train ; returns { inRange, moving } (zombie.js plays the strike and the pose), or null (left the train)
+    // one step of a zombie inside the train ; returns { inRange, moving } (zombie.js plays the strike and the pose), or null (left the train).
+    // target may be null (nobody standing). v0.82.0 : the moving train (intro) : doors closed, a zombie inside chases its target in the frame,
+    // or waits in the aisle ; it leaves only by an open door. The states of the ride (run, hang, climb, gang : outside or coming in) are
+    // stepped by rideZombies.js (game.rideZombieStep).
     trainZombieStep(z, target, dt) {
       const O = z.onTrain;
       if (!O || O.v !== t) return null;
-      const tgtIn = trainOf(target) === t && t.walkOpen() ? localOf(target, loc2) : null;
-      if (!tgtIn && O.st !== 'leave') { // its target left : out by the nearest platform door
+      if (O.st !== 'enter' && O.st !== 'in' && O.st !== 'leave') return game.rideZombieStep ? game.rideZombieStep(z, target, dt) : null;
+      const open = t.walkOpen(), tgtIn = trainOf(target) === t ? localOf(target, loc2) : null;
+      if (!tgtIn && O.st !== 'leave' && open) { // its target left : out by the nearest platform door
         let best = 0, bd = Infinity;
         for (const sp of t.interior.spans) { const d = Math.abs((sp[0] + sp[1]) / 2 - O.u); if (d < bd) { bd = d; best = (sp[0] + sp[1]) / 2; } }
         O.st = 'leave'; O.door = best;
-      } else if (tgtIn && O.st === 'leave') O.st = 'in';
+      } else if ((tgtIn || !open) && O.st === 'leave') O.st = 'in';
       // goal in (u, w)
       let gu, gw, aisle = false;
       if (O.st === 'enter') { gu = O.door; gw = 0; if (Math.abs(O.w) < W.wall - 0.2) O.st = 'in'; }
       else if (O.st === 'leave') { gu = O.door; gw = Math.abs(O.u - O.door) > 0.35 ? 0 : t.doorSide * (W.outW + 0.3); aisle = Math.abs(O.u - O.door) > 0.35; }
+      else if (!tgtIn) { gu = O.u; gw = 0; aisle = Math.abs(O.w) > 0.12; } // nobody to chase in the train : back to the aisle and wait
       else { gu = loc2.u; gw = loc2.w; aisle = Math.abs(loc2.u - O.u) > 0.9; if (aisle) gw = 0; }
       let du = gu - O.u, dw = gw - O.w;
       if (aisle && Math.abs(O.w) > 0.12) { du = Math.sign(du) * Math.min(Math.abs(du), 0.35); dw = -O.w * 3; } // back to the aisle first (seats, partition doors, gangways : all open at w = 0)
       const dl = Math.hypot(du, dw);
       const inRange = !!tgtIn && O.st === 'in' && Math.hypot(target.pos.x - z.pos.x, target.pos.z - z.pos.z) < CONFIG.zombie.attackRange && Math.abs(target.pos.y - z.pos.y) < 2.4;
+      if (!inRange && z.attackWindup >= 0 && !target) z.attackWindup = -1; // (its target fell : no blow in the air)
       let moving = false;
       if (!inRange && z.attackWindup < 0 && dl > 0.05) {
         const sp = (z.limp ? z.speed * 0.8 : z.speed) * (z.slowT > 0 ? z.slowK : 1) * Z.speedK, k = Math.min(dl, sp * dt) / dl;

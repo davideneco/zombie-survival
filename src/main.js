@@ -24,6 +24,7 @@ import { installTram } from './tram.js';
 import { installTramWalk, pushOut } from './tramInterior.js';
 import { installTrain } from './train.js';
 import { installIntro } from './intro.js';
+import { installRideZombies } from './rideZombies.js';
 import { wreckMaterial } from './vehicleModels.js';
 import { installLauncher } from './launcher.js';
 import { makeDisplay } from './weaponDisplay.js';
@@ -213,11 +214,16 @@ const game = {
   },
 
   // extra (le Bourreau) : { ray : tir direct du pistolet à rayons, back : coup de couteau porté dans son dos, ax, az : position de l'attaquant }
+  // a zombie in the moving train (v0.82.0) : its blood flies with the train (fx carry) and leaves no stain on the walls outside it
   hitZombie(z, head, point, damage, headMult, fromPid = null, mel = false, extra = null) {
+    const carry = !!z.onTrain && !!this.rideFxCarry?.(z);
+    try { return this._hitZombie(z, head, point, damage, headMult, fromPid, mel, extra); } finally { if (carry) fx.setCarry(0, 0); }
+  },
+  _hitZombie(z, head, point, damage, headMult, fromPid = null, mel = false, extra = null) {
     if (this.isClient) {
       // Le client envoie l'impact à l'hôte
       fx.blood(point.x, point.y, point.z, false);
-      this._bloodWall(point, false);
+      if (!z.onTrain) this._bloodWall(point, false);
       z._bleed?.(head); // le sang de ses propres tirs (l'hôte seul voit tous les impacts : aucun message réseau de plus)
       sfx.hit(head);
       hud.hitMarker(false);
@@ -242,7 +248,7 @@ const game = {
     const killed = z.damage(mel ? damage / (z.armor || 1) : z.weakMult ? damage * (head ? z.weakMult : 1) : damage * (head ? headMult : 1), head, hit);
 
     fx.blood(point.x, point.y, point.z, killed && !head);
-    if (fromPid == null) this._bloodWall(point, killed);
+    if (fromPid == null && !z.onTrain) this._bloodWall(point, killed);
     sfx.hit(head);
 
     if (fromPid == null) {
@@ -430,7 +436,7 @@ const game = {
     const now = this.time || performance.now() / 1000;
 
     for (const z of this.zombies) {
-      if (z.dead || z.spawnT > 0 || z.region || z.link || (z.isBoss && !z.mini)) continue;
+      if (z.dead || z.spawnT > 0 || z.region || z.link || z.ride || (z.isBoss && !z.mini)) continue;
       let near = Infinity;
       for (const t of targets) near = Math.min(near, Math.hypot(t.pos.x - z.pos.x, t.pos.z - z.pos.z));
 
@@ -1383,6 +1389,7 @@ const game = {
     this.updateVehicles(dt);
     this.updateTransfer?.(dt); // tram transfer (v0.79.0) : decor car, ride, fade, teleport
     this.updateIntro?.(dt);    // train intro (v0.81.0) : clock, train pose, doors, announcements, skip
+    this.updateRide?.(dt);     // zombies of the ride (v0.82.0) : spawns, roof, roadkills, removals
     this.updateTrain?.(dt);    // regional train (v0.80.0) : LED flicker
     p.update(dt, this.time);
     world.setLocalArea?.(world.areaOf(p.pos.x, p.pos.z)); // only the local player's area is drawn (island or station)
@@ -1558,7 +1565,7 @@ const game = {
         if (this.isHost && this.zombies.length > 0) {
           const zdata = [];
           for (const z of this.zombies) {
-            zdata.push([
+            const row = [
               z.id,
               Math.round(z.pos.x * 100) / 100,
               Math.round(z.pos.z * 100) / 100,
@@ -1567,7 +1574,8 @@ const game = {
               Math.round(z.pos.y * 100) / 100,
               z.isBoss ? z.bs : 0,
               z.isBoss && z.state === 'hidden' ? 1 : 0,
-            ]);
+            ];
+            zdata.push(z.onTrain && this.rideTick ? this.rideTick(z, row) : row); // in the train frame (v0.82.0) : + tu, tw, ty, ryw, st, k
           }
           this.net?.send({ t: 'z_tick', z: zdata });
         }
@@ -1696,6 +1704,7 @@ installTram(game, { world, scene, hud, sfx });
 installTramWalk(game, { world, hud, sfx }); // intérieur praticable de la rame (v0.40.0)
 installTrain(game, { world, hud }); // regional train parked at quai 1 of the station (v0.80.0) : walk frame, zombies boarding
 installIntro(game, { world, hud, sfx }); // train intro (v0.81.0) : the ride into the station, then round 1
+installRideZombies(game, { world, scene, sfx }); // zombies of the train ride (v0.82.0) : trackside, breaches at the windows, the gangway
 RemotePlayer.rideOf = (id) => game.rideById(id); // coéquipiers debout dans une rame : leur position est dans le repère de la rame
 installLauncher(game, { world, scene, fx });
 installModMenu(game, { world, hud, sfx });
@@ -1792,6 +1801,7 @@ function setupNetworkHandlers(net) {
   game.bindVehicleNet(net);
   game.onTransferNet?.(net); // tram transfer : xf_req, xf_call, xf_go, xf_left
   game.onIntroNet?.(net); // train intro : tn_sync, intro_skip
+  game.onRideNet?.(net);  // zombies of the ride : tn_win, tn_rk, tn_rm
   // Déconnexion
   net.on('disconnect', () => {
     hud.announce('DÉCONNECTÉ', 'Perte de connexion au serveur', 4000);
@@ -1858,7 +1868,10 @@ function setupNetworkHandlers(net) {
           angel: z.isAngel ? 1 : 0,
           kind: z.kind || null,
           y: z.pos.y,
+          ...(z.region ? { region: z.region } : null), // (station zombies : their floor region)
+          ...game.rideSyncZombie?.(z), // zombie of the train ride (v0.82.0) : rk, train frame tu / tw / ty / ts
         })),
+        tnWin: game.rideDamageState?.() || null, // the train's broken windows, blood on the cab (v0.82.0)
       }, m.id);
     }
   });
@@ -1943,6 +1956,7 @@ function setupNetworkHandlers(net) {
     if (m.fin) { z.skipSpawn(); z.pos.set(m.x, m.y || 0, m.z); if (m.boss && !m.tanner && !m.angel) z.group.visible = false; }
     z.net = { x: m.x, z: m.z, y: m.y || 0, yaw: 0, atk: false, bs: m.angel ? 25 : m.boss && !m.tanner ? 9 : 0 };
     if (m.angel || m.region) z.region = m.region || 0;
+    if (m.rk) game.rideNetSpawn?.(z, m); // zombie of the train ride (v0.82.0) : kind, train frame
     game.zombies.push(z);
   });
 
@@ -1958,10 +1972,10 @@ function setupNetworkHandlers(net) {
   net.onHost('z_tick', (m) => {
     const map = new Map();
     for (const z of game.zombies) map.set(z.id, z);
-    for (const [id, x, z, yaw, atk, y, bs, hid] of m.z) {
+    for (const [id, x, z, yaw, atk, y, bs, hid, tu, tw, ty, ryw, ts, tk] of m.z) {
       const zombie = map.get(id);
       if (zombie) {
-        zombie.net = { x, z, yaw, atk: !!atk, y: y || 0, bs: bs || 0 };
+        zombie.net = { x, z, yaw, atk: !!atk, y: y || 0, bs: bs || 0, ...(tu != null ? { tu, tw, ty, ryw, ts, k: tk } : null) }; // tu… : in the train frame (v0.82.0)
         if (zombie.isBoss) zombie.group.visible = !hid;
       }
     }
@@ -2133,9 +2147,12 @@ function setupNetworkHandlers(net) {
       if (zd.spawnT <= 0) z.skipSpawn();
       z.net = { x: zd.x, z: zd.z, y: zd.y || 0, yaw: 0, atk: false, bs: zd.angel ? 0 : undefined };
       if (zd.angel) z.region = 1;
+      if (zd.region) z.region = zd.region;
+      if (zd.rk || zd.tu != null) game.rideNetSpawn?.(z, zd);
       game.zombies.push(z);
     }
     if (m.intro) game.introJoin?.(m.intro); // train intro running (v0.81.0)
+    if (m.tnWin) game.rideApplyDamage?.(m.tnWin); // (after introJoin : it resets the train)
   });
 
   // Démarrage par l'hôte

@@ -118,7 +118,9 @@ function billboard(mat, atlas) {
 }
 
 class Fx {
-  constructor() { this.partK = 1; this.decalMax = 36; }
+  constructor() { this.partK = 1; this.decalMax = 36; this.cvx = 0; this.cvz = 0; }
+  // carried velocity (m/s, world) added to the particles emitted until reset : effects inside the moving train fly with it (v0.82.0)
+  setCarry(vx, vz) { this.cvx = vx || 0; this.cvz = vz || 0; }
 
   // Qualité (CONFIG.graphics.levels) : part des particules émises (1 = toutes) et nombre de taches de sang gardées (sol et murs)
   setQuality(particles = 1, decals = 36) {
@@ -217,7 +219,7 @@ class Fx {
       p.life = p.max = life * (0.6 + Math.random() * 0.6);
       p.x = x + (Math.random() - 0.5) * spread; p.y = y + (Math.random() - 0.5) * spread; p.z = z + (Math.random() - 0.5) * spread;
       const a = Math.random() * Math.PI * 2, s = speed * (0.3 + Math.random() * 0.7);
-      p.vx = Math.cos(a) * s + nx * push; p.vz = Math.sin(a) * s + nz * push;
+      p.vx = Math.cos(a) * s + nx * push + this.cvx; p.vz = Math.sin(a) * s + nz * push + this.cvz;
       p.vy = up * (0.4 + Math.random() * 0.9);
       const cc = Array.isArray(cell) ? cell[Math.floor(Math.random() * cell.length)] : cell;
       p.cell = cc; p.size = size * SIZE_K[cc] * (0.55 + Math.random() * 0.9); p.grow = grow;
