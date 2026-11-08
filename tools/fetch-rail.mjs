@@ -10,6 +10,9 @@
 //   --bootstrap-git   OSM extract of the station saved in git (commit 4880783, public/data/gare.json, ODbL) : platforms, outlines
 //   --bdtopo          IGN BD TOPO (Géoplateforme WFS, Licence Ouverte Etalab 2.0) : tram tracks (troncon_de_voie_ferree), building heights
 //   --osm             OpenStreetMap (ODbL) tram stop nodes, via Overpass or else the OSM API : cross-check of the derived stop (optional)
+//   --tram-route      OpenStreetMap (ODbL) route relation of CTS line C (Gare Centrale -> Homme de Fer) : rail.routes.tramC, the centreline
+//                     of the rendered tram transfer (src/transferRoute.js). Alone, it UPDATES the existing rail.json (gare.json untouched).
+//                     --osm-file <map.json> : an OSM API map call saved beforehand (else it is fetched from api.openstreetmap.org)
 // Downloaded files are data only : parsed with JSON.parse, never executed.
 import fs from 'node:fs';
 import path from 'node:path';
@@ -18,12 +21,14 @@ import { execFileSync } from 'node:child_process';
 const argv = process.argv.slice(2);
 const opt = (k, d = null) => { const i = argv.indexOf(k); return i >= 0 ? (argv[i + 1] && !argv[i + 1].startsWith('--') ? argv[i + 1] : true) : d; };
 const SNCF = opt('--sncf'), GIT = !!opt('--bootstrap-git'), BDTOPO = !!opt('--bdtopo'), OSM = !!opt('--osm');
+const TRAM_ROUTE = !!opt('--tram-route'), OSM_FILE = opt('--osm-file');
 const RADIUS = parseFloat(opt('--radius', 2600));
 const OUT_RAIL = opt('--out-rail', 'public/data/rail.json'), OUT_GARE = opt('--out-gare', 'public/data/gare.json');
-if (!SNCF && !GIT && !BDTOPO && !OSM) {
-  console.error('Usage: node tools/fetch-rail.mjs --sncf <geojson> [--bootstrap-git] [--bdtopo] [--osm]');
+if (!SNCF && !GIT && !BDTOPO && !OSM && !TRAM_ROUTE) {
+  console.error('Usage: node tools/fetch-rail.mjs --sncf <geojson> [--bootstrap-git] [--bdtopo] [--osm] [--tram-route [--osm-file <map.json>]]');
   process.exit(1);
 }
+const UPDATE = TRAM_ROUTE && !SNCF && !GIT && !BDTOPO && !OSM; // only the tram route : rail.json is updated in place
 
 // ---------------------------------------------------------------- frame (never re-centre area.json : every config coordinate depends on it)
 const area = JSON.parse(fs.readFileSync('public/data/area.json', 'utf8'));
@@ -81,7 +86,8 @@ async function fetchText(url, init = {}, tries = 4) {
 }
 
 // ---------------------------------------------------------------- outputs
-const rail = { origin: { lat: LAT, lon: LON }, sources, tracks: [], tram: [], platforms: [], stops: [], routes: {} };
+const rail = UPDATE ? JSON.parse(fs.readFileSync(OUT_RAIL, 'utf8')) : { origin: { lat: LAT, lon: LON }, sources, tracks: [], tram: [], platforms: [], stops: [], routes: {} };
+if (UPDATE) { rail.routes = rail.routes || {}; rail.sources = rail.sources || []; }
 const gare = { origin: { lat: LAT, lon: LON }, sources, bounds: GARE_BOX, buildings: [], parts: [], platforms: [], trees: [], lamps: [], furniture: [], extraFurniture: [], roads: [] };
 
 // ---------------------------------------------------------------- SNCF Réseau track shapes
@@ -258,7 +264,7 @@ if (!rail.stops.some((s) => /gare centrale/i.test(s.name || ''))) {
 // ---------------------------------------------------------------- intro route : SW approach, ending at quai 1
 // Directed graph of SNCF tracks : every track is split where the end of another track (a switch) touches it, pieces are joined at shared ends
 // (0.6 m), and a move from one piece to the next is allowed only without a sharp turn (a train cannot reverse through a switch).
-if (rail.tracks.length) {
+if (rail.tracks.length && !UPDATE) {
   const T = rail.tracks.filter((t) => t.type !== 'OSM');
   const dSeg = (x, z, a, b) => { const dx = b[0] - a[0], dz = b[1] - a[1], l2 = dx * dx + dz * dz; let u = l2 ? ((x - a[0]) * dx + (z - a[1]) * dz) / l2 : 0; u = Math.max(0, Math.min(1, u)); return { d: Math.hypot(x - a[0] - dx * u, z - a[1] - dz * u), u }; };
   // 1) cut points : ends of other tracks lying on a track's interior
@@ -351,7 +357,79 @@ if (rail.tracks.length) {
   }
 }
 
-for (const [file, obj] of [[OUT_RAIL, rail], [OUT_GARE, gare]]) {
+// ---------------------------------------------------------------- CTS line C : Gare Centrale -> Homme de Fer (the rendered tram transfer, v0.83.0)
+// The OSM route relation (route=tram, ref=C, starting at Gare Centrale) lists its ways in running order : they are chained, cut at the
+// Homme de Fer stop node, resampled every metre. stops : the relation's stop nodes projected on the chain (s, m from Gare Centrale) ;
+// junction : the first node of the chain shared with a way of line B or F (where line C joins the B / C / F track of the Grande Île).
+if (TRAM_ROUTE) {
+  const lon = (x) => LON + x / M_LON, lat = (z) => LAT - z / M_LAT;
+  let osmMap = null;
+  try {
+    if (OSM_FILE) osmMap = JSON.parse(fs.readFileSync(OSM_FILE, 'utf8'));
+    else {
+      // corridor from the station to Homme de Fer (the API caps a bbox at 0.25 deg² and 50 000 nodes : this one is ~0.0001 deg²)
+      const bbox = [lon(-1300), lat(150), lon(-250), lat(-750)].map((v) => v.toFixed(6)).join(',');
+      osmMap = JSON.parse(await fetchText(`https://api.openstreetmap.org/api/0.6/map.json?bbox=${bbox}`, {}, 3));
+    }
+  } catch (e) { console.log('tram route : OSM data unavailable :', e.message); }
+  const els = osmMap?.elements || [];
+  const nodes = new Map(), ways = new Map(), rels = [];
+  for (const e of els) { if (e.type === 'node') nodes.set(e.id, e); else if (e.type === 'way') ways.set(e.id, e); else if (e.type === 'relation') rels.push(e); }
+  const P = (id) => { const n = nodes.get(id); return n ? toLocal(n.lon, n.lat) : null; };
+  const isStopRole = (r) => /^stop/.test(r || '');
+  const rel = rels.find((r) => r.tags?.route === 'tram' && r.tags?.ref === 'C' && (() => { const m = r.members.find((q) => q.type === 'node' && isStopRole(q.role)); return /gare centrale/i.test(nodes.get(m?.ref)?.tags?.name || ''); })());
+  if (!rel) console.log('tram route : no line C relation from Gare Centrale in the OSM data');
+  else {
+    // chain the track ways (empty role, railway=tram) in relation order ; each way is turned to continue the chain
+    let chain = [], chainIds = [];
+    for (const m of rel.members) {
+      if (m.type !== 'way' || m.role) continue;
+      const w = ways.get(m.ref);
+      if (!w || w.tags?.railway !== 'tram') { if (chain.length) break; continue; } // (left the downloaded box : the chain ends)
+      let ids = w.nodes.filter((id) => nodes.has(id));
+      if (ids.length < 2) break;
+      if (chainIds.length) {
+        const end = chainIds[chainIds.length - 1];
+        if (ids[ids.length - 1] === end) ids.reverse();
+        else if (ids[0] !== end) { const e = P(end), a = P(ids[0]), b = P(ids[ids.length - 1]); if (Math.hypot(b[0] - e[0], b[1] - e[1]) < Math.hypot(a[0] - e[0], a[1] - e[1])) ids.reverse(); }
+        if (ids[0] === end) ids = ids.slice(1);
+      }
+      chainIds = chainIds.concat(ids);
+    }
+    chain = chainIds.map(P);
+    const cum = [0]; for (let i = 1; i < chain.length; i++) cum.push(cum[i - 1] + Math.hypot(chain[i][0] - chain[i - 1][0], chain[i][1] - chain[i - 1][1]));
+    const proj = (x, z) => { let best = { d: Infinity, s: 0 }; for (let i = 1; i < chain.length; i++) { const a = chain[i - 1], b = chain[i], dx = b[0] - a[0], dz = b[1] - a[1], l2 = dx * dx + dz * dz; let u = l2 ? ((x - a[0]) * dx + (z - a[1]) * dz) / l2 : 0; u = Math.max(0, Math.min(1, u)); const d = Math.hypot(x - a[0] - dx * u, z - a[1] - dz * u); if (d < best.d) best = { d, s: cum[i - 1] + u * Math.sqrt(l2) }; } return best; };
+    const stops = [];
+    for (const m of rel.members) {
+      if (m.type !== 'node' || !isStopRole(m.role) || !nodes.has(m.ref)) continue;
+      const n = nodes.get(m.ref), at = toLocal(n.lon, n.lat), q = proj(at[0], at[1]);
+      if (q.d < 15) stops.push({ name: n.tags?.name || null, s: r1(q.s), at: at.map(r1), osm: n.id });
+    }
+    const hdf = stops.find((s) => /homme de fer/i.test(s.name || ''));
+    const end = hdf ? hdf.s : cum[cum.length - 1];
+    // junction with lines B / F : first chain node used by a way of a B or F tram relation
+    const bf = new Set();
+    for (const r of rels) if (r.tags?.route === 'tram' && /^[BF]$/.test(r.tags?.ref || '')) for (const m of r.members) if (m.type === 'way' && !m.role) for (const id of ways.get(m.ref)?.nodes || []) bf.add(id);
+    const ji = chainIds.findIndex((id) => bf.has(id));
+    // samples every metre from Gare Centrale (s = 0 at the relation's first stop) to Homme de Fer
+    const s0 = stops[0] ? stops[0].s : 0, samples = [];
+    for (let s = s0, i = 1; s <= end + 1e-6; s += 1) {
+      while (i < chain.length - 1 && cum[i] < s) i++;
+      const a = chain[i - 1], b = chain[i], f = (s - cum[i - 1]) / Math.max(1e-9, cum[i] - cum[i - 1]);
+      samples.push([r1(a[0] + (b[0] - a[0]) * f), r1(a[1] + (b[1] - a[1]) * f)]);
+    }
+    rail.routes.tramC = {
+      relation: rel.id, name: rel.tags?.name || null, length: samples.length - 1, samples,
+      stops: stops.filter((s) => s.s >= s0 - 1 && s.s <= end + 1).map((s) => ({ ...s, s: r1(s.s - s0) })),
+      junction: ji >= 0 ? { s: r1(cum[ji] - s0), at: chain[ji].map(r1), with: 'B / F' } : null,
+    };
+    if (!rail.sources.some((s) => /openstreetmap/i.test(s.name) && /line C/i.test(s.name))) rail.sources.push({ name: `OpenStreetMap contributors (CTS line C, relation ${rel.id}, OSM API)`, licence: 'ODbL 1.0', url: 'https://www.openstreetmap.org/copyright', date: now });
+    const R = rail.routes.tramC;
+    console.log(`tram route (line C, relation ${rel.id}) : ${R.length} m, stops ${R.stops.map((s) => `${s.name} @${s.s}`).join(' > ')}, junction with B / F @${R.junction?.s ?? '?'}`);
+  }
+}
+
+for (const [file, obj] of UPDATE ? [[OUT_RAIL, rail]] : [[OUT_RAIL, rail], [OUT_GARE, gare]]) {
   fs.mkdirSync(path.dirname(file), { recursive: true });
   fs.writeFileSync(file, JSON.stringify(obj));
   console.log(`→ ${file} (${(fs.statSync(file).size / 1024).toFixed(0)} KB)`);

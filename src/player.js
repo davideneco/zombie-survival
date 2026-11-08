@@ -398,9 +398,6 @@ export class Player {
       this.vy = 0; this.wasGrounded = true; this.region = 0; this.airT = 0; this.jumpSprint = false; // en moto : pas de plongeon
       this.yaw += veh.v.seatDyaw(veh.seat);
       this.ride.steer(dt, veh, this.game.time - this.lastMouse); // vue externe : tangage borné, recentrage derrière la moto
-    } else if (this.game.xfRide) { // tram transfer (transfer.js) : carried by the car, no walking
-      this.game.xfRide.carry(this);
-      this.vel.set(0, 0, 0); this.vy = 0; this.wasGrounded = true; this.airT = 0; this.jumpSprint = false;
     } else {
       const B = this.game.binds;
       let mx = (B.down('right', K) ? 1 : 0) - (B.down('left', K) ? 1 : 0);
@@ -932,7 +929,7 @@ export class Player {
   // -------------------------------------------------------------- Dégâts
   // src : origine des dégâts ('blast' explosion, 'crash' choc de moto ; absent = coup de zombie, Bourreau…)
   hurt(amount, src = null) {
-    if (this.godMode || this.downed || this.dead || this.game.xfRide) return; // (not during a tram transfer)
+    if (this.godMode || this.downed || this.dead || this.game.xfRide?.safe) return; // (not during a tram transfer ride : v0.83.0, riders stand in the car, safe)
     if (this.perks.phdflopper && (src === 'blast' || src === 'crash')) return; // PHD Flopper : immunité aux explosions et aux chocs
     if (this.game.perkFx) { amount = this.game.perkFx.filterDamage(amount); if (amount <= 0) return; } // Bastion, Ultime Volonté
     if (!src) this.game.perkFx?.onStruck(); // Veuve noire : coup de zombie

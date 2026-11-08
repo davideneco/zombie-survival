@@ -20,6 +20,8 @@ import { carDoorStarts } from './hommedefer.js';
 // =====================================================================
 
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+// ground under a walk-frame point : the terrain, or the vehicle's own track height (the transfer tram on its bridge, v0.83.0 : walkGround(u))
+const groundOf = (t, u, p) => (t.walkGround ? t.walkGround(u) : terrainY(p.x, p.z));
 
 // Construit l'intérieur d'une rame (t : { L, M, n, model: { seats } }). Renvoie { boxes, wallsClosed, wallsOpen, spans, uEnd, seatSpots }.
 export function interiorOf(t) {
@@ -132,7 +134,7 @@ export function installTramWalk(game, { world, hud, sfx }) {
       O.y += (floor - O.y) * Math.min(1, dt * Wc.enterEase);
       if (Math.abs(floor - O.y) < 0.002) O.y = floor;
       t.walkToWorld(O.u, O.w, O.y, tmp);
-      p.pos.set(tmp.x, tmp.y + terrainY(tmp.x, tmp.z), tmp.z);
+      p.pos.set(tmp.x, tmp.y + groundOf(t, O.u, tmp), tmp.z);
     },
     tramMoveWarn(p, t) {
       if (this.time < (this.tramWarnUntil || 0)) return;
@@ -164,7 +166,7 @@ export function installTramWalk(game, { world, hud, sfx }) {
       const p = this.player, t = nv.v, I = t.interior, span = I.spans[nv.door], Wc = t.walkCfg || W;
       if (!span || p.vehicle || p.onTram) return;
       t.frame((span[0] + span[1]) / 2, f1);
-      p.onTram = { v: t, u: (span[0] + span[1]) / 2, w: nv.side * (Wc.wall - 0.05), y: Math.min(p.pos.y - terrainY(p.pos.x, p.pos.z), (t.floorY ?? T.car.floor) - 0.05), fy: f1.yaw };
+      p.onTram = { v: t, u: (span[0] + span[1]) / 2, w: nv.side * (Wc.wall - 0.05), y: Math.min(p.pos.y - groundOf(t, (span[0] + span[1]) / 2, p.pos), (t.floorY ?? T.car.floor) - 0.05), fy: f1.yaw };
       p.vel.set(0, 0, 0); p.vy = 0;
       sfx.knock?.(0.35);
       this.sendPlayerState?.();
@@ -193,7 +195,7 @@ export function installTramWalk(game, { world, hud, sfx }) {
       p.onTram = { v: t, u: pt.u, w: pt.w, y: floor, fy: f1.yaw };
       p.vehicle = null; p.vel.set(0, 0, 0); p.vy = 0; p.wasGrounded = true; p.region = t.walkRegion || 0;
       t.walkToWorld(pt.u, pt.w, floor, tmp);
-      p.pos.set(tmp.x, tmp.y + terrainY(tmp.x, tmp.z), tmp.z);
+      p.pos.set(tmp.x, tmp.y + groundOf(t, pt.u, tmp), tmp.z);
       this.sendPlayerState?.();
     },
 
@@ -284,6 +286,7 @@ export function installTramWalk(game, { world, hud, sfx }) {
 
     // ----------------------------------------------------------- invites
     tramWalkHint(t) { // debout dans la rame
+      if (t.walkHint) return t.walkHint(); // the transfer tram (transfer.js, v0.83.0)
       if (!t.isTram) return this.trainWalkHint?.(t) || '';
       const B = game.binds, near = this.nearSeatInside(), kmh = Math.round(Math.abs(t.v) * 3.6);
       const state = t.walkOpen() ? 'portes ouvertes : marchez vers une porte pour descendre' : kmh > 2 ? `rame en marche (${kmh} km/h)` : `${B.label('tramDoors')} : portes`;

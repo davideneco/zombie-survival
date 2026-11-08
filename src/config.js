@@ -680,11 +680,37 @@ export const CONFIG = {
 
   // ------------------------------------------------------------------ Tram de transfert (v0.79.0, src/transfer.js) : arrêt « Gare Centrale »
   // (parvis, ligne C réelle) <-> quai B / C / F de l'Homme de Fer. Interagir avec la borne : le tram arrive (countdown s), tous les joueurs debout à
-  // moins de boardRadius m de la rame partent (ride s d'animation, fondu fade s), puis sont téléportés. cooldown : s entre deux départs d'un arrêt.
+  // moins de boardRadius m de la rame (ou de la borne) partent. cooldown : s entre deux départs d'un arrêt.
+  // v0.83.0 (src/transferRoute.js) : the ride is rendered along the REAL line C (OSM relation, rail.routes.tramC) : Gare Centrale -> Faubourg de
+  // Saverne (passed without stopping) -> bridge over the Ill -> Homme de Fer. Riders stand in the car (walk frame of the trams : they can walk,
+  // the doors stay closed), they are safe (no zombie targets them). The ~1 km ride is compressed by two short cuts (a dip to black) : the
+  // departure (legs.*.depart m), the middle stretch (middle.before m before the passed stop to the middle of the bridge), then the last
+  // legs.*.arrive m into the stop. The first cut also hides the switch between the drawn areas (station / island).
   transfer: {
-    countdown: 8, ride: 7, fade: 0.8, cooldown: 20, price: 0, boardRadius: 6, reach: 2.6,
-    accel: 1.6, approach: 60,   // m/s² au départ ; m parcourus par la rame qui arrive
-    hdf: { line: 'BCF', stop: 'Homme de Fer', side: 1, terminal: 5.5 },   // côté du quai (1 : droite de la voie), recul de la borne (m le long de la voie)
+    countdown: 8, cooldown: 20, price: 0, boardRadius: 6, reach: 2.6,
+    approach: 60,             // m parcourus par la rame qui arrive à l'arrêt de départ pendant le compte à rebours
+    doorTime: 1.0,            // s : ouverture / fermeture des portes
+    dwell: 10,                // s : à l'arrivée, portes ouvertes ; ensuite les passagers encore à bord sont posés sur le quai et la rame repart
+    leave: 45,                // m : la rame repart (dans le sens des abscisses croissantes) puis disparaît
+    // speeds (m/s, m/s²) : cruise ~45 km/h (a Citadis on its own track), CTS-like acceleration and service braking ; curves are capped at
+    // sqrt(aLat * R) ; the intermediate stop is passed at `pass` m/s over ± passLen m ; step : m between two samples of a speed profile
+    drive: { cruise: 12.5, accel: 1.3, brake: 1.3, aLat: 1.2, pass: 6.5, passLen: 22, step: 0.25 },
+    legs: { gare: { depart: 40, arrive: 45 }, hdf: { depart: 10, arrive: 11 } },   // m ridden near each stop (departure / arrival legs)
+    middle: { pass: 'Faubourg de Saverne', before: 150, after: 0 },               // middle leg : from `before` m before the passed stop to the bridge middle + after
+    cut: { out: 0.35, hold: 0.15, in: 0.45 },                                      // s : fade to black, black, fade back in
+    // route assembly : blend lengths (m) from the station's stop track into line C and from line C into the island's B / C / F track ; extra m of
+    // that track past Homme de Fer ; bridges : route samples whose terrain is below bridgeBelow m (the Ill), widened by bridgePad m
+    route: { gareBlend: 40, bcfBlend: 40, extra: 140, bridgeBelow: -0.12, bridgePad: 5 },
+    announce: { passAfter: 25 },   // m past the intermediate stop : « Prochain arrêt : … » on the passenger display
+    walk: { outW: 1.95, boardSpeed: 0.5 },   // stepping off : put down outW m from the axis ; doors pass below boardSpeed m/s (tram walk settings otherwise)
+    light: { color: 0xffe6c0, intensity: 8, dist: 12, y: 2.6 },   // pooled point light inside the car (warm LED)
+    sway: { roll: 0.35, bob: 0.012, hz: 1.6, refSpeed: 12 },        // camera sway of a standing rider (deg, m, Hz, m/s), local look
+    // scenery of the line C branch (src/transferScene.js) : rails, catenary poles every poleEvery m (poleOffset m from the axis, alternating sides),
+    // the bridge deck (width m), the platform of the passed stop (len x width m)
+    scene: { poleEvery: 14, poleOffset: 2.9, poleHeight: 6.0, wire: 5.5, bridgeWidth: 8.4, platform: { len: 30, width: 2.6 } },
+    // Homme de Fer (island track B / C / F) : side of the platform (1 : right of the track), terminal set back along the track (m) ; slots : stop
+    // positions (m from the stop, along the track) tried in order : the first one clear of the island's drivable tram (± clear m) is used
+    hdf: { line: 'BCF', stop: 'Homme de Fer', side: 1, terminal: 5.5, slots: [0, 36], clear: 1.0 },
   },
 
   tram: {
