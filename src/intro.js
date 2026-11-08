@@ -212,7 +212,7 @@ export function installIntro(game, { world, hud, sfx }) {
   game.onIntroNet = (net) => {
     net.onHost('tn_sync', (m) => {
       if (game.isHost) return;
-      if (!S.on) { if (m.ph === 'ride' || m.ph === 'stopped') begin(m.tau, { late: true }); return; }
+      if (!S.on) { if (S.ph !== 'done' && (m.ph === 'ride' || m.ph === 'stopped')) begin(m.tau, { late: true }); return; } // (done : a late tn_sync of the host's last stopped second must not restart it ; a new game resets ph)
       if (m.ph === 'done') { finish(); return; }
       const target = m.tau + Math.min(I.maxPing, (game.netPing || 0) / 1000) / 2, err = target - (S.tau + S.corr);
       if (Math.abs(err) > 1) { S.tau = target; S.corr = 0; } else S.corr += err;

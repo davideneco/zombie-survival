@@ -1,6 +1,6 @@
 # Zombie Survival — fiche de référence
 
-Version du jeu : **v0.80.0** (package 0.80.0). Générée automatiquement par `node tools/make-docs.mjs` à partir de `src/config.js` et du jeu.
+Version du jeu : **v0.81.0** (package 0.81.0). Générée automatiquement par `node tools/make-docs.mjs` à partir de `src/config.js` et du jeu.
 Carte annotée : [carte.png](carte.png). Armes de profil : [armes.png](armes.png). Les mêmes tableaux en tableur : dossier [csv/](csv/).
 
 Pour demander une modification, citez la ligne (ex. « Mitrailleuse RPK : chargeur 100 », « Mastodonte à 3000 pts », « porte P3 à 500 pts », « mettre la boîte mystère dans la zone Temple-Neuf »).
@@ -649,13 +649,17 @@ Prix d'une porte : le plus cher des deux prix de zone (colonne « Prix de la por
 | Départ par défaut | intro en train | menu « Départ » : intro en train / Gare Centrale / Classique (Grande Île) ; le choix est retenu ; ?debug seul garde le départ classique, ?debug&intro lance l'intro |
 | Trajet | 1217 m en 95 s depuis le sud-ouest, arrêt au quai 1 | vitesses (s : km/h) 0 : 80 · 26 : 80 · 36 : 15 · 52 : 15 · 60 : 50 · 78 : 50 · 95 : 0 ; la position du train ne dépend que de l'horloge de l'intro |
 | Ouverture | carton noir « TRAIN RÉGIONAL 17412 — DIRECTION STRASBOURG » (4 s, fondu 2,5 s) | nuit : l'horloge reste à 3 h pendant le trajet (le cycle jour / nuit reprend ensuite) |
-| Annonces | 5.5 s : Mesdames et messieurs, dans quelques minutes notre train arrivera en gare de Strasbourg, son terminus… · 12.8 s : … (grésillements — des cris dans le haut-parleur) … · 26 s : RALENTISSEMENT — Obstacle sur la voie · 79 s : Strasbourg. Strasbourg, terminus de ce train. | à l'arrivée : « STRASBOURG — Terminus. Tout le monde descend. » |
+| Annonces | 5.5 s : Mesdames et messieurs, dans quelques minutes notre train arrivera en gare de Strasbourg, son terminus… · 12.8 s : … (grésillements — des cris dans le haut-parleur) … · 26 s : RALENTISSEMENT — Obstacle sur la voie · 33 s : ILS S'ACCROCHENT AUX FENÊTRES ! — Abattez-les avant qu'ils ne montent · 55.6 s : (des pas sur le toit…) · 79 s : Strasbourg. Strasbourg, terminus de ce train. | à l'arrivée : « STRASBOURG — Terminus. Tout le monde descend. » |
 | Dans le train | debout en voiture 2 et 3 (arrivants en cours de route : voiture 3), portes verrouillées | on marche dans l'allée et les intercirculations en roulant ; balancement de la caméra 0,4° / 0,015 m, secousse à chaque joint de rail (25 m) |
-| Arrivée | portes ouvertes en 1,6 s ; manche 1 5 s après l'arrêt (zone Quais) | pas de zombies pendant le trajet pour l'instant (étape 4 : crochets introHooks) |
-| Passer l'intro | maintenir Espace 1,5 s | solo : le joueur ; coop : l'hôte seulement ; le train arrive à quai, portes ouvertes |
+| Arrivée | portes ouvertes en 1,6 s ; manche 1 5 s après l'arrêt (zone Quais) | 2 zombies sortent du ballast sur le quai (hors décompte ; la manche 1 finit quand ils sont morts aussi) ; les zombies encore à bord poursuivent les joueurs ou descendent par une porte ouverte |
+| Zombies du trajet | 4 le long de la voie (2 sur la voie), 6 au bord de la voie au ralentissement, 6 aux fenêtres, 3 par l'intercirculation | solo ; x (1 + 0,75 par joueur en plus) comme une manche ; vie de la manche 1 (100 PV) ; points habituels par zombie tué |
+| Le long de la voie | 12 à 27 s (80 km/h), à 3,8-9 m de l'axe | ceux qui sont sur la voie sont percutés par la locomotive (choc, sang sur la cabine, 0 pt) au-dessus de 3 m/s |
+| Fenêtres | ils s'accrochent 3 s (la vitre se fend), la brisent (elle reste cassée, vent) puis entrent en 1,2 s | au plus 4 accrochés à la fois (8 à 4 joueurs) ; ils courent le long du train à 6 m/s au plus : un train plus rapide les sème ; on peut les abattre ou les poignarder à la fenêtre |
+| Toit et intercirculation | pas sur le toit de la dernière voiture à 55 s, porte arrière forcée à 63.5 s | puis un zombie toutes les 1,6 s par l'intercirculation |
+| Passer l'intro | maintenir Espace 1,5 s | solo : le joueur ; coop : l'hôte seulement ; le train arrive à quai, portes ouvertes ; les zombies du trajet disparaissent |
 | Grenades dans le train | simulées dans le repère de la voiture | elles gardent la vitesse du train, rebondissent sur les parois, les sièges et le plafond, et restent posées au freinage |
 | Décor du trajet | clôtures, 520 arbres, 700 buissons, 90 bâtiments, 90 lampadaires, signaux, wagons déraillés à 44 s | instanciés, en tronçons de 300 m dessinés à moins de 190 m ; sol sombre de 460 m autour de la caméra |
-| Réseau | l'hôte envoie tn_sync (τ, phase) toutes les 0,5 s ; intro_skip | le client avance τ lui-même et rattrape l'hôte (+ demi-ping, plafonné à 0,5 s) ; arrivant : sync.intro |
+| Réseau | l'hôte envoie tn_sync (τ, phase) toutes les 0,5 s ; intro_skip | le client avance τ lui-même et rattrape l'hôte (+ demi-ping, plafonné à 0,5 s) ; arrivant : sync.intro ; zombies du trajet : z_spawn + tn, positions dans le repère du train (z_tick), tn_win, tn_rk, tn_rm |
 
 ## Tram : l'aiguillage du nœud de Homme de Fer (croisement des lignes A / D et B / C / F)
 

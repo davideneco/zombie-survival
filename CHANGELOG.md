@@ -2,6 +2,16 @@
 
 Chaque changement est poussé sur `main` (déploiement Render) avec un nouveau numéro de version et sa description ici.
 
+## v0.82.0 (2026-11-08)
+- Les zombies attaquent le train. Pendant le trajet, des zombies longent la voie : abattez-les par les fenêtres. Ceux qui restent sur la voie sont percutés par la locomotive (choc, sang sur le pare-brise, 0 point).
+- Au ralentissement près des wagons déraillés : « Ils s'accrochent aux fenêtres ! ». Des zombies courent le long du train, s'agrippent à une fenêtre, la vitre se fend puis vole en éclats (elle reste cassée, le vent s'engouffre), ils grimpent à l'intérieur et vous poursuivent dans l'allée. Au plus 4 accrochés à la fois (8 à quatre joueurs) ; on peut les abattre à la fenêtre.
+- Des pas sur le toit, puis la porte arrière de la dernière voiture est forcée : des zombies arrivent par l'intercirculation.
+- À l'arrivée, les zombies encore à bord descendent sur le quai et quelques-uns sortent du ballast ; la manche 1 commence comme d'habitude. Passer l'intro fait disparaître les zombies du trajet.
+- Coop : l'hôte décide de tout, les zombies du trajet suivent le train chez chacun, chaque joueur reçoit ses propres points.
+- Vérifié : build ; intro déroulée jusqu'au ralentissement sans erreur (9 zombies autour du train, 144 appels de dessin) ; captures regardées (zombie accroché à une vitre fendue, zombie dans l'allée, intérieur au ralentissement). Selon le développeur : trajet solo complet pas à pas (21 zombies, 19 éliminés par un tireur automatique, 2 percutés), plafond des zombies accrochés respecté, aucun zombie hors de la caisse en marche ou au freinage, joueur immobile blessé puis à terre, arrivée, saut de l'intro, manche 1 terminée, deux onglets hôte + client (zombies attachés au train chez le client, points du client crédités au client, mêmes fenêtres cassées), départs classique et gare et tram vers Homme de Fer sans erreur.
+- Non vérifié : jeu en temps réel à la souris, sons, 3 ou 4 joueurs, arrivée en cours de trajet, coéquipier à terre dans le train en marche, coup de couteau sur un zombie accroché.
+- À surveiller : un tireur parfait gagne ~1 560 pts pendant le trajet (objectif ~1 000) ; les balles traversent le bas des parois ; les fenêtres restent cassées après un saut de l'intro ; l'intro démarre toujours avec le M4A1 en main.
+
 ## v0.81.0 (2026-11-07)
 - L'intro en train : la partie commence désormais dans le train régional 17412 qui arrive de nuit en gare de Strasbourg (~95 s) : carton « TRAIN RÉGIONAL 17412 — DIRECTION STRASBOURG », annonces à bord, 80 km/h, « RALENTISSEMENT — Obstacle sur la voie » à 15 km/h devant des wagons déraillés, 50 km/h, arrêt au quai 1 sous la halle.
 - On marche dans les voitures et les intercirculations pendant que le train roule (portes verrouillées), avec un léger roulis et les secousses des joints de rail ; les grenades restent dans la voiture même au freinage ; on peut tirer par les fenêtres.
