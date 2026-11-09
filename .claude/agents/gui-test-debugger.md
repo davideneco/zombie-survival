@@ -16,3 +16,6 @@ Procedure (details and a ready harness in the `play-test` skill):
 5. Point to the probable cause with `file:line` (material, geometry, transform, shader patch, HUD CSS in `index.html`).
 
 Report: what is wrong, where (coordinates and a `?debug` link), screenshot paths, likely cause, suggested fix. Keep screenshots and throwaway scripts in the scratchpad, never in the repository.
+
+## Final report
+At most 200 words: what changed (files), what you verified (numbers, not a tour), what you did not verify, known limits. No tables, no recap of the brief, no draft changelog unless asked. Do not commit or ship: the main session does.

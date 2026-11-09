@@ -23,3 +23,6 @@ Verification, every time:
 2. Exercise the change in the real game with the `play-test` skill (`?debug`, Playwright): drive the scenario through `window.game`, check the console has no errors, take screenshots and LOOK at them when the change is visual.
 3. If `src/config.js` changed: `node tools/make-docs.mjs`.
 4. Report precisely what you verified and what you did not. Do not commit unless asked; the main session ships with the `ship` skill.
+
+## Final report
+At most 200 words: what changed (files), what you verified (numbers, not a tour), what you did not verify, known limits. No tables, no recap of the brief, no draft changelog unless asked. Do not commit or ship: the main session does.

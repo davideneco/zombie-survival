@@ -5,11 +5,19 @@
       "Bash(npx vite --port *)",
       "Bash(node tools/make-docs.mjs *)",
       "Bash(node tools/stuck-scan.mjs *)",
+      "Bash(node tools/ship.mjs *)",
       "Bash(node .claude/skills/play-test/harness.mjs *)",
       "Bash(curl -s -o /dev/null -w *)",
       "Bash(git status *)",
       "Bash(git diff *)",
       "Bash(git log *)"
+    ],
+    "deny": [
+      "Read(public/data/*.json)",
+      "Read(package-lock.json)",
+      "Read(docs/REFERENCE.md)",
+      "Read(docs/csv/**)",
+      "Read(dist/**)"
     ]
   },
   "hooks": {

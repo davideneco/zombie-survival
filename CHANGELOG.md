@@ -2,6 +2,13 @@
 
 Chaque changement est poussé sur `main` (déploiement Render) avec un nouveau numéro de version et sa description ici.
 
+## v0.84.0 (2026-11-09)
+- Préparation du travail en parallèle avec Gemini sur tout ce qui est sonore : Gemini est responsable de `src/audio.js`, `src/music.js`, `public/music/`, `public/sfx/` ; Claude du reste. Nouveaux fichiers `GEMINI.md`, `AGENTS.md` (règles communes et répartition), `docs/AUDIO.md` (fonctionnement du son, règles, liste de demandes entre les deux : ambiance de la gare, bruits de pas, cloche du tram, ambiance de la ville) et `.gemini/styleguide.md` (relecture des PR de Gemini).
+- Nouvel outil `tools/ship.mjs` : une seule commande pour publier (rebase sur `main`, prochain numéro de version libre, entrée du journal, docs, build, commit, push de la branche et de `main`) ; deux agents peuvent publier chacun de leur côté sans conflit de version. `tools/scopes.json` limite Gemini à ses fichiers sonores.
+- Nouvel outil `tools/audio-smoke.js` : appelle chacun des 46 sons du jeu et signale ceux qui plantent (aucun ne plante).
+- Économie de jetons : règles dans `CLAUDE.md` (modèle par défaut, ne pas lire les gros fichiers, rapports courts), rapports des sous-agents limités à 200 mots, lecture des données volumineuses interdite dans `.claude/settings.json`, captures plus petites dans la skill play-test, skill ship réduite à une commande.
+- Aucun changement de jeu. Vérifié : le script de test sonore tourne sur le jeu (46 sons, 0 erreur) ; la publication elle-même est faite avec le nouveau script. Non vérifié : un vrai travail de Gemini sur la branche `gemini/audio`, le script avec deux agents en même temps.
+
 ## v0.83.1 (2026-11-08)
 - Plus de texte « ZQSD : marcher · train en marche… » pendant le trajet en train (intro) ni pendant le trajet en tram de transfert : l'écran reste dégagé. Les annonces, l'indication pour passer l'intro, le compte à rebours du tram et le texte de descente à quai restent.
 - Vérifié : build ; intro lancée (aucun texte à τ = 10 s, annonce affichée, capture regardée) ; après le passage de l'intro, le texte de descente à quai réapparaît ; aucune erreur. Non vérifié : trajet en tram rejoué (même changement, une ligne).

@@ -23,3 +23,6 @@ Your spec must contain:
 7. **Risks and open questions** for the user, with your recommended answer.
 
 Keep it concrete and short enough to act on. Write French game text for anything shown to players.
+
+## Final report
+At most 200 words: what changed (files), what you verified (numbers, not a tour), what you did not verify, known limits. No tables, no recap of the brief, no draft changelog unless asked. Do not commit or ship: the main session does.

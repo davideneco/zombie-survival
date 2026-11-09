@@ -21,7 +21,7 @@ Check again with `curl` before every run: it may have stopped since the last com
 node .claude/skills/play-test/harness.mjs --url "debug&x=-0.6&z=-28&yaw=0&pitch=0.1" \
   --eval "game.player.pos.y" --shot "$SCRATCH/start.png"
 ```
-Put screenshots and throwaway scripts in the session scratchpad, never in the repo. Then **open each screenshot with Read and look at it**.
+Put screenshots and throwaway scripts in the session scratchpad, never in the repo. Screenshots cost tokens: use `--size 640x360`, take few, and **open with Read only the ones that decide the question**; prefer an `--eval` that returns numbers (positions, counts, states) over an image when the check is not visual.
 
 ## 3. Useful URL and in-page handles
 - `?debug&x=..&z=..&yaw=..&pitch=..`: start directly in game at that spot (yaw 0 looks toward -z; forward = (-sin yaw, -cos yaw)).

@@ -19,3 +19,6 @@ Answer format:
 - The direct answer first, then the evidence as `path/file.js:line` with one line of explanation each.
 - No pasted files; quote at most a few lines when the exact code matters.
 - Say clearly when something was not found or is uncertain.
+
+## Final report
+At most 200 words: what changed (files), what you verified (numbers, not a tour), what you did not verify, known limits. No tables, no recap of the brief, no draft changelog unless asked. Do not commit or ship: the main session does.

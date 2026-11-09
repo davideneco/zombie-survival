@@ -1,0 +1,10 @@
+{
+  "audio": [
+    "src/audio.js",
+    "src/music.js",
+    "public/music/",
+    "public/sfx/",
+    "docs/AUDIO.md",
+    "tools/audio-"
+  ]
+}

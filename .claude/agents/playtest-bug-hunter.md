@@ -20,3 +20,6 @@ Method:
 5. **Report** cause, fix, evidence, and what remains unverified.
 
 Headless browser tips: launch Chromium with `--use-gl=swiftshader --enable-unsafe-swiftshader --no-sandbox`; software rendering is slow, so use small viewports, long screenshot timeouts, and run one browser at a time. For network tests without rendering cost, stub `game.renderer.render = () => {}`. Audio may not start headless: stub `vehicle.stopEngine` / `updateEngine` if they throw.
+
+## Final report
+At most 200 words: what changed (files), what you verified (numbers, not a tour), what you did not verify, known limits. No tables, no recap of the brief, no draft changelog unless asked. Do not commit or ship: the main session does.
