@@ -22,6 +22,7 @@ Browser game: Three.js + Vite, Node.js WebSocket relay. Deployed on Render from 
 - Subagent prompts: state the task, the files, the done criteria; ask for a final report of ≤ 200 words (no tables, no recap of the brief, no draft changelog). Do not re-verify what a report already proves: one build + one screenshot is enough.
 - Screenshots cost tokens: `--size 640x360`, look at one or two, prefer numeric checks (`--eval` returning numbers) over images.
 - Ship with `tools/ship.mjs` in one call; do not hand-edit version, lock file or changelog.
+- **Token meter**: at the end of every reply that involved work, run `node tools/token-meter.mjs` (reads the real usage from the session transcripts, one cheap call) and append its first two lines to the reply. `--mark` restarts the counter, `--week` gives the 7-day total by model. Subagents are included: they were 72 % of the output tokens before `gameplay-coder` moved to Sonnet.
 
 ## Subagents (`.claude/agents/`) and skills (`.claude/skills/`)
 | Need | Use |

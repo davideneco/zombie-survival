@@ -2,6 +2,11 @@
 
 Chaque changement est poussé sur `main` (déploiement Render) avec un nouveau numéro de version et sa description ici.
 
+## v0.85.0 (2026-11-09)
+- Nouvel outil `tools/token-meter.mjs` : compteur de jetons à partir des vraies données enregistrées par Claude Code (conversation principale et sous-agents) : jetons écrits, entrée, cache écrit, cache lu ; depuis le dernier appel, depuis le démarrage du compteur, pour toute la session, et sur 7 jours par modèle (`--week`). Claude l'affiche à la fin de ses réponses.
+- Constat du premier relevé sur 7 jours : 1,66 M de jetons écrits, dont 87 % par Opus et 72 % par les sous-agents, d'où le passage de `gameplay-coder` sur Sonnet.
+- Aucun changement de jeu. Vérifié : le compteur tourne sur la session en cours (totaux, 7 jours, remise à zéro). Non vérifié : correspondance exacte avec le pourcentage de la limite hebdomadaire (formule non publique ; `/usage` donne le chiffre réel).
+
 ## v0.84.1 (2026-11-09)
 - L'agent de développement `gameplay-coder` passe de Opus 5.5 à Sonnet 5.5 (effort élevé) pour réduire la consommation hebdomadaire ; seul `game-designer` reste sur Opus 5.5.
 - Aucun changement de jeu. Vérifié : réglage de l'agent et des consignes relus. Non vérifié : qualité du code produit par l'agent sur Sonnet à l'usage.
