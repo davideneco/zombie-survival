@@ -295,7 +295,7 @@ export function installTransfer(game, { world, hud, sfx, scene }) {
     car.doorSide = sideAt(st.sStop + dep, termSide(st));
     S.call = buildCall(route, st.sStop + dep, 1, X.approach, X.countdown - X.doorTime - 0.4, vlim, X);
     const p = game.player;
-    if (Math.hypot(p.pos.x - st.terminal.x, p.pos.z - st.terminal.z) < 40) { hud.announce('TRAM C', `Direction ${stops[st.dest].name} — départ dans ${X.countdown} s, montez à bord`, 3200); sfx.buy?.(); }
+    if (Math.hypot(p.pos.x - st.terminal.x, p.pos.z - st.terminal.z) < 40) { hud.announce('TRAM C', `Direction ${stops[st.dest].name} — départ dans ${X.countdown} s, montez à bord`, 3200); sfx.buy?.(); sfx.tramBell?.(0.55); }
   }
   function startGo(stopId, pids, dep, arr) {
     const st = stops[stopId]; if (!st) return;
@@ -310,6 +310,7 @@ export function installTransfer(game, { world, hud, sfx, scene }) {
       game.xfRide = { stop: st, safe: true };
       p.vel.set(0, 0, 0);
       S.sound?.stop(); S.sound = sfx.createTramEngine?.() || null;
+      sfx.tramDoors?.(false, 0.75);
     } else if (p.onTram?.v === car) ejectLocal(); // (not taken : off the car)
   }
   // the car stops at the arrival stop : zone open (every client), riders' title, host : the zombies left behind follow
@@ -320,7 +321,8 @@ export function installTransfer(game, { world, hud, sfx, scene }) {
     if (game.xfRide) {
       game.xfRide.safe = false;
       hud.announce(dest.title, dest.sub, 3500);
-      sfx.tramChime?.(true, 0.8);
+      sfx.tramBell?.(0.6);
+      sfx.tramDoors?.(true, 0.85);
       game.sendPlayerState?.();
     }
     if (!game.isClient && S.pids.length) hostFollow(st.area, dest.id);
@@ -403,6 +405,11 @@ export function installTransfer(game, { world, hud, sfx, scene }) {
       if (S.state === STATE.call) {
         S.t += dt;
         S.call.pose(S.t, pose); car.place(pose.s, pose.v, pose.doors);
+        if (!S.ev.callStop && pose.doors > 0.05) {
+          S.ev.callStop = 1;
+          const d = Math.hypot(p.pos.x - S.stop.terminal.x, p.pos.z - S.stop.terminal.z);
+          if (d < 45) { const v = Math.max(0.2, 1 - d / 45); sfx.tramBell?.(0.6 * v); sfx.tramDoors?.(true, 0.75 * v); }
+        }
         if (S.t >= X.countdown && !this.isClient) { // host : who boards, where the car stops
           const st = S.stop, players = [[myId(), p], ...this.remotes.entries()];
           const pids = players.filter(([, pl]) => pl && !pl.dead && !pl.downed && aboard(st, pl)).map(([id]) => id);
@@ -420,8 +427,22 @@ export function installTransfer(game, { world, hud, sfx, scene }) {
           car.place(pose.s, pose.v, pose.doors);
           const R = this.xfRide;
           // events (once each)
-          if (!S.ev.dep && S.t >= X.doorTime) { S.ev.dep = 1; if (R) { showSub(`Tram C — direction ${dest.name}`, 4); sfx.tramChime?.(false, 0.6); } }
-          if (!S.ev.pass && passStop && pose.leg === 1 && (pose.s - passStop.s) * Math.sign(pose.v || 1) > X.announce.passAfter) { S.ev.pass = 1; if (R) { showSub(`Prochain arrêt : ${dest.name}`, 5); sfx.trainChime?.(0.5); } }
+          if (!S.ev.dep && S.t >= X.doorTime) {
+            S.ev.dep = 1;
+            if (R) {
+              showSub(`Tram C — direction ${dest.name}`, 4);
+              sfx.tramBell?.(0.65);
+              sfx.paAnnounce?.(dest.id === 'gare' ? 'tram_dep_gare' : 'tram_dep_hdf', 0.9, { at: 0.65 });
+            }
+          }
+          if (!S.ev.pass && passStop && pose.leg === 1 && (pose.s - passStop.s) * Math.sign(pose.v || 1) > X.announce.passAfter) {
+            S.ev.pass = 1;
+            if (R) {
+              showSub(`Prochain arrêt : ${dest.name}`, 5);
+              sfx.trainChime?.(0.5);
+              sfx.paAnnounce?.(dest.id === 'gare' ? 'tram_arr_gare' : 'tram_arr_hdf', 0.9, { at: 0.95 });
+            }
+          }
           if (!S.ev.brake && pose.leg === T.profs.length - 1 && pose.ph === 'ride') { S.ev.brake = 1; if (R) sfx.tramBrake?.(0.5, Math.abs(pose.v)); }
           if (!S.ev.arr && S.t >= T.tArrive) { S.ev.arr = 1; arrive(); }
           if (!S.ev.close && S.t >= T.tClose) { S.ev.close = 1; if (p.onTram?.v === car) ejectLocal(); this.xfRide = null; S.sound?.stop(); S.sound = null; }

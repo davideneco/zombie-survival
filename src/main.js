@@ -266,7 +266,10 @@ const game = {
       // Récompense pour l'hôte
       if (killed) {
         this.kills++;
-        if (head) this.headshots = (this.headshots || 0) + 1;
+        if (head) {
+          this.headshots = (this.headshots || 0) + 1;
+          if (Math.random() < 0.35) sfx.charVoice?.('headshot', 0.82);
+        }
         sfx.kill();
         this.addPoints(award, head ? 'head' : '');
       } else {
@@ -566,14 +569,17 @@ const game = {
         this.player.refill(w);
       }
       this.player.grenades = CONFIG.grenade.max;
+      sfx.narrate?.('narr_max_ammo', 0.9, { at: 0.25 });
       hud.announce('MUNITIONS MAX !', 'Réserves pleines pour toute l’équipe', 2500);
       hud.popup('MUNITIONS MAX', 'bonus');
     } else if (p.type === 'insta_kill') {
       this.buffs.instaKill = CONFIG.powerups.buffDuration;
+      sfx.narrate?.('narr_instakill', 0.9, { at: 0.25 });
       hud.announce('MORT INSTANTANÉE !', '30 secondes', 2500);
       hud.popup('MORT INSTANTANÉE', 'bonus');
     } else if (p.type === 'nuke') {
       sfx.nuke();
+      sfx.narrate?.('narr_nuke', 0.95, { at: 0.25 });
       hud.flashNuke();
       hud.announce('BOMBE !', '+400 points', 2500);
       hud.popup('+400 BOMBE', 'bonus');
@@ -587,6 +593,7 @@ const game = {
       }
     } else if (p.type === 'double_points') {
       this.buffs.doublePoints = CONFIG.powerups.buffDuration;
+      sfx.narrate?.('narr_double', 0.9, { at: 0.25 });
       hud.announce('POINTS DOUBLES !', '30 secondes', 2500);
       hud.popup('POINTS DOUBLES', 'bonus');
     }
@@ -639,6 +646,7 @@ const game = {
         this.points -= ww.price;
         p.giveWeapon(ww.id);
         sfx.buy();
+        sfx.charVoice?.('buy', 0.82);
         hud.announce(ww.name, 'Arme acquise !', 2000);
       }
       return;
@@ -1046,6 +1054,7 @@ const game = {
     this.spawnTimer = 1;
     hud.setRound(r);
     sfx.roundStart();
+    sfx.narrate?.('narr_round_start', 0.85, { at: 0.9 });
     hud.announce(`MANCHE ${r}`, `${this.toSpawn} zombies`);
 
     // Réanime le joueur s'il était à terre lors de la manche précédente
@@ -1363,6 +1372,7 @@ const game = {
   gameOver() {
     if (this.over) return;
     this.over = true;
+    sfx.narrate?.('narr_gameover', 0.9, { at: 0.3 });
     this.player.releaseInputs();
     this.ui?.closeOverlays();
     document.exitPointerLock();
@@ -1460,6 +1470,7 @@ const game = {
       } else if (alive === 0 && this.round > 0 && this.intermission <= 0) {
         this.intermission = 6;
         sfx.roundEnd();
+        sfx.narrate?.('narr_round_end', 0.82, { at: 0.5 });
         hud.announce('MANCHE TERMINÉE', 'La prochaine arrive…', 4000);
         if (this.isHost) this.net?.send({ t: 'round_end' });
       }
@@ -2641,12 +2652,35 @@ if (q.has('debug')) {
 // ------------------------------------------------------------- Boucle
 // Musique : de plus en plus dure avec les manches, à fond pendant le finale, étouffée dans les menus et en pause
 // (en multijoueur la partie continue pendant la pause, donc la musique aussi)
+let stationAmb = null, cityAmb = null;
 function updateMusicMood() {
   const inGame = game.started && !game.over;
   const intensity = !inGame ? 0.3 : game.finale ? 1 : Math.min(0.85, 0.3 + game.round * 0.05);
   const paused = !game.isMultiplayer && !game.playing;
   // Muffled uniquement si le joueur est en pause d'une partie active (jamais sur l'écran titre ou les menus)
   sfx.setMood(intensity, inGame && paused);
+
+  // Station and city environmental ambience (layered alongside the music)
+  const activeAmb = inGame && !paused && !(game.intro?.on && game.intro.ph === 'ride');
+  if (!activeAmb) {
+    if (stationAmb) { stationAmb.stop(); stationAmb = null; }
+    if (cityAmb) { cityAmb.stop(); cityAmb = null; }
+    return;
+  }
+  const p = game.player.pos;
+  const night = (game.summitFx?.sky?.k ?? 0) < 0.35;
+  const inGare = world.localArea === 'gare' || !!world.gare?.inArea?.(p.x, p.z);
+  if (inGare) {
+    if (cityAmb) { cityAmb.stop(); cityAmb = null; }
+    if (!stationAmb) stationAmb = sfx.createStationAmbience?.() || null;
+    const zi = world.gare?.zoneOf?.(p.x, p.z) ?? -1;
+    stationAmb?.update(world.zoneNames?.[zi] || 'Hall', night);
+  } else {
+    if (stationAmb) { stationAmb.stop(); stationAmb = null; }
+    if (!cityAmb) cityAmb = sfx.createCityAmbience?.() || null;
+    const zi = world.zoneOf?.(p.x, p.z) ?? 0;
+    cityAmb?.update(night, Math.max(0, zi));
+  }
 }
 
 const clock = new THREE.Clock();

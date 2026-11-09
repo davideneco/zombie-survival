@@ -115,9 +115,11 @@ export function installIntro(game, { world, hud, sfx }) {
     S.ann = I.announce.length; // (skipped : the remaining announcements are dropped, and the ride events before the stop)
     while (S.ev < I.events.length && I.events[S.ev].at < S.stopTau) S.ev++;
     sub.style.display = 'none'; subText = null;
+    if (skipped) sfx.stopVoices?.();
     game.summitFx?.holdNight(null);
     sfx.airRelease?.(0.8);
     sfx.trainDoors?.(0.9);
+    sfx.narrate?.('intro_arrival', 0.95, { at: 0.65 });
     hud.announce(I.arrival.title, I.arrival.sub, 4500);
     game.rideOnStop?.(skipped); // ride zombies : released at the station, or removed (skip)
   }
@@ -134,6 +136,7 @@ export function installIntro(game, { world, hud, sfx }) {
     if (S.ph === 'off') return;
     S.on = false; S.ph = 'off';
     hideUi();
+    sfx.stopVoices?.();
     S.sound?.stop(); S.sound = null;
     train.onJoint = null;
     train.park();
@@ -164,11 +167,18 @@ export function installIntro(game, { world, hud, sfx }) {
     if (Math.abs(co - cardO) > 0.004) { cardO = co; card.style.opacity = String(co); card.style.display = co > 0 ? 'flex' : 'none'; }
     // announcements, phase 4 hooks
     while (S.ann < I.announce.length && tau >= I.announce[S.ann].at) {
-      const a = I.announce[S.ann++];
+      const idx = S.ann, a = I.announce[S.ann++];
       if (a.chime) sfx.trainChime?.(0.9);
       if (a.static) sfx.radioStatic?.(a.dur, 0.8);
       if (a.big) { hud.announce(a.title, a.sub || '', a.dur * 1000); if (!a.quiet) sfx.tramBrake?.(0.6, 14); }
       else if (a.text) showSub(a.text, a.dur);
+      // Trigger matching PA or narrator voice line for each intro event
+      if (idx === 0) sfx.paAnnounce?.('intro_pa_1', 0.95, { at: 0.95 });
+      else if (idx === 1) sfx.paAnnounce?.('intro_pa_panic', 0.88, { at: 0.12 });
+      else if (idx === 2) sfx.narrate?.('intro_slow', 0.95, { at: 0.22 });
+      else if (idx === 3) sfx.narrate?.('intro_windows', 1.0, { at: 0.12 });
+      else if (idx === 4) sfx.narrate?.('intro_roof', 0.9, { at: 0.08 });
+      else if (idx === 5) sfx.paAnnounce?.('intro_pa_2', 0.95, { at: 0.95 });
     }
     while (S.ev < I.events.length && tau >= I.events[S.ev].at) { const e = I.events[S.ev++]; try { game.introHooks[e.id]?.(tau, e); } catch (err) { console.warn('[intro] hook', e.id, err); } }
     if (subText) { S.sub -= dt; if (S.sub <= 0) { sub.style.display = 'none'; subText = null; } }

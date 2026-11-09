@@ -81,6 +81,35 @@ const CUSTOM_TRACKS = TRACK_DEFINITIONS[2].urls;
 // Armes sans profil propre
 const GUN_FALLBACK = { pistol: 'm1911', ar: 'rifle', smg: 'mp5', mg: 'm249', sniper: 'sniper' };
 
+// Pre-generated French voice Ogg clips in public/sfx/ (narrator, train/tram PA, and shared character voice)
+const VOICE_CLIPS = [
+  'intro_pa_1', 'intro_pa_panic', 'intro_slow', 'intro_windows', 'intro_roof', 'intro_pa_2', 'intro_arrival',
+  'tram_dep_gare', 'tram_dep_hdf', 'tram_arr_gare', 'tram_arr_hdf',
+  'narr_round_start', 'narr_round_end', 'narr_max_ammo', 'narr_instakill', 'narr_nuke', 'narr_double', 'narr_gameover',
+  'char_reload_1', 'char_reload_2', 'char_empty', 'char_hurt_1', 'char_hurt_2', 'char_down', 'char_revive',
+  'char_headshot_1', 'char_headshot_2', 'char_buy',
+];
+
+const CHAR_POOLS = {
+  reload: ['char_reload_1', 'char_reload_2'],
+  empty: ['char_empty'],
+  hurt: ['char_hurt_1', 'char_hurt_2'],
+  down: ['char_down'],
+  revive: ['char_revive'],
+  headshot: ['char_headshot_1', 'char_headshot_2'],
+  buy: ['char_buy'],
+};
+
+const CHAR_COOLDOWNS = {
+  reload: 5.5,
+  empty: 4.0,
+  hurt: 3.2,
+  down: 1.0,
+  revive: 1.0,
+  headshot: 6.5,
+  buy: 4.0,
+};
+
 export class Sfx {
   constructor() {
     this.ctx = null;
@@ -93,6 +122,11 @@ export class Sfx {
     this.onTrackChange = null;
     this._userInteracted = false;
     this._loadStarted = false;
+    this._voicesStarted = false;
+    this._voiceBufs = new Map();
+    this._voiceLoading = new Map();
+    this._activeVoices = new Map();
+    this._charCd = {};
 
     // Démarre le contexte et le téléchargement/décodage des morceaux dès le chargement de la page
     // (le navigateur le laisse en 'suspended' sans erreur jusqu'au premier clic où le son se libère instantanément)
@@ -105,6 +139,7 @@ export class Sfx {
           console.warn('[AUDIO] Échec préchargement morceaux, lancement du rock synthétisé :', err);
           this.music?.start();
         });
+        this._loadVoices().catch(() => {});
         document.addEventListener('visibilitychange', () => {
           if (document.hidden) c.suspend(); else if (this._userInteracted) c.resume();
         });
@@ -158,9 +193,40 @@ export class Sfx {
         this.music?.start();
       });
     }
+    this._loadVoices().catch(() => {});
     document.addEventListener('visibilitychange', () => {
       if (document.hidden) c.suspend(); else c.resume();
     });
+  }
+
+  async _loadVoiceOne(id) {
+    if (!this.ctx) return null;
+    if (this._voiceBufs.has(id)) return this._voiceBufs.get(id);
+    if (this._voiceLoading.has(id)) return this._voiceLoading.get(id);
+    const p = (async () => {
+      for (const url of [`sfx/${id}.ogg`, `/sfx/${id}.ogg`]) {
+        try {
+          const res = await fetch(url);
+          if (!res.ok || /text\/html/.test(res.headers.get('content-type') || '')) continue;
+          const ab = await res.arrayBuffer();
+          const buf = await this.ctx.decodeAudioData(ab);
+          this._voiceBufs.set(id, buf);
+          return buf;
+        } catch { /* try next path */ }
+      }
+      return null;
+    })();
+    this._voiceLoading.set(id, p);
+    return p;
+  }
+
+  async _loadVoices() {
+    if (this._voicesStarted || !this.ctx) return;
+    this._voicesStarted = true;
+    // Load intro clips first so they are ready immediately when the train ride begins
+    for (const id of VOICE_CLIPS) {
+      await this._loadVoiceOne(id);
+    }
   }
 
   async _loadTracks() {
@@ -306,6 +372,14 @@ export class Sfx {
     this._tone('square', f * 0.45, f * 0.2, 0.03, 0.12 * v, { at });
   }
 
+  // Brass shell casing bouncing on the floor after a shot
+  _shellDrop(at, v = 1, heavy = false) {
+    const f = (heavy ? 3200 : 4400) * rnd(0.93, 1.08);
+    this._tone('sine', f, f * 0.92, 0.045, 0.08 * v, { at, atk: 0.001 });
+    this._tone('triangle', f * 1.48, f * 1.38, 0.035, 0.05 * v, { at, atk: 0.001 });
+    this._tone('sine', f * 1.03, f * 0.95, 0.035, 0.05 * v, { at: at + rnd(0.09, 0.14), atk: 0.001 });
+  }
+
   // ------------------------------------------------------------ Armes
   // id : arme (config) ; v : volume (coéquipier loin = faible) ; dist : distance en mètres (plus loin = plus sourd)
   gun(id, v = 1, dist = 0) {
@@ -317,11 +391,16 @@ export class Sfx {
     const j = v * rnd(0.88, 1);
     const out = this._far(dist);
     const o = { out };
-    this._noise(p.cd, p.cv * j, p.cf * r, 'highpass', { ...o, atk: 0.0006, send: p.rv * 0.5 });
-    this._noise(p.bd, p.bv * j, p.bf * r, 'lowpass', { ...o, f1: p.bf * 0.2, send: p.rv });
-    this._tone('sine', p.tf * r, p.tf * 0.28, p.td, p.tv * j, o);
-    this._tone('sawtooth', p.gf * r, p.gf * 0.3, p.gd, p.gv * j, { ...o, dist: !out });
-    if (p.ec) this._noise(0.4, p.ec * j, 1500, 'lowpass', { ...o, at: p.ed, f1: 350, send: 0.5, atk: 0.01 }); // écho de la rue
+    this._noise(p.cd, p.cv * j, p.cf * r, 'highpass', { ...o, atk: 0.0005, send: p.rv * 0.55 });
+    this._noise(p.bd, p.bv * j, p.bf * r, 'lowpass', { ...o, f1: p.bf * 0.18, send: p.rv });
+    this._tone('sine', p.tf * r, p.tf * 0.25, p.td * 1.15, p.tv * j, o);
+    this._tone('sine', Math.max(48, p.tf * 0.55), 32, p.td * 1.25, p.tv * 0.55 * j, o); // sub-bass punch
+    this._tone('sawtooth', p.gf * r, p.gf * 0.28, p.gd, p.gv * j, { ...o, dist: !out });
+    if (dist < 7 && id !== 'crossbow' && id !== 'm79') {
+      this._clack(0.018, 0.32 * j, 2600 * r); // mechanical bolt cycle
+      if (Math.random() < 0.65) this._shellDrop(rnd(0.24, 0.34), 0.7 * j, p.tf < 120);
+    }
+    if (p.ec) this._noise(0.45, p.ec * j, 1500, 'lowpass', { ...o, at: p.ed, f1: 320, send: 0.55, atk: 0.01 }); // écho de la rue
   }
 
   // Une distance fait perdre les aigus
@@ -338,16 +417,18 @@ export class Sfx {
     if (!this.ctx) return;
     const r = rnd(0.95, 1.05), j = v * rnd(0.9, 1);
     const o = { out: this._far(dist) };
-    this._noise(0.07, 1.0 * j, 3500 * r, 'highpass', { ...o, atk: 0.0006, send: 0.4 });
-    this._noise(0.4, 1.0 * j, 2400 * r, 'lowpass', { ...o, f1: 300, send: 0.8 });
-    this._tone('sine', 115 * r, 28, 0.32, 0.9 * j, o);
-    this._tone('sawtooth', 190 * r, 50, 0.2, 0.5 * j, { ...o, dist: !o.out });
-    this._noise(0.9, 0.3 * j, 800, 'lowpass', { ...o, at: 0.04, f1: 200, send: 1 });
-    this._noise(0.5, 0.4 * j, 1400, 'lowpass', { ...o, at: 0.2, f1: 300, send: 0.5, atk: 0.01 }); // écho
-    if (dist < 8) { // la pompe : deux claquements
+    this._noise(0.075, 1.0 * j, 3400 * r, 'highpass', { ...o, atk: 0.0005, send: 0.45 });
+    this._noise(0.42, 1.0 * j, 2300 * r, 'lowpass', { ...o, f1: 280, send: 0.85 });
+    this._tone('sine', 118 * r, 26, 0.36, 0.95 * j, o);
+    this._tone('sine', 64 * r, 24, 0.38, 0.65 * j, o);
+    this._tone('sawtooth', 190 * r, 48, 0.22, 0.52 * j, { ...o, dist: !o.out });
+    this._noise(0.9, 0.32 * j, 800, 'lowpass', { ...o, at: 0.04, f1: 190, send: 1 });
+    this._noise(0.55, 0.42 * j, 1400, 'lowpass', { ...o, at: 0.2, f1: 280, send: 0.55, atk: 0.01 }); // écho
+    if (dist < 8) { // la pompe : deux claquements + cartouche qui tombe
       this._clack(0.42, 1, 1500);
-      this._noise(0.12, 0.2, 900, 'bandpass', { at: 0.5 });
+      this._noise(0.12, 0.22, 900, 'bandpass', { at: 0.5 });
       this._clack(0.6, 0.9, 1800);
+      this._noise(0.04, 0.16 * j, 1600, 'bandpass', { at: 0.68, q: 2.2 });
     }
   }
 
@@ -418,6 +499,36 @@ export class Sfx {
     this._tone('sine', 150, 55, 0.1, 0.35, { at: 0.42 });
   }
 
+  // Footsteps by surface : 'stone' (cobblestone/cathedral), 'wood' (building interior), 'metal' (train/tram floor), 'platform' (station quai)
+  step(surface = 'stone', v = 1, sprint = false) {
+    if (!this.ctx || v < 0.02) return;
+    const r = rnd(0.9, 1.12);
+    const kv = v * (sprint ? 1.15 : 0.85) * rnd(0.9, 1.05);
+    if (surface === 'wood') {
+      // Hollow wooden floorboards: warm low thud + resonant board body + occasional faint creak
+      this._tone('sine', 105 * r, 42, 0.09, 0.32 * kv);
+      this._noise(0.065, 0.24 * kv, 380 * r, 'bandpass', { q: 2.8, atk: 0.002 });
+      this._noise(0.035, 0.14 * kv, 1500 * r, 'bandpass', { q: 1.5, at: 0.012 });
+      if (Math.random() < 0.32) this._tone('triangle', 490 * r, 410 * r, 0.07, 0.045 * kv, { at: 0.02, atk: 0.01 });
+    } else if (surface === 'metal') {
+      // Sheet-metal coach floor: metallic ring + crisp heel tap + damped thump
+      this._tone('sine', 135 * r, 58, 0.075, 0.26 * kv);
+      this._tone('triangle', 320 * r, 185 * r, 0.065, 0.12 * kv);
+      this._noise(0.05, 0.22 * kv, 880 * r, 'bandpass', { q: 4.0, atk: 0.001 });
+      this._noise(0.028, 0.16 * kv, 2900 * r, 'highpass', { at: 0.008, atk: 0.001 });
+    } else if (surface === 'platform') {
+      // Concrete/asphalt station platform: dry sole impact + fine grit scuff
+      this._tone('sine', 120 * r, 48, 0.07, 0.25 * kv);
+      this._noise(0.055, 0.22 * kv, 1250 * r, 'bandpass', { q: 1.2, atk: 0.001, send: 0.15 });
+      this._noise(0.04, 0.14 * kv, 3200 * r, 'highpass', { at: 0.015, atk: 0.002 });
+    } else {
+      // Cobblestone / stone ('stone'): crisp mineral heel click + sole thud + light street echo
+      this._tone('sine', 130 * r, 52, 0.07, 0.26 * kv);
+      this._noise(0.045, 0.25 * kv, 1950 * r, 'bandpass', { q: 1.6, atk: 0.001, send: 0.18 });
+      this._noise(0.03, 0.15 * kv, 3600 * r, 'highpass', { at: 0.012, atk: 0.001, send: 0.12 });
+    }
+  }
+
   // Couteau : 'swing' (souffle de la lame), 'flesh' (chair : choc mou et humide), 'metal' (armure : deux notes métalliques)
   knife(kind = 'swing', v = 1) {
     if (!this.ctx || v < 0.03) return;
@@ -466,38 +577,50 @@ export class Sfx {
     this._noise(0.25, 0.35, 700, 'lowpass', { f1: 200 });
   }
 
-  // ------------------------------------------------------------ Motos
-  // Moteur : dents de scie + carré + sous-grave filtrés, à-coups des cylindres (modulation d'amplitude) et bruit du vent.
+  // ------------------------------------------------------------ Motos & Véhicules
+  // Moteur : dents de scie + carré + sous-grave filtrés, formante d'échappement, roulement des pneus, crépitement de décélération et bruit du vent.
   // set(rpm 0..1, accélérateur -1..1, vitesse 0..1, volume 0..1) ; stop() l'éteint.
   createEngine(kind) {
     if (!this.ctx) return null;
-    const c = this.ctx, isSuv = kind === 'suv', isCar = kind === 'voiture' || isSuv, big = kind === 'grosseMoto' || isCar;
+    const c = this.ctx, isSuv = kind === 'suv' || kind === '4x4', isCar = kind === 'voiture' || kind === 'car' || isSuv, big = kind === 'grosseMoto' || isCar;
     const out = c.createGain(); out.gain.value = 0;
-    const am = c.createGain(); am.gain.value = isSuv ? 0.62 : isCar ? 0.55 : big ? 0.62 : 0.8;
-    const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = isSuv ? 620 : isCar ? 750 : 900; lp.Q.value = 2;
+    const am = c.createGain(); am.gain.value = isSuv ? 0.65 : isCar ? 0.58 : big ? 0.65 : 0.8;
+    const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = isSuv ? 620 : isCar ? 750 : 900; lp.Q.value = 2.2;
+    const ex = c.createBiquadFilter(); ex.type = 'peaking'; ex.frequency.value = isSuv ? 140 : isCar ? 180 : 240; ex.Q.value = 1.8; ex.gain.value = 5.5;
     const osc = (type, gain) => { const o = c.createOscillator(), g = c.createGain(); o.type = type; g.gain.value = gain; o.connect(g).connect(lp); o.start(); return o; };
-    const o1 = osc('sawtooth', isCar ? 0.6 : 0.5), o2 = osc('square', isCar ? 0.28 : 0.22), sub = osc('sine', isSuv ? 0.85 : big ? 0.7 : 0.4);
-    lp.connect(am).connect(out);
+    const o1 = osc('sawtooth', isCar ? 0.62 : 0.52), o2 = osc('square', isCar ? 0.3 : 0.24), sub = osc('sine', isSuv ? 0.9 : big ? 0.75 : 0.45);
+    lp.connect(ex).connect(am).connect(out);
     const lfo = c.createOscillator(), lg = c.createGain();
-    lfo.frequency.value = 10; lg.gain.value = big ? 0.38 : 0.18; lfo.connect(lg).connect(am.gain); lfo.start();
+    lfo.frequency.value = 10; lg.gain.value = big ? 0.4 : 0.2; lfo.connect(lg).connect(am.gain); lfo.start();
     const wind = c.createBufferSource(), wf = c.createBiquadFilter(), wg = c.createGain();
     wind.buffer = this.noiseBuf; wind.loop = true; wf.type = 'bandpass'; wf.frequency.value = 700; wf.Q.value = 0.6; wg.gain.value = 0;
     wind.connect(wf).connect(wg).connect(out); wind.start();
+    const tire = c.createBufferSource(), tf = c.createBiquadFilter(), tg = c.createGain();
+    tire.buffer = this.noiseBuf; tire.loop = true; tf.type = 'lowpass'; tf.frequency.value = 340; tf.Q.value = 0.9; tg.gain.value = 0;
+    tire.connect(tf).connect(tg).connect(out); tire.start(0, 0.5);
     out.connect(this.bus);
-    const base = isSuv ? 26 : isCar ? 32 : big ? 34 : 52, span = isSuv ? 70 : isCar ? 85 : big ? 95 : 175;
+    const base = isSuv ? 26 : isCar ? 32 : big ? 34 : 52, span = isSuv ? 72 : isCar ? 88 : big ? 98 : 175;
+    let lastPop = 0;
     return {
       set: (rpm, throttle, ratio, vol) => {
         const t = c.currentTime, f = base + rpm * span;
         o1.frequency.setTargetAtTime(f, t, 0.04); o2.frequency.setTargetAtTime(f * 1.006, t, 0.04); sub.frequency.setTargetAtTime(f * 0.5, t, 0.04);
-        lp.frequency.setTargetAtTime((isSuv ? 320 : isCar ? 400 : 500) + rpm * 1800 + Math.max(0, throttle) * 600, t, 0.05);
-        lfo.frequency.setTargetAtTime(big ? 5 + rpm * 17 : 12 + rpm * 44, t, 0.05);
-        wf.frequency.setTargetAtTime(500 + ratio * 1500, t, 0.1); wg.gain.setTargetAtTime(ratio * 0.3, t, 0.1);
-        out.gain.setTargetAtTime(vol * (0.16 + 0.1 * rpm + Math.max(0, throttle) * 0.06), t, 0.05);
+        lp.frequency.setTargetAtTime((isSuv ? 320 : isCar ? 400 : 500) + rpm * 1850 + Math.max(0, throttle) * 680, t, 0.05);
+        ex.frequency.setTargetAtTime((isSuv ? 120 : 170) + rpm * 260, t, 0.06);
+        lfo.frequency.setTargetAtTime(big ? 5 + rpm * 18 : 12 + rpm * 44, t, 0.05);
+        wf.frequency.setTargetAtTime(500 + ratio * 1500, t, 0.1); wg.gain.setTargetAtTime(ratio * 0.28, t, 0.1);
+        tf.frequency.setTargetAtTime(180 + ratio * 520, t, 0.1); tg.gain.setTargetAtTime(ratio * 0.22, t, 0.1);
+        out.gain.setTargetAtTime(vol * (0.17 + 0.11 * rpm + Math.max(0, throttle) * 0.07), t, 0.05);
+        // Deceleration exhaust burble when backing off throttle at high RPM
+        if (rpm > 0.45 && throttle <= 0.05 && vol > 0.1 && t - lastPop > 0.18 && Math.random() < 0.22) {
+          lastPop = t;
+          this._noise(0.055, 0.16 * vol, 320 + rpm * 220, 'lowpass', { f1: 110 });
+        }
       },
       stop: () => {
         const t = c.currentTime;
         out.gain.setTargetAtTime(0, t, 0.06);
-        for (const n of [o1, o2, sub, lfo, wind]) n.stop(t + 0.35);
+        for (const n of [o1, o2, sub, lfo, wind, tire]) n.stop(t + 0.35);
       },
     };
   }
@@ -555,19 +678,20 @@ export class Sfx {
   }
 
   // ------------------------------------------------------------ Tram (v0.39.0)
-  // Moteur de traction : ronronnement grave (dents de scie filtrées) dont la hauteur monte avec la vitesse, sifflement des onduleurs à l'accélération,
-  // roulement des roues sur les rails. set(vitesse 0..1, traction 0..1, volume 0..1) ; stop() l'éteint.
+  // Moteur de traction : ronronnement grave (dents de scie filtrées) dont la hauteur monte avec la vitesse, sifflement des onduleurs PWM à l'accélération,
+  // roulement des roues sur les rails et chant des boudins. set(vitesse 0..1, traction 0..1, volume 0..1) ; stop() l'éteint.
   createTramEngine() {
     if (!this.ctx) return null;
     const c = this.ctx;
     const out = c.createGain(); out.gain.value = 0;
-    const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 500; lp.Q.value = 1.2;
+    const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 500; lp.Q.value = 1.4;
     const osc = (type, g) => { const o = c.createOscillator(), n = c.createGain(); o.type = type; n.gain.value = g; o.connect(n).connect(lp); o.start(); return o; };
-    const o1 = osc('sawtooth', 0.45), o2 = osc('triangle', 0.35), sub = osc('sine', 0.5);
+    const o1 = osc('sawtooth', 0.48), o2 = osc('triangle', 0.38), sub = osc('sine', 0.55);
     lp.connect(out);
     const whine = c.createOscillator(), wg = c.createGain(); whine.type = 'sine'; wg.gain.value = 0; whine.connect(wg).connect(out); whine.start();
+    const pwm = c.createOscillator(), pg = c.createGain(); pwm.type = 'triangle'; pg.gain.value = 0; pwm.connect(pg).connect(out); pwm.start();
     const roll = c.createBufferSource(), rf = c.createBiquadFilter(), rg = c.createGain();
-    roll.buffer = this.noiseBuf; roll.loop = true; rf.type = 'bandpass'; rf.frequency.value = 300; rf.Q.value = 0.5; rg.gain.value = 0;
+    roll.buffer = this.noiseBuf; roll.loop = true; rf.type = 'bandpass'; rf.frequency.value = 300; rf.Q.value = 0.6; rg.gain.value = 0;
     roll.connect(rf).connect(rg).connect(out); roll.start();
     const tick = c.createOscillator(), tg = c.createGain(), tl = c.createGain(); // joints de rails : un tic-tac qui s'accélère
     tick.type = 'square'; tick.frequency.value = 2; tg.gain.value = 0.5; tl.gain.value = 0; tick.connect(tg).connect(tl).connect(rg.gain);
@@ -575,18 +699,19 @@ export class Sfx {
     out.connect(this.bus);
     return {
       set: (ratio, traction, vol) => {
-        const t = c.currentTime, f = 38 + ratio * 70;
+        const t = c.currentTime, f = 38 + ratio * 74;
         o1.frequency.setTargetAtTime(f, t, 0.08); o2.frequency.setTargetAtTime(f * 2.01, t, 0.08); sub.frequency.setTargetAtTime(f * 0.5, t, 0.08);
-        lp.frequency.setTargetAtTime(300 + ratio * 700 + traction * 300, t, 0.1);
-        whine.frequency.setTargetAtTime(500 + ratio * 1500, t, 0.1); wg.gain.setTargetAtTime(traction * 0.03 * (0.4 + ratio), t, 0.1);
-        rf.frequency.setTargetAtTime(200 + ratio * 900, t, 0.1); rg.gain.setTargetAtTime(ratio * 0.28, t, 0.15);
-        tick.frequency.setTargetAtTime(1 + ratio * 14, t, 0.15); tl.gain.setTargetAtTime(ratio * 0.12, t, 0.15);
-        out.gain.setTargetAtTime(vol * (0.1 + 0.12 * ratio + traction * 0.05), t, 0.1);
+        lp.frequency.setTargetAtTime(300 + ratio * 750 + traction * 340, t, 0.1);
+        whine.frequency.setTargetAtTime(480 + ratio * 1650, t, 0.1); wg.gain.setTargetAtTime(traction * 0.036 * (0.35 + ratio), t, 0.1);
+        pwm.frequency.setTargetAtTime(850 + ratio * 1100, t, 0.1); pg.gain.setTargetAtTime((0.012 + traction * 0.022) * Math.min(1, ratio * 3), t, 0.1);
+        rf.frequency.setTargetAtTime(210 + ratio * 940, t, 0.1); rg.gain.setTargetAtTime(ratio * 0.3, t, 0.15);
+        tick.frequency.setTargetAtTime(1 + ratio * 14, t, 0.15); tl.gain.setTargetAtTime(ratio * 0.14, t, 0.15);
+        out.gain.setTargetAtTime(vol * (0.12 + 0.14 * ratio + traction * 0.06), t, 0.1);
       },
       stop: () => {
         const t = c.currentTime;
         out.gain.setTargetAtTime(0, t, 0.1);
-        for (const n of [o1, o2, sub, whine, roll, tick]) n.stop(t + 0.5);
+        for (const n of [o1, o2, sub, whine, pwm, roll, tick]) n.stop(t + 0.5);
       },
     };
   }
@@ -596,6 +721,29 @@ export class Sfx {
       for (const [f, gv, d] of [[196, 0.5, 2.4], [312, 0.38, 1.9], [489, 0.3, 1.4], [706, 0.22, 1.0], [1034, 0.14, 0.7]]) this._tone('sine', f * 1.003, f * 0.995, d, gv * v * vv, { at, atk: 0.004, send: 0.35 });
       this._noise(0.12, 0.5 * v * vv, 1800, 'bandpass', { at, q: 0.8, atk: 0.001 });
     }
+  }
+  // Electromechanical tram bell (transfer tram & arrival signal): rapid bright hammer strikes on a steel/bronze bell dome
+  tramBell(v = 1) {
+    if (!this.ctx || v < 0.03) return;
+    const hits = [0, 0.11, 0.22, 0.33, 0.44];
+    for (let i = 0; i < hits.length; i++) {
+      const at = hits[i], last = i === hits.length - 1, dur = last ? 1.15 : 0.24, kv = v * (last ? 1.0 : 0.82);
+      this._tone('sine', 1046, 1042, dur, 0.28 * kv, { at, atk: 0.002, send: 0.35 });
+      this._tone('sine', 2093, 2085, dur * 0.75, 0.18 * kv, { at, atk: 0.001, send: 0.3 });
+      this._tone('triangle', 2960, 2940, dur * 0.5, 0.11 * kv, { at, atk: 0.001, send: 0.25 });
+      this._noise(0.025, 0.22 * kv, 3800, 'bandpass', { at, q: 2.5, atk: 0.001 });
+    }
+  }
+  // Transfer tram doors: warning beeps + electric/pneumatic slide + rubber seal thud
+  tramDoors(open = true, v = 1) {
+    if (!this.ctx || v < 0.03) return;
+    this.tramChime(open, v * 0.85);
+    if (!open) {
+      for (let i = 0; i < 3; i++) this._tone('square', 1320, 1320, 0.08, 0.06 * v, { at: 0.18 + i * 0.16 });
+    }
+    this._noise(0.75, 0.14 * v, open ? 1100 : 850, 'bandpass', { at: 0.42, q: 0.9, f1: open ? 650 : 420 });
+    this._tone('sine', open ? 130 : 105, 48, 0.14, 0.26 * v, { at: 1.12 });
+    this._clack(1.12, 0.35 * v, 1400);
   }
   tramChime(open = true, v = 1) { // carillon des portes : deux notes, montantes à l'ouverture, descendantes à la fermeture
     if (!this.ctx || v < 0.03) return;
@@ -620,13 +768,13 @@ export class Sfx {
   // ------------------------------------------------------------ Regional train (v0.81.0, intro.js)
   // Rolling sound of a passenger inside : low rumble and wheel roar (filtered noise, brighter with speed), traction motor whine, wind, and a
   // brake squeal (resonant noise + a wavering tone) faded in while braking at low speed. set(speed m/s, brake 0..1, volume 0..1, gust 0..1) ;
-  // stop(). gust (v0.82.0) : wind roaring in at a broken window near the listener (louder and darker than the cabin wind, grows with speed)
+  // stop(). gust (v0.82.0) : wind roaring in at a broken window near the listener (louder and darker than the cabin wind, grows with speed, plus whistling drafts)
   createTrainSound() {
     if (!this.ctx) return null;
     const c = this.ctx;
     const out = c.createGain(); out.gain.value = 0; out.connect(this.bus);
     const noise = (type, f, q, g) => { const s = c.createBufferSource(), fl = c.createBiquadFilter(), gn = c.createGain(); s.buffer = this.noiseBuf; s.loop = true; fl.type = type; fl.frequency.value = f; fl.Q.value = q; gn.gain.value = g; s.connect(fl).connect(gn).connect(out); s.start(0, Math.random() * 1.5); return { s, fl, gn }; };
-    const rumble = noise('lowpass', 120, 0.7, 0), roar = noise('bandpass', 400, 0.6, 0), wind = noise('highpass', 1800, 0.5, 0), gustN = noise('bandpass', 700, 0.4, 0);
+    const rumble = noise('lowpass', 120, 0.7, 0), roar = noise('bandpass', 400, 0.6, 0), wind = noise('highpass', 1800, 0.5, 0), gustN = noise('bandpass', 700, 0.45, 0), gustWhistle = noise('bandpass', 1450, 4.2, 0);
     const sq = noise('bandpass', 3200, 18, 0);
     const motor = c.createOscillator(), mg = c.createGain(); motor.type = 'sawtooth'; mg.gain.value = 0; const ml = c.createBiquadFilter(); ml.type = 'lowpass'; ml.frequency.value = 900;
     motor.connect(ml).connect(mg).connect(out); motor.start();
@@ -639,7 +787,8 @@ export class Sfx {
         rumble.gn.gain.setTargetAtTime((0.25 + 0.55 * k) * Math.min(1, speed / 2), t, 0.15);
         roar.fl.frequency.setTargetAtTime(220 + 900 * k, t, 0.2); roar.gn.gain.setTargetAtTime(0.32 * k, t, 0.15);
         wind.gn.gain.setTargetAtTime(0.05 * k * k, t, 0.2);
-        gustN.gn.gain.setTargetAtTime(gust * (0.08 + 0.5 * k), t, 0.25); gustN.fl.frequency.setTargetAtTime(380 + 900 * k, t, 0.3);
+        gustN.gn.gain.setTargetAtTime(gust * (0.1 + 0.55 * k), t, 0.25); gustN.fl.frequency.setTargetAtTime(360 + 950 * k, t, 0.3);
+        gustWhistle.gn.gain.setTargetAtTime(gust * (0.02 + 0.12 * k), t, 0.25); gustWhistle.fl.frequency.setTargetAtTime(1100 + 700 * k, t, 0.3);
         motor.frequency.setTargetAtTime(60 + 260 * k, t, 0.2); mg.gain.setTargetAtTime(0.025 * Math.min(1, speed / 3) * (1 - 0.6 * brake), t, 0.2);
         sg.gain.setTargetAtTime(0.03 * sqk, t, 0.08); sq.gn.gain.setTargetAtTime(0.18 * sqk, t, 0.08);
         out.gain.setTargetAtTime(vol, t, 0.2);
@@ -647,7 +796,7 @@ export class Sfx {
       stop: () => {
         const t = c.currentTime;
         out.gain.setTargetAtTime(0, t, 0.25);
-        for (const n of [rumble.s, roar.s, wind.s, gustN.s, sq.s, motor, squeal, lfo]) n.stop(t + 1.5);
+        for (const n of [rumble.s, roar.s, wind.s, gustN.s, gustWhistle.s, sq.s, motor, squeal, lfo]) n.stop(t + 1.5);
       },
     };
   }
@@ -816,5 +965,258 @@ export class Sfx {
     o.start(t); lfo.start(t);
     o.stop(t + dur + 0.05); lfo.stop(t + dur + 0.05);
     this._noise(dur * 0.8, volume * 0.1, 600, 'bandpass', { q: 1.2, atk: 0.2 });
+  }
+
+  // ------------------------------------------------------------ Ambiance loops (station & city)
+  // Station ambience loop: hall echo hum, distant PA murmur, and pigeons under the glass roof
+  createStationAmbience() {
+    if (!this.ctx) return null;
+    const c = this.ctx;
+    const out = c.createGain(); out.gain.value = 0; out.connect(this.bus);
+    const send = c.createGain(); send.gain.value = 0.45; out.connect(send).connect(this.verbIn);
+
+    const hallSrc = c.createBufferSource(), hallLp = c.createBiquadFilter(), hallGain = c.createGain();
+    hallSrc.buffer = this.noiseBuf; hallSrc.loop = true;
+    hallLp.type = 'bandpass'; hallLp.frequency.value = 210; hallLp.Q.value = 1.4;
+    hallGain.gain.value = 0.06;
+    hallSrc.connect(hallLp).connect(hallGain).connect(out);
+
+    const hum = c.createOscillator(), humGain = c.createGain();
+    hum.type = 'sine'; hum.frequency.value = 100; humGain.gain.value = 0.015;
+    hum.connect(humGain).connect(out);
+
+    let started = false, stopped = false, nextPigeon = 0, nextMurmur = 0;
+    const start = () => {
+      if (started || stopped) return;
+      started = true;
+      const t = c.currentTime;
+      hallSrc.start(t, Math.random());
+      hum.start(t);
+      out.gain.setTargetAtTime(0.16, t, 0.5);
+      nextPigeon = t + rnd(4, 10);
+      nextMurmur = t + rnd(10, 22);
+    };
+
+    const update = (zoneName = 'Hall', night = false) => {
+      if (stopped) return;
+      if (!started) start();
+      const t = c.currentTime;
+      const inHall = zoneName === 'Hall' || zoneName === 'Verrière';
+      const onQuai = zoneName === 'Quais';
+      hallLp.frequency.setTargetAtTime(inHall ? 190 : onQuai ? 280 : 340, t, 0.4);
+      hallGain.gain.setTargetAtTime(inHall ? 0.08 : onQuai ? 0.065 : 0.05, t, 0.4);
+      send.gain.setTargetAtTime(inHall ? 0.65 : 0.35, t, 0.4);
+      out.gain.setTargetAtTime(0.18, t, 0.4);
+
+      // Pigeons cooing and fluttering under the canopy / platforms (mostly daytime, rarer at night)
+      if (t >= nextPigeon) {
+        nextPigeon = t + (night ? rnd(14, 28) : rnd(6, 14));
+        const pv = night ? 0.04 : 0.08;
+        for (let i = 0; i < 3; i++) {
+          const at = i * 0.24, f0 = rnd(470, 540);
+          this._tone('sine', f0, f0 * 0.78, 0.19, pv, { at, atk: 0.03, send: 0.55 });
+        }
+        if (Math.random() < 0.35) {
+          for (let w = 0; w < 5; w++) this._noise(0.035, pv * 0.85, 1400, 'bandpass', { at: 0.1 + w * 0.055, q: 1.5, send: 0.4 });
+        }
+      }
+      // Distant reverberant station announcement murmur
+      if (t >= nextMurmur) {
+        nextMurmur = t + rnd(16, 32);
+        this._tone('sine', 523, 523, 0.45, 0.035, { atk: 0.02, send: 0.75 });
+        this._tone('sine', 659, 659, 0.55, 0.035, { at: 0.28, atk: 0.02, send: 0.75 });
+        for (let k = 0; k < 5; k++) {
+          this._noise(0.22, 0.028, rnd(550, 950), 'bandpass', { at: 0.75 + k * 0.26, q: 3.5, atk: 0.04, send: 0.8 });
+        }
+      }
+    };
+
+    const stop = () => {
+      if (stopped) return;
+      stopped = true;
+      const t = c.currentTime;
+      out.gain.setTargetAtTime(0, t, 0.2);
+      if (started) {
+        for (const n of [hallSrc, hum]) { try { n.stop(t + 0.6); } catch {} }
+      }
+    };
+
+    return { start, update, stop };
+  }
+
+  // City ambience by day/night: wind between medieval façades, distant bells, far-off dogs, night insects
+  createCityAmbience() {
+    if (!this.ctx) return null;
+    const c = this.ctx;
+    const out = c.createGain(); out.gain.value = 0; out.connect(this.bus);
+
+    const windSrc = c.createBufferSource(), windBp = c.createBiquadFilter(), windGain = c.createGain();
+    windSrc.buffer = this.noiseBuf; windSrc.loop = true;
+    windBp.type = 'bandpass'; windBp.frequency.value = 340; windBp.Q.value = 0.8;
+    windGain.gain.value = 0.065;
+    windSrc.connect(windBp).connect(windGain).connect(out);
+
+    const cricketOsc = c.createOscillator(), cricketMod = c.createOscillator(), cricketModG = c.createGain(), cricketGain = c.createGain();
+    cricketOsc.type = 'sine'; cricketOsc.frequency.value = 4350;
+    cricketMod.type = 'sine'; cricketMod.frequency.value = 18; cricketModG.gain.value = 0.012;
+    cricketGain.gain.value = 0;
+    cricketMod.connect(cricketModG).connect(cricketGain.gain);
+    cricketOsc.connect(cricketGain).connect(out);
+
+    let started = false, stopped = false, nextDog = 0, nextBell = 0;
+    const start = () => {
+      if (started || stopped) return;
+      started = true;
+      const t = c.currentTime;
+      windSrc.start(t, Math.random());
+      cricketOsc.start(t);
+      cricketMod.start(t);
+      out.gain.setTargetAtTime(0.18, t, 0.6);
+      nextDog = t + rnd(9, 20);
+      nextBell = t + rnd(18, 36);
+    };
+
+    const update = (night = true, zoneIndex = 0) => {
+      if (stopped) return;
+      if (!started) start();
+      const t = c.currentTime;
+      const windF = 280 + ((zoneIndex & 3) * 45) + (night ? 0 : 60);
+      windBp.frequency.setTargetAtTime(windF, t, 0.6);
+      windGain.gain.setTargetAtTime(night ? 0.075 : 0.055, t, 0.6);
+      cricketGain.gain.setTargetAtTime(night ? 0.012 : 0, t, 0.8);
+      out.gain.setTargetAtTime(0.18, t, 0.5);
+
+      // Far-away dog bark echoing across the dark streets
+      if (t >= nextDog) {
+        nextDog = t + rnd(14, 30);
+        const nBarks = Math.random() < 0.5 ? 2 : 3;
+        const baseF = rnd(290, 360);
+        for (let i = 0; i < nBarks; i++) {
+          const at = i * rnd(0.26, 0.34);
+          this._tone('sawtooth', baseF * 0.85, baseF * 1.18, 0.09, 0.032, { at, atk: 0.015, send: 0.7 });
+          this._tone('triangle', baseF * 1.15, baseF * 0.72, 0.12, 0.028, { at: at + 0.05, atk: 0.01, send: 0.75 });
+          this._noise(0.11, 0.025, 720, 'bandpass', { at, q: 2.2, send: 0.7 });
+        }
+      }
+      // Distant church / cathedral bell toll
+      if (t >= nextBell) {
+        nextBell = t + rnd(24, 48);
+        this._tone('sine', 220, 218, 2.2, 0.055, { atk: 0.01, send: 0.75 });
+        this._tone('sine', 440, 436, 1.5, 0.025, { atk: 0.01, send: 0.75 });
+      }
+    };
+
+    const stop = () => {
+      if (stopped) return;
+      stopped = true;
+      const t = c.currentTime;
+      out.gain.setTargetAtTime(0, t, 0.25);
+      if (started) {
+        for (const n of [windSrc, cricketOsc, cricketMod]) { try { n.stop(t + 0.6); } catch {} }
+      }
+    };
+
+    return { start, update, stop };
+  }
+
+  // ------------------------------------------------------------ Voices (PA, Narrator, and Character)
+  stopVoices(channel = null) {
+    if (channel) {
+      const cur = this._activeVoices.get(channel);
+      if (cur) { try { cur.stop(); } catch {} this._activeVoices.delete(channel); }
+      return;
+    }
+    for (const cur of this._activeVoices.values()) {
+      try { cur.stop(); } catch {}
+    }
+    this._activeVoices.clear();
+  }
+
+  // Play a pre-generated voice buffer through a dedicated WebAudio filter chain ('pa' | 'narrator' | 'character')
+  playVoice(id, channel = 'narrator', v = 1, o = {}) {
+    if (!this.ctx || !id || v < 0.02) return;
+    const playBuf = (buf) => {
+      if (!buf || !this.ctx) return;
+      this.stopVoices(channel);
+      const c = this.ctx, t = c.currentTime + (o.at || 0);
+      const src = c.createBufferSource();
+      src.buffer = buf;
+      src.playbackRate.value = o.rate || 1;
+      const g = c.createGain();
+      g.gain.setValueAtTime(0.001, t);
+      g.gain.linearRampToValueAtTime(v, t + 0.02);
+
+      if (channel === 'pa') {
+        // Train / tram PA loudspeaker chain: bandpass 380-3200 Hz, mid presence peak, subtle drive, coach reverb
+        const hp = c.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 380;
+        const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 3200;
+        const pk = c.createBiquadFilter(); pk.type = 'peaking'; pk.frequency.value = 1450; pk.Q.value = 1.4; pk.gain.value = 4.5;
+        src.connect(hp).connect(pk).connect(lp).connect(g);
+        this._route(g, { send: o.send ?? 0.38 });
+        this._clack(o.at || 0, 0.18 * v, 1900); // intercom mic click on
+      } else if (channel === 'narrator') {
+        // Dark narrator chain: warm low-shelf + hall reverb + subtle low atmospheric swell
+        const ls = c.createBiquadFilter(); ls.type = 'lowshelf'; ls.frequency.value = 180; ls.gain.value = 3.5;
+        const pk = c.createBiquadFilter(); pk.type = 'peaking'; pk.frequency.value = 2400; pk.Q.value = 1.0; pk.gain.value = 2.0;
+        src.connect(ls).connect(pk).connect(g);
+        this._route(g, { send: o.send ?? 0.45 });
+        this._tone('sine', 68, 52, Math.min(1.6, buf.duration), 0.14 * v, { at: o.at || 0, atk: 0.08, send: 0.4 });
+      } else {
+        // Survivor character voice chain: clear mid-forward presence
+        const hp = c.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 115;
+        const pk = c.createBiquadFilter(); pk.type = 'peaking'; pk.frequency.value = 2600; pk.Q.value = 1.1; pk.gain.value = 2.5;
+        src.connect(hp).connect(pk).connect(g);
+        this._route(g, { send: o.send ?? 0.18 });
+      }
+
+      this._activeVoices.set(channel, src);
+      src.onended = () => {
+        if (this._activeVoices.get(channel) === src) this._activeVoices.delete(channel);
+      };
+      src.start(t);
+    };
+
+    const cached = this._voiceBufs.get(id);
+    if (cached) {
+      playBuf(cached);
+    } else {
+      this._loadVoiceOne(id).then((buf) => { if (buf) playBuf(buf); }).catch(() => {});
+    }
+  }
+
+  // Narrator voice (intro narration, round start/end, power-ups)
+  narrate(id = 'narr_round_start', v = 1, o = {}) {
+    if (!this.ctx || v < 0.02) return;
+    this.playVoice(id, 'narrator', 0.88 * v, o);
+  }
+
+  // Train / tram PA voice announcement
+  paAnnounce(id = 'intro_pa_1', v = 1, o = {}) {
+    if (!this.ctx || v < 0.02) return;
+    this.playVoice(id, 'pa', 0.85 * v, o);
+  }
+
+  // Shared character voice + procedural vocal effort for all playable characters
+  charVoice(event = 'reload', v = 1) {
+    if (!this.ctx || v < 0.02) return;
+    const now = this.ctx.currentTime;
+    const cd = CHAR_COOLDOWNS[event] ?? 3.5;
+    if (now - (this._charCd[event] || -99) < cd) return;
+    this._charCd[event] = now;
+    this._charEffort(event, v);
+    const pool = CHAR_POOLS[event];
+    if (!pool || !pool.length) return;
+    const id = pool[Math.floor(Math.random() * pool.length)];
+    this.playVoice(id, 'character', 0.82 * v, { at: event === 'hurt' ? 0.06 : 0.02 });
+  }
+
+  // Procedural breath / grunt layered with the character voice
+  _charEffort(event, v = 1) {
+    if (event === 'hurt' || event === 'down') {
+      this._tone('sawtooth', 145, 92, 0.18, 0.18 * v, { atk: 0.01 });
+      this._noise(0.16, 0.16 * v, 950, 'bandpass', { q: 1.8, atk: 0.01 });
+    } else if (event === 'reload' || event === 'revive') {
+      this._noise(0.14, 0.09 * v, 1200, 'bandpass', { q: 1.4, atk: 0.02 });
+    }
   }
 }

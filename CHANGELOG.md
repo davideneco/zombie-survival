@@ -2,6 +2,14 @@
 
 Chaque changement est poussé sur `main` (déploiement Render) avec un nouveau numéro de version et sa description ici.
 
+## v0.86.0 (2026-11-09)
+- **Bruits de pas selon la surface** : pas distincts sur pierre/asphalte (`stone`), plancher bois (`wood`), grilles/passerelles métalliques (`metal`) et quais de gare/tram (`platform`), avec cadence et impact renforcés au sprint et à l'atterrissage.
+- **Audio du tram et du train d'intro** : cloche d'avertissement (`tramBell`), pneumatique et glissement des portes (`tramDoors`), moteur de tramway enrichi (onduleur PWM, harmonique de traction, crissement de bride en courbe, joints de rail) et sifflement d'air dans les vitres brisées du train d'intro.
+- **Armes et véhicules améliorés** : sous-basse punchy, claquement mécanique de culasse, queue de réverbération urbaine et tintement de douille/cartouche au sol pour les armes à feu ; formant d'échappement, bruit de roulement des pneus et pétarades à la décélération pour les véhicules.
+- **Ambiances sonores de station et de ville** : boucles d'ambiance dédiées pour l'intérieur de la gare/métro (grondement de ventilation, bourdonnement des néons, gouttes d'eau, grondement lointain) et l'extérieur urbain (vent dans les ruelles, bourdonnement électrique, sirène lointaine, tôle au vent), en complément de la musique existante.
+- **Voix françaises du narrateur, de l'interphone et des personnages** : annonces vocales de l'intro dans le train (interphone RATP et narrateur), annonces des trams de transfert entre la Gare Centrale et les Hauts-de-France, voix du narrateur pour les manches et bonus, et répliques vocales partagées pour tous les personnages (rechargement, chargeur vide, blessure, mise à terre, réanimation, tir dans la tête, achat d'arme).
+- *Vérifié : `npx vite build` OK, 28 fichiers vocaux `.ogg` générés dans `public/sfx/`, 53 méthodes et boucles `Sfx` testées sans erreur / Non vérifié : Playwright absent sur la machine hôte, sons non écoutés.*
+
 ## v0.85.0 (2026-11-09)
 - Nouvel outil `tools/token-meter.mjs` : compteur de jetons à partir des vraies données enregistrées par Claude Code (conversation principale et sous-agents) : jetons écrits, entrée, cache écrit, cache lu ; depuis le dernier appel, depuis le démarrage du compteur, pour toute la session, et sur 7 jours par modèle (`--week`). Claude l'affiche à la fin de ses réponses.
 - Constat du premier relevé sur 7 jours : 1,66 M de jetons écrits, dont 87 % par Opus et 72 % par les sous-agents, d'où le passage de `gameplay-coder` sur Sonnet.
