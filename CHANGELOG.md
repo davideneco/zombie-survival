@@ -2,6 +2,10 @@
 
 Chaque changement est poussé sur `main` (déploiement Render) avec un nouveau numéro de version et sa description ici.
 
+## v0.84.1 (2026-11-09)
+- L'agent de développement `gameplay-coder` passe de Opus 5.5 à Sonnet 5.5 (effort élevé) pour réduire la consommation hebdomadaire ; seul `game-designer` reste sur Opus 5.5.
+- Aucun changement de jeu. Vérifié : réglage de l'agent et des consignes relus. Non vérifié : qualité du code produit par l'agent sur Sonnet à l'usage.
+
 ## v0.84.0 (2026-11-09)
 - Préparation du travail en parallèle avec Gemini sur tout ce qui est sonore : Gemini est responsable de `src/audio.js`, `src/music.js`, `public/music/`, `public/sfx/` ; Claude du reste. Nouveaux fichiers `GEMINI.md`, `AGENTS.md` (règles communes et répartition), `docs/AUDIO.md` (fonctionnement du son, règles, liste de demandes entre les deux : ambiance de la gare, bruits de pas, cloche du tram, ambiance de la ville) et `.gemini/styleguide.md` (relecture des PR de Gemini).
 - Nouvel outil `tools/ship.mjs` : une seule commande pour publier (rebase sur `main`, prochain numéro de version libre, entrée du journal, docs, build, commit, push de la branche et de `main`) ; deux agents peuvent publier chacun de leur côté sans conflit de version. `tools/scopes.json` limite Gemini à ses fichiers sonores.

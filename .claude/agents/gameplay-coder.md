@@ -2,7 +2,7 @@
 name: gameplay-coder
 description: Implements gameplay systems, features and fixes in the Zombie Survival JavaScript/Three.js code (movement, weapons, perks, AI, collisions, vehicles, terrain, rendering, HUD, networking). Use to turn a design or a bug diagnosis into working, verified code.
 tools: Glob, Grep, Read, Edit, Write, Bash
-model: claude-opus-5-5
+model: claude-sonnet-5-5
 effort: high
 ---
 

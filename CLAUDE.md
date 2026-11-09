@@ -17,7 +17,7 @@ Browser game: Three.js + Vite, Node.js WebSocket relay. Deployed on Render from 
 - Ship with `node tools/ship.mjs` (rebases on `main`, takes the next free version, so concurrent agents never collide); `main` may have moved, so never assume the version number.
 
 ## Token economy (the weekly limit is real)
-- Default model Sonnet 5.5. Use Opus subagents (`game-designer`, `gameplay-coder`) only for a new system or a hard multi-file change; use Sonnet for fixes, tuning, checks.
+- Default model Sonnet 5.5. Opus is only for `game-designer` (new systems); `gameplay-coder` and the others run on Sonnet.
 - Grep before reading: never Read a whole big file (`src/main.js`, `realworld.js`, `vehicles.js`, `config.js`, `modMenu.js`, `hud.js`, `player.js`); never read `public/data/*.json`, `package-lock.json`, `docs/REFERENCE.md`, `docs/csv/` (denied in settings). Use the `explorer` agent for sweeps.
 - Subagent prompts: state the task, the files, the done criteria; ask for a final report of ≤ 200 words (no tables, no recap of the brief, no draft changelog). Do not re-verify what a report already proves: one build + one screenshot is enough.
 - Screenshots cost tokens: `--size 640x360`, look at one or two, prefer numeric checks (`--eval` returning numbers) over images.
@@ -28,7 +28,7 @@ Browser game: Three.js + Vite, Node.js WebSocket relay. Deployed on Render from 
 |---|---|
 | Find code, usages, data flow (read-only) | `explorer` agent (Sonnet 5.5, high effort) |
 | Design a new system (waves, weapons, vehicles, perks, power-ups) | `game-designer` agent (Opus 5.5, high effort) |
-| Implement a feature or fix (JS / Three.js) | `gameplay-coder` agent (Opus 5.5, high effort) |
+| Implement a feature or fix (JS / Three.js) | `gameplay-coder` agent (Sonnet 5.5, high effort) |
 | Odd behaviour, gameplay bug, desync, perf drop | `playtest-bug-hunter` agent (Sonnet 5.5, high effort) |
 | Visual / UI bug needing screenshots | `gui-test-debugger` agent (Sonnet 5.5, high effort) |
 | Run the game headless, drive it, take screenshots | `play-test` skill |
