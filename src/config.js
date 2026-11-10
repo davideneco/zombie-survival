@@ -169,8 +169,8 @@ export const CONFIG = {
     '40mm': { name: '40×46 mm' }, // pas de base : l'arme fixe ses dégâts
     energy: { name: 'énergie' }, // pas de base ni de chute : le pistolet à rayons règle ses propres dégâts
   },
-  // Armes au départ (la première est en main)
-  startWeapons: ['rifle', 'm1911'],
+  // Arme au départ : un seul pistolet de base, tiré au hasard dans cette liste pour chaque joueur (v0.85.1)
+  startPistols: ['m1911', 'arex'],
 
   // Noms des armes améliorées au Pack-a-Punch
   papNames: {

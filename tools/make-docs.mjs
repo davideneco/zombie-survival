@@ -79,7 +79,7 @@ const fr = (n, d = 2) => (typeof n === 'number' ? String(+n.toFixed(d)).replace(
 const where = {};
 for (const v of D.walls) (where[v.id] ||= new Set()).add(`mur ${zname(v.zone)}`);
 for (const id of Object.keys(C.box.pool)) (where[id] ||= new Set()).add('boîte mystère');
-for (const id of C.startWeapons) (where[id] ||= new Set()).add('arme de départ');
+for (const id of C.startPistols) (where[id] ||= new Set()).add('arme de départ (au hasard)');
 const typeName = { auto: 'automatique', shotgun: 'pompe', semi: 'coup par coup' };
 const totalW = Object.values(C.box.pool).reduce((a, b) => a + b, 0);
 const P = C.player, Zc = C.zombie, S = C.sector;

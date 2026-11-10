@@ -2,6 +2,12 @@
 
 Chaque changement est poussé sur `main` (déploiement Render) avec un nouveau numéro de version et sa description ici.
 
+## v0.86.1 (2026-11-10)
+- On démarre maintenant avec un seul pistolet de base, tiré au hasard pour chaque joueur parmi le Colt M1911 et l'AREX ZERO 1 (plus de M4A1 au départ) ; les autres armes s'achètent au mur ou se trouvent dans la boîte mystère. La liste est dans `startPistols` (config).
+- Train de l'intro : les portes entre les voitures étaient en partie bouchées par une plaque beige à bord diagonal (un habillage mal découpé) ; l'ouverture est maintenant dégagée entre chaque voiture.
+- Nouveau dossier de commande pour les voix et les sons (`docs/AI_STUDIO_BRIEF.md`) : un seul fichier à envoyer dans Google AI Studio, avec les annonces (train, tram), les voix de zombies et de joueurs, les ambiances, les pas et les petits bruitages à produire, leur format et le nom de chaque fichier.
+- Vérifié : build ; démarrage en jeu avec un seul pistolet (M1911 obtenu), aucune erreur ; lancer de rayons à travers l'ouverture entre deux voitures (la plaque a disparu, seul reste le haut du mur) ; capture de l'ouverture regardée. Non vérifié : tirage de l'AREX au démarrage (même code), les portes dans le train en marche à la nuit tombée, la sauvegarde des voix.
+
 ## v0.86.0 (2026-11-09)
 - **Bruits de pas selon la surface** : pas distincts sur pierre/asphalte (`stone`), plancher bois (`wood`), grilles/passerelles métalliques (`metal`) et quais de gare/tram (`platform`), avec cadence et impact renforcés au sprint et à l'atterrissage.
 - **Audio du tram et du train d'intro** : cloche d'avertissement (`tramBell`), pneumatique et glissement des portes (`tramDoors`), moteur de tramway enrichi (onduleur PWM, harmonique de traction, crissement de bride en courbe, joints de rail) et sifflement d'air dans les vitres brisées du train d'intro.

@@ -374,9 +374,11 @@ export function buildCoachGeometry() {
     }
     B.add('dark', cbox(uE + dir * 0.25, F - 0.02, 0, 0.5, 0.04, T.walk.gangway + 0.1, 0.01), C.steel);
     { // inner lining of the end wall (interior colour), around the gangway opening, and the opening's reveal
-      const li = new THREE.Shape([new THREE.Vector2(-lin, F), new THREE.Vector2(lin, F), new THREE.Vector2(lin, 2.93), new THREE.Vector2(-lin, 2.93)]);
-      li.holes.push(rrect(-gw, F + 0.01, gw, F + 2.05, 0.08, true));
-      B.add('inside', onEnd(new THREE.ShapeGeometry(li, 4), uE - dir * 0.09, -dir), C.partition);
+      // three quads around the opening (a Shape with a hole was triangulated across the opening : a solid slab with a diagonal edge, v0.85.1)
+      const yT = 2.93, yO = F + 2.05, sideW = lin - gw;
+      for (const [w, h, cx, cy] of [[sideW, yT - F, -(lin + gw) / 2, (F + yT) / 2], [sideW, yT - F, (lin + gw) / 2, (F + yT) / 2], [2 * gw, yT - yO, 0, (yO + yT) / 2]]) {
+        B.add('inside', onEnd(plane(w, h).translate(cx, cy, 0), uE - dir * 0.09, -dir), C.partition);
+      }
       const rv = extr(ring(-gw, F + 0.01, gw, F + 2.05, 0.08, 0.04), 0.12, 0, 4); rv.translate(0, 0, -0.06); onEnd(rv, uE - dir * 0.05, dir); B.add('inside', rv, C.rack);
     }
     buffers(B, uE, dir);

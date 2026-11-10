@@ -95,7 +95,8 @@ export class Player {
     this.ride?.reset();
 
     // Inventaire d'armes
-    this.inventory = CONFIG.startWeapons.map((id) => this.newWeapon(id));
+    const pistols = CONFIG.startPistols; // un seul pistolet de base, au hasard (chaque joueur tire le sien)
+    this.inventory = [this.newWeapon(pistols[Math.floor(Math.random() * pistols.length)])];
     this.weaponIdx = 0;
     this.switchWeapon(0);
 
