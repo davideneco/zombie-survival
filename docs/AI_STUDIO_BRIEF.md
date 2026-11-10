@@ -1,57 +1,66 @@
-# Zombie Survival — brief for the voices and sound effects (to upload to Google AI Studio)
+# Zombie Survival — voices and sounds brief (to upload to Google AI Studio)
 
-> How to use this file: upload it (or paste it) in Google AI Studio with a Gemini model that can output audio, then say: **"Read the brief and produce the files of section 3, starting with the group P1. Give each file separately, named exactly as in the table."** Download the audio files, put them in one folder, and bring them back to Claude Code (it will add them to the game).
+> **How to use:** upload this file in Google AI Studio with a Gemini model that can output audio and say: *"Read the brief. Produce the 28 files of part A, one downloadable audio file each, named exactly as in the table. Then part B."* Download the files into one folder and bring the folder back to Claude Code: it converts them and swaps them into the game. Same file names = nothing else to change.
 
-## 1. The game
-Co-op zombie survival set in **Strasbourg, France**, browser game, dark realistic mood (cold nights, damp stone streets, a railway station). The player starts on a regional train arriving at night at the station, fights zombies through the windows, then plays on the city streets. All the **game text is French**. All voices are **French (France)**. No real person's voice, no brand jingle (not the SNCF jingle: use a generic two-tone chime), no copyrighted music or sounds.
+## 1. The game, in 5 lines
+Co-op zombie survival in **Strasbourg, France** (browser game). Dark, realistic, tense mood: cold night, damp stone, a railway station. The player starts in a regional train arriving at night, zombies attack the windows, then the fight continues in the city. Everything is **French (France)**. No real person's voice, no brand jingle (not the SNCF jingle), no copyrighted material.
 
-The game already generates by code (do NOT redo): gunshots, reloads, knife, explosions, shop sounds, vehicle engines, train/tram rolling, rail clacks, brake squeal, door beeps, glass, the cathedral bell. What is missing and wanted here: **voices** and **ambiences / footsteps / small details**.
+## 2. Format (all files)
+- WAV, **mono**, 48 kHz, 16-bit. Peak about -3 dBFS, no clipping, no more than 50 ms of silence at the start/end.
+- **Clean and dry**: no reverb, no loudspeaker filter, no background noise. The game adds the loudspeaker / echo / radio effects itself while playing.
+- One line = one file, exactly the name below (lowercase, `.wav`). If a take is bad, give a better take under the same name.
 
-## 2. Technical format (all files)
-- WAV, mono, 48 kHz, 16-bit (we convert to Ogg ourselves). Voices: close-mic, dry (no reverb), the game adds the room sound. Speaker-filtered ones are marked "PA".
-- Peak at about -3 dBFS, no clipping, no more than 50 ms of silence at the start or end (except where noted).
-- Loops must be **seamless** (end matches start, no click, no fade-in/out).
-- One sound per file; for variations give separate files (`_a`, `_b`, `_c`).
-- File name = exactly the name in the tables (lowercase, no spaces).
+## 3. Part A — replace the 28 current voices (robotic text-to-speech stand-ins)
 
-## 3. Files wanted
+Three speakers; keep each one consistent across all their files.
+- **Woman "PA"** (station/train announcer): calm, neutral, professional, clear diction, mid-age. Stays calm even when things go wrong (except `intro_pa_panic`).
+- **Man "narrator"**: deep, grave, slow, dark; like the narrator of a horror game. Not theatrical, not a monster.
+- **Man "survivor"**: ordinary person under stress, mid-age, warm voice, natural fighting shouts; short, breathy, human.
 
-### P1 — Announcements (PA voice: calm, neutral, a woman's voice, as if through a station loudspeaker: band-limited 400 Hz–6 kHz, slight distortion)
-| File | Text (French) | Length |
-|---|---|---|
-| `pa_train_approach.wav` | « Mesdames et messieurs, dans quelques minutes notre train arrivera en gare de Strasbourg, son terminus. » | 6–7 s |
-| `pa_train_terminus.wav` | « Strasbourg. Strasbourg, terminus de ce train. Tout le monde descend. » | 5–6 s |
-| `pa_train_cut.wav` | The same woman starts « Mesdames et messieurs, nous vous informons… » then the loudspeaker cracks into static and **distant screams** of several people | 3 s |
-| `pa_tram_c_homme_de_fer.wav` | « Tram C, direction Homme de Fer. » | 2 s |
-| `pa_tram_c_gare_centrale.wav` | « Tram C, direction Gare Centrale. » | 2 s |
-| `pa_next_homme_de_fer.wav` | « Prochain arrêt : Homme de Fer. » | 2 s |
-| `pa_next_gare_centrale.wav` | « Prochain arrêt : Gare Centrale. » | 2 s |
-| `pa_doors_closing.wav` | « Attention, fermeture des portes. » | 2 s |
-| `pa_chime.wav` | generic two-tone soft chime (before announcements), no brand melody | 1.5 s |
+| File | Speaker | Direction | Text (French) |
+|---|---|---|---|
+| `intro_pa_1.wav` | PA | calm, professional, reassuring | Mesdames et messieurs, dans quelques minutes notre train arrivera en gare de Strasbourg, son terminus. |
+| `intro_pa_panic.wav` | PA | the calm voice breaks: urgent, panicked, rising | Attention ! Ils sont dans la rame ! Fermez les portes ! |
+| `intro_slow.wav` | narrator | low, serious, warning | Ralentissement. Obstacle sur la voie. |
+| `intro_windows.wav` | narrator | tense, urgent, fast | Ils s'accrochent aux fenêtres ! Abattez-les avant qu'ils ne montent ! |
+| `intro_roof.wav` | narrator | whispering, dread | Écoutez... des pas sur le toit... |
+| `intro_pa_2.wav` | PA | calm and flat, almost eerie given the situation | Strasbourg. Strasbourg, terminus de ce train. |
+| `intro_arrival.wav` | narrator | grave, heavy, slow, relieved but ominous | Strasbourg, terminus. Tout le monde descend. |
+| `tram_dep_gare.wav` | PA | tram announcement, neutral | Tram C, direction Gare Centrale. |
+| `tram_dep_hdf.wav` | PA | same | Tram C, direction Homme de Fer. |
+| `tram_arr_gare.wav` | PA | neutral | Prochain arrêt : Gare Centrale. |
+| `tram_arr_hdf.wav` | PA | neutral | Prochain arrêt : Homme de Fer. |
+| `narr_round_start.wav` | narrator | low, menacing, slow | Ils arrivent... Tenez bon. |
+| `narr_round_end.wav` | narrator | tired, calm, a breath of relief | Manche terminée. Reprenez votre souffle. |
+| `narr_max_ammo.wav` | narrator | punchy, short, energetic | Munitions maximum ! |
+| `narr_instakill.wav` | narrator | punchy, aggressive | Mort instantanée ! |
+| `narr_nuke.wav` | narrator | punchy, explosive | Bombe ! |
+| `narr_double.wav` | narrator | punchy, bright | Points doubles ! |
+| `narr_gameover.wav` | narrator | slow, hopeless, final | La horde a eu raison de vous... |
+| `char_reload_1.wav` | survivor | quick, focused, under fire | Je recharge ! |
+| `char_reload_2.wav` | survivor | shouting to a teammate | Couvrez-moi, je recharge ! |
+| `char_empty.wav` | survivor | frustrated, alarmed | À sec ! Plus de balles ! |
+| `char_hurt_1.wav` | survivor | pained grunt, then the words | Argh ! Ils m'ont touché ! |
+| `char_hurt_2.wav` | survivor | angry, pushing back | Reculez, sales bêtes ! |
+| `char_down.wav` | survivor | weak, desperate, calling | Je suis à terre ! À l'aide ! |
+| `char_revive.wav` | survivor | breathing hard, determined | Je me relève, on reprend le combat ! |
+| `char_headshot_1.wav` | survivor | satisfied, sharp | En pleine tête ! |
+| `char_headshot_2.wav` | survivor | cold, relieved | Et un de moins ! |
+| `char_buy.wav` | survivor | grim satisfaction, low | Parfait, ça va faire mal. |
 
-### P2 — Zombies and people (dry voice, no words)
-| File | Content | Length |
-|---|---|---|
-| `zombie_groan_a.wav` … `_f.wav` | 6 different low, wet, hoarse groans (not cartoonish), idle | 1–2 s each |
-| `zombie_attack_a.wav` … `_c.wav` | 3 aggressive snarls/screams when attacking | 0.7–1 s |
-| `zombie_die_a.wav` … `_c.wav` | 3 short gurgling death rattles | 0.8–1.2 s |
-| `zombie_window_grab.wav` | one zombie bangs the window and snarls, muffled by glass | 1.5 s |
-| `player_hurt_a.wav` … `_d.wav` | 4 short pained grunts, adult man (a-b) and adult woman (c-d) | 0.4–0.6 s |
-| `player_down.wav` | a gasp then a weak groan, falling to the ground | 1.5 s |
-| `player_revive.wav` | a deep sharp breath, recovering | 1 s |
+Lengths: each file is as long as the sentence takes (about 1–5 s); the PA/narrator ones can breathe, the survivor ones are quick.
 
-### P3 — Ambiences (loops, seamless, 40–60 s)
-`amb_station_hall.wav` (large echoing hall, distant murmur and metallic creaks, pigeons, no clear words) · `amb_city_night.wav` (wind in narrow streets, distant dog, faint bell, insects) · `amb_city_day.wav` (light wind, distant birds, far traffic hum) · `amb_train_interior.wav` (inside a moving regional train: low rumble, rattles, no clacks) · `amb_wind_window.wav` (wind through a broken train window, steady).
+## 4. Part B — new sounds (optional, only after part A)
+Dry, mono WAV, same format, 4 variations `_a` `_b` `_c` `_d` where noted. These are NEW files: the game needs a small update to play them, so name them exactly.
+- `zombie_groan_a.wav` … `_f.wav`: 6 different low, wet, hoarse idle groans, human and damaged (not cartoonish), 1–2 s.
+- `zombie_attack_a.wav` … `_c.wav`: 3 aggressive snarls/screams, 0.7–1 s.
+- `zombie_die_a.wav` … `_c.wav`: 3 short death rattles, 0.8–1.2 s.
+- `zombie_window_grab.wav`: a zombie slaps a window and snarls, muffled by glass, 1.5 s.
+- `player_hurt_a.wav` … `_d.wav`: short pained grunts, no words (a–b a man, c–d a woman), 0.4–0.6 s.
+- `player_down.wav` (a gasp then a weak groan, 1.5 s) and `player_revive.wav` (a deep sharp breath, 1 s).
+- `pa_cut.wav`: the PA woman starts « Mesdames et messieurs, nous vous informons… » then the loudspeaker cracks into static and distant screams, 3 s.
 
-### P4 — Footsteps and small details (short, dry; give 4 variations `_a`–`_d` for each footstep)
-`step_stone_a.wav`… (cobblestones, leather boots) · `step_wood_a.wav`… (wooden floor inside a building) · `step_metal_a.wav`… (train floor) · `step_platform_a.wav`… (concrete platform) · `step_gravel_a.wav`… (railway ballast) · `roof_step.wav` (heavy step on a metal roof, hollow) · `train_door_forced.wav` (metal door forced open, bang and screech) · `window_smash.wav` (a train window smashed from outside, glass falls inside) · `tram_bell.wav` (tram bell, two rings) · `tram_horn.wav` (short tram warning horn) · `door_wood_open.wav` · `door_wood_close.wav` · `pickup_item.wav` (short, satisfying, small) · `heartbeat_low.wav` (loop of a slow heartbeat, 4 s, for low health).
-
-## 4. What to give back
-1. All the files above (start with P1, then P2, P3, P4), each downloadable, named exactly.
-2. At the end a `manifest.json` listing every file: `{ "file": "...", "text": "<the French text, if a voice>", "loop": true/false, "notes": "..." }`.
-3. Tell me which lines you changed (if a text sounded wrong in French) and which sounds you could not produce.
-
-## 5. Direction notes
-- Mood: serious and tense, never funny. Voices natural, not theatrical, except the zombies.
-- The announcer stays calm even when the situation turns bad: that contrast is the point.
-- Zombies are former citizens: human voices, damaged, not monsters.
+## 5. What to give back
+1. The 28 files of part A (then part B), each downloadable, named exactly.
+2. A `manifest.json` listing every file: `{ "file": "...", "speaker": "...", "text": "..." }`.
+3. Tell me which texts you changed (if one sounded wrong in French) and what you could not produce.

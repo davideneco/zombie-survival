@@ -2,6 +2,10 @@
 
 Chaque changement est poussé sur `main` (déploiement Render) avec un nouveau numéro de version et sa description ici.
 
+## v0.86.2 (2026-11-10)
+- Le dossier de commande pour Google AI Studio (`docs/AI_STUDIO_BRIEF.md`) est refait autour des 28 voix déjà en jeu (annonces du train et du tram, narrateur, voix du survivant) : mêmes noms de fichiers, textes exacts, locuteur et ton de chaque réplique, format demandé. Les fichiers rapportés remplacent les voix de synthèse actuelles sans changer le code. Les nouveaux sons (zombies, joueur) sont en option, en seconde partie.
+- Aucun changement de jeu. Vérifié : le jeu fusionné avec le travail de Gemini démarre avec un seul pistolet, les 53 sons passent le test sans erreur ; la liste des 28 fichiers vient du script de génération. Non vérifié : le résultat d'AI Studio (pas encore reçu) et la conversion des fichiers rapportés.
+
 ## v0.86.1 (2026-11-10)
 - On démarre maintenant avec un seul pistolet de base, tiré au hasard pour chaque joueur parmi le Colt M1911 et l'AREX ZERO 1 (plus de M4A1 au départ) ; les autres armes s'achètent au mur ou se trouvent dans la boîte mystère. La liste est dans `startPistols` (config).
 - Train de l'intro : les portes entre les voitures étaient en partie bouchées par une plaque beige à bord diagonal (un habillage mal découpé) ; l'ouverture est maintenant dégagée entre chaque voiture.
