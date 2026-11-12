@@ -2,6 +2,11 @@
 
 Chaque changement est poussé sur `main` (déploiement Render) avec un nouveau numéro de version et sa description ici.
 
+## v0.87.1 (2026-11-12)
+- Nouveau dossier pour faire l'intro vidéo avec Google AI Studio (`docs/AI_STUDIO_VIDEO.md`) : une vidéo d'environ 56 s en 7 plans de 8 s (train de nuit, couloir, zombie à la vitre, zombie dans l'allée, arrivée à l'aube sous la verrière, quai, façade de la gare), avec pour chaque plan l'image de départ, le texte à donner à Veo, le bloc de style commun, les voix et sons à placer au montage, des plans de remplacement et la marche à suivre pour assembler.
+- Les 14 images de référence sont de vraies captures du jeu (sans interface), prises à l'aube, au crépuscule et de nuit ; elles sont fournies à part dans un dossier à télécharger, pas dans le dépôt.
+- Aucun changement de jeu. Vérifié : images regardées une à une sur planches ; le test de capture (caméra libre, interface masquée) tourne sans erreur. Non vérifié : le résultat de Veo (pas encore essayé).
+
 ## v0.87.0 (2026-11-12)
 - **Partie A du brief audio (`docs/AI_STUDIO_BRIEF.md`)** : régénération des 28 voix françaises avec découpage prosodique par proposition, respirations naturelles, chuchotement spectral (`intro_roof`), panique montante (`intro_pa_panic`), grognement de douleur réel (`char_hurt_1`) et résonance grave du narrateur.
 - **Partie B du brief audio (20 nouveaux sons)** : génération et intégration en jeu des 6 râles de zombies (`zombie_groan_a..f`), 3 cris d'attaque (`zombie_attack_a..c`), 3 râles d'agonie (`zombie_die_a..c`), prise de fenêtre étouffée par la vitre (`zombie_window_grab`), 4 cris courts de douleur homme/femme (`player_hurt_a..d`), mise à terre (`player_down`), réanimation (`player_revive`) et annonce PA interrompue par les grésillements et les cris (`pa_cut`), accompagnés de `manifest.json`.
