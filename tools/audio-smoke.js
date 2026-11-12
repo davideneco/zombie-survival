@@ -12,14 +12,10 @@ for (const n of names) {
   try { s[n](...(args[n] || [])); } catch (e) { failed.push(`${n}: ${e.message}`); }
 }
 // engines and loops are objects with start/stop : build them and stop them again
-for (const make of ['createTramEngine', 'createTrainSound', 'createStationAmbience', 'createCityAmbience']) {
-  try { const o = s[make](); o?.start?.(); o?.update?.(); o?.stop?.(); } catch (e) { failed.push(`${make}: ${e.message}`); }
-}
-for (const surf of ['stone', 'wood', 'metal', 'platform']) {
-  try { s.step(surf, 0.8, true); } catch (e) { failed.push(`step(${surf}): ${e.message}`); }
+for (const make of ['createTramEngine', 'createTrainSound']) {
+  try { const o = s[make](); o?.stop?.(); } catch (e) { failed.push(`${make}: ${e.message}`); }
 }
 for (const kind of ['car', 'moto', 'bike', '4x4']) {
-  try { const o = s.createEngine(kind); o?.set?.(0.5, 0.5, 0.5, 0.5); o?.stop?.(); } catch (e) { failed.push(`createEngine(${kind}): ${e.message}`); }
+  try { const o = s.createEngine(kind); o?.stop?.(); } catch (e) { failed.push(`createEngine(${kind}): ${e.message}`); }
 }
-s.stopVoices?.();
 return { ctx: s.ctx?.state ?? 'none', sounds: names.length, failed };

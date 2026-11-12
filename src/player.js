@@ -514,7 +514,7 @@ export class Player {
         else if (w.reserve > 0) { this.reload(); break; }
         else { // chargeur et réserve vides : coup de couteau à la place du clic à vide (maintenu : un coup toutes les cooldown s)
           this.nextShot = now + 0.1;
-          if (this.meleeT < 0 && now >= this.nextMelee && !this.melee(now)) { this.nextShot = now + 0.3; this.game.sfx.empty(); this.game.sfx.charVoice?.('empty', 0.85); }
+          if (this.meleeT < 0 && now >= this.nextMelee && !this.melee(now)) { this.nextShot = now + 0.3; this.game.sfx.empty(); }
           break;
         }
         if (cfg.type === 'semi') { this.mouseDown = false; break; } // une balle par clic
@@ -524,13 +524,9 @@ export class Player {
     // ---- couteau : fente, instant de la touche, animation ----
     this.updateMelee(dt, now);
 
-    // ---- caméra & bruits de pas ----
+    // ---- caméra ----
     this.recoil *= Math.max(0, 1 - dt * 8);
-    const prevBob = this.bobT;
     this.bobT += dt * (sprinting ? 12 : 8) * (moving && onGround ? 1 : 0);
-    if (moving && onGround && !veh && !this.vault && Math.floor(this.bobT / Math.PI) > Math.floor(prevBob / Math.PI)) {
-      this.game.sfx.step?.(this.surfaceAt(), this.downed ? 0.35 : 0.72, sprinting);
-    }
     const bob = moving && onGround ? Math.sin(this.bobT) * (sprinting ? 0.06 : 0.035) : 0;
     const eyeH = (this.downed ? 0.55 : P.eye) + (this.vault ? CONFIG.vault.camLift * Math.sin(Math.PI * Math.min(1, this.vault.t / this.vault.dur)) : 0);
     let sh = this.game.shake || 0;
@@ -899,17 +895,6 @@ export class Player {
     return true;
   }
 
-  surfaceAt() {
-    if (this.onTram) return 'metal';
-    const w = this.world;
-    if (w?.roomOf?.(this.pos.x, this.pos.z) >= 0) return 'wood';
-    if (w?.gare?.inArea?.(this.pos.x, this.pos.z)) {
-      const zn = w.zoneNames?.[w.gare.zoneOf(this.pos.x, this.pos.z)] || '';
-      if (zn === 'Quais') return 'platform';
-    }
-    return 'stone';
-  }
-
   reload() {
     const cfg = this.curCfg;
     const w = this.curW;
@@ -918,7 +903,6 @@ export class Player {
     w.reloading = true;
     w.reloadT = 0;
     this.game.sfx.reload(cfg.cat, cfg.reloadTime);
-    this.game.sfx.charVoice?.('reload', 0.8);
   }
 
   throwGrenade() {
@@ -936,9 +920,6 @@ export class Player {
   // Atterrissage après `air` s en l'air et une chute de `drop` m : le PHD Flopper déclenche son onde explosive si le saut est parti
   // d'un sprint ou si la chute dépasse fallHeight. Ni en moto, ni à terre, avec une recharge de cooldown s.
   onLand(air, drop) {
-    if (air > 0.18 && !this.vehicle && !this.dead) {
-      this.game.sfx.step?.(this.surfaceAt(), Math.min(1, 0.65 + drop * 0.15), true);
-    }
     const F = CONFIG.phd;
     if (!this.perks.phdflopper || this.vehicle || this.downed || this.dead || this.flopCd > 0 || air < F.minAir) return;
     if (!this.jumpSprint && drop < F.fallHeight) return;
@@ -964,8 +945,6 @@ export class Player {
       } else {
         this.game.gameOver();
       }
-    } else {
-      this.game.sfx.charVoice?.('hurt', 0.85);
     }
   }
 
@@ -976,7 +955,6 @@ export class Player {
     this.downed = true;
     this.bleedout = 45;
     this.health = 0;
-    this.game.sfx.charVoice?.('down', 0.95);
     this.game.perkFx?.onDown(); // Pierre tombale : la tombe garde les atouts
     if (!this.game.blessed) this.clearPerks(); // à terre : on perd tous ses atouts (sauf sous la Bénédiction de l'Aube)
     if (solo && hadQR) {
@@ -994,7 +972,6 @@ export class Player {
     this.selfRevive = 0;
     this.health = Math.min(50, this.maxHealth);
     this.lastHurt = this.game.time;
-    this.game.sfx.charVoice?.('revive', 0.9);
     this.game.hud.announce('RÉANIMÉ !', 'Reprenez le combat !', 2500);
   }
 }

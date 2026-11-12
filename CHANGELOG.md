@@ -2,6 +2,11 @@
 
 Chaque changement est poussé sur `main` (déploiement Render) avec un nouveau numéro de version et sa description ici.
 
+## v0.88.1 (2026-11-12)
+- Retour aux sons d'avant Gemini, à ta demande : les voix françaises (annonces du train et du tram, narrateur, survivant), les cris de zombies, les bruits de pas et les ambiances de la gare et de la ville ajoutés en v0.86.0 et v0.87.0 sont retirés (77 fichiers sons, leur code et leurs appels dans le jeu). Les sons de synthèse d'avant et tes musiques (`public/music/`, inchangées) restent.
+- Conservé : le pistolet de départ au hasard, le passage entre les wagons réparé, la documentation et les outils ajoutés depuis.
+- Vérifié : build ; intro jouée 30 s et départ sur l'île sans erreur ; les 46 sons d'avant appelés un par un sans erreur. Non vérifié : écoute réelle.
+
 ## v0.88.0 (2026-11-12)
 - Mémoire technique du projet : nouveau `docs/ARCHITECTURE.md` (conventions de code, chaîne de rendu, mécanismes de performance et budgets, génération des bâtiments et des intérieurs, déterminisme, systèmes de progression, limites pour étendre la carte à toute la ville). README, `AGENTS.md` et `CLAUDE.md` mis à jour et renvoient vers ce document.
 - Documentation officielle téléchargée dans la branche `reference-docs` (three.js r170, Vite 6.4.3, ws 8.22.0, Playwright 1.63.0, MDN : Web Audio, WebGL, WebSocket), aux versions utilisées par le jeu ; `tools/fetch-reference-docs.sh` la régénère.

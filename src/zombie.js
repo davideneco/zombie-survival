@@ -368,7 +368,6 @@ export class Zombie {
       this.dead = true;
       this.deathT = 0;
       this._decal = false;
-      this.onEvent('die', this);
       if (isHead) {
         this.headGroup.visible = false; // tête explosée
         fx.blood(this.pos.x, this.pos.y + 1.55, this.pos.z, true);
@@ -740,7 +739,6 @@ export class Zombie {
       }
     } else if (inRange && this.attackCd <= 0) {
       this.attackWindup = 0.35;
-      this.onEvent('attack', this);
     }
 
     // ----- Pose -----
