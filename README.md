@@ -6,7 +6,7 @@ The game's text and menus are in French.
 
 ## How it works
 
-You start at place du Marché-Neuf with a pistol, an assault rifle and 500 points. Zombies come in rounds that get bigger, faster and tougher. Survive as long as you can.
+By default the game opens on a ~95 s **intro on a regional train** arriving at night at the Gare de Strasbourg (zombies along the tracks and at the windows), then round 1 starts on the platforms; a tram (line C) takes you to the Grande Île. The lobby also offers a start at Gare Centrale or a classic start on the island. Everyone starts with **one random base pistol** and 500 points. Zombies come in rounds that get bigger, faster and tougher. Survive as long as you can.
 
 **Earning points**: hit a zombie (10), kill it (60), headshot kill (100), revive a teammate (250).
 
@@ -109,13 +109,16 @@ Drop `theme.mp3` (or `.ogg`, `.m4a`, `.wav`) in `public/music/` to replace the s
 | `src/` | The game (ES modules); balance in `src/config.js` |
 | `server/` | Multiplayer relay (`rooms.mjs`) and production server (`prod.mjs`) |
 | `public/` | Map (`data/area.json`), textures, music |
-| `tools/` | OSM extraction, doc generation, stuck detection |
-| `docs/` | Reference, annotated map, CSV |
-| `CLAUDE.md` | Development rules and architecture map for Claude Code (`AGENTS.md` points to it) |
+| `src/gare/` | The Gare de Strasbourg area (separate playable area at its real coordinates) |
+| `tools/` | Data extraction (OSM, IGN, SNCF), doc generation, map scan, perf probe, release script (`ship.mjs`) |
+| `docs/` | `ARCHITECTURE.md` (technical memory: rendering, city generation, performance, scaling), `REFERENCE.md` (generated balance tables), CSV, specs, audio contract |
+| `AGENTS.md` | Rules shared by every AI agent (who owns which files, git workflow) |
+| `CLAUDE.md` / `GEMINI.md` | Instructions for Claude Code (code) and Gemini (sound) |
 | `.claude/agents/` | Claude Code subagents: `explorer`, `game-designer`, `gameplay-coder`, `playtest-bug-hunter`, `gui-test-debugger` |
-| `.claude/skills/` | Claude Code skills: `play-test` (headless harness), `map-scan`, `weapon-sheet`, `ship` |
+| `.claude/skills/` | Claude Code skills: `play-test` (headless harness), `perf-check`, `map-scan`, `weapon-sheet`, `ship` |
+| branch `reference-docs` | Official docs of three.js r170, Vite, ws, Playwright and MDN (Web Audio, WebGL), pinned to the versions used |
 
-To check a change: `npx vite build`, then play a game with `?debug` in the URL.
+To check a change: `npx vite build`, then play a game with `?debug` in the URL (`?debug&intro`, `?debug&gare` for the other starts). Performance: `tools/perf-probe.js` (see `.claude/skills/perf-check`).
 
 ## Credits
 

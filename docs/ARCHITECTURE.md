@@ -1,0 +1,68 @@
+# Architecture — technical memory of the project
+
+Long-term reference for anyone (human or agent) changing the engine, the city generation or the performance. Facts below were read from the code at **v0.87.1** (2026-11-12), with `file:line` pointers; re-check a pointer before relying on it, lines move. Balance values are in `src/config.js`, generated tables in `docs/REFERENCE.md`. Official library docs, pinned to the versions used: branch `reference-docs` (see its README).
+
+## 1. Stack and code conventions
+- Three.js **r170**, Vite **6**, `ws` **8.22** relay. ES modules, no framework, no bundler plugins. Entry `src/main.js` (top-level `await buildRealWorld`, `main.js:106`).
+- **Module pattern**: `installX(game, ctx)` attaches methods/state to the `game` object; `ctx` is the subset of `{ world, scene, hud, sfx, fx, camera, … }` it needs. About 20 installers, called in `main.js` (around lines 1710-1726 and 2240). New systems follow this pattern.
+- **Config**: every tunable in `src/config.js` (`CONFIG.x.y`), never a literal in logic (known exception: the round zombie count `(4 + 3r)` in `main.js` ~1051).
+- **Language**: game text French; code, new comments, docs, commits English (old code has French comments: keep them). Versions tagged in comments `(v0.NN.N)` where behaviour changed.
+- **Networking**: JSON `{ t, … }` over WebSocket `/mp`; the relay adds `from`, routes optional `to`, 4 players. `net.on(type, fn)` / `net.onHost(type, fn)` (host-only senders). Host-authoritative: clients send `*_req` / `z_hit`, the host answers with state. Message families: `z_*` zombies, `v_*` vehicles, `t_*` tram, `tn_*` train intro, `xf_*` transfer, `box_*`, `pap_*`, `pu_*`, `finale_*`, `dbg_*` (host only).
+- **Determinism**: map generation uses Mulberry32 `rnd` seeded `20240611` (`realworld.js:179`) plus `rndOuter` 77002, `rndIso` 77001, `rndExtra` 77003. Removed/ghost buildings still consume `rnd` so the sequence stays aligned (`architecture.js:707-721`). Relief and interiors use position hashes. Visual-only `Math.random`: rubble, window cracks, interior floor dirt. Every client builds the same city from the same data: never add `Math.random` to anything that affects collision, nav, zones or doors.
+
+## 2. Rendering pipeline
+- **Renderer** (`main.js:49-54`): antialias, `high-performance`, sRGB output, tone mapping re-applied by `graphics.js:116-124` from `CONFIG.graphics.tone` (ACES 1.05 × brightness × zone exposure). `renderer.info.autoReset = false` (`graphics.js:296`).
+- **Scene**: background `0x04060c`, `FogExp2(0x050810, 0.021)`, camera far **170 m**. Lights: `HemisphereLight` 0.28 + one shadow-casting `DirectionalLight` "moon" 0.42 following the player (snapped), shadow camera ±45 m.
+- **Light rule**: never add/remove/hide a light at runtime (every shader would recompile). Local lights = a **pool of 8 `PointLight`s** reassigned every 0.4 s to the nearest entries of `world.lightSources` (`realworld.js:2240-2261`); new lamps register a light *source*, never a light. Plus the player's torch, muzzle flash, explosion light, vehicle headlights.
+- **Quality levels** (`CONFIG.graphics`, `applyQuality` in `graphics.js:199-218`; default 1 "Normale"):
+
+| Level | pixel ratio | shadows | shadow map | shadow every | facade relief range | trees | post |
+|---|---|---|---|---|---|---|---|
+| 0 Rapide | 0.75 | off | 1024 | 2 frames | 30 m | balls | no |
+| 1 Normale | 1 | PCF | 1024 | 2 frames | 60 m | cards | no |
+| 2 Haute | device ≤ 2 | PCFSoft | 2048 | every frame | 110 m | cards + branches | yes |
+
+  `shadowMap.autoUpdate = false`; the loop sets `needsUpdate` every `shadowEvery` frames (`main.js` ~2705).
+- **Post (Haute only)**, custom, no EffectComposer (`graphics.js:162-185, 304-317`): 4× MSAA HalfFloat target (`isXRRenderTarget` trick so materials tone-map before writing), final quad = sRGB + 32³ LUT grade + halo (threshold at half resolution, 4 separable gaussian passes). Skipped above 4.3 Mpx, 2× MSAA above 2.4 Mpx. Vignette and grain are CSS (`#cinema`).
+- **Environment**: 512×256 canvas sky → PMREM → `scene.environment` (target reused), rebuilt when sky `k` moves > 0.06 (`graphics.js:127-159`, `envmap.js`).
+- **Sky / day-night**: `sky.js` dome (`ShaderMaterial`, renderOrder 1000, no fog); cycle in `summit.js:146-168` (14 real minutes per day; `k` 0 night, 0.5 dawn, 1 day); `applySky` drives background, fog, hemi, moon, interior daylight, lamp scale. `holdNight(hour)` freezes it (intro).
+- **Frame loop** (`main.js` ~2691-2708): `game.update(dt ≤ 0.05)` → HUD, clock, scoreboard, chat, music mood → shadow flag → `gfx.update` (exposure, sky, trees, contact shadows) → `gfx.render()`. Inside `game.update`: vehicles, transfer, intro, ride zombies, train, player, `world.setLocalArea(world.areaOf(player))`, summit, perks, remotes, `world.update` (LOD), moon, levels, nav flow field, grenades, box/PaP, rounds, zombies, power-ups.
+- **Areas**: `areaOf(x, z)` → `'gare'` (station rectangle and the intro corridor) or `'island'`; `setLocalArea` toggles `visible` on the island roots vs `gare.root` (local only, no-op when unchanged).
+- **Shader patches**: terrain displacement (`terrain.js:84-114`, half-float height texture, 2 m cells, static scenery only; dynamic bodies use `terrainY`), facade detail (`architecture.js:387-394`), interior daylight dimming (`interiors.js:283-290`), ground SDF of facade footprints at 1 m (`ground.js`). Every `onBeforeCompile` patch must set `customProgramCacheKey`.
+- **Shader precompile** (`main.js` ~2548-2589): temporary zombies/boss/avatars, hidden objects shown, `frustumCulled` off, `gfx.compile()` + one render, so the first fight does not stutter. Objects with `userData.lod` stay hidden.
+
+## 3. Performance mechanisms (and budgets)
+- **Budgets** (targets, see the `perf-check` skill): ≤ 300 draw calls and ≤ 1.5 M triangles per view at default quality, `game.update` p95 ≤ 4 ms, heap ≤ 400 MB, ≤ 60 shader programs, 60 FPS on a mid-range PC.
+- **Measured v0.87.1, island start** (`tools/perf-probe.js`): **858 draw calls, 2.29 M triangles**, 11 343 meshes (6 276 visible, 4 083 InstancedMesh / 471 k instances), 5 863 geometries, 373 textures, 85 programs, **756 MB heap**, update 0.6 ms median / 2.9 ms p95. Far over budget: this is the first optimisation target.
+- **InstancedMesh**: relief (windows, balconies, cornices, plinths, quoins: `relief.js:163`), props (`props.js:328`), trees, manholes, particles/decals, contact shadows, interior lamps, tram network, train, ride scenery, station.
+- **Merged geometry**: buildings = one merged mesh **per material per 160 m tile** (`architecture.js:812-873`, the comment there says 96 m: the code uses 160), walls with 2 depth-offset ranks, roofs 4 (z-fighting). `mergeGeometries` also in relief, characters, train, rail, station.
+- **Distance LOD / culling** (checked every 0.25 s unless noted): relief tiles 32 m (windows) / 64 m (rest) within the quality range; interiors 64 m tiles within 70 m; station items 60 m; ride scenery 300 m chunks within 190 m; rail chunks 200 m; zombies not drawn/animated beyond 170 m; contact shadows 45 m.
+- **Known costs** (from the code, not profiled): props and `instanced()` meshes have `frustumCulled = false` (drawn in every direction), every tile is built up front (no streaming), several full-grid nav/zone passes at load, ~19 facade canvas sets drawn at start, `assignLights` sorts all light sources every 0.4 s, `CONFIG.gare.lightsMax` is unused.
+
+## 4. City generation (Grande Île)
+- **Data**: `public/data/area.json` (1.4 MB) from `tools/fetch-osm.mjs` (OSM + IGN BD TOPO heights `ignH`). Frame: origin `center` lat/lon, **x east, z south, metres**; half extent 820 × 560 m. Content: 3 186 buildings (2 970 with `ignH`), 764 building parts, 62 passages, 61 water polygons, 2 127 trees, 159 lamps, ~1 950 furniture items, rails, platforms (`roads`, `parks`, `barriers` are empty). Loaded once with the station data (`realworld.js:178-191`), rings repaired by `stitchRings`.
+- **Building → mesh** (`realworld.js:470-521`, `architecture.js:684-772`):
+  1. Buildings with `building:part`s (cathedral, churches) are drawn from the parts.
+  2. Storeys from `building:levels`, else `round((h − 4.2) / 3.25) + 1` (ground floor 4.2 m, upper floors 3.25 m, bays 4 m), capped 1–8 by `ignH`.
+  3. Style `styleFor` (`architecture.js:694`): gothic, modern, timber (colombage), sandstone, plaster — from tags, else `rnd()`; shop front on the ground floor when commercial (or 38 % near the start).
+  4. Walls = quads per wall slice with vertex tint and a foot ambient-occlusion ramp; passages cut openings.
+  5. Roof: flat, pyramidal/dome/onion/cone, skillion, mansard ring, gabled (+ dormers, chimneys); hipped variants become gabled or mansard by half-width ≤ 9.5 m.
+  6. Relief (`relief.js`, instanced): window trims (`WIN` table), balconies, cornices, floor bands, quoins, plinths, pipes, chimneys.
+  7. Facade textures: canvas per style/material (map 768×624, bump ½, emissive ¼) + 7 PBR JPG sets (1024²).
+- **Zones and doors** (`realworld.js:802-1373`): zones flood-filled on the nav grid from seeds in `CONFIG.sector` (origin zones capped at 95 m); a door wherever two reachable zones touch (one per pair); price = max of the two zones' `doorPrice`. Items (`'station'`, `'wall:<id>'`, `'perk:<id>'`, `'box'`) placed by `spotIn` (`realworld.js:1480`), ≥ 5 m apart.
+- **Collision** (`collision.js`): 2D segments (height band `y0`/`h`, kind wall/prop) and circles (vaultable ≤ 1.15 m) in a 4 m hash grid (`ix*4096+iz`); `setDynamic` boxes outside the grid; extra playable rectangles via `bounds` (station).
+- **Navigation** (`nav.js`): grid 0.75 m (≈ 2 187 × 1 493 cells for the island), `Uint8Array blocked` (2 = vaultable), double-buffered `Int32Array` flow field, bounded per call (range 160 m, 25 000 cells, every 0.2 s, `maxCost` 1300). Built 2–3 times at load (before/after interiors, after sealing).
+- **Interiors** (`interiors.js`, `realworld.js:449-469, 2124-2175`): a building gets a ground-floor room if height ≥ 4 m, area 25–3 000 m², the 0.22 m inset is valid and an edge faces open street (`chooseDoor`). Door cut 2.4 × 3.6 m; parquet or tile floor (subdivided ≤ 2.5 m for the terrain shader), wainscot, shelves (50 %), one ceiling lamp (light source + instanced fixture); 64 m tiles, 4 buckets (walls, two floors, furniture). Rooms are hollowed in the nav grid only at the final build; a room whose door is blocked, invaded by a prop or unreachable is **sealed** with a closed door. Each room takes the zone of its street.
+- **Station** (`src/gare/`): separate area at real coordinates (x −1260…−800, z −620…−60), own nav grid; `plan.js` is pure geometry in a local frame (u along the tracks, v toward the forecourt; `plan.W(u, v)` → world), `build.js` meshes, `index.js` zones/doors/items/spawns. Data `public/data/gare.json`, `rail.json` (`tools/fetch-rail.mjs`: SNCF tracks, OSM outlines, IGN heights).
+
+## 5. Progression systems (all exist)
+Doors and zones (`CONFIG.sector`, 30 zones, `basePrice` 750, step 250) · wall weapons (`CONFIG.weapons[id].price/ammoPrice`) · ammo stations · mystery box (`CONFIG.box`, 950, weighted pool, moves after 1..30 uses) · Pack-a-Punch I/II/III (5 000 / 10 000 / 20 000, cathedral) · 7 classic perks + 9 `perkFx` perks, 4 slots · power-ups (`CONFIG.powerups`) · rounds (health 70 + 30/round to round 10 then ×1.1, speed 1.6 + 0.12 r ≤ 3.8, 22 alive max, runners/crawlers from round 4) · finale (round 12, 18 zones) and Act V.
+
+## 6. Limits for scaling to the whole city
+- One monolithic `buildRealWorld` (~2 340 lines) and one data file; every tile built at load, only `visible` toggled.
+- Island-sized full grids: nav at 0.75 m would be ~10× larger for the city; `Int8Array` zone labels cap zones at 127; hash keys `*4096` / `*8192` cap coordinates.
+- Hand-placed coordinates: zones, start hints, spawn points, cathedral, Homme de Fer, station, finale.
+- Plan to lift them: data split into tiles (one JSON per ~500 m tile, generated by the fetch tool), deterministic per-tile generation (seed = hash(tile)), per-tile nav and collision with portals between tiles, load/unload around the players, pooled GPU buffers, zones defined per district in data rather than in config.
+
+## 7. Tools
+`tools/ship.mjs` (release), `tools/perf-probe.js` (counts, see `perf-check`), `tools/stuck-scan.mjs` (map defects), `tools/mp-smoke.mjs` (3 tabs), `tools/audio-smoke.js`, `tools/fetch-osm.mjs` / `fetch-rail.mjs` (data), `tools/make-docs.mjs` (REFERENCE.md), `tools/fetch-reference-docs.sh` (branch `reference-docs`), `.claude/skills/play-test/harness.mjs` (headless game).

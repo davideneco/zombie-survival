@@ -824,7 +824,7 @@ export function createArchitecture({ renderer, plasterImg, plaster2Img, roofP, r
         scene.add(m);
         return m;
       };
-      // Découpe en tuiles de 96 m : la caméra ne dessine que les morceaux de ville devant elle et à portée du brouillard
+      // Découpe en tuiles de 160 m (T ci-dessous) : la caméra ne dessine que les morceaux de ville devant elle et à portée du brouillard
       // (sinon toute la ville, ~600 000 triangles, était dessinée à chaque image).
       const T = 160;
       // Deux triangles coplanaires de même matériau dans deux tuiles voisines (bâtiments OSM aux emprises qui se chevauchent : toits, façades) se

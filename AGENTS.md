@@ -20,6 +20,11 @@ Never edit the other owner's files. Need something from them? Add a line to the 
    `notes.txt` = French player-facing bullets ending with "Vérifié : … / Non vérifié : …" (no heading). Details: header of `tools/ship.mjs`.
 3. Ship small and often: the shorter a branch lives, the fewer conflicts. If the rebase reports a conflict, nothing is lost: merge `origin/main` by hand.
 
+## Technical memory (read before changing the engine or the city)
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md): conventions, rendering pipeline, performance mechanisms and budgets, city/building/interior generation, progression systems, scaling limits.
+- Official docs pinned to the versions used: branch `reference-docs` (`git fetch origin reference-docs`, then `git show origin/reference-docs:three-r170/api/en/objects/InstancedMesh.html`). Prefer them to memory for three.js r170 APIs.
+- Performance budgets and how to measure: `.claude/skills/perf-check/SKILL.md` (`tools/perf-probe.js`).
+
 ## Rules for everyone
 - Be honest about what was verified (build, headless run, screenshots) and what was not.
 - Balance values live in `src/config.js`. `docs/REFERENCE.md` and `docs/csv/` are generated (`node tools/make-docs.mjs`), never edited by hand.

@@ -2,6 +2,12 @@
 
 Chaque changement est poussé sur `main` (déploiement Render) avec un nouveau numéro de version et sa description ici.
 
+## v0.88.0 (2026-11-12)
+- Mémoire technique du projet : nouveau `docs/ARCHITECTURE.md` (conventions de code, chaîne de rendu, mécanismes de performance et budgets, génération des bâtiments et des intérieurs, déterminisme, systèmes de progression, limites pour étendre la carte à toute la ville). README, `AGENTS.md` et `CLAUDE.md` mis à jour et renvoient vers ce document.
+- Documentation officielle téléchargée dans la branche `reference-docs` (three.js r170, Vite 6.4.3, ws 8.22.0, Playwright 1.63.0, MDN : Web Audio, WebGL, WebSocket), aux versions utilisées par le jeu ; `tools/fetch-reference-docs.sh` la régénère.
+- Nouvel outil de mesure `tools/perf-probe.js` et skill `perf-check` (appels de dessin, triangles, objets, mémoire, coût de la simulation). Premières mesures : départ sur l'île 858 appels de dessin et 2,29 M de triangles (budget 300 et 1,5 M), 756 Mo de mémoire ; gare 319 appels ; intro 110 appels.
+- Aucun changement de jeu (un commentaire de code corrigé). Vérifié : build ; outil de mesure lancé sur l'île, la gare et l'intro ; branche de docs poussée (509 fichiers). Non vérifié : performances sur une vraie carte graphique.
+
 ## v0.87.1 (2026-11-12)
 - Nouveau dossier pour faire l'intro vidéo avec Google AI Studio (`docs/AI_STUDIO_VIDEO.md`) : une vidéo d'environ 56 s en 7 plans de 8 s (train de nuit, couloir, zombie à la vitre, zombie dans l'allée, arrivée à l'aube sous la verrière, quai, façade de la gare), avec pour chaque plan l'image de départ, le texte à donner à Veo, le bloc de style commun, les voix et sons à placer au montage, des plans de remplacement et la marche à suivre pour assembler.
 - Les 14 images de référence sont de vraies captures du jeu (sans interface), prises à l'aube, au crépuscule et de nuit ; elles sont fournies à part dans un dossier à télécharger, pas dans le dépôt.
