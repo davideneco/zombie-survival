@@ -1191,6 +1191,8 @@ const game = {
       else if (name === 'glass') { sfx.glass(v); sfx.groan(Math.min(1, v * 1.4)); }
       else if (name === 'rumble') sfx.rumble(v);
       else if (name === 'emerge') { sfx.dirt(v); sfx.groan(Math.min(1, v * 1.4)); }
+      else if (name === 'attack') sfx.zombieAttack?.(v);
+      else if (name === 'die') sfx.zombieDie?.(v);
     };
     const crawl = !knight && !pest && this.round >= Zc.crawlerRound && Math.random() < Zc.crawlerChance;
     const nm = this.summitFx?.nightHealthMult?.() ?? 1; // cycle jour / nuit : un peu plus de vie la nuit
@@ -1963,6 +1965,8 @@ function setupNetworkHandlers(net) {
       else if (name === 'glass') { sfx.glass(v); sfx.groan(Math.min(1, v * 1.4)); }
       else if (name === 'rumble') sfx.rumble(v);
       else if (name === 'emerge') { sfx.dirt(v); sfx.groan(Math.min(1, v * 1.4)); }
+      else if (name === 'attack') sfx.zombieAttack?.(v);
+      else if (name === 'die') sfx.zombieDie?.(v);
     };
     const z = m.angel ? new Angel(scene, spawn, m.hp, onEvent, m.id, {}) : m.tanner ? new Tanner(scene, spawn, m.hp, onEvent, m.id, {}) : m.boss ? new Boss(scene, spawn, m.hp, onEvent, m.id, {}) : new Zombie(scene, spawn, m.hp, m.spd, onEvent, m.id, { crawler: !!m.crawl, kind: m.kind || null });
     if (m.run) z.runner = true;

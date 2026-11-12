@@ -71,6 +71,8 @@ export function installRideZombies(game, { world, scene, sfx }) {
     else if (name === 'glass') { sfx.glass(v); sfx.groan(Math.min(1, v * 1.4)); }
     else if (name === 'rumble') sfx.rumble(v);
     else if (name === 'emerge') { sfx.dirt(v); sfx.groan(Math.min(1, v * 1.4)); }
+    else if (name === 'attack') sfx.zombieAttack?.(v);
+    else if (name === 'die') sfx.zombieDie?.(v);
   };
   const hp1 = () => game.zombieHealthAt(I.healthRound);
   const speed1 = () => Math.min(CONFIG.zombie.speedStart + I.healthRound * CONFIG.zombie.speedPerRound, CONFIG.zombie.speedMax) * (0.85 + Math.random() * 0.3);
@@ -99,7 +101,7 @@ export function installRideZombies(game, { world, scene, sfx }) {
     const p = game.player;
     t.walkToWorld(wo.u, wo.sd * Wd, 0, wp);
     const y = t.railY + (lay.winY0 + lay.winY1) / 2, v = Math.max(0, 1 - Math.hypot(wp.x - p.pos.x, wp.z - p.pos.z) / 40);
-    if (st === 1) { sfx.knock(v); sfx.glass(v * 0.25); return; }
+    if (st === 1) { if (sfx.zombieWindowGrab) sfx.zombieWindowGrab(v); else sfx.knock(v); sfx.glass(v * 0.25); return; }
     t.frame(wo.u, o2);
     trainVel(wo.u, cv); fx.setCarry(cv.x, cv.z);
     fx.glass(wp.x, y, wp.z, wo.sd * o2.tz, -wo.sd * o2.tx); // (the shards fly into the coach)
@@ -364,7 +366,7 @@ export function installRideZombies(game, { world, scene, sfx }) {
     while (Q.bang < Rf.bangs && tau >= Rf.bangAt + Q.bang * 0.55) { sfx.knock(Math.min(1, vol(last.uc - lay.h) * 1.4)); Q.bang++; }
     if (tau >= Rf.forceAt) {
       t.setTail((tau - Rf.forceAt) / 0.35);
-      if (!Q.forced) { Q.forced = true; const v = vol(last.uc - lay.h); sfx.knock(v); sfx.glass(v * 0.6); sfx.groan(v); }
+      if (!Q.forced) { Q.forced = true; const v = vol(last.uc - lay.h); sfx.knock(v); sfx.glass(v * 0.6); sfx.groan(v); sfx.paAnnounce?.('intro_pa_panic', 0.9, { at: 0.25 }); }
       while (Q.gang < Q.ng && tau >= Rf.forceAt + 0.5 + Q.gang * Rf.gangEvery) { spawnGang(); Q.gang++; }
     }
   };

@@ -2,6 +2,11 @@
 
 Chaque changement est poussé sur `main` (déploiement Render) avec un nouveau numéro de version et sa description ici.
 
+## v0.87.0 (2026-11-12)
+- **Partie A du brief audio (`docs/AI_STUDIO_BRIEF.md`)** : régénération des 28 voix françaises avec découpage prosodique par proposition, respirations naturelles, chuchotement spectral (`intro_roof`), panique montante (`intro_pa_panic`), grognement de douleur réel (`char_hurt_1`) et résonance grave du narrateur.
+- **Partie B du brief audio (20 nouveaux sons)** : génération et intégration en jeu des 6 râles de zombies (`zombie_groan_a..f`), 3 cris d'attaque (`zombie_attack_a..c`), 3 râles d'agonie (`zombie_die_a..c`), prise de fenêtre étouffée par la vitre (`zombie_window_grab`), 4 cris courts de douleur homme/femme (`player_hurt_a..d`), mise à terre (`player_down`), réanimation (`player_revive`) et annonce PA interrompue par les grésillements et les cris (`pa_cut`), accompagnés de `manifest.json`.
+- *Vérifié : `npx vite build` OK, 48 fichiers WAV (48 kHz, 16 bits, mono, crête -3,0 dBFS) générés dans `/home/david/Téléchargements/ai_studio_audio/` + 48 fichiers `.ogg` dans `public/sfx/` + `manifest.json`, 57 méthodes `Sfx` testées sans erreur / Non vérifié : sons non écoutés.*
+
 ## v0.86.2 (2026-11-10)
 - Le dossier de commande pour Google AI Studio (`docs/AI_STUDIO_BRIEF.md`) est refait autour des 28 voix déjà en jeu (annonces du train et du tram, narrateur, voix du survivant) : mêmes noms de fichiers, textes exacts, locuteur et ton de chaque réplique, format demandé. Les fichiers rapportés remplacent les voix de synthèse actuelles sans changer le code. Les nouveaux sons (zombies, joueur) sont en option, en seconde partie.
 - Aucun changement de jeu. Vérifié : le jeu fusionné avec le travail de Gemini démarre avec un seul pistolet, les 53 sons passent le test sans erreur ; la liste des 28 fichiers vient du script de génération. Non vérifié : le résultat d'AI Studio (pas encore reçu) et la conversion des fichiers rapportés.

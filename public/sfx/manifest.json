@@ -1,0 +1,242 @@
+[
+  {
+    "file": "intro_pa_1.wav",
+    "speaker": "PA",
+    "text": "Mesdames et messieurs, dans quelques minutes notre train arrivera en gare de Strasbourg, son terminus."
+  },
+  {
+    "file": "intro_pa_panic.wav",
+    "speaker": "PA",
+    "text": "Attention ! Ils sont dans la rame ! Fermez les portes !"
+  },
+  {
+    "file": "intro_slow.wav",
+    "speaker": "narrator",
+    "text": "Ralentissement. Obstacle sur la voie."
+  },
+  {
+    "file": "intro_windows.wav",
+    "speaker": "narrator",
+    "text": "Ils s'accrochent aux fenêtres ! Abattez-les avant qu'ils ne montent !"
+  },
+  {
+    "file": "intro_roof.wav",
+    "speaker": "narrator",
+    "text": "Écoutez... des pas sur le toit..."
+  },
+  {
+    "file": "intro_pa_2.wav",
+    "speaker": "PA",
+    "text": "Strasbourg. Strasbourg, terminus de ce train."
+  },
+  {
+    "file": "intro_arrival.wav",
+    "speaker": "narrator",
+    "text": "Strasbourg, terminus. Tout le monde descend."
+  },
+  {
+    "file": "tram_dep_gare.wav",
+    "speaker": "PA",
+    "text": "Tram C, direction Gare Centrale."
+  },
+  {
+    "file": "tram_dep_hdf.wav",
+    "speaker": "PA",
+    "text": "Tram C, direction Homme de Fer."
+  },
+  {
+    "file": "tram_arr_gare.wav",
+    "speaker": "PA",
+    "text": "Prochain arrêt : Gare Centrale."
+  },
+  {
+    "file": "tram_arr_hdf.wav",
+    "speaker": "PA",
+    "text": "Prochain arrêt : Homme de Fer."
+  },
+  {
+    "file": "narr_round_start.wav",
+    "speaker": "narrator",
+    "text": "Ils arrivent... Tenez bon."
+  },
+  {
+    "file": "narr_round_end.wav",
+    "speaker": "narrator",
+    "text": "Manche terminée. Reprenez votre souffle."
+  },
+  {
+    "file": "narr_max_ammo.wav",
+    "speaker": "narrator",
+    "text": "Munitions maximum !"
+  },
+  {
+    "file": "narr_instakill.wav",
+    "speaker": "narrator",
+    "text": "Mort instantanée !"
+  },
+  {
+    "file": "narr_nuke.wav",
+    "speaker": "narrator",
+    "text": "Bombe !"
+  },
+  {
+    "file": "narr_double.wav",
+    "speaker": "narrator",
+    "text": "Points doubles !"
+  },
+  {
+    "file": "narr_gameover.wav",
+    "speaker": "narrator",
+    "text": "La horde a eu raison de vous..."
+  },
+  {
+    "file": "char_reload_1.wav",
+    "speaker": "survivor",
+    "text": "Je recharge !"
+  },
+  {
+    "file": "char_reload_2.wav",
+    "speaker": "survivor",
+    "text": "Couvrez-moi, je recharge !"
+  },
+  {
+    "file": "char_empty.wav",
+    "speaker": "survivor",
+    "text": "À sec ! Plus de balles !"
+  },
+  {
+    "file": "char_hurt_1.wav",
+    "speaker": "survivor",
+    "text": "Argh ! Ils m'ont touché !"
+  },
+  {
+    "file": "char_hurt_2.wav",
+    "speaker": "survivor",
+    "text": "Reculez, sales bêtes !"
+  },
+  {
+    "file": "char_down.wav",
+    "speaker": "survivor",
+    "text": "Je suis à terre ! À l'aide !"
+  },
+  {
+    "file": "char_revive.wav",
+    "speaker": "survivor",
+    "text": "Je me relève, on reprend le combat !"
+  },
+  {
+    "file": "char_headshot_1.wav",
+    "speaker": "survivor",
+    "text": "En pleine tête !"
+  },
+  {
+    "file": "char_headshot_2.wav",
+    "speaker": "survivor",
+    "text": "Et un de moins !"
+  },
+  {
+    "file": "char_buy.wav",
+    "speaker": "survivor",
+    "text": "Parfait, ça va faire mal."
+  },
+  {
+    "file": "zombie_groan_a.wav",
+    "speaker": "zombie",
+    "text": "(grognement rauque et humide)"
+  },
+  {
+    "file": "zombie_groan_b.wav",
+    "speaker": "zombie",
+    "text": "(grognement rauque et humide)"
+  },
+  {
+    "file": "zombie_groan_c.wav",
+    "speaker": "zombie",
+    "text": "(grognement rauque et humide)"
+  },
+  {
+    "file": "zombie_groan_d.wav",
+    "speaker": "zombie",
+    "text": "(grognement rauque et humide)"
+  },
+  {
+    "file": "zombie_groan_e.wav",
+    "speaker": "zombie",
+    "text": "(grognement rauque et humide)"
+  },
+  {
+    "file": "zombie_groan_f.wav",
+    "speaker": "zombie",
+    "text": "(grognement rauque et humide)"
+  },
+  {
+    "file": "zombie_attack_a.wav",
+    "speaker": "zombie",
+    "text": "(feulement d'attaque agressif)"
+  },
+  {
+    "file": "zombie_attack_b.wav",
+    "speaker": "zombie",
+    "text": "(feulement d'attaque agressif)"
+  },
+  {
+    "file": "zombie_attack_c.wav",
+    "speaker": "zombie",
+    "text": "(feulement d'attaque agressif)"
+  },
+  {
+    "file": "zombie_die_a.wav",
+    "speaker": "zombie",
+    "text": "(râle d'agonie)"
+  },
+  {
+    "file": "zombie_die_b.wav",
+    "speaker": "zombie",
+    "text": "(râle d'agonie)"
+  },
+  {
+    "file": "zombie_die_c.wav",
+    "speaker": "zombie",
+    "text": "(râle d'agonie)"
+  },
+  {
+    "file": "zombie_window_grab.wav",
+    "speaker": "zombie",
+    "text": "(coup contre la vitre et grognement étouffé)"
+  },
+  {
+    "file": "player_hurt_a.wav",
+    "speaker": "survivor_m",
+    "text": "(cri court de douleur)"
+  },
+  {
+    "file": "player_hurt_b.wav",
+    "speaker": "survivor_m",
+    "text": "(cri court de douleur)"
+  },
+  {
+    "file": "player_hurt_c.wav",
+    "speaker": "survivor_f",
+    "text": "(cri court de douleur)"
+  },
+  {
+    "file": "player_hurt_d.wav",
+    "speaker": "survivor_f",
+    "text": "(cri court de douleur)"
+  },
+  {
+    "file": "player_down.wav",
+    "speaker": "survivor",
+    "text": "(suffocation puis gémissement faible)"
+  },
+  {
+    "file": "player_revive.wav",
+    "speaker": "survivor",
+    "text": "(grande inspiration brusque)"
+  },
+  {
+    "file": "pa_cut.wav",
+    "speaker": "PA",
+    "text": "Mesdames et messieurs, nous vous informons… (grésillements et cris lointains)"
+  }
+]

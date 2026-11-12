@@ -174,7 +174,7 @@ export function installIntro(game, { world, hud, sfx }) {
       else if (a.text) showSub(a.text, a.dur);
       // Trigger matching PA or narrator voice line for each intro event
       if (idx === 0) sfx.paAnnounce?.('intro_pa_1', 0.95, { at: 0.95 });
-      else if (idx === 1) sfx.paAnnounce?.('intro_pa_panic', 0.88, { at: 0.12 });
+      else if (idx === 1) sfx.paCut?.(0.92, { at: 0.05 });
       else if (idx === 2) sfx.narrate?.('intro_slow', 0.95, { at: 0.22 });
       else if (idx === 3) sfx.narrate?.('intro_windows', 1.0, { at: 0.12 });
       else if (idx === 4) sfx.narrate?.('intro_roof', 0.9, { at: 0.08 });

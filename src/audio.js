@@ -81,14 +81,26 @@ const CUSTOM_TRACKS = TRACK_DEFINITIONS[2].urls;
 // Armes sans profil propre
 const GUN_FALLBACK = { pistol: 'm1911', ar: 'rifle', smg: 'mp5', mg: 'm249', sniper: 'sniper' };
 
-// Pre-generated French voice Ogg clips in public/sfx/ (narrator, train/tram PA, and shared character voice)
+// Pre-generated French voice & sound Ogg clips in public/sfx/ (Part A: 28 voices, Part B: 20 new sounds)
 const VOICE_CLIPS = [
   'intro_pa_1', 'intro_pa_panic', 'intro_slow', 'intro_windows', 'intro_roof', 'intro_pa_2', 'intro_arrival',
+  'pa_cut',
   'tram_dep_gare', 'tram_dep_hdf', 'tram_arr_gare', 'tram_arr_hdf',
   'narr_round_start', 'narr_round_end', 'narr_max_ammo', 'narr_instakill', 'narr_nuke', 'narr_double', 'narr_gameover',
   'char_reload_1', 'char_reload_2', 'char_empty', 'char_hurt_1', 'char_hurt_2', 'char_down', 'char_revive',
   'char_headshot_1', 'char_headshot_2', 'char_buy',
+  'zombie_groan_a', 'zombie_groan_b', 'zombie_groan_c', 'zombie_groan_d', 'zombie_groan_e', 'zombie_groan_f',
+  'zombie_attack_a', 'zombie_attack_b', 'zombie_attack_c',
+  'zombie_die_a', 'zombie_die_b', 'zombie_die_c',
+  'zombie_window_grab',
+  'player_hurt_a', 'player_hurt_b', 'player_hurt_c', 'player_hurt_d',
+  'player_down', 'player_revive',
 ];
+
+const ZOMBIE_GROANS = ['zombie_groan_a', 'zombie_groan_b', 'zombie_groan_c', 'zombie_groan_d', 'zombie_groan_e', 'zombie_groan_f'];
+const ZOMBIE_ATTACKS = ['zombie_attack_a', 'zombie_attack_b', 'zombie_attack_c'];
+const ZOMBIE_DIES = ['zombie_die_a', 'zombie_die_b', 'zombie_die_c'];
+const PLAYER_HURTS = ['player_hurt_a', 'player_hurt_b', 'player_hurt_c', 'player_hurt_d'];
 
 const CHAR_POOLS = {
   reload: ['char_reload_1', 'char_reload_2'],
@@ -575,6 +587,8 @@ export class Sfx {
     this._tone('sine', 95, 40, 0.3, 0.6);
     this._tone('sawtooth', 220, 70, 0.22, 0.25, { dist: true });
     this._noise(0.25, 0.35, 700, 'lowpass', { f1: 200 });
+    const clip = PLAYER_HURTS[Math.floor(Math.random() * PLAYER_HURTS.length)];
+    this._playSample(clip, 0.65, { rate: rnd(0.95, 1.05), send: 0.15 });
   }
 
   // ------------------------------------------------------------ Motos & Véhicules
@@ -933,9 +947,12 @@ export class Sfx {
     this._noise(0.45, 0.6 * v, 900, 'lowpass');
   }
 
-  // Râle de zombie : une voix (dent de scie qui vibre et descend) passée dans deux filtres de voyelle, plus du souffle
-  groan(volume) {
+  // Râle de zombie : échantillon vocal rauque (zombie_groan_a..f) doublé par une synthèse de gorge
+  groan(volume = 0.5) {
     if (!this.ctx || volume <= 0.01) return;
+    const clip = ZOMBIE_GROANS[Math.floor(Math.random() * ZOMBIE_GROANS.length)];
+    const played = this._playSample(clip, volume * 0.78, { rate: rnd(0.92, 1.08), send: 0.32 });
+    const kv = played ? volume * 0.35 : volume;
     const c = this.ctx, t = c.currentTime;
     const dur = rnd(0.9, 1.5);
     const base = rnd(70, 115);
@@ -950,7 +967,7 @@ export class Sfx {
     lfo.connect(lg).connect(o.frequency);
     const g = c.createGain();
     g.gain.setValueAtTime(0.0001, t);
-    g.gain.linearRampToValueAtTime(volume * 0.34, t + 0.2);
+    g.gain.linearRampToValueAtTime(kv * 0.34, t + 0.2);
     g.gain.exponentialRampToValueAtTime(0.001, t + dur);
     const vowel = [[520, 330], [1000, 700]]; // « ouuaah » qui se ferme
     for (const [f0, f1] of vowel) {
@@ -964,7 +981,34 @@ export class Sfx {
     g.connect(this.bus);
     o.start(t); lfo.start(t);
     o.stop(t + dur + 0.05); lfo.stop(t + dur + 0.05);
-    this._noise(dur * 0.8, volume * 0.1, 600, 'bandpass', { q: 1.2, atk: 0.2 });
+    this._noise(dur * 0.8, kv * 0.1, 600, 'bandpass', { q: 1.2, atk: 0.2 });
+  }
+
+  // Cri / feulement d'attaque d'un zombie (zombie_attack_a..c)
+  zombieAttack(v = 1) {
+    if (!this.ctx || v < 0.02) return;
+    const clip = ZOMBIE_ATTACKS[Math.floor(Math.random() * ZOMBIE_ATTACKS.length)];
+    const played = this._playSample(clip, v * 0.82, { rate: rnd(0.94, 1.07), send: 0.28 });
+    const kv = played ? v * 0.3 : v * 0.65;
+    this._tone('sawtooth', 140, 210, 0.28, 0.22 * kv, { atk: 0.01, dist: true });
+    this._noise(0.26, 0.18 * kv, 1250, 'bandpass', { q: 1.8, atk: 0.01 });
+  }
+
+  // Râle d'agonie d'un zombie (zombie_die_a..c)
+  zombieDie(v = 1) {
+    if (!this.ctx || v < 0.02) return;
+    const clip = ZOMBIE_DIES[Math.floor(Math.random() * ZOMBIE_DIES.length)];
+    const played = this._playSample(clip, v * 0.78, { rate: rnd(0.93, 1.06), send: 0.3 });
+    const kv = played ? v * 0.28 : v * 0.6;
+    this._tone('sawtooth', 115, 44, 0.38, 0.2 * kv, { atk: 0.01 });
+    this._noise(0.32, 0.15 * kv, 620, 'bandpass', { q: 1.4, atk: 0.02 });
+  }
+
+  // Zombie qui plaque les mains et feule contre une vitre du train (zombie_window_grab)
+  zombieWindowGrab(v = 1) {
+    if (!this.ctx || v < 0.02) return;
+    this._playSample('zombie_window_grab', v * 0.88, { rate: rnd(0.96, 1.04), send: 0.22 });
+    this._tone('sine', 148, 56, 0.14, 0.35 * v);
   }
 
   // ------------------------------------------------------------ Ambiance loops (station & city)
@@ -1210,12 +1254,49 @@ export class Sfx {
     this.playVoice(id, 'character', 0.82 * v, { at: event === 'hurt' ? 0.06 : 0.02 });
   }
 
-  // Procedural breath / grunt layered with the character voice
+  // Non-exclusive sample playback (for overlapping zombie/player vocal effects)
+  _playSample(id, v = 1, o = {}) {
+    if (!this.ctx || !id || v < 0.02) return false;
+    const play = (buf) => {
+      if (!buf || !this.ctx) return;
+      const c = this.ctx, t = c.currentTime + (o.at || 0);
+      const src = c.createBufferSource();
+      src.buffer = buf;
+      src.playbackRate.value = o.rate || 1;
+      const g = c.createGain();
+      g.gain.setValueAtTime(0.001, t);
+      g.gain.linearRampToValueAtTime(v, t + 0.012);
+      src.connect(g);
+      this._route(g, { send: o.send ?? 0.22 });
+      src.start(t);
+    };
+    const cached = this._voiceBufs.get(id);
+    if (cached) {
+      play(cached);
+      return true;
+    }
+    this._loadVoiceOne(id).then((buf) => { if (buf) play(buf); }).catch(() => {});
+    return false;
+  }
+
+  // Train PA announcement cut off by static and distant screams (pa_cut)
+  paCut(v = 1, o = {}) {
+    if (!this.ctx || v < 0.02) return;
+    this.playVoice('pa_cut', 'pa', 0.9 * v, o);
+  }
+
+  // Procedural + sampled breath / grunt layered with the character voice
   _charEffort(event, v = 1) {
-    if (event === 'hurt' || event === 'down') {
+    if (event === 'down') {
+      this._playSample('player_down', 0.72 * v, { send: 0.2 });
+      this._tone('sawtooth', 145, 92, 0.18, 0.15 * v, { atk: 0.01 });
+    } else if (event === 'revive') {
+      this._playSample('player_revive', 0.72 * v, { send: 0.18 });
+      this._noise(0.14, 0.08 * v, 1200, 'bandpass', { q: 1.4, atk: 0.02 });
+    } else if (event === 'hurt') {
       this._tone('sawtooth', 145, 92, 0.18, 0.18 * v, { atk: 0.01 });
       this._noise(0.16, 0.16 * v, 950, 'bandpass', { q: 1.8, atk: 0.01 });
-    } else if (event === 'reload' || event === 'revive') {
+    } else if (event === 'reload') {
       this._noise(0.14, 0.09 * v, 1200, 'bandpass', { q: 1.4, atk: 0.02 });
     }
   }
