@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { bakeGroup, boxMaterialGroups } from './bake.js';
 
 // =====================================================================
 //  Modèles des machines du jeu : distributeurs d'atouts, borne de munitions, armes murales
@@ -19,6 +20,8 @@ function tex(key, w, h, draw, emissive = false) {
   cache.set(k, t);
   return t;
 }
+// Per-vertex colour (linear) on a geometry: lets parts of slightly different paint share one material, hence one draw call
+const tint = (geo, color) => { const c = new THREE.Color(color), n = geo.attributes.position.count, a = new Float32Array(n * 3); for (let i = 0; i < n; i++) { a[i * 3] = c.r; a[i * 3 + 1] = c.g; a[i * 3 + 2] = c.b; } geo.setAttribute('color', new THREE.BufferAttribute(a, 3)); return geo; };
 const shade = (hex, f) => { const c = new THREE.Color(hex); c.multiplyScalar(f); return '#' + c.getHexString(); };
 
 // usure : rayures et taches
@@ -125,17 +128,18 @@ export function makePerkMachine(id, perk, price) {
   const isQR = id === 'quickrevive';
   const col = new THREE.Color(perk.color);
   // Teintes désaturées et rugosités réalistes PBR
-  const paint = new THREE.MeshStandardMaterial({ color: col.clone().multiplyScalar(0.55), roughness: 0.72, metalness: 0.35 });
+  const paintC = col.clone().multiplyScalar(0.55), darkC = new THREE.Color(0x16181a);
+  const paint = new THREE.MeshStandardMaterial({ color: 0xffffff, vertexColors: true, roughness: 0.75, metalness: 0.4 }); // paint and dark parts share it (vertex colours): one draw call
   const chrome = new THREE.MeshStandardMaterial({ color: 0x9fa4ab, roughness: 0.32, metalness: 0.88 });
-  const dark = new THREE.MeshStandardMaterial({ color: 0x16181a, roughness: 0.82, metalness: 0.45 });
+  const dark = paint;
   const [map, emap] = perkFront(id, perk, price);
   const front = new THREE.MeshStandardMaterial({ map, emissiveMap: emap, emissive: isQR ? 0x7ac8ff : 0xffffff, emissiveIntensity: 1.5, roughness: 0.75, metalness: 0.1 });
   
   // Corps principal
-  const body = new THREE.Mesh(new THREE.BoxGeometry(W, H, D), paint); body.position.y = H / 2 + 0.08; g.add(body);
+  const body = new THREE.Mesh(tint(new THREE.BoxGeometry(W, H, D), paintC), paint); body.position.y = H / 2 + 0.08; g.add(body);
   
   // Fronton supérieur arrondi avec bordure de chanfrein
-  const top = new THREE.Mesh(new THREE.CylinderGeometry(W / 2, W / 2, D, 24, 1, false, 0, Math.PI), paint);
+  const top = new THREE.Mesh(tint(new THREE.CylinderGeometry(W / 2, W / 2, D, 24, 1, false, 0, Math.PI), paintC), paint);
   top.rotation.z = Math.PI / 2; top.rotation.y = Math.PI / 2; top.position.y = H + 0.08; g.add(top);
   const topRim = new THREE.Mesh(new THREE.CylinderGeometry(W / 2 + 0.02, W / 2 + 0.02, 0.06, 24, 1, false, 0, Math.PI), chrome);
   topRim.rotation.z = Math.PI / 2; topRim.rotation.y = Math.PI / 2; topRim.position.set(0, H + 0.08, D / 2); g.add(topRim);
@@ -144,23 +148,23 @@ export function makePerkMachine(id, perk, price) {
   const face = new THREE.Mesh(new THREE.PlaneGeometry(W - 0.08, H - 0.1), front); face.position.set(0, H / 2 + 0.1, D / 2 + 0.012); g.add(face);
   
   // Socle robuste avec pieds de surélévation (détails d'arêtes)
-  const base = new THREE.Mesh(new THREE.BoxGeometry(W + 0.1, 0.12, D + 0.1), dark); base.position.y = 0.06; g.add(base);
+  const base = new THREE.Mesh(tint(new THREE.BoxGeometry(W + 0.1, 0.12, D + 0.1), darkC), dark); base.position.y = 0.06; g.add(base);
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
-    const foot = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.08, 0.14), dark);
+    const foot = new THREE.Mesh(tint(new THREE.BoxGeometry(0.14, 0.08, 0.14), darkC), dark);
     foot.position.set(sx * (W / 2 - 0.02), 0.02, sz * (D / 2 - 0.02));
     g.add(foot);
   }
   
   // Bandes chromées, poignées latérales et néons lumineux pour le bloom halo
+  const neonMat = new THREE.MeshStandardMaterial({ // one material for both neons (merged into one mesh below)
+    color: isQR ? 0x4ab6ff : col,
+    emissive: isQR ? 0x3aa6ff : col,
+    emissiveIntensity: 2.2,
+    roughness: 0.25,
+    metalness: 0.1,
+  });
   for (const sx of [-1, 1]) {
     const trim = new THREE.Mesh(new THREE.BoxGeometry(0.05, H, 0.05), chrome); trim.position.set(sx * (W / 2 + 0.01), H / 2 + 0.08, D / 2); g.add(trim);
-    const neonMat = new THREE.MeshStandardMaterial({
-      color: isQR ? 0x4ab6ff : col,
-      emissive: isQR ? 0x3aa6ff : col,
-      emissiveIntensity: 2.2,
-      roughness: 0.25,
-      metalness: 0.1,
-    });
     const neon = new THREE.Mesh(new THREE.BoxGeometry(0.04, H * 0.8, 0.04), neonMat);
     neon.position.set(sx * (W / 2 + 0.03), H / 2 + 0.1, 0); g.add(neon);
     // Poignées de maintien latérales pour casser la silhouette boîte
@@ -172,6 +176,7 @@ export function makePerkMachine(id, perk, price) {
   const coinBezel = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.14, 0.06), chrome);
   coinBezel.position.set(0.24, 0.95, D / 2 + 0.02); g.add(coinBezel);
 
+  bakeGroup(g); // 16 meshes -> 5 (paint, chrome, dark, neon, printed front)
   g.userData.size = [W + 0.1, D + 0.1, H + 0.6];
   return g;
 }
@@ -203,29 +208,28 @@ function ammoFront() {
 export function makeAmmoStation() {
   const g = new THREE.Group();
   const W = 1.25, H = 1.75, D = 0.7;
-  const olive = new THREE.MeshStandardMaterial({ color: 0x3d442c, roughness: 0.78, metalness: 0.4 });
-  const darkMetal = new THREE.MeshStandardMaterial({ color: 0x1f2123, roughness: 0.6, metalness: 0.75 });
+  const olive = new THREE.MeshStandardMaterial({ color: 0xffffff, vertexColors: true, roughness: 0.75, metalness: 0.45 }); // body, crate and steel parts share it (vertex colours): one draw call
+  const darkMetal = olive;
   const [map, emap] = ammoFront();
   const front = new THREE.MeshStandardMaterial({ map, emissiveMap: emap, emissive: 0x4dff7a, emissiveIntensity: 1.2, roughness: 0.8, metalness: 0.15 });
-  const body = new THREE.Mesh(new THREE.BoxGeometry(W, H, D), olive); body.position.y = H / 2; g.add(body);
+  const body = new THREE.Mesh(tint(new THREE.BoxGeometry(W, H, D), 0x3d442c), olive); body.position.y = H / 2; g.add(body);
   const face = new THREE.Mesh(new THREE.PlaneGeometry(W - 0.04, H - 0.04), front); face.position.set(0, H / 2, D / 2 + 0.012); g.add(face);
   
   // Cornières métalliques de renfort d'arêtes pour accrocher la lumière
   for (const sx of [-1, 1]) {
-    const post = new THREE.Mesh(new THREE.BoxGeometry(0.04, H, 0.04), darkMetal);
+    const post = new THREE.Mesh(tint(new THREE.BoxGeometry(0.04, H, 0.04), 0x1f2123), darkMetal);
     post.position.set(sx * (W / 2 - 0.01), H / 2, D / 2);
     g.add(post);
   }
   // Pieds surélevés
   for (const sx of [-1, 1]) {
-    const foot = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.06, D), darkMetal);
+    const foot = new THREE.Mesh(tint(new THREE.BoxGeometry(0.12, 0.06, D), 0x1f2123), darkMetal);
     foot.position.set(sx * (W / 2 - 0.1), 0.03, 0);
     g.add(foot);
   }
 
   // caisse ouverte posée dessus, pleine de cartouches
-  const crateMat = new THREE.MeshStandardMaterial({ color: 0x323824, roughness: 0.85, metalness: 0.35 });
-  const crate = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.28, 0.5), crateMat); crate.position.set(0, H + 0.14, 0); g.add(crate);
+  const crate = new THREE.Mesh(tint(new THREE.BoxGeometry(0.9, 0.28, 0.5), 0x323824), olive); crate.position.set(0, H + 0.14, 0); g.add(crate);
   const brass = new THREE.MeshStandardMaterial({ color: 0xb58e38, roughness: 0.35, metalness: 0.85 });
   const shells = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.025, 0.025, 0.14, 6), brass, 60);
   const m = new THREE.Matrix4();
@@ -234,6 +238,7 @@ export function makeAmmoStation() {
   const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.07, 10, 8), new THREE.MeshStandardMaterial({ color: 0x4dff7a, emissive: 0x38d960, emissiveIntensity: 2.5 }));
   lamp.position.set(W / 2 - 0.12, H + 0.06, D / 2 - 0.1); g.add(lamp);
 
+  bakeGroup(g); // posts + feet share one mesh
   g.userData.size = [W, D, H + 0.3];
   return g;
 }
@@ -296,29 +301,38 @@ function chalkBoard(id, name, price) {
   };
   return [tex(`wall:${id}:${price}`, 512, 288, draw, false), tex(`wall:${id}:${price}`, 512, 288, draw, true)];
 }
+// Wall-lamp material shared by every wall board: a 2x1 texel map, left = dark metal, right = lit bulb (emissive map)
+let lampMat = null;
+function lampMaterial() {
+  if (lampMat) return lampMat;
+  const mk = (l, r) => { const t = new THREE.DataTexture(new Uint8Array([...l, 255, ...r, 255]), 2, 1); t.magFilter = t.minFilter = THREE.NearestFilter; t.colorSpace = THREE.SRGBColorSpace; t.needsUpdate = true; return t; };
+  lampMat = new THREE.MeshStandardMaterial({ color: 0x222224, map: mk([255, 255, 255], [255, 240, 192]), emissive: 0xffd080, emissiveMap: mk([0, 0, 0], [255, 255, 255]), emissiveIntensity: 2, roughness: 0.5, metalness: 0.7 });
+  return lampMat;
+}
+const lampUV = (geo, u) => { const uv = geo.attributes.uv; for (let i = 0; i < uv.count; i++) uv.setXY(i, u, 0.5); return geo; };
 export function makeWallBuy(id, name, price, lightHex) {
   const g = new THREE.Group();
   const W = 1.6, H = 0.9;
   const [map, emap] = chalkBoard(id, name, price);
-  const board = new THREE.Mesh(new THREE.BoxGeometry(W, H, 0.06), [
-    new THREE.MeshStandardMaterial({ color: 0x2a1c12, roughness: 0.9 }), new THREE.MeshStandardMaterial({ color: 0x2a1c12, roughness: 0.9 }),
-    new THREE.MeshStandardMaterial({ color: 0x2a1c12, roughness: 0.9 }), new THREE.MeshStandardMaterial({ color: 0x2a1c12, roughness: 0.9 }),
-    new THREE.MeshStandardMaterial({ map, emissiveMap: emap, emissive: 0xffffff, emissiveIntensity: 0.35, roughness: 0.95 }),
-    new THREE.MeshStandardMaterial({ color: 0x2a1c12, roughness: 0.9 }),
-  ]);
+  // one draw call: the five non-chalk faces sample a plain dark plank pixel (top-left corner) of the chalk texture
+  const boardGeo = new THREE.BoxGeometry(W, H, 0.06), uv = boardGeo.attributes.uv;
+  for (let f = 0; f < 6; f++) if (f !== 4) for (let i = 0; i < 4; i++) uv.setXY(f * 4 + i, 0.01, 0.985);
+  const board = new THREE.Mesh(boardGeo, new THREE.MeshStandardMaterial({ map, emissiveMap: emap, emissive: 0xffffff, emissiveIntensity: 0.35, roughness: 0.95 }));
   board.position.set(0, 1.55, 0.03); g.add(board);
   // applique lumineuse au-dessus
-  const metal = new THREE.MeshStandardMaterial({ color: 0x222224, roughness: 0.5, metalness: 0.7 });
-  const arm = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.04, 0.35), metal); arm.position.set(0, 2.1, 0.17); g.add(arm);
-  const shadeM = new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.14, 12, 1, true), metal); shadeM.position.set(0, 2.08, 0.34); g.add(shadeM);
-  const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.05, 8, 6), new THREE.MeshStandardMaterial({ color: 0xfff0c0, emissive: 0xffd080, emissiveIntensity: 2 })); bulb.position.set(0, 2.03, 0.34); g.add(bulb);
+  const metal = lampMaterial(); // metal and bulb share one material (the bulb samples the bright texel): the whole lamp is one draw call
+  const arm = new THREE.Mesh(lampUV(new THREE.BoxGeometry(0.04, 0.04, 0.35), 0.25), metal); arm.position.set(0, 2.1, 0.17); g.add(arm);
+  const shadeM = new THREE.Mesh(lampUV(new THREE.ConeGeometry(0.16, 0.14, 12, 1, true), 0.25), metal); shadeM.position.set(0, 2.08, 0.34); g.add(shadeM);
+  const bulb = new THREE.Mesh(lampUV(new THREE.SphereGeometry(0.05, 8, 6), 0.75), metal); bulb.position.set(0, 2.03, 0.34); g.add(bulb);
+  g.userData.lamp = bakeGroup(g)[0]; // arm + shade + bulb -> one mesh (culled early beyond CONFIG.graphics.detailCull.lamp: 35 cm of metal)
   g.userData.size = [W, 0.15, 2.2];
   return g;
 }
 // panneau autoportant (si aucun mur à proximité) : deux poteaux
 export function addPosts(g) {
-  const metal = new THREE.MeshStandardMaterial({ color: 0x222224, roughness: 0.5, metalness: 0.7 });
-  for (const sx of [-0.7, 0.7]) { const p = new THREE.Mesh(new THREE.BoxGeometry(0.08, 2.1, 0.08), metal); p.position.set(sx, 1.05, -0.04); g.add(p); }
+  const metal = lampMaterial(); // the lamp's material: the posts merge into its mesh
+  for (const sx of [-0.7, 0.7]) { const p = new THREE.Mesh(lampUV(new THREE.BoxGeometry(0.08, 2.1, 0.08), 0.25), metal); p.position.set(sx, 1.05, -0.04); g.add(p); }
+  bakeGroup(g);
 }
 
 // ------------------------------------------------------------------ Boîte mystère
@@ -343,7 +357,7 @@ export function makeMysteryBox() {
   const side = new THREE.MeshStandardMaterial({ map, emissiveMap: emap, emissive: 0x4aa0ff, emissiveIntensity: 1.6, roughness: 0.85, metalness: 0.1 });
   const wood = new THREE.MeshStandardMaterial({ color: 0x2e1e12, roughness: 0.88 });
   const iron = new THREE.MeshStandardMaterial({ color: 0x2c2d30, roughness: 0.52, metalness: 0.85 });
-  const body = new THREE.Mesh(new THREE.BoxGeometry(W, H, D), [side, side, wood, wood, side, side]); body.position.y = H / 2 + 0.05; g.add(body);
+  const body = new THREE.Mesh(boxMaterialGroups(new THREE.BoxGeometry(W, H, D), [0, 0, 1, 1, 0, 0]), [side, wood]); body.position.y = H / 2 + 0.05; g.add(body); // 2 draw calls (was 6)
   
   // Cornières métalliques de coin pour accrocher la lumière sur les arêtes
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
@@ -359,6 +373,7 @@ export function makeMysteryBox() {
   lidMesh.rotation.z = Math.PI / 2; lidMesh.scale.set(1, 1, 0.45); lidMesh.position.set(0, 0, D / 2); lid.add(lidMesh);
   for (const sx of [-0.55, 0, 0.55]) { const band = new THREE.Mesh(new THREE.CylinderGeometry(D / 2 + 0.025, D / 2 + 0.025, 0.07, 16, 1, false, 0, Math.PI), iron); band.rotation.z = Math.PI / 2; band.scale.set(1, 1, 0.45); band.position.set(sx, -0.004, D / 2); lid.add(band); } // 4 mm plus bas : sa face plane (dessous du couvercle ouvert) n'est plus coplanaire avec celle du couvercle
   const lock = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.2, 0.05), iron); lock.position.set(0, H - 0.02, D / 2 + 0.03); g.add(lock);
+  bakeGroup(lid); bakeGroup(g, [body]); // corner irons + feet + lock in one mesh; lid bands in one mesh
   
   // faisceau de lumière bleue (repère de loin)
   const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.32, 30, 14, 1, true), new THREE.MeshStandardMaterial({ color: 0x5fb8ff, emissive: 0x4aa0ff, emissiveIntensity: 1.8, transparent: true, opacity: 0.12, depthWrite: false, side: THREE.DoubleSide }));
@@ -424,10 +439,13 @@ export function makePackAPunch() {
     const gear = new THREE.Group();
     gear.add(new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 0.07, 16), rim));
     for (let k = 0; k < 10; k++) { const t = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.07, 0.12), rim); const a = (k / 10) * Math.PI * 2; t.position.set(Math.cos(a) * 0.33, 0, Math.sin(a) * 0.33); t.rotation.y = -a; gear.add(t); }
+    bakeGroup(gear); // disc + teeth: one mesh, the group still turns
     gear.rotation.z = Math.PI / 2; gear.position.set(sx * (W / 2 + 0.04), H * 0.62, 0.1);
     g.add(gear); gears.push(gear);
   }
-  g.userData.rollers = g.children.filter((o) => o.geometry && o.geometry.type === 'CylinderGeometry' && o.position.y > H);
+  const rollers = g.children.filter((o) => o.geometry && o.geometry.type === 'CylinderGeometry' && o.position.y > H);
+  bakeGroup(g, [...rollers, slotDoor]); // body, posts and feet in one mesh; the rollers and the slot door stay separate (animated)
+  g.userData.rollers = rollers;
   g.userData.slotDoor = slotDoor; g.userData.slotY = SY; g.userData.gears = gears; g.userData.front = front;
   g.userData.anchor = [0, 1.0, D / 2 + 0.7];
   g.userData.size = [W, D, H + 0.4];
@@ -499,7 +517,22 @@ export function makeAstronomicalClock() {
   for (let k = 0; k < 4; k++) add(new THREE.CapsuleGeometry(0.16, 0.6, 3, 6), gold, -0.9 + k * 0.6, 10.6, 0.68); // apôtres
   add(new THREE.ConeGeometry(1.4, 3.2, 4), stone, 0, 14.1, 0).rotation.y = Math.PI / 4; // flèche
   add(new THREE.SphereGeometry(0.25, 10, 8), gold, 0, 15.9, 0);           // coq
+  bakeGroup(g, [dial]); // stone / paint / gold parts merged
   g.traverse((o) => { if (o.isMesh) o.castShadow = o.receiveShadow = true; });
   g.userData.size = [4.4, 2, 16];
   return g;
+}
+
+// Only the largest solid part of a machine casts a shadow (the small parts are not worth a shadow-pass draw call each)
+export function castShadowBiggest(g) {
+  let best = null, r = 0;
+  g.traverse((o) => {
+    if (!o.isMesh) return;
+    o.receiveShadow = true; o.castShadow = false;
+    if (o.material.transparent || o.material.blending === THREE.AdditiveBlending) return;
+    if (!o.geometry.boundingSphere) o.geometry.computeBoundingSphere();
+    const rr = o.geometry.boundingSphere.radius * Math.max(o.scale.x, o.scale.y, o.scale.z);
+    if (rr > r) { r = rr; best = o; }
+  });
+  if (best) best.castShadow = true;
 }

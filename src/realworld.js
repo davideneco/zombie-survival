@@ -13,6 +13,8 @@ import { findBreaches } from './breach.js';
 import { preparePassages, cutIntervals, insideRuns, distToPassage } from './passage.js';
 import { Levels } from './levels.js';
 import { createArchitecture, BAY_W } from './architecture.js';
+import { createGateBatch } from './gateBatch.js';
+import { detailCull } from './detailCull.js';
 import { createProps } from './props.js';
 import { planCathedral, CEIL, pointInPoly as inPoly } from './cathedral.js';
 import { buildCathedral, augmentPlan, PORTAL_H } from './cath/index.js';
@@ -20,7 +22,7 @@ import { HDF, isRotunda, isOpenShelter, rotundaInfo, shelterInfo, planHdf, legac
 import { planTram, buildTramNetwork } from './tramNet.js';
 import { parkingLayout, buildParkingDecor } from './parking.js';
 import { bikeStationLayout, buildBikeStationDecor } from './bikeStation.js';
-import { makePerkMachine, makeAmmoStation, makeWallBuy, addPosts, makeMysteryBox, makePackAPunch, makeAstronomicalClock } from './machines.js';
+import { makePerkMachine, makeAmmoStation, makeWallBuy, addPosts, makeMysteryBox, makePackAPunch, makeAstronomicalClock, castShadowBiggest } from './machines.js';
 import { loadGareData, buildGare } from './gare/index.js';
 
 // =====================================================================
@@ -1179,8 +1181,8 @@ export async function buildRealWorld(scene, renderer) {
     const g = makeAmmoStation();
     g.position.set(x, 0, z);
     g.rotation.y = Math.atan2(faceX - x, faceZ - z);
-    g.traverse((o) => { if (o.isMesh) o.castShadow = o.receiveShadow = true; });
-    scene.add(g);
+    castShadowBiggest(g); // the body only: the small parts would each cost a shadow-pass draw call
+    scene.add(g); detailCull.addPoint(g, 3);
     const [w, d, h] = g.userData.size;
     collision.addBox(x, z, w, d, -g.rotation.y, h);
     lightSources.push({ x, y: 2.6, z, color: 0x9fffb0, intensity: 6, dist: 7 });
@@ -1214,8 +1216,9 @@ export async function buildRealWorld(scene, renderer) {
     }
     g.position.set(x, 0, z);
     g.rotation.y = rot;
-    g.traverse((o) => { if (o.isMesh) o.castShadow = o.receiveShadow = true; });
-    scene.add(g);
+    g.traverse((o) => { if (o.isMesh) { o.castShadow = false; o.receiveShadow = true; } }); // thin board on a wall: no shadow
+    scene.add(g); detailCull.addPoint(g, 3);
+    if (ang != null && g.userData.lamp) detailCull.addPoint(g.userData.lamp, 1, CONFIG.graphics.detailCull.lamp, g); // wall lamp (35 cm): not worth a draw call far away
     // point d'interaction devant la planche
     const fx = x + Math.sin(rot) * 0.6, fz = z + Math.cos(rot) * 0.6;
     wallWeapons.push({ id, name, price, ammoPrice, pos: new THREE.Vector3(fx, 0, fz) });
@@ -1226,6 +1229,7 @@ export async function buildRealWorld(scene, renderer) {
   // Partout où deux cases accessibles voisines appartiennent à deux zones différentes, on pose une barrière ;
   // les barrières d'une même paire de zones forment une seule porte (un seul achat).
   // Prix d'une porte = le plus cher des `doorPrice` des deux zones qu'elle sépare (Marché-Neuf : 0).
+  let gateBatchRef = null;   // (gateBatch.js) island paid-door barricades, merged per chunk
   const doors = [];
   const sealedGroups = [];
   const sealedPoints = []; // pour la carte (aucun tant que toute l'île est ouverte)
@@ -1373,7 +1377,17 @@ export async function buildRealWorld(scene, renderer) {
     const zonePrice = (zi) => (zi === startZone ? 0 : Z.zones[zi].doorPrice ?? Z.basePrice + Z.priceStep * Math.max(0, depth[zi] - 1));
 
     const FH = 3.4;
-    // panneau de prix : une texture par porte (nom des deux zones) ; chaque porte garde la sienne
+    const gateBatch = createGateBatch(scene); gateBatchRef = gateBatch; // barricade meshes are merged per material and per chunk (gateBatch.js)
+    // panneau de prix : une cellule de 512x192 par porte (nom des deux zones) dans UN atlas partagé : tous les panneaux d'une tuile se fusionnent en un seul appel de dessin
+    const SW = 512, SH_ = 192, sCols = links.length > 60 ? 4 : 2, sRows = Math.max(1, Math.ceil(links.length / sCols));
+    const signCv = document.createElement('canvas'); signCv.width = SW * sCols; signCv.height = SH_ * sRows;
+    const signTexAtlas = new THREE.CanvasTexture(signCv); signTexAtlas.colorSpace = THREE.SRGBColorSpace;
+    const signMat = new THREE.MeshStandardMaterial({ map: signTexAtlas, roughness: 0.72 });
+    const signUV = (geo, di) => { // plane uv 0..1 -> the inside of the door's cell (3 px inset: no bleeding between cells at low mip levels)
+      const ox = (di % sCols) * SW, oy = Math.floor(di / sCols) * SH_, uv = geo.attributes.uv;
+      for (let i = 0; i < uv.count; i++) uv.setXY(i, (ox + 3 + uv.getX(i) * (SW - 6)) / signCv.width, 1 - (oy + 3 + (1 - uv.getY(i)) * (SH_ - 6)) / signCv.height);
+      return geo;
+    };
     links.forEach((g, di) => {
       const far = depth[g.a] > depth[g.b] ? g.a : g.b;
       const price = Math.max(zonePrice(g.a), zonePrice(g.b));
@@ -1381,8 +1395,8 @@ export async function buildRealWorld(scene, renderer) {
       const door = { id: di, price, a: g.a, b: g.b, toZone: far, name: ZONE_NAMES[far], open: false, points: [], segs: [], meshes: [], cells: [], portal: isPortal };
       const pieces = straightPieces(g.runs);
       const longest = pieces.reduce((b, r) => (Math.hypot(r.x1 - r.x0, r.z1 - r.z0) > Math.hypot(b.x1 - b.x0, b.z1 - b.z0) ? r : b), pieces[0]);
-      const cv = document.createElement('canvas'); cv.width = 512; cv.height = 192;
-      const x = cv.getContext('2d');
+      const x = signCv.getContext('2d');
+      x.save(); x.translate((di % sCols) * SW, Math.floor(di / sCols) * SH_);
       x.fillStyle = '#1a0d0a'; x.fillRect(0, 0, 512, 192);
       x.strokeStyle = '#ffd24a'; x.lineWidth = 6; x.strokeRect(8, 8, 496, 176);
       x.textAlign = 'center';
@@ -1391,8 +1405,8 @@ export async function buildRealWorld(scene, renderer) {
       x.fillStyle = '#aaa'; x.font = '24px Arial, sans-serif';
       const names = `${ZONE_NAMES[g.a]} ↔ ${ZONE_NAMES[g.b]}`;
       x.fillText(names, 256, 164, 480); // maxWidth : les noms longs (Saint-Pierre-le-Vieux ↔ Monument Stoeber) se resserrent
-      const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace;
-      const signMat = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.72 });
+      x.restore();
+      const batchable = [];
       for (const r of pieces) {
         const len = Math.hypot(r.x1 - r.x0, r.z1 - r.z0);
         if (len < 0.2) continue;
@@ -1400,6 +1414,7 @@ export async function buildRealWorld(scene, renderer) {
         const isPortal = Z.zones[far].portal;
         const gm = alignOn(isPortal ? props.portalDoors(len) : props.gate(len), r);
         if (isPortal) door.leaves = (door.leaves || []).concat(gm.userData.leaves);
+        else batchable.push(gm);
         door.meshes.push(gm);
         pointsOf(r, len, door.points);
         if (r !== longest && len < 3.5) continue;
@@ -1408,7 +1423,7 @@ export async function buildRealWorld(scene, renderer) {
         for (let k = 0; k < nSigns; k++) {
           const u = nSigns === 1 ? 0 : -len / 2 + (len * (k + 0.5)) / nSigns;
           for (const side of [-1, 1]) {
-            const sign = new THREE.Mesh(new THREE.PlaneGeometry(sw, sw * 0.375), signMat);
+            const sign = new THREE.Mesh(signUV(new THREE.PlaneGeometry(sw, sw * 0.375), di), signMat);
             sign.position.set(u, 2.0, side * 0.16);
             sign.rotation.y = side > 0 ? 0 : Math.PI;
             gm.add(sign);
@@ -1417,9 +1432,11 @@ export async function buildRealWorld(scene, renderer) {
           lightSources.push({ x: lx, y: 2.8, z: lz, color: 0xff8844, intensity: 9, dist: 8, door });
         }
       }
+      for (const gm of batchable) gateBatch.take(door, gm);
       doorPts.push(...door.points);
       doors.push(door);
     });
+    gateBatch.build();
     door_depth = depth;
 
     // Barricades définitives : plus aucune depuis que toute l'île est ouverte (v0.27.0), mais le code reste pour une zone fermée
@@ -1541,8 +1558,10 @@ export async function buildRealWorld(scene, renderer) {
       const [w, d, h] = g.userData.size;
       g.position.set(x, 0, z);
       g.rotation.y = spotRot != null ? spotRot : Math.atan2(fx - x, fz - z);
-      g.traverse((o) => { if (o.isMesh && o.material.blending !== THREE.AdditiveBlending) o.castShadow = o.receiveShadow = true; });
+      if (type === 'clock') g.traverse((o) => { if (o.isMesh) o.receiveShadow = true; }); // (the clock keeps all its parts as casters: a 16 m monument, one instance)
+      else castShadowBiggest(g);
       scene.add(g);
+      if (type !== 'box') detailCull.addPoint(g, type === 'clock' ? 12 : 3); // (the mystery boxes are shown one at a time by setActiveBox)
       collision.addBox(x, z, w, d, -g.rotation.y, h);
       const entry = { type, id, name, price, color, letter: type === 'perk' ? CONFIG.perks[id].letter : null, zone: zi, pos: new THREE.Vector3(x, 0, z), group: g, active: true };
       machines.push(entry);
@@ -2227,6 +2246,7 @@ export async function buildRealWorld(scene, renderer) {
     d.name = ZONE_NAMES[d.opens];
     for (const s of d.segs) s.off = true;
     if (d.leaves) { d.opening = 0; openingDoors.push(d); for (const m of d.meshes) m.traverse((o) => { if (o.isMesh && o.geometry.type === 'PlaneGeometry') o.visible = false; }); }
+    else if (d.batched) gateBatchRef.open(d);
     else for (const m of d.meshes) { m.parent?.remove(m); }
     const dn = d.nav || nav; // station doors : cells of the station's own grid
     for (const i of d.cells) dn.blocked[i] = 0;
@@ -2272,7 +2292,7 @@ export async function buildRealWorld(scene, renderer) {
   const stationPos = stations[0];
   patchObject(scene, (o) => o.userData.noTerrain); // relief : tout le décor déjà construit suit le terrain (les corps dynamiques gardent une hauteur absolue)
   // ---- areas (v0.79.0) : the island and the station. Only the local player's area is drawn (the other one is hidden : 130 m away, behind fog).
-  const islandRoots = gare ? scene.children.filter((o) => o !== gare.root && o !== sky && !o.isLight) : [];
+  const islandRoots = gare ? scene.children.filter((o) => o !== gare.root && o !== sky && !o.isLight && !o.userData.shadowProxy) : []; // (shadow proxies are driven by installShadowProxies)
   let localArea = 'island';
   const areaOf = (x, z) => (gare && (gare.inArea(x, z) || ((Math.abs(x) > halfX || Math.abs(z) > halfZ) && gare.inCorridor(x, z))) ? 'gare' : 'island'); // (the train's approach belongs to the station area, v0.81.0)
   if (gare) gare.arch.relief.setRange(0); // the station's surrounding buildings are background : painted windows only (draw calls)
@@ -2335,7 +2355,8 @@ export async function buildRealWorld(scene, renderer) {
       if (lightTimer <= 0) { lightTimer = 0.4; assignLights(px, pz); }
       for (const l of lightPool) { const src = l.userData.src; if (src && src.dyn) l.position.set(src.x, src.y, src.z); } // moving sources (the train's coach lights, v0.81.0)
       reliefTimer -= dt;
-      if (reliefTimer <= 0) { reliefTimer = 0.25; arch.relief.update(px, pz); interiors.update(px, pz); } // détail des façades coupé au-delà de la portée de la qualité
+      if (reliefTimer <= 0) { reliefTimer = 0.25; arch.relief.update(px, pz); interiors.update(px, pz); }
+      if (localArea === 'island') detailCull.update(px, pz, scene.fog.density, detailCull.camera); // every frame: the frustum test follows the view // détail des façades coupé au-delà de la portée de la qualité
     },
     mapName: 'Grande Île, Strasbourg',
   };

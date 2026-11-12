@@ -22,9 +22,10 @@ Each prints one JSON line: `render.calls`, `render.triangles`, `memory.{geometri
 - JS heap ≤ 400 MB after load; no growth over a 10-minute session (check `heapMB` again after `for (i < 36000) game.update(1/60)`).
 - Programs (shader variants) ≤ 60: every `onBeforeCompile` patch must set `customProgramCacheKey`.
 
-## Baseline measured on v0.87.1 (2026-11-12), island start
-858 draw calls, 2.29 M triangles, 11 343 meshes (6 276 visible, 4 083 InstancedMesh with 471 k instances), 5 863 geometries, 373 textures, 85 programs, heap 756 MB, update 0.6 ms median / 2.9 ms p95, load 0.7 s (assets keep streaming after that).
-Station quai 1: 319 calls, 0.64 M triangles. Intro (train at speed): 110 calls, 0.50 M triangles. Heap and mesh count are the same everywhere (the whole world stays loaded). Update this section when an optimisation lands.
+## Baseline after the draw-call pass (step A1, 2026-11-12), island start (day, fog 0.011)
+271 draw calls (`tools/perf-breakdown.js`: 224 main + 40 shadow), 1.97 M triangles (1.56 M main + 0.40 M shadow), 8 178 meshes (2 352 visible, 4 083 InstancedMesh with 471 k instances), 3 054 geometries, 320 textures, 85 programs, heap 756-803 MB (noisy), update 0.6 ms median / 3.3 ms p95, load 0.7 s.
+Station quai 1: 185 calls, 0.64 M triangles. Intro (train at speed): 96 calls, 0.50 M triangles. Before A1 (v0.87.1): 858 / 319 / 110 calls, 2.29 M triangles at the island start. Heap and mesh count are the same everywhere (the whole world stays loaded). Update this section when an optimisation lands.
+For the per-object split of one frame (main vs shadow pass): `node $H --size 1280x720 --url "debug&x=-0.6&z=-28&yaw=0" --file tools/perf-breakdown.js`.
 
 ## Reading the numbers
 - Many visible meshes with few instances each → merge per material and per chunk (static) or use one InstancedMesh per prop type for the whole chunk.

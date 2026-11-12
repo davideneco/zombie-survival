@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import { CONFIG } from './config.js';
 import { createRelief, hash2 } from './relief.js';
+import { addShadowProxy, proxyBucket } from './shadowProxy.js';
+import { detailCull } from './detailCull.js';
 
 // =====================================================================
 //  Architecture strasbourgeoise : façades dessinées (crépi + grès, colombages, grès rose,
@@ -809,7 +811,7 @@ export function createArchitecture({ renderer, plasterImg, plaster2Img, roofP, r
     relief, // relief des façades (relief.js) : portée réglée par la qualité, mis à jour par le monde
 
     // Construit les maillages (un par matériau) et les ajoute à la scène
-    finish(scene) {
+    finish(scene, area = 'island') {
       const toMesh = (b, mat) => {
         if (!b.pos.length) return null;
         const g = new THREE.BufferGeometry();
@@ -820,13 +822,17 @@ export function createArchitecture({ renderer, plasterImg, plaster2Img, roofP, r
         g.setIndex(b.idx);
         g.computeBoundingSphere();
         const m = new THREE.Mesh(g, mat);
-        m.castShadow = m.receiveShadow = true;
+        m.castShadow = false; m.receiveShadow = true; // the tile's shadow is cast by its merged proxy (shadowProxy.js): one draw call instead of one per material
         scene.add(m);
+        if (area === 'island') detailCull.addMesh(m); // hidden beyond the fog distance (the station keeps its own LOD)
+        const pk = `${b.ix},${b.iz}`; // (b = a split tile)
+        (proxyTiles.get(pk) || proxyTiles.set(pk, proxyBucket()).get(pk)).add(b.pos, b.idx);
         return m;
       };
+      const proxyTiles = new Map();
       // Découpe en tuiles de 160 m (T ci-dessous) : la caméra ne dessine que les morceaux de ville devant elle et à portée du brouillard
       // (sinon toute la ville, ~600 000 triangles, était dessinée à chaque image).
-      const T = 160;
+      const T = CONFIG.graphics.cityTile; // tile size (m): ~20 materials per tile, so the number of tiles in view drives the draw calls (160 m: 83 calls at the island start, 240 m: 40)
       // Deux triangles coplanaires de même matériau dans deux tuiles voisines (bâtiments OSM aux emprises qui se chevauchent : toits, façades) se
       // disputaient le pixel : chaque tuile a un rang de décalage de profondeur (polygonOffset) propre à sa parité, donc deux tuiles voisines
       // ne rendent jamais à la même profondeur (v0.35.2). Murs : 2 rangs (un demi-pas entre deux matériaux), toits : 4 rangs (aussi en diagonale).
@@ -869,6 +875,7 @@ export function createArchitecture({ renderer, plasterImg, plaster2Img, roofP, r
       };
       for (const [key, { mat, b }] of Object.entries(mats)) for (const t of split(b)) { const m = toMesh(t, tileMat(mat, t, 2)); if (m) m.name = 'arch:' + key; }
       for (const t of split(roofB)) { const r = toMesh(t, tileMat(roofMat, t, 4)); if (r) r.name = 'arch:roof'; }
+      for (const pb of proxyTiles.values()) addShadowProxy(scene, pb.pos, pb.idx, area);
       relief.finish(scene);
     },
   };

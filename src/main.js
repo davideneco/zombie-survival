@@ -37,6 +37,8 @@ import { installKeysMenu } from './keysMenu.js';
 import { installChat } from './chat.js';
 import { createGraphics } from './graphics.js';
 import { contact } from './contact.js';
+import { installShadowProxies } from './shadowProxy.js';
+import { detailCull } from './detailCull.js';
 const r2 = (v) => Math.round(v * 100) / 100;
 
 document.getElementById('version').textContent = __GAME_VERSION__;
@@ -104,6 +106,8 @@ fx.init(scene);
 const hud = new Hud();
 const sfx = new Sfx();
 const world = await buildRealWorld(scene, renderer);
+installShadowProxies(renderer, () => world.localArea);
+detailCull.camera = camera; // (detailCull.js) frustum test of the merged city tiles
 
 let nextPuId = 1;
 

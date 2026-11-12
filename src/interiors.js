@@ -306,7 +306,7 @@ export function createInteriors() {
           g.setIndex(B.idx);
           g.computeBoundingSphere();
           const m = new THREE.Mesh(g, mat);
-          m.name = 'interior'; m.receiveShadow = true; m.castShadow = shadow; m.matrixAutoUpdate = false; m.userData.lod = true;
+          m.name = 'interior'; m.receiveShadow = true; m.castShadow = false; m.matrixAutoUpdate = false; m.userData.lod = true; // (castShadow off: the building shell casts the shadow)
           scene.add(m); T.meshes.push(m);
         });
         api.tiles.push(T);

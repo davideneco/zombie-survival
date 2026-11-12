@@ -3,6 +3,7 @@ import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeom
 import { CONFIG } from './config.js';
 import { reflective } from './envmap.js';
 import { PARTS } from './weaponParts.js';
+import { bakeGroup } from './bake.js';
 
 // =====================================================================
 //  Modèles 3D des armes (vue à la première personne). Chaque arme a sa silhouette :
@@ -144,6 +145,8 @@ function build(grp, M, parts) {
       grp.add(mesh);
     }
   }
+  // draw calls: static parts of one material become one mesh; the parts game code looks up or hides (hands, magazine, optic, stock, bolt) stay separate
+  bakeGroup(grp, grp.children.filter((o) => o.userData.skin || o.userData.bolt || o.userData.mag || o.userData.optic || o.userData.stock), false);
 }
 // mains : avant (garde-main) et arrière (poignée)
 const hands = (front, back) => [

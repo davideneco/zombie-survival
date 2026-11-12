@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { CONFIG } from './config.js';
 import { contact } from './contact.js';
 import { reflective } from './envmap.js';
 
@@ -323,12 +324,13 @@ export function createProps() {
   function finish(scene) {
     const meshes = [];
     for (const [type, list] of Object.entries(inst)) {
-      for (const [geo, mat] of P[type]) {
+      const casts = CONFIG.graphics.propShadows.includes(type);
+      for (const [pi, [geo, mat]] of P[type].entries()) {
         const useColor = mat === M.carPaint;
         const im = new THREE.InstancedMesh(geo, mat, list.length);
         im.name = 'prop:' + type;
         list.forEach((it, i) => { im.setMatrixAt(i, it.m); if (useColor) im.setColorAt(i, it.c || new THREE.Color(0x777777)); });
-        im.castShadow = im.receiveShadow = true;
+        im.castShadow = casts && pi === 0; im.receiveShadow = true; // shadow: first part of the big props only (draw calls of the shadow pass)
         im.frustumCulled = false;
         scene.add(im);
         meshes.push(im);

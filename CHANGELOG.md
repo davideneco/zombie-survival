@@ -2,6 +2,27 @@
 
 Chaque changement est poussé sur `main` (déploiement Render) avec un nouveau numéro de version et sa description ici.
 
+## v0.89.0 (2026-11-12)
+**Optimisation (étape A1) : 3 fois moins d'appels de rendu.**
+- Au départ (Marché-Neuf), le jeu passe de 858 à 271 appels de rendu par image le jour, et 253 la nuit. À la gare (quai 1), il passe de 319 à 185. Dans l'intro en train, il passe de 110 à 96. Toutes ces vues sont maintenant sous le budget de 300.
+- **Ombres** : seuls les gros objets proches projettent une ombre. Les bâtiments utilisent un modèle simplifié pour l'ombre (`shadowProxy.js`).
+- **Machines, accessoires et viewmodel** : les machines (atouts, munitions, boîte mystère, Pack-a-Punch), les accessoires et l'arme en main sont fusionnés par matériau (`bake.js`). Les pièces animées restent séparées (couvercle de la boîte, engrenages du PaP).
+- **Barricades des portes payantes** : elles sont regroupées par morceau de carte (`gateBatch.js`). Le morceau est reconstruit quand une porte s'ouvre.
+- **Petits détails** : ils sont masqués au-delà d'environ 90 m (`detailCull.js`).
+- **Tuiles de façades** : elles passent de 160 à 240 m. Les nouveaux réglages sont `graphics.detailCull`, `cityTile` et `propShadows`.
+- **Pas encore fait** : les triangles restent à 1,97 M au départ (budget 1,5 M) et la mémoire à environ 800 Mo (budget 400). Ce seront les étapes A2 (façades lointaines simplifiées) et A3 (mémoire).
+- **Vérifié** :
+  - le build passe ;
+  - mesures chiffrées au départ (jour et nuit), à la gare et dans l'intro ;
+  - captures avant/après regardées (départ, machine d'atout, munitions, AK amélioré en main, barricade, gare, départ de nuit) : rendu identique ;
+  - achats testés en jeu (atout, munitions, arme murale, boîte mystère, Pack-a-Punch) ;
+  - passage île ↔ gare ;
+  - ouverture des 58 portes d'un coup, comme pour un joueur qui rejoint en cours de partie : 48 ms, aucune erreur.
+- **Non vérifié** :
+  - partie multijoueur réelle : l'ancien test `tools/mp-smoke.mjs` ne fonctionne plus depuis l'arrivée de l'intro et du lobby, mais les clients passent par le même code d'ouverture de porte ;
+  - portes du portail de la cathédrale ;
+  - fluidité sur un vrai GPU.
+
 ## v0.88.1 (2026-11-12)
 - Retour aux sons d'avant Gemini, à ta demande : les voix françaises (annonces du train et du tram, narrateur, survivant), les cris de zombies, les bruits de pas et les ambiances de la gare et de la ville ajoutés en v0.86.0 et v0.87.0 sont retirés (77 fichiers sons, leur code et leurs appels dans le jeu). Les sons de synthèse d'avant et tes musiques (`public/music/`, inchangées) restent.
 - Conservé : le pistolet de départ au hasard, le passage entre les wagons réparé, la documentation et les outils ajoutés depuis.

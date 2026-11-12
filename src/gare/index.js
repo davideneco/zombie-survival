@@ -6,6 +6,7 @@ import { buildIntroRoute, buildRailNet } from '../railNet.js';
 import { Train } from '../train.js';
 import { buildRideScenery } from '../rideScenery.js';
 import { introProfile } from '../intro.js';
+import { detailCull } from '../detailCull.js';
 
 // =====================================================================
 //  Gare de Strasbourg (v0.79.0) : a separate small playable area at its real coordinates (same frame as area.json), joined to the
@@ -66,7 +67,7 @@ export function buildGare(ctx) {
     bldPolys.push(pts);
     for (let i = 0; i < pts.length; i++) { const [ax, az] = pts[i], [bx, bz] = pts[(i + 1) % pts.length]; collision.addSegment(ax, az, bx, bz); }
   }
-  arch.finish(root);
+  arch.finish(root, 'gare');
 
   // ---------------------------------------------------------------- trees (OSM) : forecourt groves ; collision for the ones in the playable place
   const treeList = [];
@@ -199,7 +200,7 @@ export function buildGare(ctx) {
         } else addMachine(type, id, [x, z], zi, Math.atan2(fx - x, fz - z));
       }
     }
-    for (const o of scene.children) if (!before.has(o)) { scene.remove(o); root.add(o); } // into the station group (area visibility)
+    for (const o of scene.children) if (!before.has(o)) { scene.remove(o); root.add(o); detailCull.remove(o); o.visible = true; } // into the station group (area visibility)
   };
 
   // ---------------------------------------------------------------- navigation : door cells blocked in the region grid

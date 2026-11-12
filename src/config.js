@@ -869,6 +869,14 @@ export const CONFIG = {
     ground: { cell: 1, apron: 0.95, kerb: 0.16, gutter: 0.4, slab: 0.45, puddle: { from: 0.66, to: 0.72, reflect: 3.5, darken: 0.4 }, manholeGrid: 34, manholeChance: 0.9 },
     // vitraux (cathedral.js, cath/) : intensité des taches de lumière colorée au sol (couleur de matériau, additive : la cathédrale garde sa pénombre)
     glass: { poolColor: 0x3c3c3c },
+    // distance de coupure des détails (detailCull.js, tous les 0,25 s) : tuiles de bâtiments, machines, armes murales, bornes au-delà de fog / densité du brouillard m
+    // (le brouillard FogExp2 ne laisse plus voir que exp(-fog²) d'un objet : 2 -> 1,8 %), bornée entre min et max (m)
+    // taille (m) des tuiles de bâtiments fusionnées (architecture.js) : chaque tuile coûte ~20 appels de dessin (un par matériau) ; plus grande = moins d'appels, plus de triangles hors champ
+    cityTile: 240,
+    // lamp : portée (m) de la petite applique des armes murales
+    detailCull: { fog: 2, min: 50, max: 170, lamp: 45 },
+    // props instanciés qui projettent une ombre (seule leur première pièce : carrosserie, toit…) ; les autres sont trop petits pour valoir un appel de dessin dans la passe d'ombres
+    propShadows: ['car', 'chalet', 'kiosk', 'column', 'statue', 'fountain'],
     // ombres de contact : tache sous chaque objet / arbre (fixe) et sous les zombies, coéquipiers, véhicules (mobiles, à moins de maxDist m)
     contact: { enabled: true, opacity: 0.8, dynamicMax: 160, maxDist: 45, zombie: 0.55, vehicle: 0.5, tree: 0.55 },
     // ciel : lune (élévation et azimut en rad, rayon angulaire), nuages
