@@ -36,6 +36,7 @@ import { installUnstick } from './unstick.js';
 import { installBarricades } from './barricades.js';
 import { installBarrels } from './barrels.js';
 import { installTransfer } from './transfer.js';
+import { installTiles } from './tiles.js';
 import { installKeybinds } from './keybinds.js';
 import { installKeysMenu } from './keysMenu.js';
 import { installChat } from './chat.js';
@@ -1469,6 +1470,7 @@ const game = {
     if (this.buffs.doublePoints > 0) this.buffs.doublePoints = Math.max(0, this.buffs.doublePoints - dt);
 
     world.update?.(p.pos.x, p.pos.z, dt, p.pos.y);
+    this.tiles?.update(dt); // streamed world tiles around the local camera (tiles.js, visual only)
 
     // Lumière de lune suivant le joueur
     moon.target.position.set(Math.round(p.pos.x), 0, Math.round(p.pos.z));
@@ -1783,6 +1785,7 @@ installUnstick(game, { world, hud, sfx });
 installBarricades(game, { scene, world, hud, sfx }); // window barricades of the key buildings (barricades.js)
 installBarrels(game, { scene, world, sfx }); // explosive barrels next to them (barrels.js)
 installTransfer(game, { world, hud, sfx, scene }); // tram Gare Centrale <-> Homme de Fer (v0.79.0)
+installTiles(game, { world, scene, camera }); // world tiles outside the island core, streamed around the local camera (step B, tiles.js)
 { // menu : « Départ » (train intro / Gare Centrale / Grande Île au hasard), remembered locally ; default CONFIG.start (v0.81.0)
   const sel = document.getElementById('startArea'), qs = new URLSearchParams(location.search);
   const ok = (v) => (v === 'intro' ? !!game.introAvailable : v === 'gare' ? !!world.gare : v === 'island');

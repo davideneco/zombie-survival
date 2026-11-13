@@ -23,6 +23,7 @@ export function createFacadeAtlas({ renderer, detailTex, depthBias }) {
     uDepthBias,
     has: (key) => byKey.has(key),
     get: (key) => byKey.get(key),
+    byId: (id) => layers[id], // (key, rank and id stay valid after build(); streamed tiles map their layers through them)
     // sets: the three canvases of the layer (they are freed by build()); flood: lit by the monument floodlight (gothic cathedral)
     add(key, rank, sets, flood = false) {
       const L = { id: layers.length, key, rank, sets, flood };

@@ -11,3 +11,6 @@ public/music/theme.*
 !public/music/LISEZMOI.txt
 !public/music/jeaux_davide.ogg
 !public/music/midnight_lurch.ogg
+
+# raw downloads of tools/tiles.mjs (untrusted data, rebuilt with --fetch)
+.cache/

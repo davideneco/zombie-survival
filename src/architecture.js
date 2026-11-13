@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { gpuOnly } from './gpuOnly.js';
 import { CONFIG } from './config.js';
-import { createRelief, hash2 } from './relief.js';
+import { createRelief, nullRelief, hash2 } from './relief.js';
 import { addShadowProxy, proxyBucket } from './shadowProxy.js';
 import { detailCull } from './detailCull.js';
 import { FLOOR_H, BAY_W, GF_H, texSet, CW, CH, GH, prng } from './facadeDraw.js';
@@ -90,20 +90,24 @@ const num = (v) => { const n = parseFloat(v); return Number.isFinite(n) ? n : nu
 const HIPPED = ['hipped', 'half-hipped', 'gambrel', 'mansard', 'side_hipped', 'quadruple_saltbox', 'saltbox', 'round'];
 
 // ------------------------------------------------------------------ Constructeur
-export function createArchitecture({ renderer, plasterImg, plaster2Img, roofP, rnd }) {
+// stream (step B, tiles.js): the kit of the core instance (`streamKit()`, after its finish) makes this a STREAMED instance: no canvas is drawn, no atlas, no
+// relief, no new material: walls use the core texture array and its material, a layer the core atlas does not hold falls back to the nearest one that it does.
+// Its buildings are flushed one tile at a time (flushTile). Its `rnd` is the tile's own generator (opts.rnd per building overrides it).
+export function createArchitecture({ renderer, plasterImg, plaster2Img, roofP, rnd: rndWorld, stream = null }) {
+  let rnd = rndWorld; // the generator of the building being built (building() swaps it when opts.rnd is given)
   const CFG = CONFIG.architecture;
   // plaster2 (« painted_plaster_wall » : crépi taché et coulé, CC0 Poly Haven) sert de fond à la moitié des crépis et à une variante de colombage
   const p2 = plaster2Img || plasterImg;
   // anciens styles : nombre de variantes et fonction de dessin (le tirage `rnd` du monde est consommé exactement comme avant : legacyDraws)
   const LEGACY = { plaster: [4, (c, i, r, v) => drawPlaster(c, v >= 2 ? p2 : i, r, v)], timber: [3, (c, i, r, v) => drawTimber(c, v === 1 ? p2 : i, r, v)], sandstone: [3, drawSandstone], gothic: [1, (c, i, r, v) => drawSandstone(c, i, r, v, true)], modern: [1, drawModern] };
   // texture de détail fine (mêmes pixels que plaster2, 256 px, niveaux de gris) : multipliée à la couleur des façades par le shader du matériau en tableau
-  const detailTex = (() => {
+  const detailTex = stream ? null : (() => {
     const cv = document.createElement('canvas'); cv.width = cv.height = 256;
     const x = cv.getContext('2d'); x.filter = 'grayscale(1) contrast(1.7) brightness(1.1)'; x.drawImage(p2, 0, 0, 256, 256);
     const t = new THREE.CanvasTexture(cv); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 4; t.userData.detail = true;
     return t;
   })();
-  const atlas = createFacadeAtlas({ renderer, detailTex, depthBias: CFG.depthBias });
+  const atlas = stream ? null : createFacadeAtlas({ renderer, detailTex, depthBias: CFG.depthBias });
 
   const bucket = () => ({ pos: [], nor: [], uv: [], col: [], fac: [], idx: [] });
   const wallB = bucket(), roofB = bucket();
@@ -114,8 +118,17 @@ export function createArchitecture({ renderer, plasterImg, plaster2Img, roofP, r
   const record = (L, style, variant) => { let r = recs.get(L.id); if (!r) recs.set(L.id, r = { b: wallB, L, rank: L.rank, style, variant }); return r; };
   const roofR = { b: roofB, L: { id: 0 }, rank: 0 };
   // Legacy layer: drawn on first use with the WORLD rnd, exactly as the old lazy materials did (the canvases are reused as atlas layers)
+  // Streamed instance: the layer of the core atlas with this key, else CONFIG.world.layerFallback, else the same style family, else the first layer there is
+  const streamLayer = (key) => {
+    const sl = stream.layers;
+    let L = sl.get(key) || sl.get(CONFIG.world.layerFallback[key]);
+    if (!L) { const fam = key.split(':')[0]; for (const [k, v] of sl) if (k === fam || k.startsWith(fam + ':')) { L = v; break; } }
+    if (!L) L = sl.get('plasterP:0') || sl.values().next().value;
+    return record(L, key.split(':')[0], +(key.split(':')[1] || 0));
+  };
   const legacyLayer = (style, variant) => {
     const key = `${style}:${variant}`;
+    if (stream) return streamLayer(key);
     if (!atlas.has(key)) {
       let set;
       if (style === 'shop') set = texSet(CW * 2, GH, (ctx) => drawShop(ctx, plasterImg, rnd, variant));
@@ -129,6 +142,7 @@ export function createArchitecture({ renderer, plasterImg, plaster2Img, roofP, r
   // New layer (local prng, never the world rnd)
   const hashStr = (s) => { let h = 2166136261; for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619); return h >>> 0; };
   const newLayer = (key) => {
+    if (stream) return streamLayer(key);
     if (!atlas.has(key)) {
       const def = NEW_LAYERS[key], R = prng(hashStr(key) ^ CFG.seed);
       atlas.add(key, def.rank * 2, texSet(def.W, def.H, (ctx) => def.draw(ctx, plasterImg, R, p2)));
@@ -138,6 +152,7 @@ export function createArchitecture({ renderer, plasterImg, plaster2Img, roofP, r
   // Monuments éclairés la nuit (cathédrale) : le grès lui-même émet une lumière chaude
   let floodRec = null;
   const floodlit = () => {
+    if (stream) return streamLayer('gothic:0');
     if (!floodRec) {
       const base = matFor('gothic', 0);
       floodRec = record(atlas.add('gothic:flood', 2 * (RANK.flood + 1), base.L.sets, true), 'gothic', 0);
@@ -145,11 +160,12 @@ export function createArchitecture({ renderer, plasterImg, plaster2Img, roofP, r
     return floodRec;
   };
   // toits : tuiles PBR teintées par sommet
-  const roofMat = atlas.patchDepth(new THREE.MeshStandardMaterial({ map: roofP.map, normalMap: roofP.normalMap, roughnessMap: roofP.roughnessMap, vertexColors: true, side: THREE.DoubleSide }));
+  const roofMat = stream ? stream.roofMat : atlas.patchDepth(new THREE.MeshStandardMaterial({ map: roofP.map, normalMap: roofP.normalMap, roughnessMap: roofP.roughnessMap, vertexColors: true, side: THREE.DoubleSide }));
   const tmp = new THREE.Color();
+  let kit = null; // set by finish() (core instance): see streamKit
 
   // ---------- relief des façades (relief.js) : fenêtres, balcons, corniches, tuyaux, cheminées ; AUCUN tirage `rnd`
-  const relief = createRelief();
+  const relief = stream ? nullRelief : createRelief();
   // ouverture dessinée dans la texture (m) : n fenêtres par travée, largeur, hauteur, hauteur au-dessus du plancher ; encadrement
   const WIN_LEGACY = {
     plaster: { n: 1, w: 1.25, h: 1.85, b: 0.85, trim: (v) => (v % 2 ? '#c99a84' : '#e2d9c6'), cornice: '#d8cdb8' },
@@ -641,6 +657,10 @@ export function createArchitecture({ renderer, plasterImg, plaster2Img, roofP, r
     // Bâtiment complet. cutsOf(i) : ouvertures (passages) du mur i. Retourne { wallTop, roofTop }.
     // opts.ghost : le construire « pour rien » (voir ghost) ; opts.island : sur l'île ; opts.streetEdges[i] : le mur i donne sur la rue
     building(pts, tags, hGuess, cutsOf, opts = {}) {
+      if (opts.rnd && opts.rnd !== rnd) { // a streamed tile draws from its own generator
+        const prev = rnd; rnd = opts.rnd;
+        try { return this.building(pts, tags, hGuess, cutsOf, { ...opts, rnd: null }); } finally { rnd = prev; }
+      }
       if (opts.ghost) return ghost(() => this.building(pts, tags, hGuess, cutsOf, { ...opts, ghost: false }));
       const area = Math.abs(polyArea(pts));
       const levelsTag = num(tags['building:levels']);
@@ -803,6 +823,51 @@ export function createArchitecture({ renderer, plasterImg, plaster2Img, roofP, r
 
     relief, // relief des façades (relief.js) : portée réglée par la qualité, mis à jour par le monde
 
+    // What a streamed instance needs from this (core) one: the finished wall material, its layer -> array slice map and the layers it holds. Null before finish().
+    streamKit: () => kit,
+
+    // STREAMED instance only: turns the buildings built since the last flush into the tile's meshes (not added to any scene) and empties the builders.
+    // Returns { walls, roof, proxy: { pos, idx }, digest: { verts, tris, sum } } ; a mesh is null when the tile has no such geometry. The depth parity of the
+    // tile (see finish) keeps two neighbouring tiles from fighting for a pixel. The caller owns the meshes (dispose their geometry when the tile goes away).
+    // flushTileSteps is the same as a generator that yields between its heavy steps (the streamer runs it in time slices); flushTile runs it to the end.
+    *flushTileSteps(ix, iz) {
+      const out = { walls: null, roof: null, proxy: { pos: null, idx: null }, digest: { verts: 0, tris: 0, sum: 0 } };
+      const parts = [];
+      const mk = (b, mat, name, walls) => {
+        if (!b.pos.length) return null;
+        const n = b.pos.length / 3, par = walls ? (ix + iz) & 1 : (ix & 1) | ((iz & 1) << 1), fac = new Uint8Array(n * 2);
+        for (let v = 0; v < n; v++) { fac[v * 2] = walls ? stream.slot.get(b.fac[v * 2]) ?? 0 : 0; fac[v * 2 + 1] = b.fac[v * 2 + 1] + par; }
+        const g = new THREE.BufferGeometry();
+        const pos = new Float32Array(b.pos);
+        g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+        g.setAttribute('normal', new THREE.Float32BufferAttribute(b.nor, 3));
+        g.setAttribute('uv', new THREE.Float32BufferAttribute(b.uv, 2));
+        g.setAttribute('color', new THREE.Float32BufferAttribute(b.col, 3));
+        g.setAttribute('aFac', new THREE.BufferAttribute(fac, 2));
+        const idx = n > 65535 ? new Uint32Array(b.idx) : new Uint16Array(b.idx);
+        g.setIndex(new THREE.BufferAttribute(idx, 1));
+        g.computeBoundingSphere(); g.computeBoundingBox();
+        const m = new THREE.Mesh(g, mat);
+        gpuOnly(m);
+        m.name = name; m.castShadow = false; m.receiveShadow = true;
+        let s = 0; for (let i = 0; i < pos.length; i++) s += pos[i];
+        out.digest.verts += n; out.digest.tris += idx.length / 3; out.digest.sum += s;
+        parts.push({ pos: new Float32Array(pos), idx }); // (the proxy gets its own copy: the mesh arrays are dropped after their upload)
+        return m;
+      };
+      out.walls = mk(wallB, stream.wallMat, 'tile:walls', true);
+      yield;
+      out.roof = mk(roofB, roofMat, 'tile:roof', false);
+      for (const b of [roofB, wallB]) { b.pos = []; b.nor = []; b.uv = []; b.col = []; b.fac = []; b.idx = []; }
+      yield;
+      let np = 0, ni = 0; for (const q of parts) { np += q.pos.length; ni += q.idx.length; }
+      const pp = new Float32Array(np), pi = new Uint32Array(ni); np = 0; ni = 0;
+      for (const q of parts) { for (let i = 0; i < q.idx.length; i++) pi[ni + i] = q.idx[i] + np / 3; pp.set(q.pos, np); np += q.pos.length; ni += q.idx.length; }
+      out.proxy.pos = pp; out.proxy.idx = pi;
+      return out;
+    },
+    flushTile(ix, iz) { const g = this.flushTileSteps(ix, iz); let r; while (!(r = g.next()).done); return r.value; },
+
     // Construit les maillages (un par tuile : murs en tableau de textures, toits) et les ajoute à la scène
     finish(scene, area = 'island') {
       const T = CONFIG.graphics.cityTile; // tile size (m): with the texture array a tile is one wall mesh + one roof mesh
@@ -810,6 +875,7 @@ export function createArchitecture({ renderer, plasterImg, plaster2Img, roofP, r
       const used = new Set();
       for (let i = 0; i < wallB.fac.length; i += 2) used.add(wallB.fac[i]);
       const { mat: wallMat, slot } = atlas.build(used);
+      kit = { wallMat, roofMat, slot, layers: new Map([...used].map((id) => { const L = atlas.byId(id); return [L.key, { id, rank: L.rank }]; })) };
       const proxyTiles = new Map();
       const toMesh = (b, mat, name) => {
         if (!b.pos.length) return null;

@@ -1,0 +1,88 @@
+{
+ "tileSize": 480,
+ "origin": {
+  "lat": 48.5822,
+  "lon": 7.7485
+ },
+ "core": {
+  "x0": -820,
+  "x1": 820,
+  "z0": -560,
+  "z1": 560
+ },
+ "halo": 30,
+ "tiles": {
+  "1,-1": {
+   "k": 2147581951,
+   "file": "t_1_-1.json",
+   "bytes": 25073,
+   "sha": "baa3c6e25dbe750e",
+   "counts": {
+    "buildings": 60,
+    "halo": 24,
+    "trees": 257,
+    "lamps": 5,
+    "droppedCore": 233,
+    "hSrc": {
+     "default": 51,
+     "levels": 9
+    }
+   }
+  },
+  "1,0": {
+   "k": 2147581952,
+   "file": "t_1_0.json",
+   "bytes": 34878,
+   "sha": "b19902e54ce6bd57",
+   "counts": {
+    "buildings": 89,
+    "halo": 31,
+    "trees": 46,
+    "lamps": 3,
+    "droppedCore": 384,
+    "hSrc": {
+     "default": 75,
+     "levels": 13,
+     "height": 1
+    }
+   }
+  },
+  "2,-1": {
+   "k": 2147647487,
+   "file": "t_2_-1.json",
+   "bytes": 103244,
+   "sha": "c1a269b02ccd23fb",
+   "counts": {
+    "buildings": 256,
+    "halo": 63,
+    "trees": 444,
+    "lamps": 0,
+    "droppedCore": 0,
+    "hSrc": {
+     "levels": 20,
+     "default": 232,
+     "height": 4
+    }
+   }
+  },
+  "2,0": {
+   "k": 2147647488,
+   "file": "t_2_0.json",
+   "bytes": 54814,
+   "sha": "8b2e74c65b5dbb98",
+   "counts": {
+    "buildings": 109,
+    "halo": 44,
+    "trees": 310,
+    "lamps": 63,
+    "droppedCore": 0,
+    "hSrc": {
+     "levels": 23,
+     "height": 20,
+     "default": 66
+    }
+   }
+  }
+ },
+ "hash": "cccedff37207f6ed"
+}

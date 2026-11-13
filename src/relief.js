@@ -245,4 +245,8 @@ export function createRelief() {
   return api;
 }
 
+// Relief sink for streamed tiles (tiles.js): every call is ignored (painted windows only, like the station's background buildings), nothing is kept
+const noop = () => {};
+export const nullRelief = { count: () => 0, mark: () => null, rollback: noop, window: noop, cornice: noop, quoin: noop, plinth: noop, box: noop, ribbon: noop, pipe: noop, chimney: noop, finish: noop, setRange: noop, update: noop, tiles: [] };
+
 export { hash2 };

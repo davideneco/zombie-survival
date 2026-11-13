@@ -27,6 +27,12 @@ export function addShadowProxy(parent, pos, idx, area = 'island') {
   return m;
 }
 
+// Streamed tiles: takes a proxy out of the list and frees its geometry
+export function removeShadowProxy(m) {
+  const i = proxies.indexOf(m); if (i >= 0) proxies.splice(i, 1);
+  m.parent?.remove(m); m.geometry.dispose();
+}
+
 // Accumulates the triangles of several buckets (per tile) into one proxy
 export function proxyBucket() {
   return { pos: [], idx: [], add(pos, idx) { const o = this.pos.length / 3; for (let i = 0; i < pos.length; i++) this.pos.push(pos[i]); for (let i = 0; i < idx.length; i++) this.idx.push(idx[i] + o); } };

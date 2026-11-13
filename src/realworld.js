@@ -3,6 +3,7 @@ import { createTrees } from './trees.js';
 import { createGround } from './ground.js';
 import { createInteriors } from './interiors.js';
 import { chunkGround } from './groundChunks.js';
+import { seeded } from './rng.js';
 import { createKeyBuildings } from './keyBuildings.js';
 import { installTerrain, terrainY, terrainWaterY, terrainOn, patchObject, tessellate } from './terrain.js';
 import { contact } from './contact.js';
@@ -38,19 +39,6 @@ const loadTex = (url) => new Promise((res, rej) => texLoader.load(url, res, unde
 const loadImg = (url) => new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = url; });
 const rand = (a, b) => a + Math.random() * (b - a);
 const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
-
-// Mulberry32 : aléatoire reproductible pour que la map soit la même à chaque partie
-function seeded(seed) {
-  const f = () => {
-    seed |= 0; seed = (seed + 0x6d2b79f5) | 0;
-    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-  f.save = () => seed;       // état du générateur : permet de placer des objets « hors tirage » (voir zone.isolatedRnd)
-  f.load = (s) => { seed = s; };
-  return f;
-}
 
 async function loadPBR(name, renderer) {
   const base = `/textures/${name}/`;
@@ -737,7 +725,7 @@ export async function buildRealWorld(scene, renderer) {
       if (onIsland(x, z)) collision.addCircle(x, z, 0.3);
       contact.add(x, z, 3.4, 3.4, 0, CONFIG.graphics.contact.tree); // ombre de contact (aucun tirage `rnd`)
     }
-    treesApi = createTrees(scene, treeList, tiled(barkP, 1, 2, { color: 0x8a8076 })); // le mode (boules / cartes / branches) est réglé par graphics.js
+    treesApi = createTrees(scene, treeList, tiled(barkP, 1, 2, { color: 0x8a8076 }), { capacity: CONFIG.world.treeCap }); // (capacity: slots for the streamed tile trees, tiles.js) le mode (boules / cartes / branches) est réglé par graphics.js
   }
 
   // ---------------------------------------------------------------- Sol : trottoirs, variation, flaques, plaques d'égout (shader du sol, v0.46.0)
@@ -1735,9 +1723,11 @@ export async function buildRealWorld(scene, renderer) {
   const zoneCenters = seeds.map((sd, i) => (sd && zoneCells[i].n ? { name: ZONE_NAMES[i], x: sd[0], z: sd[1] } : null));
 
   // ---------------------------------------------------------------- Lampadaires (instanciés, 6 à 8 vraies lumières mobiles)
+  let lampMats = null;
   {
     const poleMat = new THREE.MeshStandardMaterial({ color: 0x1d1f22, roughness: 0.65, metalness: 0.75 });
     const lampMat = new THREE.MeshStandardMaterial({ color: 0xffe2a0, emissive: 0xffaa44, emissiveIntensity: 2.8, roughness: 0.25 });
+    lampMats = { poleMat, lampMat }; // (streamed tiles reuse them: same programs)
     const dummy = new THREE.Object3D();
     const poles = [], lanterns = [], caps = [];
     for (const [x, z] of data.lamps) {
@@ -2344,6 +2334,9 @@ export async function buildRealWorld(scene, renderer) {
   const islandMap = { image: mapImage, view: { halfX, halfZ, scale: MAP_SCALE }, crop: { x0: Math.max(-halfX, secMinX - 40), x1: Math.min(halfX, secMaxX + 40), z0: Math.max(-halfZ, secMinZ - 40), z1: Math.min(halfZ, secMaxZ + 40) }, title: 'GRANDE ÎLE — STRASBOURG' };
   const curMap = () => (localArea === 'gare' && gare ? gare.map : islandMap);
   const zoneOfAll = (x, z) => (gare && gare.inArea(x, z) ? gare.zoneOf(x, z) : zoneOf(x, z));
+  // The build-time zone masks are dead weight once the world is built (the build closures keep them alive): the runtime only reads zoneLabelWide / zoneLabelWide1 and
+  // `reach`. Transferring an ArrayBuffer detaches it and frees its memory now (~10 MB at 3.3 M cells per mask).
+  for (const mask of [zoneLabel, zoneLabel1, breach.startMask]) { try { mask.buffer.transfer(0); } catch { /* no ArrayBuffer.transfer: the masks stay */ } }
   return {
     half: Math.max(halfX, halfZ), blockers, spawnPoints: [], windowSpawns,
     pickWindow: (px, pz, ...a) => (gare && gare.inArea(px, pz) ? null : pickWindow(px, pz, ...a)),
@@ -2408,5 +2401,8 @@ export async function buildRealWorld(scene, renderer) {
       if (localArea === 'island') detailCull.update(px, pz, scene.fog.density, detailCull.camera); // every frame: the frustum test follows the view // détail des façades coupé au-delà de la portée de la qualité
     },
     mapName: 'Grande Île, Strasbourg',
+    // what the tile streamer (tiles.js) reuses from the core: the architecture instance (finished: texture array + materials), the shared ground material
+    // and its UV mapping, the island tree layers, the lamp materials and the light sources
+    stream: { createArchitecture, renderer, arch, ground: { material: groundMesh.material, tile: GROUND_TILE, w: GROUND_W, h: GROUND_H }, trees: treesApi, lamps: lampMats, lightSources },
   };
 }

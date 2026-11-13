@@ -130,11 +130,17 @@ function ballGeometry() {
 
 // ------------------------------------------------------------------ API
 // list : [{ x, z, th }] (th : hauteur du tronc, m) ; barkMat : matériau d'écorce (realworld.js)
-export function createTrees(scene, list, barkMat) {
-  const T = CONFIG.graphics.trees, N = list.length;
+// opts.capacity : extra tree slots for streamed tile trees (api.addSet / api.removeSet, step B): the instance buffers are sized for N + capacity trees, the
+// culling rebuild below already works from the CPU data, so a set costs no extra draw call. 0 (default) = the fixed list only (unchanged layout).
+export function createTrees(scene, list, barkMat, opts = {}) {
+  const T = CONFIG.graphics.trees, N = list.length, CAP = N + (opts.capacity | 0);
   const Z = new THREE.Vector3(0, 0, 1), qr = new THREE.Quaternion(), dummy = new THREE.Object3D(), q = new THREE.Quaternion(), qi = new THREE.Quaternion(), tmpV = new THREE.Vector3(), tmpW = new THREE.Vector3();
   const tints = [0xd8e4c0, 0xc4d8a4, 0xe2e8b8, 0xb8d09c, 0xd0e0a8, 0xe8dfa0].map((c) => new THREE.Color(c));
   const api = { mode: null, meshes: {}, group: new THREE.Group(), N };
+  // slots: 0..N-1 = the fixed list, then the tile sets; items[i] is the tree of slot i, alive[i] = 0 for a free slot
+  const items = list.slice(); items.length = CAP;
+  const alive = new Uint8Array(CAP); alive.fill(1, 0, N);
+  let hi = N; const freeSlots = [], sets = new Map();
   api.group.name = 'trees'; scene.add(api.group);
   let atlas = null, foliageMat = null;
 
@@ -143,16 +149,19 @@ export function createTrees(scene, list, barkMat) {
   // camera, whenever the camera moved more than T.rebuild m (or the quality changed). Draw calls stay 1 per layer.
   const layers = [];
   const cardsPer = { v: 0 };
-  const registerLayer = (mesh, per, srcIndex) => {
-    const L = { mesh, per, srcIndex, m: mesh.instanceMatrix.array.slice(), c: mesh.instanceColor ? mesh.instanceColor.array.slice() : null, extra: [] };
-    for (const name of ['aLocalN', 'aCell']) { const a = mesh.geometry.attributes[name]; if (a) L.extra.push({ dst: a, src: a.array.slice(), size: a.itemSize }); }
+  // A layer keeps the full CPU data (L.m matrices, L.c colours, L.extra attributes) indexed by srcIndex(tree slot, k); write(L, slot) fills the entries of one tree
+  const registerLayer = (mesh, per, srcIndex, write) => {
+    const L = { mesh, per, srcIndex, write, m: new Float32Array(mesh.instanceMatrix.array.length), c: mesh.instanceColor ? new Float32Array(mesh.instanceColor.array.length) : null, extra: [] };
+    for (const name of ['aLocalN', 'aCell']) { const a = mesh.geometry.attributes[name]; if (a) L.extra.push({ dst: a, src: new Float32Array(a.array.length), size: a.itemSize, name }); }
     layers.push(L);
+    for (let i = 0; i < hi; i++) if (alive[i]) write(L, i);
+    dirty = true;
   };
-  const sel = new Int32Array(N); let nSel = 0, cx0 = NaN, cz0 = NaN, dirty = true;
+  const sel = new Int32Array(CAP); let nSel = 0, cx0 = NaN, cz0 = NaN, dirty = true;
   const range2 = (T.range || 1e9) ** 2;
   const rebuild = (cx, cz) => {
     nSel = 0;
-    for (let i = 0; i < N; i++) { const dx = list[i].x - cx, dz = list[i].z - cz; if (dx * dx + dz * dz <= range2) sel[nSel++] = i; }
+    for (let i = 0; i < hi; i++) { if (!alive[i]) continue; const dx = items[i].x - cx, dz = items[i].z - cz; if (dx * dx + dz * dz <= range2) sel[nSel++] = i; }
     for (const L of layers) {
       const per = L.per(), dm = L.mesh.instanceMatrix.array, dc = L.mesh.instanceColor ? L.mesh.instanceColor.array : null;
       for (let j = 0; j < nSel; j++) for (let c = 0; c < per; c++) {
@@ -171,46 +180,53 @@ export function createTrees(scene, list, barkMat) {
 
   const ensureTrunk = () => {
     if (api.meshes.trunk) return;
-    const m = new THREE.InstancedMesh(trunkGeometry(), barkMat, N);
-    list.forEach((t, i) => {
-      const s = 0.85 + 0.35 * hash(t.x, t.z, 3);
-      dummy.position.set(t.x, 0, t.z); dummy.rotation.set(0, hash(t.x, t.z, 4) * 6.28, 0); dummy.scale.set(s, t.th + 0.5, s); dummy.updateMatrix();
-      m.setMatrixAt(i, dummy.matrix);
-    });
+    const m = new THREE.InstancedMesh(trunkGeometry(), barkMat, CAP);
     m.castShadow = true; m.frustumCulled = false; m.instanceMatrix.needsUpdate = true;
     api.meshes.trunk = m; api.group.add(m);
-    registerLayer(m, () => 1, (i) => i); dirty = true;
+    registerLayer(m, () => 1, (i) => i, (L, i) => {
+      const t = items[i], s = 0.85 + 0.35 * hash(t.x, t.z, 3);
+      dummy.position.set(t.x, 0, t.z); dummy.rotation.set(0, hash(t.x, t.z, 4) * 6.28, 0); dummy.scale.set(s, t.th + 0.5, s); dummy.updateMatrix();
+      dummy.matrix.toArray(L.m, i * 16);
+    });
   };
 
   const ensureBalls = () => {
     if (api.meshes.ball) return;
-    const per = 2, m = new THREE.InstancedMesh(ballGeometry(), new THREE.MeshStandardMaterial({ roughness: 0.95, vertexColors: true, map: leafyTexture() }), N * per);
-    list.forEach((t, i) => {
-      const hc = hash(t.x, t.z, 9), col = tints[Math.floor(hc * tints.length)].clone().multiplyScalar(0.95);
+    const per = 2, m = new THREE.InstancedMesh(ballGeometry(), new THREE.MeshStandardMaterial({ roughness: 0.95, vertexColors: true, map: leafyTexture() }), CAP * per);
+    m.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(CAP * per * 3), 3);
+    m.castShadow = true; m.frustumCulled = false; m.instanceMatrix.needsUpdate = true; m.instanceColor.needsUpdate = true;
+    api.meshes.ball = m; api.group.add(m);
+    registerLayer(m, () => per, (i, c) => i * per + c, (L, i) => {
+      const t = items[i], hc = hash(t.x, t.z, 9), col = tints[Math.floor(hc * tints.length)].clone().multiplyScalar(0.95);
       for (let k = 0; k < per; k++) {
         const a = hash(t.x, t.z, 20 + k) * 6.28, off = k === 0 ? 0.2 : 1.0 + 0.5 * hash(t.x, t.z, 30);
         const r = (k === 0 ? 2.0 : 1.45) * (0.85 + 0.3 * hash(t.x, t.z, 40 + k));
         dummy.position.set(t.x + Math.cos(a) * off, t.th + (k === 0 ? 1.0 : 1.5 + hash(t.x, t.z, 50) * 0.5), t.z + Math.sin(a) * off);
         dummy.rotation.set(0, a, 0); dummy.scale.set(r, r, r); dummy.updateMatrix();
-        m.setMatrixAt(i * per + k, dummy.matrix); m.setColorAt(i * per + k, col);
+        dummy.matrix.toArray(L.m, (i * per + k) * 16); col.toArray(L.c, (i * per + k) * 3);
       }
     });
-    m.castShadow = true; m.frustumCulled = false; m.instanceMatrix.needsUpdate = true; m.instanceColor.needsUpdate = true;
-    api.meshes.ball = m; api.group.add(m);
-    registerLayer(m, () => per, (i, c) => i * per + c); dirty = true;
   };
 
   const ensureCards = () => {
     if (api.meshes.cards) return;
     atlas = foliageAtlas(); foliageMat = foliageMaterial(atlas);
-    const nc = T.cards[1], total = N * nc;
+    const nc = T.cards[1], total = CAP * nc;
     const geo = new THREE.PlaneGeometry(1, 1);
     const aN = new Float32Array(total * 3), aCell = new Float32Array(total * 2);
     const m = new THREE.InstancedMesh(geo, foliageMat, total);
+    m.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(total * 3), 3);
+    geo.setAttribute('aLocalN', new THREE.InstancedBufferAttribute(aN, 3));
+    geo.setAttribute('aCell', new THREE.InstancedBufferAttribute(aCell, 2));
+    m.castShadow = true; m.frustumCulled = false; m.instanceMatrix.needsUpdate = true; m.instanceColor.needsUpdate = true;
+    api.meshes.cards = m; api.group.add(m);
     const col = new THREE.Color();
     // ordre « carte d'abord » : les premières N x cards[0] instances sont les premières cartes de CHAQUE arbre (mesh.count règle la densité de la qualité)
-    for (let c = 0; c < nc; c++) for (let i = 0; i < N; i++) {
-      const t = list[i], idx = c * N + i, k = c * 7.31;
+    // (the stride between two cards of a tree is CAP: slot i of card c is c * CAP + i)
+    registerLayer(m, () => cardsPer.v, (i, c) => c * CAP + i, (L, i) => { // source order: card first
+      const eN = L.extra[0].src, eC = L.extra[1].src;
+      for (let c = 0; c < nc; c++) {
+      const t = items[i], idx = c * CAP + i, k = c * 7.31;
       const crown = (0.85 + 0.35 * hash(t.x, t.z, 5)) * T.crownRadius, cy = t.th + T.crownHeight;
       // position dans l'ellipsoïde de la couronne (plus dense au bord : on voit des feuilles, pas un trou)
       const u = hash(t.x, t.z, 100 + k) * 2 - 1, a = hash(t.x, t.z, 200 + k) * 6.28318, rr = Math.sqrt(1 - u * u) * (0.45 + 0.55 * Math.sqrt(hash(t.x, t.z, 300 + k)));
@@ -221,28 +237,27 @@ export function createTrees(scene, list, barkMat) {
       q.setFromUnitVectors(Z, tmpV).multiply(qr.setFromAxisAngle(Z, hash(t.x, t.z, 700 + k) * 6.28318));
       const size = T.cardSize[0] + (T.cardSize[1] - T.cardSize[0]) * hash(t.x, t.z, 800 + k);
       dummy.position.set(t.x + px, cy + py, t.z + pz); dummy.quaternion.copy(q); dummy.scale.setScalar(size); dummy.updateMatrix();
-      m.setMatrixAt(idx, dummy.matrix);
+      dummy.matrix.toArray(L.m, idx * 16);
       // normale d'éclairage : celle de la couronne (du centre vers la carte, relevée), exprimée dans le repère local de la carte
       tmpV.copy(tmpW).applyQuaternion(qi.copy(q).invert());
-      aN[idx * 3] = tmpV.x; aN[idx * 3 + 1] = tmpV.y; aN[idx * 3 + 2] = tmpV.z;
+      eN[idx * 3] = tmpV.x; eN[idx * 3 + 1] = tmpV.y; eN[idx * 3 + 2] = tmpV.z;
       const cell = Math.floor(hash(t.x, t.z, 900 + k) * 4);
-      aCell[idx * 2] = (cell % 2) * 0.5; aCell[idx * 2 + 1] = Math.floor(cell / 2) * 0.5;
+      eC[idx * 2] = (cell % 2) * 0.5; eC[idx * 2 + 1] = Math.floor(cell / 2) * 0.5;
       // teinte : propre à l'arbre, assombrie vers l'intérieur et le bas de la couronne (faux occlusion ambiante)
       const inner = 1 - Math.min(1, rr + Math.max(0, u) * 0.4);
       col.copy(tints[Math.floor(hash(t.x, t.z, 9) * tints.length)]).multiplyScalar(0.6 + 0.42 * (u * 0.5 + 0.5) - 0.26 * inner);
-      m.setColorAt(idx, col);
-    }
-    geo.setAttribute('aLocalN', new THREE.InstancedBufferAttribute(aN, 3));
-    geo.setAttribute('aCell', new THREE.InstancedBufferAttribute(aCell, 2));
-    m.castShadow = true; m.frustumCulled = false; m.instanceMatrix.needsUpdate = true; m.instanceColor.needsUpdate = true;
-    api.meshes.cards = m; api.group.add(m);
-    registerLayer(m, () => cardsPer.v, (i, c) => c * N + i); dirty = true; // source order: card first
+      col.toArray(L.c, idx * 3);
+      }
+    });
   };
 
   const ensureBranches = () => {
     if (api.meshes.branches) return;
-    const nb = T.branches, m = new THREE.InstancedMesh(branchGeometry(), barkMat, N * nb), up = new THREE.Vector3(0, 1, 0);
-    list.forEach((t, i) => {
+    const nb = T.branches, m = new THREE.InstancedMesh(branchGeometry(), barkMat, CAP * nb), up = new THREE.Vector3(0, 1, 0);
+    m.castShadow = true; m.frustumCulled = false; m.instanceMatrix.needsUpdate = true;
+    api.meshes.branches = m; api.group.add(m);
+    registerLayer(m, () => nb, (i, c) => i * nb + c, (L, i) => {
+      const t = items[i];
       for (let b = 0; b < nb; b++) {
         const a = (b / nb) * 6.28318 + hash(t.x, t.z, 60 + b) * 1.1, lean = 0.55 + 0.6 * hash(t.x, t.z, 70 + b);
         const h0 = t.th * (0.55 + 0.4 * (b / nb)) + hash(t.x, t.z, 80 + b) * 0.3, len = 1.3 + 1.1 * hash(t.x, t.z, 90 + b);
@@ -250,12 +265,9 @@ export function createTrees(scene, list, barkMat) {
         q.setFromUnitVectors(up, tmpV);
         const g = 0.8 + 0.5 * hash(t.x, t.z, 95 + b) - 0.35 * (h0 / t.th - 0.55);
         dummy.position.set(t.x, h0, t.z); dummy.quaternion.copy(q); dummy.scale.set(g, len, g); dummy.updateMatrix();
-        m.setMatrixAt(i * nb + b, dummy.matrix);
+        dummy.matrix.toArray(L.m, (i * nb + b) * 16);
       }
     });
-    m.castShadow = true; m.frustumCulled = false; m.instanceMatrix.needsUpdate = true;
-    api.meshes.branches = m; api.group.add(m);
-    registerLayer(m, () => nb, (i, c) => i * nb + c); dirty = true;
   };
 
   // mode : 'ball' | 'cards' | 'cards+branches'
@@ -278,5 +290,26 @@ export function createTrees(scene, list, barkMat) {
     const dx = cam.x - cx0, dz = cam.z - cz0;
     if (dirty || !(dx * dx + dz * dz <= T.rebuild * T.rebuild)) { dirty = false; cx0 = cam.x; cz0 = cam.z; rebuild(cx0, cz0); }
   };
+  // Streamed tile trees: addSet(key, [{ x, z, th }]) fills free slots (extra trees beyond the capacity are dropped, in list order), removeSet(key) frees them.
+  // Both only touch CPU data; the next culling rebuild (api.update) picks the change up. Returns the number of trees added.
+  api.addSet = (key, trees, append = false) => { // append: add to the set `key` instead of replacing it (a tile adds its trees over several frames)
+    if (!append) api.removeSet(key);
+    const slots = sets.get(key) || [];
+    for (const t of trees) {
+      const i = freeSlots.length ? freeSlots.pop() : hi < CAP ? hi++ : -1;
+      if (i < 0) break;
+      items[i] = t; alive[i] = 1; slots.push(i);
+      for (const L of layers) L.write(L, i);
+    }
+    sets.set(key, slots); dirty = true;
+    return slots.length;
+  };
+  api.removeSet = (key) => {
+    const slots = sets.get(key); if (!slots) return 0;
+    for (const i of slots) { alive[i] = 0; items[i] = null; freeSlots.push(i); }
+    sets.delete(key); dirty = true;
+    return slots.length;
+  };
+  api.stats = () => ({ fixed: N, capacity: CAP - N, used: hi - N - freeSlots.length, sets: sets.size });
   return api;
 }

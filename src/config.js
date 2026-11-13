@@ -617,6 +617,26 @@ export const CONFIG = {
   //  - B / C / F : du pont Kuss (Alt Winmärik) à l'Homme de Fer, puis rue de la Mésange, place Broglie et l'Opéra (pont du Théâtre)
   // stops : arrêts { name, at: [x, z] (projeté sur la voie), len (quai, m) } ; chaque bout de ligne porte un heurtoir. Une porte de zone fermée qui
   // coupe une voie est un heurtoir avec feu rouge (la rame freine d'elle-même) ; l'ouvrir libère le tronçon.
+  // ------------------------------------------------------------------ Chunked world (step B, src/tiles.js, tools/tiles.mjs). The island core (area.json) is built
+  // as always and never unloaded; everything outside it comes from 480 m tiles (public/data/tiles/) built from their own file and their own seed.
+  world: {
+    seed: 20240611,           // base of every tile / district seed (rng.js tileSeed); same value as the island stream, but the hash makes the streams independent
+    tileSize: 480,            // m; = 2 x cityTile, 4 x groundChunk (tile (ix, iz) covers [ix * size, (ix + 1) * size) in the frame of area.json)
+    core: { x0: -820, x1: 820, z0: -560, z1: 560 }, // m: the legacy rect (area.json), pinned: tiles never contain a building that touches it
+    groundCore: { x0: -850, x1: 850, z0: -590, z1: 590 }, // m: where the island ground plane stops (halfX/halfZ + 30): tile ground starts there
+    halo: 30,                 // m of neighbour outlines copied into each tile file (street detection without the neighbours)
+    // residency around the local camera (m): a tile is built when its nearest edge is closer than visIn, its GPU data is disposed beyond visOut (camera far 170 m + ~18 s of sprint),
+    // its JSON is dropped beyond dataOut; maxBuilt caps the GPU tiles at once, sliceMs is the build time per frame, checkEvery the residency check period (s)
+    stream: { visIn: 300, visOut: 380, dataOut: 900, maxBuilt: 6, sliceMs: 2.5, checkEvery: 0.5 },
+    streams: { facade: 1, trees: 2, lamps: 3, props: 4, items: 5, zones: 6 }, // rng stream ids (rng.js): a new system takes a new id, never reuses one
+    defaultLevels: 5,         // storeys of a tile building without height / building:levels tag (no IGN heights outside the core: not reachable from the build box)
+    lampLight: { color: 0xffb555, intensity: 50, dist: 22, y: 4.2 }, // light source of a tile lamp = the island lamps (never a real light: the 8-light pool picks the nearest sources)
+    shopChance: 0.25,         // share of the non-commercial tile buildings that get a shop front on the ground floor
+    treeCap: 1200,            // tile trees that can exist at once (slots reserved in the island tree layers: ~7 MB of instance buffers)
+    // facade layers that exist in the tile but not in the core atlas (the atlas only keeps the layers the core uses) map to the nearest style that does
+    layerFallback: { 'rustic:timber': 'rustic:plaster', gallery: 'timberN:0', gable: 'timberN:0', dormerSlat: 'dormerDark' },
+  },
+
   // ------------------------------------------------------------------ Gare de Strasbourg (v0.79.0, src/gare/). Aire jouable séparée à ses
   // vraies coordonnées (repère de area.json, données public/data/gare.json et rail.json : tools/fetch-rail.mjs). Repère local de la gare :
   // u le long des voies (vers le nord-nord-est), v vers le parvis ; origine au milieu du bâtiment historique (calculés d'après le contour OSM).
