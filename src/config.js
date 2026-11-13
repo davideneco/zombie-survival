@@ -245,6 +245,19 @@ export const CONFIG = {
     minConnected: 0.8,                         // a floor whose largest connected part is below this share of its free cells drops the building (pockets of an odd outline are harmless)
     visiblePad: 1,                             // m: upper floors are drawn while the camera is inside the footprint + this margin
   },
+  // Window barricades (barricades.js, step D): each key building has `perBuilding` ground-floor windows (width, sill and top heights in m, at least
+  // minGap m from the door and from each other) closed by `planks.window` planks. Zombies tear one plank every tear time (base - perRound x round,
+  // never below min; at most maxPerBarricade zombies per barricade, within `reach` m of it); a player holds F to nail one plank back every
+  // repair.time s (speedColaMult x that with Speed Cola; reach m; `points` per plank, at most capPerRound points per player and round). A boarded
+  // window costs navCost in the flow field (a free cell is 10, a vaultable one 40). Planks are synced by the host every `sync` s.
+  barricades: {
+    windows: { perBuilding: 3, width: 1.3, sill: 0.9, top: 2.5, minGap: 3 },
+    planks: { window: 6 },
+    tear: { base: 1.6, perRound: 0.06, min: 0.7, maxPerBarricade: 2, reach: 1.0 },
+    repair: { time: 0.75, reach: 1.8, points: 10, capPerRound: 500, speedColaMult: 0.5 },
+    navCost: 60,
+    sync: 0.2,
+  },
   // Relief du terrain (v0.74.0, terrain.js). Mètres. undulation : amplitude de l'ondulation douce des rues et places (échelles wave1 / wave2 en m) ;
   // bank : profondeur des berges à l'eau (l'eau est posée à -bank) sur bankReach m ; parvis : surélévation de la place devant la cathédrale.
   terrain: { enabled: true, undulation: 0.3, wave1: 90, wave2: 35, bank: 0.6, bankReach: 10, parvis: { x: 110, z: 36, h: 0.4, r: 22, edge: 12 }, groundEdge: 5 },

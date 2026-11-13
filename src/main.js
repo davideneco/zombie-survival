@@ -32,6 +32,7 @@ import { makeDisplay } from './weaponDisplay.js';
 import { installUi } from './ui.js';
 import { installModMenu } from './modMenu.js';
 import { installUnstick } from './unstick.js';
+import { installBarricades } from './barricades.js';
 import { installTransfer } from './transfer.js';
 import { installKeybinds } from './keybinds.js';
 import { installKeysMenu } from './keysMenu.js';
@@ -1422,6 +1423,7 @@ const game = {
     this.summitFx?.step(dt);
     this.perkFx?.update(dt);
     this.unstick?.update(dt);
+    this.barricades?.flush(dt); // plank debris, host batches of plank changes
 
     // Mise à jour des coéquipiers
     RemotePlayer.tick(dt);
@@ -1653,6 +1655,7 @@ const game = {
 
     // Prompt contextuel
     let promptText = null;
+    this.barActive = false;
     hud.setVehicle(p.vehicle ? p.vehicle.v.hudInfo() : null); // tableau de bord complet (compte-tours, vitesse, rapport, PV, essence)
     if (p.vehicle) {
       const B = game.binds, kE = B.tag('interact');
@@ -1700,6 +1703,9 @@ const game = {
       promptText = this.transferPrompt();
     } else if (this.nearVehicle()) {
       promptText = this.vehiclePrompt(this.nearVehicle());
+    } else if ((this.barTarget = this.barricades?.nearest(p.pos.x, p.pos.z)) && this.barTarget.n < this.barTarget.max) {
+      this.barActive = true;
+      promptText = this.barricades.capReached() ? `${game.binds.tag('interact')} Maintenir : réparer la barricade — Plafond de réparation atteint` : `${game.binds.tag('interact')} Maintenir : réparer la barricade (+${CONFIG.barricades.repair.points})`;
     } else if (this.nearDoor()) {
       const d = this.nearDoor(), here = world.zoneOf(this.player.pos.x, this.player.pos.z);
       const to = here === d.a ? d.b : here === d.b ? d.a : d.toZone; // la zone de l'autre côté de la barrière
@@ -1709,6 +1715,7 @@ const game = {
     const fanalPrompt = this.fanalPrompt?.();
     if (fanalPrompt && !p.vehicle) promptText = fanalPrompt;
     if (!promptText && p.vaultReady && !p.vault) promptText = `${game.binds.tag('jump')} Enjamber`;
+    if (this.barricades) { this.barricades.target = this.barTarget; this.barricades.hold(dt, this.barActive && !p.dead && !p.downed && game.binds.down('interact', p.keys)); }
     hud.prompt(promptText);
   },
 };
@@ -1734,6 +1741,7 @@ RemotePlayer.rideOf = (id) => game.rideById(id); // coéquipiers debout dans une
 installLauncher(game, { world, scene, fx });
 installModMenu(game, { world, hud, sfx });
 installUnstick(game, { world, hud, sfx });
+installBarricades(game, { scene, world, hud, sfx }); // window barricades of the key buildings (barricades.js)
 installTransfer(game, { world, hud, sfx, scene }); // tram Gare Centrale <-> Homme de Fer (v0.79.0)
 { // menu : « Départ » (train intro / Gare Centrale / Grande Île au hasard), remembered locally ; default CONFIG.start (v0.81.0)
   const sel = document.getElementById('startArea'), qs = new URLSearchParams(location.search);
@@ -1824,6 +1832,7 @@ function refreshLobby() {
 
 function setupNetworkHandlers(net) {
   game.bindVehicleNet(net);
+  game.onBarricadeNet?.(net); // bar_fix, bar
   game.onTransferNet?.(net); // tram transfer : xf_req, xf_call, xf_go, xf_left
   game.onIntroNet?.(net); // train intro : tn_sync, intro_skip
   game.onRideNet?.(net);  // zombies of the ride : tn_win, tn_rk, tn_rm
@@ -1877,6 +1886,7 @@ function setupNetworkHandlers(net) {
         finaleDone: game.finaleDone,
         summit: game.finaleDone && (game.finale || game.dawnOn) ? { st: game.summitState?.() || null, fan: game.finale?.fan || 0, dawn: game.dawnOn ? Math.round((game.time - game.dawnT0) * 10) / 10 : null, eternal: !!game.eternal } : null, // Acte V en cours (ou Aube passée)
         vehicles: game.vehicleSnapshot(),
+        bars: game.barricades?.snapshot() || [], // plank counts that differ from full
         intro: game.introState?.() || null, // train intro running : { tau, ph } (the joiner stands in the train)
         xf: game.transferState?.() || null, // tram transfer running (v0.83.0) : the joiner sees the same car
         zombies: game.zombies.map((z) => ({
@@ -2156,6 +2166,7 @@ function setupNetworkHandlers(net) {
     game.finale = m.finale != null ? { remote: true, ...(m.summit ? { st: m.summit.st, fan: m.summit.fan } : null) } : null;
     if (m.summit) game.applySummitSync?.(m.summit);
     game.applyVehicleSnapshot(m.vehicles);
+    game.barricades?.restore(m.bars);
 
     // Supprimer d'éventuels zombies locaux existants
     for (const z of game.zombies) z.dispose();

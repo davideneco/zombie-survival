@@ -118,7 +118,7 @@ export function createInteriors() {
       const P = ccw ? pts : pts.slice().reverse();
       // contour inversé : l'arête j de P est l'arête n-2-j du contour d'origine (la dernière reste la dernière), parcourue à l'envers
       const n0 = pts.length, back = (j) => (j === n0 - 1 ? n0 - 1 : n0 - 2 - j), fwd = back; // involution
-      const C2 = ccw ? cuts : P.map((_, j) => (cuts[back(j)] || []).map(([a, b]) => [1 - b, 1 - a]));
+      const C2 = ccw ? cuts : P.map((_, j) => (cuts[back(j)] || []).map(([a, b, ...yy]) => [1 - b, 1 - a, ...yy]));
       if (door && !ccw) door = { i: fwd(door.i), t0: 1 - door.t1, t1: 1 - door.t0 };
       const inner = inset(P, A.wall);
       if (inner.some((q) => !pointIn(q[0], q[1], P))) return -1; // décalage raté (contour trop tordu) : pas d'intérieur
@@ -261,11 +261,21 @@ export function createInteriors() {
             if (len * (s1 - s0) > 0.3) collision.addSegment(p0[0], p0[1], p1[0], p1[1]);
           }
           // ébrasements : relient le mur intérieur à la façade de part et d'autre de chaque ouverture, et sous le linteau
-          for (const [t0, t1] of cuts) {
-            const top = A.doorHeight;
+          for (const [t0, t1, yLo, yHi] of cuts) {
+            const top = yHi ?? A.doorHeight;
             const pi0 = at(t0), pi1 = at(t1);
             const po0 = [oa[0] + (ob[0] - oa[0]) * t0, oa[1] + (ob[1] - oa[1]) * t0], po1 = [oa[0] + (ob[0] - oa[0]) * t1, oa[1] + (ob[1] - oa[1]) * t1];
             const rc = [wallC[0] * 0.8, wallC[1] * 0.8, wallC[2] * 0.8];
+            if (yLo != null) { // window (key building barricade): inner wall below the sill and above the lintel, reveals, a wooden sill
+              const u0 = t0 * len / 2, u1 = t1 * len / 2, sillC = [0.26, 0.19, 0.13];
+              quad(W, [pi0[0], 0, pi0[1]], [pi1[0], 0, pi1[1]], [pi1[0], yLo, pi1[1]], [pi0[0], yLo, pi0[1]], [nx, 0, nz], lowC, [u0, 0, u1, 0, u1, yLo, u0, yLo]);
+              quad(W, [pi0[0], yHi, pi0[1]], [pi1[0], yHi, pi1[1]], [pi1[0], H, pi1[1]], [pi0[0], H, pi0[1]], [nx, 0, nz], wallC, [u0, yHi, u1, yHi, u1, H, u0, H]);
+              quad(W, [po0[0], yLo, po0[1]], [pi0[0], yLo, pi0[1]], [pi0[0], yHi, pi0[1]], [po0[0], yHi, po0[1]], [ux, 0, uz], rc);
+              quad(W, [pi1[0], yLo, pi1[1]], [po1[0], yLo, po1[1]], [po1[0], yHi, po1[1]], [pi1[0], yHi, pi1[1]], [-ux, 0, -uz], rc);
+              quad(W, [po0[0], yHi, po0[1]], [pi0[0], yHi, pi0[1]], [pi1[0], yHi, pi1[1]], [po1[0], yHi, po1[1]], [0, -1, 0], rc);
+              quad(M, [po0[0], yLo + 0.02, po0[1]], [po1[0], yLo + 0.02, po1[1]], [pi1[0], yLo + 0.02, pi1[1]], [pi0[0], yLo + 0.02, pi0[1]], [0, 1, 0], sillC);
+              continue;
+            }
             quad(W, [po0[0], 0, po0[1]], [pi0[0], 0, pi0[1]], [pi0[0], top, pi0[1]], [po0[0], top, po0[1]], [ux, 0, uz], rc);
             quad(W, [pi1[0], 0, pi1[1]], [po1[0], 0, po1[1]], [po1[0], top, po1[1]], [pi1[0], top, pi1[1]], [-ux, 0, -uz], rc);
             quad(W, [po0[0], top, po0[1]], [pi0[0], top, pi0[1]], [pi1[0], top, pi1[1]], [po1[0], top, po1[1]], [0, -1, 0], rc);

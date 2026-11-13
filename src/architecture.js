@@ -766,7 +766,12 @@ export function createArchitecture({ renderer, plasterImg, plaster2Img, roofP, r
         const [ax, az] = pts[i], [bx, bz] = pts[(i + 1) % pts.length];
         const cuts = cutsOf ? cutsOf(i) : [];
         let t = 0;
-        for (const [t0, t1] of cuts) { if (t0 > t) wall(ax, az, bx, bz, t, t0, 0, wallTop, st, tint, dirt); wall(ax, az, bx, bz, t0, t1, opts.passageH || 3.6, wallTop, st, tint, dirt); t = t1; }
+        for (const [t0, t1, yLo, yHi] of cuts) {
+          if (t0 > t) wall(ax, az, bx, bz, t, t0, 0, wallTop, st, tint, dirt);
+          if (yLo != null) { wall(ax, az, bx, bz, t0, t1, 0, yLo, st, tint, dirt); wall(ax, az, bx, bz, t0, t1, yHi, wallTop, st, tint, dirt); } // window: [t0, t1, sill, lintel]
+          else wall(ax, az, bx, bz, t0, t1, opts.passageH || 3.6, wallTop, st, tint, dirt);
+          t = t1;
+        }
         if (t < 1) wall(ax, az, bx, bz, t, 1, 0, wallTop, st, tint, dirt);
       }
       const roofCol = roofColor(tags, roofKind(tags));

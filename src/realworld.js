@@ -475,6 +475,7 @@ export async function buildRealWorld(scene, renderer) {
   // Key buildings (keyBuildings.js): picked before the facades are built (deterministic, no rnd)
   keyBuildings.pick({
     blds, chooseDoor, polyArea,
+    streetFree: (x, z) => !insideBuilding(x, z) && onIsland(x, z), cutsAt: (ax, az, bx, bz) => cutIntervals(passages, ax, az, bx, bz, axisInside),
     skip: (k) => breach.removed.has(k) || hasParts.has(k) || k === kCath || (cath && (blds[k].pts.some(([x, z]) => cath.insideInner(x, z)) || cath.inner.some(([x, z]) => inPoly(x, z, blds[k].pts)))),
   });
   for (const [k, bld] of blds.entries()) {
@@ -510,6 +511,7 @@ export async function buildRealWorld(scene, renderer) {
       // ouvertures des passages sous immeubles : pas de mur en bas, seulement le linteau au-dessus
       const cuts = len >= 0.05 ? cutIntervals(passages, ax, az, bx, bz, axisInside) : [];
       if (door && door.i === i) { cuts.push([door.t0, door.t1]); cuts.sort((p, q) => p[0] - q[0]); } // porte de l'intérieur
+      for (const kw of keyBuildings.windowsOf(k)) if (kw.i === i) { cuts.push(kw.cut); cuts.sort((p, q) => p[0] - q[0]); } // window barricades of a key building: [t0, t1, sill, lintel]
       edgeCuts.push(cuts);
       let solid = [];
       let t = 0;
@@ -755,6 +757,7 @@ export async function buildRealWorld(scene, renderer) {
   const nav = new NavGrid(halfX, halfZ, collision, polygons, NAV_CELL, NAV_MARGIN, 1300);
   nav.vaultCost = CONFIG.zombie.vault.cost;
   nav.finalize = (b) => keyBuildings.stampNav(nav, b);
+  nav.barCost = CONFIG.barricades.navCost;
   nav.segFilter = (it) => !it.tram && collision._blocks(it, 0); // la grille du sol ignore les obstacles d'étage (garde-corps, murs des tours…) et les poteaux de caténaire (solides mais fins)
   nav.outside = (x, z) => !onIsland(x, z);
   nav.carve = (b) => {
@@ -2344,7 +2347,7 @@ export async function buildRealWorld(scene, renderer) {
    
     sky: skyApi, setLampScale: (k) => { lampScale = k; lightTimer = 0; },
     interiors, roomOf: (x, z) => interiors.roomOf(x, z), // rez-de-chaussée praticables (v0.78.0)
-    keyBuildings: keyBuildings.list, kbAt: keyBuildings.at, kbApi: keyBuildings, // key buildings (v0.88.0): upper floors, stairs, last stand room
+    keyBuildings: keyBuildings.list, kbAt: keyBuildings.at, kbApi: keyBuildings, barricades: keyBuildings.windows, // window barricades (barricades.js drives them) // key buildings (v0.88.0): upper floors, stairs, last stand room
     relief: arch.relief, // façades en relief (v0.45.0) : relief.setRange(m) selon la qualité
     ground: groundApi, // sol (v0.46.0) : champ de distance aux façades, plaques d'égout
     trees: treesApi, // arbres (v0.46.0) : trees.setMode('ball' | 'cards' | 'cards+branches') selon la qualité

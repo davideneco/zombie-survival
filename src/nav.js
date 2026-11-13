@@ -27,6 +27,7 @@ export class NavGrid {
     this.outside = null; // (x, z) => true si hors de la zone jouable
     this.carve = null;   // (blocked) => libère les cases des passages sous immeubles
     this.finalize = null; // (blocked) => ajustement final de la grille, après tous les obstacles (cages d'escalier des immeubles clés)
+    this.barCost = 60;   // cost of a boarded cell (3: window barricade with planks left): CONFIG.barricades.navCost
     this.vaultCost = 40; // coût de traversée d'une case enjambable dans le champ de flux (10 = case libre) : CONFIG.zombie.vault.cost
   }
 
@@ -192,7 +193,7 @@ export class NavGrid {
           const j = jz * nx + jx;
           if (blocked[j] === 1) continue;
           if (dx !== 0 && dz !== 0 && (blocked[iz * nx + jx] || blocked[jz * nx + ix])) continue; // pas de coin coupé
-          const nd = d + (blocked[j] === 2 ? this.vaultCost * (c > 10 ? 1.4 : 1) : c);
+          const nd = d + (blocked[j] === 2 ? this.vaultCost * (c > 10 ? 1.4 : 1) : blocked[j] === 3 ? this.barCost * (c > 10 ? 1.4 : 1) : c);
           if (nd < dist[j]) {
             if (dist[j] >= INF) touched.push(j);
             dist[j] = nd;
@@ -244,7 +245,7 @@ export class NavGrid {
           const j = jz * nx + jx;
           if (blocked[j] === 1) continue;
           if (dx !== 0 && dz !== 0 && (blocked[iz * nx + jx] || blocked[jz * nx + ix])) continue;
-          const nd = d + (blocked[j] === 2 ? this.vaultCost * (NB[k][2] > 10 ? 1.4 : 1) : NB[k][2]);
+          const nd = d + (blocked[j] === 2 ? this.vaultCost * (NB[k][2] > 10 ? 1.4 : 1) : blocked[j] === 3 ? this.barCost * (NB[k][2] > 10 ? 1.4 : 1) : NB[k][2]);
           if (nd < dist[j]) {
             if (dist[j] >= INF) touched.push(j);
             dist[j] = nd;

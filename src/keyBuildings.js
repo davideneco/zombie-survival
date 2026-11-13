@@ -114,6 +114,40 @@ function layoutKB(inner, box, door) {
   return null;
 }
 
+// ---- windows ---------------------------------------------------------------------------------------------------------------------------------------
+// Ground-floor windows of a key building (barricades): spots on the street facade (same free-street test as the door) at least minGap from the door,
+// from the passages and from each other, not in front of the stair shaft. Returns [{ i, t0, t1, s, len, x, z, nx, nz, ux, uz }] (i : edge of `pts`).
+function pickWindows(pts, door, lay, env) {
+  const WC = CONFIG.barricades.windows, hole = [lay.P(0, lay.vs - lay.half), lay.P(lay.sEnd, lay.vs - lay.half), lay.P(lay.sEnd, lay.vs + lay.half), lay.P(0, lay.vs + lay.half)];
+  const cand = [];
+  for (let i = 0; i < pts.length; i++) {
+    const a = pts[i], b = pts[(i + 1) % pts.length], len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    if (len < WC.width + 1.6) continue;
+    const ux = (b[0] - a[0]) / len, uz = (b[1] - a[1]) / len, mx0 = (a[0] + b[0]) / 2, mz0 = (a[1] + b[1]) / 2;
+    let nx = uz, nz = -ux;
+    if (pointIn(mx0 + nx * 0.3, mz0 + nz * 0.3, pts)) { nx = -nx; nz = -nz; }
+    const cuts = env.cutsAt(a[0], a[1], b[0], b[1]);
+    for (let s = 0.8 + WC.width / 2; s <= len - 0.8 - WC.width / 2; s += 0.5) {
+      const x = a[0] + ux * s, z = a[1] + uz * s;
+      if (door && door.i === i && Math.abs(s - ((door.t0 + door.t1) / 2) * len) < WC.minGap + 1.2 + WC.width / 2) continue;
+      if (cuts.some(([c0, c1]) => s + WC.width / 2 + 0.3 > c0 * len && s - WC.width / 2 - 0.3 < c1 * len)) continue;
+      if (![[0, 1.5], [0, 4], [-0.65, 1.2], [0.65, 1.2]].every(([o, d]) => env.streetFree(x + ux * o + nx * d, z + uz * o + nz * d))) continue;
+      const ix = x - nx, iz = z - nz;
+      if (pointIn(ix, iz, hole) || edgeDist(hole, ix, iz) < 1.1) continue; // not behind the stair shaft
+      cand.push({ i, s, len, x, z, nx, nz, ux, uz, score: len * 0.05 + hash(x, z, 9) });
+    }
+  }
+  cand.sort((p, q) => q.score - p.score);
+  const out = [];
+  for (const c of cand) {
+    if (out.length >= WC.perBuilding) break;
+    if (out.some((o) => Math.hypot(o.x - c.x, o.z - c.z) < WC.minGap + WC.width)) continue;
+    c.t0 = (c.s - WC.width / 2) / c.len; c.t1 = (c.s + WC.width / 2) / c.len;
+    out.push(c);
+  }
+  return out;
+}
+
 // ---- picking -----------------------------------------------------------------------------------------------------------------------------------------
 // env : { blds, skip(k), chooseDoor(pts, h), interiors, zones (CONFIG.sector.zones), startHint, polyArea }. Returns the picks (see createKeyBuildings).
 function pickAll(env) {
@@ -157,7 +191,9 @@ function pickAll(env) {
     const dp = { x: a[0] + (b[0] - a[0]) * tm, z: a[1] + (b[1] - a[1]) * tm };
     const lay = layoutKB(ol.inner, box, dp);
     if (!lay) { rej('layout'); continue; }
-    cands.push({ k, pts, inner: ol.inner, P: ol.P, box, cx, cz, area, lay, storeys, door: dp, near, score: -Math.abs(area - C.targetArea) / C.targetArea + 0.35 * hash(cx, cz, 5) });
+    const windows = pickWindows(pts, door, lay, env);
+    if (windows.length < 2) { rej('windows'); continue; }
+    cands.push({ k, pts, inner: ol.inner, P: ol.P, box, cx, cz, area, lay, storeys, door: dp, doorCut: door, windows, near, score: -Math.abs(area - C.targetArea) / C.targetArea + 0.35 * hash(cx, cz, 5) });
   }
   cands.sort((p, q) => q.score - p.score);
   const picks = [], stats = [];
@@ -179,7 +215,7 @@ function pickAll(env) {
 // ---- the system --------------------------------------------------------------------------------------------------------------------------------------
 export function createKeyBuildings(env) {
   const { scene, collision, levels, interiors, lightSources } = env;
-  const list = [];
+  const list = [], windows = []; // windows : every window barricade of every key building (barricades.js drives them)
   const byBuilding = new Map(); // outline pts array -> kb
   let picks = [];
   const api = {
@@ -187,6 +223,9 @@ export function createKeyBuildings(env) {
     // Before the building loop: choose the buildings
     pick(e) { picks = pickAll({ ...e, interiors, zones: CONFIG.sector.zones, startHint: CONFIG.startHint }); api.stats = picks.stats; for (const p of picks) byBuilding.set(p.k, p); return picks; },
     isKey: (k) => byBuilding.has(k),
+    // Window cuts of building k for realworld's edgeCuts: [t0, t1, sill, lintel] per window, with the index of the outline edge
+    windowsOf: (k) => (byBuilding.get(k)?.windows || []).map((w) => ({ i: w.i, cut: [w.t0, w.t1, CONFIG.barricades.windows.sill, CONFIG.barricades.windows.top] })),
+    windows,
 
     // After interiors.addRoom: the ground room gets its ceiling hole above the stair shaft
     prepare() {
@@ -252,6 +291,20 @@ export function createKeyBuildings(env) {
           if (pointIn(nav.worldX(ix), nav.worldZ(iz), kb.hole)) blocked[nav.idx(ix, iz)] = 1;
         }
       }
+      // window barricades : the cells blocked only by the wall around the opening are boarded (3), or the vault sill (2) once torn: see windowCells
+      for (const w of windows) {
+        w.cells = [];
+        const hw = w.w / 2;
+        for (let iz = Math.max(0, nav.cz(w.z - 1.6)); iz <= Math.min(nav.nz - 1, nav.cz(w.z + 1.6)); iz++) for (let ix = Math.max(0, nav.cx(w.x - 1.6)); ix <= Math.min(nav.nx - 1, nav.cx(w.x + 1.6)); ix++) {
+          const idx = nav.idx(ix, iz);
+          if (blocked[idx] !== 1) continue;
+          const dx = nav.worldX(ix) - w.x, dz = nav.worldZ(iz) - w.z, along = dx * w.ux + dz * w.uz, across = dx * w.nx + dz * w.nz;
+          if (Math.abs(along) > hw - 0.1 || across < -0.8 || across > 0.6) continue; // cells inside the opening that only the wall margin blocks (a 1.3 m opening passes a 0.4 m radius body)
+          w.cells.push({ idx, torn: Math.abs(across + 0.1) <= 0.4 ? 2 : 0 }); // once torn: the sill is a vaultable cell (2), the cells before and after it are free
+        }
+        w.nav = nav;
+        for (const c of w.cells) if (c.torn !== 1) blocked[c.idx] = w.perm ? 1 : w.n > 0 ? 3 : c.torn;
+      }
     },
     // Does a failing building get dropped ? Called after the navs are built (see realworld.js): demotes sealed rooms and broken layouts
     validate(worldNav) {
@@ -269,8 +322,12 @@ export function createKeyBuildings(env) {
             if (!total || big / total < C.minConnected) why = why || `floor nav split ${(big / total).toFixed(2)}`;
           }
           if (!why && worldNav) { // the ground flow field targets the nearest free cell to the foot : it must be within the 1.3 m a zombie needs to start climbing
-            const c = worldNav.nearestFree(kb.foot[0], kb.foot[1], 3);
-            if (!c || Math.hypot(worldNav.worldX(c[0]) - kb.foot[0], worldNav.worldZ(c[1]) - kb.foot[1]) > 1.2) why = 'stair foot blocked';
+            let best = Infinity;
+            for (let iz = worldNav.cz(kb.foot[1] - 2); iz <= worldNav.cz(kb.foot[1] + 2); iz++) for (let ix = worldNav.cx(kb.foot[0] - 2); ix <= worldNav.cx(kb.foot[0] + 2); ix++) {
+              if (!worldNav.inside(ix, iz) || worldNav.blocked[worldNav.idx(ix, iz)]) continue;
+              best = Math.min(best, Math.hypot(worldNav.worldX(ix) - kb.foot[0], worldNav.worldZ(iz) - kb.foot[1]));
+            }
+            if (best > 1.2) why = 'stair foot blocked';
           }
         }
         if (why) { api.demote(kb, why); report.push({ id: kb.id, why }); }
@@ -284,6 +341,7 @@ export function createKeyBuildings(env) {
       for (const lk of kb.links) lk.closed = true;
       for (const s of kb.segs) s.off = true;
       levels.invalidateHops();
+      for (const w of windows) if (w.kb === kb.id) { w.perm = true; w.n = w.max; if (w.nav) for (const c of w.cells) if (c.torn !== 1) w.nav.blocked[c.idx] = 1; if (w.nav) w.nav.invalidate(); }
     },
   };
 
@@ -430,6 +488,20 @@ export function createKeyBuildings(env) {
         sa(a[0] + (b[0] - a[0]) * d.t0, a[1] + (b[1] - a[1]) * d.t0, a[0] + (b[0] - a[0]) * d.t1, a[1] + (b[1] - a[1]) * d.t1, Infinity, 3.0);
       }
     }
+
+    // ---- window barricades: a boarded opening is a wall (collision h = Infinity at the facade line); once torn it is a vaultable sill ----
+    const WC = CONFIG.barricades.windows;
+    p.windows.forEach((pw) => {
+      const hw = WC.width / 2, ax = pw.x - pw.ux * hw, az = pw.z - pw.uz * hw, bx = pw.x + pw.ux * hw, bz = pw.z + pw.uz * hw;
+      const board = sa(ax, az, bx, bz, Infinity);
+      const cx = pw.x - pw.nx * 0.1, cz = pw.z - pw.nz * 0.1, vid = collision.vaults.length + 1, vsegs = [];
+      const corner = (su, sn) => [cx + pw.ux * hw * su + pw.nx * 0.25 * sn, cz + pw.uz * hw * su + pw.nz * 0.25 * sn];
+      const cs = [corner(-1, -1), corner(1, -1), corner(1, 1), corner(-1, 1)];
+      for (let q = 0; q < 4; q++) { const a = cs[q], b = cs[(q + 1) % 4], sg = collision.addSegment(a[0], a[1], b[0], b[1], WC.sill, -Infinity, 'wall', vid); sg.off = true; vsegs.push(sg); kb.segs.push(sg); }
+      collision.vaults.push({ id: vid, h: WC.sill, segs: vsegs });
+      const w = { id: windows.length, kind: 'window', kb: id, x: pw.x, z: pw.z, nx: pw.nx, nz: pw.nz, ux: pw.ux, uz: pw.uz, w: WC.width, yaw: Math.atan2(pw.nx, pw.nz), n: CONFIG.barricades.planks.window, max: CONFIG.barricades.planks.window, perm: false, board, vault: vsegs, cells: [], nav: null, tearers: 0, i: pw.i };
+      windows.push(w); (kb.windows ||= []).push(w);
+    });
 
     // ---- floors ----
     const lampsAt = [];

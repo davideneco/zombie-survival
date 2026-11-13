@@ -597,6 +597,8 @@ export class Zombie {
     if (this.link) { this._onLink(dt, target, world); return; }
     if (this.vault) { this._vaultStep(dt); return; }
     this.vaultCd -= dt;
+    // ----- Boarded window of a key building (barricades.js): stop and tear the planks off, one by one -----
+    if (!this.region && world.barApi?.tear(this, dt)) { this._tearStep(dt); return; }
 
     // ----- Objectif : le joueur (même étage), ou le pied de l'escalier qui mène vers lui -----
     let gx = target.pos.x, gz = target.pos.z, chase = true;
@@ -722,6 +724,21 @@ export class Zombie {
     }
 
     this._strikeAndPose(dt, target, inRange, moving, world);
+  }
+
+  // ----- Tearing planks (the planks themselves are counted by barricades.js): face the barricade, arms up, banging -----
+  _tearStep(dt) {
+    const b = this.tearing?.b;
+    if (b) {
+      const want = Math.atan2(b.x - this.pos.x, b.z - this.pos.z);
+      let d = want - this.yaw; d = Math.atan2(Math.sin(d), Math.cos(d));
+      this.yaw += d * Math.min(1, dt * 8);
+      this.group.rotation.set(0, this.yaw, 0);
+    }
+    this.attacking = true; // (the client puppets show the attack pose)
+    this.walkT += dt * 5;
+    if (this.crawler) { this._poseCrawl(this.walkT, true); return; }
+    this._pose(this.walkT, 0.15, 1.5, (this.runner ? 0.5 : 0.28) + 0.3, 0.4);
   }
 
   // ----- Attaque, puis pose (aussi pour un zombie dans le train : _trainStep) -----
