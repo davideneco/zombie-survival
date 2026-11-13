@@ -33,7 +33,7 @@ for (let i = 0; i < args.length; i++) {
 }
 
 const { chromium } = await loadPlaywright();
-const browser = await chromium.launch({ executablePath: process.env.CHROME || undefined, args: ['--use-gl=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--no-sandbox'] });
+const browser = await chromium.launch({ executablePath: process.env.CHROME || undefined, args: ['--use-gl=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--no-sandbox', '--js-flags=--expose-gc'] });
 const page = await browser.newPage({ viewport: { width: size[0], height: size[1] } });
 const errors = [];
 page.on('pageerror', (e) => errors.push('PAGEERROR ' + e.message));

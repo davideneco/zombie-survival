@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { warmUpload } from './gpuOnly.js';
 import { CONFIG, papAmmoMult } from './config.js';
 import { buildRealWorld } from './realworld.js';
 import { Player } from './player.js';
@@ -54,6 +55,8 @@ renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.05; // exposition cinématographique sombre
 document.body.prepend(renderer.domElement);
+// The static city geometry is GPU-only (gpuOnly.js drops the CPU copies after upload): a lost WebGL context cannot be re-uploaded, so reload.
+renderer.domElement.addEventListener('webglcontextrestored', () => location.reload());
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x04060c); // nuit d'encre Call of Duty Zombies
@@ -2567,6 +2570,7 @@ function precompileShaders() {
   // (pas dans une cible hors écran : three.js y utilise d'autres variantes de shaders, sans tone mapping)
   renderer.shadowMap.needsUpdate = true;
   gfx.render();
+  warmUpload(scene, renderer, () => gfx.render()); // the hidden LOD meshes (interiors, relief) upload now, so their CPU arrays are freed at load
   for (const o of hidden) o.visible = false;
   for (const o of culled) o.frustumCulled = true;
   // on retire les zombies témoins SANS libérer leurs matériaux : un shader dont plus aucun matériau ne se sert

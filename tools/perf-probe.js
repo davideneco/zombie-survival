@@ -10,11 +10,13 @@ const nav = performance.getEntriesByType('navigation')[0];
 await new Promise((res) => { let n = 0; const f = () => (++n >= 5 ? res() : requestAnimationFrame(f)); requestAnimationFrame(f); });
 const render = { calls: info.render.calls, triangles: info.render.triangles, lines: info.render.lines, points: info.render.points };
 const memory = { geometries: info.memory.geometries, textures: info.memory.textures, programs: info.programs?.length ?? null };
+window.gc?.(); // the harness launches Chromium with --expose-gc: heap and update timings are measured after a collection (no garbage noise)
 const t = [];
 for (let i = 0; i < 60; i++) { const a = performance.now(); game.update(1 / 60); t.push(performance.now() - a); }
 t.sort((a, b) => a - b);
 let meshes = 0, instanced = 0, instances = 0, visible = 0;
 game.scene.traverse((o) => { if (o.isMesh) { meshes++; if (o.visible) visible++; if (o.isInstancedMesh) { instanced++; instances += o.count; } } });
+window.gc?.();
 const heap = performance.memory ? Math.round(performance.memory.usedJSHeapSize / 1048576) : null;
 return {
   where: { area: game.world.areaOf?.(game.player.pos.x, game.player.pos.z), x: Math.round(game.player.pos.x), z: Math.round(game.player.pos.z) },

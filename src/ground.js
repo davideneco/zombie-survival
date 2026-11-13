@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { gpuOnly } from './gpuOnly.js';
 import { CONFIG } from './config.js';
 
 // =====================================================================
@@ -168,7 +169,7 @@ function buildApron(scene, polys, api, onIsland) {
   const nor = new Float32Array(pos.length); for (let i = 1; i < nor.length; i += 3) nor[i] = 1; g.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
   g.setIndex(pos.length / 3 > 65000 ? new THREE.Uint32BufferAttribute(idx, 1) : new THREE.Uint16BufferAttribute(idx, 1));
   const m = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ map: apronTexture(), roughness: 0.75, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 }));
-  m.frustumCulled = false; m.receiveShadow = true; m.name = 'apron';
+  m.frustumCulled = false; m.receiveShadow = true; m.name = 'apron'; gpuOnly(m);
   scene.add(m);
   return m;
 }

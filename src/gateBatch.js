@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { gpuOnly } from './gpuOnly.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { detailCull } from './detailCull.js';
 
@@ -25,7 +26,7 @@ export function createGateBatch(scene, tile = 320) {
       const g = geos.length > 1 ? mergeGeometries(geos, false) : geos[0].clone();
       g.computeBoundingSphere();
       const m = new THREE.Mesh(g, mat);
-      m.name = 'gates'; m.castShadow = false; m.receiveShadow = true; m.matrixAutoUpdate = false;
+      gpuOnly(m); m.name = 'gates'; m.castShadow = false; m.receiveShadow = true; m.matrixAutoUpdate = false;
       scene.add(m); c.meshes.push(m); detailCull.addMesh(m);
     }
   };

@@ -138,6 +138,37 @@ export function createTrees(scene, list, barkMat) {
   api.group.name = 'trees'; scene.add(api.group);
   let atlas = null, foliageMat = null;
 
+  // ---- spatial culling: the instanced layers hold every tree of the map, so each frame (and each shadow pass) used to draw all of them.
+  // Each layer keeps a CPU copy of its full data ("src") and the visible mesh buffers are rebuilt with the trees within T.range m of the
+  // camera, whenever the camera moved more than T.rebuild m (or the quality changed). Draw calls stay 1 per layer.
+  const layers = [];
+  const cardsPer = { v: 0 };
+  const registerLayer = (mesh, per, srcIndex) => {
+    const L = { mesh, per, srcIndex, m: mesh.instanceMatrix.array.slice(), c: mesh.instanceColor ? mesh.instanceColor.array.slice() : null, extra: [] };
+    for (const name of ['aLocalN', 'aCell']) { const a = mesh.geometry.attributes[name]; if (a) L.extra.push({ dst: a, src: a.array.slice(), size: a.itemSize }); }
+    layers.push(L);
+  };
+  const sel = new Int32Array(N); let nSel = 0, cx0 = NaN, cz0 = NaN, dirty = true;
+  const range2 = (T.range || 1e9) ** 2;
+  const rebuild = (cx, cz) => {
+    nSel = 0;
+    for (let i = 0; i < N; i++) { const dx = list[i].x - cx, dz = list[i].z - cz; if (dx * dx + dz * dz <= range2) sel[nSel++] = i; }
+    for (const L of layers) {
+      const per = L.per(), dm = L.mesh.instanceMatrix.array, dc = L.mesh.instanceColor ? L.mesh.instanceColor.array : null;
+      for (let j = 0; j < nSel; j++) for (let c = 0; c < per; c++) {
+        const s = L.srcIndex(sel[j], c), d = j * per + c;
+        for (let k = 0; k < 16; k++) dm[d * 16 + k] = L.m[s * 16 + k];
+        if (dc) { dc[d * 3] = L.c[s * 3]; dc[d * 3 + 1] = L.c[s * 3 + 1]; dc[d * 3 + 2] = L.c[s * 3 + 2]; }
+        for (const e of L.extra) { const da = e.dst.array; for (let k = 0; k < e.size; k++) da[d * e.size + k] = e.src[s * e.size + k]; }
+      }
+      const n = nSel * per;
+      L.mesh.count = n;
+      L.mesh.instanceMatrix.clearUpdateRanges(); L.mesh.instanceMatrix.addUpdateRange(0, Math.max(1, n * 16)); L.mesh.instanceMatrix.needsUpdate = true;
+      if (L.mesh.instanceColor) { L.mesh.instanceColor.clearUpdateRanges(); L.mesh.instanceColor.addUpdateRange(0, Math.max(1, n * 3)); L.mesh.instanceColor.needsUpdate = true; }
+      for (const e of L.extra) { e.dst.clearUpdateRanges(); e.dst.addUpdateRange(0, Math.max(1, n * e.size)); e.dst.needsUpdate = true; }
+    }
+  };
+
   const ensureTrunk = () => {
     if (api.meshes.trunk) return;
     const m = new THREE.InstancedMesh(trunkGeometry(), barkMat, N);
@@ -148,6 +179,7 @@ export function createTrees(scene, list, barkMat) {
     });
     m.castShadow = true; m.frustumCulled = false; m.instanceMatrix.needsUpdate = true;
     api.meshes.trunk = m; api.group.add(m);
+    registerLayer(m, () => 1, (i) => i); dirty = true;
   };
 
   const ensureBalls = () => {
@@ -165,6 +197,7 @@ export function createTrees(scene, list, barkMat) {
     });
     m.castShadow = true; m.frustumCulled = false; m.instanceMatrix.needsUpdate = true; m.instanceColor.needsUpdate = true;
     api.meshes.ball = m; api.group.add(m);
+    registerLayer(m, () => per, (i, c) => i * per + c); dirty = true;
   };
 
   const ensureCards = () => {
@@ -203,6 +236,7 @@ export function createTrees(scene, list, barkMat) {
     geo.setAttribute('aCell', new THREE.InstancedBufferAttribute(aCell, 2));
     m.castShadow = true; m.frustumCulled = false; m.instanceMatrix.needsUpdate = true; m.instanceColor.needsUpdate = true;
     api.meshes.cards = m; api.group.add(m);
+    registerLayer(m, () => cardsPer.v, (i, c) => c * N + i); dirty = true; // source order: card first
   };
 
   const ensureBranches = () => {
@@ -221,6 +255,7 @@ export function createTrees(scene, list, barkMat) {
     });
     m.castShadow = true; m.frustumCulled = false; m.instanceMatrix.needsUpdate = true;
     api.meshes.branches = m; api.group.add(m);
+    registerLayer(m, () => nb, (i, c) => i * nb + c); dirty = true;
   };
 
   // mode : 'ball' | 'cards' | 'cards+branches'
@@ -229,7 +264,7 @@ export function createTrees(scene, list, barkMat) {
     api.mode = mode;
     ensureTrunk();
     if (mode === 'ball') ensureBalls();
-    else { ensureCards(); api.meshes.cards.count = N * (mode === 'cards+branches' ? T.cards[1] : T.cards[0]); }
+    else { ensureCards(); cardsPer.v = mode === 'cards+branches' ? T.cards[1] : T.cards[0]; dirty = true; }
     if (mode === 'cards+branches') ensureBranches();
     const M = api.meshes;
     if (M.ball) M.ball.visible = mode === 'ball';
@@ -237,6 +272,11 @@ export function createTrees(scene, list, barkMat) {
     if (M.branches) M.branches.visible = mode === 'cards+branches';
     // arbres : un tronc plus haut dans les cartes (les branches n'existent qu'en Haute)
   };
-  api.update = (t) => { if (foliageMat?.userData.wind) foliageMat.userData.wind.value = t; };
+  api.update = (t, cam) => {
+    if (foliageMat?.userData.wind) foliageMat.userData.wind.value = t;
+    if (!cam || !T.range) return;
+    const dx = cam.x - cx0, dz = cam.z - cz0;
+    if (dirty || !(dx * dx + dz * dz <= T.rebuild * T.rebuild)) { dirty = false; cx0 = cam.x; cz0 = cam.z; rebuild(cx0, cz0); }
+  };
   return api;
 }

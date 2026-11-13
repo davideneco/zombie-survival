@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { gpuOnly } from './gpuOnly.js';
 import { CONFIG } from './config.js';
 import { createRelief, hash2 } from './relief.js';
 import { addShadowProxy, proxyBucket } from './shadowProxy.js';
@@ -822,6 +823,7 @@ export function createArchitecture({ renderer, plasterImg, plaster2Img, roofP, r
         g.setIndex(b.idx);
         g.computeBoundingSphere();
         const m = new THREE.Mesh(g, mat);
+        gpuOnly(m);
         m.castShadow = false; m.receiveShadow = true; // the tile's shadow is cast by its merged proxy (shadowProxy.js): one draw call instead of one per material
         scene.add(m);
         if (area === 'island') detailCull.addMesh(m); // hidden beyond the fog distance (the station keeps its own LOD)
@@ -877,6 +879,7 @@ export function createArchitecture({ renderer, plasterImg, plaster2Img, roofP, r
       for (const t of split(roofB)) { const r = toMesh(t, tileMat(roofMat, t, 4)); if (r) r.name = 'arch:roof'; }
       for (const pb of proxyTiles.values()) addShadowProxy(scene, pb.pos, pb.idx, area);
       relief.finish(scene);
+      for (const b of [roofB, ...Object.values(mats).map((m) => m.b)]) { b.pos = []; b.nor = []; b.uv = []; b.col = []; b.idx = []; } // the builders are no longer needed: free the build-time arrays (tens of MB)
     },
   };
 }

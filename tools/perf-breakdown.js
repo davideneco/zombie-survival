@@ -27,7 +27,7 @@ const origRender = r.render.bind(r); r.render = function (sc, cam) { if (sc === 
 await new Promise((res) => requestAnimationFrame(() => requestAnimationFrame(res)));
 r.render = origRender;
 r.renderBufferDirect = orig;
-const top = (m) => Object.entries(m).sort((a, b) => b[1].calls - a[1].calls);
+const top = (m) => Object.entries(m).sort((a, b) => b[1].tris - a[1].tris); // biggest triangle consumers first
 const sum = (m) => Object.values(m).reduce((a, v) => ({ calls: a.calls + v.calls, tris: a.tris + v.tris }), { calls: 0, tris: 0 });
 const fmt = (m, n) => top(m).slice(0, n).map(([k, v]) => `${v.calls}× ${k} (${(v.tris / 1e3).toFixed(0)}k tri${v.inst ? `, ${v.inst} inst` : ''})`);
 return { main: sum(tally.main), shadow: sum(tally.shadow), topMain: fmt(tally.main, 25), topShadow: fmt(tally.shadow, 15) };

@@ -2,6 +2,29 @@
 
 Chaque changement est poussé sur `main` (déploiement Render) avec un nouveau numéro de version et sa description ici.
 
+## v0.90.0 (2026-11-13)
+**Optimisation (étapes A2 + A3) : moitié moins de triangles et de mémoire.**
+- Au départ (Marché-Neuf) :
+  - triangles : 1,97 M → 0,92 M (budget 1,5 M) ;
+  - mémoire JS : environ 800 Mo → 347 Mo (budget 400) ;
+  - appels de rendu : 239 (budget 300).
+  - La gare (185 appels, 0,64 M triangles) et l'intro (96 appels, 0,51 M triangles) ne changent pas.
+- **Sol** : découpé en morceaux que la caméra ne dessine que s'ils sont dans le champ (`groundChunks.js`, réglage `graphics.groundChunk`).
+- **Arbres** : seuls ceux à portée de la caméra sont dessinés, ombres comprises (réglage `graphics.trees.range`). La liste est recalculée quand la caméra a bougé.
+- **Géométrie statique** (façades, intérieurs, reliefs, gare, rails, sol) : sa copie en mémoire JS est libérée une fois envoyée à la carte graphique (`gpuOnly.js`). Si le navigateur perd le contexte WebGL, la page se recharge.
+- **Outils** : `tools/perf-probe.js` mesure maintenant la mémoire après un ramasse-miettes forcé, donc les anciens chiffres de mémoire ne sont pas directement comparables.
+- **Pas atteint** : le budget de 60 shaders (85 aujourd'hui). Ce sont tous des combinaisons de matériaux différentes ; il faudra revoir les matériaux, sans doute avec les façades (étape C).
+- **Vérifié** :
+  - le build passe ;
+  - mesures chiffrées au départ, à la gare et dans l'intro ;
+  - captures regardées : départ et un intérieur de magasins (rendu correct) ; l'agent a aussi comparé départ, cathédrale et gare avant/après, sans différence ;
+  - l'agent a testé en jeu les achats (porte, atout, boîte, Pack-a-Punch) et le passage île ↔ gare, sans erreur console.
+- **Non vérifié** :
+  - le coût de `game.update` : la mesure est faussée par la machine surchargée pendant le test (trois navigateurs en parallèle) ;
+  - la croissance de la mémoire sur 10 minutes ;
+  - le multijoueur ;
+  - la perte réelle du contexte WebGL.
+
 ## v0.89.0 (2026-11-12)
 **Optimisation (étape A1) : 3 fois moins d'appels de rendu.**
 - Au départ (Marché-Neuf), le jeu passe de 858 à 271 appels de rendu par image le jour, et 253 la nuit. À la gare (quai 1), il passe de 319 à 185. Dans l'intro en train, il passe de 110 à 96. Toutes ces vues sont maintenant sous le budget de 300.

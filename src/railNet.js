@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { gpuOnly } from './gpuOnly.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { CONFIG } from './config.js';
 import { Track } from './tramTrack.js';
@@ -316,7 +317,7 @@ export function buildRailNet({ rail, plan, route, mats }) {
       const g = mergeGeometries(list.map(keepStd), false); list.forEach((q) => q.dispose());
       if (!g) continue;
       g.computeBoundingSphere();
-      const m = new THREE.Mesh(g, mat); m.castShadow = false; m.receiveShadow = mat === groundMat || mat === mats.ballast; m.name = 'railNet:mesh';
+      const m = new THREE.Mesh(g, mat); m.castShadow = false; m.receiveShadow = mat === groundMat || mat === mats.ballast; m.name = 'railNet:mesh'; gpuOnly(m);
       grp.add(m); n++;
     }
     root.add(grp);

@@ -862,8 +862,8 @@ export const CONFIG = {
       top: ['#0a1222', '#3a3660', '#5a8ad0'], mid: ['#22304a', '#9a7080', '#9cc0e8'], horizon: ['#4a3a2c', '#e0a070', '#d8e4f0'], ground: ['#141210', '#3a3028', '#5a5a52'],
       lamps: 9, lampStrength: 0.6, moonStrength: 0.7,
     },
-    // arbres (trees.js) : cartes de feuillage par arbre [Normale, Haute], taille des cartes (m), rayon et hauteur de la couronne (m), atlas (px), branches par arbre (Haute), amplitude du vent (m)
-    trees: { cards: [14, 24], cardSize: [2.1, 3.1], crownRadius: 2.3, crownHeight: 1.0, atlas: 512, branches: 5, sway: 0.035 },
+    // arbres (trees.js) : range = only the trees within this many m of the camera are drawn (rebuilt every `rebuild` m of camera travel) ; cartes de feuillage par arbre [Normale, Haute], taille des cartes (m), rayon et hauteur de la couronne (m), atlas (px), branches par arbre (Haute), amplitude du vent (m)
+    trees: { range: 185, rebuild: 12, cards: [14, 24], cardSize: [2.1, 3.1], crownRadius: 2.3, crownHeight: 1.0, atlas: 512, branches: 5, sway: 0.035 },
     // sol (ground.js) : pixel du champ de distance aux façades (m), largeur du trottoir / de la bordure / du caniveau (m), hauteur d'une rangée de dalles (m),
     // flaques (seuil du bruit de ... à ..., gain des reflets, assombrissement), plaques d'égout (maille en m, probabilité par maille)
     ground: { cell: 1, apron: 0.95, kerb: 0.16, gutter: 0.4, slab: 0.45, puddle: { from: 0.66, to: 0.72, reflect: 3.5, darken: 0.4 }, manholeGrid: 34, manholeChance: 0.9 },
@@ -873,6 +873,8 @@ export const CONFIG = {
     // (le brouillard FogExp2 ne laisse plus voir que exp(-fog²) d'un objet : 2 -> 1,8 %), bornée entre min et max (m)
     // taille (m) des tuiles de bâtiments fusionnées (architecture.js) : chaque tuile coûte ~20 appels de dessin (un par matériau) ; plus grande = moins d'appels, plus de triangles hors champ
     cityTile: 240,
+    // edge (m) of the square chunks the tessellated ground is split into (groundChunks.js): only the chunks in the frustum are drawn (a whole-island ground was ~450 k triangles per frame)
+    groundChunk: 120,
     // lamp : portée (m) de la petite applique des armes murales
     detailCull: { fog: 2, min: 50, max: 170, lamp: 45 },
     // props instanciés qui projettent une ombre (seule leur première pièce : carrosserie, toit…) ; les autres sont trop petits pour valoir un appel de dessin dans la passe d'ombres

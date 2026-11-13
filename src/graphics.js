@@ -261,7 +261,7 @@ export function createGraphics({ renderer, scene, camera, hemi, moon, settings }
     if (p.torchOn) p.flashlight.intensity = G().torch.intensity * zk.torch;
     // ciel
     api.sky?.update?.(dt);
-    api.world?.trees?.update(performance.now() / 1000);
+    api.world?.trees?.update(performance.now() / 1000, camera.position);
     // ombres de contact des mobiles : zombies, coéquipiers, véhicules (à moins de maxDist de la caméra)
     if (contact.enabled && contact.dyn) {
       const C = G().contact, cx = camera.position.x, cz = camera.position.z, R2 = C.maxDist * C.maxDist;

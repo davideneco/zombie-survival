@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { gpuOnly } from './gpuOnly.js';
 import { CONFIG } from './config.js';
 
 // =====================================================================
@@ -306,7 +307,7 @@ export function createInteriors() {
           g.setIndex(B.idx);
           g.computeBoundingSphere();
           const m = new THREE.Mesh(g, mat);
-          m.name = 'interior'; m.receiveShadow = true; m.castShadow = false; m.matrixAutoUpdate = false; m.userData.lod = true; // (castShadow off: the building shell casts the shadow)
+          gpuOnly(m); m.name = 'interior'; m.receiveShadow = true; m.castShadow = false; m.matrixAutoUpdate = false; m.userData.lod = true; // (castShadow off: the building shell casts the shadow)
           scene.add(m); T.meshes.push(m);
         });
         api.tiles.push(T);

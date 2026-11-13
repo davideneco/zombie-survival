@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { gpuOnly } from '../gpuOnly.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { CONFIG } from '../config.js';
 import { trackGeometry, inStationClip, normalFromCanvas } from '../railNet.js';
@@ -246,7 +247,7 @@ export function buildGareMeshes({ plan, gare, rail, pbr, tiled, props, envMap, r
       g.computeBoundingSphere();
       const m = new THREE.Mesh(g, mat);
       m.castShadow = !shadowOff.has(mat) && !mat.transparent; m.receiveShadow = true;
-      m.name = 'gare:mesh';
+      m.name = 'gare:mesh'; gpuOnly(m);
       parent.add(m);
     }
     buckets.clear();

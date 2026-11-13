@@ -2,6 +2,7 @@ import { makeSkyDome } from './sky.js';
 import { createTrees } from './trees.js';
 import { createGround } from './ground.js';
 import { createInteriors } from './interiors.js';
+import { chunkGround } from './groundChunks.js';
 import { installTerrain, terrainY, terrainWaterY, terrainOn, patchObject, tessellate } from './terrain.js';
 import { contact } from './contact.js';
 import * as THREE from 'three';
@@ -725,6 +726,10 @@ export async function buildRealWorld(scene, renderer) {
   // ---------------------------------------------------------------- Intérieur de la cathédrale
   if (cath) cathInfo = buildCathedral({ scene, plan: cath, collision, lightSources, props, levels });
   cutGroundHoles(levels.holePolys);
+  { // the ground becomes frustum-culled chunks (the original single mesh is replaced)
+    const chunks = chunkGround(groundMesh, CONFIG.graphics.groundChunk);
+    scene.remove(groundMesh); groundMesh.geometry.dispose(); scene.add(chunks); groundMesh = chunks.children[0]; // (groundMesh: any chunk, only its material is used afterwards)
+  }
 
   // ---------------------------------------------------------------- Place de l'Homme de Fer : rotonde et abris (avant la grille de collision)
   // Les colonnes de la rotonde et les abris de quai bloquent ; le reste de la place reste praticable sous le verre.

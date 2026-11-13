@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { gpuOnly } from './gpuOnly.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
 // =====================================================================
@@ -196,7 +197,7 @@ export function createRelief() {
           g.setIndex(t.idx);
           g.computeBoundingSphere();
           const m = new THREE.Mesh(g, staticMat);
-          m.receiveShadow = true; m.name = 'relief:static'; m.matrixAutoUpdate = false; m.userData.lod = true;
+          gpuOnly(m); m.receiveShadow = true; m.name = 'relief:static'; m.matrixAutoUpdate = false; m.userData.lod = true;
           scene.add(m); T.meshes.push(m);
           count.staticTris += t.idx.length / 3;
         }

@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { gpuOnly } from './gpuOnly.js';
 
 // =====================================================================
 //  Shadow proxies: the shadow pass draws one merged, position-only mesh per world tile instead of every material mesh of the tile
@@ -18,7 +19,7 @@ export function addShadowProxy(parent, pos, idx, area = 'island') {
   g.setIndex(pos.length / 3 > 65535 ? new THREE.Uint32BufferAttribute(idx, 1) : new THREE.Uint16BufferAttribute(idx, 1));
   g.computeBoundingSphere();
   const m = new THREE.Mesh(g, MAT);
-  m.name = 'shadowProxy'; m.castShadow = true; m.receiveShadow = false; m.visible = false; m.matrixAutoUpdate = false;
+  gpuOnly(m); m.name = 'shadowProxy'; m.castShadow = true; m.receiveShadow = false; m.visible = false; m.matrixAutoUpdate = false;
   m.userData.lod = true; m.userData.noTerrain = true; m.userData.shadowProxy = area; // lod : the shader precompile keeps it hidden
   parent.add(m); proxies.push(m);
   return m;
