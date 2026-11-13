@@ -2,6 +2,14 @@
 
 Chaque changement est poussé sur `main` (déploiement Render) avec un nouveau numéro de version et sa description ici.
 
+## v0.95.0 (2026-11-13)
+- **Monde par tuiles, étape 2 : Krutenau jouable (B).** Premier quartier hors de l'île, à l'est, bâti à partir des tuiles OpenStreetMap.
+  - Krutenau est une zone séparée, comme la gare (l'île n'a aucune case marchable au-delà de x ≈ 616, la navigation ne peut pas être continue). Code : `src/district/index.js`, `src/district/bridge.js`, `CONFIG.districts.krutenau`.
+  - Un passage sur le bord est de l'île coûte 3 000 points et ouvre les 4 zones (Quai des Bateliers, Saint-Guillaume, Place de Zurich, Manufacture des Tabacs, ajoutées après les zones existantes : la graine de l'île ne change pas). Une fois acheté, E traverse le pont ; un point de retour ramène sur l'île. L'hôte déplace les zombies de la zone quittée (`br_x`).
+  - Collision depuis les empreintes des bâtiments, navigation propre, zombies qui poursuivent, sol propre au quartier (même matériau que l'île).
+  - Vérifié : empreinte déterministe de l'île identique ; achat du passage, traversée, marche, un zombie touche le joueur (100 → 80 PV), retour et nouvelle entrée sans erreur ; `stuck-scan` sur Krutenau : 0 poche piégeuse, 0 objet inatteignable ; captures 640x360 de l'entrée, d'un centre de zone et d'une rue avec sol pavé et façades ; départ de l'île inchangé ; dans Krutenau 112 appels, 0,58 M triangles, 58 programmes, tas 379 Mo ; build OK ; aucune erreur console. Un premier jet sans sol (façades dans le vide) a été détecté en captures et corrigé avant publication.
+  - Non vérifié / limites : multijoueur réel à deux navigateurs, rendu de nuit, routes et trottoirs (les tuiles n'ont pas de routes OSM), décor, carte M (montre encore l'île). Pas de passages par pont individuels : un seul portail.
+
 ## v0.94.0 (2026-11-13)
 - **Monde par tuiles, étape 1 : infrastructure (B).** L'île reste figée et identique ; tout ce qui est au-delà peut maintenant être construit par tuiles de 480 m, chargées quand le joueur approche et libérées quand il s'éloigne.
   - Nouveaux : `src/rng.js` (graines par tuile), `src/tiles.js` (streamer, construction découpée en tranches, libération complète), `tools/tiles.mjs` (`--fetch`, `--build`, `--verify`), chemin « streamé » dans `src/architecture.js` (réutilise l'atlas de façades du cœur), `addSet`/`removeSet` pour les arbres, `CONFIG.world`.
