@@ -48,6 +48,7 @@ export function installBridge(game, { world, hud, sfx }) {
       sfx.buy?.();
       hud.announce(b.to === 'krutenau' ? 'KRUTENAU' : 'GRANDE ÎLE', b.to === 'krutenau' ? 'Rive est de l\'Ill' : 'De retour sur l\'île', 2500);
       game.sendPlayerState?.();
+      game.tiles?.focus(b.x, b.z).then(() => game.tiles?.focus(null)); // the facades of the arrival are built NOW (not over the next frames: a slow frame rate would leave the view empty)
       if (game.isClient) game.net?.send({ t: 'br_x', fa: from, to: b.to, x: b.x, z: b.z });
       else hostFollow(from, b.to, b.x, b.z, P);
     },

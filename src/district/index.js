@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { CONFIG } from '../config.js';
 import { doorSignTex } from '../gare/index.js';
+import { gpuOnly } from '../gpuOnly.js';
 
 // =====================================================================
 //  Krutenau, the first walkable district outside the island core (step B, chunk 2). A separate AREA like the station: its own floor region (own nav grid),
@@ -43,7 +44,7 @@ export async function loadKrutenauData() {
 
 // ctx: { data, scene, collision, levels, lightSources, props, zoneNames, island: { find(x, z, snap) -> { x, z, zone, yaw } | null } }
 export function buildKrutenau(ctx) {
-  const { data, scene, collision, levels, lightSources, props, zoneNames, island } = ctx;
+  const { data, scene, collision, levels, lightSources, props, zoneNames, island, ground } = ctx;
   const D = CONFIG.districts.krutenau, R = D.rect;
   if (!data || !data.buildings.length) return null;
   const zoneDefs = CONFIG.sector.zones.filter((z) => z.pocket === 'krutenau');
@@ -133,6 +134,20 @@ export function buildKrutenau(ctx) {
   const retCell = nearestMain(entry.x + 5, entry.z, 3), ret = { x: wx(retCell % nx), z: wz((retCell / nx) | 0) };
   const gate = island.find(D.gateHint.x, D.gateHint.z, D.gateSnap);
   if (!gate) { console.warn('[krutenau] no gate spot on the island'); return null; }
+
+  // ---------------------------------------------------------------- ground: one flat quad over the rect with the island's ground material (same ground shader: cobbles, normal / roughness /
+  // puddle variation, same UV mapping). Built with the district, NOT by the tile streamer: it exists the moment the player arrives, whatever the streamer has built so far. It sits 2 cm below
+  // the tile ground (tiles.js) so the two never fight; terrainY is 0 out here, so the player's feet (y = 0) match it.
+  if (ground) {
+    const GT = ground.tile, c = [[R.x0, R.z0], [R.x1, R.z0], [R.x1, R.z1], [R.x0, R.z1]];
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(c.flatMap(([x, z]) => [x, -0.02, z]), 3));
+    g.setAttribute('normal', new THREE.Float32BufferAttribute(c.flatMap(() => [0, 1, 0]), 3));
+    g.setAttribute('uv', new THREE.Float32BufferAttribute(c.flatMap(([x, z]) => [(x + ground.w / 2) / GT, (-z + ground.h / 2) / GT]), 2));
+    g.setIndex([0, 2, 1, 0, 3, 2]);
+    const m = new THREE.Mesh(g, ground.material); m.receiveShadow = true; m.name = 'krutenau:ground'; m.matrixAutoUpdate = false;
+    gpuOnly(m); scene.add(m);
+  }
 
   // ---------------------------------------------------------------- floor region (own nav grid)
   const region = levels.addRegion('Krutenau', 0, 'floor', { ground: true, navCell: D.navCell, navMaxCost: D.navMaxCost, navMargin: 0.5 });

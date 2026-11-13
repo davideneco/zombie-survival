@@ -2174,7 +2174,7 @@ export async function buildRealWorld(scene, renderer) {
       let axis = 0, al = -1; for (let k = 0; k < 8; k++) { const a = k * Math.PI / 8, l = run(a) + run(a + Math.PI); if (l > al) { al = l; axis = a; } }
       return { x: best[0], z: best[1], yaw: axis + Math.PI / 2 };
     } };
-    kr = buildKrutenau({ data: krData, scene, collision, levels, lightSources, props, zoneNames: ZONE_NAMES, island });
+    kr = buildKrutenau({ data: krData, scene, collision, levels, lightSources, props, zoneNames: ZONE_NAMES, island, ground: { material: groundMesh.material, tile: GROUND_TILE, w: GROUND_W, h: GROUND_H } });
     if (kr) {
       collision.build(); // the wall weapons look for a wall with rays
       for (const [zi, c] of Object.entries(kr.zoneCenters)) { seeds[zi] = [c.x, c.z]; zoneCenters[zi] = { name: c.name, x: c.x, z: c.z }; zoneArea[zi] = c.area; }
