@@ -2,6 +2,15 @@
 
 Chaque changement est poussé sur `main` (déploiement Render) avec un nouveau numéro de version et sa description ici.
 
+## v0.97.0 (2026-11-13)
+- **Krutenau : routes, décor, carte, nuit, second pont.**
+  - Vraies routes, trottoirs, passages piétons, parcs et eau d'OpenStreetMap, dessinés en 2 maillages fusionnés par tuile (`src/surfaces.js`) ; l'Ill et les bassins des tuiles sont de l'eau avec un bord en pierre.
+  - Décor : 8 épaves le long des trottoirs, une barricade au point d'arrivée du pont, 26 lampadaires générés (les tuiles n'en avaient que 5 : les rues étaient noires la nuit) qui n'éclairent que les 8 sources les plus proches, comme sur l'île.
+  - La carte M montre un plan propre au quartier (routes, parcs, zones, point de retour du pont).
+  - Un second passage payant à 1 800 points, en (567, -23) sur l'île, qui arrive en (1087, 329) ; le premier reste à 3 000.
+  - Vérifié : build OK ; empreinte déterministe de l'île et identifiants de portes identiques ; départ de l'île 244 appels, 1,35 M triangles, 58 programmes, tas 391 Mo ; dans le quartier 132–142 appels, 0,68–0,80 M triangles, 58 programmes ; `stuck-scan` Krutenau : 0 poche piégeuse ; traversée des deux ponts, retour, un zombie touche le joueur (100 → 80 PV) ; captures de l'entrée, d'une rue, de la nuit et de la carte regardées par l'agent, captures d'entrée et de rue regardées aussi par moi ; aucune erreur console.
+  - **Non conforme au budget** : le tas JS dans le quartier est de 415 Mo (budget 400 Mo) ; à traiter dans la foulée. Non vérifié : multijoueur, déplacement réel au clavier (rendu logiciel trop lent), passages piétons et zébras purement visuels.
+
 ## v0.96.0 (2026-11-13)
 - **Sons : toute la liste « À faire » de `docs/AUDIO.md` est câblée.** Tout est synthétisé (WebAudio, aucun fichier).
   - Pas selon la surface (pierre, bois en intérieur, sol métallique, quai/béton), ambiance de la ville de jour et de nuit (vent, cloches, chiens lointains, insectes), ambiance de la gare (écho du hall, murmure d'annonces, pigeons) avec fondu enchaîné ville ↔ gare, cloche et bips de portes du tram de transfert, vent du train aux vitres cassées retravaillé, cloche du passage à niveau avec effet Doppler et grondement du pont dans l'intro.
