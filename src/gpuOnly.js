@@ -24,11 +24,12 @@ export function gpuOnly(mesh) {
 
 // Renders (1 pixel scissor, no shadow pass) every gpuOnly mesh whose arrays are still on the CPU, so that three.js uploads them
 // and the callbacks free the arrays. `render` is the game's render function; returns how many meshes were sent.
-export function warmUpload(scene, renderer, render) {
-  const todo = [];
-  scene.traverse((o) => {
-    if (o.isMesh && !o.isInstancedMesh && o.userData.gpuOnly && !o.userData.shadowProxy && o.geometry.attributes.position.array) todo.push([o, o.visible, o.frustumCulled]);
-  });
+// `meshes` (optional): only these meshes, shadow proxies included (a streamed tile warms its own meshes once its build is done: the hidden ones
+// would otherwise keep their CPU arrays until the camera comes near, and a proxy until the shadow camera sees it).
+export function warmUpload(scene, renderer, render, meshes = null) {
+  const todo = [], want = (o) => o.isMesh && !o.isInstancedMesh && o.userData.gpuOnly && o.geometry.attributes.position.array;
+  if (meshes) { for (const o of meshes) if (want(o)) todo.push([o, o.visible, o.frustumCulled]); }
+  else scene.traverse((o) => { if (want(o) && !o.userData.shadowProxy) todo.push([o, o.visible, o.frustumCulled]); });
   if (!todo.length) return 0;
   for (const [o] of todo) { o.visible = true; o.frustumCulled = false; }
   const sm = renderer.shadowMap, auto = sm.autoUpdate, need = sm.needsUpdate;

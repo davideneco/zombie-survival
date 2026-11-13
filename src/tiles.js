@@ -4,7 +4,7 @@ import { CONFIG } from './config.js';
 import { seeded, hash32 } from './rng.js';
 import { addShadowProxy, removeShadowProxy } from './shadowProxy.js';
 import { detailCull } from './detailCull.js';
-import { gpuOnly } from './gpuOnly.js';
+import { gpuOnly, warmUpload } from './gpuOnly.js';
 import { buildSurfaces, surfaceMaterial } from './surfaces.js';
 
 // =====================================================================
@@ -175,6 +175,17 @@ export function installTiles(game, ctx) {
     }
     t.digest = { buildings: nb, verts: out.digest.verts, tris: out.digest.tris, sum: Math.round(out.digest.sum * 1000) / 1000, trees: nTrees, lamps: D.lamps.length };
     t.state = BUILT; stats.built++; stats.builds++; stats.lastBuildMs = performance.now() - t0;
+    warm.push(t);
+  }
+
+  // A finished tile sends its meshes (and its shadow proxy) to the GPU at once so the callbacks of gpuOnly free the CPU arrays: a tile beyond the
+  // detailCull range is hidden and would keep ~5 MB of vertex arrays until the camera came near.
+  const warm = [];
+  function warmTiles() {
+    const meshes = [];
+    for (const t of warm) if (t.state === BUILT && t.obj) { for (const m of t.obj.meshes) meshes.push(m); if (t.obj.proxy) meshes.push(t.obj.proxy); }
+    warm.length = 0;
+    if (meshes.length && game.gfx?.render) try { warmUpload(scene, SK.renderer, () => game.gfx.render(), meshes); } catch (e) { console.warn('[tiles] warm upload failed', e.message); }
   }
 
   // frees what the tile owns right now (complete or partial build)
@@ -247,6 +258,7 @@ export function installTiles(game, ctx) {
       try { r = job.next(); } catch (e) { stats.errors++; console.warn('[tiles] build failed', jobTile.file, e); r = { done: true }; jobTile.dead = true; abort(jobTile); }
       stats.maxStepMs = Math.max(stats.maxStepMs, performance.now() - t0);
       if (r.done) { jobTile.queued = false; job = null; jobTile = null; }
+      if (warm.length && !job && !queue.length) warmTiles(); // (once per batch of builds)
       if (performance.now() >= sliceEnd) return;
     }
   }
