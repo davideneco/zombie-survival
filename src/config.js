@@ -667,6 +667,16 @@ export const CONFIG = {
       entry: { x: 880, z: 250, yaw: -1.5708 },       // arrival point in the district (snapped to free ground), the player faces east; the return point is 5 m from it
       spawnEvery: 14, itemGap: 7,                    // m between zombie spawn points; min distance (m) between two items
       portalRadius: 3,                               // m: the interaction radius of the gate (open) and of the return point
+      // set dressing (src/district/dress.js): wrecks parked at the kerb of the roads + the barricade that closes the bridge head
+      dress: {
+        cars: 8, carEvery: 44, carGap: 20, kerb: 1.25,   // max wrecks, one candidate every carEvery m along a road, min distance between two wrecks, distance of the body axis from the road edge
+        carRoads: ['residential', 'unclassified', 'tertiary', 'secondary', 'primary', 'living_street'],
+        wreckColors: [0x2a2826, 0x3a3d40, 0x4a2c28, 0x2c3440, 0x4b4a3c], // burnt / dusty paints
+        keepRadius: 9,                                   // m kept clear of the arrival point, the return point and the zone sites
+        // checkpoint at the bridge head: [type, dx, dz (m from the arrival point, the player faces +x), heading (rad), height of the base (m)]
+        entry: [['jersey', -4, -5.6, 1.5708], ['jersey', -4, -3.2, 1.5708], ['sandbags', -4.2, -0.6, 1.5708], ['crate', -4.1, 1.0, 0.3], ['crate', -4.1, 2.3, 0], ['crate', -4.1, 1.6, 0.5, 1.0],
+          ['jersey', -4, 4.2, 1.5708], ['sandbags', -3.8, 6.6, 1.2], ['sandbags', 2.4, -7.6, 0.2]],
+      },
     },
   },
 

@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { CONFIG } from '../config.js';
 import { doorSignTex } from '../gare/index.js';
 import { gpuOnly } from '../gpuOnly.js';
+import { planDress, dressBoxes, buildDress } from './dress.js';
 
 // =====================================================================
 //  Krutenau, the first walkable district outside the island core (step B, chunk 2). A separate AREA like the station: its own floor region (own nav grid),
@@ -30,15 +31,17 @@ export async function loadKrutenauData() {
   try {
     const man = await fetch('/data/tiles/manifest.json').then((r) => (r.ok ? r.json() : null));
     if (!man) return null;
-    const R = D.rect, S = man.tileSize, blds = new Map(), trees = [];
+    const R = D.rect, S = man.tileSize, blds = new Map(), trees = [], roads = new Map(), parks = new Map(), water = new Map();
+    const touches = (pts) => { let a = Infinity, b = -Infinity, c = Infinity, d = -Infinity; for (const [x, z] of pts) { a = Math.min(a, x); b = Math.max(b, x); c = Math.min(c, z); d = Math.max(d, z); } return b >= R.x0 - 30 && a <= R.x1 + 30 && d >= R.z0 - 30 && c <= R.z1 + 30; };
     for (const [key, e] of Object.entries(man.tiles)) {
       const [ix, iz] = key.split(',').map(Number);
       if ((ix + 1) * S < R.x0 - 40 || ix * S > R.x1 + 40 || (iz + 1) * S < R.z0 - 40 || iz * S > R.z1 + 40) continue;
       const t = await fetch(`/data/tiles/${e.file}`).then((r) => r.json());
       for (const b of t.buildings) if (!blds.has(b.id)) blds.set(b.id, b.pts);
+      for (const [src, dst] of [[t.roads, roads], [t.parks, parks], [t.water, water]]) for (const o of src || []) if (!dst.has(o.id) && touches(o.pts)) dst.set(o.id, o); // (flat layers, for the dressing and the map)
       for (const [x, z] of t.trees) if (x >= R.x0 && x <= R.x1 && z >= R.z0 && z <= R.z1) trees.push([x, z]);
     }
-    return { buildings: [...blds.entries()].sort((a, b) => (a[0] < b[0] ? -1 : 1)).map(([, p]) => p), trees, hash: man.hash };
+    return { buildings: [...blds.entries()].sort((a, b) => (a[0] < b[0] ? -1 : 1)).map(([, p]) => p), trees, roads: [...roads.values()], parks: [...parks.values()], water: [...water.values()], hash: man.hash };
   } catch (e) { console.warn('[krutenau] tile data', e); return null; }
 }
 
@@ -71,6 +74,17 @@ export function buildKrutenau(ctx) {
     }
   }
   for (const [x, z] of data.trees) for (let j = cz(z - 1); j <= cz(z + 1); j++) for (let i = cx(x - 1); i <= cx(x + 1); i++) if (Math.hypot(wx(i) - x, wz(j) - z) < 1) mark(i, j);
+  // set dressing: wrecks along the kerb and the checkpoint at the bridge head; their footprints are blocked cells too (items, spawns and the components avoid them)
+  const freeAt = (x, z, r) => { for (let j = cz(z - r); j <= cz(z + r); j++) for (let i = cx(x - r); i <= cx(x + r); i++) { if (i < 0 || j < 0 || i >= nx || j >= nz || blocked[j * nx + i]) return false; } return true; };
+  const keepR = D.dress.keepRadius, keep = [{ ...D.entry, r: keepR }, { x: D.entry.x + 5, z: D.entry.z, r: keepR }, ...zoneDefs.map((z) => ({ x: z.site.x, z: z.site.z, r: keepR }))];
+  const dressList = planDress({ roads: data.roads || [], D, free: freeAt, entry: D.entry, keep });
+  for (const b of dressBoxes(dressList)) { // (a 0.7 m margin around the oriented box)
+    const c = Math.cos(b.rot), s = Math.sin(b.rot), ext = Math.hypot(b.w, b.d) / 2 + 1;
+    for (let j = cz(b.z - ext); j <= cz(b.z + ext); j++) for (let i = cx(b.x - ext); i <= cx(b.x + ext); i++) {
+      const dx = wx(i) - b.x, dz = wz(j) - b.z, u = dx * c + dz * s, v = -dx * s + dz * c;
+      if (Math.abs(u) <= b.w / 2 + 0.7 && Math.abs(v) <= b.d / 2 + 0.7) mark(i, j);
+    }
+  }
   // clearance (distance to the nearest blocked cell or to the rect border, m): two-pass chamfer
   const clr = new Float32Array(N);
   for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) clr[j * nx + i] = blocked[j * nx + i] ? 0 : Math.min(i + 1, j + 1, nx - i, nz - j, 40);
@@ -149,6 +163,9 @@ export function buildKrutenau(ctx) {
     gpuOnly(m); scene.add(m);
   }
 
+  // ---------------------------------------------------------------- set dressing: instanced props + collision (before levels.buildNavs, so the nav grid sees them)
+  const dressMeshes = buildDress(dressList, { props, scene, collision });
+
   // ---------------------------------------------------------------- floor region (own nav grid)
   const region = levels.addRegion('Krutenau', 0, 'floor', { ground: true, navCell: D.navCell, navMaxCost: D.navMaxCost, navMargin: 0.5 });
   levels.addPoly(region, [[R.x0, R.z0], [R.x0, R.z1], [R.x1, R.z1], [R.x1, R.z0]].reverse(), 0);
@@ -222,7 +239,8 @@ export function buildKrutenau(ctx) {
   const api = {
     rect: R, region, nav, doors, zoneIdx, zoneCenters, spawns, entry, ret, gate, inArea, zoneOf, pickGround, makeDoors, placeItems, finishNav,
     inRegion: (x, z) => inArea(x, z) && levels.inRegion(region, x, z),
-    stats: { buildings: blds.length, trees: data.trees.length, cells: N, free: sizes[main], components: sizes.length, spawns: spawns.length },
+    stats: { buildings: blds.length, trees: data.trees.length, cells: N, free: sizes[main], components: sizes.length, spawns: spawns.length, dress: dressList.length, cars: dressList.filter((o) => o.type === 'car').length, roads: (data.roads || []).length },
+    dressMeshes,
   };
   return api;
 }
