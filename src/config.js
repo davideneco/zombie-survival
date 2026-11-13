@@ -638,6 +638,18 @@ export const CONFIG = {
     streams: { facade: 1, trees: 2, lamps: 3, props: 4, items: 5, zones: 6 }, // rng stream ids (rng.js): a new system takes a new id, never reuses one
     defaultLevels: 5,         // storeys of a tile building without height / building:levels tag (no IGN heights outside the core: not reachable from the build box)
     lampLight: { color: 0xffb555, intensity: 50, dist: 22, y: 4.2 }, // light source of a tile lamp = the island lamps (never a real light: the 8-light pool picks the nearest sources)
+    // flat map layers of a tile (src/surfaces.js): OSM roads, pavements, parks and water drawn as merged strips / polygons (vertex colours x a shared grain texture), 2 meshes per tile
+    surf: {
+      uvScale: 2.5, subdiv: 6, jitter: 0.1, rough: 0.9, // m per texture repeat; max strip segment (m, for the colour variation); brightness variation (+-)
+      width: { motorway: 12, trunk: 11, primary: 9, secondary: 8, tertiary: 7, unclassified: 6, residential: 6, living_street: 5, service: 3.5, track: 3, pedestrian: 5, cycleway: 2, footway: 1.8, sidewalk: 1.8, path: 1.5, steps: 2, other: 3 }, // m
+      paved: ['pedestrian', 'cycleway', 'footway', 'sidewalk', 'path', 'steps'], // classes drawn as pavement (the others are asphalt)
+      colors: { asphalt: 0x3a3b3e, pave: 0x77736b, grass: 0x4a5a38, quay: 0x58544d, mark: 0xc4c0b0 },
+      y: { park: 0.006, asphalt: 0.014, pave: 0.022, mark: 0.03, water: 0.04, quay: 0.045, bridge: 0.05 }, // m above the tile ground (layers of one mesh: >= 8 mm apart so they never fight)
+      dash: { len: 2.2, gap: 3.8, w: 0.14, minWidth: 7, clear: 3 }, // centre line of the wide roads (m); clear = junction margin
+      zebra: { w: 0.5, step: 1, len: 3 },                          // crossing stripes (m): stripe width, pitch, length along the road
+      quayW: 0.9,                                                  // m: stone coping around the water polygons
+      river: { river: 25, canal: 12, stream: 3 },                  // m: width of the waterway lines the water polygons do not cover
+    },
     shopChance: 0.25,         // share of the non-commercial tile buildings that get a shop front on the ground floor
     treeCap: 1200,            // tile trees that can exist at once (slots reserved in the island tree layers: ~7 MB of instance buffers)
     // facade layers that exist in the tile but not in the core atlas (the atlas only keeps the layers the core uses) map to the nearest style that does

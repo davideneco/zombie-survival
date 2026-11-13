@@ -229,11 +229,11 @@ export async function buildRealWorld(scene, renderer) {
   };
 
   // ---------------------------------------------------------------- Eau (rivière Ill et canaux)
-  let waterNormal = null;
+  let waterNormal = null, waterMat = null; // (waterMat is shared with the tile streamer: the water of the tiles is the same material, so no new program)
   {
     waterNormal = rippleNormalMap();
     waterNormal.repeat.set(1 / 6, 1 / 6);
-    const waterMat = new THREE.MeshStandardMaterial({
+    waterMat = new THREE.MeshStandardMaterial({
       color: 0x0f2a3c, roughness: 0.08, metalness: 0.6, normalMap: waterNormal, normalScale: new THREE.Vector2(0.6, 0.6),
       side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2,
     });
@@ -2434,6 +2434,6 @@ export async function buildRealWorld(scene, renderer) {
     mapName: 'Grande Île, Strasbourg',
     // what the tile streamer (tiles.js) reuses from the core: the architecture instance (finished: texture array + materials), the shared ground material
     // and its UV mapping, the island tree layers, the lamp materials and the light sources
-    stream: { createArchitecture, renderer, arch, ground: { material: groundMesh.material, tile: GROUND_TILE, w: GROUND_W, h: GROUND_H }, trees: treesApi, lamps: lampMats, lightSources },
+    stream: { createArchitecture, renderer, arch, ground: { material: groundMesh.material, tile: GROUND_TILE, w: GROUND_W, h: GROUND_H }, trees: treesApi, lamps: lampMats, lightSources, water: waterMat },
   };
 }

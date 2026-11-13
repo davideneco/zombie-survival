@@ -5,6 +5,7 @@ import { seeded, hash32 } from './rng.js';
 import { addShadowProxy, removeShadowProxy } from './shadowProxy.js';
 import { detailCull } from './detailCull.js';
 import { gpuOnly } from './gpuOnly.js';
+import { buildSurfaces, surfaceMaterial } from './surfaces.js';
 
 // =====================================================================
 //  World tiles (step B, chunk 1). The island core (area.json) is built once by realworld.js and never unloaded. Everything outside it is described
@@ -141,6 +142,14 @@ export function installTiles(game, ctx) {
       g.setIndex(idx);
       const m = new THREE.Mesh(g, SK.ground.material); m.receiveShadow = true; m.name = 'tile:ground'; m.matrixAutoUpdate = false;
       gpuOnly(m); add(m);
+    }
+    yield;
+    // flat map layers: roads, pavements, parks, water (2 merged meshes, shared materials)
+    {
+      const g = buildSurfaces(D);
+      if (g.surf) { const m = new THREE.Mesh(g.surf, surfaceMaterial()); m.receiveShadow = true; m.name = 'tile:surf'; m.matrixAutoUpdate = false; gpuOnly(m); add(m); }
+      if (g.water && SK.water) { const m = new THREE.Mesh(g.water, SK.water); m.receiveShadow = true; m.name = 'tile:water'; m.matrixAutoUpdate = false; m.userData.noTerrain = true; gpuOnly(m); add(m); }
+      else g.water?.dispose();
     }
     yield;
     // trees (CPU set in the island layers: 0 draw calls) and lamps (2 instanced meshes + light sources)

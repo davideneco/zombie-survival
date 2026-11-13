@@ -15,13 +15,17 @@
   "1,-1": {
    "k": 2147581951,
    "file": "t_1_-1.json",
-   "bytes": 25073,
-   "sha": "baa3c6e25dbe750e",
+   "bytes": 45084,
+   "sha": "8f2e6a043e9ff007",
    "counts": {
     "buildings": 60,
     "halo": 24,
     "trees": 257,
     "lamps": 5,
+    "roads": 73,
+    "water": 6,
+    "rivers": 1,
+    "parks": 16,
     "droppedCore": 233,
     "hSrc": {
      "default": 51,
@@ -32,13 +36,17 @@
   "1,0": {
    "k": 2147581952,
    "file": "t_1_0.json",
-   "bytes": 34878,
-   "sha": "b19902e54ce6bd57",
+   "bytes": 47141,
+   "sha": "8ca3a4471dae5087",
    "counts": {
     "buildings": 89,
     "halo": 31,
     "trees": 46,
     "lamps": 3,
+    "roads": 61,
+    "water": 0,
+    "rivers": 0,
+    "parks": 16,
     "droppedCore": 384,
     "hSrc": {
      "default": 75,
@@ -50,13 +58,17 @@
   "2,-1": {
    "k": 2147647487,
    "file": "t_2_-1.json",
-   "bytes": 103244,
-   "sha": "c1a269b02ccd23fb",
+   "bytes": 151899,
+   "sha": "cd4f68be66bb973e",
    "counts": {
     "buildings": 256,
     "halo": 63,
     "trees": 444,
     "lamps": 0,
+    "roads": 273,
+    "water": 8,
+    "rivers": 1,
+    "parks": 45,
     "droppedCore": 0,
     "hSrc": {
      "levels": 20,
@@ -68,13 +80,17 @@
   "2,0": {
    "k": 2147647488,
    "file": "t_2_0.json",
-   "bytes": 54814,
-   "sha": "8b2e74c65b5dbb98",
+   "bytes": 109422,
+   "sha": "7ac6b1f58c23b297",
    "counts": {
     "buildings": 109,
     "halo": 44,
     "trees": 310,
     "lamps": 63,
+    "roads": 225,
+    "water": 0,
+    "rivers": 0,
+    "parks": 115,
     "droppedCore": 0,
     "hSrc": {
      "levels": 23,
@@ -84,5 +100,5 @@
    }
   }
  },
- "hash": "cccedff37207f6ed"
+ "hash": "84f47e645a93dfbb"
 }
