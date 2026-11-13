@@ -528,7 +528,16 @@ export async function buildRealWorld(scene, renderer) {
     const cx = pts.reduce((s2, q) => s2 + q[0], 0) / pts.length, cz = pts.reduce((s2, q) => s2 + q[1], 0) / pts.length;
     const near = Math.hypot(cx - CONFIG.startHint.x, cz - CONFIG.startHint.z) < 420; // détails (boutiques, lucarnes) près du secteur
     const commercial = !!bld.tags.amenity || ['retail', 'commercial', 'hotel'].includes(bld.tags.building);
-    arch.building(pts, bld.tags, bld.h, (i) => edgeCuts[i], { inSector: near, shop: commercial || (near && rnd() < 0.38), passageH: PASSAGE_H, ignH: bld.ignH });
+    // street walls (open street outside, same test as chooseDoor): overhangs, carriage doors and mansard dormers only go there
+    const streetEdges = pts.map(([ax, az], i) => {
+      const [bx, bz] = pts[(i + 1) % pts.length], dx = bx - ax, dz = bz - az, len = Math.hypot(dx, dz);
+      if (len < 2) return false;
+      const mx = (ax + bx) / 2, mz = (az + bz) / 2;
+      let nx = dz / len, nz = -dx / len;
+      if (pointInPoly(mx + nx * 0.3, mz + nz * 0.3, pts)) { nx = -nx; nz = -nz; }
+      return [1.2, 3].every((d) => !insideBuilding(mx + nx * d, mz + nz * d) && onIsland(mx + nx * d, mz + nz * d));
+    });
+    arch.building(pts, bld.tags, bld.h, (i) => edgeCuts[i], { inSector: near, shop: commercial || (near && rnd() < 0.38), passageH: PASSAGE_H, ignH: bld.ignH, island: onIsland(cx, cz), streetEdges });
     if (door) roomQueue.push({ pts, edgeCuts, door });
   }
   for (const q of roomQueue) interiors.addRoom(q.pts, q.edgeCuts, q.door);
@@ -584,6 +593,7 @@ export async function buildRealWorld(scene, renderer) {
     arch.part(pts, tags, opts);
   }
   arch.finish(scene);
+  if (typeof window !== 'undefined' && /[?&]debug/.test(location.search)) window.__rndAfterBuildings = rnd.save(); // determinism check: the facade work must not move the stream
 
   // ---------------------------------------------------------------- Intérieur des passages sous immeubles
   {

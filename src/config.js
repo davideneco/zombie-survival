@@ -71,6 +71,33 @@ export const STRASBOURG_SECTOR = {
 export const CONFIG = {
   map: CURRENT_MAP, // 'strasbourg' (Grande Île) : la seule carte
   startHint: { x: 4.3, z: -35.7 },
+
+  // Strasbourg facade grammar (archStyle.js classifies each building, architecture.js builds the style). Purely visual: collision, nav, zones and
+  // items stay on the footprints, and the world `rnd` stream is replayed exactly (architecture.js legacyDraws), so nothing placed after the buildings moves.
+  architecture: {
+    seed: 9137,
+    // depth bias of one `aFac.y` step in clip space (facadeAtlas.js): replaces the old per-material polygonOffset. ~1 LSB of a 24-bit depth buffer (1.2e-7) per step
+    depthBias: 1.5e-7,
+    // districts (local metres), first match wins: weights of the style draw. `seg: [x0, z0, x1, z1]` + `w` = a corridor around a segment; `island` filters on the island mask
+    districts: [
+      { id: 'petiteFrance', x: -640, z: 170, r: 190, mix: { timber: 0.7, plaster: 0.25, civic: 0.05 } },
+      { id: 'cathedral', x: 150, z: 30, r: 170, mix: { timber: 0.45, plaster: 0.4, classical: 0.1, civic: 0.05 } },
+      { id: 'broglie', x: 230, z: -360, r: 170, mix: { classical: 0.6, plaster: 0.3, neustadt: 0.1 } },
+      { id: 'percee', seg: [-210, -150, -430, -180], w: 30, mix: { neustadt: 0.7, modern: 0.3 }, heimat: true },
+      { id: 'island', island: true, mix: { plaster: 0.45, timber: 0.22, classical: 0.23, modern: 0.05, civic: 0.05 } },
+      { id: 'offN', island: false, zMax: -300, mix: { neustadt: 0.75, plaster: 0.15, modern: 0.1 } },
+      { id: 'off', island: false, mix: { plaster: 0.5, classical: 0.2, neustadt: 0.15, modern: 0.15 } },
+    ],
+    // per style: floorH = upper storey height (m; the ground floor stays GF_H = 4.2), bay = window bay width (m), pitch = roof pitch range (degrees)
+    timber: { floorH: 2.85, bay: 4, overhang: 0.22, overhangMax: 3, pitch: [55, 60], dormerRows: [1, 4], dormerStep: 1.9, dormerShrink: 0.82, maxArea: 320, maxLevels: 5, maxFront: 12, gallery: 0.4, slats: 0.6 },
+    plaster: { floorH: 3.1, bay: 4, pitch: [45, 52], dormerRows: [0, 2], desaturate: 0.15 },
+    classical: { floorH: 3.5, bay: 3.2, brisis: 70, mansardH: 0.9, cochere: 0.7, cochereW: 3.2 },
+    civic: { floorH: 4.2, bay: 4.5, pitch: [42, 48], steppedGable: 0.35 },
+    neustadt: { floorH: 3.6, bay: 3.6, pitch: [50, 58], oriel: { minWall: 14, every: 12, w: 2.6, d: 0.8, floors: [1, 3] }, turret: { chance: 0.4, r: 1.6, sides: 10, minLevels: 4 } },
+    modern: { floorH: 3.0, bay: 4 },
+    // dormers: maxPerRoof caps the triangles per roof; lit = share of glowing dormers; dormerDepth = how far the dormer body stands out of the slope (m)
+    dormers: { maxPerRoof: 24, lit: 0.12, dormerDepth: 0.9, mansardW: 1.0 },
+  },
   spawnPoints: [
     { x: -0.6, z: -30.9, yaw: 0, name: 'Place du Marché-Neuf', zone: 'Marché-Neuf' },
     { x: -195.0, z: -142.0, yaw: 1.57, name: 'Place Kléber', zone: 'Place Kléber' },

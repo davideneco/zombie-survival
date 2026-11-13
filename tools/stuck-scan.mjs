@@ -43,10 +43,13 @@ page.on('pageerror', (e) => errors.push('PAGEERROR ' + e.message));
 // le rendu logiciel est lent et inutile ici : la boucle d'animation est espacée (les étapes appellent game.update elles-mêmes)
 await page.addInitScript(() => { window.requestAnimationFrame = (cb) => setTimeout(() => cb(performance.now()), 4000); try { localStorage.setItem('zombie_settings', JSON.stringify({ quality: 0 })); } catch { /* ignoré */ } });
 const sep = URL_.includes('?') ? '&' : '?';
-await page.goto(`${URL_}${sep}debug`, { timeout: 600000 });
+await page.goto(`${URL_}${sep}debug&keepgeom`, { timeout: 600000 });
 await page.waitForFunction(() => window.game && window.game.player && window.game.unstick, null, { timeout: 600000 });
 await page.waitForTimeout(1500);
 
+if (process.env.AT) { // AT=x,z : the zfight step looks at the meshes visible from there (the facade tiles beyond the fog distance are hidden)
+  await page.evaluate((at) => { const [x, z] = at.split(',').map(Number); game.player.pos.set(x, game.world.terrainY(x, z), z); for (let i = 0; i < 25; i++) game.update(1 / 30); }, process.env.AT);
+}
 await page.evaluate(() => { for (const d of game.world.doors) game.openDoor(d.id); }); // toutes les portes ouvertes pour toutes les étapes
 const report = { url: URL_, date: new Date().toISOString(), options: OPTS, steps: {} };
 const t0 = Date.now();
@@ -332,17 +335,22 @@ if (ONLY.includes('walk')) {
 
 // -------------------------------------------------------------------------------------------------------------------- étape zfight
 if (ONLY.includes('zfight')) {
+  await page.evaluate((p) => { window.__zfPrefix = p; }, process.env.ZF_PREFIX || ''); // ZF_PREFIX=arch: limits the scan to the facade meshes (the full scan overflows a Set on the whole city)
   report.steps.zfight = await page.evaluate(() => {
     const THREE = game.THREE, meshes = [];
     game.scene.traverse((m) => {
       const vis = (o) => { for (let q = o; q; q = q.parent) if (!q.visible || q === game.camera) return false; return true; };
       if (!m.isMesh || m.isInstancedMesh || !vis(m) || m.userData.zombie || !m.geometry?.attributes.position) return;
+      if (window.__zfPrefix && !(m.name || '').startsWith(window.__zfPrefix)) return;
       const mat = Array.isArray(m.material) ? m.material[0] : m.material;
       if (!mat || mat.transparent || mat.depthWrite === false) return; // verres, décalques sans écriture de profondeur : triés autrement
       m.updateMatrixWorld(true); meshes.push(m);
     });
     // tous les triangles dans le repère du monde
     const V = [], owner = [], pl = [], NRM = [];
+    // owners: a mesh, or (mesh, depth step) for the facade meshes (one mesh per tile holds every layer; the layers are told apart by the `aFac.y` depth step)
+    const ownerMesh = [], ownerStep = [], ownerOf = new Map();
+    const ownerId = (mi, step) => { const k = mi * 512 + (step + 1); let o = ownerOf.get(k); if (o === undefined) { o = ownerMesh.length; ownerMesh.push(mi); ownerStep.push(step); ownerOf.set(k, o); } return o; };
     const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3(), n = new THREE.Vector3(), e1 = new THREE.Vector3(), e2 = new THREE.Vector3();
     meshes.forEach((m, mi) => {
       const g = m.geometry, pos = g.attributes.position, idx = g.index, cnt = idx ? idx.count : pos.count;
@@ -360,7 +368,7 @@ if (ONLY.includes('zfight')) {
         const d = n.dot(a);
         const dbl = (Array.isArray(m.material) ? m.material[0] : m.material).side === THREE.DoubleSide ? 1 : 0;
         const key = ((((Math.round(n.x * 50) + 50) * 101 + (Math.round(n.y * 50) + 50)) * 101 + (Math.round(n.z * 50) + 50)) * 2 + (dbl ? 0 : flip)) * 400001 + Math.round(d * 100) + 200000;
-        pl.push(key); owner.push(mi);
+        pl.push(key); owner.push(ownerId(mi, g.attributes.aFac ? g.attributes.aFac.getY(i0) : -1));
         V.push(a.x, a.y, a.z, b.x, b.y, b.z, c.x, c.y, c.z);
       }
     });
@@ -379,7 +387,7 @@ if (ONLY.includes('zfight')) {
       return true;
     };
     // décalage de profondeur de chaque maillage (polygonOffset) : deux matériaux qui en ont de différents ne se disputent plus le pixel
-    const po = meshes.map((m) => { const mt = Array.isArray(m.material) ? m.material[0] : m.material; return mt.polygonOffset ? [mt.polygonOffsetFactor, mt.polygonOffsetUnits] : [0, 0]; });
+    const po = ownerMesh.map((mi, o) => { const mt = Array.isArray(meshes[mi].material) ? meshes[mi].material[0] : meshes[mi].material; return ownerStep[o] >= 0 ? [-ownerStep[o], -ownerStep[o]] : mt.polygonOffset ? [mt.polygonOffsetFactor, mt.polygonOffsetUnits] : [0, 0]; });
     const found = new Map(), tested = new Set(), CELL = 4;
     const bbox = (t) => { const o = [Infinity, Infinity, Infinity, -Infinity, -Infinity, -Infinity]; for (let v = 0; v < 3; v++) for (let k = 0; k < 3; k++) { const x = V[9 * t + 3 * v + k]; if (x < o[k]) o[k] = x; if (x > o[3 + k]) o[3 + k] = x; } return o; };
     const pair = (t, u) => {
@@ -421,7 +429,7 @@ if (ONLY.includes('zfight')) {
     }
     const nameOf = (m) => m.name || m.parent?.name || m.material?.name || '(sans nom)';
     const matInfo = (m) => { const mt = Array.isArray(m.material) ? m.material[0] : m.material; return `${mt.color ? '#' + mt.color.getHexString() : '-'}${mt.map ? '+map' : ''}${mt.side === 2 ? ' double' : ''}`; };
-    const list = [...found.values()].sort((p, q) => q.n - p.n).slice(0, 120).map((f) => ({ x: +f.x.toFixed(1), y: +f.y.toFixed(2), z: +f.z.toFixed(1), nx: +f.nx.toFixed(2), ny: +f.ny.toFixed(2), nz: +f.nz.toFixed(2), n: f.n, a: nameOf(meshes[f.a]), b: nameOf(meshes[f.b]), matA: matInfo(meshes[f.a]) + ' po' + po[f.a], matB: matInfo(meshes[f.b]) + ' po' + po[f.b] }));
+    const list = [...found.values()].sort((p, q) => q.n - p.n).slice(0, 120).map((f) => ({ ...f, a: ownerMesh[f.a], b: ownerMesh[f.b], pa: f.a, pb: f.b })).map((f) => ({ x: +f.x.toFixed(1), y: +f.y.toFixed(2), z: +f.z.toFixed(1), nx: +f.nx.toFixed(2), ny: +f.ny.toFixed(2), nz: +f.nz.toFixed(2), n: f.n, a: nameOf(meshes[f.a]), b: nameOf(meshes[f.b]), matA: matInfo(meshes[f.a]) + ' po' + po[f.pa], matB: matInfo(meshes[f.b]) + ' po' + po[f.pb] }));
     // regroupe par zone de 6 m (un mobilier compte pour une seule entrée)
     const grouped = [];
     for (const f of list) { const g = grouped.find((q) => Math.hypot(q.x - f.x, q.z - f.z) < 6 && Math.abs(q.y - f.y) < 4); if (g) { g.n += f.n; g.pairs++; } else grouped.push({ ...f, pairs: 1 }); }

@@ -4,327 +4,23 @@ import { CONFIG } from './config.js';
 import { createRelief, hash2 } from './relief.js';
 import { addShadowProxy, proxyBucket } from './shadowProxy.js';
 import { detailCull } from './detailCull.js';
+import { FLOOR_H, BAY_W, GF_H, texSet, CW, CH, GH, prng } from './facadeDraw.js';
+import { drawPlaster, drawTimber, drawSandstone, drawModern, drawShop, drawDormer, NEW_LAYERS } from './facadeLayers.js';
+import { createFacadeAtlas } from './facadeAtlas.js';
+import { classify, buildingRng } from './archStyle.js';
 
 // =====================================================================
 //  Architecture strasbourgeoise : façades dessinées (crépi + grès, colombages, grès rose,
 //  gothique, moderne, boutiques), toits pentus avec lucarnes, et bâtiments en 3D
 //  détaillé (building:part d'OpenStreetMap : cathédrale, églises).
+//  v0.91.0 (step C): the style of each building comes from archStyle.js (district mixes), each style has its own storey height, roof pitch,
+//  dormers and facade layers (facadeLayers.js); all layers live in one texture array (facadeAtlas.js). The world `rnd` stream is replayed
+//  exactly by legacyDraws(), so items, machines and perks never move.
 // =====================================================================
 
-export const FLOOR_H = 3.25; // hauteur d'un étage (m)
-export const BAY_W = 4;      // largeur d'une travée de fenêtre (m)
-export const GF_H = 4.2;     // rez-de-chaussée (plus haut que les étages)
-const PX = 96;               // pixels par mètre dans les textures de façade
-const CW = BAY_W * PX, CH = Math.round(FLOOR_H * PX); // une cellule = 1 travée x 1 étage
-const GH = Math.round(GF_H * PX);
+export { FLOOR_H, BAY_W, GF_H }; // (the dimensions moved to facadeDraw.js with the painting helpers)
 
-// ------------------------------------------------------------------ Dessin
-// Les trois canevas (couleur, relief, lumière) sont dessinés en même temps avec les mêmes coordonnées.
-function texSet(W, H, draw) {
-  const mk = (w, h) => { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; };
-  const cMap = mk(W, H), cBump = mk(W / 2, H / 2), cEmis = mk(W / 4, H / 4);
-  const ctx = { map: cMap.getContext('2d'), bump: cBump.getContext('2d'), emis: cEmis.getContext('2d') };
-  ctx.bump.scale(0.5, 0.5); ctx.emis.scale(0.25, 0.25);
-  ctx.bump.fillStyle = '#808080'; ctx.bump.fillRect(0, 0, W, H);
-  ctx.emis.fillStyle = '#000'; ctx.emis.fillRect(0, 0, W, H);
-  draw(ctx);
-  return { cMap, cBump, cEmis };
-}
-// remplit un rectangle sur chaque canevas pour lequel une couleur est donnée
-function box(ctx, x, y, w, h, map, bump, emis) {
-  if (map) { ctx.map.fillStyle = map; ctx.map.fillRect(x, y, w, h); }
-  if (bump) { ctx.bump.fillStyle = bump; ctx.bump.fillRect(x, y, w, h); }
-  if (emis) { ctx.emis.fillStyle = emis; ctx.emis.fillRect(x, y, w, h); }
-}
-function poly(ctx, pts, map, bump, emis) {
-  for (const [k, col] of [['map', map], ['bump', bump], ['emis', emis]]) {
-    if (!col) continue;
-    const c = ctx[k];
-    c.fillStyle = col; c.beginPath();
-    pts.forEach(([x, y], i) => (i ? c.lineTo(x, y) : c.moveTo(x, y)));
-    c.closePath(); c.fill();
-  }
-}
-function line(ctx, x0, y0, x1, y1, w, map, bump) {
-  for (const [k, col] of [['map', map], ['bump', bump]]) {
-    if (!col) continue;
-    const c = ctx[k];
-    c.strokeStyle = col; c.lineWidth = w; c.lineCap = 'butt';
-    c.beginPath(); c.moveTo(x0, y0); c.lineTo(x1, y1); c.stroke();
-  }
-}
-function noise(ctx, x, y, w, h, n, alpha, rnd) {
-  for (let i = 0; i < n; i++) {
-    const v = Math.floor(rnd() * 255);
-    ctx.map.fillStyle = `rgba(${v},${v},${v},${alpha})`;
-    ctx.map.fillRect(x + rnd() * w, y + rnd() * h, 2 + rnd() * 3, 2 + rnd() * 3);
-  }
-}
-
-// Vitre (éteinte ou allumée), petits bois, reflet
-function glass(ctx, x, y, w, h, lit, rnd, panes = [2, 3], arch = false) {
-  const shape = arch
-    ? (() => { const pts = [[x, y + h], [x, y + w * 0.6]]; for (let a = 0; a <= 16; a++) { const t = a / 16; pts.push([x + w * t, y + w * 0.6 - Math.sin(t * Math.PI) * w * 0.6]); } pts.push([x + w, y + h]); return pts; })()
-    : [[x, y], [x + w, y], [x + w, y + h], [x, y + h]];
-  if (lit) {
-    const warm = ['#ffd38a', '#ffc46b', '#ffe2b0', '#ffcf7a'][Math.floor(rnd() * 4)];
-    poly(ctx, shape, warm, '#202020', warm);
-    // rideaux
-    ctx.map.fillStyle = 'rgba(160,90,40,0.35)'; ctx.map.fillRect(x, y, w * 0.22, h); ctx.map.fillRect(x + w * 0.78, y, w * 0.22, h);
-  } else {
-    const g = ctx.map.createLinearGradient(0, y, 0, y + h);
-    g.addColorStop(0, '#2b3b50'); g.addColorStop(0.55, '#141c27'); g.addColorStop(1, '#0a0e14');
-    poly(ctx, shape, g, '#202020');
-    ctx.map.fillStyle = 'rgba(160,190,230,0.10)';
-    ctx.map.beginPath(); ctx.map.moveTo(x, y + h * 0.6); ctx.map.lineTo(x + w, y + h * 0.15); ctx.map.lineTo(x + w, y + h * 0.35); ctx.map.lineTo(x, y + h * 0.85); ctx.map.fill();
-  }
-  // petits bois
-  const [nx, ny] = panes, bar = Math.max(3, w * 0.035);
-  for (let i = 1; i < nx; i++) box(ctx, x + (w * i) / nx - bar / 2, y, bar, h, '#e4ddcf', '#b0b0b0', lit ? '#3a2a10' : null);
-  for (let j = 1; j < ny; j++) box(ctx, x, y + (h * j) / ny - bar / 2, w, bar, '#e4ddcf', '#b0b0b0', lit ? '#3a2a10' : null);
-}
-
-const SHUTTERS = ['#3f5a45', '#7a3b2e', '#54616b', '#2f4a6b', '#6b5a2f', '#5a3a4a'];
-
-// ------------------------------------------------------------------ Salissures (v0.45.0)
-// Coulures sous les appuis, fissures, taches d'humidité : dessinées sur la texture de façade avec un générateur LOCAL par cellule
-// (le tirage `rnd` du monde n'est jamais consommé : le décor, les machines et les armes restent exactement où ils étaient).
-function prng(seed) {
-  let a = seed >>> 0;
-  return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
-}
-const STYLE_SEED = { plaster: 1, timber: 2, sandstone: 3 };
-// coulures d'une fenêtre : positions (px), longueurs, largeurs, opacité (déterministes : « départ » sous l'appui et « arrivée » dans la cellule du dessous se raccordent)
-function streakSet(style, variant, c, r, wx, ww) {
-  const R = prng(STYLE_SEED[style] * 1000 + variant * 37 + c * 11 + r * 5 + 7), n = 2 + Math.floor(R() * 3), out = [];
-  for (let i = 0; i < n; i++) out.push({ x: wx - 6 + R() * (ww + 12), len: (0.5 + R() * 1.3) * PX, w: (0.04 + R() * 0.07) * PX, a: 0.16 + R() * 0.18 });
-  return out;
-}
-function drawStreak(ctx, x, y0, y1, w, a) {
-  if (y1 - y0 < 2) return;
-  const g = ctx.map.createLinearGradient(0, y0, 0, y1);
-  g.addColorStop(0, `rgba(38,30,24,${a})`); g.addColorStop(0.7, `rgba(38,30,24,${a * 0.55})`); g.addColorStop(1, 'rgba(38,30,24,0)');
-  ctx.map.fillStyle = g; ctx.map.fillRect(x - w / 2, y0, w, y1 - y0);
-  ctx.bump.fillStyle = 'rgba(90,90,90,0.35)'; ctx.bump.fillRect(x - w / 2, y0, w, (y1 - y0) * 0.6);
-}
-// cellule (c, r) du motif (2 travées x 2 étages) : ox, oy son coin haut-gauche ; fenêtre (wx, wy, ww, wh) ; appui juste sous la fenêtre
-function grime(ctx, style, variant, c, r, ox, oy, wx, wy, ww, wh) {
-  const sillY = wy + wh + 11, bottom = oy + CH;
-  for (const k of streakSet(style, variant, c, r, wx, ww)) drawStreak(ctx, k.x, sillY, Math.min(sillY + k.len, bottom), k.w, k.a);
-  for (const k of streakSet(style, variant, c, 1 - r, wx, ww)) { // l'eau qui vient de la fenêtre de l'étage du dessus : le reste de la coulure
-    const rest = k.len - (bottom - sillY); if (rest > 2) drawStreak(ctx, k.x, oy, oy + rest, k.w, k.a * 0.8);
-  }
-  const R = prng(STYLE_SEED[style] * 7919 + variant * 101 + c * 17 + r * 29 + 3);
-  for (let i = 0; i < 3; i++) { // taches d'humidité et de patine : grands halos très doux
-    const x = ox + R() * CW, y = oy + R() * CH, rad = (0.5 + R() * 1.1) * PX, a = 0.05 + R() * 0.07;
-    const g = ctx.map.createRadialGradient(x, y, 0, x, y, rad); g.addColorStop(0, `rgba(${R() < 0.35 ? '46,58,38' : '48,36,26'},${a})`); g.addColorStop(1, 'rgba(40,30,20,0)');
-    ctx.map.fillStyle = g; ctx.map.fillRect(x - rad, y - rad, rad * 2, rad * 2);
-  }
-  if (R() < 0.55) { // fissure partant d'un angle de la fenêtre
-    let x = R() < 0.5 ? wx - 8 : wx + ww + 8, y = wy + wh * (R() < 0.5 ? 0 : 1), dir = (x < wx + ww / 2 ? -1 : 1);
-    ctx.map.strokeStyle = 'rgba(30,22,18,0.42)'; ctx.map.lineWidth = 1.6; ctx.bump.strokeStyle = '#4a4a4a'; ctx.bump.lineWidth = 2.2;
-    for (const cx2 of [ctx.map, ctx.bump]) { cx2.beginPath(); cx2.moveTo(x, y); }
-    const n = 4 + Math.floor(R() * 4);
-    for (let i = 0; i < n; i++) { x += dir * (4 + R() * 12); y += (R() - 0.35) * 16 + (y < wy + wh / 2 ? -5 : 6); ctx.map.lineTo(x, y); ctx.bump.lineTo(x, y); }
-    ctx.map.stroke(); ctx.bump.stroke();
-  }
-}
-
-// ------------------------------------------------------------------ Styles de façade (2 travées x 2 étages)
-function drawPlaster(ctx, plasterImg, rnd, variant) {
-  const W = CW * 2, H = CH * 2;
-  for (let i = 0; i < 4; i++) ctx.map.drawImage(plasterImg, (i % 2) * W / 2, Math.floor(i / 2) * H / 2, W / 2, H / 2);
-  ctx.bump.filter = 'grayscale(1) contrast(0.5)'; ctx.bump.globalAlpha = 0.8;
-  for (let i = 0; i < 4; i++) ctx.bump.drawImage(plasterImg, (i % 2) * W / 2, Math.floor(i / 2) * H / 2, W / 2, H / 2);
-  ctx.bump.filter = 'none'; ctx.bump.globalAlpha = 1;
-  const frameCol = variant % 2 ? '#c99a84' : '#e2d9c6'; // encadrement en grès rose ou en pierre claire
-  for (let r = 0; r < 2; r++) for (let c = 0; c < 2; c++) {
-    const ox = c * CW, oy = r * CH;
-    // bandeau d'étage
-    box(ctx, ox, oy + CH - 10, CW, 10, 'rgba(60,45,35,0.28)', '#a8a8a8');
-    const ww = 1.25 * PX, wh = 1.85 * PX, wx = ox + (CW - ww) / 2, wy = oy + 0.55 * PX;
-    box(ctx, wx - 13, wy - 16, ww + 26, wh + 30, frameCol, '#d0d0d0');
-    box(ctx, wx - 20, wy - 22, ww + 40, 10, frameCol, '#e0e0e0'); // linteau mouluré
-    const lit = rnd() < 0.2;
-    glass(ctx, wx, wy, ww, wh, lit, rnd, [2, 3]);
-    box(ctx, wx - 18, wy + wh + 10, ww + 36, 9, '#b8ad9b', '#e8e8e8'); // appui
-    grime(ctx, 'plaster', variant, c, r, ox, oy, wx, wy, ww, wh);
-    const sh = variant >= 2 ? null : SHUTTERS[Math.floor(rnd() * SHUTTERS.length)];
-    if (sh && rnd() < 0.85) {
-      const closed = rnd() < 0.25;
-      const sw = closed ? ww / 2 : ww / 2 - 4;
-      for (const sx of closed ? [wx, wx + ww / 2] : [wx - sw - 14, wx + ww + 14]) {
-        box(ctx, sx, wy - 4, sw, wh + 8, sh, '#d0d0d0');
-        for (let y = wy; y < wy + wh; y += 8) box(ctx, sx, y, sw, 2, 'rgba(0,0,0,0.28)', '#909090');
-      }
-    }
-    if (rnd() < 0.3) { // jardinière de géraniums
-      box(ctx, wx - 6, wy + wh - 6, ww + 12, 18, '#5a3a22', '#c0c0c0');
-      for (let k = 0; k < 9; k++) {
-        const fx = wx + (ww * (k + 0.5)) / 9, fy = wy + wh - 10 - rnd() * 10;
-        ctx.map.fillStyle = rnd() < 0.7 ? '#c8202a' : '#e85a8a'; ctx.map.beginPath(); ctx.map.arc(fx, fy, 6 + rnd() * 4, 0, 7); ctx.map.fill();
-        ctx.map.fillStyle = '#2f5a24'; ctx.map.fillRect(fx - 5, fy + 4, 10, 6);
-      }
-    }
-  }
-}
-
-function drawTimber(ctx, plasterImg, rnd, variant) {
-  const W = CW * 2, H = CH * 2;
-  for (let i = 0; i < 4; i++) ctx.map.drawImage(plasterImg, (i % 2) * W / 2, Math.floor(i / 2) * H / 2, W / 2, H / 2);
-  const beam = ['#6a4128', '#5a3620', '#7a5032'][variant % 3]; // chêne brun (pas noir)
-  const bw = 0.16 * PX;
-  for (let r = 0; r < 2; r++) for (let c = 0; c < 2; c++) {
-    const ox = c * CW, oy = r * CH;
-    const ww = 1.1 * PX, wh = 1.35 * PX, wx = ox + (CW - ww) / 2, wy = oy + 0.75 * PX;
-    // sablière et poteaux
-    box(ctx, ox, oy, CW, bw, beam, '#e0e0e0'); box(ctx, ox, oy + CH - bw * 0.8, CW, bw * 0.8, beam, '#e0e0e0');
-    box(ctx, ox, oy, bw, CH, beam, '#e0e0e0');
-    box(ctx, wx - bw - 4, oy, bw, CH, beam, '#e0e0e0'); box(ctx, wx + ww + 4, oy, bw, CH, beam, '#e0e0e0');
-    box(ctx, wx - 4, wy - bw, ww + 8, bw, beam, '#e0e0e0'); box(ctx, wx - 4, wy + wh, ww + 8, bw, beam, '#e0e0e0');
-    // décharges : croix de Saint-André, ou "homme" (K)
-    const panels = [[ox + bw, wx - bw - 4], [wx + ww + 4 + bw, ox + CW]];
-    for (const [a, b] of panels) {
-      if (b - a < 20) continue;
-      const kind = (variant + r + c) % 3;
-      if (kind === 0) { line(ctx, a, oy + bw, b, oy + CH - bw, bw * 0.8, beam, '#e0e0e0'); line(ctx, b, oy + bw, a, oy + CH - bw, bw * 0.8, beam, '#e0e0e0'); }
-      else if (kind === 1) { line(ctx, a, oy + CH * 0.5, b, oy + bw, bw * 0.8, beam, '#e0e0e0'); line(ctx, a, oy + CH * 0.5, b, oy + CH - bw, bw * 0.8, beam, '#e0e0e0'); }
-      else { box(ctx, a, oy + CH * 0.5 - bw / 2, b - a, bw, beam, '#e0e0e0'); line(ctx, a, oy + CH - bw, b, oy + CH * 0.5, bw * 0.8, beam, '#e0e0e0'); }
-    }
-    glass(ctx, wx, wy, ww, wh, rnd() < 0.3, rnd, [2, 3]);
-    grime(ctx, 'timber', variant, c, r, ox, oy, wx, wy, ww, wh);
-    if (rnd() < 0.45) { // jardinière
-      box(ctx, wx - 6, wy + wh - 4, ww + 12, 16, '#5a3a22');
-      for (let k = 0; k < 7; k++) { ctx.map.fillStyle = rnd() < 0.7 ? '#d0202a' : '#f07a2a'; ctx.map.beginPath(); ctx.map.arc(wx + (ww * (k + 0.5)) / 7, wy + wh - 8 - rnd() * 8, 6 + rnd() * 3, 0, 7); ctx.map.fill(); }
-    }
-  }
-}
-
-function drawSandstone(ctx, plasterImg, rnd, variant, gothic = false) {
-  const W = CW * 2, H = CH * 2;
-  const base = gothic ? '#a76a57' : ['#b8735f', '#c48a72', '#a9604f'][variant % 3];
-  box(ctx, 0, 0, W, H, base, '#8a8a8a');
-  ctx.map.globalAlpha = 0.25; for (let i = 0; i < 4; i++) ctx.map.drawImage(plasterImg, (i % 2) * W / 2, Math.floor(i / 2) * H / 2, W / 2, H / 2); ctx.map.globalAlpha = 1;
-  // assises de pierre de taille
-  const course = 0.42 * PX;
-  for (let y = 0, k = 0; y < H; y += course, k++) {
-    box(ctx, 0, y, W, 2, 'rgba(60,25,18,0.45)', '#606060');
-    for (let x = (k % 2) * 0.45 * PX; x < W; x += 0.9 * PX) box(ctx, x, y, 2, course, 'rgba(60,25,18,0.35)', '#686868');
-    ctx.map.fillStyle = `rgba(${rnd() < 0.5 ? '255,220,200' : '60,20,10'},0.06)`; ctx.map.fillRect(0, y, W, course);
-  }
-  noise(ctx, 0, 0, W, H, 600, 0.06, rnd);
-  for (let r = 0; r < 2; r++) for (let c = 0; c < 2; c++) {
-    const ox = c * CW, oy = r * CH;
-    if (gothic) {
-      const ww = 1.3 * PX, wh = 2.6 * PX, wx = ox + (CW - ww) / 2, wy = oy + 0.3 * PX;
-      // ébrasement et lancette avec remplage
-      poly(ctx, [[wx - 14, wy + wh + 6], [wx - 14, wy + ww * 0.6], ...Array.from({ length: 17 }, (_, a) => [wx - 14 + (ww + 28) * a / 16, wy + ww * 0.6 - 14 - Math.sin(a / 16 * Math.PI) * (ww * 0.6 + 6)]), [wx + ww + 14, wy + wh + 6]], '#8e5545', '#505050');
-      const lit = rnd() < 0.35;
-      glass(ctx, wx, wy, ww, wh, false, rnd, [2, 4], true);
-      if (lit) poly(ctx, [[wx + 8, wy + wh], [wx + 8, wy + ww * 0.65], [wx + ww / 2, wy + 6], [wx + ww - 8, wy + ww * 0.65], [wx + ww - 8, wy + wh]], null, null, rnd() < 0.5 ? '#6a3a9a' : '#3a5aa8');
-      box(ctx, wx + ww / 2 - 3, wy + ww * 0.5, 6, wh - ww * 0.5, '#9a6050', '#b0b0b0');
-    } else {
-      const ww = 1.3 * PX, wh = 2.05 * PX, wx = ox + (CW - ww) / 2, wy = oy + 0.5 * PX;
-      box(ctx, wx - 16, wy - 18, ww + 32, wh + 28, '#d6a48c', '#d8d8d8'); // encadrement mouluré clair
-      box(ctx, wx - 26, wy - 30, ww + 52, 14, '#d6a48c', '#e8e8e8');    // corniche de fenêtre
-      glass(ctx, wx, wy, ww, wh, rnd() < 0.3, rnd, [2, 3]);
-      grime(ctx, 'sandstone', variant, c, r, ox, oy, wx, wy, ww, wh);
-      if (rnd() < 0.35) { // balcon en fer forgé
-        box(ctx, wx - 22, wy + wh - 4, ww + 44, 8, '#2a2a2a', '#d0d0d0');
-        for (let x = wx - 20; x < wx + ww + 22; x += 9) box(ctx, x, wy + wh - 40, 3, 38, '#262626', '#c0c0c0');
-        box(ctx, wx - 22, wy + wh - 42, ww + 44, 5, '#2a2a2a', '#d0d0d0');
-      }
-    }
-    box(ctx, ox, oy + CH - 12, CW, 12, gothic ? '#94594a' : '#cf9c84', '#c8c8c8'); // cordon
-  }
-}
-
-function drawModern(ctx, plasterImg, rnd) {
-  const W = CW * 2, H = CH * 2;
-  box(ctx, 0, 0, W, H, '#c9c7c2', '#8a8a8a');
-  ctx.map.globalAlpha = 0.3; ctx.map.drawImage(plasterImg, 0, 0, W, H); ctx.map.globalAlpha = 1;
-  for (let r = 0; r < 2; r++) for (let c = 0; c < 2; c++) {
-    const ox = c * CW, oy = r * CH, ww = 3.1 * PX, wh = 1.9 * PX, wx = ox + (CW - ww) / 2, wy = oy + 0.55 * PX;
-    box(ctx, wx - 6, wy - 6, ww + 12, wh + 12, '#5a5d61', '#d0d0d0');
-    const lit = rnd() < 0.3;
-    if (lit) box(ctx, wx, wy, ww, wh, '#f2f4ff', '#202020', '#e8eeff');
-    else glass(ctx, wx, wy, ww, wh, false, rnd, [3, 1]);
-  }
-}
-
-// Rez-de-chaussée commerçant : vitrine éclairée sous une enseigne, ou rideau métallique tagué
-const SHOPS = [
-  ['WINSTUB', '#7a1f24'], ['BOULANGERIE', '#6a4a1f'], ['PHARMACIE', '#1f5a3a'], ['BRETZELS', '#7a4a1f'], ['CAFÉ', '#2a3a5a'],
-  ['LIBRAIRIE', '#3a2a4a'], ['BRASSERIE', '#5a2a1a'], ['FROMAGERIE', '#4a4a1f'], ['CHOCOLATS', '#3a2214'], ['ÉPICERIE', '#2a4a2a'],
-  ['TABAC', '#6a1a1a'], ['OPTICIEN', '#1f3a5a'], ['FLEURISTE', '#2a5a3a'], ['SOUVENIRS', '#5a3a1a'],
-];
-function drawShop(ctx, plasterImg, rnd, variant) {
-  const W = CW * 2, H = GH;
-  box(ctx, 0, 0, W, H, '#b9a58c', '#8a8a8a');
-  ctx.map.globalAlpha = 0.35; ctx.map.drawImage(plasterImg, 0, 0, W, H); ctx.map.globalAlpha = 1;
-  for (let c = 0; c < 2; c++) {
-    const ox = c * CW, sx = ox + 0.35 * PX, sw = CW - 0.7 * PX, sy = 1.05 * PX, sh = 2.75 * PX;
-    const [name, col] = SHOPS[Math.floor(rnd() * SHOPS.length)];
-    box(ctx, ox, 0, 0.35 * PX, H, '#a68d72', '#c0c0c0'); // trumeau en pierre
-    // enseigne : bandeau coloré, lettres claires (éclairées si la boutique est ouverte)
-    const closed = variant % 3 === 2 || (variant % 3 === 1 && c === 1);
-    box(ctx, sx, 0.2 * PX, sw, 0.6 * PX, col, '#a0a0a0');
-    box(ctx, sx, 0.2 * PX, sw, 4, '#d8c090', '#c0c0c0'); box(ctx, sx, 0.8 * PX - 4, sw, 4, '#d8c090', '#c0c0c0');
-    for (const k of ['map', 'emis']) {
-      if (k === 'emis' && closed) continue;
-      const g2 = ctx[k];
-      g2.fillStyle = k === 'map' ? '#f6e6c0' : '#c8a060';
-      g2.font = `bold ${Math.round(0.36 * PX)}px Georgia, serif`; g2.textAlign = 'center'; g2.textBaseline = 'middle';
-      g2.fillText(name, sx + sw / 2, 0.52 * PX, sw - 16);
-    }
-    if (name === 'PHARMACIE') { // croix verte lumineuse
-      const cx = ox + CW - 0.25 * PX, cy = 0.5 * PX, a = 0.12 * PX;
-      box(ctx, cx - a, cy - a * 3, a * 2, a * 6, '#20e060', null, '#20ff60'); box(ctx, cx - a * 3, cy - a, a * 6, a * 2, '#20e060', null, '#20ff60');
-    }
-    if (closed) {
-      box(ctx, sx, sy, sw, sh, '#7d8186', '#c0c0c0');
-      for (let y = sy; y < sy + sh; y += 10) box(ctx, sx, y, sw, 3, 'rgba(0,0,0,0.25)', '#808080');
-      const tags = ['#d02a6a', '#2ad06a', '#2a8ad0', '#e0c020', '#ffffff'];
-      for (let t = 0; t < 3; t++) { ctx.map.strokeStyle = tags[Math.floor(rnd() * tags.length)]; ctx.map.lineWidth = 5 + rnd() * 5; ctx.map.beginPath(); let x = sx + rnd() * sw * 0.7, y = sy + sh * (0.35 + rnd() * 0.45); ctx.map.moveTo(x, y); for (let q = 0; q < 6; q++) { x += (rnd() - 0.2) * 40; y += (rnd() - 0.5) * 30; ctx.map.lineTo(x, y); } ctx.map.stroke(); }
-    } else {
-      // intérieur éclairé (dégradé chaud), silhouettes de présentoirs, reflets
-      const warm = ['#ffe3b0', '#ffd79a', '#fff1d6'][Math.floor(rnd() * 3)];
-      for (const k of ['map', 'emis']) {
-        const g2 = ctx[k], gr = g2.createLinearGradient(0, sy, 0, sy + sh);
-        gr.addColorStop(0, k === 'map' ? warm : '#ffd9a0'); gr.addColorStop(1, k === 'map' ? '#b07a40' : '#6a4420');
-        g2.fillStyle = gr; g2.fillRect(sx, sy, sw, sh);
-      }
-      ctx.bump.fillStyle = '#202020'; ctx.bump.fillRect(sx, sy, sw, sh);
-      for (let k = 0; k < 3; k++) { // présentoirs
-        const px = sx + 18 + (k * (sw - 36)) / 3 + rnd() * 10, pw = (sw - 60) / 3.4, ph = sh * (0.25 + rnd() * 0.25);
-        box(ctx, px, sy + sh - ph, pw, ph, 'rgba(70,40,20,0.75)', null, '#3a2410');
-        box(ctx, px, sy + sh - ph, pw, 6, 'rgba(255,240,200,0.6)', null, '#a08050');
-      }
-      ctx.map.fillStyle = 'rgba(255,255,255,0.12)'; ctx.map.beginPath(); ctx.map.moveTo(sx, sy + sh * 0.7); ctx.map.lineTo(sx + sw * 0.5, sy); ctx.map.lineTo(sx + sw * 0.62, sy); ctx.map.lineTo(sx + sw * 0.12, sy + sh); ctx.map.lineTo(sx, sy + sh); ctx.map.fill();
-      box(ctx, sx + sw * 0.62, sy, 5, sh, '#2a2a2a', '#b0b0b0', '#1a1408'); // porte vitrée
-    }
-    box(ctx, sx - 4, sy - 4, sw + 8, 6, '#3a2c20', '#d0d0d0'); box(ctx, sx - 4, sy + sh, sw + 8, 8, '#8a7a66', '#d0d0d0');
-  }
-}
-
-function drawDormer(ctx, plasterImg, rnd) {
-  const W = 256, H = 256;
-  box(ctx, 0, 0, W, H, '#d9cfbd', '#909090');
-  box(ctx, 50, 40, 156, 180, '#e2d9c6', '#d0d0d0');
-  glass(ctx, 64, 54, 128, 150, rnd() < 0.3, rnd, [2, 2]);
-}
-
-// ------------------------------------------------------------------ Matériaux
-function material(renderer, set, repeatSafe = true, params = {}) {
-  const aniso = renderer.capabilities.getMaxAnisotropy();
-  const mk = (c, srgb) => { const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = aniso; if (srgb) t.colorSpace = THREE.SRGBColorSpace; return t; };
-  return new THREE.MeshStandardMaterial({
-    map: mk(set.cMap, true), bumpMap: mk(set.cBump, false), bumpScale: 3.2,
-    emissiveMap: mk(set.cEmis, true), emissive: 0xffaa44, emissiveIntensity: 1.5,
-    roughness: 0.82, vertexColors: true, side: THREE.DoubleSide, ...params,
-  });
-}
-
+// ------------------------------------------------------------------ Matériaux (anciens canevas : voir facadeLayers.js)
 // Palettes de teintes (multipliées par la texture)
 const PALETTES = {
   plaster: ['#f3e7cf', '#ecd2a8', '#e3b4a2', '#d3dde0', '#f0d2d2', '#dde4c8', '#d8c2a2', '#f0e2b2', '#cf9580', '#e8e2d6', '#c8d7c0', '#e8c890'],
@@ -334,7 +30,22 @@ const PALETTES = {
   modern: ['#ffffff', '#e8eaee', '#f2eee6'],
   shop: ['#ffffff', '#f0e8e0', '#e8e0d0'],
 };
+// New styles (step C): render colours of the Strasbourg houses
+const STYLE_TINTS = {
+  timber: ['#bfae86', '#bf9a92', '#a2aa94', '#99a2a8', '#c6bea8'],
+  classical0: ['#e6cf9c', '#dcbf86', '#ecdcb4', '#d9c8a6'],
+  classical1: ['#ffffff', '#f4e8e4', '#ead8d0'],
+  civic: ['#ffffff', '#f4e8e4', '#ead8d0'],
+  neustadt: ['#f4efe2', '#e8dcc0', '#ffffff', '#f0e0d4'],
+};
 const ROOF_TINTS = { tiles: ['#b8644a', '#a85a40', '#8f4e3a', '#c07050', '#9a5a48'], slate: ['#5a5d66', '#4a4e57'], copper: ['#5f7a68'], stone: ['#b07a68'], metal: ['#6a6e74'] };
+// roofs per style when the data gives no material
+const STYLE_ROOF = {
+  timber: ['#7e4636', '#6e4232', '#5e4a3e'], // beaver-tail tiles
+  classical: ['#464c55', '#3e444d', '#50565f'], // slate
+  neustadt: ['#464c55', '#50565f', '#3e444d'],
+  civic: ['#8f4e3a', '#464c55', '#7e4636'],
+};
 
 // ------------------------------------------------------------------ Géométrie
 // Rectangle orienté de surface minimale d'un polygone (axe long u, axe court v)
@@ -374,77 +85,87 @@ function polyArea(pts) {
   return s / 2;
 }
 
+const lerp = (a, b, t) => a + (b - a) * t;
+const num = (v) => { const n = parseFloat(v); return Number.isFinite(n) ? n : null; };
+const HIPPED = ['hipped', 'half-hipped', 'gambrel', 'mansard', 'side_hipped', 'quadruple_saltbox', 'saltbox', 'round'];
+
 // ------------------------------------------------------------------ Constructeur
 export function createArchitecture({ renderer, plasterImg, plaster2Img, roofP, rnd }) {
-  // styles : [nom, nombre de variantes, fonction de dessin]
+  const CFG = CONFIG.architecture;
   // plaster2 (« painted_plaster_wall » : crépi taché et coulé, CC0 Poly Haven) sert de fond à la moitié des crépis et à une variante de colombage
   const p2 = plaster2Img || plasterImg;
-  const STYLES = { plaster: [4, (c, i, r, v) => drawPlaster(c, v >= 2 ? p2 : i, r, v)], timber: [3, (c, i, r, v) => drawTimber(c, v === 1 ? p2 : i, r, v)], sandstone: [3, drawSandstone], gothic: [1, (c, i, r, v) => drawSandstone(c, i, r, v, true)], modern: [1, drawModern] };
-  // texture de détail fine (mêmes pixels que plaster2, 256 px, niveaux de gris) : multipliée à la couleur des façades par un petit ajout au shader (un seul programme pour tous les murs)
+  // anciens styles : nombre de variantes et fonction de dessin (le tirage `rnd` du monde est consommé exactement comme avant : legacyDraws)
+  const LEGACY = { plaster: [4, (c, i, r, v) => drawPlaster(c, v >= 2 ? p2 : i, r, v)], timber: [3, (c, i, r, v) => drawTimber(c, v === 1 ? p2 : i, r, v)], sandstone: [3, drawSandstone], gothic: [1, (c, i, r, v) => drawSandstone(c, i, r, v, true)], modern: [1, drawModern] };
+  // texture de détail fine (mêmes pixels que plaster2, 256 px, niveaux de gris) : multipliée à la couleur des façades par le shader du matériau en tableau
   const detailTex = (() => {
     const cv = document.createElement('canvas'); cv.width = cv.height = 256;
     const x = cv.getContext('2d'); x.filter = 'grayscale(1) contrast(1.7) brightness(1.1)'; x.drawImage(p2, 0, 0, 256, 256);
     const t = new THREE.CanvasTexture(cv); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 4; t.userData.detail = true;
     return t;
   })();
-  const withDetail = (mat) => {
-    mat.onBeforeCompile = (sh) => {
-      sh.uniforms.tDetail = { value: detailTex };
-      sh.fragmentShader = sh.fragmentShader.replace('void main() {', 'uniform sampler2D tDetail;\nvoid main() {').replace('#include <map_fragment>', '#include <map_fragment>\n  diffuseColor.rgb *= 0.74 + 0.56 * texture2D(tDetail, vMapUv * vec2(5.0, 3.7)).r;');
-    };
-    mat.customProgramCacheKey = () => 'facadeDetail';
-    return mat;
-  };
+  const atlas = createFacadeAtlas({ renderer, detailTex, depthBias: CFG.depthBias });
 
-  const mats = {}; // "style:variante" -> { mat, bucket }
-  const bucket = () => ({ pos: [], nor: [], uv: [], col: [], idx: [] });
-  // Rang fixe de chaque matériau (style + variante) : deux faces coplanaires de deux matériaux (bâtiments aux emprises qui se chevauchent dans
-  // OSM, bandeaux de devanture contre un mur…) se disputaient le même pixel (z-fighting). Chaque matériau reçoit un décalage de profondeur
-  // propre (polygonOffset, 1 unité par rang) : le plus grand rang gagne toujours, sans scintillement (tools/stuck-scan.mjs, étape zfight).
+  const bucket = () => ({ pos: [], nor: [], uv: [], col: [], fac: [], idx: [] });
+  const wallB = bucket(), roofB = bucket();
+  // Depth rank of each layer (atlas `aFac.y`, 2 steps per rank: the half step separates two neighbouring city tiles, see finish): two coplanar faces of two layers
+  // (overlapping OSM footprints, shop bands against a wall...) get different depth biases and never fight for a pixel (tools/stuck-scan.mjs, zfight step).
   const RANK = { plaster: 0, timber: 4, sandstone: 7, modern: 10, gothic: 11, shop: 12, dormer: 18, flood: 22 };
-  // (2 unités par rang : l'intervalle intermédiaire sert à départager deux tuiles de 160 m, voir finish)
-  const rankMat = (mat, style, variant) => { const r = (RANK[style] ?? 0) + variant + 1; mat.polygonOffset = true; mat.polygonOffsetFactor = -r; mat.polygonOffsetUnits = -2 * r; return mat; };
-  const matFor = (style, variant) => {
+  const recs = new Map(); // atlas layer id -> record { b, L, rank, style, variant } handed to quad / tri
+  const record = (L, style, variant) => { let r = recs.get(L.id); if (!r) recs.set(L.id, r = { b: wallB, L, rank: L.rank, style, variant }); return r; };
+  const roofR = { b: roofB, L: { id: 0 }, rank: 0 };
+  // Legacy layer: drawn on first use with the WORLD rnd, exactly as the old lazy materials did (the canvases are reused as atlas layers)
+  const legacyLayer = (style, variant) => {
     const key = `${style}:${variant}`;
-    if (!mats[key]) {
+    if (!atlas.has(key)) {
       let set;
       if (style === 'shop') set = texSet(CW * 2, GH, (ctx) => drawShop(ctx, plasterImg, rnd, variant));
       else if (style === 'dormer') set = texSet(256, 256, (ctx) => drawDormer(ctx, plasterImg, rnd));
-      else set = texSet(CW * 2, CH * 2, (ctx) => STYLES[style][1](ctx, plasterImg, rnd, variant));
-      mats[key] = { mat: rankMat(withDetail(material(renderer, set)), style, variant), b: bucket(), style, variant };
+      else set = texSet(CW * 2, CH * 2, (ctx) => LEGACY[style][1](ctx, plasterImg, rnd, variant));
+      atlas.add(key, 2 * ((RANK[style] ?? 0) + variant + 1), set);
     }
-    return mats[key];
+    return record(atlas.get(key), style, variant);
+  };
+  const matFor = legacyLayer;
+  // New layer (local prng, never the world rnd)
+  const hashStr = (s) => { let h = 2166136261; for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619); return h >>> 0; };
+  const newLayer = (key) => {
+    if (!atlas.has(key)) {
+      const def = NEW_LAYERS[key], R = prng(hashStr(key) ^ CFG.seed);
+      atlas.add(key, def.rank * 2, texSet(def.W, def.H, (ctx) => def.draw(ctx, plasterImg, R, p2)));
+    }
+    return record(atlas.get(key), key.split(':')[0], +(key.split(':')[1] || 0));
   };
   // Monuments éclairés la nuit (cathédrale) : le grès lui-même émet une lumière chaude
-  let floodMat = null;
+  let floodRec = null;
   const floodlit = () => {
-    if (!floodMat) {
+    if (!floodRec) {
       const base = matFor('gothic', 0);
-      const mat = withDetail(base.mat.clone());
-      mat.emissiveMap = base.mat.map;
-      mat.emissive = new THREE.Color(0xe8b48c);
-      mat.emissiveIntensity = 0.24;
-      rankMat(mat, 'flood', 0);
-      floodMat = { mat, b: bucket(), style: 'gothic', variant: 0 };
-      mats['gothic:flood'] = floodMat;
+      floodRec = record(atlas.add('gothic:flood', 2 * (RANK.flood + 1), base.L.sets, true), 'gothic', 0);
     }
-    return floodMat;
+    return floodRec;
   };
   // toits : tuiles PBR teintées par sommet
-  const roofMat = new THREE.MeshStandardMaterial({ map: roofP.map, normalMap: roofP.normalMap, roughnessMap: roofP.roughnessMap, vertexColors: true, side: THREE.DoubleSide });
-  const roofB = bucket();
+  const roofMat = atlas.patchDepth(new THREE.MeshStandardMaterial({ map: roofP.map, normalMap: roofP.normalMap, roughnessMap: roofP.roughnessMap, vertexColors: true, side: THREE.DoubleSide }));
   const tmp = new THREE.Color();
 
   // ---------- relief des façades (relief.js) : fenêtres, balcons, corniches, tuyaux, cheminées ; AUCUN tirage `rnd`
   const relief = createRelief();
-  const WIN = { // ouverture dessinée dans la texture (m) : largeur, hauteur, hauteur au-dessus du plancher ; encadrement
-    plaster: { w: 1.25, h: 1.85, b: 0.85, trim: (v) => (v % 2 ? '#c99a84' : '#e2d9c6'), cornice: '#d8cdb8' },
-    timber: { w: 1.1, h: 1.35, b: 1.15, trim: () => '#6a4a30', cornice: '#8a6a4a' },
-    sandstone: { w: 1.3, h: 2.05, b: 0.7, trim: () => '#d6a48c', cornice: '#cf9c84' },
+  // ouverture dessinée dans la texture (m) : n fenêtres par travée, largeur, hauteur, hauteur au-dessus du plancher ; encadrement
+  const WIN_LEGACY = {
+    plaster: { n: 1, w: 1.25, h: 1.85, b: 0.85, trim: (v) => (v % 2 ? '#c99a84' : '#e2d9c6'), cornice: '#d8cdb8' },
+    timber: { n: 1, w: 1.1, h: 1.35, b: 1.15, trim: () => '#6a4a30', cornice: '#8a6a4a', timber: true },
+    sandstone: { n: 1, w: 1.3, h: 2.05, b: 0.7, trim: () => '#d6a48c', cornice: '#cf9c84' },
+  };
+  const WIN_NEW = {
+    timber: { n: 2, w: 0.75, h: 1.1, b: 1.0, trim: () => '#4a3220', cornice: '#4a2a20', timber: true, noGF: true },
+    classical: { n: 1, w: 1.3, h: 2.4, b: 0.55, trim: () => '#dccfb4', cornice: '#d8cdb8', cornSy: 1.6 },
+    civic: { n: 0, w: 1.6, h: 3.0, b: 0.7, trim: () => '#d6a48c', cornice: '#d6a48c' }, // arched windows are painted only (the flat relief frame would not fit): cornices, bands and quoins only
+    neustadt: { n: 1, w: 1.3, h: 2.2, b: 0.7, trim: (v) => (v % 2 ? '#dcb49c' : '#cfc4a6'), cornice: '#c9bea0' },
   };
   const hexC = (h) => new THREE.Color(h);
-  const quad = (b, p0, p1, p2, p3, uv, c0, c1) => {
-    const base = b.pos.length / 3;
+  const pushFac = (b, m, k) => { for (let i = 0; i < k; i++) b.fac.push(m.L.id, m.rank); };
+  const quad = (m, p0, p1, p2, p3, uv, c0, c1) => {
+    const b = m.b, base = b.pos.length / 3;
     b.pos.push(...p0, ...p1, ...p2, ...p3);
     // normale de la face
     const ex = p1[0] - p0[0], ey = p1[1] - p0[1], ez = p1[2] - p0[2], fx = p3[0] - p0[0], fy = p3[1] - p0[1], fz = p3[2] - p0[2];
@@ -452,10 +173,11 @@ export function createArchitecture({ renderer, plasterImg, plaster2Img, roofP, r
     for (let k = 0; k < 4; k++) b.nor.push(nx / l, ny / l, nz / l);
     b.uv.push(...uv);
     for (const c of [c0, c0, c1, c1]) b.col.push(c.r, c.g, c.b);
+    pushFac(b, m, 4);
     b.idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
   };
-  const tri = (b, p0, p1, p2, uv, c) => {
-    const base = b.pos.length / 3;
+  const tri = (m, p0, p1, p2, uv, c) => {
+    const b = m.b, base = b.pos.length / 3;
     b.pos.push(...p0, ...p1, ...p2);
     const ex = p1[0] - p0[0], ey = p1[1] - p0[1], ez = p1[2] - p0[2], fx = p2[0] - p0[0], fy = p2[1] - p0[1], fz = p2[2] - p0[2];
     let nx = ey * fz - ez * fy, ny = ez * fx - ex * fz, nz = ex * fy - ey * fx; const l = Math.hypot(nx, ny, nz) || 1;
@@ -466,72 +188,117 @@ export function createArchitecture({ renderer, plasterImg, plaster2Img, roofP, r
     for (let k = 0; k < 3; k++) b.nor.push(nx / l, ny / l, nz / l);
     b.uv.push(...uv);
     for (let k = 0; k < 3; k++) b.col.push(c.r, c.g, c.b);
+    pushFac(b, m, 3);
     if (flip) b.idx.push(base, base + 2, base + 1); else b.idx.push(base, base + 1, base + 2);
   };
 
-  // Mur vertical de a à b (tranche [t0, t1] du segment, hauteurs y0..y1), découpé au niveau du rez-de-chaussée
-  function wall(ax, az, bx, bz, t0, t1, y0, y1, st, tint, dirt, base = 0) {
+  // Mur vertical de a à b (tranche [t0, t1] du segment, hauteurs y0..y1), découpé au niveau du rez-de-chaussée.
+  // st : { main, shop, gf (rez-de-chaussée), gal / galY (étage-galerie), W (fenêtres), fh, bay, uoff, variant, scale }
+  // ovr : décalage (m) de chaque étage supérieur vers l'extérieur (encorbellement), car : { t0, t1 } porte cochère
+  function wall(ax, az, bx, bz, t0, t1, y0, y1, st, tint, dirt, base = 0, ovr = null, car = null) {
     const len = Math.hypot(bx - ax, bz - az);
     if (len < 0.05 || y1 - y0 < 0.02) return;
-    const x0 = ax + (bx - ax) * t0, z0 = az + (bz - az) * t0, x1 = ax + (bx - ax) * t1, z1 = az + (bz - az) * t1;
+    const dx = bx - ax, dz = bz - az, nx = dz / len, nz = -dx / len, ux = dx / len, uz = dz / len; // sortant (voir facadeSegs de realworld.js)
+    const x0 = ax + dx * t0, z0 = az + dz * t0, x1 = ax + dx * t1, z1 = az + dz * t1;
     const sc = st.scale || 1; // monuments : motifs plus grands
+    const fh = st.fh, bay = st.bay, P = bay * 2 * sc;
     // vu de la rue, la droite du spectateur va de b vers a : u croît dans ce sens (sinon les enseignes sont en miroir)
-    const u0 = st.uoff - (len * t0) / (BAY_W * 2 * sc), u1 = st.uoff - (len * t1) / (BAY_W * 2 * sc);
+    const uAt = (t) => st.uoff - (len * t) / P;
     // pied de mur assombri (v0.44.0, CONFIG.graphics.footAO : [hauteur au-dessus de la base, facteur] par morceaux) : le mur « s'ancre » au sol
     const AO = CONFIG.graphics.footAO;
     const ao = (h) => { if (h <= AO[0][0]) return AO[0][1]; for (let i = 1; i < AO.length; i++) if (h <= AO[i][0]) return AO[i - 1][1] + (AO[i][1] - AO[i - 1][1]) * ((h - AO[i - 1][0]) / (AO[i][0] - AO[i - 1][0])); return AO[AO.length - 1][1]; };
     const col = (y) => tmp.copy(tint).multiplyScalar(dirt * ao(y - base)).clone();
-    const piece = (ya, yb, m, vmap) => {
+    const gf = base + GF_H;
+    const offAt = (y) => (ovr && y > gf ? ovr[Math.min(ovr.length - 1, Math.floor((y - gf) / fh))] : 0);
+    const capUV = [0, 0, 0.05, 0, 0.05, 0.03, 0, 0.03];
+    const piece = (ya, yb, m, vmap, ta = t0, tb = t1, ua = uAt(ta), ub = uAt(tb)) => {
       if (yb - ya < 0.02) return;
+      const xa = ax + dx * ta, za = az + dz * ta, xb = ax + dx * tb, zb = az + dz * tb;
       const ys = [ya];
       for (const [h] of AO) { const y = base + h; if (y > ya + 0.05 && y < yb - 0.05) ys.push(y); }
-      ys.push(yb);
+      if (ovr) for (let n = 0; n <= ovr.length; n++) { const y = gf + n * fh; if (y > ya + 0.05 && y < yb - 0.05) ys.push(y); }
+      ys.push(yb); ys.sort((p, q) => p - q);
       for (let i = 0; i + 1 < ys.length; i++) {
-        const a = ys[i], b = ys[i + 1];
-        quad(m.b, [x0, a, z0], [x1, a, z1], [x1, b, z1], [x0, b, z0], [u0, vmap(a), u1, vmap(a), u1, vmap(b), u0, vmap(b)], col(a), col(b));
+        const a = ys[i], b = ys[i + 1], off = offAt((a + b) / 2), Xa = xa + nx * off, Za = za + nz * off, Xb = xb + nx * off, Zb = zb + nz * off;
+        quad(m, [Xa, a, Za], [Xb, a, Zb], [Xb, b, Zb], [Xa, b, Za], [ua, vmap(a), ub, vmap(a), ub, vmap(b), ua, vmap(b)], col(a), col(b));
+        if (off > 0.001) { // return faces at the two ends of the edge (the storey juts out of the wall)
+          if (ta === 0) quad(st.main, [xa, a, za], [Xa, a, Za], [Xa, b, Za], [xa, b, za], capUV, col(a), col(b));
+          if (tb === 1) quad(st.main, [Xb, a, Zb], [xb, a, zb], [xb, b, zb], [Xb, b, Zb], capUV, col(a), col(b));
+        }
       }
     };
-    const gf = base + GF_H;
-    if (st.shop && y0 < gf && base === 0) {
-      piece(y0, Math.min(y1, gf), st.shop, (y) => y / GF_H);
-      piece(Math.max(y0, gf), y1, st.main, (y) => (y - gf) / (FLOOR_H * 2 * sc));
-    } else {
-      piece(y0, y1, st.main, (y) => (y - gf) / (FLOOR_H * 2 * sc));
+    const upper = (ya, yb) => { // above the ground floor: the main layer, or the open loft of the top storey
+      if (st.gal && st.galY < yb) { piece(ya, Math.min(yb, st.galY), st.main, (y) => (y - gf) / (fh * 2 * sc)); piece(Math.max(ya, st.galY), yb, st.gal, (y) => (y - gf) / (fh * 2 * sc)); }
+      else piece(ya, yb, st.main, (y) => (y - gf) / (fh * 2 * sc));
+    };
+    const gfRec = base === 0 ? (st.shop || st.gf) : null;
+    if (gfRec && y0 < gf) {
+      const top = Math.min(y1, gf), gv = (y) => y / GF_H;
+      if (car && !st.shop && y0 < 0.01 && car.t1 > t0 && car.t0 < t1) { // porte cochère : un morceau de rez-de-chaussée peint (3,4 m), les deux côtés en pierre
+        const ca = Math.max(t0, car.t0), cb = Math.min(t1, car.t1);
+        piece(y0, top, gfRec, gv, t0, ca); piece(y0, top, newLayer('carriage'), gv, ca, cb, 1, 0); piece(y0, top, gfRec, gv, cb, t1);
+      } else piece(y0, top, gfRec, gv);
+      upper(Math.max(y0, gf), y1);
+    } else upper(y0, y1);
+    if (ovr) { // soffits under each jutting storey: the dark underside of the oak sill beam
+      for (let n = 1; n <= ovr.length; n++) {
+        const yB = gf + (n - 1) * fh;
+        if (yB <= y0 + 0.05 || yB >= y1 - 0.05) continue;
+        const o0 = n === 1 ? 0 : ovr[n - 2], o1 = ovr[n - 1];
+        if (o1 - o0 < 0.01) continue;
+        const c = col(yB).multiplyScalar(0.7);
+        quad(st.main, [x0 + nx * o0, yB, z0 + nz * o0], [x1 + nx * o0, yB, z1 + nz * o0], [x1 + nx * o1, yB, z1 + nz * o1], [x0 + nx * o1, yB, z0 + nz * o1], [0, 0, 0.3, 0, 0.3, 0.03, 0, 0.03], c, c);
+      }
     }
 
-    // ---- relief : mêmes positions que les fenêtres dessinées (u = uoff - s / 8 m : une fenêtre au milieu de chaque travée de 4 m, par étage de 3,25 m)
-    const W = WIN[st.main.style];
+    // ---- relief : mêmes positions que les fenêtres dessinées (une fenêtre par travée de `bay` m, par étage de `fh` m)
+    const W = st.W;
     if (W && sc === 1) {
-      const dx = bx - ax, dz = bz - az, nx = dz / len, nz = -dx / len, ux = dx / len, uz = dz / len; // sortant (voir facadeSegs de realworld.js)
       const s0 = len * t0, s1 = len * t1, shopGF = !!st.shop && base === 0;
-      const s00 = 8 * (st.uoff - 0.25);
-      const lo = Math.ceil((s00 - (s1 - W.w / 2 - 0.35)) / 4), hi = Math.floor((s00 - (s0 + W.w / 2 + 0.35)) / 4);
-      const trimC = hexC(W.trim(st.main.variant));
+      const s00 = P * (st.uoff - 0.25);
+      const lo = Math.ceil((s00 - (s1 - W.w / 2 - 0.35)) / bay), hi = Math.floor((s00 - (s0 + W.w / 2 + 0.35)) / bay);
+      const trimC = hexC(W.trim(st.variant));
+      const doorS = car ? len * (car.t0 + car.t1) / 2 : null;
       for (let k = lo; k <= hi; k++) {
-        const sk = s00 - 4 * k;
-        for (let n = -1; n < 60; n++) {
-          const wy = gf + n * FLOOR_H + W.b;
-          if (wy + W.h > y1 - 0.2) break;
-          if (wy < y0 - 1e-3 || (shopGF ? wy < gf : wy < base + 0.3)) continue;
-          const px = ax + ux * sk, pz = az + uz * sk, h = hash2(px * 1.7, pz * 1.3 + wy);
-          const c = tmp.copy(trimC).multiplyScalar(dirt * ao(wy + W.h / 2 - base) * (0.92 + 0.16 * h)).clone().multiply(tint);
-          relief.window(px, wy, pz, nx, nz, W.w / 1.25, W.h / 1.85, c, n === 0 && h < 0.16 && st.main.style !== 'timber');
+        for (let j = 0; j < W.n; j++) {
+          const sk = s00 - bay * k - (j - (W.n - 1) / 2) * (bay / W.n);
+          if (sk < s0 + W.w / 2 + 0.2 || sk > s1 - W.w / 2 - 0.2) continue;
+          for (let n = -1; n < 60; n++) {
+            const wy = gf + n * fh + W.b;
+            if (wy + W.h > y1 - 0.2 || wy >= (st.galY ?? Infinity) - 0.01) break;
+            if (wy < y0 - 1e-3 || (shopGF ? wy < gf : wy < base + 0.3)) continue;
+            if (n === -1 && (W.noGF || (st.gf && !st.W.gfWin))) continue; // ground floor with its own painted layer: no frame unless it matches
+            if (n === -1 && doorS !== null && Math.abs(sk - doorS) < 2.4) continue;
+            const off = offAt(wy + W.h / 2), px = ax + ux * sk + nx * off, pz = az + uz * sk + nz * off, h = hash2(px * 1.7, pz * 1.3 + wy);
+            const c = tmp.copy(trimC).multiplyScalar(dirt * ao(wy + W.h / 2 - base) * (0.92 + 0.16 * h)).clone().multiply(tint);
+            relief.window(px, wy, pz, nx, nz, W.w / 1.25, W.h / 1.85, c, n === 0 && h < 0.16 && !W.timber);
+          }
         }
       }
       if (y1 - y0 > 2.5 && (t1 - t0) * len >= 2.2) { // corniche en haut du mur (pas sur les petits morceaux)
-        relief.cornice(x0, z0, x1, z1, nx, nz, y1, hexC(W.cornice).multiplyScalar(dirt).multiply(tint));
-        // bandeaux d'étage (v0.72.0) : un cordon de pierre saillant à chaque plancher, sous les appuis de fenêtre (pas sur les colombages : leurs poutres sont dessinées)
-        if (st.main.style !== 'timber') {
+        const offTop = offAt(y1 - 0.05);
+        relief.cornice(x0 + nx * offTop, z0 + nz * offTop, x1 + nx * offTop, z1 + nz * offTop, nx, nz, y1, hexC(W.cornice).multiplyScalar(dirt).multiply(tint), W.cornSy || 1);
+        if (W.timber) { // oak sill beams at every floor line (they carry the overhang)
+          const beamC = hexC(W.cornice).multiplyScalar(dirt * 0.9).multiply(tint);
+          for (let n = 1; n < 60; n++) {
+            const fy = gf + (n - 1) * fh + 0.2;
+            if (fy > y1 - 0.8) break;
+            if (fy < y0 + 0.3) continue;
+            const o = offAt(fy + 0.1);
+            relief.cornice(x0 + nx * o, z0 + nz * o, x1 + nx * o, z1 + nz * o, nx, nz, fy, beamC, 1.4);
+          }
+        } else {
+          // bandeaux d'étage (v0.72.0) : un cordon de pierre saillant à chaque plancher, sous les appuis de fenêtre
           const bandC = hexC(W.cornice).multiplyScalar(dirt * 0.95).multiply(tint);
           for (let n = 1; n < 60; n++) {
-            const fy = gf + n * FLOOR_H + 0.35;
+            const fy = gf + n * fh + 0.35;
             if (fy > y1 - 0.6) break;
             if (fy < y0 + 0.3) continue;
             relief.cornice(x0, z0, x1, z1, nx, nz, fy, bandC, 0.75);
           }
         }
         // chaînage d'angle (v0.73.0) : à l'angle de départ de chaque mur entier, de la base au toit (pas pour les colombages)
-        if (st.main.style !== 'timber' && t0 === 0 && y0 <= base + 0.01 && y1 - base > 4) {
+        if (!W.timber && t0 === 0 && y0 <= base + 0.01 && y1 - base > 4) {
           relief.quoin(ax + nx * 0.005, az + nz * 0.005, base + 0.1, y1 - 0.2, nx, nz, hexC(W.cornice).multiplyScalar(dirt * 0.88).multiply(tint));
         }
         // soubassement de pierre au pied des murs hors boutiques (v0.72.0)
@@ -544,12 +311,17 @@ export function createArchitecture({ renderer, plasterImg, plaster2Img, roofP, r
   }
 
   // ---------- toits
-  function roofColor(tags, kind) {
+  function roofColorLegacy(tags, kind) { // (parts) same draws as before
     const c = tags && tags['roof:colour'];
     if (c && /^#|^[a-z]+$/i.test(c)) { try { return new THREE.Color(c === 'black' ? '#3a3a3e' : c === 'white' ? '#cfcfcf' : c); } catch { /* couleur inconnue */ } }
     const pal = ROOF_TINTS[kind] || ROOF_TINTS.tiles;
     return new THREE.Color(pal[Math.floor(rnd() * pal.length)]);
   }
+  const roofTagColour = (tags) => {
+    const c = tags && tags['roof:colour'];
+    if (c && /^#|^[a-z]+$/i.test(c)) { try { return new THREE.Color(c === 'black' ? '#3a3a3e' : c === 'white' ? '#cfcfcf' : c); } catch { /* couleur inconnue */ } }
+    return null;
+  };
   function roofKind(tags) {
     const m = (tags && (tags['roof:material'] || '')) || '';
     if (m === 'copper') return 'copper';
@@ -559,8 +331,30 @@ export function createArchitecture({ renderer, plasterImg, plaster2Img, roofP, r
     return 'tiles';
   }
 
+  // Dormer standing on a slope: front rectangle (+ pediment) on `face`, cheeks and roof in the roof colour. (fx, fy, fz): centre of the sill ON the roof surface,
+  // (ox, oz): outward unit vector of the slope, (ux, uz): unit vector along the eave, sl: slope (rise per metre run). 6 to 9 triangles.
+  function dormer(d) {
+    const { fx, fy, fz, ox, oz, ux, uz, w, h, sl, shed, face, roofCol, tint } = d;
+    const ap = shed ? 0 : w * 0.85, rise = shed ? 0.3 : 0, D = h / sl, Dr = (h + ap + rise) / sl;
+    const FL = [fx - ux * w, fy, fz - uz * w], FR = [fx + ux * w, fy, fz + uz * w], FLT = [FL[0], fy + h, FL[2]], FRT = [FR[0], fy + h, FR[2]];
+    const back = (p, dist, y) => [p[0] - ox * dist, y, p[2] - oz * dist];
+    quad(face, FL, FR, FRT, FLT, [0, 0, 1, 0, 1, 0.78, 0, 0.78], tint, tint);
+    const Db = shed ? (h + rise) / sl : D, yb = fy + h + rise;
+    tri(roofR, FL, FLT, back(FLT, Db, yb), [0, 0, 0, 0.4, 0.4, 0.4], roofCol);
+    tri(roofR, FR, FRT, back(FRT, Db, yb), [0, 0, 0, 0.4, 0.4, 0.4], roofCol);
+    if (shed) {
+      quad(roofR, FLT, FRT, back(FRT, Db, yb), back(FLT, Db, yb), [0, 0, 0.7, 0, 0.7, 0.7, 0, 0.7], roofCol, roofCol);
+    } else {
+      const apex = [fx, fy + h + ap, fz], rb = back(apex, Dr, fy + h + ap);
+      tri(face, FLT, FRT, apex, [0, 0.78, 1, 0.78, 0.5, 1], tint);
+      quad(roofR, FLT, apex, rb, back(FLT, D, fy + h), [0, 0, 0.4, 0, 0.4, 0.7, 0, 0.7], roofCol, roofCol);
+      quad(roofR, FRT, apex, rb, back(FRT, D, fy + h), [0, 0, 0.4, 0, 0.4, 0.7, 0, 0.7], roofCol, roofCol);
+    }
+  }
+
   // Toit à deux pans (pignons) : le polygone est coupé le long du faîtage, hauteurs linéaires de chaque côté
-  function gabled(pts, top, rh, ob, st, tint, dirt, roofCol, across, dormers) {
+  // dm : { rows, face(), shedP, maxN } lucarnes ; gm : calque du triangle de pignon
+  function gabled(pts, top, rh, ob, st, tint, dirt, roofCol, across, dm, gm) {
     let { ux, uz, vx, vz, hw, hl } = ob;
     if (across) { [ux, uz, vx, vz] = [vx, vz, -ux, -uz]; [hl, hw] = [hw, hl]; }
     const tOf = ([x, z]) => (x - ob.cx) * vx + (z - ob.cz) * vz;
@@ -576,7 +370,7 @@ export function createArchitecture({ renderer, plasterImg, plaster2Img, roofP, r
           const P = [half[a], half[b], half[c]];
           const v3 = P.map((p) => [p[0], hOf(p), p[1]]);
           const uv = P.flatMap((p) => [sOf(p) / 3, ((hw - Math.abs(tOf(p))) / hw) * slopeLen / 3]);
-          tri(roofB, v3[0], v3[1], v3[2], uv, roofCol);
+          tri(roofR, v3[0], v3[1], v3[2], uv, roofCol);
         }
       } catch { /* polygone dégénéré */ }
     }
@@ -589,6 +383,7 @@ export function createArchitecture({ renderer, plasterImg, plaster2Img, roofP, r
       }
     }
     // pignons : on comble entre l'égout et le toit au-dessus de chaque façade
+    const gRec = gm || st.main, gP = gm ? 6.8 : st.bay * 2, gH = gm ? 4.4 : st.fh * 2, gO = gm ? top : GF_H;
     for (let i = 0; i < pts.length; i++) {
       const a = pts[i], b = pts[(i + 1) % pts.length];
       const ta = tOf(a), tb = tOf(b);
@@ -597,45 +392,36 @@ export function createArchitecture({ renderer, plasterImg, plaster2Img, roofP, r
         const hp = hOf(p), hq = hOf(q);
         if (hp - top < 0.05 && hq - top < 0.05) continue;
         const len = Math.hypot(q[0] - p[0], q[1] - p[1]);
-        const u0 = st.uoff, u1 = st.uoff - len / (BAY_W * 2), gf = GF_H;
-        const v = (y) => (y - gf) / (FLOOR_H * 2);
-        quad(st.main.b, [p[0], top, p[1]], [q[0], top, q[1]], [q[0], hq, q[1]], [p[0], hp, p[1]], [u0, v(top), u1, v(top), u1, v(hq), u0, v(hp)], tmp.copy(tint).multiplyScalar(dirt).clone(), tmp.copy(tint).multiplyScalar(dirt).clone());
+        const u0 = st.uoff, u1 = st.uoff - len / gP;
+        const v = (y) => (y - gO) / gH;
+        const c = tmp.copy(tint).multiplyScalar(dirt).clone();
+        quad(gRec, [p[0], top, p[1]], [q[0], top, q[1]], [q[0], hq, q[1]], [p[0], hp, p[1]], [u0, v(top), u1, v(top), u1, v(hq), u0, v(hp)], c, c);
       }
     }
-    // lucarnes sur les grands pans
-    if (dormers && rh > 3.5 && hl > 3.5) {
-      const dm = matFor('dormer', 0);
-      const n = Math.floor((hl * 2 - 2) / 3.2);
-      for (const side of [1, -1]) {
-        for (let k = 0; k < n; k++) {
-          if (rnd() < 0.35) continue;
-          const s = -hl + 1.8 + k * 3.2 + 1.2;
-          const tpos = side * hw * 0.55; // à mi-pente
-          const cx = ob.cx + ux * s + vx * tpos, cz = ob.cz + uz * s + vz * tpos;
-          if (!pointIn(pts, cx, cz)) continue;
-          const y0 = top + rh * (1 - 0.55), dw = 0.7, dh = 1.4, dd = 1.1;
-          // façade de la lucarne (orientée vers l'extérieur du pan)
-          const ox = vx * side, oz = vz * side;
-          const fx = cx + ox * dd * 0.5, fz = cz + oz * dd * 0.5;
-          const lx = ux * dw, lz = uz * dw;
-          quad(dm.b, [fx - lx, y0, fz - lz], [fx + lx, y0, fz + lz], [fx + lx, y0 + dh, fz + lz], [fx - lx, y0 + dh, fz - lz], [0, 0, 1, 0, 1, 1, 0, 1], tint, tint);
-          // petit toit à deux pans de la lucarne
-          const bx = cx - ox * dd, bz = cz - oz * dd, ry = y0 + dh + 0.6;
-          tri(roofB, [fx - lx, y0 + dh, fz - lz], [fx, ry, fz], [bx, ry, bz], [0, 0, 0.5, 0.5, 0, 1], roofCol);
-          tri(roofB, [fx - lx, y0 + dh, fz - lz], [bx, ry, bz], [bx - lx, y0 + dh, bz - lz], [0, 0, 0, 1, 1, 1], roofCol);
-          tri(roofB, [fx + lx, y0 + dh, fz + lz], [bx, ry, bz], [fx, ry, fz], [0, 0, 0.5, 0.5, 0, 1], roofCol);
-          tri(roofB, [fx + lx, y0 + dh, fz + lz], [bx + lx, y0 + dh, bz + lz], [bx, ry, bz], [0, 0, 0, 1, 1, 1], roofCol);
-          // joues latérales
-          quad(st.main.b, [fx - lx, y0, fz - lz], [fx - lx, y0 + dh, fz - lz], [bx - lx, y0 + dh, bz - lz], [bx - lx, y0, bz - lz], [0, 0, 0, 0.1, 0.1, 0.1, 0.1, 0], tint, tint);
-          quad(st.main.b, [fx + lx, y0, fz + lz], [bx + lx, y0, bz + lz], [bx + lx, y0 + dh, bz + lz], [fx + lx, y0 + dh, fz + lz], [0, 0, 0, 0.1, 0.1, 0.1, 0.1, 0], tint, tint);
+    // lucarnes (rows of dormers up the two slopes, each row 18 % smaller; shed dormers on timber houses)
+    if (dm && dm.rows > 0 && rh > 2.6 && hl > 2.2) {
+      const sl = rh / hw, step = dm.step, n = Math.max(1, Math.floor((hl * 2 - 1.4) / step));
+      let count = 0;
+      for (let r = 0; r < dm.rows; r++) {
+        const sc = Math.pow(dm.shrink, r), w = 0.5 * sc, h = 1.2 * sc, yR = 0.9 + r * 2.3;
+        if (yR + h + (dm.shed ? 0.3 : w * 0.85) > rh - 0.25) break;
+        const tpos = hw * (1 - yR / rh);
+        for (const side of [1, -1]) {
+          for (let k = 0; k < n; k++) {
+            if (count >= dm.maxN) return;
+            const s = (k - (n - 1) / 2) * step, cx = ob.cx + ux * s + vx * side * tpos, cz = ob.cz + uz * s + vz * side * tpos;
+            if (!pointIn(pts, cx + vx * side * 0.6, cz + vz * side * 0.6)) continue;
+            dormer({ fx: cx, fy: top + yR, fz: cz, ox: vx * side, oz: vz * side, ux, uz, w, h, sl, shed: dm.shed, face: dm.face(), roofCol, tint });
+            count++;
+          }
         }
       }
     }
   }
 
-  // Toit à la Mansart pour les grands bâtiments : pente raide sur le pourtour, terrasse au centre
-  function mansard(pts, top, rh, roofCol) {
-    const d = Math.min(2.4, rh * 0.6);
+  // Toit à la Mansart : pente raide sur le pourtour (inset d), terrasse au centre ; lucarnes alignées sur les fenêtres des murs de rue (dm)
+  function mansard(pts, top, rh, roofCol, dIn = null, dm = null) {
+    const d = dIn ?? Math.min(2.4, rh * 0.6);
     const n = pts.length, inner = [];
     for (let i = 0; i < n; i++) {
       const p = pts[(i - 1 + n) % n], c = pts[i], q = pts[(i + 1) % n];
@@ -652,22 +438,38 @@ export function createArchitecture({ renderer, plasterImg, plaster2Img, roofP, r
       const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
       // deux triangles (tri oriente toujours vers le haut) : sur une arete courte le decalage interieur peut retourner l'arete du haut, le quad se vrille et son enroulement contredit sa normale
       const pa = [a[0], top, a[1]], pb = [b[0], top, b[1]], pib = [ib[0], top + rh, ib[1]], pia = [ia[0], top + rh, ia[1]];
-      tri(roofB, pa, pb, pib, [0, 0, len / 3, 0, len / 3, rh / 2.5], roofCol);
-      tri(roofB, pa, pib, pia, [0, 0, len / 3, rh / 2.5, 0, rh / 2.5], roofCol);
+      tri(roofR, pa, pb, pib, [0, 0, len / 3, 0, len / 3, rh / 2.5], roofCol);
+      tri(roofR, pa, pib, pia, [0, 0, len / 3, rh / 2.5, 0, rh / 2.5], roofCol);
     }
     flat(polyArea(inner) > 1 ? inner : pts, top + rh, roofCol);
+    if (dm) { // one dormer per bay on the street walls, aligned with the windows below
+      let count = 0;
+      for (let i = 0; i < n && count < dm.maxN; i++) {
+        if (!dm.streetEdges || !dm.streetEdges[i]) continue;
+        const a = pts[i], b = pts[(i + 1) % n], dx = b[0] - a[0], dz = b[1] - a[1], len = Math.hypot(dx, dz);
+        if (len < dm.bay + 1.2) continue;
+        const ux = dx / len, uz = dz / len, nx = dz / len, nz = -dx / len, P = dm.bay * 2, s00 = P * (dm.uoff - 0.25), f = 0.3, sl = rh / d;
+        for (let k = Math.ceil((s00 - (len - 0.9)) / dm.bay); k <= Math.floor((s00 - 0.9) / dm.bay); k++) {
+          if (count >= dm.maxN) break;
+          const sk = s00 - dm.bay * k, fx = a[0] + ux * sk - nx * d * f, fz = a[1] + uz * sk - nz * d * f;
+          if (!pointIn(pts, fx - nx * 0.3, fz - nz * 0.3)) continue;
+          dormer({ fx, fy: top + rh * f, fz, ox: nx, oz: nz, ux, uz, w: 0.55 * dm.w, h: 1.25, sl, shed: false, face: dm.face(), roofCol, tint: dm.tint });
+          count++;
+        }
+      }
+    }
   }
   function flat(pts, y, roofCol) {
     try {
       const tris = THREE.ShapeUtils.triangulateShape(pts.map(([x, z]) => new THREE.Vector2(x, z)), []);
-      for (const [a, b, c] of tris) tri(roofB, [pts[a][0], y, pts[a][1]], [pts[b][0], y, pts[b][1]], [pts[c][0], y, pts[c][1]], [pts[a][0] / 4, pts[a][1] / 4, pts[b][0] / 4, pts[b][1] / 4, pts[c][0] / 4, pts[c][1] / 4], roofCol);
+      for (const [a, b, c] of tris) tri(roofR, [pts[a][0], y, pts[a][1]], [pts[b][0], y, pts[b][1]], [pts[c][0], y, pts[c][1]], [pts[a][0] / 4, pts[a][1] / 4, pts[b][0] / 4, pts[b][1] / 4, pts[c][0] / 4, pts[c][1] / 4], roofCol);
     } catch { /* polygone dégénéré */ }
   }
   function pyramidal(pts, top, rh, roofCol) {
     let cx = 0, cz = 0; for (const [x, z] of pts) { cx += x; cz += z; } cx /= pts.length; cz /= pts.length;
     for (let i = 0; i < pts.length; i++) {
       const a = pts[i], b = pts[(i + 1) % pts.length], len = Math.hypot(b[0] - a[0], b[1] - a[1]);
-      tri(roofB, [a[0], top, a[1]], [b[0], top, b[1]], [cx, top + rh, cz], [0, 0, len / 3, 0, len / 6, rh / 2.5], roofCol);
+      tri(roofR, [a[0], top, a[1]], [b[0], top, b[1]], [cx, top + rh, cz], [0, 0, len / 3, 0, len / 6, rh / 2.5], roofCol);
     }
   }
   function skillion(pts, top, rh, ob, roofCol, st, tint, dirt) {
@@ -675,26 +477,27 @@ export function createArchitecture({ renderer, plasterImg, plaster2Img, roofP, r
     const hOf = (p) => top + rh * ((tOf(p) + ob.hw) / (2 * ob.hw));
     try {
       const tris = THREE.ShapeUtils.triangulateShape(pts.map(([x, z]) => new THREE.Vector2(x, z)), []);
-      for (const [a, b, c] of tris) { const P = [pts[a], pts[b], pts[c]]; tri(roofB, ...P.map((p) => [p[0], hOf(p), p[1]]), P.flatMap((p) => [p[0] / 3, p[1] / 3]), roofCol); }
+      for (const [a, b, c] of tris) { const P = [pts[a], pts[b], pts[c]]; tri(roofR, ...P.map((p) => [p[0], hOf(p), p[1]]), P.flatMap((p) => [p[0] / 3, p[1] / 3]), roofCol); }
     } catch { /* polygone dégénéré */ }
     for (let i = 0; i < pts.length; i++) {
       const p = pts[i], q = pts[(i + 1) % pts.length], hp = hOf(p), hq = hOf(q);
       if (hp - top < 0.05 && hq - top < 0.05) continue;
-      quad(st.main.b, [p[0], top, p[1]], [q[0], top, q[1]], [q[0], hq, q[1]], [p[0], hp, p[1]], [0, 0, 1, 0, 1, 0.3, 0, 0.3], tmp.copy(tint).multiplyScalar(dirt).clone(), tmp.copy(tint).multiplyScalar(dirt).clone());
+      const c = tmp.copy(tint).multiplyScalar(dirt).clone();
+      quad(st.main, [p[0], top, p[1]], [q[0], top, q[1]], [q[0], hq, q[1]], [p[0], hp, p[1]], [0, 0, 1, 0, 1, 0.3, 0, 0.3], c, c);
     }
   }
 
-  function roof(pts, top, shape, rh, ob, st, tint, dirt, roofCol, tags, dormers) {
+  // x : { mansardD, dm (dormers), gm (gable layer) }
+  function roof(pts, top, shape, rh, ob, st, tint, dirt, roofCol, tags, x = {}) {
     if (!ob || rh < 0.2 || shape === 'flat') return flat(pts, top, roofCol);
     if (shape === 'pyramidal' || shape === 'dome' || shape === 'onion' || shape === 'cone') return pyramidal(pts, top, rh, roofCol);
     if (shape === 'skillion') return skillion(pts, top, rh, ob, roofCol, st, tint, dirt);
-    if (shape === 'mansard_ring') return mansard(pts, top, rh, roofCol);
-    return gabled(pts, top, rh, ob, st, tint, dirt, roofCol, tags && tags['roof:orientation'] === 'across', dormers);
+    if (shape === 'mansard_ring') return mansard(pts, top, rh, roofCol, x.mansardD, x.dmM);
+    return gabled(pts, top, rh, ob, st, tint, dirt, roofCol, tags && tags['roof:orientation'] === 'across', x.dm, x.gm);
   }
 
-  // ---------- choix du style d'un bâtiment
-  const num = (v) => { const n = parseFloat(v); return Number.isFinite(n) ? n : null; };
-  function styleFor(tags, area, levels, inSector) {
+  // ---------- anciens tirages : l'ancien choix de style, rejoué à l'identique
+  function legacyStyleFor(tags, area, levels) {
     const b = tags.building || 'yes', m = tags['building:material'] || '';
     if (b === 'cathedral' || b === 'church' || b === 'chapel' || tags.religion) return 'gothic';
     if (m === 'glass' || b === 'office' && area > 800) return 'modern';
@@ -706,65 +509,142 @@ export function createArchitecture({ renderer, plasterImg, plaster2Img, roofP, r
     if (area < 260 && levels <= 5) return r < 0.42 ? 'timber' : r < 0.9 ? 'plaster' : 'sandstone';
     return r < 0.62 ? 'plaster' : r < 0.94 ? 'sandstone' : 'modern';
   }
+  // Replays, in the same order, every draw of the world `rnd` that building() used to make: style, variant, shop, lazy legacy textures, offset, tint,
+  // dirt, roof colour, dormers (2 per candidate, count from the OLD roof). The values are kept (raw floats) and reused by the new look.
+  function legacyDraws(tags, area, levels, ob, opts) {
+    const L = { style: legacyStyleFor(tags, area, levels), shopL: null };
+    L.variant = Math.floor(rnd() * LEGACY[L.style][0]);
+    // (old roof, only to know how many dormer draws follow)
+    let shape = tags['roof:shape'] || null;
+    if (!shape) shape = L.style === 'modern' ? 'flat' : ob && ob.hw <= 9.5 ? 'gabled' : 'mansard_ring';
+    if (HIPPED.includes(shape)) shape = ob && ob.hw <= 9.5 ? 'gabled' : 'mansard_ring';
+    let rh = num(tags['roof:height']);
+    if (rh == null) {
+      const roofLevels = num(tags['roof:levels']);
+      if (shape === 'gabled') rh = ob ? Math.min(11, Math.max(3, ob.hw * (roofLevels ? 1.1 + roofLevels * 0.15 : 1.25))) : 4;
+      else if (shape === 'mansard_ring') rh = roofLevels ? roofLevels * 2.8 : 4;
+      else if (shape === 'pyramidal') rh = ob ? ob.hw * 1.4 : 4;
+      else if (shape === 'skillion') rh = 2.5;
+      else rh = 0;
+    }
+    if (opts.shop && L.style !== 'gothic' && L.style !== 'modern' && levels >= 2) { L.s1 = rnd(); L.s2 = rnd(); L.shopL = matFor('shop', Math.floor(L.s1 * 6) % 3 + 3 * Math.floor(L.s2 * 2)); }
+    L.main = matFor(L.style, L.variant);
+    L.uoff = rnd();
+    const bc = tags['building:colour'];
+    L.rt = bc && /^#/.test(bc) ? null : rnd();
+    L.dirt = 0.82 + rnd() * 0.18;
+    L.rr = roofTagColour(tags) ? null : rnd();
+    if (opts.inSector && shape === 'gabled' && ob && rh >= 0.2) {
+      let hl = ob.hl;
+      if (tags['roof:orientation'] === 'across') hl = ob.hw;
+      if (rh > 3.5 && hl > 3.5) { matFor('dormer', 0); const n = Math.floor((hl * 2 - 2) / 3.2); for (let i = 0; i < 2 * n; i++) rnd(); }
+    }
+    return L;
+  }
 
   // Construit un bâtiment sans rien en garder : tire exactement les mêmes nombres aléatoires (textures, styles, teintes) mais
   // efface la géométrie produite. Sert à retirer un bâtiment du rendu sans décaler la suite du tirage `rnd`, donc sans changer
   // l'aspect des autres façades ni l'emplacement des objets placés ensuite (machines, armes murales…).
   function ghost(fn) {
-    const all = () => [roofB, ...Object.values(mats).map((m) => m.b)];
-    const before = new Map(all().map((b) => [b, [b.pos.length, b.nor.length, b.uv.length, b.col.length, b.idx.length]]));
+    const all = () => [roofB, wallB];
+    const before = new Map(all().map((b) => [b, [b.pos.length, b.nor.length, b.uv.length, b.col.length, b.fac.length, b.idx.length]]));
     const rm = relief.mark();
     const r = fn();
     relief.rollback(rm);
     for (const b of all()) {
-      const [p, n, u, c, i] = before.get(b) || [0, 0, 0, 0, 0];
-      b.pos.length = p; b.nor.length = n; b.uv.length = u; b.col.length = c; b.idx.length = i;
+      const [p, n, u, c, f, i] = before.get(b) || [0, 0, 0, 0, 0, 0];
+      b.pos.length = p; b.nor.length = n; b.uv.length = u; b.col.length = c; b.fac.length = f; b.idx.length = i;
     }
     return r;
   }
 
+  const desat = (c, k) => { const g = c.r * 0.3 + c.g * 0.59 + c.b * 0.11; c.r = lerp(c.r, g, k); c.g = lerp(c.g, g, k); c.b = lerp(c.b, g, k); return c; };
+
   return {
     // Bâtiment complet. cutsOf(i) : ouvertures (passages) du mur i. Retourne { wallTop, roofTop }.
-    // opts.ghost : le construire « pour rien » (voir ghost)
+    // opts.ghost : le construire « pour rien » (voir ghost) ; opts.island : sur l'île ; opts.streetEdges[i] : le mur i donne sur la rue
     building(pts, tags, hGuess, cutsOf, opts = {}) {
       if (opts.ghost) return ghost(() => this.building(pts, tags, hGuess, cutsOf, { ...opts, ghost: false }));
       const area = Math.abs(polyArea(pts));
       const levelsTag = num(tags['building:levels']);
       const levels = levelsTag != null ? Math.max(1, levelsTag) : Math.max(2, Math.round((hGuess - GF_H) / FLOOR_H) + 1);
-      const style = opts.style || styleFor(tags, area, levels, opts.inSector);
-      const variant = Math.floor(rnd() * STYLES[style][0]);
       const ob = obb(pts);
+      const ignH = num(opts.ignH ?? tags['ign:h']);
+      const L = legacyDraws(tags, area, levels, ob, opts); // world rnd: nothing else in this function may touch it
+      let cx = 0, cz = 0; for (const [x, z] of pts) { cx += x; cz += z; } cx /= pts.length; cz /= pts.length;
+      const streetEdges = opts.streetEdges || null;
+      let frontage = 0, frontI = -1;
+      if (streetEdges) for (let i = 0; i < pts.length; i++) { if (!streetEdges[i]) continue; const [ax, az] = pts[i], [bx, bz] = pts[(i + 1) % pts.length], l = Math.hypot(bx - ax, bz - az); if (l > frontage) { frontage = l; frontI = i; } }
+      const cls = classify({ tags, area, levels, ignH, frontage, island: !!opts.island, cx, cz }, CFG);
+      const style = opts.style || cls.style;
+      const R = buildingRng(CFG, cx, cz); R(); // (the first draw is the classifier's)
+      const S = CFG[style] || null, fh = S && S.floorH ? S.floorH : FLOOR_H, bay = S && S.bay ? S.bay : BAY_W;
+      const legacyStyle = style === 'gothic';
       // hauteurs
       let wallTop = GF_H + (levels - 1) * FLOOR_H;
-      const roofLevels = num(tags['roof:levels']);
       let shape = tags['roof:shape'] || null;
-      if (!shape) shape = style === 'modern' ? 'flat' : ob && ob.hw <= 9.5 ? 'gabled' : 'mansard_ring';
-      if (['hipped', 'half-hipped', 'gambrel', 'mansard', 'side_hipped', 'quadruple_saltbox', 'saltbox', 'round'].includes(shape)) shape = ob && ob.hw <= 9.5 ? 'gabled' : 'mansard_ring';
+      const roofLevels = num(tags['roof:levels']);
+      const hw = ob ? ob.hw : 0;
+      if (!shape) shape = style === 'modern' ? 'flat' : style === 'classical' ? 'mansard_ring' : ob && hw <= 9.5 ? 'gabled' : 'mansard_ring';
+      if (HIPPED.includes(shape)) shape = style === 'classical' ? 'mansard_ring' : ob && hw <= 9.5 ? 'gabled' : 'mansard_ring';
       let rh = num(tags['roof:height']);
+      const pitch = S && S.pitch ? lerp(S.pitch[0], S.pitch[1], R()) : 0;
+      let mD = null;
       if (rh == null) {
-        if (shape === 'gabled') rh = ob ? Math.min(11, Math.max(3, ob.hw * (roofLevels ? 1.1 + roofLevels * 0.15 : 1.25))) : 4;
-        else if (shape === 'mansard_ring') rh = roofLevels ? roofLevels * 2.8 : 4;
-        else if (shape === 'pyramidal') rh = ob ? ob.hw * 1.4 : 4;
+        if (shape === 'gabled') rh = ob ? (pitch ? Math.min(12.5, Math.max(3, hw * Math.tan(pitch * Math.PI / 180))) : Math.min(11, Math.max(3, hw * (roofLevels ? 1.1 + roofLevels * 0.15 : 1.25)))) : 4;
+        else if (shape === 'mansard_ring') rh = style === 'classical' ? S.mansardH * fh : roofLevels ? roofLevels * 2.8 : 4;
+        else if (shape === 'pyramidal') rh = ob ? hw * 1.4 : 4;
         else if (shape === 'skillion') rh = 2.5;
         else rh = 0;
       }
+      if (shape === 'mansard_ring' && style === 'classical' && S) mD = rh / Math.tan(S.brisis * Math.PI / 180);
       const height = num(tags.height);
-      const ignH = num(opts.ignH ?? tags['ign:h']);
       if (height != null) wallTop = Math.max(3, height - rh);
       else if (levelsTag == null && ignH != null) {
         const ignLevels = Math.max(1, Math.min(8, Math.round((ignH - GF_H) / FLOOR_H) + 1));
         wallTop = GF_H + (ignLevels - 1) * FLOOR_H;
       }
       if (style === 'gothic' && height == null) wallTop = Math.max(wallTop, 14);
-      const shop = opts.shop && style !== 'gothic' && style !== 'modern' && levels >= 2 ? matFor('shop', Math.floor(rnd() * 6) % 3 + 3 * Math.floor(rnd() * 2)) : null;
-      const st = { main: matFor(style, variant), shop, uoff: rnd() };
-      const pal = PALETTES[style];
-      const tint = new THREE.Color(tags['building:colour'] && /^#/.test(tags['building:colour']) ? tags['building:colour'] : pal[Math.floor(rnd() * pal.length)]);
-      if (tags['building:colour'] && /^#/.test(tags['building:colour'])) tint.lerp(new THREE.Color('#ffffff'), 0.4);
-      const dirt = 0.82 + rnd() * 0.18;
+      if (!legacyStyle && fh !== FLOOR_H && wallTop >= GF_H - 0.3) { // keep the building height (or its storey count when the data gives it) with this style's storeys
+        const up = levelsTag != null && height == null ? levels - 1 : Math.max(0, Math.round((wallTop - GF_H) / fh));
+        wallTop = GF_H + up * fh;
+      }
+      const nUp = Math.max(0, Math.round((wallTop - GF_H) / fh));
+      // ---- calques
+      const pal = (arr) => arr[Math.floor((L.rt ?? 0.5) * arr.length)];
+      let main, gfRec = null, tintHex, W = null, gable = null, gal = null, variantN = 0;
+      const nv = (n) => Math.floor(R() * n);
+      if (style === 'gothic') { main = L.main; tintHex = PALETTES.gothic[Math.floor((L.rt ?? 0) * PALETTES.gothic.length)]; W = null; }
+      else if (style === 'timber') { variantN = nv(3); main = newLayer(`timberN:${variantN}`); gfRec = newLayer('rustic:timber'); gable = newLayer('gable'); tintHex = pal(STYLE_TINTS.timber); W = WIN_NEW.timber; }
+      else if (style === 'plaster') { variantN = L.variant % 4; main = newLayer(`plasterP:${variantN}`); tintHex = pal(PALETTES.plaster); W = (() => { const f = fh / FLOOR_H, o = WIN_LEGACY.plaster; return { ...o, h: o.h * f, b: o.b * f, gfWin: true }; })(); }
+      else if (style === 'classical') { variantN = nv(2); main = newLayer(`classical:${variantN}`); gfRec = newLayer('rustic:classical'); tintHex = pal(variantN ? STYLE_TINTS.classical1 : STYLE_TINTS.classical0); W = { ...WIN_NEW.classical, gfWin: true }; }
+      else if (style === 'civic') { variantN = 0; main = newLayer('civic'); gfRec = newLayer('arcade'); tintHex = pal(STYLE_TINTS.civic); W = WIN_NEW.civic; }
+      else if (style === 'neustadt') { variantN = nv(2); main = newLayer(`neustadt:${variantN}`); gfRec = newLayer('rustic:neustadt'); tintHex = pal(STYLE_TINTS.neustadt); W = { ...WIN_NEW.neustadt, gfWin: true }; }
+      else { variantN = 0; main = R() < 0.5 ? newLayer('modernStrip') : newLayer('modernP'); tintHex = pal(PALETTES.modern); W = null; } // modern
+      const shopOK = opts.shop && cls.shop && style !== 'gothic' && style !== 'modern' && levels >= 2;
+      let shop = null;
+      if (shopOK) shop = L.shopL && R() < 0.6 ? L.shopL : newLayer(`shopN:${nv(4)}`);
+      const st = { main, shop, gf: gfRec, gal: null, galY: Infinity, W, fh, bay, uoff: L.uoff, variant: variantN, scale: 1 };
+      const bc = tags['building:colour'];
+      const tint = new THREE.Color(bc && /^#/.test(bc) ? bc : tintHex);
+      if (bc && /^#/.test(bc)) tint.lerp(new THREE.Color('#ffffff'), 0.4);
+      else if (style === 'plaster' && S) desat(tint, S.desaturate);
+      const dirt = L.dirt;
+      // upper-storey gallery of the old tanners' lofts (Petite France, top storey of a gabled timber house)
+      if (style === 'timber' && cls.district === 'petiteFrance' && nUp >= 2 && shape === 'gabled' && R() < S.gallery) { st.gal = newLayer('gallery'); st.galY = wallTop - fh; }
+      // overhang (encorbellement) of the upper storeys on the street walls
+      const ovrFor = (i, cuts) => {
+        if (style !== 'timber' || !streetEdges || !streetEdges[i] || cuts.length || nUp < 2) return null;
+        const [ax, az] = pts[i], [bx, bz] = pts[(i + 1) % pts.length]; if (Math.hypot(bx - ax, bz - az) < 3) return null;
+        const o = []; for (let n = 1; n <= nUp; n++) o.push(Math.min(n, S.overhangMax) * S.overhang); return o;
+      };
+      // carriage door of the classical hôtels: centred on the longest street edge that has no cut (no passage, no interior door)
+      let car = null, carI = -1;
+      if (style === 'classical' && !shop && frontI >= 0 && R() < S.cochere && frontage >= S.cochereW + 2 && !(cutsOf ? cutsOf(frontI) : []).length) { car = { t0: 0.5 - 1.7 / frontage, t1: 0.5 + 1.7 / frontage }; carI = frontI; }
       for (let i = 0; i < pts.length; i++) {
         const [ax, az] = pts[i], [bx, bz] = pts[(i + 1) % pts.length];
         const cuts = cutsOf ? cutsOf(i) : [];
+        const ovr = ovrFor(i, cuts), cr = i === carI ? car : null;
         let t = 0;
         for (const [t0, t1, yLo, yHi] of cuts) {
           if (t0 > t) wall(ax, az, bx, bz, t, t0, 0, wallTop, st, tint, dirt);
@@ -772,10 +652,34 @@ export function createArchitecture({ renderer, plasterImg, plaster2Img, roofP, r
           else wall(ax, az, bx, bz, t0, t1, opts.passageH || 3.6, wallTop, st, tint, dirt);
           t = t1;
         }
-        if (t < 1) wall(ax, az, bx, bz, t, 1, 0, wallTop, st, tint, dirt);
+        if (t < 1) wall(ax, az, bx, bz, t, 1, 0, wallTop, st, tint, dirt, 0, ovr, cr);
       }
-      const roofCol = roofColor(tags, roofKind(tags));
-      roof(pts, wallTop, shape, rh, ob, st, tint, dirt, roofCol, tags, opts.inSector && shape === 'gabled');
+      // ---- toit
+      let roofCol = roofTagColour(tags);
+      if (!roofCol) {
+        const kind = roofKind(tags), sp = STYLE_ROOF[style];
+        const arr = kind === 'tiles' && sp ? sp : ROOF_TINTS[kind] || ROOF_TINTS.tiles;
+        roofCol = new THREE.Color(arr[Math.floor((L.rr ?? 0.5) * arr.length)]);
+      }
+      const x = {};
+      const DM = CFG.dormers;
+      const faceFn = () => { // front layer of a dormer
+        if (style === 'timber' && cls.district === 'petiteFrance' && R() < S.slats) return newLayer('dormerSlat');
+        return R() < DM.lit ? newLayer('dormerLit') : newLayer('dormerDark');
+      };
+      if (shape === 'gabled' && ob) {
+        if (style === 'timber') x.gm = gable;
+        const lim = S && S.dormerRows;
+        if (lim && rh > 3) {
+          const cap = Math.max(lim[0], Math.min(lim[1], Math.floor((rh - 1.6) / 2.4)));
+          const rows = style === 'timber' ? cap : lim[0] + Math.floor(R() * (cap - lim[0] + 1));
+          x.dm = { rows, step: S.dormerStep || 2.6, shrink: S.dormerShrink || 0.82, shed: style === 'timber', maxN: DM.maxPerRoof, face: faceFn };
+        }
+      } else if (shape === 'mansard_ring' && style === 'classical') {
+        x.mansardD = mD;
+        x.dmM = { maxN: DM.maxPerRoof, streetEdges, bay, uoff: L.uoff, w: DM.mansardW, face: faceFn, tint: tmp.copy(tint).multiplyScalar(dirt).clone() };
+      }
+      roof(pts, wallTop, shape, rh, ob, st, tint, dirt, roofCol, tags, x);
       return { wallTop, roofTop: wallTop + rh, style };
     },
 
@@ -793,7 +697,8 @@ export function createArchitecture({ renderer, plasterImg, plaster2Img, roofP, r
       const wallTop = height - rh;
       const m = tags['building:material'] || '';
       const style = m.includes('stone') ? 'gothic' : m === 'glass' ? 'modern' : m === 'timber_framing' ? 'timber' : 'plaster';
-      const st = { main: style === 'gothic' ? floodlit() : matFor(style, 0), shop: null, uoff: rnd(), scale: style === 'gothic' ? 2.4 : 1 };
+      const uoff = rnd();
+      const st = { main: style === 'gothic' ? floodlit() : matFor(style, 0), shop: null, gf: null, gal: null, galY: Infinity, W: WIN_LEGACY[style] || null, fh: FLOOR_H, bay: BAY_W, uoff, variant: 0, scale: style === 'gothic' ? 2.4 : 1 };
       const tint = new THREE.Color(PALETTES[style][0]);
       for (let i = 0; i < pts.length; i++) {
         const [ax, az] = pts[i], [bx, bz] = pts[(i + 1) % pts.length];
@@ -808,27 +713,35 @@ export function createArchitecture({ renderer, plasterImg, plaster2Img, roofP, r
         if (t < 1) wall(ax, az, bx, bz, t, 1, lo, wallTop, st, tint, 1, minH);
       }
       if (opts.skipRoof) return;
-      const roofCol = roofColor(tags, roofKind(tags));
+      const roofCol = roofColorLegacy(tags, roofKind(tags));
       if (rh < 0.2) { flat(pts, wallTop, roofCol); return; }
       // les petits toits à deux pans très étroits deviennent des pyramides (pinacles)
-      roof(pts, wallTop, ob && ob.hl < 1.5 && shape === 'gabled' ? 'pyramidal' : shape, rh, ob, st, tint, 1, roofCol, tags, false);
+      roof(pts, wallTop, ob && ob.hl < 1.5 && shape === 'gabled' ? 'pyramidal' : shape, rh, ob, st, tint, 1, roofCol, tags, {});
     },
 
     relief, // relief des façades (relief.js) : portée réglée par la qualité, mis à jour par le monde
 
-    // Construit les maillages (un par matériau) et les ajoute à la scène
+    // Construit les maillages (un par tuile : murs en tableau de textures, toits) et les ajoute à la scène
     finish(scene, area = 'island') {
-      const toMesh = (b, mat) => {
+      const T = CONFIG.graphics.cityTile; // tile size (m): with the texture array a tile is one wall mesh + one roof mesh
+      // layers really used -> array slices
+      const used = new Set();
+      for (let i = 0; i < wallB.fac.length; i += 2) used.add(wallB.fac[i]);
+      const { mat: wallMat, slot } = atlas.build(used);
+      const proxyTiles = new Map();
+      const toMesh = (b, mat, name) => {
         if (!b.pos.length) return null;
         const g = new THREE.BufferGeometry();
         g.setAttribute('position', new THREE.Float32BufferAttribute(b.pos, 3));
         g.setAttribute('normal', new THREE.Float32BufferAttribute(b.nor, 3));
         g.setAttribute('uv', new THREE.Float32BufferAttribute(b.uv, 2));
         g.setAttribute('color', new THREE.Float32BufferAttribute(b.col, 3));
+        g.setAttribute('aFac', new THREE.Uint8BufferAttribute(b.fac, 2));
         g.setIndex(b.idx);
         g.computeBoundingSphere();
         const m = new THREE.Mesh(g, mat);
         gpuOnly(m);
+        m.name = name;
         m.castShadow = false; m.receiveShadow = true; // the tile's shadow is cast by its merged proxy (shadowProxy.js): one draw call instead of one per material
         scene.add(m);
         if (area === 'island') detailCull.addMesh(m); // hidden beyond the fog distance (the station keeps its own LOD)
@@ -836,55 +749,38 @@ export function createArchitecture({ renderer, plasterImg, plaster2Img, roofP, r
         (proxyTiles.get(pk) || proxyTiles.set(pk, proxyBucket()).get(pk)).add(b.pos, b.idx);
         return m;
       };
-      const proxyTiles = new Map();
-      // Découpe en tuiles de 160 m (T ci-dessous) : la caméra ne dessine que les morceaux de ville devant elle et à portée du brouillard
-      // (sinon toute la ville, ~600 000 triangles, était dessinée à chaque image).
-      const T = CONFIG.graphics.cityTile; // tile size (m): ~20 materials per tile, so the number of tiles in view drives the draw calls (160 m: 83 calls at the island start, 240 m: 40)
-      // Deux triangles coplanaires de même matériau dans deux tuiles voisines (bâtiments OSM aux emprises qui se chevauchent : toits, façades) se
-      // disputaient le pixel : chaque tuile a un rang de décalage de profondeur (polygonOffset) propre à sa parité, donc deux tuiles voisines
-      // ne rendent jamais à la même profondeur (v0.35.2). Murs : 2 rangs (un demi-pas entre deux matériaux), toits : 4 rangs (aussi en diagonale).
-      const variants = new Map();
-      const tileMat = (mat, t, levels) => {
-        const rk = levels === 4 ? (t.ix & 1) | ((t.iz & 1) << 1) : (t.ix + t.iz) & 1;
-        if (!rk) return mat;
-        const key = `${rk}`;
-        let per = variants.get(mat); if (!per) variants.set(mat, per = {});
-        if (!per[key]) {
-          const m = mat.clone();
-          m.onBeforeCompile = mat.onBeforeCompile; m.customProgramCacheKey = mat.customProgramCacheKey; // Material.clone() ne copie pas le shader modifié
-          m.polygonOffset = true;
-          m.polygonOffsetFactor = mat.polygonOffsetFactor - 0.5 * rk;
-          m.polygonOffsetUnits = mat.polygonOffsetUnits - rk;
-          per[key] = m;
-        }
-        return per[key];
-      };
-      const split = (b) => {
+      // Découpe en tuiles (T) : la caméra ne dessine que les morceaux de ville devant elle et à portée du brouillard.
+      // Deux triangles coplanaires dans deux tuiles voisines (bâtiments OSM aux emprises qui se chevauchent : toits, façades) se disputaient le
+      // pixel : chaque tuile ajoute au rang de profondeur de ses sommets un petit décalage propre à sa parité, donc deux tuiles voisines ne rendent
+      // jamais à la même profondeur (v0.35.2). Murs : 2 rangs (un demi-pas entre deux calques), toits : 4 rangs (aussi en diagonale).
+      const split = (b, walls) => {
         const tiles = new Map();
-        const P = b.pos, N = b.nor, U = b.uv, C = b.col, I = b.idx;
+        const P = b.pos, N = b.nor, U = b.uv, C = b.col, F = b.fac, I = b.idx;
         for (let i = 0; i < I.length; i += 3) {
           const a = I[i], bb = I[i + 1], c = I[i + 2];
           const cx = (P[a * 3] + P[bb * 3] + P[c * 3]) / 3, cz = (P[a * 3 + 2] + P[bb * 3 + 2] + P[c * 3 + 2]) / 3;
-          const k = Math.floor(cx / T) * 4096 + Math.floor(cz / T);
+          const ix = Math.floor(cx / T), iz = Math.floor(cz / T), k = ix * 4096 + iz;
           let t = tiles.get(k);
-          if (!t) { t = { pos: [], nor: [], uv: [], col: [], idx: [], map: new Map(), ix: Math.floor(cx / T), iz: Math.floor(cz / T) }; tiles.set(k, t); }
+          if (!t) { t = { pos: [], nor: [], uv: [], col: [], fac: [], idx: [], map: new Map(), ix, iz }; tiles.set(k, t); }
+          const par = walls ? (ix + iz) & 1 : (ix & 1) | ((iz & 1) << 1);
           for (const v of [a, bb, c]) {
             let j = t.map.get(v);
             if (j === undefined) {
               j = t.pos.length / 3; t.map.set(v, j);
               t.pos.push(P[v * 3], P[v * 3 + 1], P[v * 3 + 2]); t.nor.push(N[v * 3], N[v * 3 + 1], N[v * 3 + 2]);
               t.uv.push(U[v * 2], U[v * 2 + 1]); t.col.push(C[v * 3], C[v * 3 + 1], C[v * 3 + 2]);
+              t.fac.push(walls ? slot.get(F[v * 2]) : 0, F[v * 2 + 1] + par);
             }
             t.idx.push(j);
           }
         }
         return [...tiles.values()];
       };
-      for (const [key, { mat, b }] of Object.entries(mats)) for (const t of split(b)) { const m = toMesh(t, tileMat(mat, t, 2)); if (m) m.name = 'arch:' + key; }
-      for (const t of split(roofB)) { const r = toMesh(t, tileMat(roofMat, t, 4)); if (r) r.name = 'arch:roof'; }
+      for (const t of split(wallB, true)) toMesh(t, wallMat, 'arch:walls');
+      for (const t of split(roofB, false)) toMesh(t, roofMat, 'arch:roof');
       for (const pb of proxyTiles.values()) addShadowProxy(scene, pb.pos, pb.idx, area);
       relief.finish(scene);
-      for (const b of [roofB, ...Object.values(mats).map((m) => m.b)]) { b.pos = []; b.nor = []; b.uv = []; b.col = []; b.idx = []; } // the builders are no longer needed: free the build-time arrays (tens of MB)
+      for (const b of [roofB, wallB]) { b.pos = []; b.nor = []; b.uv = []; b.col = []; b.fac = []; b.idx = []; } // the builders are no longer needed: free the build-time arrays (tens of MB)
     },
   };
 }

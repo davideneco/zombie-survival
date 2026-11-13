@@ -15,6 +15,7 @@ export function gpuOnly(mesh) {
   if (g.userData.gpuOnly) { mesh.userData.gpuOnly = true; return mesh; }
   if (!g.boundingSphere) g.computeBoundingSphere();
   if (!g.boundingBox) g.computeBoundingBox();
+  if (typeof location !== 'undefined' && /[?&]keepgeom/.test(location.search)) return mesh; // debug (tools/stuck-scan.mjs reads the vertex arrays)
   for (const k in g.attributes) { const a = g.attributes[k]; if (!a.isInterleavedBufferAttribute && !a.isInstancedBufferAttribute) a.onUpload(dropArray); }
   if (g.index) g.index.onUpload(dropArray);
   g.userData.gpuOnly = true; mesh.userData.gpuOnly = true;
