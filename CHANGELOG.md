@@ -2,6 +2,14 @@
 
 Chaque changement est poussé sur `main` (déploiement Render) avec un nouveau numéro de version et sa description ici.
 
+## v0.93.1 (2026-11-13)
+- **Performance A4 : programmes shader 85 → 58 (budget ≤ 60).**
+  - Tout le code de relief du terrain est maintenant porté par tous les matériaux standard/basic, activé par un uniform `uTerrainK` : le décor déformé et ses jumeaux dynamiques partagent le même programme (85 → 71).
+  - Nouveau `src/programShare.js` : les matériaux sans texture reçoivent une carte blanche partagée et réutilisent le programme de leur jumeau texturé ; les matériaux transparents double face se dessinent en une seule passe (71 → 58).
+  - Le matériau du proxy d'ombre est un MeshStandardMaterial qui réutilise un programme existant.
+  - Vérifié : build OK ; au départ de l'île 240 appels, 1,15 M triangles, tas 391 Mo, 58 programmes (identique à l'île, la gare et l'intro, car tout est précompilé au chargement) ; captures 640x360 avant/après (île, cathédrale, gare, train d'intro, nuit) quasi identiques ; après toutes les armes à 2 niveaux d'amélioration, tous les atouts, 12 zombies et bonus : toujours 58 programmes, aucune erreur console ; achat d'un atout, de la boîte et du Pack-a-Punch OK.
+  - Non vérifié : véhicules en mouvement, multijoueur, vitres vues de près depuis l'intérieur du train.
+
 ## v0.93.0 (2026-11-13)
 **Façades de Strasbourg : chaque bâtiment a maintenant un style fidèle à son quartier.**
 - **Classement** (`archStyle.js`) : chaque bâtiment reçoit un style, toujours le même, d'après ses données OpenStreetMap et son quartier : colombage, enduit, hôtel classique du XVIIIᵉ, grès rose civil, Neustadt (1871-1918) ou moderne. `tools/arch-stats.mjs` donne le décompte par style et par quartier.
