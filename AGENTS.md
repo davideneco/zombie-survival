@@ -1,21 +1,16 @@
 # Zombie Survival — AI collaboration rules (all agents)
 
 Browser game (Three.js + Vite, Node relay), deployed from `main` on Render. Game text is French.
-Instructions per agent: Claude → [`CLAUDE.md`](CLAUDE.md) (subagents `.claude/agents/`, skills `.claude/skills/`); Gemini → [`GEMINI.md`](GEMINI.md).
+Instructions per agent: Claude → [`CLAUDE.md`](CLAUDE.md) (subagents `.claude/agents/`, skills `.claude/skills/`).
 
-## Who owns what (several agents work at the same time)
-| Owner | Files |
-|---|---|
-| **Gemini** — all sound | `src/audio.js`, `src/music.js`, `public/music/`, `public/sfx/`, `docs/AUDIO.md`, `tools/audio-*` |
-| **Claude** — everything else | gameplay, rendering, UI, map, networking, the call sites that trigger sounds (`sfx.xxx()` in `src/*.js`) |
-
-Never edit the other owner's files. Need something from them? Add a line to the "Requests" list of `docs/AUDIO.md` (or ask the user). This is what keeps two agents from conflicting.
+## Who owns what
+Claude owns everything, sound included (`src/audio.js`, `src/music.js`, `public/music/`, `public/sfx/`, `docs/AUDIO.md`, `tools/audio-*`). If several agents work at the same time, keep each to its own files and ship small and often.
 
 ## Git workflow (the user wants every change on `main` with a version and a description)
-1. Work on **your own branch** (Claude: the session branch `claude/...`; Gemini: `gemini/audio`, create it from `origin/main`). Never commit on `main`, never force-push `main`.
+1. Work on **your own branch** (the session branch `claude/...`, created from `origin/main`). Never commit on `main`, never force-push `main`.
 2. Ship with the one command (it rebases on `main`, takes the next free version, writes the CHANGELOG entry, builds, pushes branch and `main`):
    ```bash
-   node tools/ship.mjs <patch|minor> "<English subject>" --changelog notes.txt [--body body.txt] [--trailer "Co-Authored-By: …"] [--scope audio]
+   node tools/ship.mjs <patch|minor> "<English subject>" --changelog notes.txt [--body body.txt] [--trailer "Co-Authored-By: …"]
    ```
    `notes.txt` = French player-facing bullets ending with "Vérifié : … / Non vérifié : …" (no heading). Details: header of `tools/ship.mjs`.
 3. Ship small and often: the shorter a branch lives, the fewer conflicts. If the rebase reports a conflict, nothing is lost: merge `origin/main` by hand.

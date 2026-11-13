@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// One command to ship a change (Claude, Gemini or a human). Replaces ~10 manual steps (and their tokens).
+// One command to ship a change (an agent or a human). Replaces ~10 manual steps (and their tokens).
 //
 //   node tools/ship.mjs <patch|minor> "<English subject>" --changelog <file> [--body <file>] [--trailer "<line>"]...
 //                       [--scope <name>] [--allow-images] [--no-push | --only-push]
@@ -7,7 +7,7 @@
 //   --changelog <file>  French player-facing bullets (what changed, then "Vérifié : … / Non vérifié : …"), WITHOUT the "## vX" heading
 //   --body <file>       English commit body (default: the changelog text)
 //   --trailer <line>    commit trailer, repeatable (e.g. "Co-Authored-By: Name <noreply@…>" and the "Claude-Session: …" line)
-//   --scope <name>      refuse to ship files outside tools/scopes.json[name] (Gemini: --scope audio)
+//   --scope <name>      refuse to ship files outside tools/scopes.json[name]
 //   --no-push           do everything except pushing (then --only-push); --only-push: just push the current HEAD
 //
 // What it does: commit the pending work ("wip:"), fetch + rebase onto origin/main (conflict → abort, nothing lost), THEN bump the version

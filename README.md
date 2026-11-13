@@ -113,7 +113,7 @@ Drop `theme.mp3` (or `.ogg`, `.m4a`, `.wav`) in `public/music/` to replace the s
 | `tools/` | Data extraction (OSM, IGN, SNCF), doc generation, map scan, perf probe, release script (`ship.mjs`) |
 | `docs/` | `ARCHITECTURE.md` (technical memory: rendering, city generation, performance, scaling), `REFERENCE.md` (generated balance tables), CSV, specs, audio contract |
 | `AGENTS.md` | Rules shared by every AI agent (who owns which files, git workflow) |
-| `CLAUDE.md` / `GEMINI.md` | Instructions for Claude Code (code) and Gemini (sound) |
+| `CLAUDE.md` / `AGENTS.md` | Instructions for Claude Code and collaboration rules |
 | `.claude/agents/` | Claude Code subagents: `explorer`, `game-designer`, `gameplay-coder`, `playtest-bug-hunter`, `gui-test-debugger` |
 | `.claude/skills/` | Claude Code skills: `play-test` (headless harness), `perf-check`, `map-scan`, `weapon-sheet`, `ship` |
 | branch `reference-docs` | Official docs of three.js r170, Vite, ws, Playwright and MDN (Web Audio, WebGL), pinned to the versions used |

@@ -17,8 +17,8 @@ Browser game: Three.js + Vite, Node.js WebSocket relay. Deployed on Render from 
 - Library docs pinned to our versions: branch `reference-docs` (three.js r170, Vite 6, ws 8, Playwright, MDN Web Audio/WebGL); read with `git show origin/reference-docs:<path>`.
 - Performance budgets: ≤ 300 draw calls and ≤ 1.5 M triangles per view, `game.update` p95 ≤ 4 ms, heap ≤ 400 MB, ≤ 60 shader programs. Measure before and after with the `perf-check` skill (v0.87.1 island start: 858 calls, 2.29 M triangles, 756 MB).
 
-## Gemini works in parallel on all sound (see `AGENTS.md`, `GEMINI.md`, `docs/AUDIO.md`)
-- Gemini owns `src/audio.js`, `src/music.js`, `public/music/`, `public/sfx/`, `docs/AUDIO.md`, `tools/audio-*`: do not edit them. I own everything else, including the call sites (`sfx.xxx()`); wire the "Gemini → Claude" requests of `docs/AUDIO.md` and tick them.
+## Sound
+- Gemini no longer works on this project: its instruction files were removed (v0.95.1). Sound (`src/audio.js`, `src/music.js`, `public/music/`, `public/sfx/`, `docs/AUDIO.md`, `tools/audio-*`) is now edited like any other code; the open requests in `docs/AUDIO.md` are a to-do list.
 - Ship with `node tools/ship.mjs` (rebases on `main`, takes the next free version, so concurrent agents never collide); `main` may have moved, so never assume the version number.
 
 ## Token economy (the weekly limit is real)

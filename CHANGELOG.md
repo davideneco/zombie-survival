@@ -2,6 +2,10 @@
 
 Chaque changement est poussé sur `main` (déploiement Render) avec un nouveau numéro de version et sa description ici.
 
+## v0.95.1 (2026-11-13)
+- **Nettoyage : fichiers d'instructions Gemini supprimés** (`GEMINI.md`, `.gemini/`), et les règles de propriété « Gemini = son » retirées de `CLAUDE.md`, `AGENTS.md`, `README.md`, `docs/AUDIO.md` et du skill `ship`. Le son (`audio.js`, `music.js`, `docs/AUDIO.md`) s'édite désormais comme le reste du code ; la liste « Requests » de `docs/AUDIO.md` devient une liste de choses à faire.
+  - Vérifié : build OK ; plus aucune référence à Gemini dans les fichiers d'instructions (restent seulement le brief AI Studio, la note de la vidéo et les anciennes entrées du CHANGELOG). Non vérifié : aucun changement de code du jeu, donc pas de test en jeu.
+
 ## v0.95.0 (2026-11-13)
 - **Monde par tuiles, étape 2 : Krutenau jouable (B).** Premier quartier hors de l'île, à l'est, bâti à partir des tuiles OpenStreetMap.
   - Krutenau est une zone séparée, comme la gare (l'île n'a aucune case marchable au-delà de x ≈ 616, la navigation ne peut pas être continue). Code : `src/district/index.js`, `src/district/bridge.js`, `CONFIG.districts.krutenau`.

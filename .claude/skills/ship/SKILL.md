@@ -5,7 +5,7 @@ description: Ship every change in Zombie Survival with ONE command (tools/ship.m
 
 # Ship a change
 
-The user wants **every change on `main`**, with a new version and a description of what was done. Do not edit the version, lock file or CHANGELOG by hand: the script does it after rebasing on `main`, so it also works while Gemini ships in parallel.
+The user wants **every change on `main`**, with a new version and a description of what was done. Do not edit the version, lock file or CHANGELOG by hand: the script does it after rebasing on `main`, so it also works while another agent ships in parallel.
 
 1. Write the changelog bullets to a scratch file (French, player-facing, no `##` heading; the last bullets say `Vérifié : …` and `Non vérifié : …`, honestly):
    ```
