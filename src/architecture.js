@@ -194,8 +194,8 @@ export function createArchitecture({ renderer, plasterImg, plaster2Img, roofP, r
 
   // Mur vertical de a à b (tranche [t0, t1] du segment, hauteurs y0..y1), découpé au niveau du rez-de-chaussée.
   // st : { main, shop, gf (rez-de-chaussée), gal / galY (étage-galerie), W (fenêtres), fh, bay, uoff, variant, scale }
-  // ovr : décalage (m) de chaque étage supérieur vers l'extérieur (encorbellement), car : { t0, t1 } porte cochère
-  function wall(ax, az, bx, bz, t0, t1, y0, y1, st, tint, dirt, base = 0, ovr = null, car = null) {
+  // ovr : décalage (m) de chaque étage supérieur vers l'extérieur (encorbellement), car : { t0, t1 } porte cochère, street : mur de rue (oriels)
+  function wall(ax, az, bx, bz, t0, t1, y0, y1, st, tint, dirt, base = 0, ovr = null, car = null, street = false) {
     const len = Math.hypot(bx - ax, bz - az);
     if (len < 0.05 || y1 - y0 < 0.02) return;
     const dx = bx - ax, dz = bz - az, nx = dz / len, nz = -dx / len, ux = dx / len, uz = dz / len; // sortant (voir facadeSegs de realworld.js)
@@ -248,6 +248,46 @@ export function createArchitecture({ renderer, plasterImg, plaster2Img, roofP, r
         if (o1 - o0 < 0.01) continue;
         const c = col(yB).multiplyScalar(0.7);
         quad(st.main, [x0 + nx * o0, yB, z0 + nz * o0], [x1 + nx * o0, yB, z1 + nz * o0], [x1 + nx * o1, yB, z1 + nz * o1], [x0 + nx * o1, yB, z0 + nz * o1], [0, 0, 0.3, 0, 0.3, 0.03, 0, 0.03], c, c);
+        // oak corbels under the jutting storey (static relief, merged per tile)
+        const cb = hexC('#3a2418').multiplyScalar(dirt).multiply(tint), step = CFG.timber.corbel;
+        for (let sC = step / 2; sC < len * (t1 - t0); sC += step) relief.box(x0 + ux * sC + nx * o0, yB - 0.32, z0 + uz * sC + nz * o0, nx, nz, 0.14, 0.32, o1 - o0 + 0.02, cb, 'fs');
+      }
+    }
+    // shop front (static relief): stone pilasters on the piers and a cornice above the sign
+    if (st.shop && base === 0 && y0 < 0.01 && y1 > GF_H - 0.1) {
+      const pc = hexC('#9a8a74').multiplyScalar(dirt).multiply(tint), lenP = len * (t1 - t0);
+      relief.box(x0 + ux * lenP / 2, GF_H - 0.18, z0 + uz * lenP / 2, nx, nz, lenP - 0.05, 0.18, 0.16, pc, 'fts');
+      for (let k = Math.ceil((st.uoff * 8 - t1 * len) / 4); k <= Math.floor((st.uoff * 8 - t0 * len) / 4); k++) { // pier centres: u = uoff - s / 8 = k / 2
+        const sP = st.uoff * 8 - 4 * k - t0 * len;
+        if (sP < 0.25 || sP > lenP - 0.25) continue;
+        relief.box(x0 + ux * sP, 0, z0 + uz * sP, nx, nz, 0.36, GF_H - 0.18, 0.09, pc, 'fs');
+      }
+    }
+    if (car && !st.shop && y0 < 0.01 && car.t1 > t0 && car.t0 < t1) { // carriage door: stone jambs and keystone proud of the painted arch
+      const sd = len * (car.t0 + car.t1) / 2, kc = hexC('#d6b89c').multiplyScalar(dirt).multiply(tint);
+      for (const dxs of [-1.375, 1.375]) relief.box(ax + ux * (sd + dxs), 0, az + uz * (sd + dxs), nx, nz, 0.28, 2.6, 0.12, kc, 'fts');
+      relief.box(ax + ux * sd, GF_H - 0.7, az + uz * sd, nx, nz, 0.34, 0.5, 0.14, kc, 'fts');
+    }
+    // oriels (neustadt): three-sided bay windows from floor 1 to 3, one every 12 m on long street walls
+    const ori = st.ori, oriS = [];
+    if (ori && street && t0 === 0 && t1 === 1 && len >= ori.minWall) {
+      const y0o = gf + (ori.floors[0] - 1) * fh, y1o = Math.min(gf + ori.floors[1] * fh, y1 - 0.5), s00o = P * (st.uoff - 0.25), cnt = Math.floor(len / ori.every);
+      if (y1o - y0o >= fh * 1.5) {
+        for (let j = 0; j < cnt; j++) {
+          const sC = s00o - bay * Math.round((s00o - (len * (j + 0.5)) / cnt) / bay);
+          if (sC < ori.w / 2 + 1 || sC > len - ori.w / 2 - 1 || oriS.some((q) => Math.abs(q - sC) < ori.w)) continue;
+          oriS.push(sC);
+          const pt = (s, o, y) => [ax + ux * s + nx * o, y, az + uz * s + nz * o], dw = (ori.w - 1.4) / 2, v = (y) => (y - gf) / (fh * 2), uS = (s) => st.uoff - s / P;
+          const sl = [sC - ori.w / 2, sC - ori.w / 2 + dw, sC + ori.w / 2 - dw, sC + ori.w / 2], ol = [0, ori.d, ori.d, 0];
+          for (let q = 0; q < 3; q++) {
+            const ca = col(y0o), cb2 = col(y1o);
+            quad(st.main, pt(sl[q], ol[q], y0o), pt(sl[q + 1], ol[q + 1], y0o), pt(sl[q + 1], ol[q + 1], y1o), pt(sl[q], ol[q], y1o), [uS(sl[q]), v(y0o), uS(sl[q + 1]), v(y0o), uS(sl[q + 1]), v(y1o), uS(sl[q]), v(y1o)], ca, cb2);
+          }
+          const dk = col(y0o).multiplyScalar(0.6);
+          quad(st.main, pt(sl[0], 0, y0o), pt(sl[1], ori.d, y0o), pt(sl[2], ori.d, y0o), pt(sl[3], 0, y0o), [0, 0, 0.2, 0, 0.2, 0.03, 0, 0.03], dk, dk);
+          const apex = pt(sC, ori.d * 0.45, y1o + 0.9), rc = st.roofCol;
+          for (let q = 0; q < 3; q++) tri(roofR, pt(sl[q], ol[q], y1o), pt(sl[q + 1], ol[q + 1], y1o), apex, [0, 0, 1, 0, 0.5, 1], rc);
+        }
       }
     }
 
@@ -269,6 +309,7 @@ export function createArchitecture({ renderer, plasterImg, plaster2Img, roofP, r
             if (wy < y0 - 1e-3 || (shopGF ? wy < gf : wy < base + 0.3)) continue;
             if (n === -1 && (W.noGF || (st.gf && !st.W.gfWin))) continue; // ground floor with its own painted layer: no frame unless it matches
             if (n === -1 && doorS !== null && Math.abs(sk - doorS) < 2.4) continue;
+            if (oriS.length && n >= 1 && oriS.some((q) => Math.abs(q - sk) < st.ori.w / 2 + 0.3) && wy + W.h / 2 < gf + st.ori.floors[1] * fh) continue; // hidden inside an oriel
             const off = offAt(wy + W.h / 2), px = ax + ux * sk + nx * off, pz = az + uz * sk + nz * off, h = hash2(px * 1.7, pz * 1.3 + wy);
             const c = tmp.copy(trimC).multiplyScalar(dirt * ao(wy + W.h / 2 - base) * (0.92 + 0.16 * h)).clone().multiply(tint);
             relief.window(px, wy, pz, nx, nz, W.w / 1.25, W.h / 1.85, c, n === 0 && h < 0.16 && !W.timber);
@@ -354,7 +395,7 @@ export function createArchitecture({ renderer, plasterImg, plaster2Img, roofP, r
 
   // Toit à deux pans (pignons) : le polygone est coupé le long du faîtage, hauteurs linéaires de chaque côté
   // dm : { rows, face(), shedP, maxN } lucarnes ; gm : calque du triangle de pignon
-  function gabled(pts, top, rh, ob, st, tint, dirt, roofCol, across, dm, gm) {
+  function gabled(pts, top, rh, ob, st, tint, dirt, roofCol, across, dm, gm, xs = {}) {
     let { ux, uz, vx, vz, hw, hl } = ob;
     if (across) { [ux, uz, vx, vz] = [vx, vz, -ux, -uz]; [hl, hw] = [hw, hl]; }
     const tOf = ([x, z]) => (x - ob.cx) * vx + (z - ob.cz) * vz;
@@ -394,8 +435,17 @@ export function createArchitecture({ renderer, plasterImg, plaster2Img, roofP, r
         const len = Math.hypot(q[0] - p[0], q[1] - p[1]);
         const u0 = st.uoff, u1 = st.uoff - len / gP;
         const v = (y) => (y - gO) / gH;
-        const c = tmp.copy(tint).multiplyScalar(dirt).clone();
-        quad(gRec, [p[0], top, p[1]], [q[0], top, q[1]], [q[0], hq, q[1]], [p[0], hp, p[1]], [u0, v(top), u1, v(top), u1, v(hq), u0, v(hp)], c, c);
+        const c = tmp.copy(tint).multiplyScalar(dirt).clone(), gnx = (q[1] - p[1]) / len, gnz = -(q[0] - p[0]) / len;
+        if (xs.stepped) { // Renaissance stepped gable: rectangular steps standing above the slope, with a tread on each
+          const k = Math.max(3, Math.min(6, Math.round(Math.abs(hq - hp) / 0.9))), tc = c.clone().multiplyScalar(0.8);
+          for (let j = 0; j < k; j++) {
+            const f0 = j / k, f1 = (j + 1) / k, H = hp + (hq - hp) * (hp < hq ? f1 : f0);
+            const A = [p[0] + (q[0] - p[0]) * f0, p[1] + (q[1] - p[1]) * f0], B = [p[0] + (q[0] - p[0]) * f1, p[1] + (q[1] - p[1]) * f1];
+            quad(gRec, [A[0], top, A[1]], [B[0], top, B[1]], [B[0], H, B[1]], [A[0], H, A[1]], [u0 + (u1 - u0) * f0, v(top), u0 + (u1 - u0) * f1, v(top), u0 + (u1 - u0) * f1, v(H), u0 + (u1 - u0) * f0, v(H)], c, c);
+            quad(gRec, [A[0], H, A[1]], [B[0], H, B[1]], [B[0] - gnx * 0.3, H, B[1] - gnz * 0.3], [A[0] - gnx * 0.3, H, A[1] - gnz * 0.3], [0, 0, 0.1, 0, 0.1, 0.02, 0, 0.02], tc, tc);
+          }
+        } else quad(gRec, [p[0], top, p[1]], [q[0], top, q[1]], [q[0], hq, q[1]], [p[0], hp, p[1]], [u0, v(top), u1, v(top), u1, v(hq), u0, v(hp)], c, c);
+        if (xs.barge && Math.abs(hq - hp) > 1) relief.ribbon([p[0], hp, p[1]], [q[0], hq, q[1]], gnx, gnz, 0.3, 0.09, hexC('#3a2418').multiplyScalar(dirt).multiply(tint)); // barge board along the gable edge
       }
     }
     // lucarnes (rows of dormers up the two slopes, each row 18 % smaller; shed dormers on timber houses)
@@ -493,7 +543,34 @@ export function createArchitecture({ renderer, plasterImg, plaster2Img, roofP, r
     if (shape === 'pyramidal' || shape === 'dome' || shape === 'onion' || shape === 'cone') return pyramidal(pts, top, rh, roofCol);
     if (shape === 'skillion') return skillion(pts, top, rh, ob, roofCol, st, tint, dirt);
     if (shape === 'mansard_ring') return mansard(pts, top, rh, roofCol, x.mansardD, x.dmM);
-    return gabled(pts, top, rh, ob, st, tint, dirt, roofCol, tags && tags['roof:orientation'] === 'across', x.dm, x.gm);
+    return gabled(pts, top, rh, ob, st, tint, dirt, roofCol, tags && tags['roof:orientation'] === 'across', x.dm, x.gm, x);
+  }
+
+  // Corner turrets of the Neustadt blocks: a corbelled 10-sided tower on convex street corners of 60-120 degrees (at most 2 per building), with a cone roof
+  function turrets(pts, streetEdges, wallTop, st, tint, dirt, roofCol, T, R) {
+    const n = pts.length, gf = GF_H;
+    let made = 0;
+    for (let i = 0; i < n && made < 2; i++) {
+      if (!streetEdges[(i - 1 + n) % n] || !streetEdges[i]) continue;
+      const p = pts[(i - 1 + n) % n], c = pts[i], q = pts[(i + 1) % n];
+      const v1 = [p[0] - c[0], p[1] - c[1]], v2 = [q[0] - c[0], q[1] - c[1]], l1 = Math.hypot(...v1), l2 = Math.hypot(...v2);
+      if (l1 < 4 || l2 < 4) continue;
+      const cosA = (v1[0] * v2[0] + v1[1] * v2[1]) / (l1 * l2), ang = Math.acos(Math.max(-1, Math.min(1, cosA))) * 180 / Math.PI;
+      const e1 = [c[0] - p[0], c[1] - p[1]], e2 = [q[0] - c[0], q[1] - c[1]];
+      if (e1[0] * e2[1] - e1[1] * e2[0] <= 0 || ang < 60 || ang > 120) continue; // convex corners only
+      if (R() >= T.chance) continue;
+      let bx = -(v1[0] / l1 + v2[0] / l2), bz = -(v1[1] / l1 + v2[1] / l2); const bl = Math.hypot(bx, bz) || 1; bx /= bl; bz /= bl;
+      const cx = c[0] + bx * T.r * 0.5, cz = c[1] + bz * T.r * 0.5, y0 = gf, y1 = wallTop + 1.2, ns = T.sides, P2 = st.bay * 2, fh = st.fh;
+      const ring = (r, y, k) => [cx + Math.cos((k / ns) * Math.PI * 2) * r, y, cz + Math.sin((k / ns) * Math.PI * 2) * r];
+      const circ = (Math.PI * 2 * T.r) / ns, col = tmp.copy(tint).multiplyScalar(dirt).clone(), dk = col.clone().multiplyScalar(0.6);
+      for (let k = 0; k < ns; k++) {
+        const u0 = st.uoff + (k * circ) / P2, u1 = st.uoff + ((k + 1) * circ) / P2, v = (y) => (y - gf) / (fh * 2);
+        quad(st.main, ring(T.r, y0, k), ring(T.r, y0, k + 1), ring(T.r, y1, k + 1), ring(T.r, y1, k), [u0, v(y0), u1, v(y0), u1, v(y1), u0, v(y1)], col, col);
+        tri(st.main, ring(T.r, y0, k), ring(T.r, y0, k + 1), [cx, y0 - 1.2, cz], [u0, 0, u1, 0, (u0 + u1) / 2, 0.02], dk); // corbel under the tower
+        tri(roofR, ring(T.r * 1.08, y1, k), ring(T.r * 1.08, y1, k + 1), [cx, y1 + 3.6, cz], [0, 0, 1, 0, 0.5, 1.4], roofCol);
+      }
+      made++;
+    }
   }
 
   // ---------- anciens tirages : l'ancien choix de style, rejoué à l'identique
@@ -630,6 +707,14 @@ export function createArchitecture({ renderer, plasterImg, plaster2Img, roofP, r
       if (bc && /^#/.test(bc)) tint.lerp(new THREE.Color('#ffffff'), 0.4);
       else if (style === 'plaster' && S) desat(tint, S.desaturate);
       const dirt = L.dirt;
+      let roofCol = roofTagColour(tags);
+      if (!roofCol) {
+        const kind = roofKind(tags), sp = STYLE_ROOF[style];
+        const arr = kind === 'tiles' && sp ? sp : ROOF_TINTS[kind] || ROOF_TINTS.tiles;
+        roofCol = new THREE.Color(arr[Math.floor((L.rr ?? 0.5) * arr.length)]);
+      }
+      st.roofCol = roofCol;
+      if (style === 'neustadt') st.ori = S.oriel;
       // upper-storey gallery of the old tanners' lofts (Petite France, top storey of a gabled timber house)
       if (style === 'timber' && cls.district === 'petiteFrance' && nUp >= 2 && shape === 'gabled' && R() < S.gallery) { st.gal = newLayer('gallery'); st.galY = wallTop - fh; }
       // overhang (encorbellement) of the upper storeys on the street walls
@@ -652,15 +737,9 @@ export function createArchitecture({ renderer, plasterImg, plaster2Img, roofP, r
           else wall(ax, az, bx, bz, t0, t1, opts.passageH || 3.6, wallTop, st, tint, dirt);
           t = t1;
         }
-        if (t < 1) wall(ax, az, bx, bz, t, 1, 0, wallTop, st, tint, dirt, 0, ovr, cr);
+        if (t < 1) wall(ax, az, bx, bz, t, 1, 0, wallTop, st, tint, dirt, 0, ovr, cr, !!(streetEdges && streetEdges[i] && !cuts.length));
       }
       // ---- toit
-      let roofCol = roofTagColour(tags);
-      if (!roofCol) {
-        const kind = roofKind(tags), sp = STYLE_ROOF[style];
-        const arr = kind === 'tiles' && sp ? sp : ROOF_TINTS[kind] || ROOF_TINTS.tiles;
-        roofCol = new THREE.Color(arr[Math.floor((L.rr ?? 0.5) * arr.length)]);
-      }
       const x = {};
       const DM = CFG.dormers;
       const faceFn = () => { // front layer of a dormer
@@ -679,7 +758,10 @@ export function createArchitecture({ renderer, plasterImg, plaster2Img, roofP, r
         x.mansardD = mD;
         x.dmM = { maxN: DM.maxPerRoof, streetEdges, bay, uoff: L.uoff, w: DM.mansardW, face: faceFn, tint: tmp.copy(tint).multiplyScalar(dirt).clone() };
       }
+      if (style === 'civic' && shape === 'gabled' && R() < S.steppedGable) x.stepped = true;
+      if (shape === 'gabled' && style === 'timber') x.barge = true;
       roof(pts, wallTop, shape, rh, ob, st, tint, dirt, roofCol, tags, x);
+      if (style === 'neustadt' && streetEdges && nUp + 1 >= S.turret.minLevels) turrets(pts, streetEdges, wallTop, st, tint, dirt, roofCol, S.turret, R);
       return { wallTop, roofTop: wallTop + rh, style };
     },
 

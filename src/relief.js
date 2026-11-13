@@ -107,6 +107,16 @@ export function createRelief() {
     if (cap) { const base = t.pos.length / 3; t.pos.push(x, y1, z); t.nor.push(0, 1, 0); t.col.push(col.r, col.g, col.b); for (let i = 0; i <= sides; i++) { const a = rot + (i / sides) * Math.PI * 2; t.pos.push(x + Math.cos(a) * r, y1, z + Math.sin(a) * r); t.nor.push(0, 1, 0); t.col.push(col.r, col.g, col.b); } for (let i = 0; i < sides; i++) t.idx.push(base, base + 2 + i, base + 1 + i); }
   };
 
+  // Oriented box on a facade (merged into the tile's static mesh, vertex colours): centre of its base on the wall plane at (x, y, z), outward (nx, nz),
+  // width w along the wall, height h, depth d out of the wall. fm: faces to build (f front, t top, s sides, b bottom; the back is never seen)
+  const obox = (t, x, y, z, nx, nz, w, h, d, col, fm = 'ftsb') => {
+    const tx = -nz, tz = nx, hw = w / 2, P = (s, yy, o) => [x + tx * s + nx * o, y + yy, z + tz * s + nz * o];
+    if (fm.includes('f')) quad(t, P(-hw, 0, d), P(hw, 0, d), P(hw, h, d), P(-hw, h, d), [nx, 0, nz], col);
+    if (fm.includes('t')) quad(t, P(-hw, h, 0), P(hw, h, 0), P(hw, h, d), P(-hw, h, d), [0, 1, 0], col);
+    if (fm.includes('b')) quad(t, P(-hw, 0, d), P(hw, 0, d), P(hw, 0, 0), P(-hw, 0, 0), [0, -1, 0], col);
+    if (fm.includes('s')) { quad(t, P(-hw, 0, 0), P(-hw, 0, d), P(-hw, h, d), P(-hw, h, 0), [-tx, 0, -tz], col); quad(t, P(hw, 0, d), P(hw, 0, 0), P(hw, h, 0), P(hw, h, d), [tx, 0, tz], col); }
+  };
+
   const snap = (map) => new Map([...map].map(([k, t]) => [k, [t.win.length, t.bal.length, t.cor.length, t.pos.length, t.nor.length, t.col.length, t.idx.length, t.pl.length, t.qu.length]]));
   const restore = (map, m) => {
     for (const [k, t] of map) { const s = m.get(k) || [0, 0, 0, 0, 0, 0, 0, 0, 0]; t.qu.length = s[8]; t.pl.length = s[7]; t.win.length = s[0]; t.bal.length = s[1]; t.cor.length = s[2]; t.pos.length = s[3]; t.nor.length = s[4]; t.col.length = s[5]; t.idx.length = s[6]; }
@@ -138,6 +148,17 @@ export function createRelief() {
     plinth(ax, az, bx, bz, nx, nz, y, color) {
       const mx = (ax + bx) / 2, mz = (az + bz) / 2, len = Math.hypot(bx - ax, bz - az);
       getTile(coarse, COARSE, mx, mz).pl.push(mx, y, mz, Math.atan2(nx, nz), len, 1, color.r, color.g, color.b);
+    },
+    // Static pieces (step C2), merged per 64 m tile with the pipes and chimneys: no draw call of their own.
+    // Box on a facade (see obox)
+    box(x, y, z, nx, nz, w, h, d, color, fm) { obox(getTile(coarse, COARSE, x, z), x, y, z, nx, nz, w, h, d, color, fm); },
+    // Board between two 3D points p0 and p1 of a wall plane (barge board along a gable edge): `h` tall, `d` out of the wall
+    ribbon(p0, p1, nx, nz, h, d, color) {
+      const t = getTile(coarse, COARSE, (p0[0] + p1[0]) / 2, (p0[2] + p1[2]) / 2);
+      const o = (p) => [p[0] + nx * d, p[1], p[2] + nz * d], up = (p, k) => [p[0], p[1] + k, p[2]];
+      quad(t, o(p0), o(p1), up(o(p1), h), up(o(p0), h), [nx, 0, nz], color);
+      quad(t, up(p0, h), up(p1, h), up(o(p1), h), up(o(p0), h), [0, 1, 0], color);
+      quad(t, p0, p1, o(p1), o(p0), [0, -1, 0], color);
     },
     // Descente de gouttière (tuyau gris-vert, section carrée à pans coupés)
     pipe(x, z, y0, y1) {

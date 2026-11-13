@@ -88,8 +88,8 @@ export const CONFIG = {
       { id: 'offN', island: false, zMax: -300, mix: { neustadt: 0.75, plaster: 0.15, modern: 0.1 } },
       { id: 'off', island: false, mix: { plaster: 0.5, classical: 0.2, neustadt: 0.15, modern: 0.15 } },
     ],
-    // per style: floorH = upper storey height (m; the ground floor stays GF_H = 4.2), bay = window bay width (m), pitch = roof pitch range (degrees)
-    timber: { floorH: 2.85, bay: 4, overhang: 0.22, overhangMax: 3, pitch: [55, 60], dormerRows: [1, 4], dormerStep: 1.9, dormerShrink: 0.82, maxArea: 320, maxLevels: 5, maxFront: 12, gallery: 0.4, slats: 0.6 },
+    // per style: floorH = upper storey height (timber.corbel = spacing (m) of the oak corbels under an overhang) (m; the ground floor stays GF_H = 4.2), bay = window bay width (m), pitch = roof pitch range (degrees)
+    timber: { floorH: 2.85, bay: 4, overhang: 0.22, overhangMax: 3, pitch: [55, 60], dormerRows: [1, 4], dormerStep: 1.9, dormerShrink: 0.82, corbel: 1.2, maxArea: 320, maxLevels: 5, maxFront: 12, gallery: 0.4, slats: 0.6 },
     plaster: { floorH: 3.1, bay: 4, pitch: [45, 52], dormerRows: [0, 2], desaturate: 0.15 },
     classical: { floorH: 3.5, bay: 3.2, brisis: 70, mansardH: 0.9, cochere: 0.7, cochereW: 3.2 },
     civic: { floorH: 4.2, bay: 4.5, pitch: [42, 48], steppedGable: 0.35 },
