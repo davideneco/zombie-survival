@@ -2,6 +2,28 @@
 
 Chaque changement est poussé sur `main` (déploiement Render) avec un nouveau numéro de version et sa description ici.
 
+## v0.93.0 (2026-11-13)
+**Façades de Strasbourg : chaque bâtiment a maintenant un style fidèle à son quartier.**
+- **Classement** (`archStyle.js`) : chaque bâtiment reçoit un style, toujours le même, d'après ses données OpenStreetMap et son quartier : colombage, enduit, hôtel classique du XVIIIᵉ, grès rose civil, Neustadt (1871-1918) ou moderne. `tools/arch-stats.mjs` donne le décompte par style et par quartier.
+- **Colombages** (Petite France, cathédrale) : étages en encorbellement, poutres, croix de Saint-André, toits à 55-60°, rangées de lucarnes.
+- **Hôtels classiques** : toits mansardés, fenêtres alignées avec les lucarnes, portes cochères.
+- **Neustadt** : oriels, tourelles d'angle ; grès rose : pignons à gradins.
+- **Façades** : toutes les textures de façade sont réunies dans une seule texture à couches (`facadeAtlas.js`, `facadeLayers.js`, `facadeDraw.js`).
+- **Rien ne bouge en jeu** : les objets, machines, boîtes et points d'apparition restent exactement à la même place (l'état du tirage aléatoire après les bâtiments est identique). Les collisions et la navigation ne changent pas.
+- **Perf** : départ île à 238 appels de rendu (279 avant les façades), 1,18 M triangles, 391 Mo ; gare 177 appels ; intro 122 appels. Shaders : 85, toujours au-dessus du budget de 60.
+- **Vérifié** :
+  - le build passe aux deux étapes ;
+  - 0 paire de faces qui se chevauchent aux 5 endroits scannés ;
+  - captures regardées : Petite France (colombages), place Kléber (lucarnes, encadrements), Petite France de nuit (sombre, comme avant) ;
+  - aucune erreur console.
+- **Non vérifié** :
+  - les oriels et les tourelles : aucun des points de vue pris ne les montre clairement (le bord nord est sur l'eau) ;
+  - la rue des Juifs avant/après ;
+  - le multijoueur ;
+  - le scan complet des blocages.
+- **Pas fait** : cadres de lucarnes en relief, enduit rugueux Heimatstil, rugosité par couche.
+- **Outils** : le scan de chevauchement a besoin de `?keepgeom` dans l'URL (il lit des données que le jeu libère normalement) ; `tools/stuck-scan.mjs` accepte `AT=x,z` et `ZF_PREFIX`.
+
 ## v0.92.0 (2026-11-13)
 **Défense : immeubles fortifiés, fenêtres barricadées, point de repli.**
 - **30 immeubles fortifiés** (1 à 2 par zone, choisis de façon déterministe) ont un ou deux étages avec escalier à demi-paliers, couloir et pièces (`keyBuildings.js`). Les zombies montent les escaliers : un zombie placé à 4 m du pied de l'escalier atteint l'étage en 11 à 25 s dans 10 immeubles sur 10 testés.
