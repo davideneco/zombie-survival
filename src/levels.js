@@ -29,6 +29,7 @@ export class Levels {
   // opts (v0.79.0) : ground (its floor wins over the implicit city ground at the same height : a separate area at y = 0),
   // navCell / navMaxCost / navMargin (its nav grid ; default 0.5 m, unbounded field, 0.4 m)
   addRegion(name, y, kind = 'floor', opts = {}) {
+    if (this.regions.length >= 1023) throw new Error('Levels: more than 1023 regions (hop keys are region * 1024)');
     const r = { id: this.regions.length, name, y, kind, bbox: [Infinity, Infinity, -Infinity, -Infinity], tris: [], spawns: [], link: null, ...opts };
     this.regions.push(r);
     return r.id;
@@ -218,7 +219,7 @@ export class Levels {
   _buildHops() {
     const n = this.regions.length;
     const adj = Array.from({ length: n }, () => []);
-    for (const l of this.links) { adj[l.a].push({ to: l.b, link: l, dir: 1 }); adj[l.b].push({ to: l.a, link: l, dir: -1 }); }
+    for (const l of this.links) { if (l.closed) continue; adj[l.a].push({ to: l.b, link: l, dir: 1 }); adj[l.b].push({ to: l.a, link: l, dir: -1 }); } // a closed link (stair door not bought yet) is not a route
     this._hop = new Map();
     this._dist = new Map();
     for (let target = 0; target < n; target++) {
@@ -234,6 +235,8 @@ export class Levels {
       for (let i = 0; i < n; i++) this._dist.set(i * 1024 + target, dist[i]);
     }
   }
+  // The links changed (a stair door opened): the next nextHop / hopDistance call recomputes the table
+  invalidateHops() { this._hop = null; }
   // Longueur du chemin d'escaliers entre deux régions (Infinity si non reliées)
   hopDistance(from, to) {
     if (from === to) return 0;

@@ -26,6 +26,7 @@ export class NavGrid {
     this.segFilter = null; // (segment | cercle) => true si l'obstacle compte pour cette grille (obstacles de l'étage)
     this.outside = null; // (x, z) => true si hors de la zone jouable
     this.carve = null;   // (blocked) => libère les cases des passages sous immeubles
+    this.finalize = null; // (blocked) => ajustement final de la grille, après tous les obstacles (cages d'escalier des immeubles clés)
     this.vaultCost = 40; // coût de traversée d'une case enjambable dans le champ de flux (10 = case libre) : CONFIG.zombie.vault.cost
   }
 
@@ -134,6 +135,7 @@ export class NavGrid {
         if (this.outside(this.worldX(ix), this.worldZ(iz))) b[iz * nx + ix] = 1;
       }
     }
+    if (this.finalize) this.finalize(b); // last word on the grid (key buildings close the stair shaft pockets)
     this.lastTargetKey = null;
   }
 

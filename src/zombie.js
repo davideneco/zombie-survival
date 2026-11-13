@@ -847,7 +847,7 @@ export class Zombie {
     const tmp = this._lk || (this._lk = { x: 0, y: 0, z: 0, yaw: 0 });
     if (moving) k.s += k.dir * sp * 0.9 * dt;
     lv.pointOn(L, k.s, tmp);
-    this.pos.set(tmp.x, tmp.y, tmp.z);
+    this.pos.set(tmp.x, tmp.y + terrainY(tmp.x, tmp.z), tmp.z); // (levels are relative to the terrain)
     let diff = (inRange ? Math.atan2(dx, dz) : tmp.yaw + (k.dir < 0 ? Math.PI : 0)) - this.yaw;
     diff = Math.atan2(Math.sin(diff), Math.cos(diff));
     this.yaw += diff * Math.min(1, dt * 8);

@@ -15,7 +15,7 @@ import { CONFIG } from './config.js';
 // =====================================================================
 const TILE = 64;
 const hash = (x, z, k = 0) => { const s = Math.sin(x * 127.1 + z * 311.7 + k * 74.7) * 43758.5453; return s - Math.floor(s); };
-const pointIn = (x, z, pts) => {
+export const pointIn = (x, z, pts) => {
   let c = false;
   for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
     const [xi, zi] = pts[i], [xj, zj] = pts[j];
@@ -58,6 +58,44 @@ function floorTexture(kind) {
   return t;
 }
 
+// Geometry helpers (shared with keyBuildings.js): vertex-colour buckets, quads, thin boxes, polygon inset
+export function mk() { return { pos: [], nor: [], col: [], uv: [], idx: [] }; }
+export const quad = (B, a, b, c, d, n, col, uv = [0, 0, 1, 0, 1, 1, 0, 1]) => {
+  const base = B.pos.length / 3;
+  B.pos.push(...a, ...b, ...c, ...d);
+  for (let i = 0; i < 4; i++) { B.nor.push(n[0], n[1], n[2]); B.col.push(col[0], col[1], col[2]); }
+  B.uv.push(...uv);
+  B.idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
+};
+// boîte biseautée simple (meubles) : 5 faces visibles, orientée par (ux, uz) le long du mur
+export const box = (B, cx, y0, cz, ux, uz, w, h, d, col) => {
+  const nx = -uz, nz = ux, hw = w / 2, hd = d / 2, y1 = y0 + h;
+  const P = (s, t, y) => [cx + ux * s + nx * t, y, cz + uz * s + nz * t];
+  const sh = (k) => [col[0] * k, col[1] * k, col[2] * k];
+  quad(B, P(-hw, hd, y0), P(hw, hd, y0), P(hw, hd, y1), P(-hw, hd, y1), [nx, 0, nz], sh(1));
+  quad(B, P(hw, -hd, y0), P(-hw, -hd, y0), P(-hw, -hd, y1), P(hw, -hd, y1), [-nx, 0, -nz], sh(0.8));
+  quad(B, P(hw, hd, y0), P(hw, -hd, y0), P(hw, -hd, y1), P(hw, hd, y1), [ux, 0, uz], sh(0.9));
+  quad(B, P(-hw, -hd, y0), P(-hw, hd, y0), P(-hw, hd, y1), P(-hw, -hd, y1), [-ux, 0, -uz], sh(0.9));
+  quad(B, P(-hw, hd, y1), P(hw, hd, y1), P(hw, -hd, y1), P(-hw, -hd, y1), [0, 1, 0], sh(1.1));
+};
+
+// Polygone intérieur : chaque arête décalée de `w` vers l'intérieur (onglets bornés aux angles aigus)
+export const inset = (pts, w) => {
+  const n = pts.length, out = [];
+  for (let i = 0; i < n; i++) {
+    const p = pts[(i + n - 1) % n], c = pts[i], q = pts[(i + 1) % n];
+    const e1 = [c[0] - p[0], c[1] - p[1]], e2 = [q[0] - c[0], q[1] - c[1]];
+    const l1 = Math.hypot(...e1) || 1, l2 = Math.hypot(...e2) || 1;
+    const n1 = [-e1[1] / l1, e1[0] / l1], n2 = [-e2[1] / l2, e2[0] / l2]; // normales gauches (intérieur pour un contour anti-horaire)
+    const bx = n1[0] + n2[0], bz = n1[1] + n2[1], bl = Math.hypot(bx, bz);
+    let k = bl > 1e-3 ? w / ((bx / bl) * n1[0] + (bz / bl) * n1[1]) : w;
+    k = Math.min(Math.abs(k), w * 3);
+    out.push(bl > 1e-3 ? [c[0] + (bx / bl) * k, c[1] + (bz / bl) * k] : [c[0] + n1[0] * w, c[1] + n1[1] * w]);
+  }
+  return out;
+};
+
+
 export function createInteriors() {
   const C = () => CONFIG.interiors;
   const rooms = [];
@@ -70,42 +108,6 @@ export function createInteriors() {
     if (!t) tiles.set(k, t = { cx: (ix + 0.5) * TILE, cz: (iz + 0.5) * TILE, half: TILE * 0.7072, b: [mk(), mk(), mk(), mk()] }); // 0 murs, 1 parquet, 2 carrelage, 3 meubles et lampes
     return t;
   };
-  function mk() { return { pos: [], nor: [], col: [], uv: [], idx: [] }; }
-  const quad = (B, a, b, c, d, n, col, uv = [0, 0, 1, 0, 1, 1, 0, 1]) => {
-    const base = B.pos.length / 3;
-    B.pos.push(...a, ...b, ...c, ...d);
-    for (let i = 0; i < 4; i++) { B.nor.push(n[0], n[1], n[2]); B.col.push(col[0], col[1], col[2]); }
-    B.uv.push(...uv);
-    B.idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
-  };
-  // boîte biseautée simple (meubles) : 5 faces visibles, orientée par (ux, uz) le long du mur
-  const box = (B, cx, y0, cz, ux, uz, w, h, d, col) => {
-    const nx = -uz, nz = ux, hw = w / 2, hd = d / 2, y1 = y0 + h;
-    const P = (s, t, y) => [cx + ux * s + nx * t, y, cz + uz * s + nz * t];
-    const sh = (k) => [col[0] * k, col[1] * k, col[2] * k];
-    quad(B, P(-hw, hd, y0), P(hw, hd, y0), P(hw, hd, y1), P(-hw, hd, y1), [nx, 0, nz], sh(1));
-    quad(B, P(hw, -hd, y0), P(-hw, -hd, y0), P(-hw, -hd, y1), P(hw, -hd, y1), [-nx, 0, -nz], sh(0.8));
-    quad(B, P(hw, hd, y0), P(hw, -hd, y0), P(hw, -hd, y1), P(hw, hd, y1), [ux, 0, uz], sh(0.9));
-    quad(B, P(-hw, -hd, y0), P(-hw, hd, y0), P(-hw, hd, y1), P(-hw, -hd, y1), [-ux, 0, -uz], sh(0.9));
-    quad(B, P(-hw, hd, y1), P(hw, hd, y1), P(hw, -hd, y1), P(-hw, -hd, y1), [0, 1, 0], sh(1.1));
-  };
-
-  // Polygone intérieur : chaque arête décalée de `w` vers l'intérieur (onglets bornés aux angles aigus)
-  const inset = (pts, w) => {
-    const n = pts.length, out = [];
-    for (let i = 0; i < n; i++) {
-      const p = pts[(i + n - 1) % n], c = pts[i], q = pts[(i + 1) % n];
-      const e1 = [c[0] - p[0], c[1] - p[1]], e2 = [q[0] - c[0], q[1] - c[1]];
-      const l1 = Math.hypot(...e1) || 1, l2 = Math.hypot(...e2) || 1;
-      const n1 = [-e1[1] / l1, e1[0] / l1], n2 = [-e2[1] / l2, e2[0] / l2]; // normales gauches (intérieur pour un contour anti-horaire)
-      const bx = n1[0] + n2[0], bz = n1[1] + n2[1], bl = Math.hypot(bx, bz);
-      let k = bl > 1e-3 ? w / ((bx / bl) * n1[0] + (bz / bl) * n1[1]) : w;
-      k = Math.min(Math.abs(k), w * 3);
-      out.push(bl > 1e-3 ? [c[0] + (bx / bl) * k, c[1] + (bz / bl) * k] : [c[0] + n1[0] * w, c[1] + n1[1] * w]);
-    }
-    return out;
-  };
-
   const api = {
     rooms,
     // pts : contour du bâtiment (anti-horaire, repère monde) ; cuts[i] : ouvertures [t0, t1] de l'arête i (porte comprise) ; door : { i, t0, t1 }
@@ -137,6 +139,13 @@ export function createInteriors() {
       const ccw = pts.reduce((s2, p, i) => { const q = pts[(i + 1) % pts.length]; return s2 + (p[0] * q[1] - q[0] * p[1]); }, 0) > 0;
       const P = ccw ? pts : pts.slice().reverse();
       return inset(P, C().wall).every((q) => pointIn(q[0], q[1], P));
+    },
+
+    // Inset outline of a building contour (the walls of the room addRoom would build): { P (normalised winding), inner }, or null when the offset fails
+    outline(pts) {
+      const ccw = pts.reduce((s2, p, i) => { const q = pts[(i + 1) % pts.length]; return s2 + (p[0] * q[1] - q[0] * p[1]); }, 0) > 0;
+      const P = ccw ? pts : pts.slice().reverse(), inner = inset(P, C().wall);
+      return inner.every((q) => pointIn(q[0], q[1], P)) ? { P, inner } : null;
     },
 
     // Porte fermée (pièce dont la porte est bouchée côté rue : un joueur ne doit pas pouvoir s'y retrancher hors d'atteinte des zombies) :
@@ -206,11 +215,25 @@ export function createInteriors() {
             F.uv.push(u[0] / 2, u[1] / 2, v[0] / 2, v[1] / 2, x[0] / 2, x[1] / 2);
             F.idx.push(base, base + 1, base + 2);
           }
+          if (r.ceilHoles) continue; // ceiling with stairwell holes: emitted below
           const cb = W.pos.length / 3, cc = [0.4, 0.38, 0.35];
           W.pos.push(pa[0], H, pa[1], q2[0], H, q2[1], q1[0], H, q1[1]); // plafond : face vers le bas
           for (let k = 0; k < 3; k++) { W.nor.push(0, -1, 0); W.col.push(...cc); }
           W.uv.push(0, 0, 1, 0, 1, 1);
           W.idx.push(cb, cb + 1, cb + 2);
+        }
+        if (r.ceilHoles) { // key building (keyBuildings.js): the ceiling is open above the stair shaft
+          const all = [...r.inner, ...r.ceilHoles.flat()];
+          let ct = [];
+          try { ct = THREE.ShapeUtils.triangulateShape(v2, r.ceilHoles.map((h) => h.map(([x, z]) => new THREE.Vector2(x, z)))); } catch { ct = []; }
+          for (const [a, b, c] of ct) {
+            const pa = all[a], pb = all[b], pc = all[c], s = (pb[0] - pa[0]) * (pc[1] - pa[1]) - (pc[0] - pa[0]) * (pb[1] - pa[1]);
+            const [q1, q2] = s < 0 ? [pb, pc] : [pc, pb], cb = W.pos.length / 3;
+            W.pos.push(pa[0], H, pa[1], q2[0], H, q2[1], q1[0], H, q1[1]);
+            for (let k = 0; k < 3; k++) { W.nor.push(0, -1, 0); W.col.push(0.4, 0.38, 0.35); }
+            W.uv.push(0, 0, 1, 0, 1, 1);
+            W.idx.push(cb, cb + 1, cb + 2);
+          }
         }
         // murs intérieurs : soubassement, cimaise, enduit ; plinthe ; ouvertures (porte, passages) et leurs ébrasements
         const n = r.inner.length;
@@ -294,6 +317,7 @@ export function createInteriors() {
       const furnMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.78, metalness: 0.03 });
       const lampMat = new THREE.MeshStandardMaterial({ color: 0xffe2b0, emissive: 0xffc070, emissiveIntensity: 1.1, roughness: 0.5 });
       [wallMat, woodMat, tileMat, furnMat].forEach(dimAmbient);
+      api.mats = { wall: wallMat, wood: woodMat, tile: tileMat, furn: furnMat, lamp: lampMat }; // shared with keyBuildings.js (same ambient patch: no new shader program)
       api.tiles = [];
       for (const t of tiles.values()) {
         const T = { cx: t.cx, cz: t.cz, half: t.half, meshes: [] };

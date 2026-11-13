@@ -428,6 +428,16 @@ const game = {
     }
   },
 
+  // Debug / tests: put the local player on a floor of key building i (0 = ground room, 1.. = upper floors) in front of the stair
+  tpKeyBuilding(i, floor = 1) {
+    const kb = world.keyBuildings?.[i];
+    if (!kb) return null;
+    const st = kb.stand(Math.min(floor, kb.nUp)), p = this.player;
+    p.pos.set(st.x, st.y + world.terrainY(st.x, st.z) + 0.05, st.z);
+    p.yaw = Math.atan2(kb.lay.sdx, kb.lay.sdz); p.pitch = 0;
+    return { id: kb.id, zone: kb.zoneName, region: st.region };
+  },
+
   // Zombies coincés dans le décor ou partis trop loin : on les fait réapparaître près des joueurs (hôte).
   // force : appel du menu debug (U), sans attendre la seconde de recharge et avec des seuils plus bas ; renvoie le nombre de zombies déplacés.
   relocateZombies(dt, targets, force = false) {
@@ -436,7 +446,13 @@ const game = {
       if (this.relocateTimer > 0 || !targets.length || !world.pickGround) return 0;
       this.relocateTimer = 0.5; // vérification 2 fois par seconde
     } else if (!targets.length || !world.pickGround) return 0;
-    const groundTargets = targets.filter((t) => !t.tregion);
+    // players on an upper floor (key buildings, cathedral) count through the foot of the stair that leads to them: the ground zombies still get relocated
+    const lv = world.levels, groundTargets = [];
+    for (const t of targets) {
+      if (!t.tregion) { groundTargets.push(t); continue; }
+      const hop = lv?.nextHop(0, t.tregion);
+      if (hop) { const e = hop.dir > 0 ? hop.link.path[0] : hop.link.path[hop.link.path.length - 1]; groundTargets.push({ pos: { x: e[0], y: 0, z: e[2] }, tregion: 0 }); }
+    }
     if (!groundTargets.length) return 0;
     targets = groundTargets;
     let moved = 0;
@@ -1415,7 +1431,7 @@ const game = {
     if (this.buffs.instaKill > 0) this.buffs.instaKill = Math.max(0, this.buffs.instaKill - dt);
     if (this.buffs.doublePoints > 0) this.buffs.doublePoints = Math.max(0, this.buffs.doublePoints - dt);
 
-    world.update?.(p.pos.x, p.pos.z, dt);
+    world.update?.(p.pos.x, p.pos.z, dt, p.pos.y);
 
     // Lumière de lune suivant le joueur
     moon.target.position.set(Math.round(p.pos.x), 0, Math.round(p.pos.z));

@@ -3,6 +3,7 @@ import { createTrees } from './trees.js';
 import { createGround } from './ground.js';
 import { createInteriors } from './interiors.js';
 import { chunkGround } from './groundChunks.js';
+import { createKeyBuildings } from './keyBuildings.js';
 import { installTerrain, terrainY, terrainWaterY, terrainOn, patchObject, tessellate } from './terrain.js';
 import { contact } from './contact.js';
 import * as THREE from 'three';
@@ -312,6 +313,7 @@ export async function buildRealWorld(scene, renderer) {
   const tailGhosts = ghosts;
   let cathInfo = null;
   const levels = new Levels(); // étages (cathédrale : balcons, escaliers, plateforme, flèche)
+  const keyBuildings = createKeyBuildings({ scene, collision, levels, interiors, lightSources, onLightsChanged: () => { lightTimer = 0; } }); // upper floors of the key buildings (v0.88.0)
   // Cathédrale : intérieur jouable (zone de fin de partie)
   let kCath = blds.findIndex((b) => b.name === 'Cathédrale Notre-Dame');
   if (kCath < 0) kCath = blds.reduce((best, b, k) => (b.tags.building === 'cathedral' && (best < 0 || Math.abs(polyArea(b.pts)) > Math.abs(polyArea(blds[best].pts))) ? k : best), -1);
@@ -470,6 +472,11 @@ export async function buildRealWorld(scene, renderer) {
     }
     return best;
   };
+  // Key buildings (keyBuildings.js): picked before the facades are built (deterministic, no rnd)
+  keyBuildings.pick({
+    blds, chooseDoor, polyArea,
+    skip: (k) => breach.removed.has(k) || hasParts.has(k) || k === kCath || (cath && (blds[k].pts.some(([x, z]) => cath.insideInner(x, z)) || cath.inner.some(([x, z]) => inPoly(x, z, blds[k].pts)))),
+  });
   for (const [k, bld] of blds.entries()) {
     for (const g of bld.ghosts) ghostBuild(g);
     const pts = bld.pts;
@@ -512,7 +519,7 @@ export async function buildRealWorld(scene, renderer) {
       const made = [];
       for (const [t0, t1] of solid) if ((t1 - t0) * len > 0.05) made.push(collision.addSegment(ax + dx * t0, az + dz * t0, ax + dx * t1, az + dz * t1));
       if (partial) partialEdges.push({ k, ax, az, bx, bz, cuts, made });
-      if (len < 0.3 || partial) continue;
+      if (len < 0.3 || partial || keyBuildings.isKey(k)) continue; // (no zombie window spawn inside the facade of a key building)
       facadeSegs.push([ax, az, bx, bz, dz / len, -dx / len, Math.max(1, Math.round(len / BAY_W)), len]);
     }
     if (hasParts.has(k)) continue; // rendu à partir de ses parties 3D (cathédrale, églises…)
@@ -523,6 +530,7 @@ export async function buildRealWorld(scene, renderer) {
     if (door) roomQueue.push({ pts, edgeCuts, door });
   }
   for (const q of roomQueue) interiors.addRoom(q.pts, q.edgeCuts, q.door);
+  keyBuildings.prepare(); // ceiling holes above the stair shafts
 
   for (const g of tailGhosts) ghostBuild(g);
 
@@ -746,6 +754,7 @@ export async function buildRealWorld(scene, renderer) {
   collision.build();
   const nav = new NavGrid(halfX, halfZ, collision, polygons, NAV_CELL, NAV_MARGIN, 1300);
   nav.vaultCost = CONFIG.zombie.vault.cost;
+  nav.finalize = (b) => keyBuildings.stampNav(nav, b);
   nav.segFilter = (it) => !it.tram && collision._blocks(it, 0); // la grille du sol ignore les obstacles d'étage (garde-corps, murs des tours…) et les poteaux de caténaire (solides mais fins)
   nav.outside = (x, z) => !onIsland(x, z);
   nav.carve = (b) => {
@@ -2146,6 +2155,7 @@ export async function buildRealWorld(scene, renderer) {
   // ---------------------------------------------------------------- Finalisation navigation
   for (const c of trackTrees) c.off = true; // les arbres de la voie du tram n'existent plus (v0.38.0)
   interiors.finish(scene, collision, lightSources); // murs intérieurs, étagères, plafonniers (après tous les placements)
+  keyBuildings.build(); // upper floors, stairs, corridors (levels + collision + meshes)
   nav.polys = polygons.filter((p) => !p.room);      // les pièces sont évidées : la grille finale les rend praticables
   applyMapFixes();
   collision.build();
@@ -2239,6 +2249,9 @@ export async function buildRealWorld(scene, renderer) {
     }
   }
   interiors.reachable = roomsReachable;
+  for (const kb of keyBuildings.list) kb.zone = kb.room.zone ?? zoneOf(kb.foot[0], kb.foot[1]);
+  const kbDropped = keyBuildings.validate(nav); // sealed room / split floor / no stair route: the building keeps its ground room only
+  if (kbDropped.length) console.warn('[keyBuildings] demoted', JSON.stringify(kbDropped));
 
   const openingDoors = [];
   function openDoor(id) {
@@ -2271,10 +2284,11 @@ export async function buildRealWorld(scene, renderer) {
   }
   let reliefTimer = 0;
   let lightTimer = 0, lampScale = 1; // lampScale : l'Aube éteint peu à peu les lampadaires (summit.js)
+  let lightY = 0; // height of the local player: the light pool is sorted by 3D distance (key buildings stack floors)
   const assignLights = (px, pz) => {
     const sorted = lightSources
       .filter((s) => !(s.door && s.door.open) && !(s.box && !s.box.active) && !s.off)
-      .map((s) => ({ s, d: (s.x - px) ** 2 + (s.z - pz) ** 2 }))
+      .map((s) => ({ s, d: (s.x - px) ** 2 + (s.z - pz) ** 2 + ((s.y ?? lightY) - lightY) ** 2 }))
       .sort((a, b) => a.d - b.d)
       .slice(0, LIGHTS);
     lightPool.forEach((l, i) => {
@@ -2330,6 +2344,7 @@ export async function buildRealWorld(scene, renderer) {
    
     sky: skyApi, setLampScale: (k) => { lampScale = k; lightTimer = 0; },
     interiors, roomOf: (x, z) => interiors.roomOf(x, z), // rez-de-chaussée praticables (v0.78.0)
+    keyBuildings: keyBuildings.list, kbAt: keyBuildings.at, kbApi: keyBuildings, // key buildings (v0.88.0): upper floors, stairs, last stand room
     relief: arch.relief, // façades en relief (v0.45.0) : relief.setRange(m) selon la qualité
     ground: groundApi, // sol (v0.46.0) : champ de distance aux façades, plaques d'égout
     trees: treesApi, // arbres (v0.46.0) : trees.setMode('ball' | 'cards' | 'cards+branches') selon la qualité
@@ -2339,14 +2354,17 @@ export async function buildRealWorld(scene, renderer) {
     collide: (pos, r, out, ignore) => { const t = terrainY(pos.x, pos.z); pos.y -= t; try { return collision.resolve(pos, r, out, ignore); } finally { pos.y += t; } },
     rayHit: (ox, oy, oz, dx, dy, dz, maxT) => collision.rayHit(ox, oy - terrainY(ox, oz), oz, dx, dy, dz, maxT),
     // Hauteur du plafond à l'aplomb de (x, z) : voûtes de la cathédrale, passage sous immeuble (PASSAGE_H), sinon rien (ciel ouvert)
-    ceilingAt: (x, z) => {
+    // y (optional, relative to the terrain): the nearest ceiling above a body whose feet are at y (key buildings have several storeys)
+    ceilingAt: (x, z, y) => {
       const c = cath ? cath.ceilAt(x, z) : null;
       if (c != null) return c;
       if (axisInside(x, z)) return PASSAGE_H;
+      if (y != null && y > 0.5) { const kc = keyBuildings.ceilingAt(x, z, y); if (kc != null) return kc; }
       return interiors.roomOf(x, z) >= 0 ? CONFIG.interiors.height : Infinity; // plafond des rez-de-chaussée
     },
-    update(px, pz, dt) {
+    update(px, pz, dt, py) {
       sky.position.set(px, 0, pz);
+      keyBuildings.update(px, pz);
       for (let i = openingDoors.length - 1; i >= 0; i--) { // battants du grand portail
         const d = openingDoors[i];
         d.opening = Math.min(1, d.opening + dt * 0.6);
@@ -2357,6 +2375,7 @@ export async function buildRealWorld(scene, renderer) {
       if (waterNormal) { waterNormal.offset.x += dt * 0.004; waterNormal.offset.y += dt * 0.0025; }
       tramInfo?.update(dt); // feux des portes sur les voies (vert une fois la porte ouverte)
       lightTimer -= dt;
+      if (py != null) lightY = py;
       if (lightTimer <= 0) { lightTimer = 0.4; assignLights(px, pz); }
       for (const l of lightPool) { const src = l.userData.src; if (src && src.dyn) l.position.set(src.x, src.y, src.z); } // moving sources (the train's coach lights, v0.81.0)
       reliefTimer -= dt;

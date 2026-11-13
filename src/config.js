@@ -227,6 +227,24 @@ export const CONFIG = {
   // shelfChance : part des murs pleins garnis d'étagères ; plafonnier : lightColor / lightIntensity / lightDist ; range : distance d'affichage (m).
   interiors: { enabled: true, minArea: 25, maxArea: 3000, minHeight: 4, door: 2.4, doorHeight: 3.6, height: 3.6, wall: 0.22, floorY: 0.08,
     shelfChance: 0.5, lightColor: 0xffc890, lightIntensity: 7, lightDist: 9, range: 70, ambientDay: 0.35 }, // ambientDay : part de la lumière du ciel à l'intérieur en plein jour
+  // Key buildings ("Immeuble fortifié", keyBuildings.js): 1-2 per zone, a ground-floor room (interiors.js) plus 1-2 upper floors reached by a dog-leg
+  // stair, a central corridor, rooms and (top floor) a dead-end "last stand" room. Metres. Picked deterministically (no rnd): the best-fitting
+  // building within pickRadius of the zone seed, at least minSpacing from the others. Footprint limits apply to the inset outline / oriented box.
+  keyBuildings: {
+    perZone: 1, twoIn: ['Place Kléber', 'Place Gutenberg', 'Grandes Arcades', 'Petite France', "Grand'Rue", 'Ancienne Douane', 'Temple-Neuf'], // zones that get a second key building
+    exclude: ['Intérieur de la Cathédrale'],  // zone names without key building (every `pocket` zone is skipped as well)
+    pickRadius: 70, minSpacing: 40,
+    minArea: 100, maxArea: 700, targetArea: 380, minWidth: 8.5, minLength: 15, minRect: 0.7, // area fit score peaks at targetArea
+    maxUpper: 2, groundStorey: 4.2, storey: 3.25, ceiling: 3.0, // floor k is at groundStorey + storey * (k - 1); matches the facade storeys
+    // Dog-leg stair: two lanes of `lane` m with a `divider` wall between them, a landing of `landing` m at the turn, flights of `run` m, an access
+    // strip of `strip` m (floor level, in front of the flights). The corridor has the width of the shaft (2 x lane + divider).
+    stair: { lane: 1.1, divider: 0.2, landing: 1.2, run: 4.2, strip: 1.2, tread: 0.18, clearance: 0.2 },
+    room: { door: 1.3, minLen: 4, maxLen: 6.5, lastDepth: 5, minCorridor: 9, wall: 0.14 }, // door : doorway width; lastDepth : last stand room depth
+    nav: { cell: 0.4, margin: 0.35 },          // nav grid of an upper floor (finer than the street: 1.3 m doorways)
+    ceilingLamp: { color: 0xffc890, intensity: 6, dist: 8 },
+    minConnected: 0.8,                         // a floor whose largest connected part is below this share of its free cells drops the building (pockets of an odd outline are harmless)
+    visiblePad: 1,                             // m: upper floors are drawn while the camera is inside the footprint + this margin
+  },
   // Relief du terrain (v0.74.0, terrain.js). Mètres. undulation : amplitude de l'ondulation douce des rues et places (échelles wave1 / wave2 en m) ;
   // bank : profondeur des berges à l'eau (l'eau est posée à -bank) sur bankReach m ; parvis : surélévation de la place devant la cathédrale.
   terrain: { enabled: true, undulation: 0.3, wave1: 90, wave2: 35, bank: 0.6, bankReach: 10, parvis: { x: 110, z: 36, h: 0.4, r: 22, edge: 12 }, groundEdge: 5 },
