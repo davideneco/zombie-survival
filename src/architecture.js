@@ -833,36 +833,49 @@ export function createArchitecture({ renderer, plasterImg, plaster2Img, roofP, r
     *flushTileSteps(ix, iz) {
       const out = { walls: null, roof: null, proxy: { pos: null, idx: null }, digest: { verts: 0, tris: 0, sum: 0 } };
       const parts = [];
-      const mk = (b, mat, name, walls) => {
+      // (a generator: every pass over a big array yields every CHUNK elements, so that no step of a 65 k-vertex tile takes more than ~2 ms; same result)
+      const CHUNK = 16384;
+      const mk = function* (b, mat, name, walls) {
         if (!b.pos.length) return null;
         const n = b.pos.length / 3, par = walls ? (ix + iz) & 1 : (ix & 1) | ((iz & 1) << 1), fac = new Uint8Array(n * 2);
-        for (let v = 0; v < n; v++) { fac[v * 2] = walls ? stream.slot.get(b.fac[v * 2]) ?? 0 : 0; fac[v * 2 + 1] = b.fac[v * 2 + 1] + par; }
+        for (let v0 = 0; v0 < n; v0 += CHUNK) {
+          for (let v = v0, e = Math.min(n, v0 + CHUNK); v < e; v++) { fac[v * 2] = walls ? stream.slot.get(b.fac[v * 2]) ?? 0 : 0; fac[v * 2 + 1] = b.fac[v * 2 + 1] + par; }
+          yield;
+        }
         const g = new THREE.BufferGeometry();
         const pos = new Float32Array(b.pos);
         g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+        yield;
         g.setAttribute('normal', new THREE.Float32BufferAttribute(b.nor, 3));
+        yield;
         g.setAttribute('uv', new THREE.Float32BufferAttribute(b.uv, 2));
         g.setAttribute('color', new THREE.Float32BufferAttribute(b.col, 3));
+        yield;
         g.setAttribute('aFac', new THREE.BufferAttribute(fac, 2));
         const idx = n > 65535 ? new Uint32Array(b.idx) : new Uint16Array(b.idx);
         g.setIndex(new THREE.BufferAttribute(idx, 1));
+        yield;
         g.computeBoundingSphere(); g.computeBoundingBox();
         const m = new THREE.Mesh(g, mat);
         gpuOnly(m);
         m.name = name; m.castShadow = false; m.receiveShadow = true;
+        yield;
         let s = 0; for (let i = 0; i < pos.length; i++) s += pos[i];
         out.digest.verts += n; out.digest.tris += idx.length / 3; out.digest.sum += s;
         parts.push({ pos: new Float32Array(pos), idx }); // (the proxy gets its own copy: the mesh arrays are dropped after their upload)
         return m;
       };
-      out.walls = mk(wallB, stream.wallMat, 'tile:walls', true);
+      out.walls = yield* mk(wallB, stream.wallMat, 'tile:walls', true);
       yield;
-      out.roof = mk(roofB, roofMat, 'tile:roof', false);
+      out.roof = yield* mk(roofB, roofMat, 'tile:roof', false);
       for (const b of [roofB, wallB]) { b.pos = []; b.nor = []; b.uv = []; b.col = []; b.fac = []; b.idx = []; }
       yield;
       let np = 0, ni = 0; for (const q of parts) { np += q.pos.length; ni += q.idx.length; }
       const pp = new Float32Array(np), pi = new Uint32Array(ni); np = 0; ni = 0;
-      for (const q of parts) { for (let i = 0; i < q.idx.length; i++) pi[ni + i] = q.idx[i] + np / 3; pp.set(q.pos, np); np += q.pos.length; ni += q.idx.length; }
+      for (const q of parts) {
+        for (let i0 = 0; i0 < q.idx.length; i0 += CHUNK * 4) { for (let i = i0, e = Math.min(q.idx.length, i0 + CHUNK * 4); i < e; i++) pi[ni + i] = q.idx[i] + np / 3; yield; }
+        pp.set(q.pos, np); np += q.pos.length; ni += q.idx.length;
+      }
       out.proxy.pos = pp; out.proxy.idx = pi;
       return out;
     },

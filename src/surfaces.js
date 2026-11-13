@@ -85,7 +85,10 @@ function polygon(A, pts, y, rgb, k = 1) {
 const area2 = (p) => { let s = 0; for (let i = 0; i < p.length; i++) { const [ax, az] = p[i], [bx, bz] = p[(i + 1) % p.length]; s += ax * bz - bx * az; } return s / 2; };
 
 // D: tile data { roads, water, rivers, parks }; returns { surf, water } geometries (null when empty). `dedupe`: ids already drawn by an earlier call are skipped.
-export function buildSurfaces(D, dedupe = null) {
+// buildSurfaces runs the generator to the end; the tile streamer drives buildSurfacesSteps itself (it yields every STEP features so that no step of a tile build is long).
+export function buildSurfaces(D, dedupe = null) { const g = buildSurfacesSteps(D, dedupe); let r; while (!(r = g.next()).done); return r.value; }
+const STEP = 8;
+export function* buildSurfacesSteps(D, dedupe = null) {
   const W = CONFIG.world, S = W.surf, C = S.colors, Y = S.y, core = W.core;
   const inCore = (x, z) => x > core.x0 && x < core.x1 && z > core.z0 && z < core.z1;
   const centroidIn = (pts) => { let x = 0, z = 0; for (const q of pts) { x += q[0]; z += q[1]; } return inCore(x / pts.length, z / pts.length); };
@@ -93,7 +96,9 @@ export function buildSurfaces(D, dedupe = null) {
   const A = accumulator(S.uvScale), WT = accumulator(1), asphalt = rgbOf(C.asphalt), pave = rgbOf(C.pave), grass = rgbOf(C.grass), quay = rgbOf(C.quay), mark = rgbOf(C.mark);
   const roads = (D.roads || []).filter(fresh);
 
-  for (const o of D.parks || []) if (fresh(o) && !centroidIn(o.pts)) polygon(A, o.pts, Y.park, grass, 1);
+  let n = 0;
+  for (const o of D.parks || []) { if (fresh(o) && !centroidIn(o.pts)) polygon(A, o.pts, Y.park, grass, 1); if (++n % STEP === 0) yield; }
+  yield;
 
   // junction vertices of the asphalt roads and crossings (the centre line stops short of them)
   const isPave = (r) => S.paved.includes(r.hw), asph = roads.filter((r) => !isPave(r) && r.hw !== 'crossing' && !r.area);
@@ -107,8 +112,10 @@ export function buildSurfaces(D, dedupe = null) {
   for (const r of asph) {
     const hw = (r.w || S.width[r.hw] || S.width.other) / 2;
     strip(A, r.pts, hw, r.bridge ? Y.bridge : Y.asphalt, asphalt, S, skipCore);
+    if (++n % STEP === 0) yield;
   }
   for (const r of roads) {
+    if (++n % STEP === 0) yield;
     if (r.area) { if (!centroidIn(r.pts)) polygon(A, r.pts, Y.pave, pave, 1); continue; }
     if (!isPave(r)) continue;
     strip(A, r.pts, (r.w || S.width[r.hw] || S.width.other) / 2, r.bridge ? Y.bridge + 0.004 : Y.pave, pave, S, skipCore);
@@ -116,6 +123,7 @@ export function buildSurfaces(D, dedupe = null) {
   // centre lines of the wide roads (dashes), none near a junction
   const D_ = S.dash;
   for (const r of asph) {
+    if (++n % STEP === 0) yield;
     const w = r.w || S.width[r.hw] || S.width.other; if (w < D_.minWidth || r.bridge) continue;
     let s = 0, next = D_.gap * 0.5;
     for (let i = 0; i + 1 < r.pts.length; i++) {
@@ -135,6 +143,7 @@ export function buildSurfaces(D, dedupe = null) {
   // zebras: stripes parallel to the traffic, stacked along the walking line
   const Z = S.zebra;
   for (const r of roads) {
+    if (++n % (STEP * 4) === 0) yield; // (a crossing is a handful of quads)
     if (r.hw !== 'crossing' || r.um) continue;
     for (let i = 0; i + 1 < r.pts.length; i++) {
       const [ax, az] = r.pts[i], [bx, bz] = r.pts[i + 1], len = Math.hypot(bx - ax, bz - az); if (len < 2.5 || inCore(ax, az)) continue;
@@ -148,6 +157,7 @@ export function buildSurfaces(D, dedupe = null) {
   }
   // water: polygons, waterway lines the polygons do not cover; a stone coping runs around every polygon (the quay)
   for (const o of D.water || []) {
+    yield;
     if (!fresh(o) || centroidIn(o.pts)) continue;
     polygon(WT, o.pts, Y.water, [1, 1, 1], 1);
     const ring = area2(o.pts) > 0 ? o.pts : o.pts.slice().reverse(); // counter-clockwise in (x, z): the outside is at (dz, -dx) x sign
@@ -155,6 +165,9 @@ export function buildSurfaces(D, dedupe = null) {
     const outer = closed.map(([x, z], i) => { const a = closed[Math.max(0, i - 1)], b = closed[Math.min(closed.length - 1, i + 1)], dx = b[0] - a[0], dz = b[1] - a[1], l = Math.hypot(dx, dz) || 1; return [x + (dz / l) * off, z - (dx / l) * off]; });
     strip(A, outer, off, Y.quay, quay, { ...S, subdiv: 10 });
   }
-  for (const o of D.rivers || []) if (fresh(o)) strip(WT, o.pts, (S.river[o.ww] || 10) / 2, Y.water, [1, 1, 1], { ...S, jitter: 0 }, skipCore);
-  return { surf: A.geometry(), water: WT.geometry(true) };
+  for (const o of D.rivers || []) { if (fresh(o)) strip(WT, o.pts, (S.river[o.ww] || 10) / 2, Y.water, [1, 1, 1], { ...S, jitter: 0 }, skipCore); if (++n % STEP === 0) yield; }
+  yield;
+  const surf = A.geometry();
+  yield;
+  return { surf, water: WT.geometry(true) };
 }
