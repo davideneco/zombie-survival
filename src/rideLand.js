@@ -245,6 +245,7 @@ export function buildLand(api) {
     api.flash = { a: lampMatA, b: lampMatB, any: crossings.length > 0 };
   }
   stats.crossings = crossings.length;
+  route.crossingS = crossings.map((k) => k.s).sort((a, b) => a - b); // abscissas of the level crossings (intro.js : the bell sounds as the train passes)
 
   // ---------------------------------------------------------------- bridges : girders along the deck, piers over the water
   {

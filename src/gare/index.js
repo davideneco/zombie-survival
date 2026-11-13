@@ -282,6 +282,7 @@ export function buildGare(ctx) {
   const api = {
     plan, root, region, trees, arch, nav, doors, spawns, zoneIdx, zoneCenters, start, route, railNet, train, scenery, rail: data.rail, // (rail : rail.json, the tram transfer's line C route)
     bounds: plan.bounds, inArea, inCorridor, zoneOf,
+    zoneName: (x, z) => zoneNames[zoneOf(x, z)] || null, // 'Quais' | 'Hall de la Gare' | 'Place de la Gare' (null outside) : drives the station ambience (src/ambience.js)
     inRegion: (x, z) => inArea(x, z) && levels.inRegion(region, x, z),
     makeDoors, placeItems, beforeNavs, finishNav, pickGround, cullItems,
     stop: plan.stop, map: { image: map, view: { halfX: -plan.bounds.x0, halfZ: -plan.bounds.z0, scale: mapScale }, crop: { ...plan.bounds }, title: 'GARE CENTRALE — STRASBOURG' },

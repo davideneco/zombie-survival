@@ -2,6 +2,8 @@
 // Tous les sons sont programmés à l'avance sur l'horloge audio (option `at`, en secondes) : pas de setTimeout.
 import { Music } from './music.js';
 import { rnd, clamp, satCurve, noiseBuffer, reverbBuffer } from './dsp.js';
+import { CONFIG } from './config.js';
+import { buildCity, buildStation } from './audioAmbience.js';
 
 // Un coup de feu = quatre couches + l'écho de la rue :
 //   claque (bruit aigu : l'onde de choc), corps (bruit qui s'assombrit : l'explosion de la poudre),
@@ -610,6 +612,25 @@ export class Sfx {
     this._tone('square', 190, 90, 0.09, 0.12 * v);
     this._tone('triangle', 520, 380, 0.12, 0.08 * v, { at: 0.1 });
   }
+  tramBell(v = 1, n = 2) { // tram warning bell : `n` quick dings (a bright bell: sine partials 1.5x and 2x above, a metallic tick)
+    if (!this.ctx || v < 0.03) return;
+    const k = v * CONFIG.audio.tram.bell;
+    for (let i = 0; i < n; i++) {
+      const at = i * 0.27;
+      this._tone('sine', 1720, 1700, 0.55, k, { at, atk: 0.002, send: 0.3 });
+      this._tone('sine', 2580, 2560, 0.35, k * 0.4, { at, atk: 0.002 });
+      this._tone('sine', 3440, 3420, 0.2, k * 0.2, { at, atk: 0.002 });
+      this._noise(0.02, k * 0.6, 4200, 'bandpass', { at, q: 2, atk: 0.001 });
+    }
+  }
+  tramDoors(open = true, v = 1) { // tram doors : warning beeps, the leaves slide (hiss), and a thump when they shut
+    if (!this.ctx || v < 0.03) return;
+    const k = v * CONFIG.audio.tram.doors, n = open ? 3 : 4, gap = open ? 0.17 : 0.12;
+    for (let i = 0; i < n; i++) this._tone('square', 1320, 1320, 0.07, k, { at: i * gap });
+    const t0 = n * gap + 0.1;
+    this._noise(0.8, 2 * k, 1000, 'bandpass', { at: t0, q: 0.7, atk: 0.1, f1: open ? 1600 : 700 });
+    if (!open) this._noise(0.12, 4 * k, 200, 'lowpass', { at: t0 + 0.8 });
+  }
   tramBrake(v = 1, speed = 8) { // frein : grincement aigu et frottement
     if (!this.ctx || v < 0.03) return;
     const k = Math.min(1, speed / 14);
@@ -630,24 +651,34 @@ export class Sfx {
     const sq = noise('bandpass', 3200, 18, 0);
     const motor = c.createOscillator(), mg = c.createGain(); motor.type = 'sawtooth'; mg.gain.value = 0; const ml = c.createBiquadFilter(); ml.type = 'lowpass'; ml.frequency.value = 900;
     motor.connect(ml).connect(mg).connect(out); motor.start();
+    // broken window (review) : the gust is not a steady hiss, it buffets (slow amplitude LFO growing with the gust) and a thin whistle rides the glass edge
+    const R = CONFIG.audio.ride, buffet = c.createOscillator(), bg = c.createGain(), whistle = c.createOscillator(), whg = c.createGain();
+    buffet.frequency.value = R.buffet; bg.gain.value = 0; buffet.connect(bg).connect(gustN.gn.gain); buffet.start();
+    whistle.type = 'sine'; whistle.frequency.value = 1100; whg.gain.value = 0; whistle.connect(whg).connect(out); whistle.start();
+    let lastSet = -1, lastVol = -1;
     const squeal = c.createOscillator(), sg = c.createGain(), lfo = c.createOscillator(), lg = c.createGain();
     squeal.type = 'triangle'; squeal.frequency.value = 2900; sg.gain.value = 0; lfo.frequency.value = 5.5; lg.gain.value = 60;
     lfo.connect(lg).connect(squeal.frequency); squeal.connect(sg).connect(out); squeal.start(); lfo.start();
     return {
       set: (speed, brake, vol, gust = 0) => {
-        const t = c.currentTime, k = Math.min(1, speed / 22), sqk = brake > 0.05 && speed > 0.4 && speed < 9 ? brake * Math.min(1, (9 - speed) / 4) * Math.min(1, speed / 1.2) : 0;
+        const t = c.currentTime;
+        if (t - lastSet < R.setEvery && Math.abs(vol - lastVol) < 0.05) return; // called every frame : one update per setEvery s is plenty (fewer automation events)
+        lastSet = t; lastVol = vol;
+        const k = Math.min(1, speed / 22), sqk = brake > 0.05 && speed > 0.4 && speed < 9 ? brake * Math.min(1, (9 - speed) / 4) * Math.min(1, speed / 1.2) : 0;
         rumble.gn.gain.setTargetAtTime((0.25 + 0.55 * k) * Math.min(1, speed / 2), t, 0.15);
         roar.fl.frequency.setTargetAtTime(220 + 900 * k, t, 0.2); roar.gn.gain.setTargetAtTime(0.32 * k, t, 0.15);
         wind.gn.gain.setTargetAtTime(0.05 * k * k, t, 0.2);
         gustN.gn.gain.setTargetAtTime(gust * (0.08 + 0.5 * k), t, 0.25); gustN.fl.frequency.setTargetAtTime(380 + 900 * k, t, 0.3);
         motor.frequency.setTargetAtTime(60 + 260 * k, t, 0.2); mg.gain.setTargetAtTime(0.025 * Math.min(1, speed / 3) * (1 - 0.6 * brake), t, 0.2);
         sg.gain.setTargetAtTime(0.03 * sqk, t, 0.08); sq.gn.gain.setTargetAtTime(0.18 * sqk, t, 0.08);
+        bg.gain.setTargetAtTime(gust * R.buffetDepth * k, t, 0.3); // (the LFO adds to the gust gain : the wind swells and drops 5 times a second)
+        whistle.frequency.setTargetAtTime(900 + 1100 * k, t, 0.3); whg.gain.setTargetAtTime(R.whistle * gust * k, t, 0.3);
         out.gain.setTargetAtTime(vol, t, 0.2);
       },
       stop: () => {
         const t = c.currentTime;
         out.gain.setTargetAtTime(0, t, 0.25);
-        for (const n of [rumble.s, roar.s, wind.s, gustN.s, sq.s, motor, squeal, lfo]) n.stop(t + 1.5);
+        for (const n of [rumble.s, roar.s, wind.s, gustN.s, sq.s, motor, squeal, lfo, buffet, whistle]) n.stop(t + 1.5);
       },
     };
   }
@@ -691,6 +722,71 @@ export class Sfx {
     for (let i = 0; i < 3; i++) this._tone('square', 1480, 1480, 0.09, 0.05 * v, { at: i * 0.18 });
     this._noise(0.9, 0.12 * v, 900, 'bandpass', { at: 0.55, q: 0.8 });
     this._noise(0.12, 0.25 * v, 220, 'lowpass', { at: 1.45 });
+  }
+
+  // ------------------------------------------------------------ Footsteps and ambience loops
+  // surface : 'stone' (cobble) | 'wood' (interior, upper floors) | 'metal' (train, tram) | 'concrete' (station) ; v : 0..1 (distance, sprint, crawl)
+  step(surface = 'stone', v = 1) {
+    const A = CONFIG.audio.step;
+    if (!this.ctx || v < 0.03) return;
+    const S = A.surfaces[surface] || A.surfaces.stone, k = v * A.vol * S.vol, p = S.pitch * rnd(0.88, 1.12);
+    if (surface === 'wood') {
+      this._tone('triangle', 190 * p, 95 * p, 0.1, 0.6 * k);
+      this._noise(0.08, 0.3 * k, 700 * p, 'bandpass', { q: 1.6 });
+      if (Math.random() < 0.12) this._tone('triangle', 300 * p, 240 * p, 0.22, 0.05 * k, { at: 0.03 }); // a board creaks
+    } else if (surface === 'metal') {
+      this._noise(0.05, 0.4 * k, 2400 * p, 'bandpass', { q: 3 });
+      this._tone('square', 460 * p, 300 * p, 0.05, 0.12 * k);
+      this._tone('sine', 820 * p, 790 * p, 0.22, 0.12 * k, { at: 0.005 }); // the floor rings
+      this._tone('sine', 95, 60, 0.12, 0.35 * k);
+    } else if (surface === 'concrete') {
+      this._noise(0.05, 0.45 * k, 2200 * p, 'lowpass');
+      this._tone('sine', 140 * p, 85 * p, 0.07, 0.4 * k);
+      this._noise(0.02, 0.18 * k, 4500, 'highpass', { at: 0.003 });
+    } else { // stone, cobblestones : a dull tock and a gritty tick
+      this._noise(0.06, 0.55 * k, 1100 * p, 'lowpass', { f1: 500 });
+      this._noise(0.025, 0.25 * k, 3800 * p, 'highpass', { at: 0.004 });
+      this._tone('sine', 120 * p, 65 * p, 0.07, 0.5 * k);
+    }
+  }
+  // City ambience : { start, update(night 0..1, zoneIndex, hour?, level?), stop } ; zoneIndex < 0 fades it out (see src/audioAmbience.js)
+  createCityAmbience() { return this._ambience(buildCity); }
+  // Station ambience : { start, update(zoneName, night, level?), stop } ; a null zoneName fades it out
+  createStationAmbience() { return this._ambience(buildStation); }
+  _ambience(build) { // the graph exists only between start() and stop() (no node while idle)
+    if (!this.ctx) return null;
+    let g = null;
+    return {
+      start: () => { if (!g) g = build(this); },
+      update: (a, b, c, d) => { if (g) g.update(a, b, c, d); },
+      stop: () => { if (g) { g.stop(); g = null; } },
+      get running() { return !!g; },
+    };
+  }
+  // Level crossing seen from the train : one ding of the electric bell. v 0..1, doppler = pitch ratio (c / (c + closing speed) : above 1 approaching)
+  crossingDing(v = 1, doppler = 1) {
+    if (!this.ctx || v < 0.03) return;
+    const f = CONFIG.audio.crossing.freq * doppler;
+    this._tone('sine', f, f * 0.995, 0.3, 0.3 * v, { atk: 0.002, send: 0.15 });
+    this._tone('sine', f * 2.4, f * 2.38, 0.18, 0.09 * v, { atk: 0.002 });
+    this._noise(0.02, 0.12 * v, 4000, 'bandpass', { q: 2, atk: 0.001 });
+  }
+  // The train crosses a bridge : a hollow boom of the deck, the girders drumming (resonant noise) for `dur` s, a low tone ; v 0..1
+  bridgeRumble(v = 1, dur = 3) {
+    if (!this.ctx || v < 0.03) return;
+    dur = clamp(dur, 0.6, 12);
+    const c = this.ctx, t = c.currentTime, g = c.createGain(), e = t + dur;
+    g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(v, t + 0.25); g.gain.setValueAtTime(v, Math.max(t + 0.25, e - 0.4)); g.gain.linearRampToValueAtTime(0.0001, e + 0.4);
+    g.connect(this.bus);
+    const layer = (type, f, q, vol) => { // a looping noise through a filter : a steady plateau (the girders drum for the whole crossing)
+      const s = c.createBufferSource(), fl = c.createBiquadFilter(), gn = c.createGain();
+      s.buffer = this.noiseBuf; s.loop = true; fl.type = type; fl.frequency.value = f; fl.Q.value = q; gn.gain.value = vol;
+      s.connect(fl).connect(gn).connect(g); s.start(t, Math.random() * 1.5); s.stop(e + 0.45);
+    };
+    layer('lowpass', 180, 0.7, 0.5); layer('bandpass', 420, 5, 0.16);
+    const o = c.createOscillator(), og = c.createGain(); // low drone of the deck
+    o.type = 'sine'; o.frequency.value = 52; og.gain.value = 0.3; o.connect(og).connect(g); o.start(t); o.stop(e + 0.45);
+    this._tone('sine', 90, 60, 0.3, 0.45 * v); // the entry boom
   }
 
   // ------------------------------------------------------------ Interface et ambiance

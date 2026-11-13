@@ -26,6 +26,7 @@ import { installTram } from './tram.js';
 import { installTramWalk, pushOut } from './tramInterior.js';
 import { installTrain } from './train.js';
 import { installIntro } from './intro.js';
+import { installAmbience } from './ambience.js';
 import { installRideZombies } from './rideZombies.js';
 import { wreckMaterial } from './vehicleModels.js';
 import { installLauncher } from './launcher.js';
@@ -1783,6 +1784,7 @@ installTram(game, { world, scene, hud, sfx });
 installTramWalk(game, { world, hud, sfx }); // intérieur praticable de la rame (v0.40.0)
 installTrain(game, { world, hud }); // regional train parked at quai 1 of the station (v0.80.0) : walk frame, zombies boarding
 installIntro(game, { world, hud, sfx }); // train intro (v0.81.0) : the ride into the station, then round 1
+installAmbience(game, { world, sfx }); // city / station background sound by area and night (ambience.js)
 installRideZombies(game, { world, scene, sfx }); // zombies of the train ride (v0.82.0) : trackside, breaches at the windows, the gangway
 RemotePlayer.rideOf = (id) => game.rideById(id); // coéquipiers debout dans une rame : leur position est dans le repère de la rame
 installLauncher(game, { world, scene, fx });
@@ -2754,6 +2756,7 @@ function frame() {
   game.scoreboard?.update(dt);
   game.chat?.update(dt);
   updateMusicMood();
+  game.ambienceFrame?.(dt);
   // ombres de la lune : recalculées une image sur deux (à chaque image en qualité haute) : ~20 % de rendu en moins
   shadowFrame++;
   if (shadowFrame % (gfx.level?.shadowEvery ?? 2) === 0) renderer.shadowMap.needsUpdate = true;

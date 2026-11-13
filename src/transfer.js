@@ -321,6 +321,7 @@ export function installTransfer(game, { world, hud, sfx, scene }) {
       game.xfRide.safe = false;
       hud.announce(dest.title, dest.sub, 3500);
       sfx.tramChime?.(true, 0.8);
+      sfx.tramDoors?.(true, 0.8); // : the doors beep and slide open at the arrival stop
       game.sendPlayerState?.();
     }
     if (!game.isClient && S.pids.length) hostFollow(st.area, dest.id);
@@ -403,6 +404,11 @@ export function installTransfer(game, { world, hud, sfx, scene }) {
       if (S.state === STATE.call) {
         S.t += dt;
         S.call.pose(S.t, pose); car.place(pose.s, pose.v, pose.doors);
+        if (!S.ev.open && pose.doors > 0.05) { // : the tram rings its bell and opens its doors (heard within 40 m of the terminal)
+          S.ev.open = 1;
+          const tm = S.stop.terminal;
+          if (Math.hypot(p.pos.x - tm.x, p.pos.z - tm.z) < 40) { sfx.tramBell?.(0.8); sfx.tramDoors?.(true, 0.6); }
+        }
         if (S.t >= X.countdown && !this.isClient) { // host : who boards, where the car stops
           const st = S.stop, players = [[myId(), p], ...this.remotes.entries()];
           const pids = players.filter(([, pl]) => pl && !pl.dead && !pl.downed && aboard(st, pl)).map(([id]) => id);
@@ -420,7 +426,12 @@ export function installTransfer(game, { world, hud, sfx, scene }) {
           car.place(pose.s, pose.v, pose.doors);
           const R = this.xfRide;
           // events (once each)
-          if (!S.ev.dep && S.t >= X.doorTime) { S.ev.dep = 1; if (R) { showSub(`Tram C — direction ${dest.name}`, 4); sfx.tramChime?.(false, 0.6); } }
+          if (!S.ev.dep && S.t >= X.doorTime) {
+            S.ev.dep = 1;
+            if (R) { showSub(`Tram C — direction ${dest.name}`, 4); sfx.tramChime?.(false, 0.6); }
+            const tm = st.terminal; // : doors closing, then the departure bell (riders and anyone within 40 m of the terminal)
+            if (R || Math.hypot(p.pos.x - tm.x, p.pos.z - tm.z) < 40) { sfx.tramDoors?.(false, R ? 0.8 : 0.5); sfx.tramBell?.(R ? 0.7 : 0.5, 3); }
+          }
           if (!S.ev.pass && passStop && pose.leg === 1 && (pose.s - passStop.s) * Math.sign(pose.v || 1) > X.announce.passAfter) { S.ev.pass = 1; if (R) { showSub(`Prochain arrêt : ${dest.name}`, 5); sfx.trainChime?.(0.5); } }
           if (!S.ev.brake && pose.leg === T.profs.length - 1 && pose.ph === 'ride') { S.ev.brake = 1; if (R) sfx.tramBrake?.(0.5, Math.abs(pose.v)); }
           if (!S.ev.arr && S.t >= T.tArrive) { S.ev.arr = 1; arrive(); }

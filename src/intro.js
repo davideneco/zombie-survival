@@ -99,6 +99,31 @@ export function installIntro(game, { world, hud, sfx }) {
   };
   const holdHour = (tau) => { game.summitFx?.holdNight(I.hour + ((I.hourEnd ?? I.hour) - I.hour) * clamp(tau / P.T, 0, 1)); hourT = tau; };
 
+  // ---------------------------------------------------------------- sounds of the line (local) : level-crossing bells with doppler, rumble on the bridges
+  // The listener is where the local player stands in the train (else car 2) ; s is the abscissa along the route (train.s = the nose).
+  const AC = CONFIG.audio, crossS = train.route.crossingS || [], rideBridges = (train.route.bridges || []).filter((b) => b.s1 - b.s0 >= AC.bridge.minLen);
+  let lastS = -1, dingT = 0;
+  const listenerS = () => { const o = game.player?.onTram, u = o && o.v === train ? o.u : train.veh[Math.min(2, train.n - 1)].uc; return train.s - (train.L / 2 - u); };
+  function lineSounds(dt) {
+    if (S.ph !== 'ride') { lastS = -1; return; }
+    const sp = listenerS(), vel = train.speed;
+    if (lastS >= 0) {
+      for (let i = 0; i < rideBridges.length; i++) {
+        const b = rideBridges[i];
+        if (lastS < b.s0 && sp >= b.s0 && sp - lastS < 5) sfx.bridgeRumble?.(AC.bridge.vol * (b.over === 'water' ? AC.bridge.water : 1), (b.s1 - b.s0) / Math.max(vel, 1)); // (entering : rumbles for the crossing time)
+      }
+    }
+    lastS = sp;
+    dingT -= dt;
+    if (dingT > 0 || !crossS.length) return;
+    let best = Infinity, bd = 0;
+    for (let i = 0; i < crossS.length; i++) { const d = crossS[i] - sp; if (Math.abs(d) < Math.abs(best)) { best = d; bd = Math.abs(d); } }
+    if (bd >= AC.crossing.range) return;
+    dingT = AC.crossing.every;
+    const fall = 1 - bd / AC.crossing.range; // quiet far away, loud at the crossing
+    sfx.crossingDing?.(AC.crossing.vol * fall * fall, (AC.crossing.sound + (best > 0 ? vel : -vel)) / AC.crossing.sound); // doppler : pitch up approaching (best > 0 : ahead), down after
+  }
+
   // ---------------------------------------------------------------- phases
   function begin(tau = 0, { late = false } = {}) {
     S.on = true; S.tau = tau; S.corr = 0; S.hold = 0; S.syncT = 0; S.stopTau = P.T;
@@ -191,6 +216,7 @@ export function installIntro(game, { world, hud, sfx }) {
     const w = Math.round(clamp(S.hold / I.skipHold, 0, 1) * 100);
     if (w !== skipW) { skipW = w; skipBar.style.width = w + '%'; }
     if (S.hold >= I.skipHold) { S.hold = 0; skip(); }
+    lineSounds(dt);
     // rolling sound (local), host clock
     if (S.sound) S.sound.set(train.speed, S.ph === 'ride' ? P.braking(tau) : 0, p.onTram?.v === train ? 0.9 : 0.35, game.rideWind?.() || 0);
     if (game.isHost && game.isMultiplayer) { S.syncT -= dt; if (S.syncT <= 0) { S.syncT = I.sync; game.net?.send({ t: 'tn_sync', tau: Math.round(S.tau * 1000) / 1000, ph: S.ph }); } }

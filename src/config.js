@@ -736,6 +736,39 @@ export const CONFIG = {
     sway: { roll: 0.4, bob: 0.015, hz: 1.4, refSpeed: 22, curve: 0.35, jolt: 0.006, joint: 25, axle: 2.6, bogie: 17.3 },
   },
 
+  // ------------------------------------------------------------------ Procedural audio (src/audio.js, src/ambience.js) : volumes (0..1 of the bus), intervals (s), ranges (m)
+  audio: {
+    // footsteps (Sfx.step, player.js) : one step per half bob cycle ; surface = stone (cobble) | wood (interior, upper floor) | metal (train, tram) | concrete (station)
+    step: {
+      vol: 0.3, sprintMul: 1.35, downedMul: 0.4,           // base volume, x when sprinting, x when crawling
+      surfaces: { stone: { vol: 1, pitch: 1 }, wood: { vol: 1.1, pitch: 0.8 }, metal: { vol: 0.9, pitch: 1.3 }, concrete: { vol: 0.85, pitch: 1.05 } },
+    },
+    // ambience mixer (ambience.js) : update period, cross-fade time between the city, the station and the train ride, level while the game is paused
+    mix: { period: 0.1, fade: 1.5, pausedMul: 0.3, city: 1, station: 1 },
+    // city ambience (Sfx.createCityAmbience) : wind (day / night level), crickets (night only), far dogs, church bells at the listed game hours
+    city: {
+      windDay: 0.05, windNight: 0.09,
+      crickets: 0.012,                                       // peak gain of the insect trills at full night
+      dog: { vol: 0.035, every: [16, 42], dayChance: 0.25 },  // far barks : delay range between two barking sessions (s), probability of one by day
+      bell: { vol: 0.05,hours: [7, 12, 18, 21], maxStrokes: 6, gap: 2.1 }, // far cathedral bell : game hours, strokes cap, seconds between strokes
+      zoneWind: { 8: 0.2, 5: 1.25, 6: 1.25, 15: 1.2, 16: 1.3, 26: 1.3, 30: 1.3, 2: 0.7, 3: 0.75, 11: 0.8 }, // wind multiplier by zone index (cathedral interior, squares and quays, narrow streets)
+    },
+    // station ambience (Sfx.createStationAmbience) : room tone, echo of the hall, announcements murmur (a chime then a phrase), pigeons (by day)
+    station: {
+      room: 0.045, wind: 0.03,                               // room tone gain, wind along the platforms (zone Quais)
+      echo: { time: 0.21, feedback: 0.42, mix: 0.5 },        // hall echo : delay (s), feedback, send level
+      voice: { vol: 0.04, every: [24, 55], dur: [3.2, 5.5], chime: 0.08 }, // distant PA : delay between phrases, phrase length (s), chime volume
+      pigeon: { vol: 0.05, every: [5, 16], nightChance: 0.1 }, // coos : delay range (s), probability by night
+      zoneMul: { 'Hall de la Gare': 1, 'Quais': 0.8, 'Place de la Gare': 0.6 }, // overall level by zone
+    },
+    // trams (Sfx.tramBell / tramDoors, transfer.js) and the train ride wind at broken windows (createTrainSound)
+    tram: { bell: 0.22, doors: 0.1 },
+    ride: { setEvery: 0.05, buffet: 5.3, buffetDepth: 0.3, whistle: 0.008 }, // min s between two set() updates, window buffeting (Hz, depth), whistle gain
+    // intro (src/intro.js) : level-crossing bell with doppler, bridge rumble
+    crossing: { range: 170, every: 0.36, vol: 0.5, freq: 1180, sound: 343 }, // audible range (m), interval of the dings (s), volume at 0 m, bell pitch (Hz), speed of sound (m/s)
+    bridge: { vol: 0.5, minLen: 12, water: 1.25 },           // rumble volume, shortest bridge that rings (m), x over water
+  },
+
   // ------------------------------------------------------------------ Train intro (v0.81.0, src/intro.js) : the game starts in the moving regional
   // train, which comes from the south-west and stops at quai 1 of the station ; then round 1 starts at the station (zone Quais).
   // The train abscissa s(τ) is a pure function of the intro clock τ (s) : the speed profile below is integrated exactly (linear speed between

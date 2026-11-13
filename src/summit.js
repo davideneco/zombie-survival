@@ -231,6 +231,8 @@ export function installSummit(game, { world, scene, hud, sfx, fx, hemi, moon, mo
     // cycle jour / nuit : heure du HUD (pas de clockMinutes), moment de la journée, bonus de vie nocturne des zombies
     clockText() { const m = Math.floor(dn.hour * 60 / DN().clockMinutes) * DN().clockMinutes; return `${String(Math.floor(m / 60) % 24).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`; },
     clockVisible() { return dn.cycle && mode() === 'auto'; },
+    get skyK() { return sky.k; },   // 0 night .. 1 day (ambience sounds)
+    get hour() { return dn.hour; }, // game clock, 0..24
     phaseName() { const k = sky.k; return k < 0.12 ? 'NUIT' : k < 0.7 ? (dn.hour < 12 ? 'AUBE' : 'CRÉPUSCULE') : 'JOUR'; },
     // train intro (v0.81.0) : hold the night at `hour` (any day / night setting) ; null : release (auto : the clock resumes from that hour,
     // fixed settings : the sky eases back to their hour)

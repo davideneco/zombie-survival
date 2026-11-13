@@ -528,6 +528,7 @@ export class Player {
     // ---- caméra ----
     this.recoil *= Math.max(0, 1 - dt * 8);
     this.bobT += dt * (sprinting ? 12 : 8) * (moving && onGround ? 1 : 0);
+    if (moving && onGround) { const n = Math.floor(this.bobT / Math.PI); if (n !== this._stepN) { this._stepN = n; this.footstep(sprinting); } } // one footfall per half bob cycle
     const bob = moving && onGround ? Math.sin(this.bobT) * (sprinting ? 0.06 : 0.035) : 0;
     const eyeH = (this.downed ? 0.55 : P.eye) + (this.vault ? CONFIG.vault.camLift * Math.sin(Math.PI * Math.min(1, this.vault.t / this.vault.dur)) : 0);
     let sh = this.game.shake || 0;
@@ -921,6 +922,21 @@ export class Player {
 
   // Atterrissage après `air` s en l'air et une chute de `drop` m : le PHD Flopper déclenche son onde explosive si le saut est parti
   // d'un sprint ou si la chute dépasse fallHeight. Ni en moto, ni à terre, avec une recharge de cooldown s.
+  // surface under the feet (footstep sound) : metal (train / tram floor), concrete (station), wood (ground-floor rooms, floors and stairs of the key buildings), else cobble
+  surface() {
+    if (this.onTram) return 'metal';
+    const w = this.world, r = this.region | 0;
+    if (r) {
+      if (w.gare && r === w.gare.region) return 'concrete';
+      const R = w.levels?.regions[r];
+      return R && R.kb !== undefined ? 'wood' : 'stone';
+    }
+    return w.roomOf && w.roomOf(this.pos.x, this.pos.z) >= 0 ? 'wood' : 'stone';
+  }
+  footstep(sprinting) {
+    const A = CONFIG.audio.step;
+    this.game.sfx.step?.(this.surface(), (sprinting ? A.sprintMul : 1) * (this.downed ? A.downedMul : 1));
+  }
   onLand(air, drop) {
     const F = CONFIG.phd;
     if (!this.perks.phdflopper || this.vehicle || this.downed || this.dead || this.flopCd > 0 || air < F.minAir) return;
