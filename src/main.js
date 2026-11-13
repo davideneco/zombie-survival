@@ -37,6 +37,7 @@ import { installBarricades } from './barricades.js';
 import { installBarrels } from './barrels.js';
 import { installTransfer } from './transfer.js';
 import { installTiles } from './tiles.js';
+import { installBridge } from './district/bridge.js';
 import { installKeybinds } from './keybinds.js';
 import { installKeysMenu } from './keysMenu.js';
 import { installChat } from './chat.js';
@@ -707,6 +708,9 @@ const game = {
 
     // 4c) Sous-station du tram (Homme de Fer) : 2000 pts, une fois pour l'équipe
     if (this.nearSubstation?.()) { this.useSubstation(); return; }
+
+    // 4c2) Pont de Krutenau (porte payee) : traverser
+    if (this.nearBridge?.()) { this.useBridge(); return; }
 
     // 4d) Borne du tram de transfert (Gare Centrale <-> Homme de Fer)
     if (this.nearTransfer?.()) { this.useTransfer(); return; }
@@ -1737,6 +1741,8 @@ const game = {
       promptText = this.pumpPrompt(this.nearPump());
     } else if (this.nearSubstation?.()) {
       promptText = this.substationPrompt();
+    } else if (this.nearBridge?.()) {
+      promptText = this.bridgePrompt();
     } else if (this.nearTransfer?.()) {
       promptText = this.transferPrompt();
     } else if (this.nearVehicle()) {
@@ -1785,6 +1791,7 @@ installUnstick(game, { world, hud, sfx });
 installBarricades(game, { scene, world, hud, sfx }); // window barricades of the key buildings (barricades.js)
 installBarrels(game, { scene, world, sfx }); // explosive barrels next to them (barrels.js)
 installTransfer(game, { world, hud, sfx, scene }); // tram Gare Centrale <-> Homme de Fer (v0.79.0)
+installBridge(game, { world, hud, sfx }); // gate + bridge to the Krutenau district (district/bridge.js)
 installTiles(game, { world, scene, camera }); // world tiles outside the island core, streamed around the local camera (step B, tiles.js)
 { // menu : « Départ » (train intro / Gare Centrale / Grande Île au hasard), remembered locally ; default CONFIG.start (v0.81.0)
   const sel = document.getElementById('startArea'), qs = new URLSearchParams(location.search);
@@ -2067,6 +2074,7 @@ function setupNetworkHandlers(net) {
     if (z) z.damage(999999, m.head);
   });
 
+  net.on('br_x', (m) => { if (game.isHost) game.hostBridgeFollow?.(m.fa, m.to, m.x, m.z, game.remotes.get(m.from)); }); // a client crossed the Krutenau bridge: the host moves the zombies it left behind
   net.on('z_hit', (m) => {
     if (!game.isHost) return;
     const z = game.zombies.find((zb) => zb.id === m.zid);

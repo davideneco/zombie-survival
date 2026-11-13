@@ -46,6 +46,8 @@ async function buildDataInNode() {
   globalThis.fetch = async (url) => {
     const m = String(url).match(/\/data\/(area|gare|rail)\.json$/); // l'île et la Gare de Strasbourg (v0.79.0)
     if (m) return { ok: true, json: async () => JSON.parse(fs.readFileSync(path.join(ROOT, `public/data/${m[1]}.json`), 'utf8')) };
+    const t = String(url).match(/\/data\/tiles\/([\w.-]+)$/); // world tiles (Krutenau district, step B)
+    if (t) return { ok: true, json: async () => JSON.parse(fs.readFileSync(path.join(ROOT, `public/data/tiles/${t[1]}`), 'utf8')) };
     throw new Error('Unexpected fetch: ' + url);
   };
   const { buildRealWorld } = await import(path.join(ROOT, 'src/realworld.js'));

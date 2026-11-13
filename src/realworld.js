@@ -27,6 +27,7 @@ import { parkingLayout, buildParkingDecor } from './parking.js';
 import { bikeStationLayout, buildBikeStationDecor } from './bikeStation.js';
 import { makePerkMachine, makeAmmoStation, makeWallBuy, addPosts, makeMysteryBox, makePackAPunch, makeAstronomicalClock, castShadowBiggest } from './machines.js';
 import { loadGareData, buildGare } from './gare/index.js';
+import { loadKrutenauData, buildKrutenau } from './district/index.js';
 
 // =====================================================================
 //  Monde réel : la Grande Île de Strasbourg (données OpenStreetMap)
@@ -169,7 +170,7 @@ const NO_EDGE = -2; // (détection des portes) pas de limite entre deux cases
 
 export async function buildRealWorld(scene, renderer) {
   const rnd = seeded(20240611);
-  const [data, gareData] = await Promise.all([fetch('/data/area.json').then((r) => r.json()), loadGareData()]); // gare : Gare de Strasbourg (v0.79.0, src/gare/)
+  const [data, gareData, krData] = await Promise.all([fetch('/data/area.json').then((r) => r.json()), loadGareData(), loadKrutenauData()]); // gare : Gare de Strasbourg (v0.79.0, src/gare/)
   const halfX = data.half, halfZ = data.halfZ || data.half;
   const Z = CONFIG.sector;
 
@@ -2155,6 +2156,32 @@ export async function buildRealWorld(scene, renderer) {
     }
   }
 
+  // ---------------------------------------------------------------- Krutenau (step B chunk 2, src/district/): a walkable district outside the core, built after the station
+  // (its zones, its door and its items come last: the island's draws, zones, doors and digest do not move). The gate stands on the island's east edge.
+  let kr = null;
+  if (krData) {
+    const sceneBefore = new Set(scene.children);
+    const island = { find: (hx, hz, snap) => { // the reachable street cell nearest to the hint with 3.5 m of free ground around it; the gate spans the street (perpendicular to its axis)
+      let best = null, bd = Infinity;
+      for (let dz = -snap; dz <= snap; dz += 1.5) for (let dx = -snap; dx <= snap; dx += 1.5) {
+        const x = hx + dx, z = hz + dz, d = dx * dx + dz * dz;
+        if (d >= bd || !reachAt(x, z)) continue;
+        let free = true; for (let a = 0; a < 8 && free; a++) free = !nav.isBlockedAt(x + Math.cos(a * Math.PI / 4) * 3.5, z + Math.sin(a * Math.PI / 4) * 3.5);
+        if (free) { best = [x, z]; bd = d; }
+      }
+      if (!best) return null;
+      const run = (a) => { let r = 0; while (r < 14 && !nav.isBlockedAt(best[0] + Math.cos(a) * r, best[1] + Math.sin(a) * r)) r += 1; return r; };
+      let axis = 0, al = -1; for (let k = 0; k < 8; k++) { const a = k * Math.PI / 8, l = run(a) + run(a + Math.PI); if (l > al) { al = l; axis = a; } }
+      return { x: best[0], z: best[1], yaw: axis + Math.PI / 2 };
+    } };
+    kr = buildKrutenau({ data: krData, scene, collision, levels, lightSources, props, zoneNames: ZONE_NAMES, island });
+    if (kr) {
+      collision.build(); // the wall weapons look for a wall with rays
+      for (const [zi, c] of Object.entries(kr.zoneCenters)) { seeds[zi] = [c.x, c.z]; zoneCenters[zi] = { name: c.name, x: c.x, z: c.z }; zoneArea[zi] = c.area; }
+      kr.placeItems({ addStation, addWallBuy, addMachine: addMachineRef, stations, wallWeapons, wallColors: WALL_COLORS });
+    }
+  }
+
   // ---------------------------------------------------------------- Finalisation navigation
   for (const c of trackTrees) c.off = true; // les arbres de la voie du tram n'existent plus (v0.38.0)
   interiors.finish(scene, collision, lightSources); // murs intérieurs, étagères, plafonniers (après tous les placements)
@@ -2167,6 +2194,7 @@ export async function buildRealWorld(scene, renderer) {
   levels.buildNavs(NavGrid, collision);
   keyBuildings.afterNavs(); // last stand doorway cells
   gare?.finishNav();
+  kr?.finishNav();
   // Les portes sont ouvertes pour construire la grille, puis leurs cases sont bloquées une par une.
   for (const d of doors) for (const s of d.segs) s.off = true;
   nav.build();
@@ -2255,6 +2283,7 @@ export async function buildRealWorld(scene, renderer) {
   interiors.reachable = roomsReachable;
   for (const kb of keyBuildings.list) kb.zone = kb.room.zone ?? zoneOf(kb.foot[0], kb.foot[1]);
   keyBuildings.finishDoors((zi) => CONFIG.sector.zones[zi]?.doorPrice ?? 0);
+  kr?.makeDoors({ doorList: doors }); // the gate: the LAST door (after the stair doors of the key buildings, so every other door id stays what it was)
   const kbDropped = keyBuildings.validate(nav); // sealed room / split floor / no stair route: the building keeps its ground room only
   if (kbDropped.length) console.warn('[keyBuildings] demoted', JSON.stringify(kbDropped));
 
@@ -2285,6 +2314,7 @@ export async function buildRealWorld(scene, renderer) {
     for (const i of d.cells) dn.blocked[i] = 0;
     dn.invalidate();
     zoneOpen[d.a] = zoneOpen[d.b] = true;
+    if (d.extra) for (const z of d.extra) zoneOpen[z] = true; // the district gate opens all the zones of its district
     lightTimer = 0;
     return true;
   }
@@ -2333,20 +2363,21 @@ export async function buildRealWorld(scene, renderer) {
   if (gare) { gare.root.visible = false; if (treesApi) { const sm = treesApi.setMode.bind(treesApi); treesApi.setMode = (m) => { sm(m); gare.trees?.setMode(m); }; } }
   const islandMap = { image: mapImage, view: { halfX, halfZ, scale: MAP_SCALE }, crop: { x0: Math.max(-halfX, secMinX - 40), x1: Math.min(halfX, secMaxX + 40), z0: Math.max(-halfZ, secMinZ - 40), z1: Math.min(halfZ, secMaxZ + 40) }, title: 'GRANDE ÎLE — STRASBOURG' };
   const curMap = () => (localArea === 'gare' && gare ? gare.map : islandMap);
-  const zoneOfAll = (x, z) => (gare && gare.inArea(x, z) ? gare.zoneOf(x, z) : zoneOf(x, z));
+  const zoneOfAll = (x, z) => (gare && gare.inArea(x, z) ? gare.zoneOf(x, z) : kr && kr.inArea(x, z) ? kr.zoneOf(x, z) : zoneOf(x, z));
   // The build-time zone masks are dead weight once the world is built (the build closures keep them alive): the runtime only reads zoneLabelWide / zoneLabelWide1 and
   // `reach`. Transferring an ArrayBuffer detaches it and frees its memory now (~10 MB at 3.3 M cells per mask).
   for (const mask of [zoneLabel, zoneLabel1, breach.startMask]) { try { mask.buffer.transfer(0); } catch { /* no ArrayBuffer.transfer: the masks stay */ } }
   return {
     half: Math.max(halfX, halfZ), blockers, spawnPoints: [], windowSpawns,
-    pickWindow: (px, pz, ...a) => (gare && gare.inArea(px, pz) ? null : pickWindow(px, pz, ...a)),
-    pickGround: (px, pz, minD, maxD, allowAnyZone = false) => (gare && gare.inArea(px, pz) ? gare.pickGround(px, pz, minD, maxD, (zi) => allowAnyZone || !!zoneOpen[zi]) : pickGround(px, pz, minD, maxD, allowAnyZone)),
+    pickWindow: (px, pz, ...a) => (gare && gare.inArea(px, pz) || kr && kr.inArea(px, pz) ? null : pickWindow(px, pz, ...a)),
+    pickGround: (px, pz, minD, maxD, allowAnyZone = false) => (gare && gare.inArea(px, pz) ? gare.pickGround(px, pz, minD, maxD, (zi) => allowAnyZone || !!zoneOpen[zi]) : kr && kr.inArea(px, pz) ? kr.pickGround(px, pz, minD, maxD, (zi) => allowAnyZone || !!zoneOpen[zi]) : pickGround(px, pz, minD, maxD, allowAnyZone)),
     stationPos, stations, wallWeapons, vehicleSpawns, parkings, bikeStations, bikeCheck, doors, openDoor, zoneOf: zoneOfAll, startPos, nav, collision, machines, boxes, setActiveBox,
     zoneNames: ZONE_NAMES, zoneCenters, startZone, sealedPoints,
     get mapImage() { return curMap().image; }, get mapView() { return curMap().view; }, get mapCrop() { return curMap().crop; }, get mapTitle() { return curMap().title; },
-    gare, areaOf, lightSources,
-    navAt: (x, z) => (gare && gare.inArea(x, z) && gare.nav ? gare.nav : nav), // grid of the area of a point
-    regionAt: (x, z) => (gare && gare.inRegion(x, z) ? gare.region : 0),      // floor region of a spawn point (station zombies use its grid)
+    gare, kr, areaOf, lightSources,
+    logicAreaOf: (x, z) => (kr && kr.inArea(x, z) ? 'krutenau' : areaOf(x, z)), // the area whose nav / spawns apply (the RENDER area stays 'island' in Krutenau)
+    navAt: (x, z) => (gare && gare.inArea(x, z) && gare.nav ? gare.nav : kr && kr.inArea(x, z) && kr.nav ? kr.nav : nav), // grid of the area of a point
+    regionAt: (x, z) => (gare && gare.inRegion(x, z) ? gare.region : kr && kr.inRegion(x, z) ? kr.region : 0),      // floor region of a spawn point (station zombies use its grid)
     get localArea() { return localArea; },
     // shows only the local player's area (local only : each client draws its own)
     setLocalArea(area) {

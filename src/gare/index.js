@@ -291,7 +291,7 @@ export function buildGare(ctx) {
 
 const distSeg = (u, v, a, b) => { const dx = b[0] - a[0], dz = b[1] - a[1], l2 = dx * dx + dz * dz; let t = l2 ? ((u - a[0]) * dx + (v - a[1]) * dz) / l2 : 0; t = Math.max(0, Math.min(1, t)); return Math.hypot(u - a[0] - dx * t, v - a[1] - dz * t); };
 
-function doorSignTex(price, names) {
+export function doorSignTex(price, names) {
   const cv = document.createElement('canvas'); cv.width = 512; cv.height = 192;
   const x = cv.getContext('2d');
   x.fillStyle = '#1a0d0a'; x.fillRect(0, 0, 512, 192);

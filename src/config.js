@@ -65,6 +65,13 @@ export const STRASBOURG_SECTOR = {
     { name: 'Quais', pocket: 'gare', isolatedRnd: true, doorPrice: 750, items: ['station', 'wall:m1911', 'wall:shotgun'] },
     { name: 'Hall de la Gare', pocket: 'gare', isolatedRnd: true, doorPrice: 750, items: ['station', 'wall:mp5', 'perk:quickrevive', 'box'] },
     { name: 'Place de la Gare', pocket: 'gare', isolatedRnd: true, doorPrice: 1000, items: ['station', 'wall:famas', 'perk:staminup'] },
+    // ---- Krutenau (step B chunk 2, src/district/): zones of a walkable district outside the island core, entered through ONE gate (CONFIG.districts.krutenau.gatePrice) that opens
+    // all of them. Appended after the station's and without `seed`: the island loops skip them. `site` = where the zone starts (walking-distance flood fill); spots are found by
+    // scanning the data (deterministic, no `rnd`).
+    { name: 'Quai des Bateliers', pocket: 'krutenau', isolatedRnd: true, site: { x: 900, z: 160 }, items: ['station', 'wall:mp5', 'wall:ak47'] },
+    { name: 'Saint-Guillaume', pocket: 'krutenau', isolatedRnd: true, site: { x: 1040, z: 170 }, items: ['station', 'wall:scar', 'perk:doubletap'] },
+    { name: 'Place de Zurich', pocket: 'krutenau', isolatedRnd: true, site: { x: 900, z: 340 }, items: ['station', 'wall:famas', 'wall:saiga'] },
+    { name: 'Manufacture des Tabacs', pocket: 'krutenau', isolatedRnd: true, site: { x: 1040, z: 340 }, items: ['station', 'wall:mg42', 'perk:juggernog'] },
   ],
 };
 
@@ -635,6 +642,20 @@ export const CONFIG = {
     treeCap: 1200,            // tile trees that can exist at once (slots reserved in the island tree layers: ~7 MB of instance buffers)
     // facade layers that exist in the tile but not in the core atlas (the atlas only keeps the layers the core uses) map to the nearest style that does
     layerFallback: { 'rustic:timber': 'rustic:plaster', gallery: 'timberN:0', gable: 'timberN:0', dormerSlat: 'dormerDark' },
+  },
+
+  // ------------------------------------------------------------------ Districts (step B chunk 2): walkable areas built from the world tiles (src/district/)
+  districts: {
+    krutenau: {
+      enabled: true,
+      rect: { x0: 872, x1: 1100, z0: 100, z1: 400 }, // m, frame of area.json: the playable rectangle (collision bounds, nav region), inside tiles (1,0) (2,0), east of the core (x > 820)
+      navCell: 0.75, navMaxCost: 2400,               // nav grid of the district (like the station)
+      gatePrice: 3000,                               // pts: the bridge gate on the island (opens the 4 zones); the island's outer ring costs 2500
+      gateHint: { x: 610, z: -110 }, gateSnap: 40,   // m: where the gate stands on the island (the reachable street cell nearest to the hint, <= gateSnap m away)
+      entry: { x: 880, z: 250, yaw: -1.5708 },       // arrival point in the district (snapped to free ground), the player faces east; the return point is 5 m from it
+      spawnEvery: 14, itemGap: 7,                    // m between zombie spawn points; min distance (m) between two items
+      portalRadius: 3,                               // m: the interaction radius of the gate (open) and of the return point
+    },
   },
 
   // ------------------------------------------------------------------ Gare de Strasbourg (v0.79.0, src/gare/). Aire jouable séparée à ses

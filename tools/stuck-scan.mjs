@@ -5,6 +5,7 @@
 //     dossier-sortie  défaut ./stuck-scan-out (report.json, hotspots.png, liens.txt)
 //   variables : ONLY=comp,pockets,bots,rays,walk,zfight (étapes à lancer ; défaut toutes) · WALKS=4000 · SEED=1 · BOTS=200 · BOT_SECONDS=60 · RAYS=2000
 //               PLAYWRIGHT=/chemin/vers/playwright/index.mjs (si le module n'est pas résoluble) · CHROME=/chemin/chrome (sinon celui de Playwright)
+//               AREA=krutenau : the same steps on the nav grid of the Krutenau district (step B chunk 2)
 //               AREA=gare : étapes comp et pockets sur la grille de la Gare de Strasbourg (v0.79.0) au lieu de celle de l'île
 //
 // Étapes (toutes portes ouvertes) :
@@ -23,7 +24,7 @@ import path from 'path';
 const URL_ = process.argv[2] || 'http://localhost:5173/';
 const OUT = path.resolve(process.argv[3] || 'stuck-scan-out');
 const ONLY = (process.env.ONLY || 'comp,pockets,bots,rays,walk,zfight').split(',');
-const AREA = process.env.AREA === 'gare' ? 'gare' : 'island';
+const AREA = process.env.AREA === 'gare' ? 'gare' : process.env.AREA === 'krutenau' ? 'krutenau' : 'island';
 const OPTS = { area: AREA, seed: +(process.env.SEED || 1), bots: +(process.env.BOTS || 200), botSeconds: +(process.env.BOT_SECONDS || 60), rays: +(process.env.RAYS || 2000) };
 fs.mkdirSync(OUT, { recursive: true });
 
@@ -58,10 +59,10 @@ const log = (...a) => console.log(`[${((Date.now() - t0) / 1000).toFixed(0).padS
 // ---------------------------------------------------------------------------------------------------------------- étape comp
 if (ONLY.includes('comp') || ONLY.includes('pockets')) {
   report.steps.comp = await page.evaluate((AREA) => {
-    const w = game.world, nav = AREA === 'gare' ? w.gare.nav : w.nav;
+    const w = game.world, nav = AREA === 'gare' ? w.gare.nav : AREA === 'krutenau' ? w.kr.nav : w.nav;
     for (const d of w.doors) game.openDoor(d.id); // toutes les portes ouvertes
     const comp = nav.components(), main = game.unstick.main(nav), { labels, sizes } = comp, { nx, nz } = nav;
-    const inArea = (x, z) => (w.areaOf ? w.areaOf(x, z) : 'island') === AREA;
+    const inArea = (x, z) => (w.logicAreaOf ? w.logicAreaOf(x, z) : w.areaOf ? w.areaOf(x, z) : 'island') === AREA;
     const acc = new Map();
     for (let iz = 0; iz < nz; iz++) for (let ix = 0; ix < nx; ix++) {
       const l = labels[iz * nx + ix];
@@ -97,7 +98,7 @@ if (ONLY.includes('comp') || ONLY.includes('pockets')) {
       return false;
     };
     const check = (kind, name, x, z) => { if (x == null || z == null || !inArea(x, z)) return; if (!reach(x, z)) unreachable.push({ kind, name, x: +x.toFixed(1), z: +z.toFixed(1), zone: w.zoneNames[w.zoneOf(x, z)] ?? null }); };
-    if (AREA === 'gare') check('départ', 'gare.start', w.gare.start.x, w.gare.start.z); else check('départ', 'startPos', w.startPos.x, w.startPos.z);
+    if (AREA === 'gare') check('départ', 'gare.start', w.gare.start.x, w.gare.start.z); else if (AREA === 'krutenau') { check('départ', 'kr.entry', w.kr.entry.x, w.kr.entry.z); check('retour', 'kr.ret', w.kr.ret.x, w.kr.ret.z); } else check('départ', 'startPos', w.startPos.x, w.startPos.z);
     for (const st of w.stations || []) check('borne de munitions', '', st.x, st.z);
     for (const m of w.machines || []) check('machine', m.type + (m.id ? ':' + m.id : ''), m.pos.x, m.pos.z);
     for (const ww of w.wallWeapons || []) check('arme au mur', ww.id, ww.pos.x, ww.pos.z);
@@ -113,7 +114,7 @@ if (ONLY.includes('comp') || ONLY.includes('pockets')) {
 // -------------------------------------------------------------------------------------------------------------- étape pockets
 if (ONLY.includes('pockets')) {
   report.steps.pockets = await page.evaluate((AREA) => {
-    const w = game.world, nav = AREA === 'gare' ? w.gare.nav : w.nav, p = game.player, main = game.unstick.main(nav), { labels } = nav.components();
+    const w = game.world, nav = AREA === 'gare' ? w.gare.nav : AREA === 'krutenau' ? w.kr.nav : w.nav, p = game.player, main = game.unstick.main(nav), { labels } = nav.components();
     const dt = 0.05, traps = [], stats = { tested: 0, enterable: 0, trapped: 0, unreachable: 0 };
     const labelNear = (x, z) => {
       const ix = nav.cx(x), iz = nav.cz(z);
