@@ -9,7 +9,9 @@ import { gpuOnly } from './gpuOnly.js';
 // =====================================================================
 
 const proxies = [];
-const MAT = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide, colorWrite: false }); // double sided like the facade materials it replaces
+// Double sided like the facade materials it replaces. A MeshStandardMaterial (never drawn in the main pass, only read by the shadow map)
+// so that renderer.compile() reuses the program of the plain double-sided scenery instead of compiling a MeshBasic one just for it.
+const MAT = new THREE.MeshStandardMaterial({ side: THREE.DoubleSide, colorWrite: false });
 
 // pos: flat xyz array, idx: triangle indices (plain arrays or typed arrays). area: 'island' | 'gare' (which local area draws it)
 export function addShadowProxy(parent, pos, idx, area = 'island') {

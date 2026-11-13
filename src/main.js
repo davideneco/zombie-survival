@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { warmUpload } from './gpuOnly.js';
+import { shareProgramFlags } from './programShare.js';
 import { CONFIG, papAmmoMult } from './config.js';
 import { buildRealWorld } from './realworld.js';
 import { Player } from './player.js';
@@ -2627,6 +2628,7 @@ function precompileShaders() {
   add(new THREE.Sprite(new THREE.SpriteMaterial({ map: tagTex, depthTest: false, transparent: true })));
   add(new THREE.Sprite(new THREE.SpriteMaterial({ map: tagTex, depthTest: false, transparent: true, fog: false }))); // étiquette de nom des coéquipiers
   if (world.windowSpawns?.length) world.windowSpawns[0].getQuad();
+  shareProgramFlags(scene); // before the compile: materials that differ only by a baked flag share one program (programShare.js)
   // les objets cachés (autres armes, zombies en attente…) sont rendus visibles le temps de la compilation ;
   // pas les lumières, pour compiler avec le vrai nombre de lumières
   const hidden = [], culled = [];

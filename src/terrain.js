@@ -76,10 +76,18 @@ export function installTerrain(isl) {
   const tex = new THREE.DataTexture(half, nx, nz, THREE.RedFormat, THREE.HalfFloatType);
   tex.minFilter = tex.magFilter = THREE.LinearFilter; tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping; tex.needsUpdate = true;
   // uv = (xz + (hx, hz)) / (taille) ; le texel 0 est centré en cell / 2
-  const uniforms = { tTerrain: { value: tex }, uTerrain: { value: new THREE.Vector4(hx, hz, nx * cell, nz * cell) } };
-  data = { h, nx, nz, hx, hz, cell, water: -T.bank + 0.04, tex, uniforms };
+  // Shared uniform objects: every terrain-aware shader (patched or not) reads the same ones.
+  U.tTerrain.value = tex; U.uTerrain.value.set(hx, hz, nx * cell, nz * cell);
+  data = { h, nx, nz, hx, hz, cell, water: -T.bank + 0.04, tex, uniforms: U };
   return true;
 }
+
+// Program sharing (A4): EVERY standard / basic material carries the same terrain code in its vertex shader, switched per material by the
+// `uTerrainK` uniform (1 = scenery that follows the relief, 0 = dynamic bodies at absolute heights). Patched and unpatched twins therefore
+// share one program instead of two (the cache key is the same prototype function for both).
+const DUMMY_TEX = new THREE.DataTexture(new Uint8Array([0, 0, 0, 255]), 1, 1); DUMMY_TEX.needsUpdate = true;
+const U = { tTerrain: { value: DUMMY_TEX }, uTerrain: { value: new THREE.Vector4(0, 0, 1, 1) } };
+const PATCHED = new WeakSet(); // materials that follow the relief (clones do not inherit it, unlike userData)
 
 const VERT_CHUNK = /* glsl */`
   vec4 mvPosition = vec4( transformed, 1.0 );
@@ -91,25 +99,39 @@ const VERT_CHUNK = /* glsl */`
     tWorld = instanceMatrix * tWorld;
     mvPosition = instanceMatrix * mvPosition;
   #endif
-  tWorld = modelMatrix * tWorld;
-  float tOff = texture2D( tTerrain, (tWorld.xz + uTerrain.xy) / uTerrain.zw ).r;
-  tOff *= 1.0 - clamp( max( max( abs( tWorld.x ) - uTerrain.x, abs( tWorld.z ) - uTerrain.y ), 0.0 ) / 20.0, 0.0, 1.0 ); // fade outside the grid (terrainY)
   mvPosition = modelViewMatrix * mvPosition;
-  mvPosition.xyz += ( viewMatrix * vec4( 0.0, tOff, 0.0, 0.0 ) ).xyz;
+  if ( uTerrainK > 0.5 ) {
+    tWorld = modelMatrix * tWorld;
+    float tOff = texture2D( tTerrain, (tWorld.xz + uTerrain.xy) / uTerrain.zw ).r;
+    tOff *= 1.0 - clamp( max( max( abs( tWorld.x ) - uTerrain.x, abs( tWorld.z ) - uTerrain.y ), 0.0 ) / 20.0, 0.0, 1.0 ); // fade outside the grid (terrainY)
+    mvPosition.xyz += ( viewMatrix * vec4( 0.0, tOff, 0.0, 0.0 ) ).xyz;
+  }
   gl_Position = projectionMatrix * mvPosition;
 `;
 
+const isSurface = (m) => m.isMeshStandardMaterial || m.isMeshBasicMaterial || m.isMeshLambertMaterial || m.isMeshPhongMaterial;
+function applyTerrain(shader, k) {
+  if (!shader.vertexShader.includes('#include <project_vertex>')) return;
+  shader.uniforms.tTerrain = U.tTerrain; shader.uniforms.uTerrain = U.uTerrain; shader.uniforms.uTerrainK = { value: k };
+  shader.vertexShader = 'uniform sampler2D tTerrain;\nuniform vec4 uTerrain;\nuniform float uTerrainK;\n' + shader.vertexShader.replace('#include <project_vertex>', VERT_CHUNK);
+}
+// Default for every material without its own onBeforeCompile: terrain code with K from PATCHED (see above)
+THREE.Material.prototype.onBeforeCompile = function (shader) {
+  if (isSurface(this)) applyTerrain(shader, PATCHED.has(this) ? 1 : 0);
+};
+
 // Décale les sommets d'un matériau du décor (MeshStandard / Physical / Basic…) de T(x, z), sans toucher à ses autres modifications du shader
 export function patchMaterial(mat) {
-  if (!data || !mat || mat.userData.terrainPatched || !(mat.isMeshStandardMaterial || mat.isMeshBasicMaterial || mat.isMeshLambertMaterial || mat.isMeshPhongMaterial)) return;
-  mat.userData.terrainPatched = true;
-  const prev = mat.onBeforeCompile, prevKey = mat.customProgramCacheKey ? mat.customProgramCacheKey.bind(mat) : null;
-  mat.onBeforeCompile = function (shader, renderer) {
-    if (prev) prev.call(this, shader, renderer);
-    shader.uniforms.tTerrain = data.uniforms.tTerrain; shader.uniforms.uTerrain = data.uniforms.uTerrain;
-    shader.vertexShader = 'uniform sampler2D tTerrain;\nuniform vec4 uTerrain;\n' + shader.vertexShader.replace('#include <project_vertex>', VERT_CHUNK);
-  };
-  mat.customProgramCacheKey = () => (prevKey ? prevKey() : (prev ? prev.toString() : '')) + '|terrain';
+  if (!data || !mat || mat.userData.terrainPatched || PATCHED.has(mat) || !isSurface(mat)) return;
+  mat.userData.terrainPatched = true; PATCHED.add(mat);
+  if (Object.prototype.hasOwnProperty.call(mat, 'onBeforeCompile')) { // custom shader: wrap it (its own cache key, plus the terrain suffix)
+    const prev = mat.onBeforeCompile, prevKey = mat.customProgramCacheKey ? mat.customProgramCacheKey.bind(mat) : null;
+    mat.onBeforeCompile = function (shader, renderer) {
+      prev.call(this, shader, renderer);
+      applyTerrain(shader, 1);
+    };
+    mat.customProgramCacheKey = () => (prevKey ? prevKey() : prev.toString()) + '|terrain';
+  }
   mat.needsUpdate = true;
 }
 
