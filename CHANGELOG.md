@@ -2,6 +2,13 @@
 
 Chaque changement est poussé sur `main` (déploiement Render) avec un nouveau numéro de version et sa description ici.
 
+## v0.96.0 (2026-11-13)
+- **Sons : toute la liste « À faire » de `docs/AUDIO.md` est câblée.** Tout est synthétisé (WebAudio, aucun fichier).
+  - Pas selon la surface (pierre, bois en intérieur, sol métallique, quai/béton), ambiance de la ville de jour et de nuit (vent, cloches, chiens lointains, insectes), ambiance de la gare (écho du hall, murmure d'annonces, pigeons) avec fondu enchaîné ville ↔ gare, cloche et bips de portes du tram de transfert, vent du train aux vitres cassées retravaillé, cloche du passage à niveau avec effet Doppler et grondement du pont dans l'intro.
+  - Nouveaux fichiers : `src/audioAmbience.js`, `src/ambience.js`, `tools/audio-render.js` ; constantes dans `CONFIG.audio`.
+  - Vérifié : build OK ; test de sons (51 sons) sans erreur ; aucune fuite sur 5 cycles départ/arrêt (33 nœuds par cycle ville, 37 gare) ; rendu hors ligne : crête 0,73, pas de saturation ; Doppler 1281 / 1082 Hz ; en jeu 11 pas en 4 s de marche, 15 en sprint, surfaces pierre/bois/béton correctes ; coût du mixeur ~0,005 ms par image ; île 244 appels, gare 169, intro 119, 58 programmes, aucune erreur console.
+  - Non vérifié : comment ça SONNE (impossible d'écouter ici, le contexte audio reste suspendu en mode sans écran) ; sols métalliques du train et bois des bâtiments clés non parcourus ; joueurs distants et zombies silencieux.
+
 ## v0.95.1 (2026-11-13)
 - **Nettoyage : fichiers d'instructions Gemini supprimés** (`GEMINI.md`, `.gemini/`), et les règles de propriété « Gemini = son » retirées de `CLAUDE.md`, `AGENTS.md`, `README.md`, `docs/AUDIO.md` et du skill `ship`. Le son (`audio.js`, `music.js`, `docs/AUDIO.md`) s'édite désormais comme le reste du code ; la liste « Requests » de `docs/AUDIO.md` devient une liste de choses à faire.
   - Vérifié : build OK ; plus aucune référence à Gemini dans les fichiers d'instructions (restent seulement le brief AI Studio, la note de la vidéo et les anciennes entrées du CHANGELOG). Non vérifié : aucun changement de code du jeu, donc pas de test en jeu.
