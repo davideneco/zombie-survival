@@ -89,6 +89,16 @@ export function installIntro(game, { world, hud, sfx }) {
     p.vel.set(0, 0, 0);
   };
 
+  // ---------------------------------------------------------------- the atmosphere of the ride (local look) : night turning to dawn (a slow ramp of the held hour),
+  // thinner fog, a farther camera plane, the distant ridge of the Vosges in the sky dome
+  let hourT = -1;
+  const rideAtmosphere = (on) => {
+    const cam = game.player?.camera;
+    if (on) { game.summitFx?.setFogScale(I.fog); if (cam && cam.far < I.far) { cam.far = I.far; cam.updateProjectionMatrix(); } game.gfx?.sky?.setRidge?.(1); }
+    else { game.summitFx?.holdNight(null); game.summitFx?.setFogScale(1); if (cam && cam.far === I.far) { cam.far = 170; cam.updateProjectionMatrix(); } game.gfx?.sky?.setRidge?.(0); hourT = -1; }
+  };
+  const holdHour = (tau) => { game.summitFx?.holdNight(I.hour + ((I.hourEnd ?? I.hour) - I.hour) * clamp(tau / P.T, 0, 1)); hourT = tau; };
+
   // ---------------------------------------------------------------- phases
   function begin(tau = 0, { late = false } = {}) {
     S.on = true; S.tau = tau; S.corr = 0; S.hold = 0; S.syncT = 0; S.stopTau = P.T;
@@ -98,10 +108,10 @@ export function installIntro(game, { world, hud, sfx }) {
     game.rideReset?.(tau); // (the windows like new, no ride zombie plan ; a late joiner : the roof state from τ)
     if (tau >= S.stopTau) { // already at the station : doors open
       S.ph = 'stopped'; poseAt(tau); train.setDoors(clamp((tau - S.stopTau) / I.doorTime, 0, 1));
-      game.summitFx?.holdNight(null);
+      rideAtmosphere(false);
     } else {
       S.ph = 'ride'; poseAt(tau); train.setDoors(0);
-      game.summitFx?.holdNight(I.hour);
+      rideAtmosphere(true); holdHour(tau);
       placeLocal(late);
     }
     if (!S.sound) S.sound = sfx.createTrainSound?.() || null;
@@ -115,7 +125,7 @@ export function installIntro(game, { world, hud, sfx }) {
     S.ann = I.announce.length; // (skipped : the remaining announcements are dropped, and the ride events before the stop)
     while (S.ev < I.events.length && I.events[S.ev].at < S.stopTau) S.ev++;
     sub.style.display = 'none'; subText = null;
-    game.summitFx?.holdNight(null);
+    rideAtmosphere(false);
     sfx.airRelease?.(0.8);
     sfx.trainDoors?.(0.9);
     hud.announce(I.arrival.title, I.arrival.sub, 4500);
@@ -138,6 +148,7 @@ export function installIntro(game, { world, hud, sfx }) {
     train.onJoint = null;
     train.park();
     game.rideReset?.(0);
+    rideAtmosphere(false);
     if (game.summitFx?.nightHeld) { game.summitFx.holdNight(null); game.summitFx.resetSky(); }
   }
   function skip(tau = S.tau) {
@@ -153,6 +164,7 @@ export function installIntro(game, { world, hud, sfx }) {
     S.tau += dt;
     if (game.isClient && S.corr) { const k = Math.min(1, dt * I.nudge), c = S.corr * k; S.tau += c; S.corr -= c; }
     const tau = S.tau;
+    if (S.ph === 'ride' && (hourT < 0 || tau - hourT > 2)) holdHour(tau); // (every 2 s : the sky is repainted at each step)
     if (S.ph === 'ride' && tau >= P.T) stop();
     if (S.ph === 'ride') poseAt(tau);
     else if (S.ph === 'stopped') {

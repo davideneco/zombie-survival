@@ -130,7 +130,7 @@ export function installTramWalk(game, { world, hud, sfx }) {
         this.tramMoveWarn(p, t);
       }
       O.u = pt.u; O.w = pt.w;
-      const floor = t.floorY ?? T.car.floor;
+      const floor = t.floorAt ? t.floorAt(O.u) : t.floorY ?? T.car.floor; // (the train : raised floors over the bogies)
       O.y += (floor - O.y) * Math.min(1, dt * Wc.enterEase);
       if (Math.abs(floor - O.y) < 0.002) O.y = floor;
       t.walkToWorld(O.u, O.w, O.y, tmp);
@@ -188,8 +188,9 @@ export function installTramWalk(game, { world, hud, sfx }) {
 
     // pose le joueur debout dans la rame t à (u, w) (menu debug : téléportation de l'hôte près d'un coéquipier), à la case libre la plus proche
     placeInTram(t, u, w) {
-      const p = this.player, I = t.interior, Wc = t.walkCfg || W, floor = t.floorY ?? T.car.floor;
+      const p = this.player, I = t.interior, Wc = t.walkCfg || W;
       pt.u = Math.max(I.u0 ?? -I.uEnd, Math.min(I.u1 ?? I.uEnd, u)); pt.w = w;
+      const floor = t.floorAt ? t.floorAt(pt.u) : t.floorY ?? T.car.floor;
       pushOut(t.walkLists ? t.walkLists(pt.u, false) : [I.boxes, I.wallsClosed], pt, Wc.radius);
       t.frame(pt.u, f1);
       p.onTram = { v: t, u: pt.u, w: pt.w, y: floor, fy: f1.yaw };

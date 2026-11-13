@@ -588,30 +588,40 @@ export const CONFIG = {
     // the quai 1 track of the SNCF shapes runs ~0.85 m too close to the OSM platform edge (a train would overlap the platform) : the route is moved
     // sideways so a coach side is `gap` m from the edge, with a smooth ramp in : u from blendIn[0] to blendIn[1], out : u from blendOut[0] to blendOut[1]
     route: { gap: 0.2, blendIn: [-170, -110], blendOut: [75, 150], extendTo: 235 },
+    // embankment of the approach (v0.88.0) : the track stands `drop` m above the fields (slope `slope` m wide beyond the ballast shoulder) ; it eases out
+    // toward the station (rampOut m before the station clip, ending `endBefore` m short of it). Bridges (rideland.json) : the deck keeps the ground
+    // low beyond its sides (floor level `drop` below), girders `girder` m high above the rail bed
+    embank: { drop: 2.2, slope: 12, rampOut: 420, endBefore: 30, girder: 1.0, deckMin: 3.7 },
   },
 
-  // ------------------------------------------------------------------ Regional train (v0.80.0, src/train.js, src/trainModel.js) : an electric locomotive
-  // and single-deck coaches, unbranded, number « 17412 ». Parked at quai 1, doors open on the platform side ; players walk inside (moving frame of
-  // the tram : one rigid frame per coach, between its bogie pivots). Lengths in m ; heights above the rail head.
+  // ------------------------------------------------------------------ Regional train (v0.80.0, src/train.js, src/trainModel.js) : an electric
+  // multiple unit of the Régiolis type (articulated low-floor regional EMU, neutral livery, no brand), number « 17412 ». Four cars: a cab car at each
+  // end (rounded nose, large windscreen, locked cab behind a bulkhead) and two middle cars ; the cars share their bogies at the joints (articulated).
+  // Parked at quai 1, doors open on the platform side ; players walk inside (moving frame of the tram : one rigid frame per car, between its bogie
+  // pivots). Lengths in m ; heights above the rail head.
   train: {
-    loco: 17.5, coach: 24.5, gap: 1.0, coaches: 3,
-    width: 2.9, height: 4.05, floor: 1.10,      // body width, roof height, floor height (the platform is ~0.73 m above the rail head)
-    bogie: 17.0, locoBogie: 9.6,                 // m between bogie pivots (coach, locomotive)
-    doorWidth: 1.3, doorH: 2.0, doorAt: 10.4,    // side doors : width, height, centre (m from the coach centre, both ends)
-    partitionAt: 9.2, windows: 8,                // vestibule partitions (m from the coach centre) ; windows per side in the saloon
+    cars: [19.6, 16.6, 16.6, 19.6], gap: 0.7,      // body lengths (nose first), articulation gap between two cars (bellows)
+    width: 2.9, height: 4.1,                       // body width, roof height
+    floor: 0.78, floorHigh: 1.10,                  // low floor (the platform is ~0.73 m above the rail head), raised floor over the bogies and the cabs
+    noseBogie: 3.3,                                // m from the nose to the pivot of the end bogie
+    doorWidth: 1.3, doorH: 2.05,                   // side doors : width, height above the low floor
+    // interior layout of a car, from the car end : raised floor length, step ramp, entrance vestibule (the door stands in the middle), seat bay
+    // pitch (2+2 seats facing each other) ; end cars : cab depth behind the nose (bulkhead), nose taper length, raised floor in front of the bulkhead
+    layout: { raised: 1.7, step: 0.6, vestibule: 2.0, bay: 1.95, cab: 4.1, taper: 3.3, cabRaised: 0.8 },
+    winY: [1.73, 2.78],                            // saloon window sill and head above the rail head (raised-zone windows are 0.3 m higher)
     number: '17412',
-    park: { headU: 47.5 },                       // parked : locomotive nose at this u of the station frame (between the footbridges)
+    park: { headU: 47.5 },                         // parked : nose at this u of the station frame (between the footbridges)
     // walking inside (same fields as tram.walk) : radius, side walls at `wall` m from the axis (thickness thick), gangway opening, partition door ;
     // doors pass when open past doorOpen and slower than boardSpeed m/s ; board : push against an open door from up to boardW m off the axis
     // (the platform edge is gap + width / 2 away), or interact within boardReach ; step off past exitW (put down outW m off the axis, on the platform)
-    walk: { radius: 0.3, wall: 1.32, thick: 0.12, gangway: 1.0, partitionDoor: 0.9, doorOpen: 0.6, boardSpeed: 0.5, boardW: 2.35, boardPush: 0.8, boardReach: 2.6, exitW: 1.55, outW: 2.25, enterEase: 9, cabReach: 2.0 },
+    walk: { radius: 0.3, wall: 1.32, thick: 0.12, gangway: 1.3, partitionDoor: 1.0, doorOpen: 0.6, boardSpeed: 0.5, boardW: 2.35, boardPush: 0.8, boardReach: 2.6, exitW: 1.55, outW: 2.25, enterEase: 9, cabReach: 2.0 },
     // zombies of the station board a parked train with open doors : they reach the door spot (doorSpot m outside the body), step in, then walk the aisle
     zombie: { radius: 0.3, doorSpot: 0.75, enter: 1.0, speedK: 0.9 },
-    light: { color: 0xc8dcff, intensity: 1.2, dist: 11, y: 1.95 },   // one pooled point light per coach (cold LED), y above the rail head
+    light: { color: 0xc8dcff, intensity: 1.2, dist: 11, y: 2.2 },   // one pooled point light per car (cold LED), y above the rail head
     flicker: { hz: 9, rate: 0.35 },              // the faulty LED strips : flicker frequency, share of time off
     // camera sway of a player standing in the moving train (local only) : roll (deg) and bob (m) at full speed (refSpeed m/s), frequency (Hz) ;
     // curve : extra roll (deg) per m/s² of lateral acceleration ; jolt : bob kick (m) at each rail joint (joint m apart, axle and bogie spacing in m)
-    sway: { roll: 0.4, bob: 0.015, hz: 1.4, refSpeed: 22, curve: 0.35, jolt: 0.006, joint: 25, axle: 2.6 },
+    sway: { roll: 0.4, bob: 0.015, hz: 1.4, refSpeed: 22, curve: 0.35, jolt: 0.006, joint: 25, axle: 2.6, bogie: 17.3 },
   },
 
   // ------------------------------------------------------------------ Train intro (v0.81.0, src/intro.js) : the game starts in the moving regional
@@ -620,61 +630,69 @@ export const CONFIG = {
   // the keys) and the stop lands on the parked position (CONFIG.train.park). The host owns τ (tn_sync twice a second) ; clients follow.
   intro: {
     enabled: true,
-    profile: [[0, 22.2], [26, 22.2], [36, 4.2], [52, 4.2], [60, 13.9], [78, 13.9], [95, 0]],  // [τ s, speed m/s] : 80 km/h, 15 km/h past the obstacle, 50 km/h, stop at 95 s
+    // [τ s, speed m/s] : 100 km/h along the open line for 160 s (about 4.5 km : fields, villages, level crossings), 80 km/h at the city outskirts (172 s),
+    // 15 km/h past the obstacle, 50 km/h, stop at 267 s (4 min 27 s, 6.0 km from the start)
+    profile: [[0, 27.8], [160, 27.8], [172, 22.2], [198, 22.2], [208, 4.2], [224, 4.2], [232, 13.9], [250, 13.9], [267, 0]],
     card: 4.0, fadeIn: 2.5,       // s : black title card, then the picture fades in over the last fadeIn s of it
     title: 'TRAIN RÉGIONAL 17412 — DIRECTION STRASBOURG',
     doorTime: 1.6,                // s : the doors open at the stop
     roundDelay: 5,                // s after the stop : round 1 starts at the station
     skipHold: 1.5,                // s : hold [jump] (Espace) to skip the ride (solo : anyone ; co-op : the host)
-    hour: 3.0,                    // night : the game clock is held at this hour during the ride (auto day / night : the cycle resumes from it)
-    slots: [[2, 3.4], [2, -3.0], [3, 3.4], [3, -3.0]],   // [vehicle (1 : first coach), u from the coach centre] of the player slots ; late joiners : coach 3
-    lateCoach: 3,
+    rideMinHealth: 15,            // HP floor while the train rides : zombies on board wound, they cannot kill before the arrival
+    fog: 0.5, far: 320,           // fog density x fog during the ride (the landscape is the show), camera far plane (m) ; restored at the stop
+    hour: 4.9, hourEnd: 5.75,     // night turning to dawn : the game clock is held on a slow ramp from hour to hourEnd over the ride (auto day / night : the cycle resumes from it)
+    slots: [[1, 1.0], [1, -1.0], [2, 1.0], [2, -1.0]],   // [car (0 : head car), u from the car centre] of the player slots (the aisle) ; late joiners : car 2
+    lateCoach: 2,
     corridor: 60,                 // m : points this close to the route (outside the island) belong to the station area (drawn while riding)
     sync: 0.5,                    // s between two tn_sync of the host
     nudge: 2,                     // 1/s : a client's τ converges toward the host τ (+ half the ping) ; snaps past 1 s of error
     maxPing: 0.5,                 // s : the ping used for that lead is capped (a stalled tab measures absurd pings)
     // on-board announcements (French) at τ (s) : chime, subtitle (text) for dur s ; static : radio static and screams after it ; big : title / sub
     announce: [
-      { at: 5.5, chime: true, dur: 7, text: 'Mesdames et messieurs, dans quelques minutes notre train arrivera en gare de Strasbourg, son terminus…' },
-      { at: 12.8, dur: 3.2, static: true, text: '… (grésillements — des cris dans le haut-parleur) …' },
-      { at: 26, big: true, dur: 4, title: 'RALENTISSEMENT', sub: 'Obstacle sur la voie' },
-      { at: 33, big: true, quiet: true, dur: 3.2, title: 'ILS S\'ACCROCHENT AUX FENÊTRES !', sub: 'Abattez-les avant qu\'ils ne montent' },   // quiet : no brake squeal
-      { at: 55.6, dur: 3.5, text: '(des pas sur le toit…)' },
-      { at: 79, chime: true, dur: 6, text: 'Strasbourg. Strasbourg, terminus de ce train.' },
+      { at: 6, chime: true, dur: 6.5, text: 'Mesdames et messieurs, bienvenue à bord de ce train régional à destination de Strasbourg.' },
+      { at: 78, dur: 6, text: 'Prochain arrêt : Strasbourg-Ville, terminus. Ce train ne dessert ni Lingolsheim ni Koenigshoffen.' },
+      { at: 138, chime: true, dur: 7, text: 'Mesdames et messieurs, dans quelques minutes notre train arrivera en gare de Strasbourg, son terminus…' },
+      { at: 146, dur: 3.2, static: true, text: '… (grésillements — des cris dans le haut-parleur) …' },
+      { at: 198, big: true, dur: 4, title: 'RALENTISSEMENT', sub: 'Obstacle sur la voie' },
+      { at: 205, big: true, quiet: true, dur: 3.2, title: 'ILS S\'ACCROCHENT AUX FENÊTRES !', sub: 'Abattez-les avant qu\'ils ne montent' },   // quiet : no brake squeal
+      { at: 227.6, dur: 3.5, text: '(des pas sur le toit…)' },
+      { at: 251, chime: true, dur: 6, text: 'Strasbourg. Strasbourg, terminus de ce train.' },
     ],
     arrival: { title: 'STRASBOURG — Terminus.', sub: 'Tout le monde descend.' },
     // ---- zombies of the ride (v0.82.0, src/rideZombies.js ; the host simulates them) : game.introHooks[id](τ) is called at τ (events) ;
     // counts are solo, × (1 + 0.75 per extra player) like startRound ; health of round healthRound (100 HP), speed of round 1
-    events: [{ at: 8, id: 'track' }, { at: 30, id: 'breach' }, { at: 55, id: 'roof' }, { at: 95, id: 'trackbed' }],
+    events: [{ at: 180, id: 'track' }, { at: 202, id: 'breach' }, { at: 227, id: 'roof' }, { at: 267, id: 'trackbed' }],
     trackZombies: 4, sideZombies: 6, breachers: 6, gangway: 3,
-    trackOnRail: 2,               // of the trackZombies : standing on the track ahead (run over by the locomotive, roadkillPoints each)
+    trackOnRail: 2,               // of the trackZombies : standing on the track ahead (run over by the head car, roadkillPoints each)
     trackbed: 2,                  // at the stop : zombies climbing out of the track bed onto quai 1 (outside the round count ; round 1 ends when they are dead too)
-    // 4-30 s : the train passes trackside zombies at τ in pass[0..1] (s) ; they appear lead s before (ahead, in the fog), off m from the axis,
+    // 180-210 s (4 min 27 ride) : the train passes trackside zombies at τ in pass[0..1] (s) ; they appear lead s before (ahead, in the fog), off m from the axis,
     // walk toward the track ; despawned `lose` m behind the tail (not counted)
-    track: { pass: [12, 27], lead: 5, off: [3.8, 9], lose: 40 },
-    // 30-55 s (15 km/h past the derailed wagons) : side zombies (sideZombies) stand beside the track, passed at τ in pass ; breachers run alongside
+    track: { pass: [184, 199], lead: 5, off: [3.8, 9], lose: 40 },
+    // 202-227 s (15 km/h past the derailed wagons) : side zombies (sideZombies) stand beside the track, passed at τ in pass ; breachers run alongside
     // (spawned between spawn[0] and spawn[1] s, from back or ahead of their window, `from` m away and `out` m off the body side), up to `run` m/s
     // faster or slower than the train, at most maxRun m/s on the ground (a faster train leaves them behind, lost `lose` m behind the tail) ;
     // at the window : hang grab s (attack animation, the glass cracks at crackAt of it, knocks every knock s), smash it (stays broken, wind),
     // climb in climb s (arc m over the sill), then walk the aisle. Hanging (hang + climb) is capped at maxHanging (maxHanging4p with 4 players) :
     // the others wait `wait` m behind their window. Hanging pose : `hangOut` m off the body side, feet `hangY` m above the rail head.
-    side: { pass: [36, 52], lead: 8, off: [4, 9] },
-    breach: { grab: 3.0, climb: 1.2, maxHanging: 4, maxHanging4p: 8, spawn: [31, 50], from: [8, 14], out: 3.5, run: 1.7, maxRun: 6.0, lose: 14, wait: 2.6, crackAt: 0.35, knock: 0.45, hangOut: 0.3, hangY: 0.75, arc: 0.9 },
-    // 55-80 s : footsteps on the roof of the last coach (steps every `every` s from its front to its tail), bangs on its tail door (at bangAt, bangs
+    side: { pass: [208, 224], lead: 8, off: [4, 9] },
+    breach: { grab: 3.0, climb: 1.2, maxHanging: 4, maxHanging4p: 8, spawn: [203, 222], from: [8, 14], out: 3.5, run: 1.7, maxRun: 6.0, lose: 14, wait: 2.6, crackAt: 0.35, knock: 0.45, hangOut: 0.3, hangY: 0.75, arc: 0.9 },
+    // 227-250 s : footsteps on the roof of the last car (steps every `every` s from its front to its tail), bangs on its rear cab door (at bangAt, bangs
     // knocks), the door is forced at forceAt ; then the gangway zombies come in through it, one every gangEvery s
-    roof: { steps: 8, every: 0.7, bangAt: 61.5, bangs: 3, forceAt: 63.5, gangEvery: 1.6 },
+    roof: { steps: 8, every: 0.7, bangAt: 233.5, bangs: 3, forceAt: 235.5, gangEvery: 1.6 },
     healthRound: 1, roadkillPoints: 0,
     roadkill: { minSpeed: 3, fling: 0.6, up: 4.5 },   // run over above minSpeed m/s : thrown forward at fling x the train speed, up m/s ; blood on the cab front
     wind: { reach: 7, gain: 0.5 },                    // wind noise at broken windows : heard up to reach m (along the train), gain at full speed
     // trackside scenery of the ride (src/rideScenery.js, instanced, no shadows) : from `from` m behind the train start to `clip` m before the
     // station ; things stay `clear` m away from every track ; far ground : a dark plane of `ground` m around the camera under the track strip
     scenery: {
-      from: 160, clip: 40, clear: 4.5, ground: 460, seed: 1741,
+      from: 160, clip: 40, clear: 4.5, ground: 460, seed: 1741,   // from : m of scenery behind the train start
       chunk: 300, chunkView: 190,               // m : instances binned along the route ; a chunk is drawn while the camera is within chunkView m of it
       fenceGap: 3.2, fenceEvery: 3.0,          // fence : m beyond the outermost track of its side, post spacing (m)
-      trees: 520, bushes: 700, buildings: 90, lamps: 90, signalEvery: 280,   // counts (whole ride) ; signals : one every n m along the route
+      trees: 520, bushes: 700, buildings: 90, lamps: 90, signalEvery: 280,   // counts per 1.8 km (bushes, lamps ; trees and buildings : only without rideland.json) ; signals : one every n m along the route
+      treesPerKm: 70,                           // verge and garden trees per km of route (the woods and orchards come from the OSM polygons)
+      land: { band: 170, woodSpacing: 7, treesMax: 7500, hedgesMax: 3500 },   // real landscape (rideLand.js) : lateral range of trees (m), wood tree spacing (m), caps of tree and hedge instances
       band: [8, 120],                           // m from the route : lateral range of trees, bushes and buildings
-      wreck: { at: 44, side: -1, off: 7.5, n: 3 },   // derailed wagons : beside the train at τ = at (s), side (-1 : left), off m from the route, count
+      wreck: { at: 216, side: -1, off: 7.5, n: 3 },   // derailed wagons : beside the train at τ = at (s), side (-1 : left), off m from the route, count
     },
   },
 

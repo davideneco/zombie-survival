@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { CONFIG } from '../config.js';
 import { planGare } from './plan.js';
 import { buildGareMeshes } from './build.js';
-import { buildIntroRoute, buildRailNet } from '../railNet.js';
+import { buildIntroRoute, buildRailNet, findBridges } from '../railNet.js';
 import { Train } from '../train.js';
 import { buildRideScenery } from '../rideScenery.js';
 import { introProfile } from '../intro.js';
@@ -21,8 +21,8 @@ import { detailCull } from '../detailCull.js';
 export async function loadGareData() {
   if (!CONFIG.gare?.enabled) return null;
   try {
-    const [g, r] = await Promise.all(['/data/gare.json', '/data/rail.json'].map((u) => fetch(u).then((res) => (res.ok ? res.json() : null))));
-    return g && r ? { gare: g, rail: r } : null;
+    const [g, r, l] = await Promise.all(['/data/gare.json', '/data/rail.json', '/data/rideland.json'].map((u) => fetch(u).then((res) => (res.ok ? res.json() : null)).catch(() => null)));
+    return g && r ? { gare: g, rail: r, rideland: l?.land || null } : null; // (rideland : the real landscape of the intro ride, tools/fetch-ride.mjs ; optional)
   } catch { return null; }
 }
 
@@ -46,6 +46,7 @@ export function buildGare(ctx) {
   const plan = planGare(data.gare, data.rail);
   if (!plan) return null;
   const route = buildIntroRoute(data.rail, plan); // v0.80.0 : the south-west approach of the intro, laid beside quai 1 (railNet.js)
+  if (route) route.bridges = findBridges(route, data.rail, data.rideland); // v0.88.0 : the railway bridges of the real line (decks, the ground low beside them)
   const { root, colliders, mats } = buildGareMeshes({ plan, gare: data.gare, rail: data.rail, pbr, tiled, props, envMap, route });
   scene.add(root);
   const railNet = buildRailNet({ rail: data.rail, plan, route, mats: { ballast: mats.ballast, sleeper: mats.sleeper, rail: mats.rail, steel: mats.steel, iron: mats.iron } });
@@ -113,8 +114,8 @@ export function buildGare(ctx) {
   if (route && train && CONFIG.intro?.enabled) {
     try {
       const P = introProfile(), s0 = route.parkHeadS - P.D, W = CONFIG.intro.scenery.wreck;
-      const midU = train.L / 2 - train.veh[Math.min(2, train.n - 1)].uc; // nose -> middle of the second coach (where the players stand)
-      scenery = buildRideScenery({ route, plan, rail: data.rail, gare: data.gare, sFrom: Math.max(0, s0 - CONFIG.intro.scenery.from), wreckS: s0 + P.dist(W.at) - midU, groundMat: railNet.groundMat, groundY: railNet.groundY });
+      const midU = train.L / 2 - train.veh[Math.min(2, train.n - 1)].uc; // nose -> middle of the third car (where the players stand)
+      scenery = buildRideScenery({ route, plan, rail: data.rail, gare: data.gare, land: data.rideland, sFrom: Math.max(0, s0 - CONFIG.intro.scenery.from), wreckS: s0 + P.dist(W.at) - midU, groundMat: railNet.groundMat, groundY: railNet.groundY });
       root.add(scenery.root);
     } catch (e) { console.warn('[gare] ride scenery', e); }
   }

@@ -19,7 +19,7 @@ const VERT = /* glsl */`
 
 const FRAG = /* glsl */`
   uniform vec3 uTop, uMid, uBot, uCloudNight, uMoonDir;
-  uniform float uTime, uMoon, uCloud, uDay, uMoonSize;
+  uniform float uTime, uMoon, uCloud, uDay, uMoonSize, uRidge;
   varying vec3 vDir;
 
   float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
@@ -62,6 +62,15 @@ const FRAG = /* glsl */`
       col += uMoon * (halo * vec3(0.55, 0.68, 1.0) * (1.0 - 0.6 * dens));
       col = mix(col, moonCol, disc * uMoon * (1.0 - 0.92 * dens));
     }
+    // the Vosges (the train intro, v0.88.0) : a faint haze on the horizon and two layers of ridge to the west (-x), as dark silhouettes
+    if (uRidge > 0.0) {
+      float az = atan(d.z, d.x), west = smoothstep(-0.25, 0.75, -d.x);
+      col += uRidge * vec3(0.17, 0.20, 0.29) * exp(-max(d.y, 0.0) * 9.0) * step(-0.02, d.y) * (0.45 + 0.55 * west);
+      float hA = (0.03 + 0.12 * fbm(vec2(az * 5.0, 3.1)) + 0.015 * vnoise(vec2(az * 31.0, 1.7))) * west, hB = hA * 0.55;
+      float mA = smoothstep(hA + 0.002, hA - 0.002, d.y) * step(0.001, hA), mB = smoothstep(hB + 0.002, hB - 0.002, d.y) * step(0.001, hA);
+      col = mix(col, vec3(0.022, 0.032, 0.048), uRidge * mA);
+      col = mix(col, vec3(0.006, 0.009, 0.014), uRidge * mB);
+    }
     gl_FragColor = vec4(col, 1.0);
     #include <tonemapping_fragment>
     #include <colorspace_fragment>
@@ -73,7 +82,7 @@ export function makeSkyDome(radius = 300) {
   const uniforms = {
     uTop: { value: new THREE.Color('#020408') }, uMid: { value: new THREE.Color('#050912') }, uBot: { value: new THREE.Color('#070c16') },
     uCloudNight: { value: new THREE.Color('#161c28') }, uMoonDir: { value: new THREE.Vector3(Math.cos(el) * Math.cos(az), Math.sin(el), Math.cos(el) * Math.sin(az)).normalize() },
-    uTime: { value: 0 }, uMoon: { value: 1 }, uCloud: { value: C.cloudCover }, uDay: { value: 0 }, uMoonSize: { value: C.moonSize },
+    uTime: { value: 0 }, uMoon: { value: 1 }, uCloud: { value: C.cloudCover }, uDay: { value: 0 }, uMoonSize: { value: C.moonSize }, uRidge: { value: 0 },
   };
   const mat = new THREE.ShaderMaterial({ uniforms, vertexShader: VERT, fragmentShader: FRAG, side: THREE.BackSide, depthWrite: false, depthTest: true, fog: false });
   const mesh = new THREE.Mesh(new THREE.SphereGeometry(radius, 32, 20), mat);
@@ -91,6 +100,7 @@ export function makeSkyDome(radius = 300) {
       uniforms.uDay.value = s(Math.min(1, Math.max(0, (k - 0.25) / 0.6)));
     },
     setCloud(v) { cloud = v; uniforms.uCloud.value = v; },
+    setRidge(v) { uniforms.uRidge.value = v; }, // the distant ridge to the west (train intro) : 0 off, 1 on
     get cloud() { return cloud; },
     update(dt) { uniforms.uTime.value += dt; },
   };

@@ -99,7 +99,7 @@ export function installSummit(game, { world, scene, hud, sfx, fx, hemi, moon, mo
   const sky = { phase: 'night', t: 0, k: 0, apply: null };
   // Le vrai look de nuit (réglé dans main.js) : k = 0 le retrouve exactement ; l'aube et le jour viennent des tables SKY (k >= 0,5).
   const NIGHT = { bg: scene.background.clone(), fog: scene.fog.color.clone(), density: scene.fog.density, hemiSky: hemi.color.clone(), hemiGround: hemi.groundColor.clone(), moon: moon.color.clone(), hemiI: 0.28, moonI: 0.42 };
-  const dn = { hour: CONFIG.dayNight.startHour, days: 0, cycle: false, lastK: -1, acc: 0, sunEl: -30, sunAz: 0, hold: null }; // hold : hour held during the train intro (v0.81.0)
+  const dn = { hour: CONFIG.dayNight.startHour, days: 0, cycle: false, lastK: -1, acc: 0, sunEl: -30, sunAz: 0, hold: null, fogScale: 1 }; // hold : hour held during the train intro (v0.81.0)
   const tmpC = new THREE.Color(), tmpD = new THREE.Color();
   const pickC = (arr, k, out, night) => (k < 0.5 ? (night ? out.copy(night).lerp(C3(arr[1]), sm(k * 2)) : lerpHex(out, arr[0], arr[1], sm(k * 2))) : lerpHex(out, arr[1], arr[2], sm((k - 0.5) * 2)));
   const pickN = (arr, k, night = arr[0]) => (k < 0.5 ? night + (arr[1] - night) * sm(k * 2) : arr[1] + (arr[2] - arr[1]) * sm((k - 0.5) * 2));
@@ -107,7 +107,7 @@ export function installSummit(game, { world, scene, hud, sfx, fx, hemi, moon, mo
   const applySky = () => {
     const k = sky.k, b = game.settings?.brightness ?? 1.4;
     pickC(SKY.bg, k, scene.background, NIGHT.bg);
-    pickC(SKY.fog, k, scene.fog.color, NIGHT.fog); scene.fog.density = pickN(SKY.density, k, NIGHT.density);
+    pickC(SKY.fog, k, scene.fog.color, NIGHT.fog); scene.fog.density = pickN(SKY.density, k, NIGHT.density) * dn.fogScale;
     pickC(SKY.hemiSky, k, hemi.color, NIGHT.hemiSky); pickC(SKY.hemiGround, k, hemi.groundColor, NIGHT.hemiGround); hemi.intensity = pickN(SKY.hemi, k, NIGHT.hemiI) * b;
     pickC(SKY.sun, k, moon.color, NIGHT.moon); moon.intensity = pickN(SKY.sunI, k, NIGHT.moonI);
     const i0 = k < 0.5 ? 0 : 1, i1 = k < 0.5 ? 1 : 2, u = k < 0.5 ? sm(k * 2) : sm((k - 0.5) * 2);
@@ -240,6 +240,8 @@ export function installSummit(game, { world, scene, hud, sfx, fx, hemi, moon, mo
       if (cycleOn()) { sky.k = kOfElevation(dn.sunEl); dn.lastK = -1; applySky(); }
     },
     get nightHeld() { return dn.hold != null; },
+    // the train intro (v0.88.0) : thinner fog (the landscape is the show) ; 1 : normal. Applied at the next sky update.
+    setFogScale(v) { if (dn.fogScale === v) return; dn.fogScale = v; dn.lastK = -1; scene.fog.density *= 1; applySky(); },
     nightHealthMult() { return dn.cycle && mode() === 'auto' && sky.k < DN().nightBelowK ? DN().nightZombieHealth : 1; },
     startDawn, startOrbit, endOrbit, cameraStep, skyStep, resetSky, step,
     get dawnT() { return sky.phase === 'dawn' ? sky.t : sky.phase === 'night' && (sky.k === 0 || dn.cycle) ? 0 : S().dawn.sky; },

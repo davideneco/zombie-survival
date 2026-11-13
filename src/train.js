@@ -1,10 +1,11 @@
 import * as THREE from 'three';
 import { CONFIG } from './config.js';
-import { coachLayout, trainMaterials, buildCoachGeometry, buildLocoGeometry, buildDoorLeaf, buildWindowGeometry, buildCabBlood } from './trainModel.js';
+import { carLayouts, floorOfCar, trainMaterials, buildCarGeometry, buildBogieGeometry, buildCabGeometry, buildLampGeometry, buildPantograph, buildDoorLeaf, buildWindowGeometry, buildCabBlood } from './trainModel.js';
 import { pushOut, doorIndexAt } from './tramInterior.js';
 
 // =====================================================================
-//  Regional train (v0.80.0) : a locomotive and CONFIG.train.coaches coaches on the intro route (railNet.js). Phase 2 : parked at quai 1,
+//  Regional train (v0.80.0 ; v0.88.0 : a Régiolis-type EMU of CONFIG.train.cars articulated cars, two cab cars and two middle cars, trainModel.js) on the
+//  intro route (railNet.js) ; the cars share their bogies at the joints (pivots pf / pb), floors are low (CONFIG.train.floor) or raised over the bogies (floorAt(u)). Phase 2 : parked at quai 1,
 //  doors open on the platform side. Players walk inside with the tram's walk frame (tramInterior.js : p.onTram, `walkFrame: true`).
 //
 //  Frames : the train is a position `s` (nose abscissa) on the route Track. Each vehicle is RIGID : its axis joins the route points at its
@@ -19,7 +20,7 @@ import { pushOut, doorIndexAt } from './tramInterior.js';
 //  v0.81.0 (intro.js) : the train also MOVES (setPose(s, v), setDoors(f)) : its pose is a pure function of the intro clock, so it sends
 //  nothing either. Coach lights follow it (`dyn` light sources), the collision boxes are updated in place, passengers get a camera sway.
 //  v0.82.0 (rideZombies.js) : damage of the ride : saloon windows intact / cracked / broken (winSt, synced by the host : tn_win), the tail door
-//  of the last coach forced open (tail, a function of the intro clock), blood on the locomotive's front (roadkills, tn_rk). The panes are their
+//  of the last coach forced open (tail, a function of the intro clock), blood on the nose of the head car (roadkills, tn_rk). The panes are their
 //  own InstancedMeshes (pane, crack, shards). Zombies in the train always live in its frame (z.onTrain { u, w, y, st }) : they ride with it.
 // =====================================================================
 
@@ -36,31 +37,37 @@ export class Train {
     this.route = route; this.track = route.track;
     this.walkCfg = T.walk; this.walkRegion = opts.region ?? 0;
     this.railY = opts.y0 ?? 0;
-    this.floorY = this.railY + T.floor;  // walk floor (absolute)
-    this.ceilY = this.railY + 3.0;        // inner ceiling (grenades)
+    this.floorY = this.railY + T.floor;  // walk floor of the low floor (absolute) ; floorAt(u) : the raised floors over the bogies too
+    this.ceilY = this.railY + 3.05;       // inner ceiling (grenades)
     this.doorSide = route.platformSide;   // doors open on this side (+1 : right of the direction of travel)
     this.collision = opts.collision;
     this.state = 'ok'; this.v = 0; this.speed = 0;
     this.doors = { open: true, f: 1 };
     this.seats = []; // (no seats : tramInterior's seat code finds none)
     this.pos = new THREE.Vector3();
-    // ---- vehicles : 0 locomotive, then the coaches (nose first)
-    const lens = [T.loco, ...Array(T.coaches).fill(T.coach)];
-    this.L = lens.reduce((a, b) => a + b, 0) + T.gap * T.coaches;
+    // ---- interior layout of the car kinds, then the cars (nose first) : articulated, the neighbours share the bogie at their joint
+    this.lay = carLayouts();
+    const lens = T.cars, nCar = lens.length;
+    this.L = lens.reduce((a, b) => a + b, 0) + T.gap * (nCar - 1);
     let acc = 0;
     this.veh = lens.map((len, i) => {
       const uc = this.L / 2 - acc - len / 2; acc += len + T.gap;
-      return { i, len, uc, loco: i === 0, bog: i === 0 ? T.locoBogie : T.bogie, x: 0, z: 0, tx: 1, tz: 0, yaw: 0 };
+      const head = i === 0, tail = i === nCar - 1, h = len / 2, j = h + T.gap / 2; // j : the joint pivot (middle of the gap)
+      // bogie pivots (offsets from the car centre along u) : front, rear ; the end cars have theirs under the cab
+      return { i, len, uc, head, tail, kind: head || tail ? 'end' : 'mid', Q: this.lay.cars[i], pf: head ? h - T.noseBogie : j, pb: tail ? -(h - T.noseBogie) : -j, x: 0, z: 0, tx: 1, tz: 0, yaw: 0 };
     });
     this.n = this.veh.length;
-    // ---- interior (walk coordinates) per coach
-    this.lay = coachLayout();
+    this.tailU = this.veh[this.n - 1].uc + this.lay.cars[this.n - 1].cab.u; // u of the cab bulkhead of the tail car (the door the gangway zombies force)
+    // window table : saloon windows of every car, both sides (sd -1 left, +1 right) ; index = base[car] + (sd > 0 ? nW : 0) + k
+    this.winTable = []; this.winBase = [];
+    for (const v of this.veh) { this.winBase.push(this.winTable.length); for (const sd of [-1, 1]) v.Q.win.forEach((q, k) => this.winTable.push({ ci: v.i, sd, k, u: v.uc + q.u, dy: q.dy, raised: !!q.raised })); }
+    // ---- interior (walk coordinates) per car
     this.interior = this.buildInterior();
     // ---- meshes
     this.buildMeshes(opts);
-    // pooled lights : one cold LED light per coach ; `dyn` : the light pool follows them every frame (realworld.js) while the train moves
+    // pooled lights : one cold LED light per car ; `dyn` : the light pool follows them every frame (realworld.js) while the train moves
     const Lc = T.light;
-    this.lights = this.veh.filter((v) => !v.loco).map((v) => ({ veh: v, x: 0, y: this.railY + Lc.y, z: 0, color: Lc.color, intensity: Lc.intensity, dist: Lc.dist, dyn: true }));
+    this.lights = this.veh.map((v) => ({ veh: v, x: 0, y: this.railY + Lc.y, z: 0, color: Lc.color, intensity: Lc.intensity, dist: Lc.dist, dyn: true }));
     for (const l of this.lights) opts.lightSources?.push(l);
     this._dynBoxes = this.veh.map(() => ({ x: 0, z: 0, w: 0, d: T.width, rot: 0, h: this.railY + T.height }));
     this.s = route.parkHeadS;
@@ -71,10 +78,13 @@ export class Train {
     this.onJoint = null; // (speed) => void : rail joint under the train (intro.js plays the clack)
   }
 
+  // ------------------------------------------------------------------ floor height (absolute) at walk coordinate u : low floor, raised over the bogies / in front of the cab
+  floorAt(u) { const v = this.veh[this.moduleAt(u)]; return this.railY + floorOfCar(v.Q, u - v.uc); }
+
   // ------------------------------------------------------------------ ride damage (v0.82.0) : windows, tail door, blood on the cab
-  // window index : ((coach - 1) * 2 + (side > 0 ? 1 : 0)) * windows + k ; coach 1..n-1 (0 is the locomotive), side -1 left / +1 right
-  winIndex(ci, sd, k) { return ((ci - 1) * 2 + (sd > 0 ? 1 : 0)) * this.lay.winU.length + k; }
-  winOf(i, out) { const nW = this.lay.winU.length, q = Math.floor(i / nW); out.ci = Math.floor(q / 2) + 1; out.sd = q % 2 ? 1 : -1; out.k = i % nW; out.u = this.veh[out.ci].uc + this.lay.winU[out.k]; return out; }
+  // window index : see winTable (car, side, k) ; side -1 left / +1 right
+  winIndex(ci, sd, k) { return this.winBase[ci] + (sd > 0 ? this.veh[ci].Q.win.length : 0) + k; }
+  winOf(i, out) { const q = this.winTable[i]; out.ci = q.ci; out.sd = q.sd; out.k = q.k; out.u = q.u; out.dy = q.dy; return out; }
   setWin(i, st) { if (this.winSt[i] === st) return false; this.winSt[i] = st; this.winDirty = true; this.applyWindows(); return true; }
   setTail(f) { f = clamp(f, 0, 1); if (f === this.tail) return; this.tail = f; this.applyDoors(); }
   addCabBlood() { const m = this.cabBlood[this.cabBloodN % this.cabBlood.length]; m.visible = true; this.cabBloodN++; }
@@ -123,43 +133,48 @@ export class Train {
   }
   // cheap reach test (boarding, prompts) : within r m of the train body
   walkBounds(x, z, r = 6) { const o = this._wb || (this._wb = {}); this.worldToWalk(x, z, o); return o.w !== 99 && Math.abs(o.w) < r && o.u > -this.L / 2 - r && o.u < this.L / 2 + r; }
-  // collision lists around u : the coach of u and its neighbours
+  // collision lists around u : the car of u and its neighbours
   walkLists(u, pass) {
     const k = this.moduleAt(u), out = this._wl || (this._wl = []);
     out.length = 0;
-    for (let i = Math.max(1, k - 1); i <= Math.min(this.n - 1, k + 1); i++) { const c = this.interior.byCoach[i]; if (!c) continue; out.push(c.boxes, pass ? c.wallsOpen : c.wallsClosed); }
+    for (let i = Math.max(0, k - 1); i <= Math.min(this.n - 1, k + 1); i++) { const c = this.interior.byCoach[i]; if (!c) continue; out.push(c.boxes, pass ? c.wallsOpen : c.wallsClosed); }
     if (!out.length) out.push(this.interior.boxes, this.interior.wallsClosed);
     return out;
   }
-  // floor under a world point inside a coach (grenades), or null
-  walkFloorAt(x, z) { const o = this._wg || (this._wg = {}); this.worldToWalk(x, z, o); return o.w !== 99 && Math.abs(o.w) < this.walkCfg.wall && o.u > this.interior.u0 && o.u < this.interior.u1 ? this.floorY : null; }
+  // floor under a world point inside a car (grenades), or null
+  walkFloorAt(x, z) { const o = this._wg || (this._wg = {}); this.worldToWalk(x, z, o); return o.w !== 99 && Math.abs(o.w) < this.walkCfg.wall && o.u > this.interior.u0 && o.u < this.interior.u1 ? this.floorAt(o.u) : null; }
   get dynKey() { return 'train' + this.id; }
 
   buildInterior() {
-    const T = CONFIG.train, W = T.walk, Lay = this.lay, h = Lay.h, side = this.doorSide;
+    const T = CONFIG.train, W = T.walk;
     const all = { boxes: [], wallsClosed: [], wallsOpen: [], spans: [], seatSpots: [], byCoach: [], cab: [], u0: Infinity, u1: -Infinity, uEnd: 0 };
     const add = (list, u0, u1, w0, w1) => { const b = { u0, u1, w0, w1 }; list.push(b); return b; };
-    const wo = W.wall, wt = W.wall + W.thick, gw = W.gangway / 2, pd = W.partitionDoor / 2;
+    const wo = W.wall, wt = W.wall + W.thick, gw = W.gangway / 2, pd = W.partitionDoor / 2, dw = T.doorWidth / 2;
     for (const v of this.veh) {
-      if (v.loco) continue;
-      const c = { boxes: [], wallsClosed: [], wallsOpen: [] }, uc = v.uc, first = v.i === 1, last = v.i === this.n - 1;
-      // seats, WC
-      for (const b of Lay.blocks) add(c.boxes, uc + b.u0, uc + b.u1, b.w0, b.w1);
-      // vestibule partitions (door opening pd)
-      for (const d of [-1, 1]) { const u = uc + d * Lay.P; add(c.boxes, u - 0.04, u + 0.04, pd, wo); add(c.boxes, u - 0.04, u + 0.04, -wo, -pd); }
-      // ends : gangway opening (to the next coach) ; closed toward the locomotive and at the tail
-      const uF = uc + h, uB = uc - h;
-      if (first) { add(c.boxes, uF - 0.12, uF + 0.6, -wt, wt); all.cab.push({ u: uF - 0.1, text: 'Cabine de conduite — verrouillée' }); }
-      else { add(c.boxes, uF - 0.12, uF + T.gap / 2 + 0.05, gw, wt); add(c.boxes, uF - 0.12, uF + T.gap / 2 + 0.05, -wt, -gw); }
-      if (last) { add(c.boxes, uB - 0.6, uB + 0.12, -wt, wt); all.cab.push({ u: uB + 0.1, text: 'Porte d\'intercirculation — condamnée' }); }
-      else { add(c.boxes, uB - T.gap / 2 - 0.05, uB + 0.12, gw, wt); add(c.boxes, uB - T.gap / 2 - 0.05, uB + 0.12, -wt, -gw); }
+      const Q = v.Q, c = { boxes: [], wallsClosed: [], wallsOpen: [] }, uc = v.uc, h = Q.h;
+      // seats, fold-up seats
+      for (const b of Q.blocks) add(c.boxes, uc + b.u0, uc + b.u1, b.w0, b.w1);
+      // vestibule partitions (opening pd)
+      for (const u of Q.parts) { add(c.boxes, uc + u - 0.04, uc + u + 0.04, pd, wo); add(c.boxes, uc + u - 0.04, uc + u + 0.04, -wo, -pd); }
+      // ends : the gangway opening (to the next car), the walls of the bellows ; a cab bulkhead (closed, locked) at the nose of an end car
+      let lo = uc - h + 0.15, hi = uc + h - 0.15;
+      for (const uE of Q.openEnds) {
+        const e = Math.sign(uE);
+        if (e > 0) { add(c.boxes, uc + uE - 0.12, uc + uE + T.gap / 2 + 0.05, gw, wt); add(c.boxes, uc + uE - 0.12, uc + uE + T.gap / 2 + 0.05, -wt, -gw); }
+        else { add(c.boxes, uc + uE - T.gap / 2 - 0.05, uc + uE + 0.12, gw, wt); add(c.boxes, uc + uE - T.gap / 2 - 0.05, uc + uE + 0.12, -wt, -gw); }
+      }
+      if (Q.cab) {
+        const ub = uc + Q.cab.u;
+        if (Q.cab.dir > 0) { add(c.boxes, ub - 0.1, uc + h + 0.6, -wt, wt); hi = ub - 0.15; all.cab.push({ u: ub - 0.1, text: 'Cabine de conduite — verrouillée' }); }
+        else { add(c.boxes, uc - h - 0.6, ub + 0.1, -wt, wt); lo = ub + 0.15; all.cab.push({ u: ub + 0.1, text: 'Cabine de conduite — verrouillée' }); }
+      }
       // side walls (closed ; open at the platform-side doors)
-      const spans = [-T.doorAt, T.doorAt].map((d) => [uc + d - T.doorWidth / 2, uc + d + T.doorWidth / 2]);
-      const ext0 = uB - T.gap / 2, ext1 = uF + T.gap / 2;
+      const spans = Q.doors.map((d) => [uc + d - dw, uc + d + dw]).sort((a, b) => a[0] - b[0]);
+      const ext0 = uc - h - T.gap / 2, ext1 = uc + h + T.gap / 2;
       for (const sd of [-1, 1]) {
         const w0 = sd > 0 ? wo : -wt, w1 = sd > 0 ? wt : -wo;
         add(c.wallsClosed, ext0, ext1, w0, w1);
-        if (sd !== side) { add(c.wallsOpen, ext0, ext1, w0, w1); continue; }
+        if (sd !== this.doorSide) { add(c.wallsOpen, ext0, ext1, w0, w1); continue; }
         let a = ext0;
         for (const [d0, d1] of spans) { add(c.wallsOpen, a, d0, w0, w1); a = d1; }
         add(c.wallsOpen, a, ext1, w0, w1);
@@ -167,7 +182,7 @@ export class Train {
       all.spans.push(...spans);
       all.byCoach[v.i] = c;
       all.boxes.push(...c.boxes); all.wallsClosed.push(...c.wallsClosed); all.wallsOpen.push(...c.wallsOpen);
-      all.u0 = Math.min(all.u0, uB + 0.15); all.u1 = Math.max(all.u1, uF - 0.15);
+      all.u0 = Math.min(all.u0, lo); all.u1 = Math.max(all.u1, hi);
     }
     all.spans.sort((a, b) => a[0] - b[0]);
     all.uEnd = Math.max(-all.u0, all.u1);
@@ -179,40 +194,55 @@ export class Train {
     this.mats = M;
     const root = this.group = new THREE.Group(); root.name = 'train'; root.userData.noTerrain = true;
     (opts.parent || opts.scene).add(root);
-    const coach = buildCoachGeometry(), loco = buildLocoGeometry(), leaf = buildDoorLeaf(), nC = T.coaches;
+    // per-vehicle carriers (avatars of teammates standing in the train are parented to them, see remote.js ; the cab, lamps, pantographs too)
+    this.mods = this.veh.map((v) => { const g = new THREE.Group(); g.name = 'train:carrier:' + v.i; root.add(g); return { g }; });
+    // car bodies : one InstancedMesh per material per car kind (the end car : the head, then the tail turned by 180 degrees)
+    const kinds = { end: buildCarGeometry('end'), mid: buildCarGeometry('mid') };
     this.coachMeshes = [];
-    for (const [k, mat] of Object.entries({ body: M.body, dark: M.dark, inside: M.inside, glass: M.glass, panel: M.panel, flicker: M.flicker, decal: M.decal })) {
-      if (!coach[k]) continue;
-      const im = new THREE.InstancedMesh(coach[k], mat, nC); im.name = 'train:coach:' + k;
-      im.castShadow = false; im.receiveShadow = k !== 'glass' && k !== 'panel' && k !== 'flicker'; // (no shadow pass : the train stands in the shadow of the shed roof)
-      im.userData.noTerrain = true;
-      root.add(im); this.coachMeshes.push(im);
+    this.kindIndex = {};
+    const cnt = { end: 0, mid: 0 };
+    for (const v of this.veh) { this.kindIndex[v.i] = cnt[v.kind]++; }
+    for (const [kind, geo] of Object.entries(kinds)) {
+      for (const [k, mat] of Object.entries({ body: M.body, dark: M.dark, inside: M.inside, glass: M.glass, screen: M.screen, panel: M.panel, flicker: M.flicker, decal: M.decal })) {
+        if (!geo[k]) continue;
+        const im = new THREE.InstancedMesh(geo[k], mat, cnt[kind]); im.name = `train:${kind}:${k}`; im.userData.kind = kind;
+        im.castShadow = false; im.receiveShadow = k !== 'glass' && k !== 'panel' && k !== 'flicker'; // (no shadow pass : the train stands in the shadow of the shed roof)
+        im.userData.noTerrain = true;
+        root.add(im); this.coachMeshes.push(im);
+      }
     }
-    this.locoGroup = new THREE.Group(); this.locoGroup.name = 'train:loco'; root.add(this.locoGroup);
-    for (const [k, mat] of Object.entries({ body: M.body, dark: M.dark, glass: M.glass, panel: M.panel })) {
-      if (!loco[k]) continue;
-      const m = new THREE.Mesh(loco[k], mat); m.castShadow = false; m.receiveShadow = k === 'body' || k === 'dark'; m.name = 'train:loco:' + k;
-      this.locoGroup.add(m);
+    // bogies : 3 at the joints (shared by two cars), 1 under each cab ; own yaw (along the track at the pivot)
+    this.bogieMesh = new THREE.InstancedMesh(buildBogieGeometry(), M.dark, this.n + 1); this.bogieMesh.name = 'train:bogies'; this.bogieMesh.castShadow = false; this.bogieMesh.receiveShadow = true; this.bogieMesh.userData.noTerrain = true;
+    root.add(this.bogieMesh); this.coachMeshes.push(this.bogieMesh);
+    // small parts on the car carriers : cab interior (head, tail), lamps (white at the head, red at the tail), pantographs (raised on the car 1, lowered on the car 2)
+    this.extra = [];
+    const part = (geo, mat, ci, name, yaw = 0) => { const m = new THREE.Mesh(geo, mat); m.name = name; m.position.y = this.railY; m.rotation.y = yaw; m.castShadow = false; m.receiveShadow = false; this.mods[ci].g.add(m); this.extra.push(m); return m; };
+    const cab = buildCabGeometry(), lamps = buildLampGeometry();
+    for (const [ci, yaw] of [[0, 0], [this.n - 1, Math.PI]]) {
+      if (cab.inside) part(cab.inside, M.inside, ci, 'train:cab', yaw);
+      if (cab.panel) part(cab.panel, M.panel, ci, 'train:cabScreens', yaw);
+      part(lamps, ci === 0 ? M.lampHead : M.lampTail, ci, 'train:lamps', yaw);
     }
-    // door leaves : 2 per side per coach + the two closed end doors
-    this.leafN = nC * 4 + 2;
+    if (this.n > 2) { part(buildPantograph(true), M.dark, 1, 'train:panto'); if (this.n > 3) part(buildPantograph(false), M.dark, 2, 'train:pantoDown'); }
+    // door leaves : 2 per side per car (per door) + the two cab doors
+    const nDoors = this.veh.reduce((a, v) => a + 2 * v.Q.doors.length, 0);
+    const leaf = buildDoorLeaf();
+    this.leafN = nDoors + 2;
     this.leafMeshes = [new THREE.InstancedMesh(leaf.leaf, M.body, this.leafN), new THREE.InstancedMesh(leaf.glass, M.glass, this.leafN)];
     for (const im of this.leafMeshes) { im.name = 'train:leaf'; im.castShadow = false; im.receiveShadow = true; root.add(im); }
-    // per-vehicle carriers (avatars of teammates standing in the train are parented to them, see remote.js)
-    this.mods = this.veh.map((v) => { const g = new THREE.Group(); g.name = 'train:carrier:' + v.i; root.add(g); return { g }; });
     // saloon windows (v0.82.0) : intact / cracked panes, cracks, shards of the broken ones ; lists of window indices per mesh (rebuilt on change)
-    const wg = buildWindowGeometry(), nWin = (this.n - 1) * 2 * this.lay.winU.length;
+    const wg = buildWindowGeometry(), nWin = this.winTable.length;
     this.winSt = new Uint8Array(nWin); this.winDirty = true; this.winLists = [[], [], []];
     this.winMeshes = [[wg.pane, M.glass], [wg.crack, M.crack], [wg.shards, M.shards]].map(([g, m], i) => {
       const im = new THREE.InstancedMesh(g, m, nWin); im.name = 'train:window:' + ['pane', 'crack', 'shards'][i];
       im.castShadow = false; im.receiveShadow = false; im.frustumCulled = false; im.count = 0; im.userData.noTerrain = true; root.add(im); return im;
     });
     this.tail = 0;
-    // blood on the locomotive's front (roadkills) : hidden decals, shown one after the other
-    this.cabBlood = buildCabBlood().map((g) => { const m = new THREE.Mesh(g, M.decal); m.visible = false; m.name = 'train:cabBlood'; this.locoGroup.add(m); return m; });
+    // blood on the nose of the head car (roadkills) : hidden decals, shown one after the other
+    this.cabBlood = buildCabBlood().map((g) => { const m = new THREE.Mesh(g, M.decal); m.visible = false; m.name = 'train:cabBlood'; m.position.y = this.railY; this.mods[0].g.add(m); return m; });
     this.cabBloodN = 0;
   }
-  // window instances : pane (state 0 intact, 1 cracked), crack (1), shards (2) ; matrices follow the coaches (no allocation)
+  // window instances : pane (state 0 intact, 1 cracked), crack (1), shards (2) ; matrices follow the cars (no allocation)
   applyWindows() {
     if (!this.winMeshes) return;
     const L = this.winLists, Wd = CONFIG.train.width / 2 - 0.025, o = this._wo || (this._wo = {});
@@ -222,7 +252,7 @@ export class Train {
       for (let j = 0; j < list.length; j++) {
         this.winOf(list[j], o);
         const v = this.veh[o.ci], c = Math.cos(v.yaw), s = Math.sin(v.yaw), lx = o.sd * Wd, lz = -(o.u - v.uc);
-        _lq.setFromAxisAngle(_up, v.yaw); _lm.compose(_p.set(v.x + c * lx + s * lz, this.railY, v.z - s * lx + c * lz), _lq, _sc);
+        _lq.setFromAxisAngle(_up, v.yaw); _lm.compose(_p.set(v.x + c * lx + s * lz, this.railY + o.dy, v.z - s * lx + c * lz), _lq, _sc);
         im.setMatrixAt(j, _lm);
       }
       im.count = list.length; im.instanceMatrix.needsUpdate = true;
@@ -231,26 +261,35 @@ export class Train {
 
   // ------------------------------------------------------------------ pose (rigid frames), meshes, collision
   apply() {
-    const T = CONFIG.train, tr = this.track, a = this._a || (this._a = {}), b = this._b || (this._b = {});
+    const T = CONFIG.train, tr = this.track, a = this._a || (this._a = {}), b = this._b || (this._b = {}), c = this._c || (this._c = {});
+    let nb = 0;
+    const bogie = (s) => { // a bogie at route abscissa s : along the track there
+      tr.at(clamp(s + 1.35, 0, tr.L), a); tr.at(clamp(s - 1.35, 0, tr.L), b); tr.at(clamp(s, 0, tr.L), c);
+      _q.setFromAxisAngle(_up, Math.atan2(-(a.x - b.x), -(a.z - b.z))); _m.compose(_p.set(c.x, this.railY, c.z), _q, _sc);
+      this.bogieMesh.setMatrixAt(nb++, _m);
+    };
     for (const v of this.veh) {
-      const sc = this.s - (this.L / 2 - v.uc);
-      tr.at(clamp(sc + v.bog / 2, 0, tr.L), a); tr.at(clamp(sc - v.bog / 2, 0, tr.L), b);
+      const sc = this.s - (this.L / 2 - v.uc); // abscissa of the car centre ; its axis joins the route points at its bogie pivots
+      tr.at(clamp(sc + v.pf, 0, tr.L), a); tr.at(clamp(sc + v.pb, 0, tr.L), b);
       let tx = a.x - b.x, tz = a.z - b.z; const l = Math.hypot(tx, tz) || 1; tx /= l; tz /= l;
-      v.x = (a.x + b.x) / 2; v.z = (a.z + b.z) / 2; v.tx = tx; v.tz = tz; v.yaw = Math.atan2(-tx, -tz);
+      v.x = a.x - tx * v.pf; v.z = a.z - tz * v.pf; v.tx = tx; v.tz = tz; v.yaw = Math.atan2(-tx, -tz); // (the centre : pf behind the front pivot, on the chord)
       this.mods[v.i].g.position.set(v.x, 0, v.z); this.mods[v.i].g.rotation.set(0, v.yaw, 0); this.mods[v.i].g.updateMatrixWorld();
+      if (v.head) bogie(sc + v.pf);
+      bogie(sc + v.pb);
     }
+    this.bogieMesh.count = nb; this.bogieMesh.instanceMatrix.needsUpdate = true; this.bogieMesh.computeBoundingSphere();
     const v0 = this.veh[0];
     this.pos.set(v0.x, this.railY, v0.z); this.yaw = v0.yaw;
-    // coaches (instances), locomotive
+    // car bodies (instances)
     for (const v of this.veh) {
-      _q.setFromAxisAngle(_up, v.yaw); _m.compose(_p.set(v.x, this.railY, v.z), _q, _sc);
-      if (v.loco) { this.locoGroup.position.set(v.x, this.railY, v.z); this.locoGroup.rotation.set(0, v.yaw, 0); continue; }
-      for (const im of this.coachMeshes) im.setMatrixAt(v.i - 1, _m);
+      _q.setFromAxisAngle(_up, v.yaw + (v.tail ? Math.PI : 0)); _m.compose(_p.set(v.x, this.railY, v.z), _q, _sc);
+      const k = this.kindIndex[v.i];
+      for (const im of this.coachMeshes) if (im.userData.kind === v.kind) im.setMatrixAt(k, _m);
     }
-    for (const im of this.coachMeshes) { im.instanceMatrix.needsUpdate = true; im.computeBoundingSphere(); }
-    this.applyDoors(); // (the leaves ride with the coaches)
+    for (const im of this.coachMeshes) { if (im === this.bogieMesh) continue; im.instanceMatrix.needsUpdate = true; im.computeBoundingSphere(); }
+    this.applyDoors(); // (the leaves ride with the cars)
     this.applyWindows();
-    // coach lights follow their coach
+    // car lights follow their car
     if (this.lights) for (const l of this.lights) { l.x = l.veh.x; l.z = l.veh.z; }
     // world collision : one oriented box per vehicle (dynamic : bullets and camera rays pass, see collision.js) ; no allocation (every frame)
     const D = this._dynBoxes;
@@ -258,41 +297,45 @@ export class Train {
     this.collision?.setDynamic(this.dynKey, D);
   }
   applyDoors() {
-    const T = CONFIG.train, f = this.doors.f, Wd = T.width / 2, Lay = this.lay;
+    const T = CONFIG.train, f = this.doors.f, Wd = T.width / 2;
     let k = 0;
-    const put = (v, u, w, rotY, sx = 1) => {
+    const put = (v, u, w, rotY, sxx = 1, dy = 0, syy = 1) => {
       const c = Math.cos(v.yaw), s = Math.sin(v.yaw); // vehicle local (w, -u) -> world
       const lx = w, lz = -(u - v.uc), wx = v.x + c * lx + s * lz, wz = v.z - s * lx + c * lz;
-      _lq.setFromAxisAngle(_up, v.yaw + rotY); _ls.set(1, 1, sx);
-      _lm.compose(_p.set(wx, this.railY, wz), _lq, _ls);
+      _lq.setFromAxisAngle(_up, v.yaw + rotY); _ls.set(1, syy, sxx);
+      _lm.compose(_p.set(wx, this.railY + dy, wz), _lq, _ls);
       for (const im of this.leafMeshes) im.setMatrixAt(k, _lm);
       k++;
     };
     for (const v of this.veh) {
-      if (v.loco) continue;
-      for (const sd of [-1, 1]) for (const d of [-1, 1]) {
-        const open = sd === this.doorSide ? f : 0, uD = v.uc + d * T.doorAt;
-        // plug door : out of the opening (0.07 m), then slides toward the coach centre
-        put(v, uD - d * open * (T.doorWidth + 0.05), sd * (Wd - 0.03 + 0.07 * Math.min(1, open * 4)), sd > 0 ? 0 : Math.PI);
+      for (const sd of [-1, 1]) for (const d of v.Q.doors) {
+        const open = sd === this.doorSide ? f : 0, uD = v.uc + d, dir = d > 0 ? 1 : -1;
+        // plug door : out of the opening (0.07 m), then slides toward the car centre
+        put(v, uD - dir * open * (T.doorWidth + 0.05), sd * (Wd - 0.03 + 0.07 * Math.min(1, open * 4)), sd > 0 ? 0 : Math.PI);
       }
     }
-    // closed end doors : toward the locomotive (first coach) and at the tail (last coach), across the gangway opening
-    const first = this.veh[1], last = this.veh[this.n - 1], sx = T.walk.gangway / T.doorWidth + 0.06;
-    put(first, first.uc + Lay.h - 0.02, 0, Math.PI / 2, sx);
-    put(last, last.uc - Lay.h + 0.02 + 0.06 * (this.tail || 0), (this.tail || 0) * 0.86, -Math.PI / 2 + 0.25 * (this.tail || 0), sx); // (forced open by the gangway zombies : shoved aside, v0.82.0)
+    // the locked cab doors (bulkhead of the head car and of the tail car) : scaled to the doorway ; the tail one is forced by the gangway zombies (v0.82.0)
+    const sxd = (T.walk.partitionDoor - 0.1) / T.doorWidth, syd = 0.93, F0 = T.floor, dyc = T.floorHigh + 0.02 - (F0 + 0.02) * syd;
+    for (const v of this.veh) {
+      if (!v.Q.cab) continue;
+      const dir = v.Q.cab.dir, ub = v.uc + v.Q.cab.u, tl = v.tail ? this.tail || 0 : 0;
+      if (v.head) put(v, ub - 0.03, 0, Math.PI / 2, sxd, dyc, syd);
+      else put(v, ub + 0.03 + 0.06 * tl, tl * 0.86, -Math.PI / 2 + 0.25 * tl, sxd, dyc, syd);
+    }
     for (const im of this.leafMeshes) { im.count = k; im.instanceMatrix.needsUpdate = true; im.computeBoundingSphere(); }
   }
 
   update(dt, game) {
-    // the coaches are InstancedMeshes : their bounding sphere spans the three coaches, so three.js frustum culling keeps them almost always ;
-    // test each coach against the camera frustum instead (draw calls)
+    // the cars are InstancedMeshes : their bounding sphere spans several cars, so three.js frustum culling keeps them almost always ;
+    // test each car against the camera frustum instead (draw calls)
     const cam = game?.player?.camera;
     if (cam) {
       _fr.setFromProjectionMatrix(_pm.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse));
       let any = game.player?.onTram?.v === this; // standing inside : always drawn (the frustum is the last frame's : stale after a skip)
-      if (!any) for (const v of this.veh) if (!v.loco) { _sph.center.set(v.x, this.railY + 2, v.z); _sph.radius = v.len / 2 + 1.5; if (_fr.intersectsSphere(_sph)) { any = true; break; } }
+      if (!any) for (const v of this.veh) { _sph.center.set(v.x, this.railY + 2, v.z); _sph.radius = v.len / 2 + 1.5; if (_fr.intersectsSphere(_sph)) { any = true; break; } }
       for (const im of this.coachMeshes) im.visible = any;
       for (const im of this.leafMeshes) im.visible = any;
+      for (const m of this.extra) m.visible = any;
       if (this.winMeshes) for (const im of this.winMeshes) im.visible = any && im.count > 0;
     }
     // faulty LED strips : random flicker (local look only)
@@ -312,12 +355,12 @@ export class Train {
     tr.at(sm - 6, a); tr.at(sm + 6, b);
     const kappa = (a.tx * b.tz - a.tz * b.tx) / 12, lean = clamp(-kappa * sp * sp * W.curve, -2.5, 2.5) * (Math.PI / 180);
     S.curve += (lean - S.curve) * Math.min(1, dt * 1.5);
-    // rail joints : the wheelsets of a coach cross a joint at 0, axle, bogie, bogie + axle m
+    // rail joints : the wheelsets of a car cross a joint at 0, axle, bogie, bogie + axle m
     if (sp > 0.3) {
       S.jointD += sp * dt;
       if (S.jointD >= W.joint) {
         S.jointD -= W.joint;
-        const J = S.jolts, B = CONFIG.train.bogie, off = this._joff || (this._joff = [0, W.axle, B, B + W.axle]);
+        const J = S.jolts, B = W.bogie, off = this._joff || (this._joff = [0, W.axle, B, B + W.axle]);
         let n = 0; for (const d of off) { for (; n < J.length; n++) if (J[n] < 0) { J[n] = d / sp; break; } }
         this.onJoint?.(sp);
       }
@@ -427,7 +470,7 @@ export function installTrain(game, { world, hud }) {
         let d = Math.atan2(target.pos.x - z.pos.x, target.pos.z - z.pos.z) - z.yaw; d = Math.atan2(Math.sin(d), Math.cos(d)); z.yaw += d * Math.min(1, dt * 8);
       }
       const inside = Math.abs(O.w) < T.width / 2;
-      O.y += ((inside ? t.floorY : 0) - O.y) * Math.min(1, dt * 10);
+      O.y += ((inside ? t.floorAt(O.u) : 0) - O.y) * Math.min(1, dt * 10);
       t.walkToWorld(O.u, O.w, O.y, z.pos);
       z.group.rotation.set(0, z.yaw, 0);
       if (O.st === 'leave' && Math.abs(O.w) > W.outW) { z.onTrain = null; z.pos.y = 0; } // back on the platform (the station's floor region)

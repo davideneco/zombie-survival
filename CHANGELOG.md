@@ -2,6 +2,26 @@
 
 Chaque changement est poussé sur `main` (déploiement Render) avec un nouveau numéro de version et sa description ici.
 
+## v0.91.0 (2026-11-13)
+**Nouvelle intro : 4 min 27 s de train sur 6 km de la vraie ligne.**
+- **Train** : une rame de type Régiolis à 4 caisses articulées, refaite de zéro : nez arrondi avec pare-brise incliné, plancher bas au milieu et relevé aux extrémités, marches, rangées de sièges, porte-bagages, cloisons, soufflets. Livrée neutre : aucun logo SNCF/TER. L'intérieur suit la hauteur du plancher (`train.floorAt`), et les zombies du trajet, le tram et les grenades l'utilisent.
+- **Trajet** : 6 km en arrivant du sud-ouest par la ligne de Molsheim (l'outil `tools/fetch-ride.mjs` complète `rail.json` avec 4,7 km de voie réelle). Le trajet dure 267 s : 100 km/h en rase campagne, 80 km/h aux abords de la ville, puis ralentissement, passage d'un obstacle et arrêt à quai.
+- **Paysage** : le vrai paysage le long de la voie (`rideLand.js`) : maisons à colombages, clochers, champs, haies, peupliers, passages à niveau avec feux clignotants, remblai et ponts (décor seulement : la voie reste plate). Passage de la nuit à l'aube, brouillon plus léger, ligne des Vosges dans le ciel.
+- **Protection pendant le trajet** : les zombies du train blessent mais ne peuvent plus tuer avant l'arrivée (réglage `intro.rideMinHealth` = 15 PV). Sans elle, un joueur immobile mourait avant la manche 1 sur ce trajet plus long. Passer l'intro reste possible en maintenant Espace.
+- **Perf** : intro à 118 appels et 0,60 M triangles ; départ île à 279 appels, 1,10 M triangles, 368 Mo.
+- **Vérifié** :
+  - le build passe ;
+  - trajet complet en headless jusqu'à la manche 1, sans erreur console ;
+  - passage de l'intro depuis τ = 230 ;
+  - marche d'un wagon à l'autre sans blocage ;
+  - captures de l'intérieur, du nez et du paysage à la fenêtre ;
+  - une capture à 2 minutes de trajet regardée : le paysage de nuit, le plan de la fenêtre et le faisceau de la lampe sont corrects.
+- **Non vérifié** :
+  - multijoueur et joueur qui rejoint en cours de trajet ;
+  - passages à niveau, ponts et arrivée dans le faisceau de voies de la gare, regardés de près ;
+  - le rendu de jour.
+- **Sons manquants** : cloche de passage à niveau, grondement de pont (à ajouter côté audio).
+
 ## v0.90.0 (2026-11-13)
 **Optimisation (étapes A2 + A3) : moitié moins de triangles et de mémoire.**
 - Au départ (Marché-Neuf) :

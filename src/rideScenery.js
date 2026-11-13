@@ -2,7 +2,8 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { CONFIG } from './config.js';
-import { inStationClip } from './railNet.js';
+import { inStationClip, groundProfile, farGroundY } from './railNet.js';
+import { buildLand } from './rideLand.js';
 
 // =====================================================================
 //  Trackside scenery of the intro ride (v0.81.0) : cheap, instanced decor along the south-west approach, outside the station clip.
@@ -12,6 +13,8 @@ import { inStationClip } from './railNet.js';
 //    - one InstancedMesh per geometry (about 20 draw calls for the whole ride), no shadows, deterministic placement (seeded).
 //  Placement keeps `clear` m from every track of rail.json (SNCF and OSM), off the station bounds and its surrounding buildings.
 //  Decor only : no collision (nobody walks there : the train doors stay closed during the ride).
+//  v0.88.0 : the 6 km ride lays the real landscape (rideland.json, rideLand.js) on top : buildings, churches, fields, woods, roads, rivers, level
+//  crossings, bridges ; the ground follows railNet.groundProfile (embankment, bridge decks) ; without that file the random decor of v0.81.0 is used.
 // =====================================================================
 
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -81,16 +84,28 @@ function facadeAtlas(kind, rnd) {
         if (f > 0 && i % 3 === 1) { x.fillStyle = '#4a463f'; x.fillRect(wx - 8, wy + wh - 4, ww + 16, 8); }
       }
       x.fillStyle = 'rgba(0,0,0,0.25)'; for (let k = 0; k < 12; k++) x.fillRect(rnd() * W, 0, 2, H); // rain streaks
-    } else { // house : rough render, 2 floors, shutters, a door
-      x.fillStyle = '#8a8070'; x.fillRect(0, 0, W, H);
-      for (let k = 0; k < 700; k++) { const g = 110 + rnd() * 34; x.fillStyle = `rgba(${g},${g - 8},${g - 20},0.3)`; x.fillRect(rnd() * W, rnd() * H, 4, 4); }
-      for (let f = 0; f < 2; f++) for (let i = 0; i < 3; i++) {
-        const wx = 40 + i * (W - 80) / 3, wy = H * 0.18 + f * H * 0.36, ww = 56, wh = 70;
-        if (f === 1 && i === 1) { x.fillStyle = '#3a2c22'; x.fillRect(wx + 4, wy, 48, H - wy); continue; }
-        x.fillStyle = '#4a3a2c'; x.fillRect(wx - 16, wy, 14, wh); x.fillRect(wx + ww + 2, wy, 14, wh); // shutters
+    } else if (kind === 'church') { // stone-grey render, tall narrow windows, a louvred belfry band
+      x.fillStyle = '#8b887f'; x.fillRect(0, 0, W, H);
+      for (let k = 0; k < 900; k++) { const g = 110 + rnd() * 30; x.fillStyle = `rgba(${g},${g - 2},${g - 8},0.3)`; x.fillRect(rnd() * W, rnd() * H, 3, 3); }
+      for (let i = 0; i < 6; i++) { const wx = 22 + i * (W - 44) / 6, wy = H * 0.34; x.fillStyle = '#5a574f'; x.fillRect(wx - 3, wy - 3, 28, 96); x.fillStyle = '#12151a'; x.fillRect(wx, wy, 22, 90); x.beginPath(); x.arc(wx + 11, wy, 11, Math.PI, 0); x.fill(); if (rnd() < 0.3) lit.push([wx + 2, wy + 4, 18, 80, '#ffbf6a']); }
+      x.fillStyle = '#2a2a2a'; for (let i = 0; i < 12; i++) x.fillRect(0, 6 + i * 6, W, 3); // belfry louvres (the top rows)
+    } else { // house : half-timbered (colombage) : plaster panels, dark timber frame with braces, shuttered windows, a door
+      const plaster = ['#d9ccb0', '#cdbf9c', '#dcd2bd'][Math.floor(rnd() * 3)];
+      x.fillStyle = plaster; x.fillRect(0, 0, W, H);
+      for (let k = 0; k < 800; k++) { const g = 150 + rnd() * 50; x.fillStyle = `rgba(${g},${g - 10},${g - 30},0.18)`; x.fillRect(rnd() * W, rnd() * H, 4, 4); }
+      const timber = '#2c2119', fy = [10, H * 0.5, H - 8];
+      x.fillStyle = timber; for (const y of fy) x.fillRect(0, y - 4, W, 9);
+      const bays = 5, bw = W / bays;
+      for (let i = 0; i <= bays; i++) x.fillRect(i * bw - 4, 6, 9, H - 10);
+      x.strokeStyle = timber; x.lineWidth = 6;
+      for (let f2 = 0; f2 < 2; f2++) for (let i = 0; i < bays; i++) { const y0 = fy[f2] + 4, y1 = fy[f2 + 1] - 4, x0 = i * bw + 4; if ((i + f2) % 2 === 0) { x.beginPath(); x.moveTo(x0, y1); x.lineTo(x0 + bw - 8, y0 + (y1 - y0) * 0.45); x.stroke(); } else { x.beginPath(); x.moveTo(x0 + bw - 8, y1); x.lineTo(x0, y0 + (y1 - y0) * 0.45); x.stroke(); } }
+      for (let f2 = 0; f2 < 2; f2++) for (let i = 0; i < bays; i++) {
+        const wx = i * bw + bw / 2 - 17, wy = fy[f2] + 28, ww = 34, wh = 46;
+        if (f2 === 1 && i === 2) { x.fillStyle = '#3a2a1e'; x.fillRect(wx - 6, fy[1] + 8, ww + 12, H - fy[1] - 16); x.fillStyle = '#c8a455'; x.fillRect(wx + ww - 2, fy[1] + 70, 5, 5); continue; }
+        x.fillStyle = ['#4f6a4a', '#6a4038', '#3f5668'][(i + f2) % 3]; x.fillRect(wx - 14, wy, 12, wh); x.fillRect(wx + ww + 2, wy, 12, wh); // shutters
         x.fillStyle = '#14181d'; x.fillRect(wx, wy, ww, wh);
-        x.fillStyle = '#6a6052'; x.fillRect(wx - 4, wy + wh, ww + 8, 6);
-        if (rnd() < 0.4) lit.push([wx, wy, ww, wh, '#ffb860']);
+        x.fillStyle = '#d6d0c0'; x.fillRect(wx - 2, wy + wh, ww + 4, 5);
+        if (rnd() < 0.3) lit.push([wx, wy, ww, wh, '#ffb860']);
       }
     }
     // dirt at the foot
@@ -99,7 +114,8 @@ function facadeAtlas(kind, rnd) {
   const map = canvas(512, 512, (x, W) => {
     draw(x, W);
     // roof (u < 0.5) and trim (u > 0.5)
-    x.fillStyle = kind === 'house' ? '#4a3a33' : '#2e3033'; x.fillRect(0, 384, 256, 128);
+    x.fillStyle = kind === 'house' ? '#6a3f33' : kind === 'church' ? '#2c3036' : '#2e3033'; x.fillRect(0, 384, 256, 128);
+    if (kind === 'house') for (let r = 0; r < 16; r++) { x.fillStyle = r % 2 ? 'rgba(0,0,0,0.22)' : 'rgba(255,200,170,0.08)'; x.fillRect(0, 384 + r * 8, 256, 3); }
     for (let k = 0; k < 300; k++) { const gg = 40 + rnd() * 25; x.fillStyle = `rgba(${gg},${gg},${gg + 4},0.5)`; x.fillRect(rnd() * 256, 384 + rnd() * 128, 6, 3); }
     x.fillStyle = '#4c4a45'; x.fillRect(256, 384, 256, 128);
     for (let k = 0; k < 200; k++) { const gg = 60 + rnd() * 30; x.fillStyle = `rgba(${gg},${gg - 2},${gg - 6},0.5)`; x.fillRect(256 + rnd() * 256, 384 + rnd() * 128, 4, 4); }
@@ -152,7 +168,7 @@ function blob(r, detail, rnd, sx = 1, sy = 1) {
 // ------------------------------------------------------------------ the scenery
 // route : buildIntroRoute() ; plan : station plan ; rail : rail.json ; gare : gare.json (surrounding buildings) ; sFrom, sTo : route range ;
 // wreckS : s of the middle of the derailed wagons (null : none) ; groundMat : the trackside ground material of railNet.js ; groundY : its level
-export function buildRideScenery({ route, plan, rail, gare, sFrom, wreckS = null, groundMat, groundY }) {
+export function buildRideScenery({ route, plan, rail, gare, land = null, sFrom, wreckS = null, groundMat, groundY }) {
   const C = CONFIG.intro.scenery, R = CONFIG.railNet, rnd = seeded(C.seed);
   const root = new THREE.Group(); root.name = 'rideScenery'; root.userData.noTerrain = true;
   const tr = route.track, at = (s, o) => tr.at(clamp(s, 0, tr.L), o);
@@ -160,23 +176,37 @@ export function buildRideScenery({ route, plan, rail, gare, sFrom, wreckS = null
   // instances are binned in chunks of C.chunk m along the route (each instance matrix carries its abscissa `.s`) : one InstancedMesh per
   // geometry per chunk, and a chunk is drawn only while the camera is within C.chunkView m of its stretch (draw calls at the station)
   const chunks = [];
+  const chunkOf = (k) => { let ch = chunks[k]; if (!ch) { ch = chunks[k] = new THREE.Group(); ch.name = 'ride:chunk' + k; ch.userData.s0 = sFrom + k * C.chunk; ch.userData.s1 = ch.userData.s0 + C.chunk; root.add(ch); } return ch; };
+  const kOf = (s) => Math.max(0, Math.floor(((s ?? sFrom) - sFrom) / C.chunk));
+  // merged static geometry (fields, roads, rivers : one mesh per material per chunk)
+  const mergedQ = new Map();
+  const merge1 = (geo, mat, s, name) => { const key = kOf(s) + '|' + mat.uuid; let e = mergedQ.get(key); if (!e) mergedQ.set(key, e = { k: kOf(s), mat, name, list: [] }); e.list.push(geo.index ? geo.toNonIndexed() : geo); };
+  const flushMerged = () => {
+    for (const e of mergedQ.values()) {
+      for (const g of e.list) for (const a of Object.keys(g.attributes)) if (!['position', 'normal', 'uv', 'color'].includes(a)) g.deleteAttribute(a);
+      const g = mergeGeometries(e.list, false); e.list.forEach((q) => q.dispose()); if (!g) continue;
+      g.computeBoundingSphere();
+      const m = new THREE.Mesh(g, e.mat); m.name = 'ride:' + e.name; m.castShadow = false; m.receiveShadow = false; m.userData.noTerrain = true;
+      chunkOf(e.k).add(m); meshes.push(m);
+    }
+    mergedQ.clear();
+  };
   const add = (geo, mat, list, name, color = null) => {
     if (!list.length) return null;
     const bins = new Map();
-    list.forEach((m, i) => { const k = Math.max(0, Math.floor(((m.s ?? sFrom) - sFrom) / C.chunk)); let b = bins.get(k); if (!b) bins.set(k, b = []); b.push(i); });
+    list.forEach((m, i) => { const k = kOf(m.s); let b = bins.get(k); if (!b) bins.set(k, b = []); b.push(i); });
     for (const [k, idx] of bins) {
       const im = new THREE.InstancedMesh(geo, mat, idx.length); im.name = 'ride:' + name;
       idx.forEach((i, j) => { im.setMatrixAt(j, list[i]); if (color) im.setColorAt(j, color[i]); });
       im.instanceMatrix.needsUpdate = true; if (im.instanceColor) im.instanceColor.needsUpdate = true;
       im.castShadow = false; im.receiveShadow = false; im.userData.noTerrain = true;
       im.computeBoundingSphere();
-      let ch = chunks[k];
-      if (!ch) { ch = chunks[k] = new THREE.Group(); ch.name = 'ride:chunk' + k; ch.userData.s0 = sFrom + k * C.chunk; ch.userData.s1 = ch.userData.s0 + C.chunk; root.add(ch); }
-      ch.add(im); meshes.push(im);
+      chunkOf(k).add(im); meshes.push(im);
     }
     return true;
   };
   let curS = sFrom; // abscissa of the instances being placed
+  const facCache = {};
 
   // ---------------------------------------------------------------- where things may stand
   // end of the range : the station clip (its tracks and surroundings are the station's)
@@ -202,9 +232,10 @@ export function buildRideScenery({ route, plan, rail, gare, sFrom, wreckS = null
   const freeLand = (x, z) => !(x > B.x0 - M && x < B.x1 + M && z > B.z0 - M && z < B.z1 + M) && !boxes.some((b) => x > b[0] && x < b[1] && z > b[2] && z < b[3]);
   // ground level at w m from the route (the strip of railNet.js : flat over the ballast foot, sloping to the corridor edge ; then the far plane)
   const strip = R.ballast.foot / 2 + 0.4;
-  const groundAt = (w) => { const a = Math.abs(w); return a <= R.corridor ? groundY - 0.4 * clamp((a - strip) / (R.corridor - strip), 0, 1) : groundY - 0.8; };
+  const groundAt = (w, s = curS) => groundProfile(w, s, route); // (embankment and bridge decks, railNet.js)
 
   // ---------------------------------------------------------------- fence line per side : beyond the outermost track (none where they fan out)
+  const bridgeIn = (s) => (route.bridges || []).some((b) => s > b.s0 - 3 && s < b.s1 + 3);
   const fenceW = { '-1': [], 1: [] }, step = C.fenceEvery, o1 = {};
   const fs0 = sFrom, nF = Math.max(0, Math.floor((sTo - fs0) / step));
   for (const sd of [-1, 1]) {
@@ -246,8 +277,8 @@ export function buildRideScenery({ route, plan, rail, gare, sFrom, wreckS = null
         const s = fs0 + i * step, w = fenceW[sd][i];
         if (w > R.corridor + 1.5) { prev = null; continue; }
         at(s, a);
-        const x = a.x - a.tz * sd * w, z = a.z + a.tx * sd * w, y = groundAt(w);
-        if (!freeLand(x, z) || nearTrack(x, z, 1.4)) { prev = null; continue; }
+        const x = a.x - a.tz * sd * w, z = a.z + a.tx * sd * w, y = groundAt(sd * w, s);
+        if (!freeLand(x, z) || nearTrack(x, z, 1.4) || bridgeIn(s)) { prev = null; continue; }
         curS = s; posts.push(mat4(x, y, z, yawOf(a)));
         if (prev) { const dx = x - prev[0], dz = z - prev[1], l = Math.hypot(dx, dz); if (l < step * 1.8) panels.push(mat4(prev[0], (y + prev[2]) / 2, prev[1], Math.atan2(-dz, dx), l, 1, 1)); }
         prev = [x, z, y];
@@ -267,7 +298,7 @@ export function buildRideScenery({ route, plan, rail, gare, sFrom, wreckS = null
       const x = o2.x - o2.tz * sd * w, z = o2.z + o2.tx * sd * w;
       if (!freeLand(x, z) || nearTrack(x, z, C.clear + clear)) continue;
       curS = s;
-      return { s, sd, w, x, z, y: groundAt(w), yaw: yawOf(o2) };
+      return { s, sd, w, x, z, y: groundAt(sd * w, s), yaw: yawOf(o2) };
     }
     return null;
   };
@@ -275,26 +306,51 @@ export function buildRideScenery({ route, plan, rail, gare, sFrom, wreckS = null
 
   // ---------------------------------------------------------------- buildings (three kinds), kept apart
   const placed = [];
+  // circles of what stands there (houses, churches) : 20 m hash grid
+  const occ = new Map(), ok2 = (i, j) => i * 100003 + j;
+  const reserve = (x, z, r) => { const k = ok2(Math.floor(x / 20), Math.floor(z / 20)); let a = occ.get(k); if (!a) occ.set(k, a = []); a.push(x, z, r); };
+  const isFree = (x, z, r) => {
+    const i0 = Math.floor((x - r - 40) / 20), i1 = Math.floor((x + r + 40) / 20), j0 = Math.floor((z - r - 40) / 20), j1 = Math.floor((z + r + 40) / 20);
+    for (let i = i0; i <= i1; i++) for (let j = j0; j <= j1; j++) { const a = occ.get(ok2(i, j)); if (!a) continue; for (let k = 0; k < a.length; k += 3) if (Math.hypot(a[k] - x, a[k + 1] - z) < a[k + 2] + r) return false; }
+    return true;
+  };
+  // fast projection onto the route : nearest of the coarse samples (4 m, 64 m hash), then the exact segment around it
+  const PC = 64, pg = new Map(), pk = (i, j) => i * 100003 + j;
+  for (let i = 0; i < tr.n; i += 4) { const k = pk(Math.floor(tr.x[i] / PC), Math.floor(tr.z[i] / PC)); let a = pg.get(k); if (!a) pg.set(k, a = []); a.push(i); }
+  const proj = (x, z, max = 200) => {
+    const r = Math.ceil(max / PC), i0 = Math.floor(x / PC), j0 = Math.floor(z / PC);
+    let bi = -1, bd = Infinity;
+    for (let i = i0 - r; i <= i0 + r; i++) for (let j = j0 - r; j <= j0 + r; j++) { const a = pg.get(pk(i, j)); if (!a) continue; for (const q of a) { const d = (tr.x[q] - x) ** 2 + (tr.z[q] - z) ** 2; if (d < bd) { bd = d; bi = q; } } }
+    if (bi < 0) return { s: 0, d: Infinity, side: 1 };
+    let best = Infinity, bs = 0, side = 1;
+    for (let j = Math.max(0, bi - 6); j <= Math.min(tr.n - 2, bi + 6); j++) {
+      const ax = tr.x[j], az = tr.z[j], ex = tr.x[j + 1] - ax, ez = tr.z[j + 1] - az, l2 = ex * ex + ez * ez;
+      let t = l2 > 0 ? ((x - ax) * ex + (z - az) * ez) / l2 : 0; t = t < 0 ? 0 : t > 1 ? 1 : t;
+      const d = Math.hypot(x - (ax + ex * t), z - (az + ez * t));
+      if (d < best) { best = d; bs = tr.s[j] + t * Math.sqrt(l2); side = ex * (z - az) - ez * (x - ax) >= 0 ? 1 : -1; }
+    }
+    return { s: bs, d: best <= max ? best : Infinity, side };
+  };
   {
     const kinds = ['warehouse', 'block', 'house'], size = { warehouse: [30, 16], block: [24, 12], house: [10, 8] }, lists = { warehouse: [], block: [], house: [] };
-    for (let n = 0; n < C.buildings * 3 && placed.length < C.buildings; n++) {
+    for (let n = 0; n < C.buildings * 3 && placed.length < C.buildings && !land; n++) {
       const r = rnd(), kind = r < 0.3 ? 'warehouse' : r < 0.58 ? 'block' : 'house';
       const [L, D] = size[kind], k = 0.8 + rnd() * 0.45, rad = Math.hypot(L, D) * k / 2;
       const p = spot(Math.max(b0 + 10, 18) + rad * 0.5, b1, rad);
       if (!p) continue;
-      if (placed.some((q) => Math.hypot(q.x - p.x, q.z - p.z) < q.r + rad + 3)) continue;
+      if (!isFree(p.x, p.z, rad + 3)) continue;
       // the long side faces the tracks (jittered), now and then square to them
       const yaw = p.yaw + (rnd() < 0.2 ? Math.PI / 2 : 0) + (rnd() - 0.5) * 0.25;
       lists[kind].push(mat4(p.x, p.y, p.z, yaw, k, 0.85 + rnd() * 0.35, k));
-      placed.push({ x: p.x, z: p.z, r: rad });
+      placed.push({ x: p.x, z: p.z, r: rad }); reserve(p.x, p.z, rad);
     }
-    for (const kind of kinds) {
+    for (const kind of land ? [] : kinds) {
       const A = facadeAtlas(kind, rnd);
       const mat = new THREE.MeshStandardMaterial({ map: A.map, emissiveMap: A.emissiveMap, emissive: 0xffffff, emissiveIntensity: 1.1, roughness: 0.86, metalness: kind === 'warehouse' ? 0.3 : 0.04, side: THREE.DoubleSide }); // (roof overhangs seen from below)
       add(buildingGeo(kind), mat, lists[kind], 'bld:' + kind);
     }
   }
-  const offBuildings = (x, z, r) => !placed.some((q) => Math.hypot(q.x - x, q.z - z) < q.r + r);
+  const offBuildings = (x, z, r) => isFree(x, z, r);
 
   // ---------------------------------------------------------------- trees and bushes (instance colours : a few greens, a little autumn)
   {
@@ -302,7 +358,7 @@ export function buildRideScenery({ route, plan, rail, gare, sFrom, wreckS = null
     const crown = merge([blob(2.3, 1, rnd).translate(0, 4.5, 0), blob(1.7, 1, rnd).translate(0.5, 6.0, 0.2), blob(1.5, 1, rnd).translate(-0.8, 5.2, -0.6)]);
     const trees = [], crowns = [], cols = [];
     const col = (k) => new THREE.Color().setHSL(0.25 + (rnd() - 0.5) * 0.08 - (k ? 0.13 : 0), 0.3 + rnd() * 0.15, 0.055 + rnd() * 0.05); // (dark : the environment light lifts flat-shaded leaves a lot)
-    for (let n = 0; n < C.trees; n++) {
+    for (let n = 0; n < (land ? 0 : C.trees); n++) {
       const p = spot(b0, b1 * 0.8, 2.5, 1.6);
       if (!p || !offBuildings(p.x, p.z, 3)) continue;
       const k = 0.75 + rnd() * 0.7, yaw = rnd() * Math.PI * 2;
@@ -311,7 +367,7 @@ export function buildRideScenery({ route, plan, rail, gare, sFrom, wreckS = null
     add(trunk, bark, trees, 'trunk');
     add(crown, leaf, crowns, 'crown', cols);
     const bush = blob(1, 1, rnd, 1, 0.7), bushes = [], bcols = [];
-    for (let n = 0; n < C.bushes; n++) {
+    for (let n = 0; n < C.bushes * ((sTo - sFrom) / 1800); n++) {
       const p = spot(2, 45, 0.8, 2.2);
       if (!p || !offBuildings(p.x, p.z, 1.5)) continue;
       const k = 0.7 + rnd() * 1.1;
@@ -325,7 +381,7 @@ export function buildRideScenery({ route, plan, rail, gare, sFrom, wreckS = null
     const pole = merge([new THREE.CylinderGeometry(0.07, 0.12, 7.2, 8).translate(0, 3.6, 0), new THREE.CylinderGeometry(0.05, 0.05, 1.6, 6).rotateZ(Math.PI / 2).translate(0.75, 7.05, 0), new THREE.CylinderGeometry(0.22, 0.26, 0.5, 8).translate(0, 0.25, 0)]);
     const head = new RoundedBoxGeometry(0.62, 0.16, 0.32, 1, 0.05); head.translate(1.5, 6.98, 0);
     const list = [];
-    for (let n = 0; n < C.lamps; n++) {
+    for (let n = 0; n < C.lamps * ((sTo - sFrom) / 1800); n++) {
       const p = spot(6, 40, 1.5, 1.4);
       if (!p || !offBuildings(p.x, p.z, 1)) continue;
       list.push(mat4(p.x, p.y, p.z, p.yaw + (p.sd > 0 ? Math.PI / 2 : -Math.PI / 2))); // local +x : toward the tracks
@@ -343,8 +399,8 @@ export function buildRideScenery({ route, plan, rail, gare, sFrom, wreckS = null
       at(s, a);
       for (const sd of [1, -1]) {
         const w = 3.0, x = a.x - a.tz * sd * w, z = a.z + a.tx * sd * w;
-        if (nearTrack(x, z, 1.9) || !freeLand(x, z)) continue;
-        curS = s; const m = mat4(x, groundAt(w), z, Math.atan2(-a.tx, -a.tz) + Math.PI); // lens (local -z) faces the coming train
+        if (nearTrack(x, z, 1.9) || !freeLand(x, z) || bridgeIn(s)) continue;
+        curS = s; const m = mat4(x, groundAt(sd * w, s), z, Math.atan2(-a.tx, -a.tz) + Math.PI); // lens (local -z) faces the coming train
         masts.push(m); (wreckS != null && s > wreckS - 520 && s < wreckS - 60 ? reds : greens).push(m);
         break;
       }
@@ -376,7 +432,7 @@ export function buildRideScenery({ route, plan, rail, gare, sFrom, wreckS = null
     for (let i = 0; i < W.n; i++) {
       at(wreckS + (i - (W.n - 1) / 2) * 15.5, a);
       const [roll, dy] = pose[i % pose.length], w = W.side * (W.off + (i % 2) * 1.6), x = a.x - a.tz * w, z = a.z + a.tx * w;
-      bodies.push(mat4(x, groundAt(w) + 0.15 + 1.45 * Math.sin(roll) * 0.9, z, yawOf(a) + dy, 1, 1, 1, W.side * roll, 0)); // (roll about the long axis : local x)
+      bodies.push(mat4(x, groundAt(w, wreckS) + 0.15 + 1.45 * Math.sin(roll) * 0.9, z, yawOf(a) + dy, 1, 1, 1, W.side * roll, 0)); // (roll about the long axis : local x)
     }
     add(body, wagonMat, bodies, 'wagon');
     add(frame, steel, bodies, 'wagonFrame');
@@ -384,13 +440,28 @@ export function buildRideScenery({ route, plan, rail, gare, sFrom, wreckS = null
     for (let k = 0; k < 18; k++) {
       at(wreckS + (rnd() - 0.5) * 50, a);
       const w = W.side * (2.6 + rnd() * 9), x = a.x - a.tz * w, z = a.z + a.tx * w;
-      sl.push(mat4(x, groundAt(w) + 0.08, z, rnd() * 6.28, 1, 1, 1, (rnd() - 0.5) * 0.3, (rnd() - 0.5) * 0.4));
+      sl.push(mat4(x, groundAt(w, wreckS) + 0.08, z, rnd() * 6.28, 1, 1, 1, (rnd() - 0.5) * 0.3, (rnd() - 0.5) * 0.4));
     }
     add(sleeper, concrete, sl, 'debris');
     const flare = new THREE.CylinderGeometry(0.035, 0.035, 0.3, 6); flare.rotateZ(Math.PI / 2 - 0.2); const fl = [];
-    for (const k of [-1, 1]) { at(wreckS + k * 14, a); const w = W.side * 2.9; fl.push(mat4(a.x - a.tz * w, groundAt(w) + 0.05, a.z + a.tx * w, rnd() * 6.28)); }
+    for (const k of [-1, 1]) { at(wreckS + k * 14, a); const w = W.side * 2.9; fl.push(mat4(a.x - a.tz * w, groundAt(w, wreckS) + 0.05, a.z + a.tx * w, rnd() * 6.28)); }
     add(flare, red, fl, 'flare');
   }
+
+  // ---------------------------------------------------------------- the real landscape (rideland.json)
+  let flash = null, landStats = null;
+  if (land) {
+    const api = {
+      C, R, route, tr, rnd, land, sFrom, sTo, proj, nearTrack, freeLand, reserve, isFree, mat4, add, merge: merge1, setS: (v) => { curS = v; },
+      mats: { concrete, steel, bark, leaf }, kit, V: (y, Ht) => 0.25 + 0.75 * clamp(y / Ht, 0, 1), buildingGeo,
+      facade: (kind) => (facCache[kind] ||= facadeAtlas(kind, rnd)),
+      crownGeometry: () => merge([blob(2.3, 1, rnd).translate(0, 4.5, 0), blob(1.7, 1, rnd).translate(0.5, 6.0, 0.2), blob(1.5, 1, rnd).translate(-0.8, 5.2, -0.6)]),
+      bushGeometry: () => blob(1, 1, rnd, 1, 0.7),
+    };
+    buildLand(api);
+    flash = api.flash; landStats = api.landStats;
+  }
+  flushMerged();
 
   // ---------------------------------------------------------------- far ground : one plane around the camera, snapped to its 8 m texture tile
   const G = C.ground, tile = 8;
@@ -398,21 +469,23 @@ export function buildRideScenery({ route, plan, rail, gare, sFrom, wreckS = null
   { const uv = far.attributes.uv, p = far.attributes.position; for (let i = 0; i < p.count; i++) uv.setXY(i, p.getX(i) / tile, -p.getZ(i) / tile); }
   const farMat = groundMat.clone(); farMat.color = new THREE.Color(0x6a675f); // a little darker than the strip
   const ground = new THREE.Mesh(far, farMat); ground.name = 'ride:ground'; ground.receiveShadow = false; ground.userData.noTerrain = true; ground.frustumCulled = false;
-  ground.position.y = groundY - 0.8;
+  ground.position.y = farGroundY(route, sTo - 600);
   root.add(ground); meshes.push(ground);
 
   let lastX = Infinity, lastZ = Infinity;
   const _pr = {};
   return {
-    root, meshes, sTo, chunks,
+    root, meshes, sTo, chunks, landStats,
     counts: meshes.reduce((o, m) => { o[m.name] = (o[m.name] || 0) + (m.count ?? 1); return o; }, {}),
     // per frame : the far ground follows the camera ; chunks near the camera's stretch of the route are drawn (local look)
     update(cam) {
       if (root.parent && !root.parent.visible) return; // (the station area is not drawn : on the island)
       ground.position.x = Math.round(cam.x / tile) * tile; ground.position.z = Math.round(cam.z / tile) * tile;
+      if (flash) { const on = Math.floor(performance.now() / 600) % 2 === 0; flash.a.emissiveIntensity = on ? 3.4 : 0.15; flash.b.emissiveIntensity = on ? 0.15 : 3.4; } // level-crossing lamps, alternating
       if (Math.abs(cam.x - lastX) + Math.abs(cam.z - lastZ) < 4) return;
       lastX = cam.x; lastZ = cam.z;
       const q = tr.project(cam.x, cam.z, C.chunkView, _pr), V = C.chunkView;
+      if (q.d < Infinity) ground.position.y = farGroundY(route, q.s);
       for (const ch of chunks) if (ch) ch.visible = q.d < Infinity && q.s > ch.userData.s0 - V && q.s < ch.userData.s1 + V;
     },
   };

@@ -2039,7 +2039,7 @@ export async function buildRealWorld(scene, renderer) {
   {
     const dome = makeSkyDome(300); // un maillage, un shader : dégradé + nuages + lune (sky.js) ; repeint par l'Acte V (summit.js)
     sky.add(dome.mesh);
-    skyApi = { group: sky, dome: dome.mesh, setGradient: dome.setGradient, setK: dome.setK, setCloud: dome.setCloud, update: dome.update, stars: null };
+    skyApi = { group: sky, dome: dome.mesh, setGradient: dome.setGradient, setK: dome.setK, setCloud: dome.setCloud, setRidge: dome.setRidge, update: dome.update, stars: null };
     const sp = [];
     for (let i = 0; i < 500; i++) {
       const th = rnd() * Math.PI * 2, ph = rnd() * 1.2;

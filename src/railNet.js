@@ -80,11 +80,70 @@ export function buildIntroRoute(rail, plan) {
   for (let i = 0; i < track.n; i++) if (plan.L(track.x[i], track.z[i])[0] >= TR.park.headU) { parkHeadS = track.s[i]; break; }
   const o = track.at(parkHeadS, {}), q1c = plan.W((pu0 + pu1) / 2, plan.at(plan.q1W, 0) + 2);
   const platformSide = Math.sign(-(q1c[0] - o.x) * o.tz + (q1c[1] - o.z) * o.tx) || 1; // +1 : the platform is on the right of the direction of travel
-  return { track, parkHeadS, platformSide, stopAt: src.stopAt, length: track.L };
+  // embankment ramp : full height up to rampOut m before the station clip, easing to nothing endBefore m short of it
+  let sClip = track.L;
+  for (let i = 0; i < track.n; i += 2) if (inStationClip(plan, ...plan.L(track.x[i], track.z[i]))) { sClip = track.s[i]; break; }
+  const E = R.embank, emb = { s0: sClip - E.rampOut, s1: sClip - E.endBefore };
+  return { track, parkHeadS, platformSide, stopAt: src.stopAt, length: track.L, emb, bridges: [] };
+}
+
+// ------------------------------------------------------------------ ground beside the route (v0.88.0) : the embankment and the bridges
+// embankFactor : 0..1 along the route ; groundProfile(w, s, route) : ground height at w m from the axis (signed : bridges differ by side) and route abscissa s
+export function embankFactor(route, s) { const e = route.emb; return e ? 1 - smoothstep(e.s0, e.s1, s) : 1; }
+export function groundProfile(w, s, route) {
+  const R = CONFIG.railNet, E = R.embank, bedTop = CONFIG.gare.railY, gy = bedTop - R.ballast.h - 0.02;
+  const a = Math.abs(w), t0 = R.ballast.top / 2, f0 = R.ballast.foot / 2, foot = f0 + 0.4, drop = E.drop * embankFactor(route, s);
+  const br = bridgeAt(route, s);
+  if (br) { // deck : the bed to the girders, then the ground far below
+    if (a <= t0) return bedTop;
+    if (a <= (w < 0 ? br.wl : br.wr)) return a <= f0 ? bedTop + ((gy - bedTop) * (a - t0)) / (f0 - t0) : gy;
+    return gy - Math.max(drop, 1.4) - 0.8;
+  }
+  if (a <= t0) return bedTop;
+  if (a <= f0) return bedTop + ((gy - bedTop) * (a - t0)) / (f0 - t0);
+  if (a <= foot) return gy;
+  if (a <= foot + E.slope) return gy - drop * smoothstep(foot, foot + E.slope, a);
+  return a <= R.corridor ? gy - drop - 0.4 * clamp((a - foot - E.slope) / (R.corridor - foot - E.slope), 0, 1) : gy - drop - 0.8;
+}
+// level of the far ground at route abscissa s (the plane under everything)
+export function farGroundY(route, s) { const R = CONFIG.railNet, br = bridgeAt(route, s); return CONFIG.gare.railY - R.ballast.h - 0.02 - (br ? Math.max(R.embank.drop * embankFactor(route, s), 1.4) : R.embank.drop * embankFactor(route, s)) - 0.8; }
+export function bridgeAt(route, s) { const B = route.bridges; if (B) for (let i = 0; i < B.length; i++) if (s >= B[i].s0 && s <= B[i].s1) return B[i]; return null; }
+
+// occupancy of the tracks : every track of rail.json and the route, 2 m samples in a 6 m hash grid ; nearTrack(x, z, r) : a track within r m
+export function trackGrid(rail, tr) {
+  const CELL = 6, grid = new Map(), gk = (i, j) => i * 100003 + j;
+  const putPt = (x, z) => { const k = gk(Math.floor(x / CELL), Math.floor(z / CELL)); let a = grid.get(k); if (!a) grid.set(k, a = []); a.push(x, z); };
+  for (const t of rail.tracks || []) for (let i = 1; i < t.pts.length; i++) {
+    const [ax, az] = t.pts[i - 1], [bx, bz] = t.pts[i], d = Math.hypot(bx - ax, bz - az), n = Math.max(1, Math.ceil(d / 2));
+    for (let k = 0; k <= n; k++) putPt(ax + ((bx - ax) * k) / n, az + ((bz - az) * k) / n);
+  }
+  for (let i = 0; i < tr.n; i += 2) putPt(tr.x[i], tr.z[i]);
+  return (x, z, r) => {
+    const i0 = Math.floor((x - r) / CELL), i1 = Math.floor((x + r) / CELL), j0 = Math.floor((z - r) / CELL), j1 = Math.floor((z + r) / CELL), r2 = r * r;
+    for (let i = i0; i <= i1; i++) for (let j = j0; j <= j1; j++) { const a = grid.get(gk(i, j)); if (!a) continue; for (let k = 0; k < a.length; k += 2) { const dx = a[k] - x, dz = a[k + 1] - z; if (dx * dx + dz * dz < r2) return true; } }
+    return false;
+  };
+}
+
+// bridges of rideland.json (the railway bridges of the real line) as route ranges with the deck's half widths (the neighbouring tracks go over the bridge too)
+export function findBridges(route, rail, land) {
+  const out = [], tr = route.track, R = CONFIG.railNet, E = R.embank, near = trackGrid(rail, tr), pr = {}, o = {};
+  for (const b of land?.bridges || []) {
+    const a = tr.project(b.a[0], b.a[1], 30, pr).s, ad = pr.d, c = tr.project(b.b[0], b.b[1], 30, pr).s, cd = pr.d;
+    if (!isFinite(ad) || !isFinite(cd)) continue;
+    const s0 = Math.min(a, c) - 1, s1 = Math.max(a, c) + 1;
+    if (s1 - s0 < 5 || s1 - s0 > 200 || out.some((q) => s0 < q.s1 + 4 && s1 > q.s0 - 4)) continue;
+    tr.at((s0 + s1) / 2, o);
+    const ext = [0, 0]; // outermost track on the left, on the right (m from the axis)
+    for (const [i, sd] of [-1, 1].entries()) { let gap = 0; for (let w = 2.5; w <= 22 && gap < 7; w += 0.5) { if (near(o.x - o.tz * sd * w, o.z + o.tx * sd * w, 1.0)) { ext[i] = w; gap = 0; } else gap += 0.5; } } // (the tracks that touch each other : a siding 15 m away is not on the deck)
+    out.push({ s0, s1, wl: Math.max(E.deckMin, ext[0] + 2.2), wr: Math.max(E.deckMin, ext[1] + 2.2), over: b.over });
+  }
+  out.sort((p, q) => p.s0 - q.s0);
+  return out;
 }
 
 // ------------------------------------------------------------------ polyline helpers
-function simplify(pts, tol) { // Douglas-Peucker, keeps the ends
+function simplify(pts, tol, cap = 12) { // Douglas-Peucker, keeps the ends ; cap : longest segment (m)
   if (pts.length < 3) return pts.slice();
   const keep = new Uint8Array(pts.length); keep[0] = keep[pts.length - 1] = 1;
   const stack = [[0, pts.length - 1]];
@@ -99,7 +158,7 @@ function simplify(pts, tol) { // Douglas-Peucker, keeps the ends
   // cap the segment length (wire sag, chunking, ballast UVs)
   const res = [out[0]];
   for (let i = 1; i < out.length; i++) {
-    const [ax, az] = out[i - 1], [bx, bz] = out[i], d = Math.hypot(bx - ax, bz - az), n = Math.ceil(d / 12);
+    const [ax, az] = out[i - 1], [bx, bz] = out[i], d = Math.hypot(bx - ax, bz - az), n = Math.ceil(d / cap);
     for (let k = 1; k <= n; k++) res.push([ax + ((bx - ax) * k) / n, az + ((bz - az) * k) / n]);
   }
   return res;
@@ -118,15 +177,16 @@ function frames(pts) {
 
 // sweeps a 2D profile [[across, y]…] (an open strip) along the frames ; uvAcross : true -> u = across (m), v = along (m) ; scale k
 function sweep(F, prof, { closed = false, k = 0.5, offset = 0 } = {}) {
-  const pos = [], uv = [], m = prof.length, segs = closed ? m : m - 1;
+  const pf = typeof prof === 'function' ? prof : () => prof; // (a function : the profile of each frame, same point count : the ground strip, v0.88.0)
+  const pos = [], uv = [], m = pf(F[0]).length, segs = closed ? m : m - 1;
   for (let i = 1; i < F.length; i++) {
-    const a = F[i - 1], b = F[i];
+    const a = F[i - 1], b = F[i], pa = pf(a), pb = pf(b);
     for (let j = 0; j < segs; j++) {
-      const p0 = prof[j], p1 = prof[(j + 1) % m];
+      const p0 = pa[j], p1 = pa[(j + 1) % m], q0 = pb[j], q1 = pb[(j + 1) % m];
       const P = (f, p) => [f.x - f.tz * (p[0] + offset), p[1], f.z + f.tx * (p[0] + offset)];
-      const A = P(a, p0), B = P(a, p1), C = P(b, p1), D = P(b, p0);
-      const ua = (p0[0] + offset) * k, ub = (p1[0] + offset) * k, va = a.s * k, vb = b.s * k;
-      pos.push(...A, ...C, ...D, ...A, ...B, ...C); uv.push(ua, va, ub, vb, ua, vb, ua, va, ub, va, ub, vb);
+      const A = P(a, p0), B = P(a, p1), C = P(b, q1), D = P(b, q0);
+      const ua = (p0[0] + offset) * k, ub = (p1[0] + offset) * k, uc = (q1[0] + offset) * k, ud = (q0[0] + offset) * k, va = a.s * k, vb = b.s * k;
+      pos.push(...A, ...C, ...D, ...A, ...B, ...C); uv.push(ua, va, uc, vb, ud, vb, ua, va, ub, va, uc, vb);
     }
   }
   const g = new THREE.BufferGeometry();
@@ -302,11 +362,18 @@ export function buildRailNet({ rail, plan, route, mats }) {
   }
   // 3) ground strip along the route (embankment verges ; fog does the rest)
   {
-    const gy = y0 - R.ballast.h - 0.02, wd = R.corridor;
+    const wd = R.corridor, E = R.embank, foot = R.ballast.foot / 2 + 0.4, _ps = {};
     for (const run of runs(routePts, (x, z) => !inClip(x, z))) {
-      const F = frames(simplify(run.pts, 0.2));
+      const F = frames(simplify(run.pts, 0.2, 5));
+      for (const f of F) f.rs = tr.project(f.x, f.z, 4, _ps).s; // route abscissa of each frame (the embankment and the bridges depend on it)
       // (v0.81.0 : a skirt past the edges dips under the far ground of the ride, rideScenery.js : a clean seam, no coplanar faces)
-      put(run.k, groundMat, sweep(F, [[-wd - 2, gy - 1.3], [-wd, gy - 0.4], [-R.ballast.foot / 2 - 0.4, gy], [R.ballast.foot / 2 + 0.4, gy], [wd, gy - 0.4], [wd + 2, gy - 1.3]], { k: 1 / 8 }));
+      // v0.88.0 : the embankment (slope beyond the shoulder) and the bridges (a deck : the ground far below beyond the girders) ; same point count per frame
+      const prof = (f) => {
+        const br = bridgeAt(route, f.rs), hl = br ? br.wl : foot, hr = br ? br.wr : foot, g = (w) => groundProfile(w, f.rs, route);
+        const wl = [-wd - 2, -wd, -(hl + E.slope), -(hl + E.slope / 2), -hl - 0.001, -hl, hr, hr + 0.001, hr + E.slope / 2, hr + E.slope, wd, wd + 2];
+        return wl.map((w, i) => [w, i === 0 || i === wl.length - 1 ? g(w) - 0.9 : g(w)]);
+      };
+      put(run.k, groundMat, sweep(F, prof, { k: 1 / 8 }));
     }
   }
   // 4) one mesh per material per chunk

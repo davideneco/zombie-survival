@@ -871,8 +871,9 @@ const game = {
       const q = t.frame(tl.u, this._gtf || (this._gtf = {}));
       L = g.tl = { u: tl.u, w: tl.w, y: g.pos.y, vu: g.vel.x * q.tx + g.vel.z * q.tz - t.v, vw: -g.vel.x * q.tz + g.vel.z * q.tx, vy: g.vel.y, p: { u: 0, w: 0 } };
     }
-    const I = t.interior, wall = t.walkCfg.wall - 0.12, floor = t.floorY + 0.09, ceil = t.ceilY - 0.1;
+    const I = t.interior, wall = t.walkCfg.wall - 0.12, ceil = t.ceilY - 0.1;
     L.vy -= G * dt; L.u += L.vu * dt; L.w += L.vw * dt; L.y += L.vy * dt;
+    const floor = (t.floorAt ? t.floorAt(L.u) : t.floorY) + 0.09; // (raised floors over the bogies)
     if (Math.abs(L.w) > wall) { const sd = Math.sign(L.w); L.w = sd * wall; if (L.vw * sd > 0) L.vw *= -0.6; }
     if (L.u < I.u0 + 0.12) { L.u = I.u0 + 0.12; if (L.vu < 0) L.vu *= -0.6; }
     if (L.u > I.u1 - 0.12) { L.u = I.u1 - 0.12; if (L.vu > 0) L.vu *= -0.6; }
@@ -2607,7 +2608,7 @@ if (q.has('host') || q.has('join')) {
 if (q.has('debug')) {
   const pl = game.player;
   if (q.has('gare') && world.gare) { game.startArea = 'gare'; game.pickRandomSpawn(); game.applySpawnPoint(game.activeSpawn, 0); } // ?debug&gare : start at the station
-  if (q.has('gare') && q.has('train') && game.train) { const t = game.train; game.placeInTram(t, t.veh[2].uc + 3.4, 0); } // ?debug&gare&train : standing in the aisle of the middle coach
+  if (q.has('gare') && q.has('train') && game.train) { const t = game.train; game.placeInTram(t, t.veh[2].uc + 1.0, 0); } // ?debug&gare&train : standing in the aisle of the middle coach
   // ?debug&intro : the train intro (the start area was chosen before the first reset : the player already stands in the train at τ = 0)
   if (q.has('x')) pl.pos.x = parseFloat(q.get('x'));
   if (q.has('z')) pl.pos.z = parseFloat(q.get('z'));

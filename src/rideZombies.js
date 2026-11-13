@@ -2,16 +2,17 @@ import * as THREE from 'three';
 import { CONFIG } from './config.js';
 import { Zombie } from './zombie.js';
 import { fx } from './fx.js';
+import { groundProfile } from './railNet.js';
 
 // =====================================================================
 //  Zombies of the train ride (v0.82.0, phase 4 of docs/TRAIN_INTRO_SPEC.md) : the threat during the intro (intro.js) ; the host simulates,
 //  clients render. Timeline (CONFIG.intro, events -> game.introHooks) :
-//    'track'    (4-30 s, 80 km/h) : trackside zombies the train passes ; the ones standing on the track are run over by the locomotive
+//    'track'    (180-210 s, 80 km/h) : trackside zombies the train passes ; the ones standing on the track are run over by the head car
 //                (thud, blood on its front, roadkillPoints) ;
-//    'breach'   (30-55 s, 15 km/h past the derailed wagons) : side zombies beside the track, and breachers running alongside the train :
+//    'breach'   (202-227 s, 15 km/h past the derailed wagons) : side zombies beside the track, and breachers running alongside the train :
 //                they grab a window (hang : fists on the glass, it cracks), smash it (it stays broken, wind), climb in, then walk the aisle ;
 //                hanging + climbing capped at maxHanging (maxHanging4p with 4 players) ;
-//    'roof'     (55-80 s) : footsteps on the roof of the last coach, bangs on its tail door, the door is forced, gangway zombies come in ;
+//    'roof'     (227-250 s) : footsteps on the roof of the last car, bangs on its rear cab door (train.tailU), the door is forced, gangway zombies come in ;
 //    'trackbed' (the stop) : a few zombies climb out of the track bed onto quai 1 ; zombies still on board are released (train.js : they chase
 //                players inside, or leave by an open door into the station region) ; round 1 then starts as usual (intro.js).
 //  Frames : a trackside zombie is placed by its route abscissa s and lateral offset w (z.rideW) ; a zombie at / in the train lives in the
@@ -34,14 +35,8 @@ export function installRideZombies(game, { world, scene, sfx }) {
   game.rideZombieStep = null;
   if (!t || !I?.enabled || !game.introAvailable) return;
   const T = CONFIG.train, B = I.breach, Rf = I.roof, Wd = T.width / 2, lay = t.lay, route = t.route, tr = route.track;
-  // ground beside the route (the strip of railNet.js : ballast top, its slope, then the ground falling toward the corridor edge ; rideScenery.js)
-  const RN = CONFIG.railNet, bedTop = CONFIG.gare.railY, groundY = bedTop - RN.ballast.h - 0.02, strip = RN.ballast.foot / 2 + 0.4;
-  const groundAt = (w) => {
-    const a = Math.abs(w), t0 = RN.ballast.top / 2, f0 = RN.ballast.foot / 2;
-    if (a <= t0) return bedTop;
-    if (a <= f0) return bedTop + ((groundY - bedTop) * (a - t0)) / (f0 - t0);
-    return a <= RN.corridor ? groundY - 0.4 * clamp((a - strip) / (RN.corridor - strip), 0, 1) : groundY - 0.8;
-  };
+  // ground beside the route : the embankment of railNet.js (groundProfile : slope, bridge decks) at the train's middle by default
+  const groundAt = (w, sAt = t.s - t.L / 2) => groundProfile(w, sAt, route);
   const roofEvent = (I.events.find((e) => e.id === 'roof') || { at: 55 }).at;
   const R = { plan: [], next: 0, roof: null, hanging: 0, claims: new Map(), bedExtra: 0, removed: [] };
   const o1 = {}, o2 = {}, wo = {}, wp = { x: 0, y: 0, z: 0 }, cv = { x: 0, z: 0 };
@@ -78,7 +73,7 @@ export function installRideZombies(game, { world, scene, sfx }) {
   const trainVel = (u, out) => { t.frame(u, o2); out.x = o2.tx * t.v; out.z = o2.tz * t.v; return out; };
 
   // ---------------------------------------------------------------- windows
-  const winOk = (i) => { t.winOf(i, wo); return !(wo.sd < 0 && wo.k === 0); }; // (not the window of the WC cubicle)
+  const winOk = (i) => !t.winTable[i].raised; // (not the small windows above the fold-up seats of the raised floors)
   const pickWindow = (sd, u) => {
     let best = -1, bs = Infinity;
     const pu = nearestPU(u);
@@ -98,7 +93,7 @@ export function installRideZombies(game, { world, scene, sfx }) {
     t.winOf(i, wo);
     const p = game.player;
     t.walkToWorld(wo.u, wo.sd * Wd, 0, wp);
-    const y = t.railY + (lay.winY0 + lay.winY1) / 2, v = Math.max(0, 1 - Math.hypot(wp.x - p.pos.x, wp.z - p.pos.z) / 40);
+    const y = t.railY + (lay.winY0 + lay.winY1) / 2 + wo.dy, v = Math.max(0, 1 - Math.hypot(wp.x - p.pos.x, wp.z - p.pos.z) / 40);
     if (st === 1) { sfx.knock(v); sfx.glass(v * 0.25); return; }
     t.frame(wo.u, o2);
     trainVel(wo.u, cv); fx.setCarry(cv.x, cv.z);
@@ -115,8 +110,8 @@ export function installRideZombies(game, { world, scene, sfx }) {
   const landing = (i, out) => {
     t.winOf(i, wo);
     const v = t.veh[wo.ci];
-    let best = 0, bd = Infinity;
-    lay.legroom.forEach((lu, b) => { if (wo.sd < 0 && b === 0) return; const d = Math.abs(v.uc + lu - wo.u); if (d < bd) { bd = d; best = v.uc + lu; } });
+    let best = wo.u, bd = Infinity;
+    for (const lg of v.Q.legroom) { const d = Math.abs(v.uc + lg.u - wo.u); if (d < bd) { bd = d; best = v.uc + lg.u; } }
     out.u = best; out.w = wo.sd * 0.85;
     return out;
   };
@@ -140,7 +135,7 @@ export function installRideZombies(game, { world, scene, sfx }) {
   // a trackside zombie at route abscissa s, offset w ; it walks to `lane` (rail : it stays on the track)
   const spawnTrack = (kind, s, w, lane, rail) => {
     tr.at(s, o1);
-    const z = make(kind, o1.x - o1.tz * w, groundAt(w), o1.z + o1.tx * w);
+    const z = make(kind, o1.x - o1.tz * w, groundAt(w, s), o1.z + o1.tx * w);
     z.rideW = { s, w, lane, rail };
     z.yaw = rail ? Math.atan2(-o1.tx, -o1.tz) : Math.atan2(Math.sign(w) * o1.tz, -Math.sign(w) * o1.tx);
     z.group.rotation.set(0, z.yaw, 0);
@@ -161,20 +156,20 @@ export function installRideZombies(game, { world, scene, sfx }) {
     sendSpawn(z, { tn: [wo.ci, sd, wo.k] });
     return z;
   };
-  // a gangway zombie : drops onto the tail gangway of the last coach and walks in
+  // a gangway zombie : comes out of the rear cab of the tail car (through its bulkhead door, forced open) and walks in
   const spawnGang = () => {
-    const last = t.veh[t.n - 1], uB = last.uc - lay.h, u = uB - 0.6, w = rnd(-0.2, 0.2);
-    t.walkToWorld(u, w, t.floorY, wp);
-    const z = make('gang', wp.x, t.floorY, wp.z);
-    z.onTrain = { v: t, u, w, y: t.floorY, st: 'gang', sd: 1, win: -1, t: 0, gu: uB + 0.9 };
+    const uB = t.tailU, u = uB - 0.6, w = rnd(-0.2, 0.2), fy = t.floorAt(u);
+    t.walkToWorld(u, w, fy, wp);
+    const z = make('gang', wp.x, fy, wp.z);
+    z.onTrain = { v: t, u, w, y: fy, st: 'gang', sd: 1, win: -1, t: 0, gu: uB + 0.9 };
     z.yaw = frameYaw(u); z.group.rotation.set(0, z.yaw, 0);
     sendSpawn(z);
     return z;
   };
   // the trackbed zombies at the stop : a ground spawn (emergence) at the platform edge beside the train ; a normal station zombie
   const spawnBed = () => {
-    const v = t.veh[1 + Math.floor(Math.random() * (t.n - 1))];
-    t.walkToWorld(v.uc + rnd(-8, 8), t.doorSide * (Wd + 2.6), 0, wp);
+    const v = t.veh[Math.floor(Math.random() * t.n)];
+    t.walkToWorld(v.uc + rnd(-6, 6), t.doorSide * (Wd + 2.6), 0, wp);
     const g = world.pickGround?.(wp.x, wp.z, 2, 20);
     if (!g) return null;
     const hp = hp1(), spd = speed1();
@@ -226,7 +221,7 @@ export function installRideZombies(game, { world, scene, sfx }) {
     let moving = false;
     if (!W.rail && ahead < 70 && Math.abs(W.w - W.lane) > 0.05) { const st = Math.min(Math.abs(W.lane - W.w), z.speed * dt); W.w += Math.sign(W.lane - W.w) * st; moving = st > 1e-4; }
     tr.at(W.s, o1);
-    z.pos.set(o1.x - o1.tz * W.w, groundAt(W.w), o1.z + o1.tx * W.w);
+    z.pos.set(o1.x - o1.tz * W.w, groundAt(W.w, W.s), o1.z + o1.tx * W.w);
     const sd = Math.sign(W.w) || 1, goal = W.rail || ahead > 4 ? Math.atan2(-o1.tx, -o1.tz) : Math.atan2(sd * o1.tz, -sd * o1.tx); // the oncoming train, then the coaches
     z.yaw += angDiff(goal, z.yaw) * Math.min(1, dt * 5);
     z.group.rotation.set(0, z.yaw, 0);
@@ -261,12 +256,12 @@ export function installRideZombies(game, { world, scene, sfx }) {
     } else if (O.st === 'climb') {
       O.t += dt;
       k = Math.min(1, O.t / B.climb); const e = k * k * (3 - 2 * k);
-      O.u = O.u0 + (O.lu - O.u0) * e; O.w = O.w0 + (O.lw - O.w0) * e; O.y = O.y0 + (t.floorY - O.y0) * e + B.arc * Math.sin(Math.PI * k);
+      O.u = O.u0 + (O.lu - O.u0) * e; O.w = O.w0 + (O.lw - O.w0) * e; O.y = O.y0 + (t.floorAt(O.lu ?? O.u) - O.y0) * e + B.arc * Math.sin(Math.PI * k);
       z.yaw = inwardYaw(O.u, O.sd);
       pose = 'climb';
-      if (k >= 1) { O.st = 'in'; O.y = t.floorY; release(z); pose = 'walk'; }
+      if (k >= 1) { O.st = 'in'; O.y = t.floorAt(O.u); release(z); pose = 'walk'; }
     } else if (O.st === 'gang') {
-      O.u += z.speed * T.zombie.speedK * dt; O.w *= Math.max(0, 1 - dt * 2); O.y = t.floorY;
+      O.u += z.speed * T.zombie.speedK * dt; O.w *= Math.max(0, 1 - dt * 2); O.y = t.floorAt(O.u);
       z.yaw = frameYaw(O.u);
       if (O.u >= O.gu) O.st = 'in';
     }
@@ -294,7 +289,7 @@ export function installRideZombies(game, { world, scene, sfx }) {
         return;
       }
       if (O.st === 'climb' && O.lu != null) { O.u = O.lu; O.w = O.lw; }
-      O.w = clamp(O.w, -1.0, 1.0); O.y = t.floorY; O.sink = 0;
+      O.w = clamp(O.w, -1.0, 1.0); O.y = t.floorAt(O.u); O.sink = 0;
       O.ryw = angDiff(z.yaw, frameYaw(O.u));
     }
     if (z.deathT > 2.5) O.sink += dt * 0.8;
@@ -355,16 +350,16 @@ export function installRideZombies(game, { world, scene, sfx }) {
   // ---------------------------------------------------------------- roof script (every peer, from τ) : footsteps, bangs, the tail door
   const roofStep = (tau) => {
     const Q = R.roof; if (!Q) return;
-    const p = game.player, inT = p.onTram?.v === t, pu = inT ? p.onTram.u : 1e9, last = t.veh[t.n - 1];
+    const p = game.player, inT = p.onTram?.v === t, pu = inT ? p.onTram.u : 1e9, last = t.veh[t.n - 1], uTail = t.tailU;
     const vol = (u) => (inT ? clamp(1 - (Math.abs(pu - u) + 1.4) / 24, 0, 1) : 0);
     while (Q.step < Rf.steps && tau >= Q.t0 + Q.step * Rf.every) {
-      const u = last.uc + lay.h - 2 - ((lay.L - 4) * Q.step) / Math.max(1, Rf.steps - 1);
+      const u = last.uc + last.len / 2 - 2 - ((last.len - 4) * Q.step) / Math.max(1, Rf.steps - 1);
       sfx.roofStep?.(vol(u)); Q.step++;
     }
-    while (Q.bang < Rf.bangs && tau >= Rf.bangAt + Q.bang * 0.55) { sfx.knock(Math.min(1, vol(last.uc - lay.h) * 1.4)); Q.bang++; }
+    while (Q.bang < Rf.bangs && tau >= Rf.bangAt + Q.bang * 0.55) { sfx.knock(Math.min(1, vol(uTail) * 1.4)); Q.bang++; }
     if (tau >= Rf.forceAt) {
       t.setTail((tau - Rf.forceAt) / 0.35);
-      if (!Q.forced) { Q.forced = true; const v = vol(last.uc - lay.h); sfx.knock(v); sfx.glass(v * 0.6); sfx.groan(v); }
+      if (!Q.forced) { Q.forced = true; const v = vol(uTail); sfx.knock(v); sfx.glass(v * 0.6); sfx.groan(v); }
       while (Q.gang < Q.ng && tau >= Rf.forceAt + 0.5 + Q.gang * Rf.gangEvery) { spawnGang(); Q.gang++; }
     }
   };
@@ -432,7 +427,7 @@ export function installRideZombies(game, { world, scene, sfx }) {
     if (!O || O.v !== t) return 0;
     let g = 0;
     for (const i of t.winLists[2]) { t.winOf(i, wo); g = Math.max(g, 1 - (Math.abs(wo.u - O.u) + Math.abs(wo.sd * Wd - O.w) * 0.5) / I.wind.reach); }
-    if (t.tail > 0.5) { const last = t.veh[t.n - 1]; g = Math.max(g, 1 - Math.abs(last.uc - lay.h - O.u) / I.wind.reach); }
+    if (t.tail > 0.5) g = Math.max(g, 1 - Math.abs(t.tailU - O.u) / I.wind.reach);
     return clamp(g, 0, 1) * I.wind.gain;
   };
   // effects carried by the train (main.js hitZombie : blood of a zombie in the moving train flies with it) ; false : not in the train
