@@ -303,10 +303,10 @@ Prix d'une porte : le plus cher des deux prix de zone (colonne « Prix de la por
 | Quais |  | gare (aire séparée, tram) | 3132 | 750 | -1059 ; -333 | P57 | station, wall:m1911, wall:shotgun | 1 | COLT M1911, REMINGTON 870 |  |
 | Hall de la Gare |  | gare (aire séparée, tram) | 3315 | 750 | -1011 ; -306 | P57, P58 | station, wall:mp5, perk:quickrevive, box | 1 | MP5 | RÉANIMATION RAPIDE, BOÎTE MYSTÈRE |
 | Place de la Gare |  | gare (aire séparée, tram) | 20818 | 1000 | -969 ; -289 | P58 | station, wall:famas, perk:staminup | 1 | FAMAS F1 | STAMIN-UP |
-| Quai des Bateliers |  | gare (aire séparée, tram) | 4245 |  | 932 ; 155 | P89 | station, wall:mp5, wall:ak47 | 1 | MP5, AK-47 |  |
+| Quai des Bateliers |  | gare (aire séparée, tram) | 4205 |  | 932 ; 155 | P89, P90 | station, wall:mp5, wall:ak47 | 1 | MP5, AK-47 |  |
 | Saint-Guillaume |  | gare (aire séparée, tram) | 7800 |  | 1052 ; 168 |  | station, wall:scar, perk:doubletap | 1 | SCAR-H | DOUBLE TAP |
-| Place de Zurich |  | gare (aire séparée, tram) | 7590 |  | 927 ; 327 |  | station, wall:famas, wall:saiga | 1 | FAMAS F1, SAIGA-12 |  |
-| Manufacture des Tabacs |  | gare (aire séparée, tram) | 14794 |  | 1032 ; 336 |  | station, wall:mg42, perk:juggernog | 1 | MG42 | MASTODONTE |
+| Place de Zurich |  | gare (aire séparée, tram) | 7514 |  | 927 ; 327 |  | station, wall:famas, wall:saiga | 1 | FAMAS F1, SAIGA-12 |  |
+| Manufacture des Tabacs |  | gare (aire séparée, tram) | 14740 |  | 1032 ; 336 |  | station, wall:mg42, perk:juggernog | 1 | MG42 | MASTODONTE |
 
 ## Portes
 
@@ -401,6 +401,7 @@ Prix d'une porte : le plus cher des deux prix de zone (colonne « Prix de la por
 | P87 | 1250 | Saint-Pierre-le-Vieux | Saint-Pierre-le-Vieux |
 | P88 | 500 | hors secteur | hors secteur |
 | P89 | 3000 | Quai des Bateliers | Quai des Bateliers |
+| P90 | 1800 | Quai des Bateliers | Quai des Bateliers |
 
 ## Emplacements
 

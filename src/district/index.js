@@ -286,7 +286,8 @@ function drawKrMap({ data, blds, R, mb, S, nx, nz, zlab, walk, cx: wx, cz: wz, z
     x.fillStyle = '#e8c04a'; x.strokeStyle = '#000'; x.lineWidth = 2; x.beginPath(); x.roundRect(rx - 9, ry - 9, 18, 18, 4); x.fill(); x.stroke();
     x.fillStyle = '#000'; x.font = 'bold 13px Arial'; x.textAlign = 'center'; x.fillText('\u25C0', rx, ry + 4.5);
     x.font = 'bold 12px Arial'; x.lineWidth = 3; x.strokeStyle = '#000'; x.fillStyle = '#ffe9a0';
-    x.textAlign = 'left'; x.strokeText('PONT : retour Grande \u00CEle', rx - 9, ry + 26); x.fillText('PONT : retour Grande \u00CEle', rx - 9, ry + 26);
+    const right = rx > W / 2, lx = right ? rx + 9 : rx - 9; x.textAlign = right ? 'right' : 'left'; // (the label grows toward the middle of the plan)
+    x.strokeText('PONT : retour Grande \u00CEle', lx, ry + 26); x.fillText('PONT : retour Grande \u00CEle', lx, ry + 26);
   }
   return cv;
 }
