@@ -33,6 +33,7 @@ import { installUi } from './ui.js';
 import { installModMenu } from './modMenu.js';
 import { installUnstick } from './unstick.js';
 import { installBarricades } from './barricades.js';
+import { installBarrels } from './barrels.js';
 import { installTransfer } from './transfer.js';
 import { installKeybinds } from './keybinds.js';
 import { installKeysMenu } from './keysMenu.js';
@@ -429,6 +430,21 @@ const game = {
     }
   },
 
+  // Caisse de munitions d'un immeuble fortifié à portée (même étage) ; une fois par manche et par joueur (local : les munitions sont locales)
+  nearCrate() {
+    const p = this.player;
+    for (const kb of world.keyBuildings || []) {
+      const c = kb.crate;
+      if (!c || kb.demoted || (p.region || 0) !== c.region) continue;
+      if (Math.hypot(p.pos.x - c.x, p.pos.z - c.z) < CONFIG.barricades.crate.reach) return { kb: kb.id, ...c };
+    }
+    return null;
+  },
+  crateLeft(c) {
+    const e = this.crateUses?.get(c.kb);
+    return !e || e.round !== this.round || e.n < CONFIG.barricades.crate.usesPerRound;
+  },
+
   // Debug / tests: put the local player on a floor of key building i (0 = ground room, 1.. = upper floors) in front of the stair
   tpKeyBuilding(i, floor = 1) {
     const kb = world.keyBuildings?.[i];
@@ -665,6 +681,21 @@ const game = {
         sfx.buy();
         hud.announce(ww.name, 'Arme acquise !', 2000);
       }
+      return;
+    }
+
+    // 4a) Caisse de munitions du point de repli (immeuble fortifié) : recharge l'arme en main, une fois par manche
+    const crate = this.nearCrate();
+    if (crate) {
+      const cfg = p.curCfg;
+      if (!this.crateLeft(crate)) { sfx.deny(); return; }
+      if (p.curW.reserve >= cfg.maxReserve) return;
+      const u = (this.crateUses ||= new Map()), e = u.get(crate.kb) || { round: -1, n: 0 };
+      if (e.round !== this.round) { e.round = this.round; e.n = 0; }
+      e.n++; u.set(crate.kb, e);
+      p.refill(p.curW);
+      sfx.buy();
+      hud.announce('CAISSE DE MUNITIONS', cfg.name, 2000);
       return;
     }
 
@@ -996,7 +1027,7 @@ const game = {
     let best = null, bestD = 3.4;
     for (const d of world.doors) {
       if (d.open) continue;
-      for (const pt of d.points) {
+      for (const pt of d.points.length ? d.points : d.hit || []) {
         const dist = Math.hypot(p.x - pt.x, p.z - pt.z);
         if (dist < bestD) { bestD = dist; best = d; }
       }
@@ -1011,7 +1042,8 @@ const game = {
     // première ouverture de la zone du parking des motos : on l'annonce (le « P » bleu de la carte indique l'endroit)
     const pk = (world.parkings || []).find((q) => !this.parkingSeen?.has(q.zone) && d.opened.includes(q.zone)), firstPark = !!pk;
     if (firstPark) (this.parkingSeen ||= new Set()).add(pk.zone);
-    if (announce) {
+    if (announce && d.interior) hud.announce('ESCALIER', 'Accès à l\'étage', 2500);
+    else if (announce) {
       if (firstPark) hud.announce(`PARKING ${pk.name.replace(/^Place /, '').toUpperCase()} — ${pk.size} moto${pk.size > 1 ? 's' : ''}`, `Repérez le « P » bleu sur la carte ${game.binds.tag('map')}`, 4500);
       else hud.announce('PORTE OUVERTE', `Accès à ${d.name}`, 2500);
     }
@@ -1063,6 +1095,7 @@ const game = {
   // ---------------------------------------------------------- Manches
   startRound() {
     this.round++;
+    this.barrels?.reset(); // the explosive barrels come back
     const r = this.round;
     const countMult = this.isMultiplayer ? 1 + this.remotes.size * 0.75 : 1;
     this.toSpawn = Math.round((4 + r * 3) * countMult);
@@ -1363,7 +1396,7 @@ const game = {
         for (const d of world.doors) {
           if (d.basePrice == null) d.basePrice = d.price;
           d.price = d.basePrice;
-          if ((d.a === zi || d.b === zi) && !d.portal && d.price > 750) {
+          if ((d.a === zi || d.b === zi) && !d.portal && !d.interior && d.price > 750) {
             d.price = 750;
           }
         }
@@ -1424,6 +1457,7 @@ const game = {
     this.perkFx?.update(dt);
     this.unstick?.update(dt);
     this.barricades?.flush(dt); // plank debris, host batches of plank changes
+    this.barrels?.flush(dt);    // chain reaction of the explosive barrels
 
     // Mise à jour des coéquipiers
     RemotePlayer.tick(dt);
@@ -1681,6 +1715,7 @@ const game = {
       promptText = curW.reserve >= curCfg.maxReserve
         ? 'Munitions au maximum'
         : `${game.binds.tag('interact')} Munitions ${curCfg.name} (${curCfg.ammoPrice} pts)`;
+      if (this.barricades && !this.barricades.kit) promptText += ` · ${this.barricades.deployPrompt()}`;
     } else if (this.nearMachine()) {
       promptText = this.machinePrompt(this.nearMachine());
     } else if (this.nearWallWeapon()) {
@@ -1703,17 +1738,20 @@ const game = {
       promptText = this.transferPrompt();
     } else if (this.nearVehicle()) {
       promptText = this.vehiclePrompt(this.nearVehicle());
+    } else if (this.nearCrate()) {
+      promptText = this.crateLeft(this.nearCrate()) ? `${game.binds.tag('interact')} Caisse de munitions (gratuit, une fois par manche)` : 'Caisse de munitions — vide jusqu\'à la prochaine manche';
     } else if ((this.barTarget = this.barricades?.nearest(p.pos.x, p.pos.z)) && this.barTarget.n < this.barTarget.max) {
       this.barActive = true;
       promptText = this.barricades.capReached() ? `${game.binds.tag('interact')} Maintenir : réparer la barricade — Plafond de réparation atteint` : `${game.binds.tag('interact')} Maintenir : réparer la barricade (+${CONFIG.barricades.repair.points})`;
     } else if (this.nearDoor()) {
       const d = this.nearDoor(), here = world.zoneOf(this.player.pos.x, this.player.pos.z);
       const to = here === d.a ? d.b : here === d.b ? d.a : d.toZone; // la zone de l'autre côté de la barrière
-      promptText = `${game.binds.tag('interact')} Ouvrir la porte vers ${world.zoneNames[to]} (${this.freeDoors ? 'gratuit' : `${d.price} pts`})`;
+      promptText = d.interior ? `${game.binds.tag('interact')} Porte de l'escalier — ${this.freeDoors ? 'gratuit' : `${d.price} pts`}` : `${game.binds.tag('interact')} Ouvrir la porte vers ${world.zoneNames[to]} (${this.freeDoors ? 'gratuit' : `${d.price} pts`})`;
     }
     if (!promptText && p.onTram && !p.vehicle) promptText = this.tramWalkHint(p.onTram.v); // debout dans la rame
     const fanalPrompt = this.fanalPrompt?.();
     if (fanalPrompt && !p.vehicle) promptText = fanalPrompt;
+    if (!promptText && this.barricades?.kit) promptText = this.barricades.placePrompt();
     if (!promptText && p.vaultReady && !p.vault) promptText = `${game.binds.tag('jump')} Enjamber`;
     if (this.barricades) { this.barricades.target = this.barTarget; this.barricades.hold(dt, this.barActive && !p.dead && !p.downed && game.binds.down('interact', p.keys)); }
     hud.prompt(promptText);
@@ -1742,6 +1780,7 @@ installLauncher(game, { world, scene, fx });
 installModMenu(game, { world, hud, sfx });
 installUnstick(game, { world, hud, sfx });
 installBarricades(game, { scene, world, hud, sfx }); // window barricades of the key buildings (barricades.js)
+installBarrels(game, { scene, world, sfx }); // explosive barrels next to them (barrels.js)
 installTransfer(game, { world, hud, sfx, scene }); // tram Gare Centrale <-> Homme de Fer (v0.79.0)
 { // menu : « Départ » (train intro / Gare Centrale / Grande Île au hasard), remembered locally ; default CONFIG.start (v0.81.0)
   const sel = document.getElementById('startArea'), qs = new URLSearchParams(location.search);
@@ -1832,7 +1871,8 @@ function refreshLobby() {
 
 function setupNetworkHandlers(net) {
   game.bindVehicleNet(net);
-  game.onBarricadeNet?.(net); // bar_fix, bar
+  game.onBarricadeNet?.(net); // bar_fix, bar, bar_place, bar_new, bar_no
+  game.onBarrelNet?.(net); // brl_hit, brl_boom
   game.onTransferNet?.(net); // tram transfer : xf_req, xf_call, xf_go, xf_left
   game.onIntroNet?.(net); // train intro : tn_sync, intro_skip
   game.onRideNet?.(net);  // zombies of the ride : tn_win, tn_rk, tn_rm
@@ -1886,7 +1926,8 @@ function setupNetworkHandlers(net) {
         finaleDone: game.finaleDone,
         summit: game.finaleDone && (game.finale || game.dawnOn) ? { st: game.summitState?.() || null, fan: game.finale?.fan || 0, dawn: game.dawnOn ? Math.round((game.time - game.dawnT0) * 10) / 10 : null, eternal: !!game.eternal } : null, // Acte V en cours (ou Aube passée)
         vehicles: game.vehicleSnapshot(),
-        bars: game.barricades?.snapshot() || [], // plank counts that differ from full
+        bars: game.barricades?.snapshot() || null, // plank counts that differ from full, deployed barricades
+        brls: game.barrels?.snapshot() || [], // exploded barrels
         intro: game.introState?.() || null, // train intro running : { tau, ph } (the joiner stands in the train)
         xf: game.transferState?.() || null, // tram transfer running (v0.83.0) : the joiner sees the same car
         zombies: game.zombies.map((z) => ({
@@ -2116,6 +2157,7 @@ function setupNetworkHandlers(net) {
     game.round = m.r;
     game.toSpawn = m.toSpawn;
     hud.setRound(m.r);
+    game.barrels?.reset();
     sfx.roundStart();
     hud.announce(`MANCHE ${m.r}`, `${m.toSpawn} zombies`);
     if (game.player.downed || game.player.dead) game.player.revive();
@@ -2167,6 +2209,7 @@ function setupNetworkHandlers(net) {
     if (m.summit) game.applySummitSync?.(m.summit);
     game.applyVehicleSnapshot(m.vehicles);
     game.barricades?.restore(m.bars);
+    game.barrels?.restore(m.brls);
 
     // Supprimer d'éventuels zombies locaux existants
     for (const z of game.zombies) z.dispose();

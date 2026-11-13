@@ -313,7 +313,7 @@ export async function buildRealWorld(scene, renderer) {
   const tailGhosts = ghosts;
   let cathInfo = null;
   const levels = new Levels(); // étages (cathédrale : balcons, escaliers, plateforme, flèche)
-  const keyBuildings = createKeyBuildings({ scene, collision, levels, interiors, lightSources, onLightsChanged: () => { lightTimer = 0; } }); // upper floors of the key buildings (v0.88.0)
+  const keyBuildings = createKeyBuildings({ scene, collision, levels, interiors, lightSources, getDoors: () => doors, onLightsChanged: () => { lightTimer = 0; } }); // upper floors of the key buildings (v0.88.0)
   // Cathédrale : intérieur jouable (zone de fin de partie)
   let kCath = blds.findIndex((b) => b.name === 'Cathédrale Notre-Dame');
   if (kCath < 0) kCath = blds.reduce((best, b, k) => (b.tags.building === 'cathedral' && (best < 0 || Math.abs(polyArea(b.pts)) > Math.abs(polyArea(blds[best].pts))) ? k : best), -1);
@@ -2165,6 +2165,7 @@ export async function buildRealWorld(scene, renderer) {
   levels.build();
   gare?.beforeNavs();
   levels.buildNavs(NavGrid, collision);
+  keyBuildings.afterNavs(); // last stand doorway cells
   gare?.finishNav();
   // Les portes sont ouvertes pour construire la grille, puis leurs cases sont bloquées une par une.
   for (const d of doors) for (const s of d.segs) s.off = true;
@@ -2253,6 +2254,7 @@ export async function buildRealWorld(scene, renderer) {
   }
   interiors.reachable = roomsReachable;
   for (const kb of keyBuildings.list) kb.zone = kb.room.zone ?? zoneOf(kb.foot[0], kb.foot[1]);
+  keyBuildings.finishDoors((zi) => CONFIG.sector.zones[zi]?.doorPrice ?? 0);
   const kbDropped = keyBuildings.validate(nav); // sealed room / split floor / no stair route: the building keeps its ground room only
   if (kbDropped.length) console.warn('[keyBuildings] demoted', JSON.stringify(kbDropped));
 
@@ -2261,6 +2263,16 @@ export async function buildRealWorld(scene, renderer) {
     const d = doors[id];
     if (!d || d.open) return false;
     d.open = true;
+    if (d.interior) { // stair door of a key building: opens the stair, no zone
+      d.opened = []; d.opens = d.a; d.name = "l'étage";
+      for (const s of d.segs) s.off = true;
+      for (const m of d.meshes) m.parent?.remove(m);
+      for (const i of d.cells) nav.blocked[i] = 0;
+      nav.invalidate();
+      if (d.link) { d.link.closed = false; levels.invalidateHops(); }
+      lightTimer = 0;
+      return true;
+    }
     // zone que cette porte ouvre : celle qui était encore fermée (une porte lointaine achetée de loin peut n'en ouvrir aucune de neuve)
     d.opened = [d.a, d.b].filter((z) => !zoneOpen[z]); // les zones que cette porte ouvre (deux si on l'achète de loin, aucune si déjà ouvertes)
     d.opens = d.opened.length ? d.opened[0] : d.toZone;

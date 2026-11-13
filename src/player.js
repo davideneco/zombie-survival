@@ -263,6 +263,7 @@ export class Player {
       else if (this.onTram?.v.isTram && B.is('tramGong', e)) this.game.tramGong?.(); // debout dans la rame : gong et portes aussi (pas dans le train : v0.80.0)
       else if (this.onTram?.v.isTram && B.is('tramDoors', e)) this.game.tramDoors?.();
       else if (B.is('knife', e)) this.melee(this.game.time); // à pied : couteau
+      else if (B.is('deploy', e)) this.game.deployKey?.(); // barricade de fortune : acheter / poser (barricades.js)
       if (B.isBound(e)) e.preventDefault(); // Espace (défilement), Tab, flèches : le navigateur ne doit pas réagir à une touche du jeu
       if (this.locked) return; // arme dans le Pack-a-Punch
       if (B.is('weapon1', e)) this.switchWeapon(0);
@@ -817,6 +818,7 @@ export class Player {
       const hits = this.rc.intersectObjects(fast ? this.game.zombieTargets() : this.game.hitTargets(), false);
       const ro = this.rc.ray.origin, rd = this.rc.ray.direction;
       const wallT = fast ? this.world.rayHit(ro.x, ro.y, ro.z, rd.x, rd.y, rd.z, cfg.range) : cfg.range;
+      this.game.shootBarrels?.(ro, rd, wallT); // explosive barrels (barrels.js): the barrel is solid, the bullet ends on it
 
       // les balles perforantes traversent plusieurs zombies (une seule touche par zombie)
       let end = null, budget = cfg.pierce || 1, stopped = false;

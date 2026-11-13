@@ -214,7 +214,7 @@ function pickAll(env) {
 
 // ---- the system --------------------------------------------------------------------------------------------------------------------------------------
 export function createKeyBuildings(env) {
-  const { scene, collision, levels, interiors, lightSources } = env;
+  const { scene, collision, levels, interiors, lightSources } = env; // env.getDoors() : the world's `doors` array (stair doors are appended to it)
   const list = [], windows = []; // windows : every window barricade of every key building (barricades.js drives them)
   const byBuilding = new Map(); // outline pts array -> kb
   let picks = [];
@@ -293,6 +293,7 @@ export function createKeyBuildings(env) {
       }
       // window barricades : the cells blocked only by the wall around the opening are boarded (3), or the vault sill (2) once torn: see windowCells
       for (const w of windows) {
+        if (w.kind !== 'window') continue;
         w.cells = [];
         const hw = w.w / 2;
         for (let iz = Math.max(0, nav.cz(w.z - 1.6)); iz <= Math.min(nav.nz - 1, nav.cz(w.z + 1.6)); iz++) for (let ix = Math.max(0, nav.cx(w.x - 1.6)); ix <= Math.min(nav.nx - 1, nav.cx(w.x + 1.6)); ix++) {
@@ -309,6 +310,9 @@ export function createKeyBuildings(env) {
     // Does a failing building get dropped ? Called after the navs are built (see realworld.js): demotes sealed rooms and broken layouts
     validate(worldNav) {
       const report = [], C = K();
+      for (const w of windows) if (w.kind === 'door' && w.nav) { for (const c of w.cells) w.nav.blocked[c.idx] = 0; w.nav.invalidate(); } // the last stand doorway counts as open
+      for (const kb of list) kb.links[0].closed = false; // the stair doors are checked as if bought
+      levels.invalidateHops();
       for (const kb of list) {
         let why = null;
         if (kb.room.sealed) why = 'sealed';
@@ -332,7 +336,37 @@ export function createKeyBuildings(env) {
         }
         if (why) { api.demote(kb, why); report.push({ id: kb.id, why }); }
       }
+      for (const w of windows) if (w.kind === 'door' && w.nav) { for (const c of w.cells) w.nav.blocked[c.idx] = w.perm ? 1 : w.n > 0 ? 3 : 0; w.nav.invalidate(); }
+      for (const kb of list) if (!kb.demoted && kb.door) kb.links[0].closed = !kb.door.open; // back to closed behind their doors
+      levels.invalidateHops();
       return report;
+    },
+    // After levels.buildNavs: the last stand doorway of each building is a boarded cell (3) of its floor nav (a free cell otherwise: it costs navCost while planks remain)
+    afterNavs() {
+      for (const w of windows) {
+        if (w.kind !== 'door') continue;
+        const nav = levels.regions[w.region].nav;
+        if (!nav) continue;
+        nav.barCost = CONFIG.barricades.navCost;
+        w.nav = nav; w.cells = [];
+        for (let iz = Math.max(0, nav.cz(w.z - 1.2)); iz <= Math.min(nav.nz - 1, nav.cz(w.z + 1.2)); iz++) for (let ix = Math.max(0, nav.cx(w.x - 1.2)); ix <= Math.min(nav.nx - 1, nav.cx(w.x + 1.2)); ix++) {
+          const idx = nav.idx(ix, iz);
+          const dx = nav.worldX(ix) - w.x, dz = nav.worldZ(iz) - w.z, along = dx * w.ux + dz * w.uz, across = dx * w.nx + dz * w.nz;
+          // the cells of the doorway that only the board segment (and nothing beside the opening) blocks: free once the planks are gone
+          if (Math.abs(along) > w.w / 2 - nav.margin + 0.02 || Math.abs(across) > nav.margin + nav.cell / 2) continue;
+          w.cells.push({ idx, torn: 0 }); nav.blocked[idx] = 3;
+        }
+        nav.invalidate();
+      }
+    },
+    // After the zones are known: the stair door's zone and price (max(min, k x the zone's door price) rounded to `step`)
+    finishDoors(zonePrice) {
+      const D = K().stairDoor;
+      for (const kb of list) {
+        const d = kb.door; if (!d) continue;
+        d.a = d.b = d.toZone = kb.zone ?? -1;
+        d.price = Math.max(D.min, Math.round((D.k * (zonePrice(kb.zone) || 0)) / D.step) * D.step);
+      }
     },
     demote(kb, why) {
       kb.demoted = true; kb.why = why;
@@ -489,6 +523,27 @@ export function createKeyBuildings(env) {
       }
     }
 
+    // ---- stair door: closes lane A at ground level until bought (a normal `doors` entry, `interior`: opens no zone) ----
+    {
+      const doors = env.getDoors(), [ax, az] = P(-0.05, vs - half), [bx, bz] = P(-0.05, vs - ST.divider / 2), len = Math.hypot(bx - ax, bz - az), ux = (bx - ax) / len, uz = (bz - az) / len;
+      const seg = sa(ax, az, bx, bz, C.groundStorey);
+      const DB = mk(), wood = [0.3, 0.2, 0.12], dark = [0.17, 0.11, 0.07], metal = [0.35, 0.35, 0.38], red = [0.55, 0.1, 0.08], cx = (ax + bx) / 2, cz = (az + bz) / 2, nx = -uz, nz = ux;
+      for (let k = 0; k < 3; k++) box(DB, cx + ux * (k - 1) * 0.36, 0, cz + uz * (k - 1) * 0.36, ux, uz, 0.35, 2.35, 0.09, k % 2 ? dark : wood); // vertical planks
+      for (const y of [0.35, 1.8]) box(DB, cx + nx * 0.07, y, cz + nz * 0.07, ux, uz, len, 0.16, 0.05, dark);                                // cross braces
+      box(DB, cx + nx * 0.1, 1.05, cz + nz * 0.1, ux, uz, 0.18, 0.2, 0.05, metal);                                                           // lock plate
+      box(DB, cx + nx * 0.1, 1.5, cz + nz * 0.1, ux, uz, 0.6, 0.22, 0.03, red);                                                              // red warning plate
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.Float32BufferAttribute(DB.pos, 3)); g.setAttribute('normal', new THREE.Float32BufferAttribute(DB.nor, 3));
+      g.setAttribute('color', new THREE.Float32BufferAttribute(DB.col, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(DB.uv, 2));
+      g.setIndex(DB.idx); g.computeBoundingSphere();
+      const mesh = new THREE.Mesh(g, mats.furn);
+      mesh.name = `kb${id}:stairDoor`; mesh.receiveShadow = true; mesh.matrixAutoUpdate = false; mesh.userData.lod = true; mesh.visible = false;
+      scene.add(mesh); kb.meshes.push(mesh);
+      kb.door = { id: doors.length, price: C.stairDoor.min, a: -1, b: -1, toZone: -1, name: 'l\'étage', open: false, points: [], hit: [vA - 0.4, vA, vA + 0.4].map((v) => { const [x, z] = P(-0.5, v); return { x, z }; }), segs: [seg], meshes: [mesh], cells: [], portal: false, interior: true, link: kb.links[0], kb: id };
+      kb.links[0].closed = true; // zombies do not climb a closed stair
+      doors.push(kb.door);
+    }
+
     // ---- window barricades: a boarded opening is a wall (collision h = Infinity at the facade line); once torn it is a vaultable sill ----
     const WC = CONFIG.barricades.windows;
     p.windows.forEach((pw) => {
@@ -545,6 +600,24 @@ export function createKeyBuildings(env) {
       lampAt((lay.pL + lay.sFar) / 2 - 0.25, vs); // last stand room
     }
     kb.lastStand = { s0: lay.pL, s1: lay.sFar - 0.5, sMid: (lay.pL + lay.sFar) / 2 - 0.25, v: vs, y: ys[nUp - 1] };
+
+    // ---- last stand room: a plank barricade on its doorway and an ammo crate ----
+    {
+      const yT = ys[nUp - 1], [x0, z0] = P(lay.pL, vs - RM.door / 2), [x1, z1] = P(lay.pL, vs + RM.door / 2), [cx, cz] = P(lay.pL, vs), len = Math.hypot(x1 - x0, z1 - z0);
+      const board = sa(x0, z0, x1, z1, yT + C.ceiling, yT - 0.2);
+      const w = { id: windows.length, kind: 'door', kb: id, x: cx, z: cz, nx: lay.sdx, nz: lay.sdz, ux: (x1 - x0) / len, uz: (z1 - z0) / len, w: len, yaw: Math.atan2(lay.sdx, lay.sdz), y0: yT, n: CONFIG.barricades.planks.door, max: CONFIG.barricades.planks.door, perm: false, board, vault: [], cells: [], nav: null, region: kb.top, i: -1 };
+      windows.push(w); (kb.windows ||= []).push(w); kb.doorBar = w;
+      // ammo crate against the far wall of the room
+      const [qx, qz] = P(lay.sFar - 0.5 + 0.8, vs), ux = w.ux, uz = w.uz, wood2 = [0.28, 0.24, 0.12], band = [0.2, 0.2, 0.18];
+      box(M, qx, yT, qz, ux, uz, 0.95, 0.5, 0.55, wood2);
+      box(M, qx, yT + 0.5, qz, ux, uz, 1.0, 0.07, 0.6, [0.22, 0.2, 0.1]);
+      for (const k of [-0.32, 0.32]) box(M, qx + ux * k, yT, qz + uz * k, ux, uz, 0.07, 0.52, 0.58, band);
+      box(M, qx, yT + 0.2, qz, ux, uz, 0.3, 0.14, 0.58, [0.5, 0.42, 0.1]); // stencilled plate
+      const hx = 0.5, hz = 0.32, cs = [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([a, b]) => [qx + ux * hx * a + lay.sdx * hz * b, qz + uz * hx * a + lay.sdz * hz * b]);
+      for (let q = 0; q < 4; q++) sa(cs[q][0], cs[q][1], cs[(q + 1) % 4][0], cs[(q + 1) % 4][1], yT + 0.7, yT - 0.2);
+      kb.crate = { x: qx, z: qz, y: yT, region: kb.top };
+    }
+    kb.local = (x, z) => { const [ox, oz] = P(0, 0); return { s: (x - ox) * lay.sdx + (z - oz) * lay.sdz, v: (x - ox) * lay.fx + (z - oz) * lay.fz }; };
 
     // ---- lamps (light sources, off until the camera is inside) and fixtures ----
     for (const l of lampsAt) {

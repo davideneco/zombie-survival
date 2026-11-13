@@ -598,7 +598,7 @@ export class Zombie {
     if (this.vault) { this._vaultStep(dt); return; }
     this.vaultCd -= dt;
     // ----- Boarded window of a key building (barricades.js): stop and tear the planks off, one by one -----
-    if (!this.region && world.barApi?.tear(this, dt)) { this._tearStep(dt); return; }
+    if (world.barApi?.tear(this, dt)) { this._tearStep(dt); return; }
 
     // ----- Objectif : le joueur (même étage), ou le pied de l'escalier qui mène vers lui -----
     let gx = target.pos.x, gz = target.pos.z, chase = true;

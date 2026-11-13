@@ -243,6 +243,9 @@ export const CONFIG = {
     nav: { cell: 0.4, margin: 0.35 },          // nav grid of an upper floor (finer than the street: 1.3 m doorways)
     ceilingLamp: { color: 0xffc890, intensity: 6, dist: 8 },
     minConnected: 0.8,                         // a floor whose largest connected part is below this share of its free cells drops the building (pockets of an odd outline are harmless)
+    // Stair door: a buyable door at the foot of the first flight (a normal `doors` entry, interior, opens no zone). Price = max(min, round to `step` of
+    // k x the doorPrice of the building's zone). Closed: zombies do not use the stair (the link is closed) and bodies cannot enter it.
+    stairDoor: { k: 0.5, min: 500, step: 250 },
     visiblePad: 1,                             // m: upper floors are drawn while the camera is inside the footprint + this margin
   },
   // Window barricades (barricades.js, step D): each key building has `perBuilding` ground-floor windows (width, sill and top heights in m, at least
@@ -252,12 +255,22 @@ export const CONFIG = {
   // window costs navCost in the flow field (a free cell is 10, a vaultable one 40). Planks are synced by the host every `sync` s.
   barricades: {
     windows: { perBuilding: 3, width: 1.3, sill: 0.9, top: 2.5, minGap: 3 },
-    planks: { window: 6 },
+    planks: { window: 6, door: 6, deploy: 4 }, // door : the last stand doorway ; deploy : the "Barricade de fortune" 
     tear: { base: 1.6, perRound: 0.06, min: 0.7, maxPerBarricade: 2, reach: 1.0 },
     repair: { time: 0.75, reach: 1.8, points: 10, capPerRound: 500, speedColaMult: 0.5 },
     navCost: 60,
     sync: 0.2,
+    // Last stand doorway (top floor, `planks.door` planks: torn = simply open). Ammo crate in the room: refills the reserve of the weapon in hand, `usesPerRound` times
+    // per round and player, within `reach` m. Deployable barricade ("Barricade de fortune", key `deploy`): bought at an ammo station for `price`, placed `place` m
+    // ahead of the player; the host refuses it closer than clearDoor m to a door, clearItem m to a station / machine / wall weapon, on an obstacle, beyond
+    // maxTotal on the map or maxPerPlayer per owner; `width` m wide, torn away (removed) after its planks.
+    crate: { usesPerRound: 1, reach: 2.2 },
+    deploy: { price: 750, maxPerPlayer: 1, maxTotal: 4, width: 2.0, clearDoor: 3, clearItem: 2.5, place: 2.2 },
   },
+  // Explosive barrels (barrels.js): `perKeyBuilding` red barrels next to the windows of every key building, a solid obstacle (zombies path around it); a shot
+  // sets one off: blast of `radius` m, `damage` to zombies (falls off with distance), `playerDamage` to players (also falls off), other barrels in range
+  // go off `chainDelay` s later when `chain`. They come back every round.
+  barrels: { perKeyBuilding: 2, r: 0.32, h: 0.95, radius: 5, damage: 1000, playerDamage: 40, chain: true, chainDelay: 0.25 },
   // Relief du terrain (v0.74.0, terrain.js). Mètres. undulation : amplitude de l'ondulation douce des rues et places (échelles wave1 / wave2 en m) ;
   // bank : profondeur des berges à l'eau (l'eau est posée à -bank) sur bankReach m ; parvis : surélévation de la place devant la cathédrale.
   terrain: { enabled: true, undulation: 0.3, wave1: 90, wave2: 35, bank: 0.6, bankReach: 10, parvis: { x: 110, z: 36, h: 0.4, r: 22, edge: 12 }, groundEdge: 5 },
@@ -971,6 +984,7 @@ CONFIG.keybinds = [
   { id: 'tramGong', group: 'Conduite & Véhicules', label: 'Klaxon (voiture) · Gong du tram', def: 'key:h', kind: 'key', ctx: 'moto' },
   { id: 'tramDoors', group: 'Conduite & Véhicules', label: 'Portes du tram (ouvrir / fermer)', def: 'key:o', kind: 'key', ctx: 'moto' },
   { id: 'tramSwitch', group: 'Conduite & Véhicules', label: 'Aiguillage du tram : tout droit / dévié (conducteur)', def: 'key:b', kind: 'key', ctx: 'moto' },
+  { id: 'deploy', group: 'Équipement', label: 'Barricade de fortune : acheter (près d\'une borne de munitions) · poser', def: 'key:b', kind: 'key', ctx: 'foot' },
   { id: 'chat', group: 'Équipement', label: 'Chat écrit (multijoueur) : ouvrir la saisie', def: 'code:Enter', kind: 'key', ctx: 'all' },
 ];
 // Chat écrit (v0.42.0, src/chat.js ; le relais server/rooms.mjs applique les mêmes limites, il ne fait pas confiance au client) :
