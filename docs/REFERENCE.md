@@ -1,6 +1,6 @@
 # Zombie Survival — fiche de référence
 
-Version du jeu : **v0.91.0** (package 0.91.0). Générée automatiquement par `node tools/make-docs.mjs` à partir de `src/config.js` et du jeu.
+Version du jeu : **v0.92.0** (package 0.92.0). Générée automatiquement par `node tools/make-docs.mjs` à partir de `src/config.js` et du jeu.
 Carte annotée : [carte.png](carte.png). Armes de profil : [armes.png](armes.png). Les mêmes tableaux en tableur : dossier [csv/](csv/).
 
 Pour demander une modification, citez la ligne (ex. « Mitrailleuse RPK : chargeur 100 », « Mastodonte à 3000 pts », « porte P3 à 500 pts », « mettre la boîte mystère dans la zone Temple-Neuf »).
@@ -273,32 +273,32 @@ Prix d'une porte : le plus cher des deux prix de zone (colonne « Prix de la por
 
 | Zone | Départ | Type | Surface (m²) | Prix de la porte (pts) | Lieu (x ; z en m) | Portes | Contenu prévu (config) | Bornes | Armes au mur | Machines |
 |---|---|---|---|---|---|---|---|---|---|---|
-| Marché-Neuf | oui | secteur d'origine | 2295 | 0 | -1 ; -31 | P29, P32 | station, wall:m1911, wall:shotgun, wall:smg, perk:quickrevive, box | 1 | COLT M1911, REMINGTON 870, MP40 | RÉANIMATION RAPIDE, BOÎTE MYSTÈRE |
-| Temple-Neuf |  | secteur d'origine | 4251 | 750 | -35 ; -95 | P24, P25, P27, P29, P31, P33 | station, wall:arex, wall:mp5, wall:famas, perk:staminup, perk:bandolier, box | 1 | AREX ZERO 1, MP5, FAMAS F1 | STAMIN-UP, CARTOUCHIÈRE, BOÎTE MYSTÈRE |
-| Rue des Orfèvres |  | secteur d'origine | 705 | 750 | 27 ; -58 | P31, P32, P36, P39 | station, wall:famas, wall:smg, perk:speedcola, perk:deadshot, box | 1 | FAMAS F1, MP40 | SPEED COLA, ŒIL-DE-LYNX, BOÎTE MYSTÈRE |
-| Rue du Dôme |  | secteur d'origine | 4709 | 1000 | 104 ; -118 | P33, P39, P40, P43, P48 | station, wall:sniper, wall:svd, wall:arex, box | 1 | L96A1, DRAGUNOV SVD, AREX ZERO 1 | BOÎTE MYSTÈRE |
-| Grandes Arcades |  | secteur d'origine | 5231 | 1000 | -110 ; -45 | P17, P20, P24, P26 | station, wall:ak47, wall:p90, wall:shotgun, perk:mulekick, perk:deathperception, box | 1 | AK-47, FN P90, REMINGTON 870 | MULE KICK, SIXIÈME SENS, BOÎTE MYSTÈRE |
+| Marché-Neuf | oui | secteur d'origine | 2296 | 0 | -1 ; -31 | P29, P32 | station, wall:m1911, wall:shotgun, wall:smg, perk:quickrevive, box | 1 | COLT M1911, REMINGTON 870, MP40 | RÉANIMATION RAPIDE, BOÎTE MYSTÈRE |
+| Temple-Neuf |  | secteur d'origine | 4251 | 750 | -35 ; -95 | P24, P25, P27, P29, P31, P33, P60 | station, wall:arex, wall:mp5, wall:famas, perk:staminup, perk:bandolier, box | 1 | AREX ZERO 1, MP5, FAMAS F1 | STAMIN-UP, CARTOUCHIÈRE, BOÎTE MYSTÈRE |
+| Rue des Orfèvres |  | secteur d'origine | 705 | 750 | 27 ; -58 | P31, P32, P36, P39, P59 | station, wall:famas, wall:smg, perk:speedcola, perk:deadshot, box | 1 | FAMAS F1, MP40 | SPEED COLA, ŒIL-DE-LYNX, BOÎTE MYSTÈRE |
+| Rue du Dôme |  | secteur d'origine | 4710 | 1000 | 104 ; -118 | P33, P39, P40, P43, P48, P62, P63 | station, wall:sniper, wall:svd, wall:arex, box | 1 | L96A1, DRAGUNOV SVD, AREX ZERO 1 | BOÎTE MYSTÈRE |
+| Grandes Arcades |  | secteur d'origine | 5232 | 1000 | -110 ; -45 | P17, P20, P24, P26, P61, P65 | station, wall:ak47, wall:p90, wall:shotgun, perk:mulekick, perk:deathperception, box | 1 | AK-47, FN P90, REMINGTON 870 | MULE KICK, SIXIÈME SENS, BOÎTE MYSTÈRE |
 | Place Kléber |  | secteur d'origine | 11768 | 1250 | -199 ; -145 | P14, P15, P19, P20, P25 | station, wall:rifle, wall:lmg, wall:m249, perk:juggernog, perk:stronghold, box | 1 | M4A1, RPK, M249 SAW | MASTODONTE, BASTION, BOÎTE MYSTÈRE |
-| Place Gutenberg |  | secteur d'origine | 8656 | 1250 | -20 ; 90 | P22, P23, P26, P28, P34, P37 | station, wall:shotgun, wall:scar, wall:pkm, perk:doubletap, perk:electriccherry, box | 1 | REMINGTON 870, SCAR-H, PKM | DOUBLE TAP, CERISE-FOUDRE, BOÎTE MYSTÈRE |
-| Cathédrale |  | secteur d'origine | 6704 | 1000 | 103 ; 33 | P34, P36, P41, P43, P45, P46, P47 | station, wall:deagle, wall:rifle, wall:magnum, box | 1 | DESERT EAGLE, M4A1, COLT PYTHON .357 | BOÎTE MYSTÈRE |
+| Place Gutenberg |  | secteur d'origine | 8658 | 1250 | -20 ; 90 | P22, P23, P26, P28, P34, P37, P67, P68 | station, wall:shotgun, wall:scar, wall:pkm, perk:doubletap, perk:electriccherry, box | 1 | REMINGTON 870, SCAR-H, PKM | DOUBLE TAP, CERISE-FOUDRE, BOÎTE MYSTÈRE |
+| Cathédrale |  | secteur d'origine | 6705 | 1000 | 103 ; 33 | P34, P36, P41, P43, P45, P46, P47, P69 | station, wall:deagle, wall:rifle, wall:magnum, box | 1 | DESERT EAGLE, M4A1, COLT PYTHON .357 | BOÎTE MYSTÈRE |
 | Intérieur de la Cathédrale |  | secteur d'origine | 3593 | 5000 | 179 ; 40 | P45 | pap, clock, station, box, wall:barrett | 1 | BARRETT M82 | PACK-A-PUNCH, HORLOGE ASTRONOMIQUE, BOÎTE MYSTÈRE |
-| Homme de Fer |  | secteur d'origine | 10094 | 1500 | -290 ; -203 | P8, P9, P11, P12, P15 | station, wall:p90, wall:crossbow, wall:m79, perk:phdflopper, box | 1 | FN P90, ARBALÈTE, M79 | PHD FLOPPER, BOÎTE MYSTÈRE |
-| Saint-Pierre-le-Jeune |  | extérieure | 21062 | 1500 | -140 ; -340 | P12, P13, P18, P19, P27, P30 | station, wall:magnum, wall:mp5, perk:staminup, perk:vultureaid, box | 1 | COLT PYTHON .357, MP5 | STAMIN-UP, VAUTOUR, BOÎTE MYSTÈRE |
-| Grand'Rue |  | extérieure | 19168 | 1500 | -400 ; 10 | P4, P5, P6, P7, P11, P14, P16, P17, P23 | station, wall:mp5, wall:shotgun, perk:speedcola, box | 1 | MP5, REMINGTON 870 | SPEED COLA, BOÎTE MYSTÈRE |
-| Grand Séminaire |  | extérieure | 18569 | 1500 | 300 ; -60 | P46, P48, P51, P53, P54, P55 | station, wall:shotgun, wall:rifle, perk:quickrevive, box | 1 | REMINGTON 870, M4A1 | RÉANIMATION RAPIDE, BOÎTE MYSTÈRE |
+| Homme de Fer |  | secteur d'origine | 10097 | 1500 | -290 ; -203 | P8, P9, P11, P12, P15, P66, P70 | station, wall:p90, wall:crossbow, wall:m79, perk:phdflopper, box | 1 | FN P90, ARBALÈTE, M79 | PHD FLOPPER, BOÎTE MYSTÈRE |
+| Saint-Pierre-le-Jeune |  | extérieure | 21062 | 1500 | -140 ; -340 | P12, P13, P18, P19, P27, P30, P71 | station, wall:magnum, wall:mp5, perk:staminup, perk:vultureaid, box | 1 | COLT PYTHON .357, MP5 | STAMIN-UP, VAUTOUR, BOÎTE MYSTÈRE |
+| Grand'Rue |  | extérieure | 19172 | 1500 | -400 ; 10 | P4, P5, P6, P7, P11, P14, P16, P17, P23, P64, P72, P73 | station, wall:mp5, wall:shotgun, perk:speedcola, box | 1 | MP5, REMINGTON 870 | SPEED COLA, BOÎTE MYSTÈRE |
+| Grand Séminaire |  | extérieure | 18569 | 1500 | 300 ; -60 | P46, P48, P51, P53, P54, P55, P74 | station, wall:shotgun, wall:rifle, perk:quickrevive, box | 1 | REMINGTON 870, M4A1 | RÉANIMATION RAPIDE, BOÎTE MYSTÈRE |
 | Palais Rohan |  | extérieure | 10267 | 1500 | 261 ; 139 | P47, P49, P53 | station, wall:ak47, wall:arex, perk:doubletap, perk:tombstone, box | 1 | AK-47, AREX ZERO 1 | DOUBLE TAP, PIERRE TOMBALE, BOÎTE MYSTÈRE |
-| Musée historique |  | extérieure | 14644 | 1500 | 200 ; 215 | P35, P37, P41, P49 | station, wall:arex, wall:scar, wall:smg, box | 1 | AREX ZERO 1, SCAR-H, MP40 | BOÎTE MYSTÈRE |
-| Place Broglie |  | extérieure | 26173 | 2000 | 150 ; -345 | P30, P38, P40, P44, P50, P51 | station, wall:smg, wall:famas, wall:lmg, perk:juggernog, box | 1 | MP40, FAMAS F1, RPK | MASTODONTE, BOÎTE MYSTÈRE |
-| Quai Schoepflin |  | extérieure | 12324 | 2000 | -20 ; -470 | P18, P38, P42 | station, wall:svd, wall:mp5, box | 1 | DRAGUNOV SVD, MP5 | BOÎTE MYSTÈRE |
-| Hôtel de Neuwiller |  | extérieure | 7302 | 2000 | -466 ; -266 | P3, P9, P13 | station, wall:famas, wall:saiga, box | 1 | FAMAS F1, SAIGA-12 | BOÎTE MYSTÈRE |
-| Monument Stoeber |  | extérieure | 16043 | 2000 | -490 ; -150 | P2, P3, P6, P8 | station, wall:scar, wall:p90, box | 1 | SCAR-H, FN P90 | BOÎTE MYSTÈRE |
-| Ancienne Douane |  | extérieure | 14106 | 2000 | 30 ; 330 | P21, P28, P35 | station, wall:sniper, wall:shotgun, perk:phdflopper, perk:widowswine, box | 1 | L96A1, REMINGTON 870 | PHD FLOPPER, VEUVE NOIRE, BOÎTE MYSTÈRE |
+| Musée historique |  | extérieure | 14644 | 1500 | 200 ; 215 | P35, P37, P41, P49, P75 | station, wall:arex, wall:scar, wall:smg, box | 1 | AREX ZERO 1, SCAR-H, MP40 | BOÎTE MYSTÈRE |
+| Place Broglie |  | extérieure | 26173 | 2000 | 150 ; -345 | P30, P38, P40, P44, P50, P51, P76 | station, wall:smg, wall:famas, wall:lmg, perk:juggernog, box | 1 | MP40, FAMAS F1, RPK | MASTODONTE, BOÎTE MYSTÈRE |
+| Quai Schoepflin |  | extérieure | 12324 | 2000 | -20 ; -470 | P18, P38, P42, P77 | station, wall:svd, wall:mp5, box | 1 | DRAGUNOV SVD, MP5 | BOÎTE MYSTÈRE |
+| Hôtel de Neuwiller |  | extérieure | 7303 | 2000 | -466 ; -266 | P3, P9, P13, P78 | station, wall:famas, wall:saiga, box | 1 | FAMAS F1, SAIGA-12 | BOÎTE MYSTÈRE |
+| Monument Stoeber |  | extérieure | 16044 | 2000 | -490 ; -150 | P2, P3, P6, P8, P79 | station, wall:scar, wall:p90, box | 1 | SCAR-H, FN P90 | BOÎTE MYSTÈRE |
+| Ancienne Douane |  | extérieure | 14108 | 2000 | 30 ; 330 | P21, P28, P35, P80, P81 | station, wall:sniper, wall:shotgun, perk:phdflopper, perk:widowswine, box | 1 | L96A1, REMINGTON 870 | PHD FLOPPER, VEUVE NOIRE, BOÎTE MYSTÈRE |
 | Saint-Thomas |  | extérieure | 23453 | 2000 | -230 ; 250 | P10, P16, P21, P22 | station, wall:saiga, wall:rifle, perk:mulekick, box | 1 | SAIGA-12, M4A1 | MULE KICK, BOÎTE MYSTÈRE |
-| Église Réformée |  | extérieure | 6328 | 2000 | -331 ; 167 | P7, P10 | station, wall:smg, wall:ak47, box | 1 | MP40, AK-47 | BOÎTE MYSTÈRE |
-| Opéra |  | extérieure | 18280 | 2500 | 250 ; -450 | P42, P44, P52 | station, wall:deagle, wall:mg42, perk:speedcola, perk:dyingwish, box | 1 | DESERT EAGLE, MG42 | SPEED COLA, ULTIME VOLONTÉ, BOÎTE MYSTÈRE |
-| Préfecture |  | extérieure | 15777 | 2500 | 395 ; -335 | P50, P52, P54, P56 | station, wall:pkm, wall:rifle, box | 1 | PKM, M4A1 | BOÎTE MYSTÈRE |
-| Saint-Étienne |  | extérieure | 14384 | 2500 | 544 ; -86 | P55, P56 | station, wall:m249, wall:scar, perk:staminup, box | 1 | M249 SAW, SCAR-H | STAMIN-UP, BOÎTE MYSTÈRE |
-| Saint-Pierre-le-Vieux |  | extérieure | 10495 | 2500 | -615 ; -55 | P1, P2, P5 | station, wall:deagle, wall:shotgun, perk:quickrevive, box | 1 | DESERT EAGLE, REMINGTON 870 | RÉANIMATION RAPIDE, BOÎTE MYSTÈRE |
+| Église Réformée |  | extérieure | 6329 | 2000 | -331 ; 167 | P7, P10, P83 | station, wall:smg, wall:ak47, box | 1 | MP40, AK-47 | BOÎTE MYSTÈRE |
+| Opéra |  | extérieure | 18281 | 2500 | 250 ; -450 | P42, P44, P52, P84 | station, wall:deagle, wall:mg42, perk:speedcola, perk:dyingwish, box | 1 | DESERT EAGLE, MG42 | SPEED COLA, ULTIME VOLONTÉ, BOÎTE MYSTÈRE |
+| Préfecture |  | extérieure | 15778 | 2500 | 395 ; -335 | P50, P52, P54, P56, P85 | station, wall:pkm, wall:rifle, box | 1 | PKM, M4A1 | BOÎTE MYSTÈRE |
+| Saint-Étienne |  | extérieure | 14384 | 2500 | 544 ; -86 | P55, P56, P86 | station, wall:m249, wall:scar, perk:staminup, box | 1 | M249 SAW, SCAR-H | STAMIN-UP, BOÎTE MYSTÈRE |
+| Saint-Pierre-le-Vieux |  | extérieure | 10497 | 2500 | -615 ; -55 | P1, P2, P5, P87 | station, wall:deagle, wall:shotgun, perk:quickrevive, box | 1 | DESERT EAGLE, REMINGTON 870 | RÉANIMATION RAPIDE, BOÎTE MYSTÈRE |
 | Petite France |  | extérieure | 8275 | 2500 | -673 ; 136 | P1, P4 | station, wall:barrett, wall:saiga, wall:mp5, perk:juggernog, box | 1 | BARRETT M82, SAIGA-12, MP5 | MASTODONTE, BOÎTE MYSTÈRE |
 | Quais |  | gare (aire séparée, tram) | 3132 | 750 | -1059 ; -333 | P57 | station, wall:m1911, wall:shotgun | 1 | COLT M1911, REMINGTON 870 |  |
 | Hall de la Gare |  | gare (aire séparée, tram) | 3315 | 750 | -1011 ; -306 | P57, P58 | station, wall:mp5, perk:quickrevive, box | 1 | MP5 | RÉANIMATION RAPIDE, BOÎTE MYSTÈRE |
@@ -366,6 +366,36 @@ Prix d'une porte : le plus cher des deux prix de zone (colonne « Prix de la por
 | P56 | 2500 | Préfecture | Saint-Étienne |
 | P57 | 750 | Quais | Hall de la Gare |
 | P58 | 1000 | Hall de la Gare | Place de la Gare |
+| P59 | 500 | Rue des Orfèvres | Rue des Orfèvres |
+| P60 | 500 | Temple-Neuf | Temple-Neuf |
+| P61 | 500 | Grandes Arcades | Grandes Arcades |
+| P62 | 500 | Rue du Dôme | Rue du Dôme |
+| P63 | 500 | Rue du Dôme | Rue du Dôme |
+| P64 | 750 | Grand'Rue | Grand'Rue |
+| P65 | 500 | Grandes Arcades | Grandes Arcades |
+| P66 | 750 | Homme de Fer | Homme de Fer |
+| P67 | 750 | Place Gutenberg | Place Gutenberg |
+| P68 | 750 | Place Gutenberg | Place Gutenberg |
+| P69 | 500 | Cathédrale | Cathédrale |
+| P70 | 750 | Homme de Fer | Homme de Fer |
+| P71 | 750 | Saint-Pierre-le-Jeune | Saint-Pierre-le-Jeune |
+| P72 | 750 | Grand'Rue | Grand'Rue |
+| P73 | 750 | Grand'Rue | Grand'Rue |
+| P74 | 750 | Grand Séminaire | Grand Séminaire |
+| P75 | 750 | Musée historique | Musée historique |
+| P76 | 1000 | Place Broglie | Place Broglie |
+| P77 | 1000 | Quai Schoepflin | Quai Schoepflin |
+| P78 | 1000 | Hôtel de Neuwiller | Hôtel de Neuwiller |
+| P79 | 1000 | Monument Stoeber | Monument Stoeber |
+| P80 | 1000 | Ancienne Douane | Ancienne Douane |
+| P81 | 1000 | Ancienne Douane | Ancienne Douane |
+| P82 | 500 | hors secteur | hors secteur |
+| P83 | 1000 | Église Réformée | Église Réformée |
+| P84 | 1250 | Opéra | Opéra |
+| P85 | 1250 | Préfecture | Préfecture |
+| P86 | 1250 | Saint-Étienne | Saint-Étienne |
+| P87 | 1250 | Saint-Pierre-le-Vieux | Saint-Pierre-le-Vieux |
+| P88 | 500 | hors secteur | hors secteur |
 
 ## Emplacements
 
@@ -409,29 +439,29 @@ Prix d'une porte : le plus cher des deux prix de zone (colonne « Prix de la por
 | 36 | Atout | MASTODONTE | Place Kléber | 2500 | -198 | -140 |
 | 37 | Atout | BASTION | Place Kléber | 2500 | -217 | -132 |
 | 38 | BOÎTE MYSTÈRE (emplacement possible) | BOÎTE MYSTÈRE (emplacement possible) | Place Kléber | 950 | -198 | -117 |
-| 39 | Borne de munitions | Borne de munitions | Place Gutenberg |  | -14 | 79 |
-| 40 | Arme au mur | REMINGTON 870 | Place Gutenberg | 750 | -9 | 94 |
-| 41 | Arme au mur | SCAR-H | Place Gutenberg | 2500 | -18 | 99 |
-| 42 | Arme au mur | PKM | Place Gutenberg | 3200 | 3 | 98 |
-| 43 | Atout | DOUBLE TAP | Place Gutenberg | 2000 | -9 | 62 |
-| 44 | Atout | CERISE-FOUDRE | Place Gutenberg | 2000 | 5 | 86 |
-| 45 | BOÎTE MYSTÈRE (emplacement possible) | BOÎTE MYSTÈRE (emplacement possible) | Place Gutenberg | 950 | -16 | 112 |
-| 46 | Borne de munitions | Borne de munitions | Cathédrale |  | 121 | 31 |
-| 47 | Arme au mur | DESERT EAGLE | Cathédrale | 1500 | 118 | 57 |
-| 48 | Arme au mur | M4A1 | Cathédrale | 1200 | 111 | 54 |
-| 49 | Arme au mur | COLT PYTHON .357 | Cathédrale | 2000 | 75 | 27 |
-| 50 | BOÎTE MYSTÈRE (emplacement possible) | BOÎTE MYSTÈRE (emplacement possible) | Cathédrale | 950 | 111 | 62 |
-| 51 | Borne de munitions | Borne de munitions | Intérieur de la Cathédrale |  | 191 | 47 |
-| 52 | Arme au mur | BARRETT M82 | Intérieur de la Cathédrale | 5000 | 177 | 62 |
+| 39 | Borne de munitions | Borne de munitions | Place Gutenberg |  | -34 | 90 |
+| 40 | Arme au mur | REMINGTON 870 | Place Gutenberg | 750 | 4 | 83 |
+| 41 | Arme au mur | SCAR-H | Place Gutenberg | 2500 | -3 | 99 |
+| 42 | Arme au mur | PKM | Place Gutenberg | 3200 | -31 | 73 |
+| 43 | Atout | DOUBLE TAP | Place Gutenberg | 2000 | -25 | 113 |
+| 44 | Atout | CERISE-FOUDRE | Place Gutenberg | 2000 | -6 | 116 |
+| 45 | BOÎTE MYSTÈRE (emplacement possible) | BOÎTE MYSTÈRE (emplacement possible) | Place Gutenberg | 950 | -12 | 59 |
+| 46 | Borne de munitions | Borne de munitions | Cathédrale |  | 110 | 52 |
+| 47 | Arme au mur | DESERT EAGLE | Cathédrale | 1500 | 114 | 29 |
+| 48 | Arme au mur | M4A1 | Cathédrale | 1200 | 124 | 26 |
+| 49 | Arme au mur | COLT PYTHON .357 | Cathédrale | 2000 | 102 | 39 |
+| 50 | BOÎTE MYSTÈRE (emplacement possible) | BOÎTE MYSTÈRE (emplacement possible) | Cathédrale | 950 | 102 | 59 |
+| 51 | Borne de munitions | Borne de munitions | Intérieur de la Cathédrale |  | 179 | 10 |
+| 52 | Arme au mur | BARRETT M82 | Intérieur de la Cathédrale | 5000 | 207 | 37 |
 | 53 | PACK-A-PUNCH | PACK-A-PUNCH | Intérieur de la Cathédrale | 5000 | 223 | 14 |
 | 54 | HORLOGE ASTRONOMIQUE | HORLOGE ASTRONOMIQUE | Intérieur de la Cathédrale | 0 | 228 | 35 |
-| 55 | BOÎTE MYSTÈRE (emplacement possible) | BOÎTE MYSTÈRE (emplacement possible) | Intérieur de la Cathédrale | 950 | 170 | 30 |
-| 56 | Borne de munitions | Borne de munitions | Homme de Fer |  | -314 | -195 |
-| 57 | Arme au mur | FN P90 | Homme de Fer | 1800 | -322 | -213 |
-| 58 | Arme au mur | ARBALÈTE | Homme de Fer | 2000 | -310 | -224 |
-| 59 | Arme au mur | M79 | Homme de Fer | 2500 | -302 | -187 |
-| 60 | Atout | PHD FLOPPER | Homme de Fer | 2000 | -270 | -217 |
-| 61 | BOÎTE MYSTÈRE (emplacement possible) | BOÎTE MYSTÈRE (emplacement possible) | Homme de Fer | 950 | -285 | -175 |
+| 55 | BOÎTE MYSTÈRE (emplacement possible) | BOÎTE MYSTÈRE (emplacement possible) | Intérieur de la Cathédrale | 950 | 192 | 46 |
+| 56 | Borne de munitions | Borne de munitions | Homme de Fer |  | -289 | -188 |
+| 57 | Arme au mur | FN P90 | Homme de Fer | 1800 | -272 | -196 |
+| 58 | Arme au mur | ARBALÈTE | Homme de Fer | 2000 | -295 | -176 |
+| 59 | Arme au mur | M79 | Homme de Fer | 2500 | -298 | -201 |
+| 60 | Atout | PHD FLOPPER | Homme de Fer | 2000 | -303 | -214 |
+| 61 | BOÎTE MYSTÈRE (emplacement possible) | BOÎTE MYSTÈRE (emplacement possible) | Homme de Fer | 950 | -319 | -202 |
 | 62 | Borne de munitions | Borne de munitions | Saint-Pierre-le-Jeune |  | -155 | -326 |
 | 63 | Arme au mur | COLT PYTHON .357 | Saint-Pierre-le-Jeune | 2000 | -131 | -338 |
 | 64 | Arme au mur | MP5 | Saint-Pierre-le-Jeune | 1200 | -151 | -345 |
@@ -499,25 +529,25 @@ Prix d'une porte : le plus cher des deux prix de zone (colonne « Prix de la por
 | 126 | Atout | ULTIME VOLONTÉ | Opéra | 4000 | 279 | -446 |
 | 127 | BOÎTE MYSTÈRE (emplacement possible) | BOÎTE MYSTÈRE (emplacement possible) | Opéra | 950 | 266 | -442 |
 | 128 | Borne de munitions | Borne de munitions | Préfecture |  | 407 | -357 |
-| 129 | Arme au mur | PKM | Préfecture | 3200 | 372 | -337 |
-| 130 | Arme au mur | M4A1 | Préfecture | 1200 | 411 | -350 |
-| 131 | BOÎTE MYSTÈRE (emplacement possible) | BOÎTE MYSTÈRE (emplacement possible) | Préfecture | 950 | 409 | -362 |
-| 132 | Borne de munitions | Borne de munitions | Saint-Étienne |  | 556 | -79 |
-| 133 | Arme au mur | M249 SAW | Saint-Étienne | 3000 | 527 | -100 |
-| 134 | Arme au mur | SCAR-H | Saint-Étienne | 2500 | 534 | -103 |
-| 135 | Atout | STAMIN-UP | Saint-Étienne | 2000 | 564 | -93 |
-| 136 | BOÎTE MYSTÈRE (emplacement possible) | BOÎTE MYSTÈRE (emplacement possible) | Saint-Étienne | 950 | 522 | -66 |
-| 137 | Borne de munitions | Borne de munitions | Saint-Pierre-le-Vieux |  | -610 | -37 |
-| 138 | Arme au mur | DESERT EAGLE | Saint-Pierre-le-Vieux | 1500 | -595 | -35 |
-| 139 | Arme au mur | REMINGTON 870 | Saint-Pierre-le-Vieux | 750 | -643 | -39 |
-| 140 | Atout | RÉANIMATION RAPIDE | Saint-Pierre-le-Vieux | 1500 | -605 | -35 |
-| 141 | BOÎTE MYSTÈRE (emplacement possible) | BOÎTE MYSTÈRE (emplacement possible) | Saint-Pierre-le-Vieux | 950 | -635 | -41 |
-| 142 | Borne de munitions | Borne de munitions | Petite France |  | -693 | 142 |
-| 143 | Arme au mur | BARRETT M82 | Petite France | 5000 | -668 | 117 |
-| 144 | Arme au mur | SAIGA-12 | Petite France | 3000 | -684 | 140 |
-| 145 | Arme au mur | MP5 | Petite France | 1200 | -696 | 146 |
-| 146 | Atout | MASTODONTE | Petite France | 2500 | -670 | 127 |
-| 147 | BOÎTE MYSTÈRE (emplacement possible) | BOÎTE MYSTÈRE (emplacement possible) | Petite France | 950 | -704 | 149 |
+| 129 | Arme au mur | PKM | Préfecture | 3200 | 422 | -350 |
+| 130 | Arme au mur | M4A1 | Préfecture | 1200 | 420 | -343 |
+| 131 | BOÎTE MYSTÈRE (emplacement possible) | BOÎTE MYSTÈRE (emplacement possible) | Préfecture | 950 | 415 | -356 |
+| 132 | Borne de munitions | Borne de munitions | Saint-Étienne |  | 544 | -109 |
+| 133 | Arme au mur | M249 SAW | Saint-Étienne | 3000 | 534 | -120 |
+| 134 | Arme au mur | SCAR-H | Saint-Étienne | 2500 | 538 | -82 |
+| 135 | Atout | STAMIN-UP | Saint-Étienne | 2000 | 518 | -99 |
+| 136 | BOÎTE MYSTÈRE (emplacement possible) | BOÎTE MYSTÈRE (emplacement possible) | Saint-Étienne | 950 | 527 | -59 |
+| 137 | Borne de munitions | Borne de munitions | Saint-Pierre-le-Vieux |  | -610 | -32 |
+| 138 | Arme au mur | DESERT EAGLE | Saint-Pierre-le-Vieux | 1500 | -593 | -34 |
+| 139 | Arme au mur | REMINGTON 870 | Saint-Pierre-le-Vieux | 750 | -626 | -40 |
+| 140 | Atout | RÉANIMATION RAPIDE | Saint-Pierre-le-Vieux | 1500 | -620 | -39 |
+| 141 | BOÎTE MYSTÈRE (emplacement possible) | BOÎTE MYSTÈRE (emplacement possible) | Saint-Pierre-le-Vieux | 950 | -640 | -44 |
+| 142 | Borne de munitions | Borne de munitions | Petite France |  | -696 | 148 |
+| 143 | Arme au mur | BARRETT M82 | Petite France | 5000 | -702 | 146 |
+| 144 | Arme au mur | SAIGA-12 | Petite France | 3000 | -683 | 137 |
+| 145 | Arme au mur | MP5 | Petite France | 1200 | -689 | 141 |
+| 146 | Atout | MASTODONTE | Petite France | 2500 | -674 | 116 |
+| 147 | BOÎTE MYSTÈRE (emplacement possible) | BOÎTE MYSTÈRE (emplacement possible) | Petite France | 950 | -671 | 128 |
 | 148 | Borne de munitions | Borne de munitions | Quais |  | -1020 | -351 |
 | 149 | Arme au mur | COLT M1911 | Quais | 400 | -1055 | -290 |
 | 150 | Arme au mur | REMINGTON 870 | Quais | 750 | -1012 | -364 |
@@ -698,7 +728,7 @@ Prix d'une porte : le plus cher des deux prix de zone (colonne « Prix de la por
 | Bidon d'essence (bonus) | +2,5 L, 3 % par zombie tué si une moto est sous 50 % | idem | idem | idem |  |
 | Panne sèche | réserve < 15 % : bip, ratés < 5 %, à 0 : poussée 3 m/s | idem | idem | idem |  |
 
-## Vélos (gratuits, 15 stations et 18 vélos : arceaux et panneau « VÉLOS » turquoise, pastille « V » sur la carte)
+## Vélos (gratuits, 14 stations et 16 vélos : arceaux et panneau « VÉLOS » turquoise, pastille « V » sur la carte)
 
 | Réglage | Valeur | Unité / remarque |
 |---|---|---|
@@ -719,25 +749,24 @@ Prix d'une porte : le plus cher des deux prix de zone (colonne « Prix de la por
 | Station | 1 à 2 vélos, arceaux tous les 1 m, panneau « VÉLOS » ; posée après tout le décor | contrôles : dans sa zone, accessible et dégagée, à 8 m au moins d'une porte, à 5 m d'un rail, à 6 m d'une borne, d'un atout ou d'une arme murale (leur invite masquerait « monter ») |
 | Rendu | 5 maillages par vélo, aucune lumière ; vélos et stations non dessinés au-delà de 90 m | les ~100 vélos de décor (mobilier OpenStreetMap) restent du décor : on ne peut pas les enfourcher |
 
-## Stations de vélos (15 stations, 18 vélos)
+## Stations de vélos (14 stations, 16 vélos)
 
 | N° | Zone | x (m) | z (m) | Vélos |
 |---|---|---|---|---|
-| 1 | Marché-Neuf | -3 | -27 | 2 |
-| 2 | Temple-Neuf | -41 | -88 | 1 |
-| 3 | Rue des Orfèvres | 27 | -55 | 1 |
-| 4 | Rue du Dôme | 102 | -148 | 1 |
-| 5 | Grandes Arcades | -128 | -10 | 1 |
-| 6 | Place Kléber | -246 | -145 | 1 |
-| 7 | Place Gutenberg | -27 | 93 | 2 |
-| 8 | Saint-Pierre-le-Jeune | -144 | -336 | 1 |
-| 9 | Grand'Rue | -382 | 16 | 1 |
-| 10 | Place Broglie | 146 | -350 | 2 |
-| 11 | Quai Schoepflin | -13 | -469 | 1 |
-| 12 | Ancienne Douane | 32 | 330 | 1 |
-| 13 | Saint-Thomas | -195 | 227 | 1 |
-| 14 | Opéra | 281 | -464 | 1 |
-| 15 | Préfecture | 419 | -297 | 1 |
+| 1 | Temple-Neuf | -41 | -88 | 1 |
+| 2 | Rue des Orfèvres | 27 | -55 | 1 |
+| 3 | Rue du Dôme | 102 | -148 | 1 |
+| 4 | Grandes Arcades | -128 | -10 | 1 |
+| 5 | Place Kléber | -246 | -145 | 1 |
+| 6 | Place Gutenberg | -27 | 93 | 2 |
+| 7 | Saint-Pierre-le-Jeune | -144 | -336 | 1 |
+| 8 | Grand'Rue | -382 | 16 | 1 |
+| 9 | Place Broglie | 146 | -350 | 2 |
+| 10 | Quai Schoepflin | -13 | -469 | 1 |
+| 11 | Ancienne Douane | 32 | 330 | 1 |
+| 12 | Saint-Thomas | -195 | 227 | 1 |
+| 13 | Opéra | 281 | -464 | 1 |
+| 14 | Préfecture | 419 | -297 | 1 |
 
 ## Couteau (toujours disponible, hors inventaire)
 

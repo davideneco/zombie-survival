@@ -2,6 +2,35 @@
 
 Chaque changement est poussé sur `main` (déploiement Render) avec un nouveau numéro de version et sa description ici.
 
+## v0.92.0 (2026-11-13)
+**Défense : immeubles fortifiés, fenêtres barricadées, point de repli.**
+- **30 immeubles fortifiés** (1 à 2 par zone, choisis de façon déterministe) ont un ou deux étages avec escalier à demi-paliers, couloir et pièces (`keyBuildings.js`). Les zombies montent les escaliers : un zombie placé à 4 m du pied de l'escalier atteint l'étage en 11 à 25 s dans 10 immeubles sur 10 testés.
+- **Fenêtres barricadées** (`barricades.js`) : trois par immeuble. Les zombies arrachent les 6 planches une par une (environ 8 s en manche 5). On les recloue en maintenant **E** (+10 points par planche, plafonné à 500 points par manche). Le serveur de l'hôte décide et les clients reçoivent l'état par lots.
+- **Porte de l'escalier payante** (500 à 1 250 points selon la zone) : tant qu'elle est fermée, les zombies ne peuvent pas monter.
+- **Point de repli** au dernier étage : une salle avec sa porte barricadée et une caisse de munitions (une recharge par manche et par joueur).
+- **Barricade de fortune** : achetée au poste de munitions, une par joueur et quatre au total. Elle ne coupe jamais le chemin des zombies.
+- **Tonneaux explosifs** : 2 par immeuble fortifié.
+- **Réglages** : `keyBuildings`, `barricades`, `barrels` dans `src/config.js`.
+- **Perf** : départ île à 273 appels, 1,14 M triangles, 391 Mo (le budget de mémoire est de 400 Mo) ; gare 200 appels ; intro 123 appels. Dans un immeuble fortifié, l'agent a mesuré 287 appels (budget 300).
+- **Vérifié** :
+  - le build passe aux 3 étapes ;
+  - itinéraires d'escalier finis pour les 30 immeubles ;
+  - 12 077 cellules d'étage valides ;
+  - marche du joueur sur 28 escaliers sans saut ni blocage ;
+  - réparation (+10, plafond 500) et arrachage des planches ;
+  - porte d'escalier fermée → chemin infini, ouverte → 25,8 ;
+  - barricade de fortune dans un couloir : chemin toujours fini ;
+  - un tir fait exploser un tonneau et tue les zombies proches ;
+  - l'outil de recherche de blocages (`stuck-scan`) : 0 joueur bloqué ;
+  - capture regardée : fenêtres barricadées et porte à 500 points visibles dans la rue.
+- **Non vérifié** :
+  - multijoueur réel : les messages hôte/client sont testés en appelant les fonctions directement, sans deux navigateurs ;
+  - un étage vu de l'intérieur, la caisse de munitions et la porte d'escalier de près ;
+  - l'apparition des zombies à l'extérieur quand on est dans un immeuble ;
+  - `game.update` : p95 de 3,7 à 5,3 ms mesuré par l'agent sur l'ancienne base, donc possiblement au-dessus du budget de 4 ms, à remesurer sur une machine au calme.
+- **Écarts avec le plan** : un immeuble appartient à la zone de sa porte sur la rue ; la barricade de fortune est payée à l'achat et non à la pose ; les dégâts d'un tonneau sont de 1 000 (au lieu de 600) ; la touche de réparation est E (au lieu de F).
+- **Piège déjà connu** : le scan des blocages signale une poche à (-414,6 ; 74,9), à 36 m de tout immeuble fortifié ; elle est au même endroit avant et après cette étape.
+
 ## v0.91.0 (2026-11-13)
 **Nouvelle intro : 4 min 27 s de train sur 6 km de la vraie ligne.**
 - **Train** : une rame de type Régiolis à 4 caisses articulées, refaite de zéro : nez arrondi avec pare-brise incliné, plancher bas au milieu et relevé aux extrémités, marches, rangées de sièges, porte-bagages, cloisons, soufflets. Livrée neutre : aucun logo SNCF/TER. L'intérieur suit la hauteur du plancher (`train.floorAt`), et les zombies du trajet, le tram et les grenades l'utilisent.

@@ -37,29 +37,29 @@
 36;Atout;MASTODONTE;Place Kléber;2500;-198;-140
 37;Atout;BASTION;Place Kléber;2500;-217;-132
 38;BOÎTE MYSTÈRE (emplacement possible);BOÎTE MYSTÈRE (emplacement possible);Place Kléber;950;-198;-117
-39;Borne de munitions;Borne de munitions;Place Gutenberg;;-14;79
-40;Arme au mur;REMINGTON 870;Place Gutenberg;750;-9;94
-41;Arme au mur;SCAR-H;Place Gutenberg;2500;-18;99
-42;Arme au mur;PKM;Place Gutenberg;3200;3;98
-43;Atout;DOUBLE TAP;Place Gutenberg;2000;-9;62
-44;Atout;CERISE-FOUDRE;Place Gutenberg;2000;5;86
-45;BOÎTE MYSTÈRE (emplacement possible);BOÎTE MYSTÈRE (emplacement possible);Place Gutenberg;950;-16;112
-46;Borne de munitions;Borne de munitions;Cathédrale;;121;31
-47;Arme au mur;DESERT EAGLE;Cathédrale;1500;118;57
-48;Arme au mur;M4A1;Cathédrale;1200;111;54
-49;Arme au mur;COLT PYTHON .357;Cathédrale;2000;75;27
-50;BOÎTE MYSTÈRE (emplacement possible);BOÎTE MYSTÈRE (emplacement possible);Cathédrale;950;111;62
-51;Borne de munitions;Borne de munitions;Intérieur de la Cathédrale;;191;47
-52;Arme au mur;BARRETT M82;Intérieur de la Cathédrale;5000;177;62
+39;Borne de munitions;Borne de munitions;Place Gutenberg;;-34;90
+40;Arme au mur;REMINGTON 870;Place Gutenberg;750;4;83
+41;Arme au mur;SCAR-H;Place Gutenberg;2500;-3;99
+42;Arme au mur;PKM;Place Gutenberg;3200;-31;73
+43;Atout;DOUBLE TAP;Place Gutenberg;2000;-25;113
+44;Atout;CERISE-FOUDRE;Place Gutenberg;2000;-6;116
+45;BOÎTE MYSTÈRE (emplacement possible);BOÎTE MYSTÈRE (emplacement possible);Place Gutenberg;950;-12;59
+46;Borne de munitions;Borne de munitions;Cathédrale;;110;52
+47;Arme au mur;DESERT EAGLE;Cathédrale;1500;114;29
+48;Arme au mur;M4A1;Cathédrale;1200;124;26
+49;Arme au mur;COLT PYTHON .357;Cathédrale;2000;102;39
+50;BOÎTE MYSTÈRE (emplacement possible);BOÎTE MYSTÈRE (emplacement possible);Cathédrale;950;102;59
+51;Borne de munitions;Borne de munitions;Intérieur de la Cathédrale;;179;10
+52;Arme au mur;BARRETT M82;Intérieur de la Cathédrale;5000;207;37
 53;PACK-A-PUNCH;PACK-A-PUNCH;Intérieur de la Cathédrale;5000;223;14
 54;HORLOGE ASTRONOMIQUE;HORLOGE ASTRONOMIQUE;Intérieur de la Cathédrale;0;228;35
-55;BOÎTE MYSTÈRE (emplacement possible);BOÎTE MYSTÈRE (emplacement possible);Intérieur de la Cathédrale;950;170;30
-56;Borne de munitions;Borne de munitions;Homme de Fer;;-314;-195
-57;Arme au mur;FN P90;Homme de Fer;1800;-322;-213
-58;Arme au mur;ARBALÈTE;Homme de Fer;2000;-310;-224
-59;Arme au mur;M79;Homme de Fer;2500;-302;-187
-60;Atout;PHD FLOPPER;Homme de Fer;2000;-270;-217
-61;BOÎTE MYSTÈRE (emplacement possible);BOÎTE MYSTÈRE (emplacement possible);Homme de Fer;950;-285;-175
+55;BOÎTE MYSTÈRE (emplacement possible);BOÎTE MYSTÈRE (emplacement possible);Intérieur de la Cathédrale;950;192;46
+56;Borne de munitions;Borne de munitions;Homme de Fer;;-289;-188
+57;Arme au mur;FN P90;Homme de Fer;1800;-272;-196
+58;Arme au mur;ARBALÈTE;Homme de Fer;2000;-295;-176
+59;Arme au mur;M79;Homme de Fer;2500;-298;-201
+60;Atout;PHD FLOPPER;Homme de Fer;2000;-303;-214
+61;BOÎTE MYSTÈRE (emplacement possible);BOÎTE MYSTÈRE (emplacement possible);Homme de Fer;950;-319;-202
 62;Borne de munitions;Borne de munitions;Saint-Pierre-le-Jeune;;-155;-326
 63;Arme au mur;COLT PYTHON .357;Saint-Pierre-le-Jeune;2000;-131;-338
 64;Arme au mur;MP5;Saint-Pierre-le-Jeune;1200;-151;-345
@@ -127,25 +127,25 @@
 126;Atout;ULTIME VOLONTÉ;Opéra;4000;279;-446
 127;BOÎTE MYSTÈRE (emplacement possible);BOÎTE MYSTÈRE (emplacement possible);Opéra;950;266;-442
 128;Borne de munitions;Borne de munitions;Préfecture;;407;-357
-129;Arme au mur;PKM;Préfecture;3200;372;-337
-130;Arme au mur;M4A1;Préfecture;1200;411;-350
-131;BOÎTE MYSTÈRE (emplacement possible);BOÎTE MYSTÈRE (emplacement possible);Préfecture;950;409;-362
-132;Borne de munitions;Borne de munitions;Saint-Étienne;;556;-79
-133;Arme au mur;M249 SAW;Saint-Étienne;3000;527;-100
-134;Arme au mur;SCAR-H;Saint-Étienne;2500;534;-103
-135;Atout;STAMIN-UP;Saint-Étienne;2000;564;-93
-136;BOÎTE MYSTÈRE (emplacement possible);BOÎTE MYSTÈRE (emplacement possible);Saint-Étienne;950;522;-66
-137;Borne de munitions;Borne de munitions;Saint-Pierre-le-Vieux;;-610;-37
-138;Arme au mur;DESERT EAGLE;Saint-Pierre-le-Vieux;1500;-595;-35
-139;Arme au mur;REMINGTON 870;Saint-Pierre-le-Vieux;750;-643;-39
-140;Atout;RÉANIMATION RAPIDE;Saint-Pierre-le-Vieux;1500;-605;-35
-141;BOÎTE MYSTÈRE (emplacement possible);BOÎTE MYSTÈRE (emplacement possible);Saint-Pierre-le-Vieux;950;-635;-41
-142;Borne de munitions;Borne de munitions;Petite France;;-693;142
-143;Arme au mur;BARRETT M82;Petite France;5000;-668;117
-144;Arme au mur;SAIGA-12;Petite France;3000;-684;140
-145;Arme au mur;MP5;Petite France;1200;-696;146
-146;Atout;MASTODONTE;Petite France;2500;-670;127
-147;BOÎTE MYSTÈRE (emplacement possible);BOÎTE MYSTÈRE (emplacement possible);Petite France;950;-704;149
+129;Arme au mur;PKM;Préfecture;3200;422;-350
+130;Arme au mur;M4A1;Préfecture;1200;420;-343
+131;BOÎTE MYSTÈRE (emplacement possible);BOÎTE MYSTÈRE (emplacement possible);Préfecture;950;415;-356
+132;Borne de munitions;Borne de munitions;Saint-Étienne;;544;-109
+133;Arme au mur;M249 SAW;Saint-Étienne;3000;534;-120
+134;Arme au mur;SCAR-H;Saint-Étienne;2500;538;-82
+135;Atout;STAMIN-UP;Saint-Étienne;2000;518;-99
+136;BOÎTE MYSTÈRE (emplacement possible);BOÎTE MYSTÈRE (emplacement possible);Saint-Étienne;950;527;-59
+137;Borne de munitions;Borne de munitions;Saint-Pierre-le-Vieux;;-610;-32
+138;Arme au mur;DESERT EAGLE;Saint-Pierre-le-Vieux;1500;-593;-34
+139;Arme au mur;REMINGTON 870;Saint-Pierre-le-Vieux;750;-626;-40
+140;Atout;RÉANIMATION RAPIDE;Saint-Pierre-le-Vieux;1500;-620;-39
+141;BOÎTE MYSTÈRE (emplacement possible);BOÎTE MYSTÈRE (emplacement possible);Saint-Pierre-le-Vieux;950;-640;-44
+142;Borne de munitions;Borne de munitions;Petite France;;-696;148
+143;Arme au mur;BARRETT M82;Petite France;5000;-702;146
+144;Arme au mur;SAIGA-12;Petite France;3000;-683;137
+145;Arme au mur;MP5;Petite France;1200;-689;141
+146;Atout;MASTODONTE;Petite France;2500;-674;116
+147;BOÎTE MYSTÈRE (emplacement possible);BOÎTE MYSTÈRE (emplacement possible);Petite France;950;-671;128
 148;Borne de munitions;Borne de munitions;Quais;;-1020;-351
 149;Arme au mur;COLT M1911;Quais;400;-1055;-290
 150;Arme au mur;REMINGTON 870;Quais;750;-1012;-364
