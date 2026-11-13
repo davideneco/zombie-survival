@@ -31,7 +31,7 @@ export async function loadKrutenauData() {
   try {
     const man = await fetch('/data/tiles/manifest.json').then((r) => (r.ok ? r.json() : null));
     if (!man) return null;
-    const R = D.rect, S = man.tileSize, blds = new Map(), trees = [], roads = new Map(), parks = new Map(), water = new Map();
+    const R = D.rect, S = man.tileSize, blds = new Map(), trees = [], lamps = [], roads = new Map(), parks = new Map(), water = new Map();
     const touches = (pts) => { let a = Infinity, b = -Infinity, c = Infinity, d = -Infinity; for (const [x, z] of pts) { a = Math.min(a, x); b = Math.max(b, x); c = Math.min(c, z); d = Math.max(d, z); } return b >= R.x0 - 30 && a <= R.x1 + 30 && d >= R.z0 - 30 && c <= R.z1 + 30; };
     for (const [key, e] of Object.entries(man.tiles)) {
       const [ix, iz] = key.split(',').map(Number);
@@ -39,15 +39,16 @@ export async function loadKrutenauData() {
       const t = await fetch(`/data/tiles/${e.file}`).then((r) => r.json());
       for (const b of t.buildings) if (!blds.has(b.id)) blds.set(b.id, b.pts);
       for (const [src, dst] of [[t.roads, roads], [t.parks, parks], [t.water, water]]) for (const o of src || []) if (!dst.has(o.id) && touches(o.pts)) dst.set(o.id, o); // (flat layers, for the dressing and the map)
+      for (const [x, z] of t.lamps || []) if (x >= R.x0 - 30 && x <= R.x1 + 30 && z >= R.z0 - 30 && z <= R.z1 + 30) lamps.push([x, z]);
       for (const [x, z] of t.trees) if (x >= R.x0 && x <= R.x1 && z >= R.z0 && z <= R.z1) trees.push([x, z]);
     }
-    return { buildings: [...blds.entries()].sort((a, b) => (a[0] < b[0] ? -1 : 1)).map(([, p]) => p), trees, roads: [...roads.values()], parks: [...parks.values()], water: [...water.values()], hash: man.hash };
+    return { buildings: [...blds.entries()].sort((a, b) => (a[0] < b[0] ? -1 : 1)).map(([, p]) => p), trees, lamps, roads: [...roads.values()], parks: [...parks.values()], water: [...water.values()], hash: man.hash };
   } catch (e) { console.warn('[krutenau] tile data', e); return null; }
 }
 
 // ctx: { data, scene, collision, levels, lightSources, props, zoneNames, island: { find(x, z, snap) -> { x, z, zone, yaw } | null } }
 export function buildKrutenau(ctx) {
-  const { data, scene, collision, levels, lightSources, props, zoneNames, island, ground } = ctx;
+  const { data, scene, collision, levels, lightSources, props, zoneNames, island, ground, lamps } = ctx;
   const D = CONFIG.districts.krutenau, R = D.rect;
   if (!data || !data.buildings.length) return null;
   const zoneDefs = CONFIG.sector.zones.filter((z) => z.pocket === 'krutenau');
@@ -77,7 +78,7 @@ export function buildKrutenau(ctx) {
   // set dressing: wrecks along the kerb and the checkpoint at the bridge head; their footprints are blocked cells too (items, spawns and the components avoid them)
   const freeAt = (x, z, r) => { for (let j = cz(z - r); j <= cz(z + r); j++) for (let i = cx(x - r); i <= cx(x + r); i++) { if (i < 0 || j < 0 || i >= nx || j >= nz || blocked[j * nx + i]) return false; } return true; };
   const keepR = D.dress.keepRadius, keep = [{ ...D.entry, r: keepR }, { x: D.entry.x + 5, z: D.entry.z, r: keepR }, ...zoneDefs.map((z) => ({ x: z.site.x, z: z.site.z, r: keepR }))];
-  const dressList = planDress({ roads: data.roads || [], D, free: freeAt, entry: D.entry, keep });
+  const dressList = planDress({ roads: data.roads || [], D, free: freeAt, entry: D.entry, keep, lamps: data.lamps || [] });
   for (const b of dressBoxes(dressList)) { // (a 0.7 m margin around the oriented box)
     const c = Math.cos(b.rot), s = Math.sin(b.rot), ext = Math.hypot(b.w, b.d) / 2 + 1;
     for (let j = cz(b.z - ext); j <= cz(b.z + ext); j++) for (let i = cx(b.x - ext); i <= cx(b.x + ext); i++) {
@@ -164,7 +165,7 @@ export function buildKrutenau(ctx) {
   }
 
   // ---------------------------------------------------------------- set dressing: instanced props + collision (before levels.buildNavs, so the nav grid sees them)
-  const dressMeshes = buildDress(dressList, { props, scene, collision });
+  const dressMeshes = buildDress(dressList, { props, scene, collision, lamps, lightSources });
 
   // ---------------------------------------------------------------- floor region (own nav grid)
   const region = levels.addRegion('Krutenau', 0, 'floor', { ground: true, navCell: D.navCell, navMaxCost: D.navMaxCost, navMargin: 0.5 });
@@ -236,11 +237,46 @@ export function buildKrutenau(ctx) {
     return null;
   };
 
+  // ---------------------------------------------------------------- the M map: its own plan (rect + margin), like the station's
+  const MS = D.mapScale, MB = D.mapMargin, mb = { x0: R.x0 - MB, x1: R.x1 + MB, z0: R.z0 - MB, z1: R.z1 + MB };
+  const map = typeof document !== 'undefined' ? drawKrMap({ data, blds, R, mb, S: MS, nx, nz, zlab, walk, cx: wx, cz: wz, zoneIdx, ret, entry, dressList, C }) : null;
+
   const api = {
     rect: R, region, nav, doors, zoneIdx, zoneCenters, spawns, entry, ret, gate, inArea, zoneOf, pickGround, makeDoors, placeItems, finishNav,
     inRegion: (x, z) => inArea(x, z) && levels.inRegion(region, x, z),
-    stats: { buildings: blds.length, trees: data.trees.length, cells: N, free: sizes[main], components: sizes.length, spawns: spawns.length, dress: dressList.length, cars: dressList.filter((o) => o.type === 'car').length, roads: (data.roads || []).length },
+    stats: { buildings: blds.length, trees: data.trees.length, cells: N, free: sizes[main], components: sizes.length, spawns: spawns.length, dress: dressList.length, lamps: dressList.filter((o) => o.type === 'lamp').length, cars: dressList.filter((o) => o.type === 'car').length, roads: (data.roads || []).length },
     dressMeshes,
+    map: map && { image: map, view: { halfX: -mb.x0, halfZ: -mb.z0, scale: MS }, crop: { x0: R.x0 - 8, x1: R.x1 + 8, z0: R.z0 - 8, z1: R.z1 + 8 }, title: 'KRUTENAU — STRASBOURG' },
   };
   return api;
+}
+
+// Map of the district: parks, water, roads, pavements, buildings, the walkable ground tinted by zone, the wrecks and the bridge head. Image px = (world - mb.x0 / mb.z0) * S.
+function drawKrMap({ data, blds, R, mb, S, nx, nz, zlab, walk, cx: wx, cz: wz, zoneIdx, ret, entry, dressList, C }) {
+  const W = Math.round((mb.x1 - mb.x0) * S), H = Math.round((mb.z1 - mb.z0) * S), cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+  const x = cv.getContext('2d'), P = ([px, pz]) => [(px - mb.x0) * S, (pz - mb.z0) * S];
+  const path = (pts, close) => { x.beginPath(); pts.forEach((p, i) => { const [X, Y] = P(p); if (i) x.lineTo(X, Y); else x.moveTo(X, Y); }); if (close) x.closePath(); };
+  x.fillStyle = '#16181c'; x.fillRect(0, 0, W, H);
+  for (const o of data.parks || []) { x.fillStyle = '#243222'; path(o.pts, true); x.fill(); }
+  for (const o of data.water || []) { x.fillStyle = '#123650'; path(o.pts, true); x.fill(); }
+  x.lineJoin = 'round'; x.lineCap = 'round';
+  const wid = (r) => r.w || CONFIG.world.surf.width[r.hw] || CONFIG.world.surf.width.other, paved = (r) => CONFIG.world.surf.paved.includes(r.hw);
+  for (const pass of [0, 1]) for (const r of data.roads || []) { // carriageways first, pavements and paths on top
+    if (r.hw === 'crossing' || r.area || paved(r) !== !!pass) continue;
+    x.strokeStyle = pass ? '#3b3f45' : '#4a4e55'; x.lineWidth = Math.max(1.5, wid(r) * S); path(r.pts, false); x.stroke();
+  }
+  // the walkable ground by zone: a faint tint (the same 1 m cells the zones are made of)
+  const tint = ['#d9a441', '#4aa3d9', '#7ac74f', '#c9577a'];
+  zoneIdx.forEach((zi, k) => { x.fillStyle = tint[k % tint.length] + '2e'; for (let c = 0; c < zlab.length; c++) if (walk[c] && zlab[c] === zi) { const [X, Y] = P([wx(c % nx) - 0.5, wz((c / nx) | 0) - 0.5]); x.fillRect(X, Y, S + 0.5, S + 0.5); } });
+  for (const p of blds) { x.fillStyle = '#7a6a55'; path(p, true); x.fill(); x.strokeStyle = '#4a3f33'; x.lineWidth = 1; x.stroke(); }
+  for (const o of dressList) if (o.type === 'car') { const [X, Y] = P([o.x, o.z]); x.fillStyle = '#9aa0a6'; x.fillRect(X - 3, Y - 2, 6, 4); }
+  // the rect (playable limit) and the bridge head: arrival and return point
+  x.strokeStyle = 'rgba(255,210,74,0.55)'; x.lineWidth = 2; x.setLineDash([8, 6]); const [a, b] = [P([R.x0, R.z0]), P([R.x1, R.z1])]; x.strokeRect(a[0], a[1], b[0] - a[0], b[1] - a[1]); x.setLineDash([]);
+  const [rx, ry] = P([ret.x, ret.z]), [ex, ey] = P([entry.x, entry.z]);
+  x.fillStyle = '#e8c04a'; x.strokeStyle = '#000'; x.lineWidth = 2; x.beginPath(); x.roundRect(rx - 9, ry - 9, 18, 18, 4); x.fill(); x.stroke();
+  x.fillStyle = '#000'; x.font = 'bold 13px Arial'; x.textAlign = 'center'; x.fillText('\u25C0', rx, ry + 4.5);
+  x.font = 'bold 12px Arial'; x.lineWidth = 3; x.strokeStyle = '#000'; x.fillStyle = '#ffe9a0';
+  x.textAlign = 'left'; x.strokeText('PONT : retour Grande \u00CEle', rx - 9, ry + 26); x.fillText('PONT : retour Grande \u00CEle', rx - 9, ry + 26);
+  void ex; void ey;
+  return cv;
 }

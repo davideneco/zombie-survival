@@ -728,7 +728,9 @@ export class Hud {
 
   // Carte plein écran : plan de l'île + zones, portes, machines, joueurs
   drawMap(world, player, teammates, myColor) {
-    if (!this.mapOpen || !world.mapImage) return;
+    if (!this.mapOpen) return;
+    world.mapAt?.(player.pos.x, player.pos.z); // the plan of the area the local player is in (island, station, Krutenau)
+    if (!world.mapImage) return;
     const cv = this.el.mapCanvas;
     const W = window.innerWidth, H = window.innerHeight;
     if (cv.width !== W || cv.height !== H) { cv.width = W; cv.height = H; }

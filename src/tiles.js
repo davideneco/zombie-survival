@@ -63,6 +63,15 @@ function rectsMinus(a, c) {
   return out;
 }
 
+// shared (tiles and districts): pole + cap (pole material) and lantern (lamp material), pre-translated so an instance is just (x, 0, z)
+let lampGeo = null;
+export function lampGeometries() {
+  if (lampGeo) return lampGeo;
+  const pole = mergeGeometries([new THREE.CylinderGeometry(0.06, 0.09, 4.2, 8).translate(0, 2.1, 0), new THREE.ConeGeometry(0.28, 0.2, 8).translate(0, 4.65, 0)]);
+  const lantern = new THREE.CylinderGeometry(0.2, 0.14, 0.4, 8).translate(0, 4.35, 0);
+  return (lampGeo = { pole, lantern });
+}
+
 export function installTiles(game, ctx) {
   const { world, scene, camera } = ctx;
   const W = CONFIG.world, S = W.stream, SK = world.stream; // SK: what realworld.js hands over (core streaming kit)
@@ -73,16 +82,8 @@ export function installTiles(game, ctx) {
   let arch = null;           // streamed architecture instance (lazy: the core one must have finished)
   let sliceEnd = 0, timer = 0, manifest = null, job = null, jobTile = null, focusAt = null;
   const queue = [];          // tiles waiting for a build (one job at a time)
-  let lampGeo = null;        // shared: pole + cap (pole material) and lantern (lamp material), pre-translated so a tile instance is just (x, 0, z)
   const dummy = new THREE.Matrix4();
   const stats = { built: 0, data: 0, builds: 0, disposes: 0, fetches: 0, errors: 0, lastBuildMs: 0, maxStepMs: 0 };
-
-  const lampGeometries = () => {
-    if (lampGeo) return lampGeo;
-    const pole = mergeGeometries([new THREE.CylinderGeometry(0.06, 0.09, 4.2, 8).translate(0, 2.1, 0), new THREE.ConeGeometry(0.28, 0.2, 8).translate(0, 4.65, 0)]);
-    const lantern = new THREE.CylinderGeometry(0.2, 0.14, 0.4, 8).translate(0, 4.35, 0);
-    return (lampGeo = { pole, lantern });
-  };
 
   // ---------------------------------------------------------------- data
   function fetchData(t) {

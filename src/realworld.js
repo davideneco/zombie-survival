@@ -2174,7 +2174,7 @@ export async function buildRealWorld(scene, renderer) {
       let axis = 0, al = -1; for (let k = 0; k < 8; k++) { const a = k * Math.PI / 8, l = run(a) + run(a + Math.PI); if (l > al) { al = l; axis = a; } }
       return { x: best[0], z: best[1], yaw: axis + Math.PI / 2 };
     } };
-    kr = buildKrutenau({ data: krData, scene, collision, levels, lightSources, props, zoneNames: ZONE_NAMES, island, ground: { material: groundMesh.material, tile: GROUND_TILE, w: GROUND_W, h: GROUND_H } });
+    kr = buildKrutenau({ data: krData, scene, collision, levels, lightSources, props, zoneNames: ZONE_NAMES, island, lamps: lampMats, ground: { material: groundMesh.material, tile: GROUND_TILE, w: GROUND_W, h: GROUND_H } });
     if (kr) {
       collision.build(); // the wall weapons look for a wall with rays
       for (const [zi, c] of Object.entries(kr.zoneCenters)) { seeds[zi] = [c.x, c.z]; zoneCenters[zi] = { name: c.name, x: c.x, z: c.z }; zoneArea[zi] = c.area; }
@@ -2362,7 +2362,8 @@ export async function buildRealWorld(scene, renderer) {
   if (gare) gare.arch.relief.setRange(0); // the station's surrounding buildings are background : painted windows only (draw calls)
   if (gare) { gare.root.visible = false; if (treesApi) { const sm = treesApi.setMode.bind(treesApi); treesApi.setMode = (m) => { sm(m); gare.trees?.setMode(m); }; } }
   const islandMap = { image: mapImage, view: { halfX, halfZ, scale: MAP_SCALE }, crop: { x0: Math.max(-halfX, secMinX - 40), x1: Math.min(halfX, secMaxX + 40), z0: Math.max(-halfZ, secMinZ - 40), z1: Math.min(halfZ, secMaxZ + 40) }, title: 'GRANDE ÎLE — STRASBOURG' };
-  const curMap = () => (localArea === 'gare' && gare ? gare.map : islandMap);
+  let mapArea = 'island'; // which plan the M map shows: set from the local player's position (hud.js calls mapAt before drawing)
+  const curMap = () => (localArea === 'gare' && gare ? gare.map : mapArea === 'krutenau' && kr?.map ? kr.map : islandMap);
   const zoneOfAll = (x, z) => (gare && gare.inArea(x, z) ? gare.zoneOf(x, z) : kr && kr.inArea(x, z) ? kr.zoneOf(x, z) : zoneOf(x, z));
   // The build-time zone masks are dead weight once the world is built (the build closures keep them alive): the runtime only reads zoneLabelWide / zoneLabelWide1 and
   // `reach`. Transferring an ArrayBuffer detaches it and frees its memory now (~10 MB at 3.3 M cells per mask).
@@ -2375,6 +2376,7 @@ export async function buildRealWorld(scene, renderer) {
     zoneNames: ZONE_NAMES, zoneCenters, startZone, sealedPoints,
     get mapImage() { return curMap().image; }, get mapView() { return curMap().view; }, get mapCrop() { return curMap().crop; }, get mapTitle() { return curMap().title; },
     gare, kr, areaOf, lightSources,
+    mapAt: (x, z) => { mapArea = kr && kr.inArea(x, z) ? 'krutenau' : 'island'; },
     logicAreaOf: (x, z) => (kr && kr.inArea(x, z) ? 'krutenau' : areaOf(x, z)), // the area whose nav / spawns apply (the RENDER area stays 'island' in Krutenau)
     navAt: (x, z) => (gare && gare.inArea(x, z) && gare.nav ? gare.nav : kr && kr.inArea(x, z) && kr.nav ? kr.nav : nav), // grid of the area of a point
     regionAt: (x, z) => (gare && gare.inRegion(x, z) ? gare.region : kr && kr.inRegion(x, z) ? kr.region : 0),      // floor region of a spawn point (station zombies use its grid)
