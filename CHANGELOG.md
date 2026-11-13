@@ -2,6 +2,14 @@
 
 Chaque changement est poussé sur `main` (déploiement Render) avec un nouveau numéro de version et sa description ici.
 
+## v0.97.1 (2026-11-13)
+- **Perf : mémoire de Krutenau et construction des tuiles plus douce.**
+  - Une tuile terminée envoie maintenant ses maillages et son proxy d'ombre au GPU d'un coup : les tuiles masquées par le culling libèrent leurs tableaux CPU au lieu de les garder jusqu'à ce que la caméra s'approche (`warmTiles`, `warmUpload`).
+  - Les étapes de construction (`buildSurfacesSteps`, `flushTileSteps`) sont découpées : la pire étape mesurée passe de 8,8 ms à 5,6 ms, géométrie et empreintes de tuiles identiques.
+  - Mesure fine du tas (la lecture par défaut de `performance.memory` est arrondie par paliers et affichait 415 Mo, ce qui était trompeur) : quartier 393,3 → 388,7 Mo, départ de l'île 386,8 Mo (inchangé), retour sur l'île avec les 4 tuiles déchargées 387,9 Mo.
+  - Vérifié : build OK, `tools/tiles.mjs --verify` OK, aucune erreur console ; après fusion : île 251 appels / 1,35 M triangles / 58 programmes, quartier 117 appels / 0,61 M triangles ; une capture du quartier regardée par l'agent.
+  - Non vérifié : l'empreinte déterministe de l'île n'a pas été rejouée (code de l'île intact) ; les pics de 28–77 ms ne se sont pas reproduits, un seul gros bâtiment peut encore dépasser une tranche ; multijoueur.
+
 ## v0.97.0 (2026-11-13)
 - **Krutenau : routes, décor, carte, nuit, second pont.**
   - Vraies routes, trottoirs, passages piétons, parcs et eau d'OpenStreetMap, dessinés en 2 maillages fusionnés par tuile (`src/surfaces.js`) ; l'Ill et les bassins des tuiles sont de l'eau avec un bord en pierre.
