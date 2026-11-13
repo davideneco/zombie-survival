@@ -9,15 +9,17 @@ import { CONFIG } from '../config.js';
 export function installBridge(game, { world, hud, sfx }) {
   const kr = world.kr;
   if (!kr) return;
-  const D = CONFIG.districts.krutenau, gateDoor = kr.doors[0], R2 = D.portalRadius;
-  const gateAt = { x: kr.gate.x, z: kr.gate.z, yaw: kr.gate.yaw };
-  // the two interaction points: the gate (island side, only once its door is open) and the return point of the district
+  const D = CONFIG.districts.krutenau, R2 = D.portalRadius, bridges = kr.bridges;
+  // the interaction points: a bridge's gate (island side, only once ITS door is open) and its return point in the district
   const nearBridge = () => {
     const P = game.player;
-    if (P.vehicle || P.downed || P.dead || P.onTram || game.xfRide || !gateDoor.open) return null;
+    if (P.vehicle || P.downed || P.dead || P.onTram || game.xfRide) return null;
     const a = world.logicAreaOf(P.pos.x, P.pos.z);
-    if (a === 'krutenau') return Math.hypot(P.pos.x - kr.ret.x, P.pos.z - kr.ret.z) < R2 ? { to: 'island', x: gateAt.x, z: gateAt.z, yaw: gateAt.yaw - Math.PI / 2 } : null;
-    if (a === 'island') return Math.hypot(P.pos.x - gateAt.x, P.pos.z - gateAt.z) < R2 + 0.8 ? { to: 'krutenau', x: kr.entry.x, z: kr.entry.z, yaw: kr.entry.yaw } : null;
+    for (const b of bridges) {
+      if (!b.door.open) continue;
+      if (a === 'krutenau' && Math.hypot(P.pos.x - b.ret.x, P.pos.z - b.ret.z) < R2) return { to: 'island', x: b.gate.x, z: b.gate.z, yaw: b.gate.yaw - Math.PI / 2 };
+      if (a === 'island' && Math.hypot(P.pos.x - b.gate.x, P.pos.z - b.gate.z) < R2 + 0.8) return { to: 'krutenau', x: b.entry.x, z: b.entry.z, yaw: b.entry.yaw };
+    }
     return null;
   };
 

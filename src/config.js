@@ -666,6 +666,8 @@ export const CONFIG = {
       gateHint: { x: 610, z: -110 }, gateSnap: 40,   // m: where the gate stands on the island (the reachable street cell nearest to the hint, <= gateSnap m away)
       entry: { x: 880, z: 250, yaw: -1.5708 },       // arrival point in the district (snapped to free ground), the player faces east; the return point is 5 m from it
       spawnEvery: 14, itemGap: 7,                    // m between zombie spawn points; min distance (m) between two items
+      // extra passages (each one is a purchasable gate on the island with its own price and arrival point; all of them open the 4 zones). The player returns through the point next to the arrival.
+      gates: [{ price: 1800, gateHint: { x: 568, z: -22 }, gateSnap: 25, entry: { x: 1088, z: 330, yaw: 1.5708 }, label: 'Pont du sud ↔ Krutenau' }],
       mapScale: 2, mapMargin: 20,                    // M map: px per m of the district plan, margin (m) around the playable rect
       portalRadius: 3,                               // m: the interaction radius of the gate (open) and of the return point
       // set dressing (src/district/dress.js): wrecks parked at the kerb of the roads + the barricade that closes the bridge head

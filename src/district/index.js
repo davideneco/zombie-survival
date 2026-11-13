@@ -77,7 +77,7 @@ export function buildKrutenau(ctx) {
   for (const [x, z] of data.trees) for (let j = cz(z - 1); j <= cz(z + 1); j++) for (let i = cx(x - 1); i <= cx(x + 1); i++) if (Math.hypot(wx(i) - x, wz(j) - z) < 1) mark(i, j);
   // set dressing: wrecks along the kerb and the checkpoint at the bridge head; their footprints are blocked cells too (items, spawns and the components avoid them)
   const freeAt = (x, z, r) => { for (let j = cz(z - r); j <= cz(z + r); j++) for (let i = cx(x - r); i <= cx(x + r); i++) { if (i < 0 || j < 0 || i >= nx || j >= nz || blocked[j * nx + i]) return false; } return true; };
-  const keepR = D.dress.keepRadius, keep = [{ ...D.entry, r: keepR }, { x: D.entry.x + 5, z: D.entry.z, r: keepR }, ...zoneDefs.map((z) => ({ x: z.site.x, z: z.site.z, r: keepR }))];
+  const keepR = D.dress.keepRadius, keep = [D.entry, ...(D.gates || []).map((g) => g.entry)].flatMap((e) => [{ x: e.x, z: e.z, r: keepR }, { x: e.x + 5, z: e.z, r: keepR }]).concat(zoneDefs.map((z) => ({ x: z.site.x, z: z.site.z, r: keepR })));
   const dressList = planDress({ roads: data.roads || [], D, free: freeAt, entry: D.entry, keep, lamps: data.lamps || [] });
   for (const b of dressBoxes(dressList)) { // (a 0.7 m margin around the oriented box)
     const c = Math.cos(b.rot), s = Math.sin(b.rot), ext = Math.hypot(b.w, b.d) / 2 + 1;
@@ -144,11 +144,18 @@ export function buildKrutenau(ctx) {
   });
 
   // ---------------------------------------------------------------- the gate on the island (a door), the arrival point and the return point
-  const entryCell = nearestMain(D.entry.x, D.entry.z, 3.5), entry = { x: wx(entryCell % nx), z: wz((entryCell / nx) | 0), yaw: D.entry.yaw };
-  // the return point: a free spot 4-6 m from the arrival (the interaction of a point must not overlap the other's)
-  const retCell = nearestMain(entry.x + 5, entry.z, 3), ret = { x: wx(retCell % nx), z: wz((retCell / nx) | 0) };
-  const gate = island.find(D.gateHint.x, D.gateHint.z, D.gateSnap);
-  if (!gate) { console.warn('[krutenau] no gate spot on the island'); return null; }
+  // bridges: the main one (gateHint / entry / gatePrice) and the extra passages of D.gates, each with its own price, gate spot on the island and arrival point here.
+  // The extra ones are optional (skipped when the island has no gate spot near their hint); the main one is required.
+  const bridges = [];
+  for (const [k, bd] of [{ gateHint: D.gateHint, gateSnap: D.gateSnap, entry: D.entry, price: D.gatePrice, label: 'Grande Île ↔ Krutenau' }, ...(D.gates || [])].entries()) {
+    const gate = island.find(bd.gateHint.x, bd.gateHint.z, bd.gateSnap);
+    if (!gate) { console.warn('[krutenau] no gate spot on the island for bridge', k); if (!k) return null; continue; }
+    const ec = nearestMain(bd.entry.x, bd.entry.z, 3.5), entry = { x: wx(ec % nx), z: wz((ec / nx) | 0), yaw: bd.entry.yaw };
+    // the return point: a free spot 4-6 m from the arrival (the interaction of a point must not overlap the other's)
+    const rc = nearestMain(entry.x + 5, entry.z, 3), ret = { x: wx(rc % nx), z: wz((rc / nx) | 0) };
+    bridges.push({ gate, entry, ret, price: bd.price, label: bd.label, door: null });
+  }
+  const { gate, entry, ret } = bridges[0];
 
   // ---------------------------------------------------------------- ground: one flat quad over the rect with the island's ground material (same ground shader: cobbles, normal / roughness /
   // puddle variation, same UV mapping). Built with the district, NOT by the tile streamer: it exists the moment the player arrives, whatever the streamer has built so far. It sits 2 cm below
@@ -171,26 +178,28 @@ export function buildKrutenau(ctx) {
   const region = levels.addRegion('Krutenau', 0, 'floor', { ground: true, navCell: D.navCell, navMaxCost: D.navMaxCost, navMargin: 0.5 });
   levels.addPoly(region, [[R.x0, R.z0], [R.x0, R.z1], [R.x1, R.z1], [R.x1, R.z0]].reverse(), 0);
 
-  // ---------------------------------------------------------------- doors: the gate only (it opens every zone of the district)
+  // ---------------------------------------------------------------- doors: one per bridge (each opens every zone of the district; the extra ones are appended after the main gate)
   const doors = [];
   const makeDoors = ({ doorList }) => {
-    const price = D.gatePrice, door = { id: doorList.length, price, a: zoneIdx[0], b: zoneIdx[0], toZone: zoneIdx[0], name: zoneDefs[0].name, open: false, points: [], segs: [], meshes: [], cells: [], portal: false, pocket: 'krutenau', gate: true, extra: zoneIdx.slice(1) };
-    const len = 5, gm = props.gate(len);
-    gm.position.set(gate.x, 0, gate.z); gm.rotation.y = -gate.yaw;
-    const mat = new THREE.MeshStandardMaterial({ map: doorSignTex(price, 'Grande Île ↔ Krutenau'), roughness: 0.72 });
-    for (const side of [-1, 1]) {
-      const sign = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 2.6 * 0.375), mat);
-      sign.position.set(0, 2.0, side * 0.16); sign.rotation.y = side > 0 ? 0 : Math.PI; gm.add(sign);
+    for (const br of bridges) {
+      const g = br.gate, price = br.price, door = { id: doorList.length, price, a: zoneIdx[0], b: zoneIdx[0], toZone: zoneIdx[0], name: zoneDefs[0].name, open: false, points: [], segs: [], meshes: [], cells: [], portal: false, pocket: 'krutenau', gate: true, extra: zoneIdx.slice(1) };
+      const len = 5, gm = props.gate(len);
+      gm.position.set(g.x, 0, g.z); gm.rotation.y = -g.yaw;
+      const mat = new THREE.MeshStandardMaterial({ map: doorSignTex(price, br.label), roughness: 0.72 });
+      for (const side of [-1, 1]) {
+        const sign = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 2.6 * 0.375), mat);
+        sign.position.set(0, 2.0, side * 0.16); sign.rotation.y = side > 0 ? 0 : Math.PI; gm.add(sign);
+      }
+      scene.add(gm); door.meshes.push(gm);
+      for (let s = -len / 2; s <= len / 2; s += 1.25) door.points.push({ x: g.x + Math.cos(g.yaw) * s, z: g.z + Math.sin(g.yaw) * s });
+      lightSources.push({ x: g.x, y: 2.8, z: g.z, color: 0xff8844, intensity: 9, dist: 8, door });
+      doorList.push(door); doors.push(door); br.door = door;
     }
-    scene.add(gm); door.meshes.push(gm);
-    for (let s = -len / 2; s <= len / 2; s += 1.25) door.points.push({ x: gate.x + Math.cos(gate.yaw) * s, z: gate.z + Math.sin(gate.yaw) * s });
-    lightSources.push({ x: gate.x, y: 2.8, z: gate.z, color: 0xff8844, intensity: 9, dist: 8, door });
-    doorList.push(door); doors.push(door);
   };
 
   // ---------------------------------------------------------------- items (deterministic spots: nearest to the zone centre, 7 m apart, away from the arrival and return points)
   const placeItems = ({ addStation, addWallBuy, addMachine, stations, wallWeapons, wallColors }) => {
-    const taken = [[entry.x, entry.z], [ret.x, ret.z]];
+    const taken = bridges.flatMap((b) => [[b.entry.x, b.entry.z], [b.ret.x, b.ret.z]]);
     zoneDefs.forEach((zd, k) => {
       const zi = zoneIdx[k], zc = zoneCenters[zi], cells = [];
       for (let c = 0; c < N; c++) if (walk[c] && zlab[c] === zi) cells.push(c);
@@ -239,10 +248,10 @@ export function buildKrutenau(ctx) {
 
   // ---------------------------------------------------------------- the M map: its own plan (rect + margin), like the station's
   const MS = D.mapScale, MB = D.mapMargin, mb = { x0: R.x0 - MB, x1: R.x1 + MB, z0: R.z0 - MB, z1: R.z1 + MB };
-  const map = typeof document !== 'undefined' ? drawKrMap({ data, blds, R, mb, S: MS, nx, nz, zlab, walk, cx: wx, cz: wz, zoneIdx, ret, entry, dressList, C }) : null;
+  const map = typeof document !== 'undefined' ? drawKrMap({ data, blds, R, mb, S: MS, nx, nz, zlab, walk, cx: wx, cz: wz, zoneIdx, bridges, dressList }) : null;
 
   const api = {
-    rect: R, region, nav, doors, zoneIdx, zoneCenters, spawns, entry, ret, gate, inArea, zoneOf, pickGround, makeDoors, placeItems, finishNav,
+    rect: R, region, nav, doors, zoneIdx, zoneCenters, spawns, entry, ret, gate, bridges, inArea, zoneOf, pickGround, makeDoors, placeItems, finishNav,
     inRegion: (x, z) => inArea(x, z) && levels.inRegion(region, x, z),
     stats: { buildings: blds.length, trees: data.trees.length, cells: N, free: sizes[main], components: sizes.length, spawns: spawns.length, dress: dressList.length, lamps: dressList.filter((o) => o.type === 'lamp').length, cars: dressList.filter((o) => o.type === 'car').length, roads: (data.roads || []).length },
     dressMeshes,
@@ -252,7 +261,7 @@ export function buildKrutenau(ctx) {
 }
 
 // Map of the district: parks, water, roads, pavements, buildings, the walkable ground tinted by zone, the wrecks and the bridge head. Image px = (world - mb.x0 / mb.z0) * S.
-function drawKrMap({ data, blds, R, mb, S, nx, nz, zlab, walk, cx: wx, cz: wz, zoneIdx, ret, entry, dressList, C }) {
+function drawKrMap({ data, blds, R, mb, S, nx, nz, zlab, walk, cx: wx, cz: wz, zoneIdx, bridges, dressList }) {
   const W = Math.round((mb.x1 - mb.x0) * S), H = Math.round((mb.z1 - mb.z0) * S), cv = document.createElement('canvas'); cv.width = W; cv.height = H;
   const x = cv.getContext('2d'), P = ([px, pz]) => [(px - mb.x0) * S, (pz - mb.z0) * S];
   const path = (pts, close) => { x.beginPath(); pts.forEach((p, i) => { const [X, Y] = P(p); if (i) x.lineTo(X, Y); else x.moveTo(X, Y); }); if (close) x.closePath(); };
@@ -272,11 +281,12 @@ function drawKrMap({ data, blds, R, mb, S, nx, nz, zlab, walk, cx: wx, cz: wz, z
   for (const o of dressList) if (o.type === 'car') { const [X, Y] = P([o.x, o.z]); x.fillStyle = '#9aa0a6'; x.fillRect(X - 3, Y - 2, 6, 4); }
   // the rect (playable limit) and the bridge head: arrival and return point
   x.strokeStyle = 'rgba(255,210,74,0.55)'; x.lineWidth = 2; x.setLineDash([8, 6]); const [a, b] = [P([R.x0, R.z0]), P([R.x1, R.z1])]; x.strokeRect(a[0], a[1], b[0] - a[0], b[1] - a[1]); x.setLineDash([]);
-  const [rx, ry] = P([ret.x, ret.z]), [ex, ey] = P([entry.x, entry.z]);
-  x.fillStyle = '#e8c04a'; x.strokeStyle = '#000'; x.lineWidth = 2; x.beginPath(); x.roundRect(rx - 9, ry - 9, 18, 18, 4); x.fill(); x.stroke();
-  x.fillStyle = '#000'; x.font = 'bold 13px Arial'; x.textAlign = 'center'; x.fillText('\u25C0', rx, ry + 4.5);
-  x.font = 'bold 12px Arial'; x.lineWidth = 3; x.strokeStyle = '#000'; x.fillStyle = '#ffe9a0';
-  x.textAlign = 'left'; x.strokeText('PONT : retour Grande \u00CEle', rx - 9, ry + 26); x.fillText('PONT : retour Grande \u00CEle', rx - 9, ry + 26);
-  void ex; void ey;
+  for (const { ret } of bridges) {
+    const [rx, ry] = P([ret.x, ret.z]);
+    x.fillStyle = '#e8c04a'; x.strokeStyle = '#000'; x.lineWidth = 2; x.beginPath(); x.roundRect(rx - 9, ry - 9, 18, 18, 4); x.fill(); x.stroke();
+    x.fillStyle = '#000'; x.font = 'bold 13px Arial'; x.textAlign = 'center'; x.fillText('\u25C0', rx, ry + 4.5);
+    x.font = 'bold 12px Arial'; x.lineWidth = 3; x.strokeStyle = '#000'; x.fillStyle = '#ffe9a0';
+    x.textAlign = 'left'; x.strokeText('PONT : retour Grande \u00CEle', rx - 9, ry + 26); x.fillText('PONT : retour Grande \u00CEle', rx - 9, ry + 26);
+  }
   return cv;
 }
