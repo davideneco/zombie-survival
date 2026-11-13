@@ -2,6 +2,14 @@
 
 Chaque changement est poussé sur `main` (déploiement Render) avec un nouveau numéro de version et sa description ici.
 
+## v0.94.0 (2026-11-13)
+- **Monde par tuiles, étape 1 : infrastructure (B).** L'île reste figée et identique ; tout ce qui est au-delà peut maintenant être construit par tuiles de 480 m, chargées quand le joueur approche et libérées quand il s'éloigne.
+  - Nouveaux : `src/rng.js` (graines par tuile), `src/tiles.js` (streamer, construction découpée en tranches, libération complète), `tools/tiles.mjs` (`--fetch`, `--build`, `--verify`), chemin « streamé » dans `src/architecture.js` (réutilise l'atlas de façades du cœur), `addSet`/`removeSet` pour les arbres, `CONFIG.world`.
+  - Données : 4 tuiles réelles OpenStreetMap à l'est de l'île (x 480..1440, z -480..480 : 514 bâtiments, 1 057 arbres, 71 lampadaires). Hauteurs : tag `height`, sinon `building:levels`, sinon 5 étages (pas de données IGN ici). L'eau hors cœur n'est pas dessinée.
+  - Libération des trois masques de zones après construction : environ -10 Mo de tas.
+  - Vérifié : empreinte déterministe du cœur (stations, armes murales, machines, caisses, cellules de portes, point de départ, flux aléatoire) identique avant/après ; balayage de tuiles 5 fois aller-retour : géométries 4072 → 4084 → 4072, +0,1 Mo par cycle, annulation en cours de construction sans résidu ; après fusion avec A4 : 58 programmes, vue sur les tuiles 154 appels / 0,87 M triangles, départ de l'île 238–245 appels, tas 391 Mo ; build OK ; capture de façades streamées OK ; aucune erreur console.
+  - Non vérifié / limites : les tuiles sont visuelles seulement (pas de collision, de navigation ni de zones : on ne peut pas encore y marcher) ; une étape de construction peut durer 8–77 ms pour la plus grosse tuile (la tranche de 2,5 ms n'est pas stricte) ; multijoueur non testé. L'étape 2 (Krutenau jouable) est à faire.
+
 ## v0.93.1 (2026-11-13)
 - **Performance A4 : programmes shader 85 → 58 (budget ≤ 60).**
   - Tout le code de relief du terrain est maintenant porté par tous les matériaux standard/basic, activé par un uniform `uTerrainK` : le décor déformé et ses jumeaux dynamiques partagent le même programme (85 → 71).
