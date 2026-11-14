@@ -427,7 +427,7 @@ export function installTrain(game, { world, hud }) {
   game.walkFrames = () => { const a = game._wfl || (game._wfl = []); if (a.length !== game.trams.length + 1) { a.length = 0; a.push(...game.trams, t); } return a; };
   const loc = { u: 0, w: 0 }, loc2 = { u: 0, w: 0 }, pt = { u: 0, w: 0 }, tmp = { x: 0, y: 0, z: 0 };
   // bullets : the body is solid for the shots fired from outside (the world's rayHit takes the nearer of its own hit and the train's)
-  if (world.rayHit) { const base = world.rayHit; world.rayHit = (ox, oy, oz, dx, dy, dz, maxT) => { const t0 = base(ox, oy, oz, dx, dy, dz, maxT); return t.speed >= 0 ? Math.min(t0, t.rayHit(ox, oy, oz, dx, dy, dz, t0)) : t0; }; }
+  if (world.rayHit) { const base = world.rayHit; world.rayHit = (ox, oy, oz, dx, dy, dz, maxT, withDyn) => { const t0 = base(ox, oy, oz, dx, dy, dz, maxT, withDyn); return t.speed >= 0 ? Math.min(t0, t.rayHit(ox, oy, oz, dx, dy, dz, t0)) : t0; }; }
   const deckOfY = (y) => (y - t.railY > W.deckMid ? 1 : 0);   // the deck of a body at height y (feet)
 
   // the train carrying a zombie target (local player or teammate standing in it), and the target's (u, w)
