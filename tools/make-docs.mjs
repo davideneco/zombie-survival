@@ -216,11 +216,10 @@ table('23_tram_interieur', 'Tram : l\'intérieur praticable (on marche dans la r
   ['Menu mods / triche (F9)', 'F9 : menu mods et téléportation (coéquipiers, zones, armes, atouts, déblocage)', 'accessible en jeu et depuis le menu pause']]);
 // ---- train régional à quai et voies SNCF (v0.80.0)
 {
-  const N = C.train, NW = N.walk, NZ = N.zombie, RN = C.railNet;
-  const len = N.cars ? (N.cars.reduce((a, b) => a + b, 0) + (N.gaps ? N.gaps.reduce((a, b) => a + b, 0) : 0)) : 97.6;
-  table('25_train', 'Gare : le TGV à quai (quai 1, portes ouvertes) et les voies SNCF', ['Réglage', 'Valeur', 'Remarque'], [
-    ['Composition', `rame TGV 5 véhicules (2 motrices M1/M2 de ${fr2(N.cars[0])} m + 3 voitures R1/R2/R3, ${fr2(len)} m au total), ${fr2(N.width)} m de large, plancher à ${fr2(N.floor)} m (vestibules) et ${fr2(N.floorHigh)} m (salles)`, `numéro « ${N.number} » (livrée Carmillon / inOui) ; nez de la motrice à u = ${fr2(N.park.headU)} m (repère de la gare), entre les passerelles`],
-    ['Repère', `une position s sur l'itinéraire ; chaque caisse est rigide entre ses pivots de bogies (empattement ${fr2(N.bogieWb || 3.0)} m, bogies moteurs et Jacobs articulés)`, 'u le long du train (continu d\'une voiture à l\'autre), w à droite ; mêmes messages réseau que le tram (p_state vh, lx, ly, lz, lyw)'],
+  const N = C.train, NW = N.walk, NZ = N.zombie, RN = C.railNet, len = N.loco + N.coaches * N.coach + N.coaches * N.gap;
+  table('25_train', 'Gare : le train régional à quai (quai 1, portes ouvertes) et les voies SNCF', ['Réglage', 'Valeur', 'Remarque'], [
+    ['Composition', `locomotive ${fr2(N.loco)} m + ${N.coaches} voitures de ${fr2(N.coach)} m (${fr2(len)} m), ${fr2(N.width)} m de large, plancher à ${fr2(N.floor)} m au-dessus du rail`, `numéro « ${N.number} », sans marque ; nez de la locomotive à u = ${fr2(N.park.headU)} m (repère de la gare), entre les passerelles`],
+    ['Repère', `une position s sur l'itinéraire ; chaque voiture est rigide entre ses pivots de bogies (${fr2(N.bogie)} m, locomotive ${fr2(N.locoBogie)} m)`, 'u le long du train (continu d\'une voiture à l\'autre), w à droite ; mêmes messages réseau que le tram (p_state vh, lx, ly, lz, lyw)'],
     ['Intérieur', `sièges 2+2 en carrés, cloisons de vestibule (porte ${fr2(NW.partitionDoor)} m), intercirculations de ${fr2(NW.gangway)} m, WC, porte de cabine verrouillée`, `cercle de ${fr2(NW.radius)} m contre des boîtes ; seules la voiture courante et ses voisines sont testées`],
     ['Monter / descendre', `pousser contre une porte ouverte côté quai (à moins de ${fr2(NW.boardW)} m de l'axe) ou ${kn0('interact')} ; descendre : dépasser ${fr2(NW.exitW)} m dans une porte`, `posé sur le quai à ${fr2(NW.outW)} m de l'axe ; les portes côté voie restent fermées`],
     ['Zombies', `ceux de la gare montent par la porte la plus proche (à ${fr2(NZ.doorSpot)} m de la caisse), puis suivent l'allée jusqu'au joueur`, `vitesse x ${fr2(NZ.speedK)} dans le train ; ils redescendent quand leur cible est sortie ; de l'extérieur, la caisse encaisse sauf devant une porte ouverte`],

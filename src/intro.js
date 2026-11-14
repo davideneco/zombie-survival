@@ -52,7 +52,7 @@ export function installIntro(game, { world, hud, sfx }) {
   const S = { on: false, ph: 'off', tau: 0, stopTau: P.T, ann: 0, ev: 0, hold: 0, syncT: 0, corr: 0, sound: null, sub: 0 };
   game.intro = S;
   // the start spot of the intro : the station's start (zone Quais) ; applySpawnPoint opens it, the player is then put in the train
-  game.introSpawn = world.gare.start ? { ...world.gare.start, intro: true, name: 'TGV inOui 9572' } : null;
+  game.introSpawn = world.gare.start ? { ...world.gare.start, intro: true, name: 'Train régional 17412' } : null;
 
   // ---------------------------------------------------------------- overlays : title card, subtitles, skip gauge (local only)
   const card = document.createElement('div');
@@ -206,7 +206,6 @@ export function installIntro(game, { world, hud, sfx }) {
     while (S.ann < I.announce.length && tau >= I.announce[S.ann].at) {
       const a = I.announce[S.ann++];
       if (a.chime) sfx.trainChime?.(0.9);
-      if (a.horn) sfx.trainHorn?.(0.85);
       if (a.static) sfx.radioStatic?.(a.dur, 0.8);
       if (a.big) { hud.announce(a.title, a.sub || '', a.dur * 1000); if (!a.quiet) sfx.tramBrake?.(0.6, 14); }
       else if (a.text) showSub(a.text, a.dur);

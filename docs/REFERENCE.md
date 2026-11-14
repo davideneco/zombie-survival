@@ -1,6 +1,6 @@
 # Zombie Survival — fiche de référence
 
-Version du jeu : **v0.99.0** (package 0.99.0). Générée automatiquement par `node tools/make-docs.mjs` à partir de `src/config.js` et du jeu.
+Version du jeu : **v0.98.1** (package 0.98.1). Générée automatiquement par `node tools/make-docs.mjs` à partir de `src/config.js` et du jeu.
 Carte annotée : [carte.png](carte.png). Armes de profil : [armes.png](armes.png). Les mêmes tableaux en tableur : dossier [csv/](csv/).
 
 Pour demander une modification, citez la ligne (ex. « Mitrailleuse RPK : chargeur 100 », « Mastodonte à 3000 pts », « porte P3 à 500 pts », « mettre la boîte mystère dans la zone Temple-Neuf »).
@@ -676,13 +676,13 @@ Prix d'une porte : le plus cher des deux prix de zone (colonne « Prix de la por
 | Tir, grenades, couteau, réanimation | comme à pied | la grenade garde la vitesse de la rame, ignore la caisse et rebondit sur le plancher ; pas de fente du couteau |
 | Menu mods / triche (F9) | F9 : menu mods et téléportation (coéquipiers, zones, armes, atouts, déblocage) | accessible en jeu et depuis le menu pause |
 
-## Gare : le TGV à quai (quai 1, portes ouvertes) et les voies SNCF
+## Gare : le train régional à quai (quai 1, portes ouvertes) et les voies SNCF
 
 | Réglage | Valeur | Remarque |
 |---|---|---|
-| Composition | rame TGV 5 véhicules (2 motrices M1/M2 de 19,4 m + 3 voitures R1/R2/R3, 97,6 m au total), 2,9 m de large, plancher à 0,8 m (vestibules) et 1,08 m (salles) | numéro « 9572 » (livrée Carmillon / inOui) ; nez de la motrice à u = 47,8 m (repère de la gare), entre les passerelles |
-| Repère | une position s sur l'itinéraire ; chaque caisse est rigide entre ses pivots de bogies (empattement 3 m, bogies moteurs et Jacobs articulés) | u le long du train (continu d'une voiture à l'autre), w à droite ; mêmes messages réseau que le tram (p_state vh, lx, ly, lz, lyw) |
-| Intérieur | sièges 2+2 en carrés, cloisons de vestibule (porte 1,05 m), intercirculations de 1,25 m, WC, porte de cabine verrouillée | cercle de 0,3 m contre des boîtes ; seules la voiture courante et ses voisines sont testées |
+| Composition | locomotive undefined m + undefined voitures de undefined m (NaN m), 2,9 m de large, plancher à 0,78 m au-dessus du rail | numéro « 17412 », sans marque ; nez de la locomotive à u = 47,5 m (repère de la gare), entre les passerelles |
+| Repère | une position s sur l'itinéraire ; chaque voiture est rigide entre ses pivots de bogies (undefined m, locomotive undefined m) | u le long du train (continu d'une voiture à l'autre), w à droite ; mêmes messages réseau que le tram (p_state vh, lx, ly, lz, lyw) |
+| Intérieur | sièges 2+2 en carrés, cloisons de vestibule (porte 1 m), intercirculations de 1,3 m, WC, porte de cabine verrouillée | cercle de 0,3 m contre des boîtes ; seules la voiture courante et ses voisines sont testées |
 | Monter / descendre | pousser contre une porte ouverte côté quai (à moins de 2,35 m de l'axe) ou E ; descendre : dépasser 1,55 m dans une porte | posé sur le quai à 2,25 m de l'axe ; les portes côté voie restent fermées |
 | Zombies | ceux de la gare montent par la porte la plus proche (à 0,75 m de la caisse), puis suivent l'allée jusqu'au joueur | vitesse x 0,9 dans le train ; ils redescendent quand leur cible est sortie ; de l'extérieur, la caisse encaisse sauf devant une porte ouverte |
 | Tir, grenades | les balles traversent les fenêtres (et la caisse) ; la grenade rebondit sur les parois, le plafond et les bouts du train | elle se pose sur le plancher de la voiture |
@@ -696,8 +696,8 @@ Prix d'une porte : le plus cher des deux prix de zone (colonne « Prix de la por
 |---|---|---|
 | Départ par défaut | intro en train | menu « Départ » : intro en train / Gare Centrale / Classique (Grande Île) ; le choix est retenu ; ?debug seul garde le départ classique, ?debug&intro lance l'intro |
 | Trajet | 5965 m en 267 s depuis le sud-ouest, arrêt au quai 1 | vitesses (s : km/h) 0 : 100 · 160 : 100 · 172 : 80 · 198 : 80 · 208 : 15 · 224 : 15 · 232 : 50 · 250 : 50 · 267 : 0 ; la position du train ne dépend que de l'horloge de l'intro |
-| Ouverture | carton noir « TGV INOUI 9572 — DIRECTION STRASBOURG » (4 s, fondu 2,5 s) | nuit : l'horloge reste à 4.9 h pendant le trajet (le cycle jour / nuit reprend ensuite) |
-| Annonces | 6 s : Mesdames et messieurs, bienvenue à bord de ce TGV inOui à destination de Strasbourg. · 78 s : Prochain arrêt : Strasbourg-Ville, terminus. Ce train ne dessert ni Lingolsheim ni Koenigshoffen. · 138 s : Mesdames et messieurs, dans quelques minutes notre train arrivera en gare de Strasbourg, son terminus… · 146 s : … (grésillements — des cris dans le haut-parleur) … · 198 s : RALENTISSEMENT — Obstacle sur la voie · 205 s : ILS S'ACCROCHENT AUX FENÊTRES ! — Abattez-les avant qu'ils ne montent · 227.6 s : (des pas sur le toit…) · 251 s : Strasbourg. Strasbourg, terminus de ce train. | à l'arrivée : « STRASBOURG — Terminus. Tout le monde descend. » |
+| Ouverture | carton noir « TRAIN RÉGIONAL 17412 — DIRECTION STRASBOURG » (4 s, fondu 2,5 s) | nuit : l'horloge reste à 4.9 h pendant le trajet (le cycle jour / nuit reprend ensuite) |
+| Annonces | 6 s : Mesdames et messieurs, bienvenue à bord de ce train régional à destination de Strasbourg. · 78 s : Prochain arrêt : Strasbourg-Ville, terminus. Ce train ne dessert ni Lingolsheim ni Koenigshoffen. · 138 s : Mesdames et messieurs, dans quelques minutes notre train arrivera en gare de Strasbourg, son terminus… · 146 s : … (grésillements — des cris dans le haut-parleur) … · 198 s : RALENTISSEMENT — Obstacle sur la voie · 205 s : ILS S'ACCROCHENT AUX FENÊTRES ! — Abattez-les avant qu'ils ne montent · 227.6 s : (des pas sur le toit…) · 251 s : Strasbourg. Strasbourg, terminus de ce train. | à l'arrivée : « STRASBOURG — Terminus. Tout le monde descend. » |
 | Dans le train | debout en voiture 2 et 3 (arrivants en cours de route : voiture 2), portes verrouillées | on marche dans l'allée et les intercirculations en roulant ; balancement de la caméra 0,4° / 0,015 m, secousse à chaque joint de rail (25 m) |
 | Arrivée | portes ouvertes en 1,6 s ; manche 1 5 s après l'arrêt (zone Quais) | 2 zombies sortent du ballast sur le quai (hors décompte ; la manche 1 finit quand ils sont morts aussi) ; les zombies encore à bord poursuivent les joueurs ou descendent par une porte ouverte |
 | Zombies du trajet | 4 le long de la voie (2 sur la voie), 6 au bord de la voie au ralentissement, 6 aux fenêtres, 3 par l'intercirculation | solo ; x (1 + 0,75 par joueur en plus) comme une manche ; vie de la manche 1 (100 PV) ; points habituels par zombie tué |
