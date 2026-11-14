@@ -2,6 +2,13 @@
 
 Chaque changement est poussé sur `main` (déploiement Render) avec un nouveau numéro de version et sa description ici.
 
+## v0.98.0 (2026-11-14)
+- **Multijoueur : vrai test hôte + 2 clients, et un bug de relais corrigé.**
+  - `tools/mp-smoke.mjs` réécrit (Playwright, trois navigateurs via le vrai relais WebSocket) : création de salle, deux arrivées, départ de l'hôte et passage de l'intro, positions vues par chacun, coup de zombie d'un client (`z_hit`) appliqué par l'hôte, achat de porte synchronisé, manche / points / kills identiques chez les trois, traversée du pont de Krutenau, aucune erreur console. Lancement : `node tools/mp-smoke.mjs http://localhost:5173/` (serveur de dev).
+  - **Bug corrigé dans `server/rooms.mjs`** : le relais prenait toute valeur non nulle de `to` pour l'identifiant d'un joueur ; le message `br_x` porte `to: 'krutenau'` (la zone d'arrivée) et était donc perdu, si bien que l'hôte ne ramenait jamais les zombies de Krutenau sur l'île quand le dernier joueur repartait. Désormais seules les valeurs numériques adressent un joueur.
+  - Vérifié : 30/30 contrôles passés (deux fois par l'agent, une fois par moi) ; sans le correctif le contrôle du retour des zombies échoue.
+  - Non vérifié : le mode sans argument (qui lance `server/prod.mjs` sur `dist/`) ; une erreur isolée « game is not defined » vue une fois au premier lancement, non reproduite ; test avec un vrai rendu (le rendu est neutralisé pour la vitesse) et avec la latence d'un vrai réseau.
+
 ## v0.97.1 (2026-11-13)
 - **Perf : mémoire de Krutenau et construction des tuiles plus douce.**
   - Une tuile terminée envoie maintenant ses maillages et son proxy d'ombre au GPU d'un coup : les tuiles masquées par le culling libèrent leurs tableaux CPU au lieu de les garder jusqu'à ce que la caméra s'approche (`warmTiles`, `warmUpload`).
