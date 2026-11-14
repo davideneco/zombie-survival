@@ -126,6 +126,7 @@ export function installIntro(game, { world, hud, sfx }) {
 
   // ---------------------------------------------------------------- phases
   function begin(tau = 0, { late = false } = {}) {
+    game.introGraceUntil = 0;
     S.on = true; S.tau = tau; S.corr = 0; S.hold = 0; S.syncT = 0; S.stopTau = P.T;
     S.ann = 0; while (S.ann < I.announce.length && I.announce[S.ann].at < tau) S.ann++;
     S.ev = 0; while (S.ev < I.events.length && I.events[S.ev].at < tau) S.ev++;
@@ -158,6 +159,7 @@ export function installIntro(game, { world, hud, sfx }) {
   }
   function finish() {
     S.on = false; S.ph = 'done';
+    game.introGraceUntil = game.time + (I.graceAfter || 0); // (Player.hurt keeps the HP floor until then)
     hideUi();
     train.setDoors(1); train.setPose(sEnd, 0);
     S.sound?.stop(); S.sound = null;
@@ -166,6 +168,7 @@ export function installIntro(game, { world, hud, sfx }) {
   }
   // off (classic or station start, a reset) : the train back to its parked state
   function end() {
+    game.introGraceUntil = 0;
     if (S.ph === 'off') return;
     S.on = false; S.ph = 'off';
     hideUi();

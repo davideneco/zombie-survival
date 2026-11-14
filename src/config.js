@@ -811,6 +811,7 @@ export const CONFIG = {
     roundDelay: 5,                // s after the stop : round 1 starts at the station
     skipHold: 1.5,                // s : hold [jump] (Espace) to skip the ride (solo : anyone ; co-op : the host)
     rideMinHealth: 15,            // HP floor while the train rides : zombies on board wound, they cannot kill before the arrival
+    graceAfter: 10,               // s : the same HP floor still holds after round 1 starts (spawn protection : an idle player is not killed the instant the ride ends) ; then zombies kill normally
     fog: 0.5, far: 320,           // fog density x fog during the ride (the landscape is the show), camera far plane (m) ; restored at the stop
     hour: 4.9, hourEnd: 5.75,     // night turning to dawn : the game clock is held on a slow ramp from hour to hourEnd over the ride (auto day / night : the cycle resumes from it)
     slots: [[1, 1.0], [1, -1.0], [2, 1.0], [2, -1.0]],   // [car (0 : head car), u from the car centre] of the player slots (the aisle) ; late joiners : car 2

@@ -953,8 +953,9 @@ export class Player {
     if (this.game.perkFx) { amount = this.game.perkFx.filterDamage(amount); if (amount <= 0) return; } // Bastion, Ultime Volonté
     if (!src) this.game.perkFx?.onStruck(); // Veuve noire : coup de zombie
     this.health -= amount;
-    // During the long intro ride (and the stop before round 1), zombies wound but never kill: no game over before round 1 (CONFIG.intro.rideMinHealth)
-    if (this.game.intro?.ph === 'ride' || this.game.intro?.ph === 'stopped') this.health = Math.max(this.health, CONFIG.intro.rideMinHealth ?? 0);
+    // During the long intro ride (and the stop before round 1), zombies wound but never kill: no game over before round 1 (CONFIG.intro.rideMinHealth) ;
+    // the floor holds CONFIG.intro.graceAfter s more once round 1 has started (spawn protection, game.introGraceUntil set by intro.js)
+    if (this.game.intro?.ph === 'ride' || this.game.intro?.ph === 'stopped' || this.game.time < (this.game.introGraceUntil || 0)) this.health = Math.max(this.health, CONFIG.intro.rideMinHealth ?? 0);
     this.lastHurt = this.game.time;
     this.game.hud.damage();
     this.game.sfx.hurt();
