@@ -2403,7 +2403,7 @@ export async function buildRealWorld(scene, renderer) {
     terrainY,
     floorAt: (x, z, y, out) => { const t = terrainY(x, z); levels.floorAt(x, z, y - t, out); out.y += t; return out; },
     collide: (pos, r, out, ignore) => { const t = terrainY(pos.x, pos.z); pos.y -= t; try { return collision.resolve(pos, r, out, ignore); } finally { pos.y += t; } },
-    rayHit: (ox, oy, oz, dx, dy, dz, maxT) => collision.rayHit(ox, oy - terrainY(ox, oz), oz, dx, dy, dz, maxT),
+    rayHit: (ox, oy, oz, dx, dy, dz, maxT, noDyn) => collision.rayHit(ox, oy - terrainY(ox, oz), oz, dx, dy, dz, maxT, noDyn),
     // Hauteur du plafond à l'aplomb de (x, z) : voûtes de la cathédrale, passage sous immeuble (PASSAGE_H), sinon rien (ciel ouvert)
     // y (optional, relative to the terrain): the nearest ceiling above a body whose feet are at y (key buildings have several storeys)
     ceilingAt: (x, z, y) => {

@@ -53,8 +53,8 @@ export class Collision {
   }
 
   // Obstacles dynamiques : liste de boîtes orientées { x, z, w, d, rot, h } (même convention qu'addBox : w le long de (cos rot, sin rot)), remplacée à chaque
-  // appel pour la clé donnée. Ils repoussent les cercles de resolve() (joueurs, zombies, motos) mais ne sont pas dans la grille : les balles et les rayons
-  // de caméra les traversent. `kind` : nature pour les dégâts des motos ('prop' : un objet physique).
+  // appel pour la clé donnée. Ils repoussent les cercles de resolve() (joueurs, zombies, motos) mais ne sont pas dans la grille : les rayons
+  // de caméra les traversent (rayHit(…, noDyn)), les balles s'arrêtent dessus. `kind` : nature pour les dégâts des motos ('prop' : un objet physique).
   setDynamic(key, boxes, kind = 'prop') {
     let e = this.dyn.get(key);
     if (!e) this.dyn.set(key, e = { boxes: [], kind });
@@ -248,7 +248,8 @@ export class Collision {
   // Lancer de rayon 3D contre les obstacles (murs, arbres, voitures) + le sol.
   // Retourne la distance t (en mètres) du premier obstacle, ou maxT. Remplace le raycast sur les maillages
   // de bâtiments, beaucoup trop lent avec plusieurs milliers de bâtiments.
-  rayHit(ox, oy, oz, dx, dy, dz, maxT) {
+  // noDyn : ignore les obstacles dynamiques (rames) — pour les rayons de caméra ; les balles, elles, s'arrêtent sur une rame.
+  rayHit(ox, oy, oz, dx, dy, dz, maxT, noDyn = false) {
     let best = maxT;
     if (dy < -1e-6 && oy > 0) best = Math.min(best, oy / -dy); // sol
     for (const f of this.floors) { // planchers : la balle les traverse seulement par les trous (escaliers)
@@ -308,6 +309,34 @@ export class Collision {
       if (tNext > best2d) break;
       if (tx < tz) { tx += tdx; ix += sx; } else { tz += tdz; iz += sz; }
     }
+    if (!noDyn && this.dyn.size) best2d = this._rayDyn(ox, oy, oz, ux, uz, dy, h2, best2d);
     return best2d / h2;
+  }
+
+  // Dynamic solids (tram cars, the train: setDynamic) : a ray that starts OUTSIDE a box is stopped by its side (or its roof) ; one that starts inside
+  // (the passenger's own car) leaves through it, like through a window. Horizontal slab test in the box frame, no allocation. Returns the new best 2D distance.
+  _rayDyn(ox, oy, oz, ux, uz, dy, h2, best2d) {
+    for (const e of this.dyn.values()) {
+      for (const b of e.boxes) {
+        const px = ox - b.x, pz = oz - b.z;
+        const lx = b.c * px + b.s * pz, lz = -b.s * px + b.c * pz;
+        if (Math.abs(lx) < b.hx && Math.abs(lz) < b.hz) continue; // the shooter is inside this box
+        const dlx = b.c * ux + b.s * uz, dlz = -b.s * ux + b.c * uz;
+        let t0 = 0, t1 = best2d;
+        if (Math.abs(dlx) < 1e-9) { if (Math.abs(lx) >= b.hx) continue; }
+        else { let a = (-b.hx - lx) / dlx, c = (b.hx - lx) / dlx; if (a > c) { const q = a; a = c; c = q; } if (a > t0) t0 = a; if (c < t1) t1 = c; }
+        if (Math.abs(dlz) < 1e-9) { if (Math.abs(lz) >= b.hz) continue; }
+        else { let a = (-b.hz - lz) / dlz, c = (b.hz - lz) / dlz; if (a > c) { const q = a; a = c; c = q; } if (a > t0) t0 = a; if (c < t1) t1 = c; }
+        if (t0 >= t1 || t0 >= best2d) continue;
+        let t = t0;
+        if (oy + dy * (t / h2) > b.h) { // above the roof at the entry : only a descending ray can still land on it before leaving the box
+          if (dy >= -1e-6) continue;
+          t = ((b.h - oy) / dy) * h2;
+          if (t > t1 || t >= best2d) continue;
+        }
+        best2d = t;
+      }
+    }
+    return best2d;
   }
 }
