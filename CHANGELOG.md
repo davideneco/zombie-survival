@@ -2,6 +2,14 @@
 
 Chaque changement est poussé sur `main` (déploiement Render) avec un nouveau numéro de version et sa description ici.
 
+## v0.98.1 (2026-11-14)
+- **Correctifs : joueur inactif, fausse « poche piégeuse », mesure du p95.**
+  - Un joueur qui ne bouge pas mourait 0,2 s après le début de la manche 1 (le plancher de PV de l'intro s'arrêtait à l'arrêt du train, avec une dizaine de zombies dessus). Nouveau `CONFIG.intro.graceAfter` (10 s) : le plancher de PV est maintenu 10 s après le début de la manche 1 (`src/intro.js`, `hurt()` dans `src/player.js`). Un joueur inactif meurt maintenant exactement 10 s après le début de la manche.
+  - La « poche piégeuse » en (-414,6 ; 74,9) était un faux positif de `tools/stuck-scan.mjs` : le point de départ du test tombait dans une salle fermée, à 5 cm du mur ; l'outil exige maintenant que la case de départ soit dans la zone principale. Aucun code de jeu modifié.
+  - `game.update` p95 : sous 4 ms dans tous les cas mesurés (départ de l'île 1,6 ms sur 600 pas, 30 zombies 1,9–2,3 ms). La sonde `tools/perf-probe.js` passe de 60 à 300 pas parce qu'un seul ramasse-miettes décidait du p95 (lectures de 2,8 à 5,6 ms avant).
+  - Vérifié : build OK ; joueur inactif scripté (mort à t = 282,0 s) ; `stuck-scan` : 0 poche piégeuse ; île 245 appels, 1,35 M triangles ; p95 de la sonde 2,8 ms de mon côté, aucune erreur console.
+  - Non vérifié : la grâce en multijoueur ; `tiles.mjs --verify` et les étapes « murs invisibles » du `stuck-scan` non relancés (aucun code de monde modifié).
+
 ## v0.98.0 (2026-11-14)
 - **Multijoueur : vrai test hôte + 2 clients, et un bug de relais corrigé.**
   - `tools/mp-smoke.mjs` réécrit (Playwright, trois navigateurs via le vrai relais WebSocket) : création de salle, deux arrivées, départ de l'hôte et passage de l'intro, positions vues par chacun, coup de zombie d'un client (`z_hit`) appliqué par l'hôte, achat de porte synchronisé, manche / points / kills identiques chez les trois, traversée du pont de Krutenau, aucune erreur console. Lancement : `node tools/mp-smoke.mjs http://localhost:5173/` (serveur de dev).
