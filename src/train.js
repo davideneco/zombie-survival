@@ -494,9 +494,13 @@ export function installTrain(game, { world, hud }) {
         if (O.stE === undefined) O.stE = O.u - v.uc >= 0 ? 1 : -1;
         const e = O.stE, up = -e * 0.9, uTop = v.uc + e * (Q.us + 0.4), uFoot = v.uc + e * (Q.h - Q.vest + 0.6);
         const lu = Math.abs(O.u - v.uc), dV = Q.h - Q.vest;
-        let toTop;
-        if (deckZ === 0) { if (lu >= dV - 0.1) O.stairs = 1; toTop = !!O.stairs; } else toTop = lu < Q.us + 0.1;
-        gu = toTop ? uTop : uFoot; gw = up; aisle = deckZ === 0 ? !toTop && lu < dV - 0.1 : lu < Q.us;
+        if (deckZ === 0) { // up : the vestibule on the axis, then the foot of the up-flight (the divider is crossed by the vestibule only), then its top
+          if (!O.stairs && Math.hypot(O.u - uFoot, O.w) < 0.6) O.stairs = 1;
+          if (O.stairs === 1 && Math.hypot(O.u - uFoot, O.w - up) < 0.5) O.stairs = 2;
+          gu = O.stairs === 2 ? uTop : uFoot; gw = O.stairs === 2 ? up : O.stairs === 1 ? up : 0; aisle = !O.stairs && lu < dV - 0.1;
+        } else { // down : the top of the up-flight, then its foot
+          const toTop = lu < Q.us + 0.1; gu = toTop ? uTop : uFoot; gw = up; aisle = toTop;
+        }
       } else { O.stE = undefined; O.stairs = 0; }
       let du = gu - O.u, dw = gw - O.w;
       if (aisle && Math.abs(O.w) > 0.12) { du = Math.sign(du) * Math.min(Math.abs(du), 0.35); dw = -O.w * 3; } // back to the aisle first (seats, partition doors, gangways : all open at w = 0)
