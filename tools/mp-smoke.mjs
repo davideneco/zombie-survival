@@ -100,7 +100,7 @@ try {
   check('same round number on host and clients', new Set(rounds).size === 1, rounds);
 
   // ---------------------------------------------------------------- positions: everybody on the island, apart
-    const place = (t, x, z) => t.ev(([px, pz]) => window.__tp(px, pz), [x, z]);
+  const place = (t, x, z) => t.ev(([px, pz]) => window.__tp(px, pz), [x, z]);
   // island start of the classic game (open Grande Île streets): three points 6 m apart
   const base = { x: -0.6, z: -28 };
   const P = [[base.x, base.z], [base.x + 6, base.z], [base.x, base.z + 6]];
@@ -185,12 +185,13 @@ try {
     await back(host); await back(c1); await sleep(600);
     const stay = await host.ev((ids) => ids.map((id) => { const z = game.zombies.find((q) => q.id === id); return z && !z.dead ? game.world.logicAreaOf(z.pos.x, z.pos.z) : 'gone'; }), zids);
     check('c2 still in Krutenau: zombies stay there', stay.every((a) => a === 'krutenau' || a === 'gone'), stay);
+    await host.ev(() => { const f = game.hostBridgeFollow; window.__br = []; game.hostBridgeFollow = (...a) => { window.__br.push(a.slice(0, 4)); return f(...a); }; }); // spy: does br_x reach the host?
     await back(c2);
     const zAreas = (ids) => host.ev((ids2) => ids2.map((id) => { const z = game.zombies.find((q) => q.id === id); return z && !z.dead ? game.world.logicAreaOf(z.pos.x, z.pos.z) : 'gone'; }), ids);
     let home = await zAreas(zids);
     for (let i = 0; i < 20 && !home.every((a) => a === 'island' || a === 'gone'); i++) { await sleep(200); home = await zAreas(zids); }
     const seenAreas = await host.ev(() => [...game.remotes.values()].map((r) => game.world.logicAreaOf(r.pos.x, r.pos.z) + '@' + r.pos.x.toFixed(0) + ',' + r.pos.z.toFixed(0) + '(t ' + r.tpos.x.toFixed(0) + ',' + r.tpos.z.toFixed(0) + ')'));
-    check('last client leaves by br_x: zombies come back to the island (host)', home.every((a) => a === 'island' || a === 'gone'), { home, remotesSeenByHost: seenAreas });
+    check('last client leaves by br_x: zombies come back to the island (host)', home.every((a) => a === 'island' || a === 'gone'), { home, brCalls: await host.ev(() => window.__br), remotesSeenByHost: seenAreas });
     check('players are all back on the island', [await area(host), await area(c1), await area(c2)].every((a) => a === 'island'));
   }
 
@@ -204,7 +205,7 @@ try {
   check('no unexpected alert() (version mismatch, closed room...)', final.every((f) => f.alerts.length === 0), final.map((f) => f.alerts));
   check('no console error / page exception', errors.length === 0, errors.slice(0, 5));
 } catch (e) {
-  console.log('FAIL  script error: ' + (e.stack || e).toString().split('\n').slice(0, 4).join(' | '));
+  console.log('FAIL  script error: ' + (e.stack || e).toString().split('\n').slice(0, 12).join(' | '));
   results.push({ name: 'script', ok: false });
 }
 const bad = results.filter((r) => !r.ok).length;
