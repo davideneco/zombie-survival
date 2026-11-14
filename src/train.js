@@ -179,7 +179,7 @@ export class Train {
   walkBounds(x, z, r = 6) { const o = this._wb || (this._wb = {}); this.worldToWalk(x, z, o); return o.w !== 99 && Math.abs(o.w) < r && o.u > -this.L / 2 - r && o.u < this.L / 2 + r; }
   // collision lists around u : the car of u and its neighbours (lower vs upper Duplex deck selected by curY)
   walkLists(u, pass, curY = null) {
-    const k = this.moduleAt(u), out = this._wl || (this._wl = []), upper = curY != null && (curY - this.railY) > 1.35;
+    const k = this.moduleAt(u), out = this._wl || (this._wl = []), upper = curY != null && (curY - this.railY) > 1.55;
     out.length = 0;
     for (let i = Math.max(0, k - 1); i <= Math.min(this.n - 1, k + 1); i++) {
       const c = this.interior.byCoach[i];
@@ -207,21 +207,21 @@ export class Train {
       if (c.boxesUpper && Q.blocksUpper) {
         for (const b of Q.blocksUpper) add(c.boxesUpper, uc + b.u0, uc + b.u1, b.w0, b.w1);
       }
-      // vestibule / saloon glass partitions (opening pd, or right-only wing on Duplex coaches so left stairs & right lower ramp are open)
-      for (const u of Q.parts) {
-        if (Q.duplex) {
-          add(c.boxes, uc + u - 0.04, uc + u + 0.04, 1.05, wo);
-        } else {
+      // vestibule / saloon glass partitions (single-deck only; Duplex partitions are explicitly in Q.blocks / Q.blocksUpper)
+      if (!Q.duplex) {
+        for (const u of Q.parts) {
           add(c.boxes, uc + u - 0.04, uc + u + 0.04, pd, wo);
           add(c.boxes, uc + u - 0.04, uc + u + 0.04, -wo, -pd);
         }
       }
-      // ends : Jacobs / inter-car gangway openings & bellows walls
+      // ends : Jacobs / inter-car gangway openings & bellows walls (present in both lower and upper lists)
       let lo = uc - h + 0.15, hi = uc + h - 0.15;
       for (const uE of Q.openEnds) {
         const e = Math.sign(uE);
-        if (e > 0) { add(c.boxes, uc + uE - 0.12, uc + uE + v.gFront / 2 + 0.05, gw, wt); add(c.boxes, uc + uE - 0.12, uc + uE + v.gFront / 2 + 0.05, -wt, -gw); }
-        else { add(c.boxes, uc + uE - v.gRear / 2 - 0.05, uc + uE + 0.12, gw, wt); add(c.boxes, uc + uE - v.gRear / 2 - 0.05, uc + uE + 0.12, -wt, -gw); }
+        const u0 = e > 0 ? uc + uE - 0.12 : uc + uE - v.gRear / 2 - 0.05;
+        const u1 = e > 0 ? uc + uE + v.gFront / 2 + 0.05 : uc + uE + 0.12;
+        add(c.boxes, u0, u1, gw, wt); add(c.boxes, u0, u1, -wt, -gw);
+        if (c.boxesUpper) { add(c.boxesUpper, u0, u1, gw, wt); add(c.boxesUpper, u0, u1, -wt, -gw); }
       }
       if (Q.cab) {
         const ub = uc + Q.cab.u;
@@ -314,7 +314,7 @@ export class Train {
     }
     // door leaves : 2 per side per plug door + sealed bulkhead doors (R1 front, R3 rear)
     const nDoors = this.veh.reduce((a, v) => a + 2 * v.Q.doors.length, 0);
-    const nCabs = this.veh.reduce((a, v) => a + (v.Q.cab ? 1 : 0), 0);
+    const nCabs = this.veh.reduce((a, v) => a + (v.Q.cab && !v.Q.cab.open ? 1 : 0), 0);
     const leaf = buildDoorLeaf();
     this.leafN = nDoors + nCabs;
     this.leafMeshes = [new THREE.InstancedMesh(leaf.leaf, M.body, this.leafN), new THREE.InstancedMesh(leaf.glass, M.glass, this.leafN)];
@@ -412,7 +412,7 @@ export class Train {
     // cab / bulkhead doors (slid open when Q.cab.open, or forced by gangway zombies)
     const sxd = 0.90 / T.doorWidth, sydC = (2.00 - 0.02) / (T.doorH - 0.02);
     for (const v of this.veh) {
-      if (!v.Q.cab) continue;
+      if (!v.Q.cab || v.Q.cab.open) continue;
       const dir = v.Q.cab.dir, ub = v.uc + v.Q.cab.u, tl = v.Q.cab.open ? 1 : (dir < 0 ? this.tail || 0 : 0);
       const by = v.Q.cab.y ?? T.floor, dycC = by + 0.02 - (T.floor + 0.02) * sydC;
       if (dir > 0) put(v, ub - 0.03 - 0.06 * tl, tl * 0.84, Math.PI / 2 - 0.15 * tl, sxd, dycC, sydC);

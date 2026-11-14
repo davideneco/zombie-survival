@@ -723,8 +723,8 @@ export const CONFIG = {
     corridor: 24,             // m : neighbouring tracks drawn up to this distance from the route ; ground strip on each side
     simplify: 0.03,           // m : polyline simplification tolerance (Douglas-Peucker)
     smooth: { radius: 6, passes: 3 },   // route : moving average (± radius samples, passes) : the SNCF pieces meet with small kinks at the switches
-    mast: { every: 55, offset: 3.1, height: 7.8 },        // catenary masts : spacing (m along the track), offset from the axis, height
-    wire: { contact: 5.6, messenger: 6.9, dropper: 9 },   // m above the rail head ; dropper spacing (m)
+    mast: { every: 55, offset: 3.2, height: 8.2 },        // catenary masts : spacing (m along the track), offset from the axis, height
+    wire: { contact: 6.1, messenger: 7.2, dropper: 9 },   // m above the rail head ; dropper spacing (m)
     stationClip: { u: 230, v0: -140 },                    // station frame : tracks with |u| < u and v0 < v < (track-side wall) are drawn by gare/build.js
     // the quai 1 track of the SNCF shapes runs ~0.85 m too close to the OSM platform edge (a train would overlap the platform) : the route is moved
     // sideways so a coach side is `gap` m from the edge, with a smooth ramp in : u from blendIn[0] to blendIn[1], out : u from blendOut[0] to blendOut[1]
@@ -735,32 +735,32 @@ export const CONFIG = {
     embank: { drop: 2.2, slope: 12, rampOut: 420, endBefore: 30, girder: 1.0, deckMin: 3.7 },
   },
 
-  // ------------------------------------------------------------------ SNCF TGV Duplex / Euroduplex 2N2 (Carmillon / inOui, 10 vehicles: 2 Motrices + 8 Remorques Duplex)
-  // Full 10-car double-decker consist: M1 + R1..R3 (1re cl. Duplex) + R4 (Voiture Bar Duplex) + R5..R8 (2nde cl. Duplex) + M2. Walkable lower & upper decks + M1/M2 driver's cabs.
+  // ------------------------------------------------------------------ SNCF TGV M / Avelia Horizon (inOui, 10 vehicles: 2 Motrices + 8 Voitures Duplex)
+  // Full 10-car double-decker TGV M consist: M1 + R1..R3 (1re cl.) + R4 (Voiture Bar Duplex "Le Bistro" 2 étages) + R5..R8 (2nde cl.) + M2.
   train: {
     cars: [18.2, 17.2, 17.2, 17.2, 17.2, 17.2, 17.2, 17.2, 17.2, 18.2], // 2 motrices (M1, M2) + 8 voitures Duplex (R1..R8) -> L = 177.76 m
     gaps: [0.55, 0.38, 0.38, 0.38, 0.38, 0.38, 0.38, 0.38, 0.55],       // M1-R1 coupler (0.55), R1..R8 Jacobs bogies (0.38), R8-M2 coupler (0.55)
     gap: 0.38,                                     // fallback scalar
     kinds: ['motrice', 'coachR1', 'coachR1', 'coachR1', 'coachR2', 'coachR3', 'coachR3', 'coachR3', 'coachR3', 'motrice'],
-    width: 3.48, height: 4.38, ceil: 4.18,         // spacious Duplex width (3.48 m), outer roof (4.38 m), upper-deck ceiling (4.18 m)
-    floorLow: 0.36, floor: 0.80, floorHigh: 0.94, floorUpper: 2.26, // lower deck (0.36 m), vestibule (0.80 m), gangway (0.94 m), upper deck (2.26 m)
+    width: 3.64, height: 5.28, ceil: 5.10,         // spacious TGV M width (3.64 m), tall double-deck roof (5.28 m), upper-deck ceiling (5.10 m)
+    floorLow: 0.30, floor: 0.80, floorHigh: 0.88, floorUpper: 2.76, // lower deck (0.30 m), vestibule (0.80 m), gangway (0.88 m), upper deck (2.76 m)
     motriceBogies: [4.60, 2.80],                   // M1/M2 motor bogie offsets
     coachOuterBogie: 2.80,                         // R1 front / R8 rear outer trailer bogie offset
     bogieWb: 3.0,                                  // axle wheelbase of motor & trailer/Jacobs bogies (m)
     noseBogie: 4.60,                               // legacy alias
-    doorWidth: 1.15, doorH: 2.08,                  // TGV Duplex recessed plug door width & height above vestibule floor
+    doorWidth: 1.18, doorH: 2.22,                  // TGV M recessed plug door width & height above vestibule floor
     layout: { bulkhead: 0.65, step: 0.60, vestibule: 1.95, bay1: 2.15, bay2: 1.88, bay: 1.88, taper: 5.40 },
-    winY: [1.04, 1.78],                            // lower-deck saloon window sill and head above the rail head
-    winYUpper: [2.92, 3.68],                       // upper-deck saloon window sill and head above the rail head
+    winY: [0.98, 1.94],                            // lower-deck saloon window sill and head above the rail head (0.96 m tall)
+    winYUpper: [3.44, 4.40],                       // upper-deck saloon window sill and head above the rail head (0.96 m tall)
     number: '9572',
     park: { headU: 89.0 },                         // parked : nose at u ≈ +89.0 m, tail at u ≈ -88.8 m between crossings [-93.5, +93.5]
     // walking inside (same fields as tram.walk) : radius, side walls at `wall` m from the axis (thickness thick), gangway opening, partition door ;
     // doors pass when open past doorOpen and slower than boardSpeed m/s ; board : push against an open door from up to boardW m off the axis
     // (the platform edge is gap + width / 2 away), or interact within boardReach ; step off past exitW (put down outW m off the axis, on the platform)
-    walk: { radius: 0.3, wall: 1.62, thick: 0.12, gangway: 1.32, partitionDoor: 1.12, doorOpen: 0.6, boardSpeed: 0.5, boardW: 2.68, boardPush: 0.8, boardReach: 2.8, exitW: 1.84, outW: 2.58, enterEase: 10, cabReach: 2.0 },
+    walk: { radius: 0.3, wall: 1.70, thick: 0.12, gangway: 1.32, partitionDoor: 1.12, doorOpen: 0.6, boardSpeed: 0.5, boardW: 2.76, boardPush: 0.8, boardReach: 2.9, exitW: 1.92, outW: 2.66, enterEase: 10, cabReach: 2.0 },
     // zombies of the station board a parked train with open doors : they reach the door spot (doorSpot m outside the body), step in, then walk the aisle
     zombie: { radius: 0.3, doorSpot: 0.75, enter: 1.0, speedK: 0.9 },
-    light: { color: 0xd0e2ff, barColor: 0xffe6c4, intensity: 1.25, barIntensity: 1.35, dist: 13.5, y: 2.65 },   // pooled coach lights
+    light: { color: 0xfff4e4, barColor: 0xffe8c8, intensity: 1.45, barIntensity: 1.55, dist: 14.5, y: 3.20 },   // pooled warm TGV M coach lights
     flicker: { hz: 9, rate: 0.35 },              // the faulty LED strips : flicker frequency, share of time off
     // camera sway of a player standing in the moving train (local only) : roll (deg) and bob (m) at full speed (refSpeed m/s), frequency (Hz) ;
     // curve : extra roll (deg) per m/s² of lateral acceleration ; jolt : bob kick (m) at each rail joint (joint m apart, axle and bogie spacing in m)
