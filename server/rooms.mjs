@@ -87,7 +87,7 @@ function onMessage(ws, raw) {
     return;
   }
 
-  // Tout le reste est relayé : msg.to = id précis, sinon tous les autres membres.
+  // Tout le reste est relayé : msg.to = id précis (numérique), sinon tous les autres membres.
   const room = rooms.get(ws.room);
   if (!room) return;
   // chat : diffusé à TOUS les membres, expéditeur compris (le client n'affiche rien en local : pas de doublon) ; jamais d'envoi ciblé
@@ -103,7 +103,9 @@ function onMessage(ws, raw) {
   if (typeof msg.t === 'string' && msg.t.startsWith('dbg_') && msg.t !== 'dbg_ack' && room.host !== ws.pid) return;
   if (msg.t === 'start' && room.host === ws.pid) room.started = true;
   msg.from = ws.pid;
-  if (msg.to != null && msg.to !== '*') {
+  // `to` addresses a peer only when it is a player id (number or numeric string) ; any other value is payload (br_x carries `to: 'krutenau'`, the destination area)
+  // and must not turn the message into an undeliverable direct message
+  if (msg.to != null && /^\d+$/.test(String(msg.to))) {
     const toId = Number(msg.to);
     const m = room.members.get(toId) || room.members.get(msg.to);
     if (m) send(m.ws, msg);
