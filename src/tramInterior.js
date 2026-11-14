@@ -116,7 +116,7 @@ export function installTramWalk(game, { world, hud, sfx }) {
       pt.u = O.u + (p.vel.x * f1.tx + p.vel.z * f1.tz) * dt;
       pt.w = O.w + (-p.vel.x * f1.tz + p.vel.z * f1.tx) * dt;
       const pass = t.walkOpen();
-      pushOut(t.walkLists ? t.walkLists(pt.u, pass) : [I.boxes, pass ? I.wallsOpen : I.wallsClosed], pt, Wc.radius);
+      pushOut(t.walkLists ? t.walkLists(pt.u, pass, O.deck | 0) : [I.boxes, pass ? I.wallsOpen : I.wallsClosed], pt, Wc.radius);
       const out = Math.abs(pt.w) > Wc.exitW;
       if (out && pass && doorIndexAt(I, pt.u, -Wc.radius * 0.5) >= 0) { // dans l'ouverture : on descend
         O.u = pt.u; O.w = pt.w; this.tramStepOut(p, t);
@@ -130,7 +130,8 @@ export function installTramWalk(game, { world, hud, sfx }) {
         this.tramMoveWarn(p, t);
       }
       O.u = pt.u; O.w = pt.w;
-      const floor = t.floorAt ? t.floorAt(O.u) : t.floorY ?? T.car.floor; // (the train : raised floors over the bogies)
+      if (t.deckAt) O.deck = t.deckAt(O.u, O.w, O.deck | 0); // (the train : the upper deck is reached by the stairs)
+      const floor = t.floorAt ? t.floorAt(O.u, O.w, O.deck | 0) : t.floorY ?? T.car.floor; // (the train : vestibules, stairs, decks)
       O.y += (floor - O.y) * Math.min(1, dt * Wc.enterEase);
       if (Math.abs(floor - O.y) < 0.002) O.y = floor;
       t.walkToWorld(O.u, O.w, O.y, tmp);
@@ -166,7 +167,7 @@ export function installTramWalk(game, { world, hud, sfx }) {
       const p = this.player, t = nv.v, I = t.interior, span = I.spans[nv.door], Wc = t.walkCfg || W;
       if (!span || p.vehicle || p.onTram) return;
       t.frame((span[0] + span[1]) / 2, f1);
-      p.onTram = { v: t, u: (span[0] + span[1]) / 2, w: nv.side * (Wc.wall - 0.05), y: Math.min(p.pos.y - groundOf(t, (span[0] + span[1]) / 2, p.pos), (t.floorY ?? T.car.floor) - 0.05), fy: f1.yaw };
+      p.onTram = { v: t, u: (span[0] + span[1]) / 2, w: nv.side * (Wc.wall - 0.05), y: Math.min(p.pos.y - groundOf(t, (span[0] + span[1]) / 2, p.pos), (t.floorY ?? T.car.floor) - 0.05), fy: f1.yaw, deck: 0 };
       p.vel.set(0, 0, 0); p.vy = 0;
       sfx.knock?.(0.35);
       this.sendPlayerState?.();
@@ -187,13 +188,13 @@ export function installTramWalk(game, { world, hud, sfx }) {
     },
 
     // pose le joueur debout dans la rame t à (u, w) (menu debug : téléportation de l'hôte près d'un coéquipier), à la case libre la plus proche
-    placeInTram(t, u, w) {
+    placeInTram(t, u, w, deck = 0) {
       const p = this.player, I = t.interior, Wc = t.walkCfg || W;
       pt.u = Math.max(I.u0 ?? -I.uEnd, Math.min(I.u1 ?? I.uEnd, u)); pt.w = w;
-      const floor = t.floorAt ? t.floorAt(pt.u) : t.floorY ?? T.car.floor;
-      pushOut(t.walkLists ? t.walkLists(pt.u, false) : [I.boxes, I.wallsClosed], pt, Wc.radius);
+      const floor = t.floorAt ? t.floorAt(pt.u, pt.w, deck) : t.floorY ?? T.car.floor;
+      pushOut(t.walkLists ? t.walkLists(pt.u, false, deck) : [I.boxes, I.wallsClosed], pt, Wc.radius);
       t.frame(pt.u, f1);
-      p.onTram = { v: t, u: pt.u, w: pt.w, y: floor, fy: f1.yaw };
+      p.onTram = { v: t, u: pt.u, w: pt.w, y: floor, fy: f1.yaw, deck };
       p.vehicle = null; p.vel.set(0, 0, 0); p.vy = 0; p.wasGrounded = true; p.region = t.walkRegion || 0;
       t.walkToWorld(pt.u, pt.w, floor, tmp);
       p.pos.set(tmp.x, tmp.y + groundOf(t, pt.u, tmp), tmp.z);

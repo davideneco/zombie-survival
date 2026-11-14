@@ -737,34 +737,39 @@ export const CONFIG = {
     embank: { drop: 2.2, slope: 12, rampOut: 420, endBefore: 30, girder: 1.0, deckMin: 3.7 },
   },
 
-  // ------------------------------------------------------------------ Regional train (v0.80.0, src/train.js, src/trainModel.js) : an electric
-  // multiple unit of the Régiolis type (articulated low-floor regional EMU, neutral livery, no brand), number « 17412 ». Four cars: a cab car at each
-  // end (rounded nose, large windscreen, locked cab behind a bulkhead) and two middle cars ; the cars share their bogies at the joints (articulated).
-  // Parked at quai 1, doors open on the platform side ; players walk inside (moving frame of the tram : one rigid frame per car, between its bogie
-  // pivots). Lengths in m ; heights above the rail head.
+  // ------------------------------------------------------------------ Train (v0.80.0, rebuilt v0.99.0 as a TGV POS-type double-decker trainset, src/train.js, src/trainModel.js) : two power cars
+  // (aerodynamic pointed nose, locked cab) and eight articulated double-decker trailers (about 198 m), neutral livery (silver-grey, dark blue lower band, thin red
+  // stripe, no logo, no brand), number « 17412 ». The trailers share their Jacobs bogies at the joints ; a power car has its own two bogies. Parked at quai 1, doors
+  // open on the platform side ; players walk inside (moving frame of the tram : one rigid frame per car, between its bogie pivots) on both decks (stairs in the
+  // vestibules). Lengths in m ; heights above the rail head.
   train: {
-    cars: [19.6, 16.6, 16.6, 19.6], gap: 0.7,      // body lengths (nose first), articulation gap between two cars (bellows)
-    width: 2.9, height: 4.1,                       // body width, roof height
-    floor: 0.78, floorHigh: 1.10,                  // low floor (the platform is ~0.73 m above the rail head), raised floor over the bogies and the cabs
-    noseBogie: 3.3,                                // m from the nose to the pivot of the end bogie
-    doorWidth: 1.3, doorH: 2.05,                   // side doors : width, height above the low floor
-    // interior layout of a car, from the car end : raised floor length, step ramp, entrance vestibule (the door stands in the middle), seat bay
-    // pitch (2+2 seats facing each other) ; end cars : cab depth behind the nose (bulkhead), nose taper length, raised floor in front of the bulkhead
-    layout: { raised: 1.7, step: 0.6, vestibule: 2.0, bay: 1.95, cab: 4.1, taper: 3.3, cabRaised: 0.8 },
-    winY: [1.73, 2.78],                            // saloon window sill and head above the rail head (raised-zone windows are 0.3 m higher)
+    cars: [22.15, 18.7, 18.7, 18.7, 18.7, 18.7, 18.7, 18.7, 18.7, 22.15], // body lengths (head power car first, 8 trailers, tail power car)
+    gap: 0.35, gapPower: 0.9,                      // articulation gap between two trailers (bellows), between a power car and its trailer
+    width: 2.9, height: 4.3, powerHeight: 4.2,     // body width, roof height of the trailers, of the power cars
+    floor: 0.34, floorHigh: 1.05, floorUp: 2.36,   // lower saloon floor (between the bogies), vestibule floor (the platform is ~0.73 m above the rail head), upper deck floor
+    ceilLow: 2.26, ceilUp: 4.20,                   // lower saloon ceiling (underside of the upper deck), upper saloon ceiling
+    noseBogie: 4.07, endBogie: 2.6,                // m from the nose (or tail) of a power car to its end bogie pivot ; from the free end of an end trailer to its own bogie pivot
+    doorWidth: 1.1, doorH: 1.95,                   // side doors : width, height above the vestibule floor
+    winW: 1.45, winLow: [0.95, 1.85], winUp: [2.92, 3.5],   // saloon window width, lower deck sill / head, upper deck sill / head (above the rail head)
+    // interior layout of a trailer, from each car end : vestibule length (flat, the door stands at `door` m from the end), stair zone length (up-flight along
+    // one side, descent to the lower saloon beside it), descent ramp length, divider between the two flights (m off the axis), seat bay pitch (facing rows),
+    // end bulkhead depth of a closed end (head and tail trailer) ; power cars : nose taper length
+    layout: { vest: 2.9, stairs: 2.2, down: 1.3, div: 0.4, door: 1.45, bay: 2.0, cab: 0.3, nose: 6.5 },
     number: '17412',
-    park: { headU: 47.5 },                         // parked : nose at this u of the station frame (between the footbridges)
+    park: { headU: 47.5 },                         // parked : nose at this u of the station frame (the crossing at u = 52 stays free past the nose)
     // walking inside (same fields as tram.walk) : radius, side walls at `wall` m from the axis (thickness thick), gangway opening, partition door ;
     // doors pass when open past doorOpen and slower than boardSpeed m/s ; board : push against an open door from up to boardW m off the axis
     // (the platform edge is gap + width / 2 away), or interact within boardReach ; step off past exitW (put down outW m off the axis, on the platform)
-    walk: { radius: 0.3, wall: 1.32, thick: 0.12, gangway: 1.3, partitionDoor: 1.0, doorOpen: 0.6, boardSpeed: 0.5, boardW: 2.35, boardPush: 0.8, boardReach: 2.6, exitW: 1.55, outW: 2.25, enterEase: 9, cabReach: 2.0 },
+    walk: { radius: 0.3, wall: 1.32, thick: 0.12, gangway: 1.3, partitionDoor: 1.0, doorOpen: 0.6, boardSpeed: 0.5, boardW: 2.35, boardPush: 0.8, boardReach: 2.6, exitW: 1.55, outW: 2.25, enterEase: 9, cabReach: 2.0, deckMid: 1.75 }, // deckMid : height above the rail head that separates the two decks (stairs)
     // zombies of the station board a parked train with open doors : they reach the door spot (doorSpot m outside the body), step in, then walk the aisle
     zombie: { radius: 0.3, doorSpot: 0.75, enter: 1.0, speedK: 0.9 },
-    light: { color: 0xc8dcff, intensity: 1.2, dist: 11, y: 2.2 },   // one pooled point light per car (cold LED), y above the rail head
+    light: { color: 0xc8dcff, intensity: 1.4, dist: 12, y: 2.2, n: 2 },   // `n` pooled cold LED lights follow the car(s) nearest to the camera (no light per car), y above the rail head
     flicker: { hz: 9, rate: 0.35 },              // the faulty LED strips : flicker frequency, share of time off
     // camera sway of a player standing in the moving train (local only) : roll (deg) and bob (m) at full speed (refSpeed m/s), frequency (Hz) ;
     // curve : extra roll (deg) per m/s² of lateral acceleration ; jolt : bob kick (m) at each rail joint (joint m apart, axle and bogie spacing in m)
-    sway: { roll: 0.4, bob: 0.015, hz: 1.4, refSpeed: 22, curve: 0.35, jolt: 0.006, joint: 25, axle: 2.6, bogie: 17.3 },
+    sway: { roll: 0.4, bob: 0.015, hz: 1.4, refSpeed: 22, curve: 0.35, jolt: 0.006, joint: 25, axle: 2.6, bogie: 18.9 },
+    // bullets : the body is solid for shots from outside (windows included) up to `shotH` m above the rail head ; shots fired from inside the train pass through
+    shotH: 4.3,
   },
 
   // ------------------------------------------------------------------ Procedural audio (src/audio.js, src/ambience.js) : volumes (0..1 of the bus), intervals (s), ranges (m)
@@ -818,7 +823,7 @@ export const CONFIG = {
     graceAfter: 10,               // s : the same HP floor still holds after round 1 starts (spawn protection : an idle player is not killed the instant the ride ends) ; then zombies kill normally
     fog: 0.5, far: 320,           // fog density x fog during the ride (the landscape is the show), camera far plane (m) ; restored at the stop
     hour: 4.9, hourEnd: 5.75,     // night turning to dawn : the game clock is held on a slow ramp from hour to hourEnd over the ride (auto day / night : the cycle resumes from it)
-    slots: [[1, 1.0], [1, -1.0], [2, 1.0], [2, -1.0]],   // [car (0 : head car), u from the car centre] of the player slots (the aisle) ; late joiners : car 2
+    slots: [[2, 1.0], [2, -1.0], [3, 1.0], [3, -1.0]],   // [car (0 : head power car, 1..8 : the trailers), u from the car centre] of the player slots (the aisle, lower saloon) ; late joiners : car 2
     lateCoach: 2,
     corridor: 60,                 // m : points this close to the route (outside the island) belong to the station area (drawn while riding)
     sync: 0.5,                    // s between two tn_sync of the host
@@ -852,7 +857,7 @@ export const CONFIG = {
     // climb in climb s (arc m over the sill), then walk the aisle. Hanging (hang + climb) is capped at maxHanging (maxHanging4p with 4 players) :
     // the others wait `wait` m behind their window. Hanging pose : `hangOut` m off the body side, feet `hangY` m above the rail head.
     side: { pass: [208, 224], lead: 8, off: [4, 9] },
-    breach: { grab: 3.0, climb: 1.2, maxHanging: 4, maxHanging4p: 8, spawn: [203, 222], from: [8, 14], out: 3.5, run: 1.7, maxRun: 6.0, lose: 14, wait: 2.6, crackAt: 0.35, knock: 0.45, hangOut: 0.3, hangY: 0.75, arc: 0.9 },
+    breach: { grab: 3.0, climb: 1.2, maxHanging: 4, maxHanging4p: 8, spawn: [203, 222], from: [8, 14], out: 3.5, run: 1.7, maxRun: 6.0, lose: 14, wait: 2.6, crackAt: 0.35, knock: 0.45, hangOut: 0.3, hangY: 0.1, arc: 0.9 },
     // 227-250 s : footsteps on the roof of the last car (steps every `every` s from its front to its tail), bangs on its rear cab door (at bangAt, bangs
     // knocks), the door is forced at forceAt ; then the gangway zombies come in through it, one every gangEvery s
     roof: { steps: 8, every: 0.7, bangAt: 233.5, bangs: 3, forceAt: 235.5, gangEvery: 1.6 },
