@@ -52,7 +52,7 @@ export function installIntro(game, { world, hud, sfx }) {
   const S = { on: false, ph: 'off', tau: 0, stopTau: P.T, ann: 0, ev: 0, hold: 0, syncT: 0, corr: 0, sound: null, sub: 0 };
   game.intro = S;
   // the start spot of the intro : the station's start (zone Quais) ; applySpawnPoint opens it, the player is then put in the train
-  game.introSpawn = world.gare.start ? { ...world.gare.start, intro: true, name: 'Train régional 17412' } : null;
+  game.introSpawn = world.gare.start ? { ...world.gare.start, intro: true, name: 'Train rapide 17412' } : null;
 
   // ---------------------------------------------------------------- overlays : title card, subtitles, skip gauge (local only)
   const card = document.createElement('div');

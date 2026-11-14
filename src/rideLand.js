@@ -127,6 +127,13 @@ export function buildLand(api) {
   const Lq = {}; // scratch
   void Lq;
   const rng = (a, b) => a + rnd() * (b - a);
+  // the oriented footprint of a building (half extents hw along its local x, hd along its local z, rotated by th about Y) keeps `clr` m from every track (a long warehouse
+  // whose centre is 10 m from the line may still reach the rails : v0.99.0, rail-clear-scan)
+  const footClear = (cx, cz, hw, hd, th, clr) => {
+    const c = Math.cos(th), s = Math.sin(th), nu = Math.max(1, Math.ceil(hw / 1.5)), nv = Math.max(1, Math.ceil(hd / 1.5));
+    for (let i = -nu; i <= nu; i++) for (let j = -nv; j <= nv; j++) { const a = (hw * i) / nu, b = (hd * j) / nv; if (nearTrack(cx + a * c + b * s, cz - a * s + b * c, clr)) return false; }
+    return true;
+  };
   const inRange = (s) => s >= sFrom + 5 && s <= sTo + 40;
 
   // ---------------------------------------------------------------- materials
@@ -168,6 +175,7 @@ export function buildLand(api) {
     if (kind === 'h') { sy = clamp(((lv || 2) + 0.4) / 2.4, 0.7, 1.6); sx = clamp(sx, 0.5, 4); sz = clamp(sz, 0.5, 2.2); sy = Math.min(sy, sz * 1.15 + 0.3); }
     else if (kind === 'w') { sy = 0.8 + hash(cx, cz) * 0.4; sx = clamp(sx, 0.5, 4); sz = clamp(sz, 0.5, 4); }
     else { sy = clamp(((lv || 4) * 3.1) / 14, 0.5, 1.6); sx = clamp(sx, 0.6, 3); sz = clamp(sz, 0.6, 3); }
+    if (!footClear(cx, cz, (uL * sx) / 2, (uD * sz) / 2, -yaw, C.clear)) continue;
     setS(q.s);
     lists[kind === 'a' ? 'a' : kind === 'w' ? 'w' : 'h'].push(mat4(cx, groundAt(q.d * q.side, q.s), cz, -yaw, sx, sy, sz));
     const t = tints[Math.floor(hash(cx, cz, 3) * tints.length)]; hcol[kind === 'a' ? 'a' : kind === 'w' ? 'w' : 'h'].push(new THREE.Color().setHSL(t[0], t[1], t[2] * (kind === 'h' ? 1 : 0.9)));
@@ -177,7 +185,7 @@ export function buildLand(api) {
   stats.buildings = nB;
   for (const c of land.churches || []) {
     const [cx, cz, cl, cd, yaw] = c, q = proj(cx, cz, 260);
-    if (q.d === Infinity || !inRange(q.s) || q.d < 12 || !freeLand(cx, cz)) continue;
+    if (q.d === Infinity || !inRange(q.s) || q.d < 12 || !freeLand(cx, cz) || !footClear(cx, cz, cl * 0.5, cd * 0.5, -yaw, C.clear)) continue;
     setS(q.s);
     const k = clamp(cl / 20, 0.8, 1.8);
     churchList.push(mat4(cx, groundAt(q.d * q.side, q.s), cz, -yaw, k, k * 0.95, clamp(cd / 10, 0.8, 1.8) * 0.95));

@@ -399,7 +399,7 @@ export function buildRideScenery({ route, plan, rail, gare, land = null, sFrom, 
       at(s, a);
       for (const sd of [1, -1]) {
         const w = 3.0, x = a.x - a.tz * sd * w, z = a.z + a.tx * sd * w;
-        if (nearTrack(x, z, 1.9) || !freeLand(x, z) || bridgeIn(s)) continue;
+        if (nearTrack(x, z, 3.2) || !freeLand(x, z) || bridgeIn(s)) continue; // (3.2 m : clear of the neighbouring tracks too, v0.99.0)
         curS = s; const m = mat4(x, groundAt(sd * w, s), z, Math.atan2(-a.tx, -a.tz) + Math.PI); // lens (local -z) faces the coming train
         masts.push(m); (wreckS != null && s > wreckS - 520 && s < wreckS - 60 ? reds : greens).push(m);
         break;

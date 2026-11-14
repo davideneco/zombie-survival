@@ -698,7 +698,7 @@ export const CONFIG = {
     navCell: 0.75,            // case de la grille de navigation de l'aire (m)
     navMaxCost: 2400,         // portée du champ de flux (coût : 10 par case, soit ~180 m)
     playU: [-62, 62],         // quais jouables : de .. à .. (m le long des voies, depuis le milieu du bâtiment ; sous la halle)
-    crossingU: [-54, 52],     // passerelles en planches au-dessus des voies entre le quai 1 et le quai 2/3 (milieu, m), largeur crossingW (v0.80.0 : écartées pour le train à quai)
+    crossingU: [52],     // passerelles en planches au-dessus des voies entre le quai 1 et le quai 2/3 (milieu, m), largeur crossingW (v0.99.0 : une seule, devant le nez du train à quai de 198 m ; v0.80.0 : écartées pour le train à quai)
     crossingW: 4.5,
     hall: { u0: -28, u1: 26, height: 13 },       // salle des pas perdus (u, hauteur sous plafond)
     building: { wing: 15.5, pavilion: 18.5, center: 23, roof: 5.5 },  // hauteurs : corniche des ailes, pavillons d'angle, pavillon central, toit
@@ -730,7 +730,7 @@ export const CONFIG = {
     stationClip: { u: 230, v0: -140 },                    // station frame : tracks with |u| < u and v0 < v < (track-side wall) are drawn by gare/build.js
     // the quai 1 track of the SNCF shapes runs ~0.85 m too close to the OSM platform edge (a train would overlap the platform) : the route is moved
     // sideways so a coach side is `gap` m from the edge, with a smooth ramp in : u from blendIn[0] to blendIn[1], out : u from blendOut[0] to blendOut[1]
-    route: { gap: 0.2, blendIn: [-170, -110], blendOut: [75, 150], extendTo: 235 },
+    route: { gap: 0.2, blendIn: [-170, -110], blendOut: [75, 150], extendTo: 160 },
     // embankment of the approach (v0.88.0) : the track stands `drop` m above the fields (slope `slope` m wide beyond the ballast shoulder) ; it eases out
     // toward the station (rampOut m before the station clip, ending `endBefore` m short of it). Bridges (rideland.json) : the deck keeps the ground
     // low beyond its sides (floor level `drop` below), girders `girder` m high above the rail bed
@@ -805,7 +805,7 @@ export const CONFIG = {
     bridge: { vol: 0.5, minLen: 12, water: 1.25 },           // rumble volume, shortest bridge that rings (m), x over water
   },
 
-  // ------------------------------------------------------------------ Train intro (v0.81.0, src/intro.js) : the game starts in the moving regional
+  // ------------------------------------------------------------------ Train intro (v0.81.0, src/intro.js) : the game starts in the moving double-decker
   // train, which comes from the south-west and stops at quai 1 of the station ; then round 1 starts at the station (zone Quais).
   // The train abscissa s(τ) is a pure function of the intro clock τ (s) : the speed profile below is integrated exactly (linear speed between
   // the keys) and the stop lands on the parked position (CONFIG.train.park). The host owns τ (tn_sync twice a second) ; clients follow.
@@ -815,7 +815,7 @@ export const CONFIG = {
     // 15 km/h past the obstacle, 50 km/h, stop at 267 s (4 min 27 s, 6.0 km from the start)
     profile: [[0, 27.8], [160, 27.8], [172, 22.2], [198, 22.2], [208, 4.2], [224, 4.2], [232, 13.9], [250, 13.9], [267, 0]],
     card: 4.0, fadeIn: 2.5,       // s : black title card, then the picture fades in over the last fadeIn s of it
-    title: 'TRAIN RÉGIONAL 17412 — DIRECTION STRASBOURG',
+    title: 'TRAIN RAPIDE 17412 — DIRECTION STRASBOURG',
     doorTime: 1.6,                // s : the doors open at the stop
     roundDelay: 5,                // s after the stop : round 1 starts at the station
     skipHold: 1.5,                // s : hold [jump] (Espace) to skip the ride (solo : anyone ; co-op : the host)
@@ -831,7 +831,7 @@ export const CONFIG = {
     maxPing: 0.5,                 // s : the ping used for that lead is capped (a stalled tab measures absurd pings)
     // on-board announcements (French) at τ (s) : chime, subtitle (text) for dur s ; static : radio static and screams after it ; big : title / sub
     announce: [
-      { at: 6, chime: true, dur: 6.5, text: 'Mesdames et messieurs, bienvenue à bord de ce train régional à destination de Strasbourg.' },
+      { at: 6, chime: true, dur: 6.5, text: 'Mesdames et messieurs, bienvenue à bord de ce train à grande vitesse à destination de Strasbourg.' },
       { at: 78, dur: 6, text: 'Prochain arrêt : Strasbourg-Ville, terminus. Ce train ne dessert ni Lingolsheim ni Koenigshoffen.' },
       { at: 138, chime: true, dur: 7, text: 'Mesdames et messieurs, dans quelques minutes notre train arrivera en gare de Strasbourg, son terminus…' },
       { at: 146, dur: 3.2, static: true, text: '… (grésillements — des cris dans le haut-parleur) …' },

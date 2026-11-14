@@ -59,10 +59,11 @@ const report = await page.evaluate((O) => {
   const uvOf = (x, z) => plan.L(x, z).map((v) => Math.round(v * 10) / 10);
   const res = { opts: O, railY, polylines: polyName.length, cats: {}, items: [] }, seen = new Set();
   const hit = (cat, name, x, z, info) => {
+    const tid0 = info.tid;
     const k = cat + '|' + name + '|' + Math.round(x * 2) + '|' + Math.round(z * 2);
     if (seen.has(k)) return; seen.add(k);
-    const c = res.cats[cat] || (res.cats[cat] = {}); c[name] = (c[name] || 0) + 1;
-    res.items.push({ cat, name, x: Math.round(x * 10) / 10, z: Math.round(z * 10) / 10, s: sOf(x, z), uv: uvOf(x, z), ...info });
+    const c = res.cats[cat] || (res.cats[cat] = {}), tk = polyName[info.tid] === 'route' ? 'route' : 'other'; delete info.tid; const e = c[name] || (c[name] = { route: 0, other: 0 }); e[tk]++;
+    res.items.push({ cat, name, x: Math.round(x * 10) / 10, z: Math.round(z * 10) / 10, s: sOf(x, z), uv: uvOf(x, z), ...info, track: polyName[tid0] });
   };
   // ---- 1. collision : segments (walls) and circles (trees, lamps, props)
   const col = world.collision;
@@ -75,11 +76,11 @@ const report = await page.evaluate((O) => {
         const x = sg.ax + ((sg.bx - sg.ax) * k) / n, z = sg.az + ((sg.bz - sg.az) * k) / n, q = near(x, z, HALF);
         if (!q) continue;
         if (sg.y0 !== undefined && sg.y0 > O.top) break; // (a bridge deck, a floor above)
-        hit(lowEdge(sg, q.d) ? 'platformEdge' : 'collision', 'wall:' + (sg.kind || 'wall') + (sg.h === Infinity ? '' : ':h' + Math.round(sg.h)), x, z, { track: polyName[q.id], d: Math.round(q.d * 10) / 10, h: sg.h === Infinity ? 'inf' : sg.h });
+        hit(lowEdge(sg, q.d) ? 'platformEdge' : 'collision', 'wall:' + (sg.kind || 'wall') + (sg.h === Infinity ? '' : ':h' + Math.round(sg.h)), x, z, { tid: q.id, track: polyName[q.id], d: Math.round(q.d * 10) / 10, h: sg.h === Infinity ? 'inf' : sg.h });
         break;
       }
     }
-    for (const c of col.circles) { ncirc++; const q = near(c.x, c.z, HALF + c.r); if (q) hit(lowEdge(c, q.d - c.r) ? 'platformEdge' : 'collision', 'circle:' + (c.kind || 'prop') + ':r' + c.r.toFixed(1), c.x, c.z, { track: polyName[q.id], d: Math.round(q.d * 10) / 10, h: c.h }); }
+    for (const c of col.circles) { ncirc++; const q = near(c.x, c.z, HALF + c.r); if (q) hit(lowEdge(c, q.d - c.r) ? 'platformEdge' : 'collision', 'circle:' + (c.kind || 'prop') + ':r' + c.r.toFixed(1), c.x, c.z, { tid: q.id, track: polyName[q.id], d: Math.round(q.d * 10) / 10, h: c.h }); }
   }
   res.scanned = { segs: nseg, circles: ncirc };
   // ---- 2. instanced meshes (station and ride) : the bounding box of each instance
@@ -95,10 +96,15 @@ const report = await page.evaluate((O) => {
       for (let i = 0; i < o.count; i++) {
         o.getMatrixAt(i, m4); ninst++;
         v3.set((bb.min.x + bb.max.x) / 2, (bb.min.y + bb.max.y) / 2, (bb.min.z + bb.max.z) / 2).applyMatrix4(m4).applyMatrix4(o.matrixWorld);
-        const e = m4.elements, sx = Math.hypot(e[0], e[1], e[2]), sz = Math.hypot(e[8], e[9], e[10]), sy = Math.hypot(e[4], e[5], e[6]);
-        const r = Math.hypot(((bb.max.x - bb.min.x) * sx) / 2, ((bb.max.z - bb.min.z) * sz) / 2), y0 = v3.y - ((bb.max.y - bb.min.y) * sy) / 2, y1 = v3.y + ((bb.max.y - bb.min.y) * sy) / 2;
+        const e = m4.elements;
+        const y0 = v3.y - ((bb.max.y - bb.min.y) * Math.hypot(e[4], e[5], e[6])) / 2, y1 = v3.y + ((bb.max.y - bb.min.y) * Math.hypot(e[4], e[5], e[6])) / 2;
         if (y1 < lo || y0 > hi) continue;
-        const q = near(v3.x, v3.z, HALF + r); if (q) hit('instances', nm, v3.x, v3.z, { track: polyName[q.id], d: Math.round(q.d * 10) / 10, r: Math.round(r * 10) / 10, y: [Math.round(y0 * 10) / 10, Math.round(y1 * 10) / 10] });
+        // footprint : the xz rectangle of the local bounding box through the instance matrix, sampled every ~0.8 m
+        const cs = [[bb.min.x, bb.min.z], [bb.max.x, bb.min.z], [bb.max.x, bb.max.z], [bb.min.x, bb.max.z]].map(([x, z]) => { v3.set(x, 0, z).applyMatrix4(m4).applyMatrix4(o.matrixWorld); return [v3.x, v3.z]; });
+        const nu = Math.max(1, Math.ceil(Math.hypot(cs[1][0] - cs[0][0], cs[1][1] - cs[0][1]) / 0.8)), nv = Math.max(1, Math.ceil(Math.hypot(cs[3][0] - cs[0][0], cs[3][1] - cs[0][1]) / 0.8));
+        let q = null, fx = 0, fz = 0;
+        for (let i = 0; i <= nu && !q; i++) for (let j = 0; j <= nv && !q; j++) { const x = cs[0][0] + ((cs[1][0] - cs[0][0]) * i) / nu + ((cs[3][0] - cs[0][0]) * j) / nv, z = cs[0][1] + ((cs[1][1] - cs[0][1]) * i) / nu + ((cs[3][1] - cs[0][1]) * j) / nv; q = near(x, z, HALF); fx = x; fz = z; }
+        if (q) hit('instances', nm, fx, fz, { tid: q.id, track: polyName[q.id], d: Math.round(q.d * 10) / 10, y: [Math.round(y0 * 10) / 10, Math.round(y1 * 10) / 10] });
       }
     } else {
       const g = o.geometry, p = g.attributes.position, idx = g.index; if (!p || !p.array) return; // (without ?keepgeom the static meshes free their CPU arrays after the GPU upload)
@@ -118,19 +124,19 @@ const report = await page.evaluate((O) => {
         if (!found) { const cx = (A[0].x + A[1].x + A[2].x) / 3, cz = (A[0].z + A[1].z + A[2].z) / 3, q = near(cx, cz, HALF); if (q) found = { x: cx, z: cz, q }; }
         if (!found) continue;
         const low = y1 <= railY + 1.3 && found.q.d >= 1.5;
-        hit(low ? 'platformEdge' : 'meshes', nm, found.x, found.z, { track: polyName[found.q.id], d: Math.round(found.q.d * 10) / 10, y: [Math.round(y0 * 10) / 10, Math.round(y1 * 10) / 10] });
+        hit(low ? 'platformEdge' : 'meshes', nm, found.x, found.z, { tid: found.q.id, track: polyName[found.q.id], d: Math.round(found.q.d * 10) / 10, y: [Math.round(y0 * 10) / 10, Math.round(y1 * 10) / 10] });
       }
     }
   });
   res.scanned.instances = ninst; res.scanned.triangles = ntri;
-  const total = {}; for (const [c, m] of Object.entries(res.cats)) total[c] = Object.values(m).reduce((a, b) => a + b, 0);
+  const total = {}; for (const [c, m] of Object.entries(res.cats)) { total[c] = { route: 0, other: 0 }; for (const v of Object.values(m)) { total[c].route += v.route; total[c].other += v.other; } }
   res.total = total;
   return res;
 }, OPTS);
 
 fs.writeFileSync(OUT, JSON.stringify(report, null, 1));
 console.log('scanned', JSON.stringify(report.scanned), 'polylines', report.polylines, 'railY', report.railY);
-for (const [cat, m] of Object.entries(report.cats)) { console.log(`\n${cat} : ${report.total[cat]}`); for (const [n, c] of Object.entries(m).sort((a, b) => b[1] - a[1])) console.log(`  ${String(c).padStart(5)}  ${n}`); }
+for (const [cat, m] of Object.entries(report.cats)) { console.log(`\n${cat} : route ${report.total[cat].route}, other tracks ${report.total[cat].other}`); for (const [n, c] of Object.entries(m).sort((a, b) => b[1].route + b[1].other - a[1].route - a[1].other)) console.log(`  route ${String(c.route).padStart(4)}  other ${String(c.other).padStart(4)}  ${n}`); }
 console.log(errors.length ? '\nerrors:\n' + errors.join('\n') : '\nno console errors');
 console.log('report', OUT);
 await browser.close();
