@@ -87,8 +87,8 @@ export function carLayouts() {
       Q.blocks.push({ u0, u1, w0: -0.08, w1: 0.08 });
       Q.blocksUpper.push({ u0, u1, w0: -0.08, w1: 0.08 });
 
-      // 2. Lower-deck under-stair bulkhead at |u| in [3.78, 4.85], w in [-wall, 0.08] closing the entire space under the left stairs
-      const us0 = sDir > 0 ? 3.78 : -4.85, us1 = sDir > 0 ? 4.85 : -3.78;
+      // 2. Lower-deck under-stair bulkhead at |u| in [3.78, 3.88], w in [-wall, 0.08] closing the space under the left stairs from the lower saloon
+      const us0 = sDir > 0 ? 3.78 : -3.88, us1 = sDir > 0 ? 3.88 : -3.78;
       Q.blocks.push({ u0: us0, u1: us1, w0: -wall - 0.1, w1: 0.08 });
 
       // 3. Upper-deck right stairwell balustrade at |u| >= 3.78, w in [-0.08, wall] (leaves |u| in [2.90, 3.78] as a full-width 0.88 m upper landing!)
