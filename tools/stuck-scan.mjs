@@ -139,7 +139,7 @@ if (ONLY.includes('pockets')) {
       let entered = null, exited = null;
       for (let a = 0; a < 8; a++) {
         const ang = (a * Math.PI) / 4, sx = k.pc[0] + Math.cos(ang) * 3.2, sz = k.pc[1] + Math.sin(ang) * 3.2;
-        if (labelNear(sx, sz) !== main) continue;
+        if (labelNear(sx, sz) !== main || labels[nav.idx(nav.cx(sx), nav.cz(sz))] !== main) continue; // the start cell itself must be walkable main : labelNear alone (3x3) accepts a point inside the wall band or in a room slot next to a shelf, which is not reachable and made sealed rooms look like traps (-414.6 ; 74.9)
         const q = { x: sx, y: 0, z: sz }; w.collide(q, 0.4); if (Math.hypot(q.x - sx, q.z - sz) > 0.05) continue; // départ encombré
         const e = walk(sx, sz, k.pc[0], k.pc[1], 3);
         if (Math.hypot(e.x - k.pc[0], e.z - k.pc[1]) > 0.9 && labelNear(e.x, e.z) !== k.id) continue; // n'entre pas
