@@ -973,7 +973,7 @@ const game = {
       const ty = feet.y + h, dx = feet.x - pos.x, dy = ty - (pos.y + B.lift), dz = feet.z - pos.z, d = Math.hypot(dx, dy, dz);
       if (d < B.nudge + 0.05) return true; // (at the very centre)
       const ux = dx / d, uy = dy / d, uz = dz / d, rest = d - B.nudge;
-      if (world.rayHit(pos.x + ux * B.nudge, pos.y + B.lift + uy * B.nudge, pos.z + uz * B.nudge, ux, uy, uz, rest) >= rest - B.slack) return true;
+      if (world.rayHit(pos.x + ux * B.nudge, pos.y + B.lift + uy * B.nudge, pos.z + uz * B.nudge, ux, uy, uz, rest, true) >= rest - B.slack) return true;
     }
     return false;
   },
@@ -2795,6 +2795,6 @@ game.view = {
   occluded(from, pos, y) {
     const dx = pos.x - from.x, dy = y - from.y, dz = pos.z - from.z, d = Math.hypot(dx, dy, dz);
     if (d < 1) return false;
-    return world.rayHit(from.x, from.y, from.z, dx / d, dy / d, dz / d, d) < d - 0.6;
+    return world.rayHit(from.x, from.y, from.z, dx / d, dy / d, dz / d, d, true) < d - 0.6;
   },
 };

@@ -99,7 +99,7 @@ export class RideCam {
     // collision : trois rayons parallèles pivot -> caméra (au centre, puis ±rayOffset), médiane
     let lim = this.len;
     if (w.rayHit) {
-      const hits = [0, C.rayOffset, -C.rayOffset].map((off) => w.rayHit(pv.x + cy * off, pv.y, pv.z - sy * off, -d.x, -d.y, -d.z, this.len, true)); // true : la caméra traverse les rames (voir Collision.rayHit)
+      const hits = [0, C.rayOffset, -C.rayOffset].map((off) => w.rayHit(pv.x + cy * off, pv.y, pv.z - sy * off, -d.x, -d.y, -d.z, this.len));
       hits.sort((a, b) => a - b);
       lim = hits[1] >= this.len ? this.len : Math.min(this.len, Math.max(C.minArm, hits[1] - C.margin)); // rien sur le chemin : bras entier
     }

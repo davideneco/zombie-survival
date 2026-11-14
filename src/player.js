@@ -708,7 +708,7 @@ export class Player {
     cam.updateMatrixWorld(true);
     this.rc.setFromCamera({ x: 0, y: 0 }, cam);
     const ro = this.rc.ray.origin.clone(), rd = this.rc.ray.direction.clone();
-    const wallT = this.world.rayHit ? this.world.rayHit(ro.x, ro.y, ro.z, rd.x, rd.y, rd.z, K.range + 0.5) : K.range + 0.5;
+    const wallT = this.world.rayHit ? this.world.rayHit(ro.x, ro.y, ro.z, rd.x, rd.y, rd.z, K.range + 0.5, true) : K.range + 0.5;
     let target = null, head = false, point = null;
     this.rc.far = K.range + 0.4;
     const hits = this.rc.intersectObjects(g.zombieTargets(), false);
@@ -726,7 +726,7 @@ export class Player {
         const dx = z.pos.x - this.pos.x, dz = z.pos.z - this.pos.z, d = Math.hypot(dx, dz);
         if (d > K.range + 0.4 || d >= bd || Math.abs(z.pos.y - this.pos.y) > 1.6) continue;
         if ((dx * cx + dz * cz) / (d * cl || 1) < cosMax) continue;
-        if (this.world.rayHit && d > 0.5 && this.world.rayHit(ro.x, ro.y, ro.z, dx / d, (z.pos.y + 1.1 - ro.y) / d, dz / d, d) < d - 0.4) continue; // un mur les sépare
+        if (this.world.rayHit && d > 0.5 && this.world.rayHit(ro.x, ro.y, ro.z, dx / d, (z.pos.y + 1.1 - ro.y) / d, dz / d, d, true) < d - 0.4) continue; // un mur les sépare
         bd = d; target = z; point = new THREE.Vector3(z.pos.x, z.pos.y + 1.1, z.pos.z);
       }
     }
@@ -818,7 +818,7 @@ export class Player {
       const fast = !!this.world.rayHit;
       const hits = this.rc.intersectObjects(fast ? this.game.zombieTargets() : this.game.hitTargets(), false);
       const ro = this.rc.ray.origin, rd = this.rc.ray.direction;
-      const wallT = fast ? this.world.rayHit(ro.x, ro.y, ro.z, rd.x, rd.y, rd.z, cfg.range) : cfg.range;
+      const wallT = fast ? this.world.rayHit(ro.x, ro.y, ro.z, rd.x, rd.y, rd.z, cfg.range, true) : cfg.range;
       this.game.shootBarrels?.(ro, rd, wallT); // explosive barrels (barrels.js): the barrel is solid, the bullet ends on it
 
       // les balles perforantes traversent plusieurs zombies (une seule touche par zombie)
@@ -876,7 +876,7 @@ export class Player {
       const hit = world.rayHit(ro.x, ro.y, ro.z, toM.x, toM.y, toM.z, lenM);
       if (hit < lenM) origin.copy(ro).addScaledVector(toM, Math.max(0, hit - 0.05));
     }
-    const far = Math.min(40, world.rayHit ? world.rayHit(ro.x, ro.y, ro.z, rd.x, rd.y, rd.z, 40) : 40);
+    const far = Math.min(40, world.rayHit ? world.rayHit(ro.x, ro.y, ro.z, rd.x, rd.y, rd.z, 40, true) : 40);
     const target = ro.clone().addScaledVector(rd, Math.max(far, 2));
     const dir = target.sub(origin).normalize();
     const vel = dir.clone().multiplyScalar(cfg.proj.speed);

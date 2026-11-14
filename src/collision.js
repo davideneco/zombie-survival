@@ -54,7 +54,7 @@ export class Collision {
 
   // Obstacles dynamiques : liste de boîtes orientées { x, z, w, d, rot, h } (même convention qu'addBox : w le long de (cos rot, sin rot)), remplacée à chaque
   // appel pour la clé donnée. Ils repoussent les cercles de resolve() (joueurs, zombies, motos) mais ne sont pas dans la grille : les rayons
-  // de caméra les traversent (rayHit(…, noDyn)), les balles s'arrêtent dessus. `kind` : nature pour les dégâts des motos ('prop' : un objet physique).
+  // de caméra les traversent (rayHit(…, withDyn) : les balles s'arrêtent dessus). `kind` : nature pour les dégâts des motos ('prop' : un objet physique).
   setDynamic(key, boxes, kind = 'prop') {
     let e = this.dyn.get(key);
     if (!e) this.dyn.set(key, e = { boxes: [], kind });
@@ -248,8 +248,8 @@ export class Collision {
   // Lancer de rayon 3D contre les obstacles (murs, arbres, voitures) + le sol.
   // Retourne la distance t (en mètres) du premier obstacle, ou maxT. Remplace le raycast sur les maillages
   // de bâtiments, beaucoup trop lent avec plusieurs milliers de bâtiments.
-  // noDyn : ignore les obstacles dynamiques (rames) — pour les rayons de caméra ; les balles, elles, s'arrêtent sur une rame.
-  rayHit(ox, oy, oz, dx, dy, dz, maxT, noDyn = false) {
+  // withDyn : teste aussi les obstacles dynamiques (rames) — les balles et les explosions s'arrêtent sur une rame ; la construction du monde, la caméra et les autres sondes les ignorent.
+  rayHit(ox, oy, oz, dx, dy, dz, maxT, withDyn = false) {
     let best = maxT;
     if (dy < -1e-6 && oy > 0) best = Math.min(best, oy / -dy); // sol
     for (const f of this.floors) { // planchers : la balle les traverse seulement par les trous (escaliers)
@@ -309,7 +309,7 @@ export class Collision {
       if (tNext > best2d) break;
       if (tx < tz) { tx += tdx; ix += sx; } else { tz += tdz; iz += sz; }
     }
-    if (!noDyn && this.dyn.size) best2d = this._rayDyn(ox, oy, oz, ux, uz, dy, h2, best2d);
+    if (withDyn && this.dyn.size) best2d = this._rayDyn(ox, oy, oz, ux, uz, dy, h2, best2d);
     return best2d / h2;
   }
 

@@ -68,7 +68,7 @@ export function installLauncher(game, { world, scene, fx }) {
           _d.copy(s.vel).normalize();
           _a.copy(s.pos);
           // premier obstacle : mur, sol ou étage (grille de collision) ou zombie
-          let t = world.rayHit ? world.rayHit(_a.x, _a.y, _a.z, _d.x, _d.y, _d.z, len) : len;
+          let t = world.rayHit ? world.rayHit(_a.x, _a.y, _a.z, _d.x, _d.y, _d.z, len, true) : len;
           let victim = null;
           const zh = zombieHit(_a, _d, Math.min(t, len));
           if (zh && zh.t <= t) { t = zh.t; victim = zh.z; }
