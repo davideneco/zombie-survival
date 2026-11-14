@@ -301,7 +301,15 @@ export function buildGareMeshes({ plan, gare, rail, pbr, tiled, props, envMap, r
     // plinth, string course, cornice, frieze (stepped profiles)
     for (const [a, b] of spans) {
       const h = heightAt((a + b) / 2);
-      const strip = (y0, y1, d) => { const g = bx(a, b, side > 0 ? out : out - d, side > 0 ? out + d : out, y0, y1); add(M.sandTrim, g); };
+      // a band of the facade dressing ; it stops at the doorways (an opening taller than the band's top : the plinth would stay as a low wall in the open door)
+      const cuts = (side > 0 ? plan.arches : plan.rearDoors).map(([p, q, top]) => [p, q, (top ?? (side > 0 ? 9.6 : 4.6)) - (q - p) / 2]).filter(([p, q]) => q > a && p < b).sort((m, n) => m[0] - n[0]);
+      const strip = (y0, y1, d) => {
+        let u = a;
+        for (const [p, q, spring] of [...cuts.filter((c) => y1 <= c[2] + 1e-6), [b, b]]) {
+          if (p > u) add(M.sandTrim, bx(u, Math.min(p, b), side > 0 ? out : out - d, side > 0 ? out + d : out, y0, y1));
+          u = Math.max(u, q);
+        }
+      };
       strip(0, 1.1, 0.18);              // plinth
       strip(1.1, 1.22, 0.24);           // plinth cap
       strip(5.6, 5.85, 0.16);           // string course above the ground floor arcade
@@ -460,12 +468,14 @@ export function buildGareMeshes({ plan, gare, rail, pbr, tiled, props, envMap, r
     for (const [vv, s, ops] of [[v0, 1, plan.rearDoors.map(([a, b2]) => [a, b2, 4.6])], [v1, -1, plan.arches.map(([a, b2]) => [a, b2, 9.6])]]) {
       let u = u0;
       for (const [a, b2, top] of [...ops.filter(([a]) => a > u0 && a < u1), [u1, u1, 0]]) {
-        if (a > u) add(M.plasterIn, bx(u, a, s > 0 ? vv : vv - 0.04, s > 0 ? vv + 0.04 : vv, 1.3, hh - 1.2));
+        if (a > u) {
+          add(M.plasterIn, bx(u, a, s > 0 ? vv : vv - 0.04, s > 0 ? vv + 0.04 : vv, 1.3, hh - 1.2));
+          add(M.wood, bx(u, a, s > 0 ? vv : vv - 0.06, s > 0 ? vv + 0.06 : vv, 0, 1.3)); // wainscot : it stops at the doorways (it used to run across them, a wooden wall in the open door)
+        }
         if (top) add(M.plasterIn, bx(a, b2, s > 0 ? vv : vv - 0.04, s > 0 ? vv + 0.04 : vv, top + 0.6, hh - 1.2));
         u = b2;
       }
     }
-    for (const [a, b, vv, s] of [[u0, u1, v0, 1], [u0, u1, v1, -1]]) add(M.wood, bx(a, b, s > 0 ? vv : vv - 0.06, s > 0 ? vv + 0.06 : vv, 0, 1.3));
     for (const [uu, s] of [[u0, 1], [u1, -1]]) add(M.wood, bx(s > 0 ? uu : uu - 0.06, s > 0 ? uu + 0.06 : uu, v0, v1, 0, 1.3));
     add(M.sandTrim, bx(u0, u1, v0, v0 + 0.4, hh - 1.2, hh - 0.8)); add(M.sandTrim, bx(u0, u1, v1 - 0.4, v1, hh - 1.2, hh - 0.8));
     for (let u = u0; u <= u1 + 0.01; u += (u1 - u0) / 6) add(M.sandTrim, bx(u - 0.25, u + 0.25, v0, v1, hh - 0.9, hh)); // ceiling beams
@@ -536,7 +546,7 @@ export function buildGareMeshes({ plan, gare, rail, pbr, tiled, props, envMap, r
       for (let k = 1; k <= K; k++) add(M.steel, beam(prof(i, k - 1), prof(i, k), 0.14, 0.32));
     }
     for (const k of [3, 6, 9, 12]) for (let i = 1; i < us.length; i++) add(M.steel, beam(prof(i - 1, k), prof(i, k), 0.08));
-    for (let i = 1; i < us.length; i++) { const a = prof(i - 1, K), b = prof(i, K); add(M.concrete, beam([a[0], 0.2, a[2]], [b[0], 0.2, b[2]], 0.5, 0.4)); }
+    for (let i = 1; i < us.length; i++) { const a = prof(i - 1, K), b = prof(i, K); if ((a[0] + b[0]) / 2 > ent[0] - 0.4 && (a[0] + b[0]) / 2 < ent[1] + 0.4) continue; add(M.concrete, beam([a[0], 0.2, a[2]], [b[0], 0.2, b[2]], 0.5, 0.4)); } // (no curb across the entrance doorway)
     // entrance portal (paid door of the forecourt) : steel frame
     const e0 = [ent[0], plan.vFront(ent[0])], e1 = [ent[1], plan.vFront(ent[1])];
     for (const e of [e0, e1]) add(M.steel, beam([e[0], 0, e[1]], [e[0], 3.7, e[1]], 0.22));
