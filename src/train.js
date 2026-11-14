@@ -94,21 +94,18 @@ export class Train {
     this.interior = this.buildInterior();
     // ---- meshes
     this.buildMeshes(opts);
-    // pooled lights : 5 dyn lights inside R1, R2 (Bar), R3 (none inside opaque motrices)
+    // pooled lights : 1 dyn light per walkable passenger coach R1..R8
     const Lc = T.light;
     this.lights = [];
     for (const v of this.veh) {
-      if (!v.walkable) continue;
+      if (!v.walkable || v.kind.startsWith('motrice')) continue;
       const isBar = v.geoKind === 'coachR2' || v.kind === 'coachR2';
-      const offsets = isBar ? [0] : [-4.5, 4.5];
-      for (const du of offsets) {
-        this.lights.push({
-          veh: v, du, x: 0, y: this.railY + Lc.y, z: 0,
-          color: isBar ? (Lc.barColor ?? Lc.color) : Lc.color,
-          intensity: isBar ? (Lc.barIntensity ?? Lc.intensity) : Lc.intensity,
-          dist: Lc.dist, dyn: true,
-        });
-      }
+      this.lights.push({
+        veh: v, du: 0, x: 0, y: this.railY + Lc.y, z: 0,
+        color: isBar ? (Lc.barColor ?? Lc.color) : Lc.color,
+        intensity: isBar ? (Lc.barIntensity ?? Lc.intensity) : Lc.intensity,
+        dist: Lc.dist, dyn: true,
+      });
     }
     for (const l of this.lights) opts.lightSources?.push(l);
     this._dynBoxes = this.veh.map(() => ({ x: 0, z: 0, w: 0, d: T.width, rot: 0, h: this.railY + T.height }));
@@ -120,8 +117,11 @@ export class Train {
     this.onJoint = null; // (speed) => void : rail joint under the train (intro.js plays the clack)
   }
 
-  // ------------------------------------------------------------------ floor height (absolute) at walk coordinate u
-  floorAt(u) { const v = this.veh[this.moduleAt(u)]; return this.railY + floorOfCar(v.Q, u - v.uc); }
+  // ------------------------------------------------------------------ floor height (absolute) at walk coordinate (u, w, curY)
+  floorAt(u, w = 0, curY = null) {
+    const v = this.veh[this.moduleAt(u)], relY = curY != null ? curY - this.railY : null;
+    return this.railY + floorOfCar(v.Q, u - v.uc, w, relY);
+  }
 
   // ------------------------------------------------------------------ ride damage (v0.82.0) : windows, tail door, blood on the cab
   // window index : see winTable (car, side, k) ; side -1 left / +1 right
@@ -177,16 +177,20 @@ export class Train {
   }
   // cheap reach test (boarding, prompts) : within r m of the train body
   walkBounds(x, z, r = 6) { const o = this._wb || (this._wb = {}); this.worldToWalk(x, z, o); return o.w !== 99 && Math.abs(o.w) < r && o.u > -this.L / 2 - r && o.u < this.L / 2 + r; }
-  // collision lists around u : the car of u and its neighbours
-  walkLists(u, pass) {
-    const k = this.moduleAt(u), out = this._wl || (this._wl = []);
+  // collision lists around u : the car of u and its neighbours (lower vs upper Duplex deck selected by curY)
+  walkLists(u, pass, curY = null) {
+    const k = this.moduleAt(u), out = this._wl || (this._wl = []), upper = curY != null && (curY - this.railY) > 1.35;
     out.length = 0;
-    for (let i = Math.max(0, k - 1); i <= Math.min(this.n - 1, k + 1); i++) { const c = this.interior.byCoach[i]; if (!c) continue; out.push(c.boxes, pass ? c.wallsOpen : c.wallsClosed); }
+    for (let i = Math.max(0, k - 1); i <= Math.min(this.n - 1, k + 1); i++) {
+      const c = this.interior.byCoach[i];
+      if (!c) continue;
+      out.push(upper && c.boxesUpper ? c.boxesUpper : c.boxes, (pass && !upper) ? c.wallsOpen : c.wallsClosed);
+    }
     if (!out.length) out.push(this.interior.boxes, this.interior.wallsClosed);
     return out;
   }
   // floor under a world point inside a car (grenades), or null
-  walkFloorAt(x, z) { const o = this._wg || (this._wg = {}); this.worldToWalk(x, z, o); return o.w !== 99 && Math.abs(o.w) < this.walkCfg.wall && o.u > this.interior.u0 && o.u < this.interior.u1 ? this.floorAt(o.u) : null; }
+  walkFloorAt(x, z) { const o = this._wg || (this._wg = {}); this.worldToWalk(x, z, o); return o.w !== 99 && Math.abs(o.w) < this.walkCfg.wall && o.u > this.interior.u0 && o.u < this.interior.u1 ? this.floorAt(o.u, o.w) : null; }
   get dynKey() { return 'train' + this.id; }
 
   buildInterior() {
@@ -196,12 +200,23 @@ export class Train {
     const wo = W.wall, wt = W.wall + W.thick, gw = W.gangway / 2, pd = W.partitionDoor / 2, dw = T.doorWidth / 2;
     for (const v of this.veh) {
       if (!v.walkable) { all.byCoach[v.i] = null; continue; }
-      const Q = v.Q, c = { boxes: [], wallsClosed: [], wallsOpen: [] }, uc = v.uc, h = Q.h;
-      // seats, tables, bar counter, vestibule racks/bins
+      const Q = v.Q, c = { boxes: [], boxesUpper: Q.duplex ? [] : null, wallsClosed: [], wallsOpen: [] }, uc = v.uc, h = Q.h;
+      // lower/main deck seats, tables, stairwell dividers, vestibule racks, or motrice corridor/cockpit walls
       for (const b of Q.blocks) add(c.boxes, uc + b.u0, uc + b.u1, b.w0, b.w1);
-      // vestibule / bistro glass partitions (opening pd)
-      for (const u of Q.parts) { add(c.boxes, uc + u - 0.04, uc + u + 0.04, pd, wo); add(c.boxes, uc + u - 0.04, uc + u + 0.04, -wo, -pd); }
-      // ends : Jacobs gangway openings & bellows walls ; sealed bulkheads at R1 front and R3 rear
+      // upper deck seats, tables, bistro counter, stairwell guardrails
+      if (c.boxesUpper && Q.blocksUpper) {
+        for (const b of Q.blocksUpper) add(c.boxesUpper, uc + b.u0, uc + b.u1, b.w0, b.w1);
+      }
+      // vestibule / saloon glass partitions (opening pd, or right-only wing on Duplex coaches so left stairs & right lower ramp are open)
+      for (const u of Q.parts) {
+        if (Q.duplex) {
+          add(c.boxes, uc + u - 0.04, uc + u + 0.04, 1.05, wo);
+        } else {
+          add(c.boxes, uc + u - 0.04, uc + u + 0.04, pd, wo);
+          add(c.boxes, uc + u - 0.04, uc + u + 0.04, -wo, -pd);
+        }
+      }
+      // ends : Jacobs / inter-car gangway openings & bellows walls
       let lo = uc - h + 0.15, hi = uc + h - 0.15;
       for (const uE of Q.openEnds) {
         const e = Math.sign(uE);
@@ -210,10 +225,14 @@ export class Train {
       }
       if (Q.cab) {
         const ub = uc + Q.cab.u;
-        if (Q.cab.dir > 0) { add(c.boxes, ub - 0.1, uc + h + 0.6, -wt, wt); hi = ub - 0.15; all.cab.push({ u: ub - 0.1, text: Q.cab.text || 'Accès motrice — verrouillé' }); }
-        else { add(c.boxes, uc - h - 0.6, ub + 0.1, -wt, wt); lo = ub + 0.15; all.cab.push({ u: ub + 0.1, text: Q.cab.text || 'Accès motrice — verrouillé' }); }
+        if (!Q.cab.open) {
+          if (Q.cab.dir > 0) { add(c.boxes, ub - 0.1, uc + h + 0.6, -wt, wt); hi = ub - 0.15; all.cab.push({ u: ub - 0.1, text: Q.cab.text || 'Accès motrice — verrouillé' }); }
+          else { add(c.boxes, uc - h - 0.6, ub + 0.1, -wt, wt); lo = ub + 0.15; all.cab.push({ u: ub + 0.1, text: Q.cab.text || 'Accès motrice — verrouillé' }); }
+        } else if (Q.cab.text) {
+          all.cab.push({ u: ub + Q.cab.dir * 1.4, text: Q.cab.text });
+        }
       }
-      // side walls (closed ; open at platform-side plug doors)
+      // side walls (closed ; open at platform-side plug doors on lower/vestibule deck)
       const spans = Q.doors.map((d) => [uc + d - dw, uc + d + dw]).sort((a, b) => a[0] - b[0]);
       const ext0 = uc - h - (v.gRear || 0) / 2, ext1 = uc + h + (v.gFront || 0) / 2;
       for (const sd of [-1, 1]) {
@@ -390,13 +409,13 @@ export class Train {
         put(v, uD - dir * open * (T.doorWidth + 0.05), sd * (Wd - 0.03 + 0.07 * Math.min(1, open * 4)), sd > 0 ? 0 : Math.PI);
       }
     }
-    // sealed bulkhead doors (R1 front toward M1, R3 rear tailU forced by gangway zombies)
+    // cab / bulkhead doors (slid open when Q.cab.open, or forced by gangway zombies)
     const sxd = 0.90 / T.doorWidth, sydC = (2.00 - 0.02) / (T.doorH - 0.02);
     for (const v of this.veh) {
       if (!v.Q.cab) continue;
-      const dir = v.Q.cab.dir, ub = v.uc + v.Q.cab.u, tl = dir < 0 ? this.tail || 0 : 0;
+      const dir = v.Q.cab.dir, ub = v.uc + v.Q.cab.u, tl = v.Q.cab.open ? 1 : (dir < 0 ? this.tail || 0 : 0);
       const by = v.Q.cab.y ?? T.floor, dycC = by + 0.02 - (T.floor + 0.02) * sydC;
-      if (dir > 0) put(v, ub - 0.03, 0, Math.PI / 2, sxd, dycC, sydC);
+      if (dir > 0) put(v, ub - 0.03 - 0.06 * tl, tl * 0.84, Math.PI / 2 - 0.15 * tl, sxd, dycC, sydC);
       else put(v, ub + 0.03 + 0.06 * tl, tl * 0.86, -Math.PI / 2 + 0.25 * tl, sxd, dycC, sydC);
     }
     for (const im of this.leafMeshes) { im.count = k; im.instanceMatrix.needsUpdate = true; im.computeBoundingSphere(); }
@@ -501,9 +520,6 @@ export function installTrain(game, { world, hud }) {
       return { x: tmp.x, z: tmp.z };
     },
     // one step of a zombie inside the train ; returns { inRange, moving } (zombie.js plays the strike and the pose), or null (left the train).
-    // target may be null (nobody standing). v0.82.0 : the moving train (intro) : doors closed, a zombie inside chases its target in the frame,
-    // or waits in the aisle ; it leaves only by an open door. The states of the ride (run, hang, climb, gang : outside or coming in) are
-    // stepped by rideZombies.js (game.rideZombieStep).
     trainZombieStep(z, target, dt) {
       const O = z.onTrain;
       if (!O || O.v !== t) return null;
@@ -514,16 +530,27 @@ export function installTrain(game, { world, hud }) {
         for (const sp of t.interior.spans) { const d = Math.abs((sp[0] + sp[1]) / 2 - O.u); if (d < bd) { bd = d; best = (sp[0] + sp[1]) / 2; } }
         O.st = 'leave'; O.door = best;
       } else if ((tgtIn || !open) && O.st === 'leave') O.st = 'in';
+      const zUpper = (O.y - t.railY) > 1.35, tgtUpper = tgtIn ? (target.pos.y - t.railY) > 1.35 : false;
       // goal in (u, w)
       let gu, gw, aisle = false;
       if (O.st === 'enter') { gu = O.door; gw = 0; if (Math.abs(O.w) < W.wall - 0.2) O.st = 'in'; }
-      else if (O.st === 'leave') { gu = O.door; gw = Math.abs(O.u - O.door) > 0.35 ? 0 : t.doorSide * (W.outW + 0.3); aisle = Math.abs(O.u - O.door) > 0.35; }
+      else if (O.st === 'leave') {
+        if (zUpper) { const vc = t.veh[t.moduleAt(O.u)]; gu = vc.uc + (O.u >= vc.uc ? 5.65 : -5.65); gw = -0.88; }
+        else { gu = O.door; gw = Math.abs(O.u - O.door) > 0.35 ? 0 : t.doorSide * (W.outW + 0.3); aisle = Math.abs(O.u - O.door) > 0.35; }
+      }
       else if (!tgtIn) { gu = O.u; gw = 0; aisle = Math.abs(O.w) > 0.12; } // nobody to chase in the train : back to the aisle and wait
-      else { gu = loc2.u; gw = loc2.w; aisle = Math.abs(loc2.u - O.u) > 0.9; if (aisle) gw = 0; }
+      else if (zUpper !== tgtUpper && Math.abs(loc2.u - O.u) < 8.5) {
+        // Navigate Duplex stairs between lower and upper decks
+        const vc = t.veh[t.moduleAt(O.u)], sDir = O.u >= vc.uc ? 1 : -1;
+        if (zUpper) { gu = vc.uc + sDir * 5.65; gw = -0.88; }
+        else if (Math.abs(O.u - vc.uc) < 5.2 && O.w > -0.18) { gu = vc.uc + sDir * 5.65; gw = 0.20; }
+        else { gu = vc.uc + sDir * 3.55; gw = -0.88; }
+      }
+      else { gu = loc2.u; gw = loc2.w; aisle = Math.abs(loc2.u - O.u) > 0.9; if (aisle) gw = zUpper ? 0 : 0; }
       let du = gu - O.u, dw = gw - O.w;
-      if (aisle && Math.abs(O.w) > 0.12) { du = Math.sign(du) * Math.min(Math.abs(du), 0.35); dw = -O.w * 3; } // back to the aisle first (seats, partition doors, gangways : all open at w = 0)
+      if (aisle && Math.abs(O.w) > 0.12) { du = Math.sign(du) * Math.min(Math.abs(du), 0.35); dw = -O.w * 3; } // back to the aisle first
       const dl = Math.hypot(du, dw);
-      const inRange = !!tgtIn && O.st === 'in' && Math.hypot(target.pos.x - z.pos.x, target.pos.z - z.pos.z) < CONFIG.zombie.attackRange && Math.abs(target.pos.y - z.pos.y) < 2.4;
+      const inRange = !!tgtIn && O.st === 'in' && Math.hypot(target.pos.x - z.pos.x, target.pos.z - z.pos.z) < CONFIG.zombie.attackRange && Math.abs(target.pos.y - z.pos.y) < 1.35;
       if (!inRange && z.attackWindup >= 0 && !target) z.attackWindup = -1; // (its target fell : no blow in the air)
       let moving = false;
       if (!inRange && z.attackWindup < 0 && dl > 0.05) {
@@ -535,7 +562,7 @@ export function installTrain(game, { world, hud }) {
           const eu = pt.u - o.onTrain.u, ew = pt.w - o.onTrain.w, d = Math.hypot(eu, ew);
           if (d > 0 && d < 0.6) { pt.u += (eu / d) * (0.6 - d) * 0.5; pt.w += (ew / d) * (0.6 - d) * 0.25; }
         }
-        pushOut(t.walkLists(pt.u, O.st !== 'in'), pt, Z.radius);
+        pushOut(t.walkLists(pt.u, O.st !== 'in', O.y), pt, Z.radius);
         moving = Math.hypot(pt.u - O.u, pt.w - O.w) > sp * dt * 0.2;
         if (moving) { // face the way it walks (world)
           t.frame(pt.u, tmp);
@@ -547,7 +574,7 @@ export function installTrain(game, { world, hud }) {
         let d = Math.atan2(target.pos.x - z.pos.x, target.pos.z - z.pos.z) - z.yaw; d = Math.atan2(Math.sin(d), Math.cos(d)); z.yaw += d * Math.min(1, dt * 8);
       }
       const inside = Math.abs(O.w) < T.width / 2;
-      O.y += ((inside ? t.floorAt(O.u) : 0) - O.y) * Math.min(1, dt * 10);
+      O.y += ((inside ? t.floorAt(O.u, O.w, O.y) : 0) - O.y) * Math.min(1, dt * 10);
       t.walkToWorld(O.u, O.w, O.y, z.pos);
       z.group.rotation.set(0, z.yaw, 0);
       if (O.st === 'leave' && Math.abs(O.w) > W.outW) { z.onTrain = null; z.pos.y = 0; } // back on the platform (the station's floor region)

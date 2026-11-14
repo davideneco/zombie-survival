@@ -128,7 +128,9 @@ export const CONFIG = {
   player: {
     radius: 0.4,
     eye: 1.7,
+    crouchEye: 1.02,
     walkSpeed: 5,
+    crouchSpeed: 2.8,
     sprintSpeed: 8,
     jumpSpeed: 6.5,
     gravity: 20,
@@ -693,8 +695,8 @@ export const CONFIG = {
     margin: 6,                // m autour du plan : limite des collisions et de la grille de navigation
     navCell: 0.75,            // case de la grille de navigation de l'aire (m)
     navMaxCost: 2400,         // portée du champ de flux (coût : 10 par case, soit ~180 m)
-    playU: [-62, 62],         // quais jouables : de .. à .. (m le long des voies, depuis le milieu du bâtiment ; sous la halle)
-    crossingU: [-54, 52],     // passerelles en planches au-dessus des voies entre le quai 1 et le quai 2/3 (milieu, m), largeur crossingW (v0.80.0 : écartées pour le train à quai)
+    playU: [-98, 98],         // quais jouables : de .. à .. (m le long des voies, depuis le milieu du bâtiment ; couvre les 10 voitures du TGV Duplex)
+    crossingU: [-93.5, 93.5], // passerelles en planches au-dessus des voies entre le quai 1 et le quai 2/3 (milieu, m), au-delà des deux motrices M1 et M2
     crossingW: 4.5,
     hall: { u0: -28, u1: 26, height: 13 },       // salle des pas perdus (u, hauteur sous plafond)
     building: { wing: 15.5, pavilion: 18.5, center: 23, roof: 5.5 },  // hauteurs : corniche des ailes, pavillons d'angle, pavillon central, toit
@@ -726,49 +728,50 @@ export const CONFIG = {
     stationClip: { u: 230, v0: -140 },                    // station frame : tracks with |u| < u and v0 < v < (track-side wall) are drawn by gare/build.js
     // the quai 1 track of the SNCF shapes runs ~0.85 m too close to the OSM platform edge (a train would overlap the platform) : the route is moved
     // sideways so a coach side is `gap` m from the edge, with a smooth ramp in : u from blendIn[0] to blendIn[1], out : u from blendOut[0] to blendOut[1]
-    route: { gap: 0.2, blendIn: [-170, -110], blendOut: [75, 150], extendTo: 235 },
+    route: { gap: 0.2, blendIn: [-200, -100], blendOut: [100, 175], extendTo: 235 },
     // embankment of the approach (v0.88.0) : the track stands `drop` m above the fields (slope `slope` m wide beyond the ballast shoulder) ; it eases out
     // toward the station (rampOut m before the station clip, ending `endBefore` m short of it). Bridges (rideland.json) : the deck keeps the ground
     // low beyond its sides (floor level `drop` below), girders `girder` m high above the rail bed
     embank: { drop: 2.2, slope: 12, rampOut: 420, endBefore: 30, girder: 1.0, deckMin: 3.7 },
   },
 
-  // ------------------------------------------------------------------ SNCF TGV POS / Réseau (Carmillon / inOui, 5 vehicles: M1 + R1 + R2[Bar] + R3 + M2)
-  // Condensed single-deck 2M+3R consist fitting Quai 1 between both timber footbridges ([-51.75, +49.75]). Lengths in m; heights above rail head.
+  // ------------------------------------------------------------------ SNCF TGV Duplex / Euroduplex 2N2 (Carmillon / inOui, 10 vehicles: 2 Motrices + 8 Remorques Duplex)
+  // Full 10-car double-decker consist: M1 + R1..R3 (1re cl. Duplex) + R4 (Voiture Bar Duplex) + R5..R8 (2nde cl. Duplex) + M2. Walkable lower & upper decks + M1/M2 driver's cabs.
   train: {
-    cars: [19.4, 19.0, 18.7, 19.0, 19.4],          // M1 (motrice), R1 (1re cl.), R2 (Bar), R3 (2nde cl.), M2 (motrice)
-    gaps: [0.60, 0.45, 0.45, 0.60],                // M1-R1 coupler (0.60), R1-R2 & R2-R3 Jacobs (0.45), R3-M2 coupler (0.60) -> L = 97.60 m
-    gap: 0.45,                                     // fallback scalar
-    kinds: ['motrice', 'coachR1', 'coachR2', 'coachR3', 'motrice'],
-    width: 2.9, height: 4.1, ceil: 3.16,           // body width, outer roof, inner ceiling (2.08 m saloon headroom)
-    floor: 0.80, floorHigh: 1.08,                  // vestibule stepwell (0.80 m = +0.065 m above quai 1), saloon & Jacobs gangways (1.08 m)
-    motriceBogies: [4.90, 3.00],                   // M1: [from nose to front motor bogie (pf = +4.80), from rear wall to rear motor bogie (pb = -6.70)]
-    coachOuterBogie: 3.00,                         // R1 front (pf = +6.50) / R3 rear (pb = -6.50) outer trailer bogie offset from outer coach end
+    cars: [18.2, 17.2, 17.2, 17.2, 17.2, 17.2, 17.2, 17.2, 17.2, 18.2], // 2 motrices (M1, M2) + 8 voitures Duplex (R1..R8) -> L = 177.76 m
+    gaps: [0.55, 0.38, 0.38, 0.38, 0.38, 0.38, 0.38, 0.38, 0.55],       // M1-R1 coupler (0.55), R1..R8 Jacobs bogies (0.38), R8-M2 coupler (0.55)
+    gap: 0.38,                                     // fallback scalar
+    kinds: ['motrice', 'coachR1', 'coachR1', 'coachR1', 'coachR2', 'coachR3', 'coachR3', 'coachR3', 'coachR3', 'motrice'],
+    width: 3.48, height: 4.38, ceil: 4.18,         // spacious Duplex width (3.48 m), outer roof (4.38 m), upper-deck ceiling (4.18 m)
+    floorLow: 0.36, floor: 0.80, floorHigh: 0.94, floorUpper: 2.26, // lower deck (0.36 m), vestibule (0.80 m), gangway (0.94 m), upper deck (2.26 m)
+    motriceBogies: [4.60, 2.80],                   // M1/M2 motor bogie offsets
+    coachOuterBogie: 2.80,                         // R1 front / R8 rear outer trailer bogie offset
     bogieWb: 3.0,                                  // axle wheelbase of motor & trailer/Jacobs bogies (m)
-    noseBogie: 4.90,                               // legacy alias
-    doorWidth: 1.10, doorH: 2.05,                  // TGV recessed plug door width & height above vestibule stepwell floor
-    layout: { bulkhead: 0.65, step: 0.60, vestibule: 2.05, bay1: 2.35, bay2: 2.04, bay: 2.04, taper: 5.60 },
-    winY: [1.88, 2.84],                            // saloon window sill and head above the rail head
+    noseBogie: 4.60,                               // legacy alias
+    doorWidth: 1.15, doorH: 2.08,                  // TGV Duplex recessed plug door width & height above vestibule floor
+    layout: { bulkhead: 0.65, step: 0.60, vestibule: 1.95, bay1: 2.15, bay2: 1.88, bay: 1.88, taper: 5.40 },
+    winY: [1.04, 1.78],                            // lower-deck saloon window sill and head above the rail head
+    winYUpper: [2.92, 3.68],                       // upper-deck saloon window sill and head above the rail head
     number: '9572',
-    park: { headU: 47.8 },                         // parked : nose at u ∈ [47.8, 48.8] (snaps to 48.12), tail at -49.48 inside [-51.75, +49.75]
+    park: { headU: 89.0 },                         // parked : nose at u ≈ +89.0 m, tail at u ≈ -88.8 m between crossings [-93.5, +93.5]
     // walking inside (same fields as tram.walk) : radius, side walls at `wall` m from the axis (thickness thick), gangway opening, partition door ;
     // doors pass when open past doorOpen and slower than boardSpeed m/s ; board : push against an open door from up to boardW m off the axis
     // (the platform edge is gap + width / 2 away), or interact within boardReach ; step off past exitW (put down outW m off the axis, on the platform)
-    walk: { radius: 0.3, wall: 1.32, thick: 0.12, gangway: 1.25, partitionDoor: 1.05, doorOpen: 0.6, boardSpeed: 0.5, boardW: 2.35, boardPush: 0.8, boardReach: 2.6, exitW: 1.55, outW: 2.25, enterEase: 9, cabReach: 2.0 },
+    walk: { radius: 0.3, wall: 1.62, thick: 0.12, gangway: 1.32, partitionDoor: 1.12, doorOpen: 0.6, boardSpeed: 0.5, boardW: 2.68, boardPush: 0.8, boardReach: 2.8, exitW: 1.84, outW: 2.58, enterEase: 10, cabReach: 2.0 },
     // zombies of the station board a parked train with open doors : they reach the door spot (doorSpot m outside the body), step in, then walk the aisle
     zombie: { radius: 0.3, doorSpot: 0.75, enter: 1.0, speedK: 0.9 },
-    light: { color: 0xd0e2ff, barColor: 0xffe6c4, intensity: 1.25, barIntensity: 1.35, dist: 12.5, y: 2.55 },   // pooled coach lights (R1..R3 only)
+    light: { color: 0xd0e2ff, barColor: 0xffe6c4, intensity: 1.25, barIntensity: 1.35, dist: 13.5, y: 2.65 },   // pooled coach lights
     flicker: { hz: 9, rate: 0.35 },              // the faulty LED strips : flicker frequency, share of time off
     // camera sway of a player standing in the moving train (local only) : roll (deg) and bob (m) at full speed (refSpeed m/s), frequency (Hz) ;
     // curve : extra roll (deg) per m/s² of lateral acceleration ; jolt : bob kick (m) at each rail joint (joint m apart, axle and bogie spacing in m)
-    sway: { roll: 0.4, bob: 0.015, hz: 1.4, refSpeed: 22, curve: 0.35, jolt: 0.006, joint: 25, axle: 3.0, bogie: 19.0 },
+    sway: { roll: 0.4, bob: 0.015, hz: 1.4, refSpeed: 22, curve: 0.35, jolt: 0.006, joint: 25, axle: 3.0, bogie: 17.6 },
   },
 
   // ------------------------------------------------------------------ Procedural audio (src/audio.js, src/ambience.js) : volumes (0..1 of the bus), intervals (s), ranges (m)
   audio: {
     // footsteps (Sfx.step, player.js) : one step per half bob cycle ; surface = stone (cobble) | wood (interior, upper floor) | metal (train, tram) | concrete (station)
     step: {
-      vol: 0.3, sprintMul: 1.35, downedMul: 0.4,           // base volume, x when sprinting, x when crawling
+      vol: 0.3, sprintMul: 1.35, crouchMul: 0.45, downedMul: 0.4, // base volume, x when sprinting, x when crouched, x when crawling
       surfaces: { stone: { vol: 1, pitch: 1 }, wood: { vol: 1.1, pitch: 0.8 }, metal: { vol: 0.9, pitch: 1.3 }, concrete: { vol: 0.85, pitch: 1.05 } },
     },
     // ambience mixer (ambience.js) : update period, cross-fade time between the city, the station and the train ride, level while the game is paused
@@ -815,8 +818,8 @@ export const CONFIG = {
     graceAfter: 10,               // s : the same HP floor still holds after round 1 starts (spawn protection : an idle player is not killed the instant the ride ends) ; then zombies kill normally
     fog: 0.5, far: 320,           // fog density x fog during the ride (the landscape is the show), camera far plane (m) ; restored at the stop
     hour: 4.9, hourEnd: 5.75,     // night turning to dawn : the game clock is held on a slow ramp from hour to hourEnd over the ride (auto day / night : the cycle resumes from it)
-    slots: [[1, -1.2], [2, 1.5], [2, -1.5], [3, 1.2]],   // [car (1=R1, 2=R2, 3=R3), u from the car centre] of the player slots (the aisle) ; late joiners : R2
-    lateCoach: 2,
+    slots: [[3, -1.2], [4, 1.5], [4, -1.5], [5, 1.2]],   // [car (3=R3, 4=R4 Bar, 5=R5), u from the car centre] of the player slots ; late joiners : R4 Bar
+    lateCoach: 4,
     corridor: 60,                 // m : points this close to the route (outside the island) belong to the station area (drawn while riding)
     sync: 0.5,                    // s between two tn_sync of the host
     nudge: 2,                     // 1/s : a client's τ converges toward the host τ (+ half the ping) ; snaps past 1 s of error
@@ -1098,6 +1101,7 @@ CONFIG.keybinds = [
   { id: 'right', group: 'Déplacement', label: 'Aller à droite', def: 'code:KeyD', kind: 'code', ctx: 'all', alt: 'ArrowRight' },
   { id: 'sprint', group: 'Déplacement', label: 'Sprint', def: 'code:ShiftLeft', kind: 'code', ctx: 'all' },
   { id: 'jump', group: 'Déplacement', label: 'Sauter · enjamber · frein à main (moto) · frein (vélo) · frein d\'urgence (tram)', def: 'code:Space', kind: 'code', ctx: 'all' },
+  { id: 'crouch', group: 'Déplacement', label: 'S\'accroupir (maintenir ou basculer)', def: 'code:ControlLeft', kind: 'code', ctx: 'foot', alt: 'KeyC' },
   { id: 'reload', group: 'Combat', label: 'Recharger', def: 'key:r', kind: 'key', ctx: 'all' },
   { id: 'weapon1', group: 'Combat', label: 'Arme 1', def: 'code:Digit1', kind: 'code', ctx: 'all' },
   { id: 'weapon2', group: 'Combat', label: 'Arme 2', def: 'code:Digit2', kind: 'code', ctx: 'all' },

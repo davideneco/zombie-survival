@@ -1303,6 +1303,7 @@ const game = {
       pap: p.curW.pap | 0,                                           // niveau du Pack-a-Punch (0 à 3) : couleur et accessoires chez les coéquipiers
       rl: p.curW.reloading ? 1 : 0,
       ads: p.aiming ? 1 : 0,
+      cr: p.crouching ? 1 : 0,
       vt: p.vault ? Math.round(Math.min(1, p.vault.t / p.vault.dur) * 100) / 100 : 0, // progression de l'enjambement (animation des coéquipiers)
       fh: this.fanalHold ? 1 : 0,                                   // Fanal d'Erwin : je maintiens la touche (Acte V)
       mc: p.mc,                                                     // coups de couteau donnés (les coéquipiers animent leur avatar)

@@ -501,19 +501,22 @@ export class Avatar {
       this.hips.position.y = 0.92; this.torsoG.position.y = 0.93;
       this.torsoG.rotation.x = s.seat === 1 ? -0.36 : -0.18;
     } else {
-      // marche : balancement des jambes selon la vitesse réelle
+      // marche : balancement des jambes selon la vitesse réelle (+ flexion accroupie si s.crouching)
+      const cr = s.crouching && !s.downed ? 1 : 0;
+      this.crouch = (this.crouch || 0) + (cr - (this.crouch || 0)) * Math.min(1, dt * 10);
+      const c = this.crouch;
       const sp = Math.min(8, s.speed);
       this.walk += dt * (sp > 0.2 ? 3 + sp * 1.25 : 0);
-      const amp = Math.min(1, sp / 4) * 0.65;
+      const amp = Math.min(1, sp / 4) * 0.65 * (1 - 0.35 * c);
       const sw = Math.sin(this.walk) * amp * (s.fwd < -0.5 ? -1 : 1);
-      this.legs[0].hip.rotation.x = sw; this.legs[1].hip.rotation.x = -sw;
-      this.legs[0].knee.rotation.x = -Math.max(0, -Math.sin(this.walk + 0.9)) * amp * 1.1;
-      this.legs[1].knee.rotation.x = -Math.max(0, Math.sin(this.walk + 0.9)) * amp * 1.1;
-      // buste : léger rebond, penché en sprint
+      this.legs[0].hip.rotation.x = sw + c * 1.15; this.legs[1].hip.rotation.x = -sw + c * 1.15;
+      this.legs[0].knee.rotation.x = -Math.max(0, -Math.sin(this.walk + 0.9)) * amp * 1.1 - c * 1.35;
+      this.legs[1].knee.rotation.x = -Math.max(0, Math.sin(this.walk + 0.9)) * amp * 1.1 - c * 1.35;
+      // buste : léger rebond, penché en sprint ou accroupi
       const bob = Math.abs(Math.sin(this.walk)) * 0.025 * (amp > 0.05 ? 1 : 0);
-      this.torsoG.position.y = 0.93 + bob;
-      this.hips.position.y = 0.92 + bob;
-      this.torsoG.rotation.x = -Math.min(0.2, sp * 0.02);
+      this.torsoG.position.y = 0.93 + bob - c * 0.36;
+      this.hips.position.y = 0.92 + bob - c * 0.36;
+      this.torsoG.rotation.x = -Math.min(0.2, sp * 0.02) - c * 0.16;
     }
     // visée : épaules, tête
     const pitch = s.pitch || 0;

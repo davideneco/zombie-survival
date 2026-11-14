@@ -94,7 +94,11 @@ export function planGare(gare, rail) {
     [northEdge, pavFront - 1.5], [northEdge, 76], [104, 80], [90, 96], [42, 122], [-46, 124], [-66, 116], [-112, 56], [-110, pavFront],
     [verU0, pavFront], ...verFront.slice(1, -1), [verU1, pavFront],
   ];
-  const q1Poly = [...q1W.map(([u, v]) => [u, v]), [pu1, body.v0], [pu0, body.v0]];
+  const vBack = (u) => (u < -64.6 ? -17.1 : u > 63.0 ? -16.6 : body.v0);
+  const q1Back = pu0 < -64.6 && pu1 > 63.0
+    ? [[pu0, -17.1], [-64.6, -17.1], [-64.6, body.v0], [63.0, body.v0], [63.0, -16.6], [pu1, -16.6]]
+    : [[pu0, body.v0], [pu1, body.v0]];
+  const q1Poly = [...q1W.map(([u, v]) => [u, v]), ...q1Back.slice().reverse()];
   const q23Poly = [...q23W, ...q23E.slice().reverse()];
   const crossings = cUs.map((cU) => [[cU - cW / 2, at(q1W, cU - cW / 2) + 0.05], [cU - cW / 2, at(q23E, cU - cW / 2) - 0.05], [cU + cW / 2, at(q23E, cU + cW / 2) - 0.05], [cU + cW / 2, at(q1W, cU + cW / 2) + 0.05]]);
 
@@ -124,13 +128,13 @@ export function planGare(gare, rail) {
   const rearDoors = [[cMid - 13, cMid - 8.5], [cMid + 8.5, cMid + 13]];
   const arches = [[cMid - 9.5, cMid - 4.5], [cMid - 2.5, cMid + 2.5], [cMid + 4.5, cMid + 9.5]];
   const EDGE_H = 0.4, WALL_H = Infinity;
-  polyline([[pu0, body.v0], [pu1, body.v0]], WALL_H, 'wall', rearDoors);                    // building wall along quai 1
+  polyline(q1Back, WALL_H, 'wall', rearDoors);                                             // building & annex wall along quai 1
   polyline(q1W, EDGE_H, 'edge', cGaps);                                                    // quai 1 edge (track bed beyond)
   polyline(q23E, EDGE_H, 'edge', cGaps);                                                   // quai 2/3, east edge
   polyline(q23W, EDGE_H, 'edge');                                                          // quai 2/3, west edge
   for (const cU of cUs) for (const s of [-1, 1]) seg([cU + s * cW / 2, at(q1W, cU + s * cW / 2)], [cU + s * cW / 2, at(q23E, cU + s * cW / 2)], 1.1, 'edge'); // railings of the plank footbridges
   for (const u of [pu0, pu1]) { // platform ends : barricades
-    seg([u, body.v0], [u, at(q1W, u)], 1.3, 'barrier');
+    seg([u, vBack(u)], [u, at(q1W, u)], 1.3, 'barrier');
     seg([u, at(q23E, u)], [u, at(q23W, u)], 1.3, 'barrier');
   }
   seg([H.u0, body.v0], [H.u0, body.v1], WALL_H, 'wall');   // hall partitions (the wings are closed)
@@ -182,7 +186,7 @@ export function planGare(gare, rail) {
   // ---------------------------------------------------------------- lights (pooled point lights : realworld.js keeps the nearest ones)
   const lights = [];
   const sp = G.shed;
-  for (let u = pu0 + 6; u <= pu1 - 4; u += 16) { lights.push({ l: [u, (body.v0 + at(q1W, u)) / 2], y: 5.2, color: 0xffb060, intensity: 10, dist: 16 }); lights.push({ l: [u + 8, (at(q23E, u + 8) + at(q23W, u + 8)) / 2], y: 5.2, color: 0xffa858, intensity: 9, dist: 16 }); }
+  for (let u = pu0 + 6; u <= pu1 - 4; u += 16) { lights.push({ l: [u, (vBack(u) + at(q1W, u)) / 2], y: 5.2, color: 0xffb060, intensity: 10, dist: 16 }); lights.push({ l: [u + 8, (at(q23E, u + 8) + at(q23W, u + 8)) / 2], y: 5.2, color: 0xffa858, intensity: 9, dist: 16 }); }
   lights.push({ l: [cMid - 12, 0], y: 9, color: 0xffc27a, intensity: 14, dist: 22 }, { l: [cMid + 12, 0], y: 9, color: 0xffc27a, intensity: 14, dist: 22 });
   for (let u = verU0 + 12; u <= verU1 - 12; u += 24) lights.push({ l: [u, body.v1 + 3], y: 1.2, color: 0x9ec8ff, intensity: 7, dist: 14 }); // cold LED uplights
   for (const [u, v] of [[-60, 70], [-20, 100], [30, 104], [70, 80], [100, 40], [60, 45], [-40, 50], [-90, 30]]) lights.push({ l: [u, v], y: 6.5, color: 0xffa040, intensity: 9, dist: 20, post: true }); // street lamps

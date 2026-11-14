@@ -134,6 +134,7 @@ export class RemotePlayer {
     this.aiming = !!s.ads;
     this.downed = !!s.downed;
     this.dead = !!s.dead;
+    this.crouching = !!s.cr;
     if (s.mc != null) { if (this.mc != null && s.mc !== this.mc && !this.downed) this.avatar.stab(); this.mc = s.mc; } // coup de couteau
     this.fh = s.fh | 0;                  // maintient la touche d'interaction au Fanal d'Erwin (Acte V)
     this.vt = +s.vt || 0;                // progression de l'enjambement (0 : à plat)
@@ -209,13 +210,13 @@ export class RemotePlayer {
     const fwd = -(this.vel.x * Math.sin(ya) + this.vel.z * Math.cos(ya)); // -z = avant
     const isDown = this.downed || this.dead;
     this.avatar.setWeapon(this.weapon, this.pap);
-    this.avatar.update({ dt, speed: isDown ? 0 : speed, fwd, pitch: this.pitch, reloading: this.reloading, aiming: this.aiming, fire: this.fireNext });
+    this.avatar.update({ dt, speed: isDown ? 0 : speed, fwd, pitch: this.pitch, reloading: this.reloading, aiming: this.aiming, crouching: this.crouching, downed: isDown, fire: this.fireNext });
     this.fireNext = false;
     // à terre : allongé sur le dos
     this.group.rotation.x += ((isDown ? -Math.PI / 2 : 0) - this.group.rotation.x) * k;
     this.group.position.y += isDown ? 0.25 : 0;
     if (this.vt > 0) this.group.position.y += 0.55 * Math.sin(Math.PI * Math.min(1, this.vt)); // enjambement : l'avatar passe par-dessus
-    this.tag.position.y = isDown ? 0.9 : 2.2;
+    this.tag.position.y = isDown ? 0.9 : this.crouching ? 1.82 : 2.2;
     this.tag.visible = true;
     this.updateMarks(dt, view);
   }

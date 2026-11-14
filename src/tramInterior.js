@@ -116,9 +116,9 @@ export function installTramWalk(game, { world, hud, sfx }) {
       pt.u = O.u + (p.vel.x * f1.tx + p.vel.z * f1.tz) * dt;
       pt.w = O.w + (-p.vel.x * f1.tz + p.vel.z * f1.tx) * dt;
       const pass = t.walkOpen();
-      pushOut(t.walkLists ? t.walkLists(pt.u, pass) : [I.boxes, pass ? I.wallsOpen : I.wallsClosed], pt, Wc.radius);
-      const out = Math.abs(pt.w) > Wc.exitW;
-      if (out && pass && doorIndexAt(I, pt.u, -Wc.radius * 0.5) >= 0) { // dans l'ouverture : on descend
+      pushOut(t.walkLists ? t.walkLists(pt.u, pass, O.y) : [I.boxes, pass ? I.wallsOpen : I.wallsClosed], pt, Wc.radius);
+      const out = Math.abs(pt.w) > Wc.exitW, canExit = pass && (!t.isTrain || (O.y - (t.railY || 0)) < 1.35);
+      if (out && canExit && doorIndexAt(I, pt.u, -Wc.radius * 0.5) >= 0) { // dans l'ouverture : on descend
         O.u = pt.u; O.w = pt.w; this.tramStepOut(p, t);
         return;
       }
@@ -130,7 +130,7 @@ export function installTramWalk(game, { world, hud, sfx }) {
         this.tramMoveWarn(p, t);
       }
       O.u = pt.u; O.w = pt.w;
-      const floor = t.floorAt ? t.floorAt(O.u) : t.floorY ?? T.car.floor; // (the train : raised floors over the bogies)
+      const floor = t.floorAt ? t.floorAt(O.u, O.w, O.y) : t.floorY ?? T.car.floor; // (the train : Duplex lower/upper decks, stairs, raised gangways)
       O.y += (floor - O.y) * Math.min(1, dt * Wc.enterEase);
       if (Math.abs(floor - O.y) < 0.002) O.y = floor;
       t.walkToWorld(O.u, O.w, O.y, tmp);
@@ -187,11 +187,12 @@ export function installTramWalk(game, { world, hud, sfx }) {
     },
 
     // pose le joueur debout dans la rame t à (u, w) (menu debug : téléportation de l'hôte près d'un coéquipier), à la case libre la plus proche
-    placeInTram(t, u, w) {
+    placeInTram(t, u, w, deck = 0) {
       const p = this.player, I = t.interior, Wc = t.walkCfg || W;
       pt.u = Math.max(I.u0 ?? -I.uEnd, Math.min(I.u1 ?? I.uEnd, u)); pt.w = w;
-      const floor = t.floorAt ? t.floorAt(pt.u) : t.floorY ?? T.car.floor;
-      pushOut(t.walkLists ? t.walkLists(pt.u, false) : [I.boxes, I.wallsClosed], pt, Wc.radius);
+      const hintY = deck > 0 ? (t.railY || 0) + (CONFIG.train?.floorUpper ?? 2.26) : null;
+      const floor = t.floorAt ? t.floorAt(pt.u, pt.w, hintY) : t.floorY ?? T.car.floor;
+      pushOut(t.walkLists ? t.walkLists(pt.u, false, floor) : [I.boxes, I.wallsClosed], pt, Wc.radius);
       t.frame(pt.u, f1);
       p.onTram = { v: t, u: pt.u, w: pt.w, y: floor, fy: f1.yaw };
       p.vehicle = null; p.vel.set(0, 0, 0); p.vy = 0; p.wasGrounded = true; p.region = t.walkRegion || 0;

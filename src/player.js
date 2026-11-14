@@ -92,6 +92,7 @@ export class Player {
     this.meleeT = -1; this.meleeHit = true; this.nextMelee = 0; this.lunge = null; // couteau (voir melee)
     this.hasAxe = false; this.pullQ = null; this.gustQ = null; // Hache du Bourreau (récompense de la finale) ; attirance des Chaînes
     this.vault = null; this.vaultCd = 0; this.vaultReady = false; // enjambement (voir tryVault)
+    this.crouching = false; this.crouchToggle = false; this.crouchK = 0; this._crouchDownAt = 0;
     this.ride?.reset();
 
     // Inventaire d'armes
@@ -264,6 +265,7 @@ export class Player {
       else if (this.onTram?.v.isTram && B.is('tramDoors', e)) this.game.tramDoors?.();
       else if (B.is('knife', e)) this.melee(this.game.time); // à pied : couteau
       else if (B.is('deploy', e)) this.game.deployKey?.(); // barricade de fortune : acheter / poser (barricades.js)
+      if (!this.vehicle && (B.is('crouch', e) || e.code === 'KeyC' || e.code === 'ControlRight')) this._crouchDownAt = performance.now();
       if (B.isBound(e)) e.preventDefault(); // Espace (défilement), Tab, flèches : le navigateur ne doit pas réagir à une touche du jeu
       if (this.locked) return; // arme dans le Pack-a-Punch
       if (B.is('weapon1', e)) this.switchWeapon(0);
@@ -279,6 +281,12 @@ export class Player {
       this.keys[e.code] = false;
       const k = letter(e);
       if (k) this.keys['letter:' + k] = false;
+      const B = this.game.binds;
+      if (!this.vehicle && (B?.is('crouch', e) || e.code === 'KeyC' || e.code === 'ControlRight') && this._crouchDownAt > 0) {
+        if (performance.now() - this._crouchDownAt < 220) this.crouchToggle = !this.crouchToggle;
+        else this.crouchToggle = false;
+        this._crouchDownAt = 0;
+      }
     });
     window.addEventListener('wheel', (e) => {
       if (!this.game.playing || this.locked || this.game.chat?.open) return; // pendant la saisie, la molette fait défiler le chat
@@ -394,6 +402,7 @@ export class Player {
     let moving = false, sprinting = false, onGround = true;
     if (veh) {
       // sur une moto : le joueur suit la selle (la moto est simulée par Vehicle) et sa vue tourne avec elle
+      this.crouching = false; this.crouchToggle = false;
       veh.v.hipWorld(veh.seat, this._v);
       this.pos.set(this._v.x, veh.v.pos.y, this._v.z);
       this.vel.set(0, 0, 0);
@@ -406,9 +415,12 @@ export class Player {
       let mz = (B.down('forward', K) ? 1 : 0) - (B.down('back', K) ? 1 : 0);
       if (this.vault || this.game.camLock) { mx = 0; mz = 0; } // enjambement en cours : le chemin est imposé ; vue orbitale de l'Aube : immobile
       moving = (mx !== 0 || mz !== 0) && !this.dead;
-      sprinting = !this.downed && B.down('sprint', K) && mz > 0 && !this.aiming;
+      const crouchHeld = B.down('crouch', K) || !!K.ControlRight;
+      if (this.downed || this.dead || this.vault || (B.down('sprint', K) && mz > 0 && !crouchHeld) || B.down('jump', K)) this.crouchToggle = false;
+      this.crouching = (crouchHeld || this.crouchToggle) && !this.downed && !this.dead && !this.vault && !this.game.camLock;
+      sprinting = !this.downed && !this.crouching && B.down('sprint', K) && mz > 0 && !this.aiming;
       const stamin = this.perks.staminup ? 1.3 : 1;
-      let speed = this.downed ? 1.2 : (sprinting ? P.sprintSpeed * stamin : P.walkSpeed * (this.perks.staminup ? 1.1 : 1));
+      let speed = this.downed ? 1.2 : this.crouching ? (P.crouchSpeed || 2.8) * (this.perks.staminup ? 1.15 : 1) : (sprinting ? P.sprintSpeed * stamin : P.walkSpeed * (this.perks.staminup ? 1.1 : 1));
       if (this.superSpeed) speed *= 2.2;
       if (this.aiming && !this.downed) speed *= 0.6;
       if (moving) { const l = Math.hypot(mx, mz); mx /= l; mz /= l; }
@@ -527,10 +539,13 @@ export class Player {
 
     // ---- caméra ----
     this.recoil *= Math.max(0, 1 - dt * 8);
-    this.bobT += dt * (sprinting ? 12 : 8) * (moving && onGround ? 1 : 0);
+    this.crouchK = (this.crouchK || 0) + ((this.crouching ? 1 : 0) - (this.crouchK || 0)) * Math.min(1, dt * 12);
+    this.bobT += dt * (sprinting ? 12 : this.crouching ? 5.6 : 8) * (moving && onGround ? 1 : 0);
     if (moving && onGround) { const n = Math.floor(this.bobT / Math.PI); if (n !== this._stepN) { this._stepN = n; this.footstep(sprinting); } } // one footfall per half bob cycle
-    const bob = moving && onGround ? Math.sin(this.bobT) * (sprinting ? 0.06 : 0.035) : 0;
-    const eyeH = (this.downed ? 0.55 : P.eye) + (this.vault ? CONFIG.vault.camLift * Math.sin(Math.PI * Math.min(1, this.vault.t / this.vault.dur)) : 0);
+    const bob = moving && onGround ? Math.sin(this.bobT) * (sprinting ? 0.06 : this.crouching ? 0.018 : 0.035) : 0;
+    const standEye = P.eye - (P.eye - (P.crouchEye || 1.02)) * this.crouchK;
+    const eyeH = (this.downed ? 0.55 : standEye) + (this.vault ? CONFIG.vault.camLift * Math.sin(Math.PI * Math.min(1, this.vault.t / this.vault.dur)) : 0);
+    this.eyeH = eyeH;
     let sh = this.game.shake || 0;
     let ex = this.pos.x, ey = this.pos.y + eyeH + bob, ez = this.pos.z;
     const sway = !veh && this.onTram ? this.onTram.v.sway : null; // standing in the moving train (train.js, v0.81.0) : roll and bob, local look
@@ -549,7 +564,7 @@ export class Player {
     // ---- animation de l'arme ----
     this.kick *= Math.max(0, 1 - dt * 14);
     const a = this.aim;
-    let x = 0.22 * (1 - a), y = -0.22 + 0.06 * a, z = -0.45 + 0.05 * a;
+    let x = 0.22 * (1 - a), y = -0.22 + 0.06 * a - 0.018 * this.crouchK * (1 - a), z = -0.45 + 0.05 * a + 0.012 * this.crouchK * (1 - a);
     let rx = this.kick * (cfg.type === 'launcher' ? 0.45 : cfg.type === 'shotgun' || cfg.type === 'semi' ? 0.22 : 0.12);
     if (w.reloading) {
       const p = w.reloadT / cfg.reloadTime;
@@ -802,7 +817,7 @@ export class Player {
 
     // Raycast(s)
     this.camera.updateMatrixWorld(true);
-    const mul = (this.aiming ? (cfg.adsFov ? 0.05 : 0.4) : 1) * (moving ? 1.8 : 1);
+    const mul = (this.aiming ? (cfg.adsFov ? 0.05 : 0.4) : 1) * (moving ? 1.8 : 1) * (this.crouching ? 0.7 : 1);
     if (cfg.type === 'launcher') { this.fireLauncher(cfg, mul); return; }
     // origine visuelle des traçantes : la bouche de l'arme (de la vue, ou du personnage en vue externe)
     const origin = this.shotOrigin(ext);
@@ -936,7 +951,7 @@ export class Player {
   }
   footstep(sprinting) {
     const A = CONFIG.audio.step;
-    this.game.sfx.step?.(this.surface(), (sprinting ? A.sprintMul : 1) * (this.downed ? A.downedMul : 1));
+    this.game.sfx.step?.(this.surface(), (sprinting ? A.sprintMul : this.crouching ? (A.crouchMul || 0.45) : 1) * (this.downed ? A.downedMul : 1));
   }
   onLand(air, drop) {
     const F = CONFIG.phd;
