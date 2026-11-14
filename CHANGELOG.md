@@ -2,6 +2,14 @@
 
 Chaque changement est poussé sur `main` (déploiement Render) avec un nouveau numéro de version et sa description ici.
 
+## v0.98.2 (2026-11-14)
+- **On ne peut plus tirer à travers les trains, ni blesser à travers les murs ; les premières portes de la gare s'ouvrent jusqu'au sol.**
+  - Tirs : `Collision.rayHit` ne testait jamais les boîtes dynamiques (trains, trams), donc les balles les traversaient. Les tirs, les cartouches et les explosions les testent maintenant (option `withDyn`). Le rayon de la caméra et la construction du monde les ignorent toujours. Un tireur à l'intérieur d'une voiture tire toujours vers l'extérieur ; un zombie dans un train ne peut plus être touché de l'extérieur.
+  - Explosions : grenades et obus blessaient les zombies et le lanceur à travers les murs, les sols et les carrosseries (aucune occlusion). Nouvelle fonction `blastExposed` (`src/main.js`), réglages dans `CONFIG.blast`. Une explosion collée à un mur touche toujours les zombies du même côté.
+  - Portes de la gare : la boiserie du hall (1,3 m), le soubassement et le rebord de la verrière traversaient les ouvertures (visuel seulement, on passait au travers). Ils s'arrêtent maintenant aux ouvertures (`src/gare/build.js`).
+  - Vérifié : build OK ; zombie derrière un train, tirs à travers : 9 sur 9 passaient avant, 0 sur 9 après ; grenade derrière un mur : 120 sur 120 touchaient avant, 0 sur 120 après ; échantillon de 400 murs de façades et 150 sols de l'île sans fuite ; `stuck-scan` île et gare : 0 poche piège ; chiffres de la graine de l'île inchangés ; `tools/mp-smoke.mjs` 30/30.
+  - Non vérifié : les véhicules (moto, voiture) n'arrêtent toujours pas les balles ; un vrai client multijoueur qui tire sur un train (le test 30/30 ne le couvre pas) ; la capture de la porte 56 faite par l'agent avant/après, je ne l'ai pas revue moi-même.
+
 ## v0.98.1 (2026-11-14)
 - **Correctifs : joueur inactif, fausse « poche piégeuse », mesure du p95.**
   - Un joueur qui ne bouge pas mourait 0,2 s après le début de la manche 1 (le plancher de PV de l'intro s'arrêtait à l'arrêt du train, avec une dizaine de zombies dessus). Nouveau `CONFIG.intro.graceAfter` (10 s) : le plancher de PV est maintenu 10 s après le début de la manche 1 (`src/intro.js`, `hurt()` dans `src/player.js`). Un joueur inactif meurt maintenant exactement 10 s après le début de la manche.
