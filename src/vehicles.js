@@ -1116,9 +1116,8 @@ export function installVehicles(game, { world, hud, sfx, scene }) {
     broadcastSeats(v) { if (this.isMultiplayer) this.net?.send({ t: 'v_seats', id: v.id, seats: v.seats }); },
 
     onPeerLeft(pid) {
-      if (!this.isHost) return;
       this.freeSeatsOf(pid);
-      for (const v of this.rides()) this.broadcastSeats(v);
+      if (this.isHost) for (const v of this.rides()) this.broadcastSeats(v);
       this.refreshRiders();
     },
 

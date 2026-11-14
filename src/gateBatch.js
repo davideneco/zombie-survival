@@ -52,5 +52,7 @@ export function createGateBatch(scene, tile = 320) {
     build() { for (const c of chunks.values()) if (c.dirty) rebuild(c); },
     // the door was opened: drop its pieces
     open(door) { for (const c of door.gateChunks || []) rebuild(c); },
+    // new game: rebuild every chunk with currently closed doors
+    reset() { for (const c of chunks.values()) rebuild(c); },
   };
 }

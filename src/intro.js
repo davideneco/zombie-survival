@@ -236,6 +236,7 @@ export function installIntro(game, { world, hud, sfx }) {
     introFrozen() { if (S.on && S.sound) S.sound.set(0, 0, 0); },
     // reset() : start the intro when the start spot is the intro's, otherwise make sure it is off
     introReset() { if (this.activeSpawn?.intro) begin(0); else end(); },
+    introForceDone() { if (S.on) finish(); },
     // late joiner (sync from the host)
     introJoin(st) { if (!st || st.ph === 'done' || st.ph === 'off') { end(); return; } begin(st.tau, { late: true }); },
     introState: () => (S.on ? { tau: Math.round(S.tau * 1000) / 1000, ph: S.ph } : null),

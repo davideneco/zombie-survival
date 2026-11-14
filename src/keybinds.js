@@ -54,6 +54,11 @@ export function createKeybinds() {
 
     // ---------------------------------------------------------------- lecture des entrées
     is(id, e) { const p = parsed[id]; return p.t === 'code' ? e.code === p.v : typedLetter(e) === p.v; },
+    matches(id, e) {
+      if (b.is(id, e)) return true;
+      const alt = byId[id]?.alt;
+      return !!(alt && e.code === alt && !codes.has(alt));
+    },
     // touche maintenue : keys = player.keys (e.code et 'letter:x'), flèches de secours comprises tant qu'elles ne servent pas à autre chose
     down(id, K) {
       const p = parsed[id];

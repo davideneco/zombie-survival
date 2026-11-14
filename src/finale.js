@@ -377,8 +377,8 @@ export function installFinale(game, { world, scene, hud, sfx, fx }) {
     if (!f || f.remote) return;
     // boss : [santé, santé max, phase 1-4, invulnérable 0/1]
     const b = f.boss && !f.boss.dead ? [Math.max(0, Math.round(f.boss.health)), f.boss.maxHealth, f.boss.phase, f.boss.invulnerable ? 1 : 0, f.boss.isAngel ? 1 : 0] : null;
-    const msg = { t: 'finale_info', b: f.banner, boss: b };
-    if (f.state && f.state.startsWith('summit_')) { msg.st = f.state; msg.fan = Math.round((f.fan || 0) * 1000) / 1000; msg.fh = f.fh || 0; msg.fs = f.fs || 0; } // Acte V : état, jauge du Fanal, joueurs qui le tiennent
+    const msg = { t: 'finale_info', b: f.banner, boss: b, st: f.state, w: f.wave ?? -1 };
+    if (f.state && f.state.startsWith('summit_')) { msg.fan = Math.round((f.fan || 0) * 1000) / 1000; msg.fh = f.fh || 0; msg.fs = f.fs || 0; } // Acte V : jauge du Fanal, joueurs qui le tiennent
     f.infoT = (f.infoT || 0);
     if (force || f.infoT <= 0) { f.infoT = 0.25; game.net?.send(msg); }
     hud.setBanner(f.banner); hud.setBossBar?.(bossBarOf(b));
@@ -830,11 +830,48 @@ export function installFinale(game, { world, scene, hud, sfx, fx }) {
       if (!this.finale && this.dawnOn) return; // l'Acte V est fini chez nous : un message en retard ne le ressuscite pas
       if (!this.finale) this.finale = { remote: true };
       this.finale.banner = m.b;
-      if (m.st) { const f = this.finale; f.st = m.st; f.fan = m.fan || 0; f.fh = m.fh | 0; f.fs = m.fs | 0; if (!this.summitFx?.shown) this.summitFx?.show(); }
+      if (m.w != null) this.finale.w = m.w;
+      if (m.st) {
+        const f = this.finale;
+        f.st = m.st;
+        if (m.st.startsWith('summit_')) {
+          f.fan = m.fan || 0; f.fh = m.fh | 0; f.fs = m.fs | 0;
+          if (!this.summitFx?.shown) this.summitFx?.show();
+        }
+      }
       hud.setBanner(m.b);
       hud.setBossBar?.(bossBarOf(m.boss));
       const b = bossObj();
       if (b && m.boss) { b._netPhase = m.boss[2]; b._netInv = !!m.boss[3]; b.health = m.boss[0]; b.phase = m.boss[2]; }
+    },
+    promoteFinaleHost() {
+      const f = this.finale;
+      if (!f || !f.remote) return;
+      const np = Math.max(1, standing().length);
+      const b = bossObj();
+      if (b) {
+        b.ctx = bossCtx;
+        if (b.isAngel) {
+          if (!b.center && this.tower) b.center = { x: this.tower.x, z: this.tower.z };
+          if (b.center && b.az == null) b.az = Math.atan2(b.pos.z - b.center.z, b.pos.x - b.center.x) * 180 / Math.PI;
+          if (!b.state || b.state === 'arrive') b._setState?.('orbit');
+        }
+      }
+      const st = f.st || (this.finaleDone ? 'summit_beam' : b ? (this.dawnOn ? 'summit_dawn' : 'boss1') : 'wave');
+      this.finale = {
+        state: st,
+        wave: f.w != null && f.w >= 0 ? f.w : 0,
+        t: 0,
+        spawnT: 0,
+        addT: 0,
+        infoT: 0,
+        queue: [],
+        np,
+        banner: f.banner || '',
+        fan: f.fan || 0,
+        boss: b,
+      };
+      info(true);
     },
   });
 }

@@ -2297,7 +2297,7 @@ export async function buildRealWorld(scene, renderer) {
     if (d.interior) { // stair door of a key building: opens the stair, no zone
       d.opened = []; d.opens = d.a; d.name = "l'étage";
       for (const s of d.segs) s.off = true;
-      for (const m of d.meshes) m.parent?.remove(m);
+      for (const m of d.meshes) { if (!m.userData.origParent && m.parent) m.userData.origParent = m.parent; m.parent?.remove(m); }
       for (const i of d.cells) nav.blocked[i] = 0;
       nav.invalidate();
       if (d.link) { d.link.closed = false; levels.invalidateHops(); }
@@ -2311,7 +2311,7 @@ export async function buildRealWorld(scene, renderer) {
     for (const s of d.segs) s.off = true;
     if (d.leaves) { d.opening = 0; openingDoors.push(d); for (const m of d.meshes) m.traverse((o) => { if (o.isMesh && o.geometry.type === 'PlaneGeometry') o.visible = false; }); }
     else if (d.batched) gateBatchRef.open(d);
-    else for (const m of d.meshes) { m.parent?.remove(m); }
+    else for (const m of d.meshes) { if (!m.userData.origParent && m.parent) m.userData.origParent = m.parent; m.parent?.remove(m); }
     const dn = d.nav || nav; // station doors : cells of the station's own grid
     for (const i of d.cells) dn.blocked[i] = 0;
     dn.invalidate();
@@ -2319,6 +2319,38 @@ export async function buildRealWorld(scene, renderer) {
     if (d.extra) for (const z of d.extra) zoneOpen[z] = true; // the district gate opens all the zones of its district
     lightTimer = 0;
     return true;
+  }
+
+  function resetDoors() {
+    openingDoors.length = 0;
+    zoneOpen.fill(false);
+    zoneOpen[startZone] = true;
+    const invNavs = new Set();
+    let invHops = false;
+    for (const d of doors) {
+      d.open = false;
+      d.opened = [];
+      for (const s of d.segs) s.off = false;
+      if (d.leaves) {
+        d.opening = 0;
+        for (const lv of d.leaves) lv.rotation.y = 0;
+        for (const m of d.meshes) m.traverse((o) => { if (o.isMesh && o.geometry.type === 'PlaneGeometry') o.visible = true; });
+      } else if (!d.batched) {
+        for (const m of d.meshes) {
+          if (!m.parent && m.userData.origParent) m.userData.origParent.add(m);
+        }
+      }
+      const dn = d.nav || nav;
+      if (d.cells?.length) {
+        for (const i of d.cells) dn.blocked[i] = 1;
+        invNavs.add(dn);
+      }
+      if (d.interior && d.link) { d.link.closed = true; invHops = true; }
+    }
+    for (const dn of invNavs) dn.invalidate();
+    if (invHops) levels.invalidateHops();
+    gateBatchRef?.reset();
+    lightTimer = 0;
   }
 
   // Lumières mobiles : un petit nombre de PointLight redistribuées sur les sources les plus proches
@@ -2409,7 +2441,7 @@ export async function buildRealWorld(scene, renderer) {
     half: Math.max(halfX, halfZ), blockers, spawnPoints: [], windowSpawns,
     pickWindow: (px, pz, ...a) => (gare && gare.inArea(px, pz) || kr && kr.inArea(px, pz) ? null : pickWindow(px, pz, ...a)),
     pickGround: (px, pz, minD, maxD, allowAnyZone = false) => (gare && gare.inArea(px, pz) ? gare.pickGround(px, pz, minD, maxD, (zi) => allowAnyZone || !!zoneOpen[zi]) : kr && kr.inArea(px, pz) ? kr.pickGround(px, pz, minD, maxD, (zi) => allowAnyZone || !!zoneOpen[zi]) : pickGround(px, pz, minD, maxD, allowAnyZone)),
-    stationPos, stations, wallWeapons, vehicleSpawns, parkings, bikeStations, bikeCheck, doors, openDoor, zoneOf: zoneOfAll, startPos, nav, collision, machines, boxes, setActiveBox,
+    stationPos, stations, wallWeapons, vehicleSpawns, parkings, bikeStations, bikeCheck, doors, openDoor, resetDoors, zoneOf: zoneOfAll, startPos, nav, collision, machines, boxes, setActiveBox,
     zoneNames: ZONE_NAMES, zoneCenters, startZone, sealedPoints,
     get mapImage() { return curMap().image; }, get mapView() { return curMap().view; }, get mapCrop() { return curMap().crop; }, get mapTitle() { return curMap().title; },
     gare, kr, areaOf, lightSources,

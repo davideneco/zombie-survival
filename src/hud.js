@@ -102,8 +102,9 @@ export class Hud {
   }
 
   setRound(r) {
-    this._set('round', r, () => {
-      this.el.round.textContent = r;
+    const label = r > 0 ? String(r) : '—';
+    this._set('round', label, () => {
+      this.el.round.textContent = label;
     });
   }
 

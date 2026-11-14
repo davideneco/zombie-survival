@@ -139,7 +139,7 @@ export function installUi(game, { hud, canvas, lockAndPlay }) {
         case 'keys': hud.showPanel('optionsPanel'); break;
         case 'capture': case 'conflict': game.keysMenu.cancel(); break; // d'abord la capture / la question d'échange, le menu Touches reste ouvert
         case 'menu':
-          if (game.net) { if (confirm('Quitter le salon ?')) { game.net.close(); location.reload(); } }
+          if (game.net) game.exitToMenu?.();
           else hud.showPanel('titlePanel');
           break;
         case 'pause': case 'resume': this.resume(); break;

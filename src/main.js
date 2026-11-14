@@ -1328,7 +1328,14 @@ const game = {
     this.resetBoxRoll();
     this.resetPap();
     if (resetStats) this.resetBox();
-    if (resetStats) { this.finale = null; this.finaleDone = false; this.eternal = false; this.blessed = false; this.freeDoors = false; this.dawnOn = false; hud.setBanner?.(null); hud.setBossBar?.(null); hud.setFanal?.(null); }
+    if (resetStats) {
+      this.finale = null; this.finaleDone = false; this.eternal = false; this.blessed = false; this.freeDoors = false; this.dawnOn = false;
+      this.bonusZones?.clear(); this.parkingSeen?.clear(); this.miniBar = null; this.miniBarT = 0;
+      world.resetDoors?.();
+      this.barricades?.reset?.();
+      this.barrels?.reset?.();
+      hud.setBanner?.(null); hud.setBossBar?.(null); hud.setFanal?.(null);
+    }
     this.summitFx?.clear();
     this.perkFx?.reset();
     this.clearBossFx?.();
@@ -1344,6 +1351,7 @@ const game = {
       if (this.player) this.player.statDowns = 0;
       this.round = 0;
     }
+    hud.setRound(this.round);
     this.intermission = (this.isHost || !this.isMultiplayer) ? 2 : 0;
     this.toSpawn = 0;
     this.buffs.instaKill = 0;
@@ -1423,7 +1431,7 @@ const game = {
       rp.yaw = yaw;
     }
 
-    if (!sp.intro) hud.announce('ZONE DE DÉPART', sp.name.toUpperCase(), 3500); // (the train intro has its own title card)
+    if (!sp.intro && this.started) hud.announce('ZONE DE DÉPART', sp.name.toUpperCase(), 3500); // (the train intro has its own title card)
   },
 
   gameOver() {
@@ -1444,6 +1452,43 @@ const game = {
     if (this.isHost) {
       this.net?.send({ t: 'game_over', round: this.round, kills: this.kills });
     }
+  },
+
+  exitToMenu(noticeTitle = null, noticeText = null) {
+    if (this.net) {
+      try { if (this.net.connected) this.net.send({ t: 'leave' }); } catch {}
+      this.net.close();
+      this.net = null;
+    }
+    for (const id of [...this.remotes.keys()]) removeRemote(id);
+    this.isMultiplayer = false;
+    this.isHost = true;
+    this.isClient = false;
+    this.roomCode = null;
+    this.started = false;
+    this.playing = false;
+    this.over = false;
+    this.activeSpawn = null;
+    this.netPing = null;
+    this.ui?.closeOverlays();
+    this.ui?.showBanner(false);
+    this.player.releaseInputs();
+    if (document.pointerLockElement) document.exitPointerLock();
+    hud.setRoomBadge(null);
+    hud.setTeammates([]);
+    hud.prompt(null);
+    hud.setVehicle(null);
+    hud.setMark?.(null);
+    hud.el.lobbyBox?.classList.add('hidden');
+    if (hud.el.lobbyPlayers) hud.el.lobbyPlayers.innerHTML = '';
+    if (hud.el.lobbyStatus) hud.el.lobbyStatus.innerHTML = '';
+    hud.el.btnStartGame?.classList.add('hidden');
+    this.reset(true);
+    hud.showMenu(
+      noticeTitle || 'ZOMBIE SURVIVAL',
+      noticeText || `${world.mapName}<br>Survivez seul ou en coopération.`
+    );
+    if (noticeTitle) hud.showPanel('menuPanel');
   },
 
   // ----------------------------------------------------- Boucle de jeu
@@ -1890,14 +1935,68 @@ function setupNetworkHandlers(net) {
   game.onTransferNet?.(net); // tram transfer : xf_req, xf_call, xf_go, xf_left
   game.onIntroNet?.(net); // train intro : tn_sync, intro_skip
   game.onRideNet?.(net);  // zombies of the ride : tn_win, tn_rk, tn_rm
-  // Déconnexion
+  // Déconnexion et migration d'hôte
   net.on('disconnect', () => {
+    if (game.net !== net) return;
     hud.announce('DÉCONNECTÉ', 'Perte de connexion au serveur', 4000);
-    if (game.isMultiplayer) setTimeout(() => { alert('Connexion au serveur perdue.'); location.reload(); }, 1500);
+    if (game.isMultiplayer) {
+      game.exitToMenu('CONNEXION PERDUE', 'La connexion au serveur multijoueur a été interrompue.');
+    }
   });
   net.on('closed', () => {
-    alert("L'hôte a fermé la partie.");
-    location.reload();
+    if (game.net !== net) return;
+    game.exitToMenu('SALON FERMÉ', "L'hôte a fermé la partie.");
+  });
+  net.on('host', (m) => {
+    if (game.net !== net) return;
+    if (m.left != null) {
+      game.onPeerLeft(m.left);
+      const gone = game.remotes.get(m.left);
+      if (gone) game.chat.system(`${gone.name} a quitté la partie.`);
+      removeRemote(m.left);
+    }
+    net.hostId = m.id;
+    const wasHost = game.isHost;
+    game.isHost = net.id != null && net.id === m.id;
+    game.isClient = !game.isHost;
+
+    const hostName = game.isHost ? game.playerName : (game.remotes.get(m.id)?.name || `Joueur ${m.id}`);
+    refreshLobby();
+    if (!game.started) {
+      hud.el.btnStartGame?.classList.toggle('hidden', !game.isHost);
+      if (hud.el.lobbyStatus && game.roomCode) {
+        hud.el.lobbyStatus.innerHTML = game.isHost
+          ? `VOUS ÊTES L'HÔTE ! CODE : <b style="color:#fff; font-size:24px;">${game.roomCode}</b>`
+          : `SALON : <b style="color:#fff;">${game.roomCode}</b><div style="font-size:15px; color:#aaa; margin-top:6px;">Nouvel hôte : ${esc(hostName)}</div>`;
+      }
+    }
+
+    game.chat.system(game.isHost ? "Vous êtes désormais l'hôte de la partie." : `${hostName} est désormais l'hôte.`);
+    hud.announce('NOUVEL HÔTE', game.isHost ? 'Vous prenez le relais !' : `${hostName} prend le relais`, 3000);
+
+    if (game.started && game.isHost && !wasHost) {
+      for (const z of game.zombies) {
+        const wasHidden = z.isBoss && !z.isAngel && !z.mini && (!z.group.visible || z.net?.bs === 9);
+        z.net = null;
+        if (z.isBoss || z.mini || z.isAngel) z.ctx = game.bossCtx;
+        if (wasHidden && !z.dead && game.finale && game.finale.st === 'boss1') {
+          z.arrive?.(0, z.pos.x, z.pos.z, 0);
+        }
+      }
+      game.promoteFinaleHost?.();
+      if (game.over) {
+        hud.showOverlay(
+          'ÉQUIPE ÉLIMINÉE',
+          `Vous avez survécu jusqu'à la <b style="color:#fff">manche ${game.round}</b><br>${game.kills} zombies tués`,
+          'REJOUER'
+        );
+      } else {
+        if (!game.finale && game.toSpawn <= 0 && game.intermission <= 0 && game.zombies.filter((z) => !z.dead).length === 0) {
+          game.intermission = 2;
+        }
+        game.checkTeamWipe();
+      }
+    }
   });
   net.on('left', (m) => {
     game.onPeerLeft(m.id); // libère ses places de moto (hôte)
@@ -1923,6 +2022,14 @@ function setupNetworkHandlers(net) {
     // L'hôte synchronise le nouvel arrivant
     if (game.isHost) {
       if (!game.activeSpawn) game.pickRandomSpawn();
+      let joinPos = null;
+      if (game.started && !game.introState?.() && !game.transferState?.()) {
+        const mates = [game.player, ...game.remotes.values()].filter((pl) => pl && !pl.dead && !pl.downed && !pl.vehicle && !pl.onTram);
+        const ref = mates[0] || game.player;
+        if (ref?.pos) {
+          joinPos = { x: Math.round(ref.pos.x * 100) / 100, y: Math.round(ref.pos.y * 100) / 100, z: Math.round(ref.pos.z * 100) / 100, yaw: Math.round((ref.yaw || 0) * 1000) / 1000, region: ref.region || 0 };
+        }
+      }
       net.send({
         t: 'sync',
         v: GAME_V,
@@ -1930,6 +2037,8 @@ function setupNetworkHandlers(net) {
         dh: doorsHash(),
         sp: game.activeSpawn,
         started: game.started,
+        over: !!game.over,
+        joinPos,
         round: game.round,
         toSpawn: game.toSpawn,
         intermission: game.intermission,
@@ -2169,6 +2278,7 @@ function setupNetworkHandlers(net) {
 
   // Manches
   net.onHost('round_start', (m) => {
+    game.introForceDone?.();
     game.round = m.r;
     game.toSpawn = m.toSpawn;
     hud.setRound(m.r);
@@ -2208,16 +2318,34 @@ function setupNetworkHandlers(net) {
   net.onHost('sync', (m) => {
     // même version, mêmes portes (identifiants et prix) que l'hôte : sinon la partie est incohérente, on quitte
     if ((m.v && m.v !== GAME_V) || (m.dh && m.dh !== doorsHash())) {
-      alert(`Version du jeu différente de celle de l'hôte (${m.v || '?'} contre ${GAME_V}) : les portes ne correspondent pas. Rechargez la page pour récupérer la dernière version.`);
-      location.reload();
+      game.exitToMenu(
+        'VERSION INCOMPATIBLE',
+        `Version du jeu différente de celle de l'hôte (${m.v || '?'} contre ${GAME_V}). Rechargez la page pour vous synchroniser.`
+      );
       return;
     }
+    if (m.started != null) game.started = !!m.started || game.started;
     game.round = m.round;
     game.toSpawn = m.toSpawn;
     hud.setRound(m.round);
     if (m.sp) game.applySpawnPoint(m.sp, game.mySlot || 1);
     game.buffs = m.buffs || game.buffs;
     for (const id of m.doors || []) game.openDoor(id, false);
+    if (m.joinPos && !m.intro && !m.xf && game.player) {
+      const jp = m.joinPos;
+      const nav = jp.region ? world.levels?.regions?.[jp.region]?.nav : (world.navAt ? world.navAt(jp.x, jp.z) : world.nav);
+      let px = jp.x, pz = jp.z;
+      if (nav && nav.isBlockedAt?.(px, pz)) {
+        const f = nav.nearestFree(px, pz, 20);
+        if (f) { px = nav.worldX(f[0]); pz = nav.worldZ(f[1]); }
+      }
+      game.player.pos.set(px, jp.y || 0, pz);
+      game.player.vel.set(0, 0, 0);
+      game.player.yaw = jp.yaw || 0;
+      game.player.pitch = 0;
+      game.player.region = jp.region || 0;
+      game.player.camera?.rotation.set(0, game.player.yaw, 0);
+    }
     if (m.box != null && m.box >= 0) world.setActiveBox?.(m.box);
     game.finaleDone = !!m.finaleDone;
     game.finale = m.finale != null ? { remote: true, ...(m.summit ? { st: m.summit.st, fan: m.summit.fan } : null) } : null;
@@ -2249,6 +2377,7 @@ function setupNetworkHandlers(net) {
     if (m.intro) game.introJoin?.(m.intro); // train intro running (v0.81.0)
     if (m.xf) game.transferJoin?.(m.xf); // tram transfer running (v0.83.0)
     if (m.tnWin) game.rideApplyDamage?.(m.tnWin); // (after introJoin : it resets the train)
+    if (m.over) game.gameOver();
   });
 
   // Démarrage par l'hôte
@@ -2304,15 +2433,19 @@ for (const ev of ['pointerdown', 'keydown', 'click']) {
 
 function lockAndPlay() {
   sfx.init();
-  if (game.over) {
-    if (game.isHost || !game.isMultiplayer) {
-      game.pickRandomSpawn();
-      game.reset(true);
-      if (game.isHost) game.net?.send({ t: 'restart', sp: game.activeSpawn });
-    }
+  const restarted = game.over && (game.isHost || !game.isMultiplayer);
+  if (restarted) {
+    game.pickRandomSpawn();
+    game.reset(true);
+    if (game.isHost) game.net?.send({ t: 'restart', sp: game.activeSpawn });
+    hud.hideOverlay();
   }
   const req = canvas.requestPointerLock();
-  if (req && req.catch) req.catch(() => {});
+  if (req && req.catch) req.catch(() => {
+    if (restarted && document.pointerLockElement !== canvas) {
+      hud.showOverlay('NOUVELLE PARTIE', 'Cliquez pour reprendre le contrôle !', 'REPRENDRE');
+    }
+  });
 }
 
 installUi(game, { hud, canvas, lockAndPlay }); // pile de couches, Échap, carte, plein écran
@@ -2343,6 +2476,14 @@ hud.el.playerName.addEventListener('input', (e) => {
 // Mode Solo
 hud.el.btnSolo.addEventListener('click', (e) => {
   e.stopPropagation();
+  if (game.net) {
+    try { if (game.net.connected) game.net.send({ t: 'leave' }); } catch {}
+    game.net.close();
+    game.net = null;
+  }
+  for (const id of [...game.remotes.keys()]) removeRemote(id);
+  hud.el.lobbyBox?.classList.add('hidden');
+  game.roomCode = null;
   game.isMultiplayer = false;
   game.isHost = true;
   game.isClient = false;
@@ -2355,6 +2496,11 @@ hud.el.btnSolo.addEventListener('click', (e) => {
 
 // Créer salon Co-op (Hôte)
 async function hostRoom(requestedCode = null) {
+  if (game.net) {
+    try { if (game.net.connected) game.net.send({ t: 'leave' }); } catch {}
+    game.net.close();
+    game.net = null;
+  }
   try {
     const net = new Net();
     await net.connect();
@@ -2380,7 +2526,8 @@ async function hostRoom(requestedCode = null) {
 
     net.send({ t: 'create', name: game.playerName, slot: game.charPref, v: GAME_V, map: CONFIG.map, code: requestedCode || undefined });
   } catch (err) {
-    alert("Impossible d'héberger le salon : " + err.message);
+    hud.showMenu('ERREUR RÉSEAU', `Impossible d'héberger le salon : ${esc(err.message)}`);
+    hud.showPanel('menuPanel');
   }
 }
 
@@ -2392,7 +2539,16 @@ hud.el.btnHost.addEventListener('click', (e) => {
 // Rejoindre salon (Client)
 async function joinRoom(rawCode, retries = 0) {
   const code = (rawCode || hud.el.joinCode.value || '').toUpperCase().trim();
-  if (code.length < 4) { alert('Veuillez entrer un code de 4 lettres.'); return; }
+  if (code.length < 4) {
+    hud.showMenu('CODE INVALIDE', 'Veuillez entrer un code de 4 lettres.');
+    hud.showPanel('menuPanel');
+    return;
+  }
+  if (game.net) {
+    try { if (game.net.connected) game.net.send({ t: 'leave' }); } catch {}
+    game.net.close();
+    game.net = null;
+  }
 
   try {
     const net = new Net();
@@ -2401,12 +2557,14 @@ async function joinRoom(rawCode, retries = 0) {
     setupNetworkHandlers(net);
 
     net.on('error', (m) => {
+      if (game.net === net) game.net = null;
+      net.close();
       if (retries > 0) {
-        net.close();
         setTimeout(() => joinRoom(code, retries - 1), 400);
         return;
       }
-      alert(m.msg || 'Erreur salon.');
+      hud.showMenu('ERREUR SALON', esc(m.msg || 'Erreur salon.'));
+      hud.showPanel('menuPanel');
     });
 
     net.on('joined', (m) => {
@@ -2448,7 +2606,8 @@ async function joinRoom(rawCode, retries = 0) {
 
     net.send({ t: 'join', code, name: game.playerName, slot: game.charPref, v: GAME_V });
   } catch (err) {
-    alert('Impossible de rejoindre : ' + err.message);
+    hud.showMenu('ERREUR RÉSEAU', `Impossible de rejoindre : ${esc(err.message)}`);
+    hud.showPanel('menuPanel');
   }
 }
 
@@ -2614,11 +2773,12 @@ document.getElementById('btnResume').addEventListener('click', () => lockAndPlay
 document.getElementById('btnModeBack').addEventListener('click', (e) => {
   e.stopPropagation();
   // Un salon déjà créé/rejoint doit être quitté avant de revenir au menu principal.
-  if (game.net) { game.net.close(); location.reload(); return; }
+  if (game.net) { game.exitToMenu(); return; }
   hud.showPanel('titlePanel');
 });
-document.getElementById('btnQuit').addEventListener('click', () => {
-  if (confirm('Quitter la partie et revenir au menu principal ?')) location.reload();
+document.getElementById('btnQuit').addEventListener('click', (e) => {
+  e.stopPropagation();
+  game.exitToMenu();
 });
 
 // Précompilation de tous les shaders pendant le chargement : sinon chaque nouvel objet (zombie rampant,

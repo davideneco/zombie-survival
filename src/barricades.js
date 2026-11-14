@@ -338,6 +338,32 @@ export function installBarricades(game, { scene, world, hud, sfx }) {
     for (const d of snap?.d || []) if (!bars[d[0]]) createDeploy({ id: d[0], x: d[1], z: d[2], yaw: d[3], region: d[4], owner: d[5], n: d[6] });
     for (const [id, n] of snap?.n || []) { const b = bars[id]; if (b) { b.n = n; paint(b); applyState(b); } }
   };
+  api.reset = () => {
+    dirty.clear();
+    syncT = 0;
+    api.kit = false;
+    api.earned = 0;
+    api.earnedRound = -1;
+    api.repairT = 0;
+    api.target = null;
+    for (const d of debris) { d.t = 0; d.m.visible = false; }
+    for (const b of bars) {
+      if (b.kind === 'deploy') {
+        if (!b.removed) {
+          b.n = 0;
+          b.removed = true;
+          b.board.off = true;
+          if (b.nav) { for (const c of b.cells) if (c.torn !== 1) b.nav.blocked[c.idx] = 0; b.nav.invalidate(); }
+          paint(b);
+        }
+      } else {
+        b.n = b.max;
+        if (b.tearSet) b.tearSet.clear();
+        paint(b);
+        applyState(b);
+      }
+    }
+  };
   game.onBarricadeNet = (net) => {
     net.on('bar_fix', (m) => { // host: a client nails a plank
       if (game.isClient) return;

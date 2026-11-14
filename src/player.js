@@ -265,7 +265,7 @@ export class Player {
       else if (this.onTram?.v.isTram && B.is('tramDoors', e)) this.game.tramDoors?.();
       else if (B.is('knife', e)) this.melee(this.game.time); // à pied : couteau
       else if (B.is('deploy', e)) this.game.deployKey?.(); // barricade de fortune : acheter / poser (barricades.js)
-      if (!this.vehicle && (B.is('crouch', e) || e.code === 'KeyC' || e.code === 'ControlRight')) this._crouchDownAt = performance.now();
+      if (!this.vehicle && (B.matches('crouch', e) || e.code === 'ControlRight')) this._crouchDownAt = performance.now();
       if (B.isBound(e)) e.preventDefault(); // Espace (défilement), Tab, flèches : le navigateur ne doit pas réagir à une touche du jeu
       if (this.locked) return; // arme dans le Pack-a-Punch
       if (B.is('weapon1', e)) this.switchWeapon(0);
@@ -282,7 +282,7 @@ export class Player {
       const k = letter(e);
       if (k) this.keys['letter:' + k] = false;
       const B = this.game.binds;
-      if (!this.vehicle && (B?.is('crouch', e) || e.code === 'KeyC' || e.code === 'ControlRight') && this._crouchDownAt > 0) {
+      if (!this.vehicle && (B?.matches('crouch', e) || e.code === 'ControlRight') && this._crouchDownAt > 0) {
         if (performance.now() - this._crouchDownAt < 220) this.crouchToggle = !this.crouchToggle;
         else this.crouchToggle = false;
         this._crouchDownAt = 0;

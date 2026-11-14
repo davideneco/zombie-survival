@@ -44,20 +44,30 @@ function leave(ws) {
   const room = rooms.get(ws.room);
   if (!room) return;
   room.members.delete(ws.pid);
+  ws.room = null;
+  if (room.members.size === 0) {
+    rooms.delete(room.code);
+    return;
+  }
   if (room.host === ws.pid) {
-    for (const m of room.members.values()) { send(m.ws, { t: 'closed' }); m.ws.room = null; }
-    rooms.delete(ws.room);
+    const next = room.members.values().next().value;
+    room.host = next.id;
+    for (const m of room.members.values()) send(m.ws, { t: 'host', id: room.host, left: ws.pid });
   } else {
     for (const m of room.members.values()) send(m.ws, { t: 'left', id: ws.pid });
   }
-  ws.room = null;
 }
 
 function onMessage(ws, raw) {
   let msg;
   try { msg = JSON.parse(raw); } catch { return; }
   if (!msg || typeof msg !== 'object') return; // `null`, un nombre… : rien à lire
-  const name = String(msg.name || 'Joueur').slice(0, 12);
+  const name = cleanText(String(msg.name || '')) || 'Joueur';
+
+  if (msg.t === 'leave') {
+    leave(ws);
+    return;
+  }
 
   if (msg.t === 'create') {
     if (ws.room) leave(ws);
