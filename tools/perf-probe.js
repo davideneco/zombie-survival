@@ -2,7 +2,7 @@
 //   node .claude/skills/play-test/harness.mjs --url "debug&gare" --size 1280x720 --file tools/perf-probe.js
 //   node .claude/skills/play-test/harness.mjs --url "debug&x=-0.6&z=-28&yaw=0" --file tools/perf-probe.js
 // Reports what the GPU is asked to do (draw calls, triangles, programs, textures, geometries), the JS heap, the simulation cost
-// (game.update, median / p95 over 60 steps) and the page load time. Headless Chromium renders in software: frame times are NOT
+// (game.update, median / p95 over 300 steps) and the page load time. Headless Chromium renders in software: frame times are NOT
 // representative of a real GPU, the counts are. Budgets (CLAUDE.md): ≤ 300 draw calls, update ≤ 4 ms, 60 FPS on a mid-range PC.
 const r = game.renderer, info = r.info;
 const nav = performance.getEntriesByType('navigation')[0];
@@ -12,7 +12,8 @@ const render = { calls: info.render.calls, triangles: info.render.triangles, lin
 const memory = { geometries: info.memory.geometries, textures: info.memory.textures, programs: info.programs?.length ?? null };
 window.gc?.(); // the harness launches Chromium with --expose-gc: heap and update timings are measured after a collection (no garbage noise)
 const t = [];
-for (let i = 0; i < 60; i++) { const a = performance.now(); game.update(1 / 60); t.push(performance.now() - a); }
+const N = 300; // 300 steps: a 60-step p95 is the 3rd worst step, i.e. one GC pause or tile build decides it (2.8-5.6 ms from run to run, 1.6 ms over 600 steps)
+for (let i = 0; i < N; i++) { const a = performance.now(); game.update(1 / 60); t.push(performance.now() - a); }
 t.sort((a, b) => a - b);
 let meshes = 0, instanced = 0, instances = 0, visible = 0;
 game.scene.traverse((o) => { if (o.isMesh) { meshes++; if (o.visible) visible++; if (o.isInstancedMesh) { instanced++; instances += o.count; } } });
@@ -22,7 +23,7 @@ return {
   where: { area: game.world.areaOf?.(game.player.pos.x, game.player.pos.z), x: Math.round(game.player.pos.x), z: Math.round(game.player.pos.z) },
   render, memory,
   scene: { meshes, visibleMeshes: visible, instancedMeshes: instanced, instances },
-  updateMs: { median: +t[30].toFixed(2), p95: +t[57].toFixed(2) },
+  updateMs: { median: +t[N >> 1].toFixed(2), p95: +t[Math.floor(N * 0.95)].toFixed(2) },
   heapMB: heap,
   loadMs: nav ? Math.round(nav.loadEventEnd - nav.startTime) : null,
   pixelRatio: r.getPixelRatio(), quality: game.settings?.quality ?? game.settings?.graphics ?? null,
