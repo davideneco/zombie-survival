@@ -37,7 +37,7 @@ export function interiorOf(t) {
     else add(boxes, u - 0.28, u + 0.28, w - 0.22, w + 0.22);               // banquette (assise, coffre, dossier : 0,71 à 1,15 m de l'axe)
   });
   // pupitres de cabine (un à chaque bout) : 0,5 m le long de la rame, 1,9 m de large
-  for (const dir of [-1, 1]) { const Xd = dir * (L / 2 - 1.95); add(boxes, Xd - 0.27, Xd + 0.27, -0.95, 0.95); }
+  for (const dir of [-1, 1]) { const Xd = dir * (L / 2 - 1.72); add(boxes, Xd - 0.27, Xd + 0.27, -0.95, 0.95); }
   // bouts : le nez se resserre au-delà de uEnd
   add(boxes, uEnd, uEnd + 2, -3, 3); add(boxes, -uEnd - 2, -uEnd, -3, 3);
   // parois : de chaque côté, d'un bout à l'autre ; ouvertes devant les portes quand elles sont ouvertes

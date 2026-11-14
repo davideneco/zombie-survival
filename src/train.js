@@ -531,24 +531,39 @@ export function installTrain(game, { world, hud }) {
         O.st = 'leave'; O.door = best;
       } else if ((tgtIn || !open) && O.st === 'leave') O.st = 'in';
       const zUpper = (O.y - t.railY) > 1.35, tgtUpper = tgtIn ? (target.pos.y - t.railY) > 1.35 : false;
+      const vc = t.veh[t.moduleAt(O.u)], du0 = O.u - vc.uc, au = Math.abs(du0), sDir = du0 >= 0 ? 1 : -1;
+      const sameCoach = tgtIn ? t.moduleAt(O.u) === t.moduleAt(loc2.u) : false;
       // goal in (u, w)
       let gu, gw, aisle = false;
       if (O.st === 'enter') { gu = O.door; gw = 0; if (Math.abs(O.w) < W.wall - 0.2) O.st = 'in'; }
       else if (O.st === 'leave') {
-        if (zUpper) { const vc = t.veh[t.moduleAt(O.u)]; gu = vc.uc + (O.u >= vc.uc ? 5.65 : -5.65); gw = -0.88; }
-        else { gu = O.door; gw = Math.abs(O.u - O.door) > 0.35 ? 0 : t.doorSide * (W.outW + 0.3); aisle = Math.abs(O.u - O.door) > 0.35; }
+        if (zUpper) {
+          if (O.w > -0.75) { gu = vc.uc + sDir * 6.50; gw = au < 6.25 ? 0 : -1.00; }
+          else { gu = vc.uc + sDir * 3.90; gw = -1.00; }
+        } else { gu = O.door; gw = Math.abs(O.u - O.door) > 0.35 ? 0 : t.doorSide * (W.outW + 0.3); aisle = Math.abs(O.u - O.door) > 0.35; }
       }
       else if (!tgtIn) { gu = O.u; gw = 0; aisle = Math.abs(O.w) > 0.12; } // nobody to chase in the train : back to the aisle and wait
-      else if (zUpper !== tgtUpper && Math.abs(loc2.u - O.u) < 8.5) {
-        // Navigate Duplex stairs between lower and upper decks
-        const vc = t.veh[t.moduleAt(O.u)], sDir = O.u >= vc.uc ? 1 : -1;
-        if (zUpper) { gu = vc.uc + sDir * 5.65; gw = -0.88; }
-        else if (Math.abs(O.u - vc.uc) < 5.2 && O.w > -0.18) { gu = vc.uc + sDir * 5.65; gw = 0.20; }
-        else { gu = vc.uc + sDir * 3.55; gw = -0.88; }
+      else if (zUpper && (!tgtUpper || !sameCoach)) {
+        // Upper deck zombie descending Duplex stairs to lower/vestibule deck (or to cross gangway to another coach)
+        if (O.w > -0.75) { gu = vc.uc + sDir * 6.50; gw = au < 6.25 ? 0 : -1.00; }
+        else { gu = vc.uc + sDir * 3.90; gw = -1.00; }
       }
-      else { gu = loc2.u; gw = loc2.w; aisle = Math.abs(loc2.u - O.u) > 0.9; if (aisle) gw = zUpper ? 0 : 0; }
+      else if (!zUpper && tgtUpper && sameCoach) {
+        // Lower/vestibule deck zombie climbing Duplex stairs to upper deck in the target's coach
+        if (O.w <= -0.75 && au >= 3.80) { gu = vc.uc + sDir * 6.55; gw = -1.00; }
+        else if (au >= 3.80 && au <= 4.20) { gu = vc.uc + sDir * 3.95; gw = -1.00; }
+        else { gu = vc.uc + sDir * 3.92; gw = au > 4.20 ? 0.25 : 0; }
+      }
+      else if (zUpper && O.w < -0.55 && au > 4.8) {
+        // Finishing stair climb onto the upper landing before entering upper saloon
+        gu = vc.uc + sDir * 6.55; gw = au < 6.25 ? -1.00 : 0;
+      }
+      else {
+        gu = loc2.u; gw = loc2.w; aisle = Math.abs(loc2.u - O.u) > 0.9;
+        if (aisle) gw = (!zUpper && au > 3.70 && au < 6.40 && O.w > -0.45) ? 0.22 : 0;
+      }
       let du = gu - O.u, dw = gw - O.w;
-      if (aisle && Math.abs(O.w) > 0.12) { du = Math.sign(du) * Math.min(Math.abs(du), 0.35); dw = -O.w * 3; } // back to the aisle first
+      if (aisle && Math.abs(O.w - gw) > 0.15) { du = Math.sign(du) * Math.min(Math.abs(du), 0.35); dw = (gw - O.w) * 3; } // back to the aisle first
       const dl = Math.hypot(du, dw);
       const inRange = !!tgtIn && O.st === 'in' && Math.hypot(target.pos.x - z.pos.x, target.pos.z - z.pos.z) < CONFIG.zombie.attackRange && Math.abs(target.pos.y - z.pos.y) < 1.35;
       if (!inRange && z.attackWindup >= 0 && !target) z.attackWindup = -1; // (its target fell : no blow in the air)

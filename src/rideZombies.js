@@ -157,13 +157,20 @@ export function installRideZombies(game, { world, scene, sfx }) {
     sendSpawn(z, { tn: [wo.ci, sd, wo.k] });
     return z;
   };
-  // a gangway zombie : comes out of the rear cab of the tail car (through its bulkhead door, forced open) and walks in
-  const spawnGang = () => {
-    const uB = t.tailU, u = uB - 0.6, w = rnd(-0.2, 0.2), fy = t.floorAt(u);
+  // a gangway zombie : enters from an adjacent coach gangway (rear or front of the players, lower or upper deck) and walks in
+  const spawnGang = (idx = 0) => {
+    const pCi = clamp(t.moduleAt(midU()), 1, Math.max(1, t.n - 2));
+    const dir = idx % 2 === 0 ? -1 : 1; // -1 : from rear coach, +1 : from front coach
+    const adjCi = clamp(pCi + dir, 0, t.n - 1);
+    const vAdj = t.veh[adjCi], vPl = t.veh[pCi];
+    const useTail = adjCi === t.n - 1 && dir < 0;
+    const u = useTail ? t.tailU - 0.6 : vAdj.uc - dir * Math.min(3.2, vAdj.len / 2 - 1.2);
+    const gu = useTail ? t.tailU + 0.9 : vPl.uc + dir * (vPl.len / 2 - 2.2);
+    const w = rnd(-0.18, 0.18), fy = t.floorAt(u, w, t.railY + T.floor);
     t.walkToWorld(u, w, fy, wp);
     const z = make('gang', wp.x, fy, wp.z);
-    z.onTrain = { v: t, u, w, y: fy, st: 'gang', sd: 1, win: -1, t: 0, gu: uB + 0.9 };
-    z.yaw = frameYaw(u); z.group.rotation.set(0, z.yaw, 0);
+    z.onTrain = { v: t, u, w, y: fy, st: 'gang', sd: 1, win: -1, t: 0, gu };
+    z.yaw = frameYaw(u) + (gu < u ? Math.PI : 0); z.group.rotation.set(0, z.yaw, 0);
     sendSpawn(z);
     return z;
   };
@@ -257,14 +264,16 @@ export function installRideZombies(game, { world, scene, sfx }) {
     } else if (O.st === 'climb') {
       O.t += dt;
       k = Math.min(1, O.t / B.climb); const e = k * k * (3 - 2 * k);
-      O.u = O.u0 + (O.lu - O.u0) * e; O.w = O.w0 + (O.lw - O.w0) * e; O.y = O.y0 + (t.floorAt(O.lu ?? O.u) - O.y0) * e + B.arc * Math.sin(Math.PI * k);
+      const landY = t.floorAt(O.lu ?? O.u, O.lw ?? 0, t.railY + T.floor);
+      O.u = O.u0 + (O.lu - O.u0) * e; O.w = O.w0 + (O.lw - O.w0) * e; O.y = O.y0 + (landY - O.y0) * e + B.arc * Math.sin(Math.PI * k);
       z.yaw = inwardYaw(O.u, O.sd);
       pose = 'climb';
-      if (k >= 1) { O.st = 'in'; O.y = t.floorAt(O.u); release(z); pose = 'walk'; }
+      if (k >= 1) { O.st = 'in'; O.y = t.floorAt(O.u, O.w, landY); release(z); pose = 'walk'; }
     } else if (O.st === 'gang') {
-      O.u += z.speed * T.zombie.speedK * dt; O.w *= Math.max(0, 1 - dt * 2); O.y = t.floorAt(O.u);
-      z.yaw = frameYaw(O.u);
-      if (O.u >= O.gu) O.st = 'in';
+      const gDir = Math.sign((O.gu ?? O.u) - O.u) || 1;
+      O.u += gDir * z.speed * T.zombie.speedK * dt; O.w *= Math.max(0, 1 - dt * 2); O.y = t.floorAt(O.u, O.w, O.y);
+      z.yaw = frameYaw(O.u) + (gDir < 0 ? Math.PI : 0);
+      if ((gDir > 0 && O.u >= O.gu) || (gDir < 0 && O.u <= O.gu)) O.st = 'in';
     }
     t.walkToWorld(O.u, O.w, O.y, z.pos);
     z.group.rotation.y = z.yaw; if (pose !== 'climb' && pose !== 'hang') z.group.rotation.x = 0;
@@ -290,7 +299,7 @@ export function installRideZombies(game, { world, scene, sfx }) {
         return;
       }
       if (O.st === 'climb' && O.lu != null) { O.u = O.lu; O.w = O.lw; }
-      O.w = clamp(O.w, -1.0, 1.0); O.y = t.floorAt(O.u); O.sink = 0;
+      O.w = clamp(O.w, -1.0, 1.0); O.y = t.floorAt(O.u, O.w, O.y); O.sink = 0;
       O.ryw = angDiff(z.yaw, frameYaw(O.u));
     }
     if (z.deathT > 2.5) O.sink += dt * 0.8;
@@ -351,17 +360,17 @@ export function installRideZombies(game, { world, scene, sfx }) {
   // ---------------------------------------------------------------- roof script (every peer, from τ) : footsteps, bangs, the tail door
   const roofStep = (tau) => {
     const Q = R.roof; if (!Q) return;
-    const p = game.player, inT = p.onTram?.v === t, pu = inT ? p.onTram.u : 1e9, last = t.veh[t.n - 1], uTail = t.tailU;
+    const p = game.player, inT = p.onTram?.v === t, pu = inT ? p.onTram.u : 1e9, pCoach = inT ? t.veh[t.moduleAt(pu)] : t.veh[t.n - 1], uDoor = pCoach.uc - pCoach.len / 2;
     const vol = (u) => (inT ? clamp(1 - (Math.abs(pu - u) + 1.4) / 24, 0, 1) : 0);
     while (Q.step < Rf.steps && tau >= Q.t0 + Q.step * Rf.every) {
-      const u = last.uc + last.len / 2 - 2 - ((last.len - 4) * Q.step) / Math.max(1, Rf.steps - 1);
+      const u = pCoach.uc + pCoach.len / 2 - 1.5 - ((pCoach.len - 3) * Q.step) / Math.max(1, Rf.steps - 1);
       sfx.roofStep?.(vol(u)); Q.step++;
     }
-    while (Q.bang < Rf.bangs && tau >= Rf.bangAt + Q.bang * 0.55) { sfx.knock(Math.min(1, vol(uTail) * 1.4)); Q.bang++; }
+    while (Q.bang < Rf.bangs && tau >= Rf.bangAt + Q.bang * 0.55) { sfx.knock(Math.min(1, vol(uDoor) * 1.4)); Q.bang++; }
     if (tau >= Rf.forceAt) {
       t.setTail((tau - Rf.forceAt) / 0.35);
-      if (!Q.forced) { Q.forced = true; const v = vol(uTail); sfx.knock(v); sfx.glass(v * 0.6); sfx.groan(v); }
-      while (Q.gang < Q.ng && tau >= Rf.forceAt + 0.5 + Q.gang * Rf.gangEvery) { spawnGang(); Q.gang++; }
+      if (!Q.forced) { Q.forced = true; const v = vol(uDoor); sfx.knock(v); sfx.glass(v * 0.6); sfx.groan(v); }
+      while (Q.gang < Q.ng && tau >= Rf.forceAt + 0.5 + Q.gang * Rf.gangEvery) { spawnGang(Q.gang); Q.gang++; }
     }
   };
 

@@ -839,23 +839,23 @@ export const CONFIG = {
     // ---- zombies of the ride (v0.82.0, src/rideZombies.js ; the host simulates them) : game.introHooks[id](τ) is called at τ (events) ;
     // counts are solo, × (1 + 0.75 per extra player) like startRound ; health of round healthRound (100 HP), speed of round 1
     events: [{ at: 180, id: 'track' }, { at: 202, id: 'breach' }, { at: 227, id: 'roof' }, { at: 267, id: 'trackbed' }],
-    trackZombies: 4, sideZombies: 6, breachers: 6, gangway: 3,
-    trackOnRail: 2,               // of the trackZombies : standing on the track ahead (run over by the head car, roadkillPoints each)
-    trackbed: 2,                  // at the stop : zombies climbing out of the track bed onto quai 1 (outside the round count ; round 1 ends when they are dead too)
+    trackZombies: 16, sideZombies: 14, breachers: 20, gangway: 12,
+    trackOnRail: 8,               // of the trackZombies : standing on the track ahead (run over by the head car, roadkillPoints each)
+    trackbed: 6,                  // at the stop : zombies climbing out of the track bed onto quai 1 (outside the round count ; round 1 ends when they are dead too)
     // 180-210 s (4 min 27 ride) : the train passes trackside zombies at τ in pass[0..1] (s) ; they appear lead s before (ahead, in the fog), off m from the axis,
     // walk toward the track ; despawned `lose` m behind the tail (not counted)
-    track: { pass: [184, 199], lead: 5, off: [3.8, 9], lose: 40 },
+    track: { pass: [182, 200], lead: 6, off: [3.5, 9], lose: 40 },
     // 202-227 s (15 km/h past the derailed wagons) : side zombies (sideZombies) stand beside the track, passed at τ in pass ; breachers run alongside
     // (spawned between spawn[0] and spawn[1] s, from back or ahead of their window, `from` m away and `out` m off the body side), up to `run` m/s
     // faster or slower than the train, at most maxRun m/s on the ground (a faster train leaves them behind, lost `lose` m behind the tail) ;
     // at the window : hang grab s (attack animation, the glass cracks at crackAt of it, knocks every knock s), smash it (stays broken, wind),
     // climb in climb s (arc m over the sill), then walk the aisle. Hanging (hang + climb) is capped at maxHanging (maxHanging4p with 4 players) :
     // the others wait `wait` m behind their window. Hanging pose : `hangOut` m off the body side, feet `hangY` m above the rail head.
-    side: { pass: [208, 224], lead: 8, off: [4, 9] },
-    breach: { grab: 3.0, climb: 1.2, maxHanging: 4, maxHanging4p: 8, spawn: [203, 222], from: [8, 14], out: 3.5, run: 1.7, maxRun: 6.0, lose: 14, wait: 2.6, crackAt: 0.35, knock: 0.45, hangOut: 0.3, hangY: 0.75, arc: 0.9 },
+    side: { pass: [204, 226], lead: 8, off: [3.8, 9] },
+    breach: { grab: 2.3, climb: 1.0, maxHanging: 8, maxHanging4p: 14, spawn: [202.5, 224], from: [6, 13], out: 3.2, run: 2.5, maxRun: 7.5, lose: 18, wait: 2.2, crackAt: 0.30, knock: 0.40, hangOut: 0.3, hangY: 0.75, arc: 0.9 },
     // 227-250 s : footsteps on the roof of the last car (steps every `every` s from its front to its tail), bangs on its rear cab door (at bangAt, bangs
     // knocks), the door is forced at forceAt ; then the gangway zombies come in through it, one every gangEvery s
-    roof: { steps: 8, every: 0.7, bangAt: 233.5, bangs: 3, forceAt: 235.5, gangEvery: 1.6 },
+    roof: { steps: 10, every: 0.55, bangAt: 231.0, bangs: 4, forceAt: 233.0, gangEvery: 1.0 },
     healthRound: 1, roadkillPoints: 0,
     roadkill: { minSpeed: 3, fling: 0.6, up: 4.5 },   // run over above minSpeed m/s : thrown forward at fling x the train speed, up m/s ; blood on the cab front
     wind: { reach: 7, gain: 0.5 },                    // wind noise at broken windows : heard up to reach m (along the train), gain at full speed
