@@ -730,7 +730,7 @@ export const CONFIG = {
     stationClip: { u: 230, v0: -140 },                    // station frame : tracks with |u| < u and v0 < v < (track-side wall) are drawn by gare/build.js
     // the quai 1 track of the SNCF shapes runs ~0.85 m too close to the OSM platform edge (a train would overlap the platform) : the route is moved
     // sideways so a coach side is `gap` m from the edge, with a smooth ramp in : u from blendIn[0] to blendIn[1], out : u from blendOut[0] to blendOut[1]
-    route: { gap: 0.2, blendIn: [-170, -110], blendOut: [75, 150], extendTo: 160 },
+    route: { gap: 0.2, blendIn: [-170, -110], blendOut: [75, 150], extendTo: 140 },
     // embankment of the approach (v0.88.0) : the track stands `drop` m above the fields (slope `slope` m wide beyond the ballast shoulder) ; it eases out
     // toward the station (rampOut m before the station clip, ending `endBefore` m short of it). Bridges (rideland.json) : the deck keeps the ground
     // low beyond its sides (floor level `drop` below), girders `girder` m high above the rail bed

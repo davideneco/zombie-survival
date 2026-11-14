@@ -352,7 +352,7 @@ export class Train {
       const drawn = any;
       if (drawn !== this.drawn) { this.drawn = drawn; changed = true; }
       if (changed) this.applyBodies();
-      for (const im of this.bogieM ? [this.bogieM, this.bogieJ] : []) im.visible = any;
+      this.bogieM.visible = any; this.bogieJ.visible = any;
       for (const im of this.leafMeshes) im.visible = any;
       if (this.winMeshes) for (const im of this.winMeshes) im.visible = any && im.count > 0;
       // the pooled lights follow the car nearest to the camera
