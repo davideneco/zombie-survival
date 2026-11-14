@@ -763,7 +763,7 @@ export const CONFIG = {
     walk: { radius: 0.3, wall: 1.32, thick: 0.12, gangway: 1.3, partitionDoor: 1.0, doorOpen: 0.6, boardSpeed: 0.5, boardW: 2.35, boardPush: 0.8, boardReach: 2.6, exitW: 1.55, outW: 2.25, enterEase: 9, cabReach: 2.0, deckMid: 1.75 }, // deckMid : height above the rail head that separates the two decks (stairs)
     // zombies of the station board a parked train with open doors : they reach the door spot (doorSpot m outside the body), step in, then walk the aisle
     zombie: { radius: 0.3, doorSpot: 0.75, enter: 1.0, speedK: 0.9 },
-    light: { color: 0xc8dcff, intensity: 1.0, dist: 12, y: 1.7, yUp: 3.1, n: 2 },   // `n` pooled cold LED lights follow the car(s) nearest to the camera (no light per car), y above the rail head
+    light: { color: 0xc8dcff, intensity: 0.9, dist: 12, y: 1.3, yUp: 3.1, n: 2 },   // `n` pooled cold LED lights follow the car(s) nearest to the camera (no light per car), y above the rail head
     flicker: { hz: 9, rate: 0.35 },              // the faulty LED strips : flicker frequency, share of time off
     // camera sway of a player standing in the moving train (local only) : roll (deg) and bob (m) at full speed (refSpeed m/s), frequency (Hz) ;
     // curve : extra roll (deg) per m/s² of lateral acceleration ; jolt : bob kick (m) at each rail joint (joint m apart, axle and bogie spacing in m)
