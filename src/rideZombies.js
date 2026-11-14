@@ -106,13 +106,14 @@ export function installRideZombies(game, { world, scene, sfx }) {
     winFx(i, st);
     if (game.isHost && game.isMultiplayer) game.net?.send({ t: 'tn_win', i, st });
   };
-  // landing spot inside, under window i : the legroom gap between facing seats nearest to it (not the WC)
+  // landing spot inside, under window i : walkable landing spot in the aisle clear of furniture blocks
   const landing = (i, out) => {
     t.winOf(i, wo);
     const v = t.veh[wo.ci];
     let best = wo.u, bd = Infinity;
     for (const lg of v.Q.legroom) { const d = Math.abs(v.uc + lg.u - wo.u); if (d < bd) { bd = d; best = v.uc + lg.u; } }
-    out.u = best; out.w = wo.sd * 0.85;
+    out.u = best;
+    out.w = v.Q.kind === 'coachR2' ? (0.10 + wo.sd * 0.05) : (wo.sd * 0.15);
     return out;
   };
 

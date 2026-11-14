@@ -880,6 +880,7 @@ export class Player {
     const target = ro.clone().addScaledVector(rd, Math.max(far, 2));
     const dir = target.sub(origin).normalize();
     const vel = dir.clone().multiplyScalar(cfg.proj.speed);
+    if (this.onTram) { const t = this.onTram.v, q = t.frame(this.onTram.u, this._tq || (this._tq = {})); vel.x += q.tx * t.v; vel.z += q.tz * t.v; }
     this.game.launchShell(origin, vel, true, null, cfg.pap | 0);
     this.game.onPlayerShot?.(origin, origin.clone().addScaledVector(dir, 1), cfg.id, { nt: 1 });
   }

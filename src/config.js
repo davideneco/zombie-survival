@@ -733,34 +733,35 @@ export const CONFIG = {
     embank: { drop: 2.2, slope: 12, rampOut: 420, endBefore: 30, girder: 1.0, deckMin: 3.7 },
   },
 
-  // ------------------------------------------------------------------ Regional train (v0.80.0, src/train.js, src/trainModel.js) : an electric
-  // multiple unit of the Régiolis type (articulated low-floor regional EMU, neutral livery, no brand), number « 17412 ». Four cars: a cab car at each
-  // end (rounded nose, large windscreen, locked cab behind a bulkhead) and two middle cars ; the cars share their bogies at the joints (articulated).
-  // Parked at quai 1, doors open on the platform side ; players walk inside (moving frame of the tram : one rigid frame per car, between its bogie
-  // pivots). Lengths in m ; heights above the rail head.
+  // ------------------------------------------------------------------ SNCF TGV POS / Réseau (Carmillon / inOui, 5 vehicles: M1 + R1 + R2[Bar] + R3 + M2)
+  // Condensed single-deck 2M+3R consist fitting Quai 1 between both timber footbridges ([-51.75, +49.75]). Lengths in m; heights above rail head.
   train: {
-    cars: [19.6, 16.6, 16.6, 19.6], gap: 0.7,      // body lengths (nose first), articulation gap between two cars (bellows)
-    width: 2.9, height: 4.1,                       // body width, roof height
-    floor: 0.78, floorHigh: 1.10,                  // low floor (the platform is ~0.73 m above the rail head), raised floor over the bogies and the cabs
-    noseBogie: 3.3,                                // m from the nose to the pivot of the end bogie
-    doorWidth: 1.3, doorH: 2.05,                   // side doors : width, height above the low floor
-    // interior layout of a car, from the car end : raised floor length, step ramp, entrance vestibule (the door stands in the middle), seat bay
-    // pitch (2+2 seats facing each other) ; end cars : cab depth behind the nose (bulkhead), nose taper length, raised floor in front of the bulkhead
-    layout: { raised: 1.7, step: 0.6, vestibule: 2.0, bay: 1.95, cab: 4.1, taper: 3.3, cabRaised: 0.8 },
-    winY: [1.73, 2.78],                            // saloon window sill and head above the rail head (raised-zone windows are 0.3 m higher)
-    number: '17412',
-    park: { headU: 47.5 },                         // parked : nose at this u of the station frame (between the footbridges)
+    cars: [19.4, 19.0, 18.7, 19.0, 19.4],          // M1 (motrice), R1 (1re cl.), R2 (Bar), R3 (2nde cl.), M2 (motrice)
+    gaps: [0.60, 0.45, 0.45, 0.60],                // M1-R1 coupler (0.60), R1-R2 & R2-R3 Jacobs (0.45), R3-M2 coupler (0.60) -> L = 97.60 m
+    gap: 0.45,                                     // fallback scalar
+    kinds: ['motrice', 'coachR1', 'coachR2', 'coachR3', 'motrice'],
+    width: 2.9, height: 4.1, ceil: 3.16,           // body width, outer roof, inner ceiling (2.08 m saloon headroom)
+    floor: 0.80, floorHigh: 1.08,                  // vestibule stepwell (0.80 m = +0.065 m above quai 1), saloon & Jacobs gangways (1.08 m)
+    motriceBogies: [4.90, 3.00],                   // M1: [from nose to front motor bogie (pf = +4.80), from rear wall to rear motor bogie (pb = -6.70)]
+    coachOuterBogie: 3.00,                         // R1 front (pf = +6.50) / R3 rear (pb = -6.50) outer trailer bogie offset from outer coach end
+    bogieWb: 3.0,                                  // axle wheelbase of motor & trailer/Jacobs bogies (m)
+    noseBogie: 4.90,                               // legacy alias
+    doorWidth: 1.10, doorH: 2.05,                  // TGV recessed plug door width & height above vestibule stepwell floor
+    layout: { bulkhead: 0.65, step: 0.60, vestibule: 2.05, bay1: 2.35, bay2: 2.04, bay: 2.04, taper: 5.60 },
+    winY: [1.88, 2.84],                            // saloon window sill and head above the rail head
+    number: '9572',
+    park: { headU: 47.8 },                         // parked : nose at u ∈ [47.8, 48.8] (snaps to 48.12), tail at -49.48 inside [-51.75, +49.75]
     // walking inside (same fields as tram.walk) : radius, side walls at `wall` m from the axis (thickness thick), gangway opening, partition door ;
     // doors pass when open past doorOpen and slower than boardSpeed m/s ; board : push against an open door from up to boardW m off the axis
     // (the platform edge is gap + width / 2 away), or interact within boardReach ; step off past exitW (put down outW m off the axis, on the platform)
-    walk: { radius: 0.3, wall: 1.32, thick: 0.12, gangway: 1.3, partitionDoor: 1.0, doorOpen: 0.6, boardSpeed: 0.5, boardW: 2.35, boardPush: 0.8, boardReach: 2.6, exitW: 1.55, outW: 2.25, enterEase: 9, cabReach: 2.0 },
+    walk: { radius: 0.3, wall: 1.32, thick: 0.12, gangway: 1.25, partitionDoor: 1.05, doorOpen: 0.6, boardSpeed: 0.5, boardW: 2.35, boardPush: 0.8, boardReach: 2.6, exitW: 1.55, outW: 2.25, enterEase: 9, cabReach: 2.0 },
     // zombies of the station board a parked train with open doors : they reach the door spot (doorSpot m outside the body), step in, then walk the aisle
     zombie: { radius: 0.3, doorSpot: 0.75, enter: 1.0, speedK: 0.9 },
-    light: { color: 0xc8dcff, intensity: 1.2, dist: 11, y: 2.2 },   // one pooled point light per car (cold LED), y above the rail head
+    light: { color: 0xd0e2ff, barColor: 0xffe6c4, intensity: 1.25, barIntensity: 1.35, dist: 12.5, y: 2.55 },   // pooled coach lights (R1..R3 only)
     flicker: { hz: 9, rate: 0.35 },              // the faulty LED strips : flicker frequency, share of time off
     // camera sway of a player standing in the moving train (local only) : roll (deg) and bob (m) at full speed (refSpeed m/s), frequency (Hz) ;
     // curve : extra roll (deg) per m/s² of lateral acceleration ; jolt : bob kick (m) at each rail joint (joint m apart, axle and bogie spacing in m)
-    sway: { roll: 0.4, bob: 0.015, hz: 1.4, refSpeed: 22, curve: 0.35, jolt: 0.006, joint: 25, axle: 2.6, bogie: 17.3 },
+    sway: { roll: 0.4, bob: 0.015, hz: 1.4, refSpeed: 22, curve: 0.35, jolt: 0.006, joint: 25, axle: 3.0, bogie: 19.0 },
   },
 
   // ------------------------------------------------------------------ Procedural audio (src/audio.js, src/ambience.js) : volumes (0..1 of the bus), intervals (s), ranges (m)
@@ -796,7 +797,7 @@ export const CONFIG = {
     bridge: { vol: 0.5, minLen: 12, water: 1.25 },           // rumble volume, shortest bridge that rings (m), x over water
   },
 
-  // ------------------------------------------------------------------ Train intro (v0.81.0, src/intro.js) : the game starts in the moving regional
+  // ------------------------------------------------------------------ Train intro (v0.81.0, src/intro.js) : the game starts in the moving TGV
   // train, which comes from the south-west and stops at quai 1 of the station ; then round 1 starts at the station (zone Quais).
   // The train abscissa s(τ) is a pure function of the intro clock τ (s) : the speed profile below is integrated exactly (linear speed between
   // the keys) and the stop lands on the parked position (CONFIG.train.park). The host owns τ (tn_sync twice a second) ; clients follow.
@@ -806,7 +807,7 @@ export const CONFIG = {
     // 15 km/h past the obstacle, 50 km/h, stop at 267 s (4 min 27 s, 6.0 km from the start)
     profile: [[0, 27.8], [160, 27.8], [172, 22.2], [198, 22.2], [208, 4.2], [224, 4.2], [232, 13.9], [250, 13.9], [267, 0]],
     card: 4.0, fadeIn: 2.5,       // s : black title card, then the picture fades in over the last fadeIn s of it
-    title: 'TRAIN RÉGIONAL 17412 — DIRECTION STRASBOURG',
+    title: 'TGV INOUI 9572 — DIRECTION STRASBOURG',
     doorTime: 1.6,                // s : the doors open at the stop
     roundDelay: 5,                // s after the stop : round 1 starts at the station
     skipHold: 1.5,                // s : hold [jump] (Espace) to skip the ride (solo : anyone ; co-op : the host)
@@ -814,7 +815,7 @@ export const CONFIG = {
     graceAfter: 10,               // s : the same HP floor still holds after round 1 starts (spawn protection : an idle player is not killed the instant the ride ends) ; then zombies kill normally
     fog: 0.5, far: 320,           // fog density x fog during the ride (the landscape is the show), camera far plane (m) ; restored at the stop
     hour: 4.9, hourEnd: 5.75,     // night turning to dawn : the game clock is held on a slow ramp from hour to hourEnd over the ride (auto day / night : the cycle resumes from it)
-    slots: [[1, 1.0], [1, -1.0], [2, 1.0], [2, -1.0]],   // [car (0 : head car), u from the car centre] of the player slots (the aisle) ; late joiners : car 2
+    slots: [[1, -1.2], [2, 1.5], [2, -1.5], [3, 1.2]],   // [car (1=R1, 2=R2, 3=R3), u from the car centre] of the player slots (the aisle) ; late joiners : R2
     lateCoach: 2,
     corridor: 60,                 // m : points this close to the route (outside the island) belong to the station area (drawn while riding)
     sync: 0.5,                    // s between two tn_sync of the host
@@ -822,11 +823,11 @@ export const CONFIG = {
     maxPing: 0.5,                 // s : the ping used for that lead is capped (a stalled tab measures absurd pings)
     // on-board announcements (French) at τ (s) : chime, subtitle (text) for dur s ; static : radio static and screams after it ; big : title / sub
     announce: [
-      { at: 6, chime: true, dur: 6.5, text: 'Mesdames et messieurs, bienvenue à bord de ce train régional à destination de Strasbourg.' },
+      { at: 6, chime: true, dur: 6.5, text: 'Mesdames et messieurs, bienvenue à bord de ce TGV inOui à destination de Strasbourg.' },
       { at: 78, dur: 6, text: 'Prochain arrêt : Strasbourg-Ville, terminus. Ce train ne dessert ni Lingolsheim ni Koenigshoffen.' },
       { at: 138, chime: true, dur: 7, text: 'Mesdames et messieurs, dans quelques minutes notre train arrivera en gare de Strasbourg, son terminus…' },
       { at: 146, dur: 3.2, static: true, text: '… (grésillements — des cris dans le haut-parleur) …' },
-      { at: 198, big: true, dur: 4, title: 'RALENTISSEMENT', sub: 'Obstacle sur la voie' },
+      { at: 198, big: true, horn: true, dur: 4, title: 'RALENTISSEMENT', sub: 'Obstacle sur la voie' },
       { at: 205, big: true, quiet: true, dur: 3.2, title: 'ILS S\'ACCROCHENT AUX FENÊTRES !', sub: 'Abattez-les avant qu\'ils ne montent' },   // quiet : no brake squeal
       { at: 227.6, dur: 3.5, text: '(des pas sur le toit…)' },
       { at: 251, chime: true, dur: 6, text: 'Strasbourg. Strasbourg, terminus de ce train.' },

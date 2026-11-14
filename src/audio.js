@@ -664,7 +664,7 @@ export class Sfx {
         const t = c.currentTime;
         if (t - lastSet < R.setEvery && Math.abs(vol - lastVol) < 0.05) return; // called every frame : one update per setEvery s is plenty (fewer automation events)
         lastSet = t; lastVol = vol;
-        const k = Math.min(1, speed / 22), sqk = brake > 0.05 && speed > 0.4 && speed < 9 ? brake * Math.min(1, (9 - speed) / 4) * Math.min(1, speed / 1.2) : 0;
+        const k = Math.min(1, speed / 28), sqk = brake > 0.05 && speed > 0.4 && speed < 9 ? brake * Math.min(1, (9 - speed) / 4) * Math.min(1, speed / 1.2) : 0;
         rumble.gn.gain.setTargetAtTime((0.25 + 0.55 * k) * Math.min(1, speed / 2), t, 0.15);
         roar.fl.frequency.setTargetAtTime(220 + 900 * k, t, 0.2); roar.gn.gain.setTargetAtTime(0.32 * k, t, 0.15);
         wind.gn.gain.setTargetAtTime(0.05 * k * k, t, 0.2);
@@ -684,7 +684,7 @@ export class Sfx {
   }
   trainClack(v = 1, speed = 20) { // a wheelset over a rail joint : dull thump and a short metallic tick
     if (!this.ctx || v < 0.03) return;
-    const k = Math.min(1, speed / 22);
+    const k = Math.min(1, speed / 28);
     this._noise(0.06, 0.32 * v * (0.4 + 0.6 * k), 380, 'lowpass');
     this._tone('sine', 110, 60, 0.07, 0.22 * v * (0.4 + 0.6 * k));
     this._noise(0.02, 0.1 * v * k, 2600, 'bandpass', { q: 3, at: 0.005 });
@@ -722,6 +722,13 @@ export class Sfx {
     for (let i = 0; i < 3; i++) this._tone('square', 1480, 1480, 0.09, 0.05 * v, { at: i * 0.18 });
     this._noise(0.9, 0.12 * v, 900, 'bandpass', { at: 0.55, q: 0.8 });
     this._noise(0.12, 0.25 * v, 220, 'lowpass', { at: 1.45 });
+  }
+  trainHorn(v = 1) { // SNCF TGV two-tone pneumatic horn
+    if (!this.ctx || v < 0.03) return;
+    this._tone('sawtooth', 370, 370, 0.45, 0.28 * v, { send: 0.3 });
+    this._tone('sawtooth', 311, 311, 0.45, 0.24 * v, { send: 0.3 });
+    this._tone('sawtooth', 470, 470, 0.65, 0.32 * v, { at: 0.45, send: 0.3 });
+    this._tone('sawtooth', 370, 370, 0.65, 0.28 * v, { at: 0.45, send: 0.3 });
   }
 
   // ------------------------------------------------------------ Footsteps and ambience loops

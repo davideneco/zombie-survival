@@ -114,7 +114,8 @@ export function buildGare(ctx) {
   if (route && train && CONFIG.intro?.enabled) {
     try {
       const P = introProfile(), s0 = route.parkHeadS - P.D, W = CONFIG.intro.scenery.wreck;
-      const midU = train.L / 2 - train.veh[Math.min(2, train.n - 1)].uc; // nose -> middle of the third car (where the players stand)
+      const midCar = train.veh[Math.min(CONFIG.intro.lateCoach ?? 2, train.n - 1)];
+      const midU = train.L / 2 - midCar.uc; // nose -> middle of the Voiture Bar (where players stand)
       scenery = buildRideScenery({ route, plan, rail: data.rail, gare: data.gare, land: data.rideland, sFrom: Math.max(0, s0 - CONFIG.intro.scenery.from), wreckS: s0 + P.dist(W.at) - midU, groundMat: railNet.groundMat, groundY: railNet.groundY });
       root.add(scenery.root);
     } catch (e) { console.warn('[gare] ride scenery', e); }

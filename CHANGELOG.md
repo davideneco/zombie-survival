@@ -2,6 +2,12 @@
 
 Chaque changement est poussé sur `main` (déploiement Render) avec un nouveau numéro de version et sa description ici.
 
+## v0.99.0 (2026-11-14)
+- Remplacement du train régional de l'intro par un **TGV SNCF (TGV POS / Réseau, livrée Carmillon / TGV inOui 9572)** à 5 caisses articulées (97,6 m) : deux motrices (M1 et M2) avec nez aérodynamique, double projecteur, feux rouges de queue et pantographes, et trois voitures voyageurs explorables reliées par bogies Jacobs.
+- Intérieurs réalistes détaillés dans les trois voitures : **1ʳᵉ classe (R1)** en 2+1 carmin/prune avec lampes de table et rideaux, **Voiture-Bar Le Bistro (R2)** avec comptoir, machine à expresso, vitrine réfrigérée, carte rétroéclairée et *mange-debout*, **2ⁿᵈᵉ classe (R3)** en 2+2 sarcelle/ardoise, vestibules avec portes coulissantes et cloisons vitrées.
+- Adaptation du gameplay et du son : spots d'atterrissage des zombies aux 35 fenêtres alignés sur l'allée, vitesse des obus M79 héritée du train en mouvement, klaxon SNCF deux tons au ralentissement devant l'obstacle, courbe audio haute vitesse et textes/menus mis à jour (*TGV inOui 9572*).
+- Vérifié : `npx vite build`, captures visuelles sous Playwright (extérieur motrice au Quai 1 + intérieurs R1/R2/R3), continuité du plancher dans les soufflets Jacobs (`0` creux), intro live (`?debug&intro`), test audio (`tools/audio-smoke.js`, 47 sons, 0 échec), scan de navigation en gare (`tools/stuck-scan.mjs`, 0 piège, 0 erreur) et `tools/make-docs.mjs`. Non vérifié : trajet complet de l'intro sur 267 s, écoute réelle des sons (mode sans tête) et partie multijoueur multi-onglets (`tools/mp-smoke.mjs`).
+
 ## v0.98.1 (2026-11-14)
 - **Correctifs : joueur inactif, fausse « poche piégeuse », mesure du p95.**
   - Un joueur qui ne bouge pas mourait 0,2 s après le début de la manche 1 (le plancher de PV de l'intro s'arrêtait à l'arrêt du train, avec une dizaine de zombies dessus). Nouveau `CONFIG.intro.graceAfter` (10 s) : le plancher de PV est maintenu 10 s après le début de la manche 1 (`src/intro.js`, `hurt()` dans `src/player.js`). Un joueur inactif meurt maintenant exactement 10 s après le début de la manche.
