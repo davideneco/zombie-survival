@@ -754,7 +754,7 @@ export const CONFIG = {
     // interior layout of a trailer, from each car end : vestibule length (flat, the door stands at `door` m from the end), stair zone length (up-flight along
     // one side, descent to the lower saloon beside it), descent ramp length, divider between the two flights (m off the axis), seat bay pitch (facing rows),
     // end bulkhead depth of a closed end (head and tail trailer) ; power cars : nose taper length
-    layout: { vest: 2.9, stairs: 2.2, down: 1.3, div: 0.4, door: 1.45, bay: 2.0, cab: 0.3, nose: 6.5 },
+    layout: { vest: 2.7, stairs: 2.2, down: 1.3, div: 0.4, door: 1.35, bay: 1.8, cab: 0.3, nose: 6.5 },
     number: '17412',
     park: { headU: 47.5 },                         // parked : nose at this u of the station frame (the crossing at u = 52 stays free past the nose)
     // walking inside (same fields as tram.walk) : radius, side walls at `wall` m from the axis (thickness thick), gangway opening, partition door ;
@@ -763,7 +763,7 @@ export const CONFIG = {
     walk: { radius: 0.3, wall: 1.32, thick: 0.12, gangway: 1.3, partitionDoor: 1.0, doorOpen: 0.6, boardSpeed: 0.5, boardW: 2.35, boardPush: 0.8, boardReach: 2.6, exitW: 1.55, outW: 2.25, enterEase: 9, cabReach: 2.0, deckMid: 1.75 }, // deckMid : height above the rail head that separates the two decks (stairs)
     // zombies of the station board a parked train with open doors : they reach the door spot (doorSpot m outside the body), step in, then walk the aisle
     zombie: { radius: 0.3, doorSpot: 0.75, enter: 1.0, speedK: 0.9 },
-    light: { color: 0xc8dcff, intensity: 1.4, dist: 12, y: 2.2, n: 2 },   // `n` pooled cold LED lights follow the car(s) nearest to the camera (no light per car), y above the rail head
+    light: { color: 0xc8dcff, intensity: 1.0, dist: 12, y: 1.7, yUp: 3.1, n: 2 },   // `n` pooled cold LED lights follow the car(s) nearest to the camera (no light per car), y above the rail head
     flicker: { hz: 9, rate: 0.35 },              // the faulty LED strips : flicker frequency, share of time off
     // camera sway of a player standing in the moving train (local only) : roll (deg) and bob (m) at full speed (refSpeed m/s), frequency (Hz) ;
     // curve : extra roll (deg) per m/s² of lateral acceleration ; jolt : bob kick (m) at each rail joint (joint m apart, axle and bogie spacing in m)

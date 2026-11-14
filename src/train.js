@@ -76,7 +76,7 @@ export class Train {
     this.buildMeshes(opts);
     // pooled lights : `light.n` cold LED lights follow the car nearest to the camera (a low one for the lower saloon, a high one for the upper deck) ; `dyn` : the light pool follows them every frame (realworld.js)
     const Lc = T.light;
-    this.lights = Array.from({ length: Lc.n }, (_, k) => ({ veh: this.veh[Math.min(2, this.n - 1)], x: 0, y: this.railY + (k ? 3.5 : Lc.y), z: 0, color: Lc.color, intensity: Lc.intensity, dist: Lc.dist, dyn: true, lo: k === 0 }));
+    this.lights = Array.from({ length: Lc.n }, (_, k) => ({ veh: this.veh[Math.min(2, this.n - 1)], x: 0, y: this.railY + (k ? Lc.yUp : Lc.y), z: 0, color: Lc.color, intensity: Lc.intensity, dist: Lc.dist, dyn: true, lo: k === 0 }));
     for (const l of this.lights) opts.lightSources?.push(l);
     // collision boxes : the body of each vehicle (a power car : the body and a narrower nose box) ; reused every frame
     this._dynBoxes = []; this._boxOwner = [];
