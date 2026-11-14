@@ -439,6 +439,10 @@ export const CONFIG = {
     stab: 0.35, hostRange: 4,
   },
   grenade: { start: 2, max: 4, perRound: 2, fuse: 2.2, radius: 6.5, damage: 900, selfDamage: 60 },
+  // Occlusion des explosions (main.js blastExposed) : le souffle ne traverse ni murs, ni planchers, ni rames. Une cible est touchée si un des rayons
+  // centre -> cible (à ces hauteurs au-dessus de ses pieds) arrive jusqu'à elle ; le rayon part `lift` m au-dessus du centre et `nudge` m vers la cible
+  // (un obus qui éclate collé à un mur, ou à peine dedans, ne doit pas s'occulter lui-même).
+  blast: { probes: [0.3, 1.0, 1.6], lift: 0.25, nudge: 0.3, slack: 0.3 },
 
   // Maître Tanneur (v0.36.0, tanner.js) : mini-boss, un pestiféré colossal. Apparaît à l'ouverture des manches fromRound, fromRound + every, …
   // (manches 15, 20, 25…) dans la première des zones `zones` qui est ouverte. Santé = healthMult x santé d'un zombie de la manche, +perPlayer

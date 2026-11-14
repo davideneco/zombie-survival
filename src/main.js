@@ -958,10 +958,24 @@ const game = {
     const d = Math.hypot(p.pos.x - pos.x, p.pos.z - pos.z);
     sfx.explosion?.(Math.max(0.1, 1 - d / 60));
     if (d < radius * 1.8) p.recoil += 0.04 * (1 - d / (radius * 1.8));
-    if (self && d < radius && !p.downed && !p.dead) p.hurt((self === true ? CONFIG.grenade.selfDamage : self) * (1 - d / radius), src);
+    if (self && d < radius && !p.downed && !p.dead && this.blastExposed(pos, p.pos)) p.hurt((self === true ? CONFIG.grenade.selfDamage : self) * (1 - d / radius), src);
     if (this.isClient) return;
     this.areaDamage(pos, radius, damage, owner);
     this.damageVehiclesInRadius?.(pos, radius, damage); // les motos : 10 % des dégâts infligés aux zombies (hôte)
+  },
+
+  // Le souffle d'une explosion en `pos` atteint-il un corps dont les pieds sont en `feet` ? Non si un mur, un plancher ou une rame est entre les deux
+  // (rayons du centre vers quelques hauteurs du corps, voir CONFIG.blast : un seul rayon libre suffit). Sans collision (monde de test) : oui.
+  blastExposed(pos, feet) {
+    if (!world.rayHit) return true;
+    const B = CONFIG.blast;
+    for (const h of B.probes) {
+      const ty = feet.y + h, dx = feet.x - pos.x, dy = ty - (pos.y + B.lift), dz = feet.z - pos.z, d = Math.hypot(dx, dy, dz);
+      if (d < B.nudge + 0.05) return true; // (at the very centre)
+      const ux = dx / d, uy = dy / d, uz = dz / d, rest = d - B.nudge;
+      if (world.rayHit(pos.x + ux * B.nudge, pos.y + B.lift + uy * B.nudge, pos.z + uz * B.nudge, ux, uy, uz, rest) >= rest - B.slack) return true;
+    }
+    return false;
   },
 
   // Dégâts de zone sur les zombies (hôte / solo) ; les survivants peuvent perdre leurs jambes
@@ -973,6 +987,7 @@ const game = {
       const d = Math.hypot(z.pos.x - pos.x, z.pos.z - pos.z);
       if (d > radius) continue;
       if (Math.abs(z.pos.y + 1 - pos.y) > 2.5) continue; // pas à travers le plafond ou le plancher (z.pos.y = pieds, +1 = torse)
+      if (!this.blastExposed(pos, z.pos)) continue; // ni à travers un mur ou une rame
       const dmg = this.buffs.instaKill > 0 && !z.boss ? 999999 : damage * Math.pow(1 - d / radius, 0.6);
       const killed = z.damage(dmg, false, z.isBoss && !z.mini ? { zone: true } : null);
       fx.blood(z.pos.x, 1, z.pos.z, killed);
