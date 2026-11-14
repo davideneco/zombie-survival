@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { CONFIG } from './config.js';
 import { contact } from './contact.js';
 import { reflective } from './envmap.js';
+import { simplifyGeo } from './meshOpt.js';
 
 // =====================================================================
 //  Mobilier urbain et décors : modèles low-poly arrondis, affichés par instanciation
@@ -314,29 +315,50 @@ export function createProps() {
     P.board = [[merge(frame), M.iron], [box(1.12, 1.38, 0.14, 0, 1.46, 0), M.poster]];
   }
 
-  // ---- instances
+  // ---- optimise les prototypes denses (meshoptimizer) avant instanciation
+  for (const parts of Object.values(P)) {
+    if (!Array.isArray(parts)) continue;
+    for (const pair of parts) {
+      pair[0] = simplifyGeo(pair[0], 0.45, 0.02, 160);
+    }
+  }
+
+  // ---- instances (regroupées par type/matériau via InstancedMesh)
   const inst = {}; // type -> [{ m: Matrix4, c: Color|null }]
-  const tmpM = new THREE.Matrix4(), q = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0);
+  const tmpM = new THREE.Matrix4(), q = new THREE.Quaternion();
   function place(type, x, z, rotY = 0, scale = 1, color = null, y = 0, tilt = 0) {
     contact.addProp(type, x, z, rotY, scale, y); // ombre de contact sous l'objet (contact.js)
     (inst[type] ||= []).push({ m: new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), q.setFromEuler(new THREE.Euler(tilt, rotY, 0, 'YXZ')).clone(), new THREE.Vector3(scale, scale, scale)), c: color });
   }
-  function finish(scene) {
+
+  function emit(entries, parent, prefix = 'prop:', shadowFn = (type, pi) => CONFIG.graphics.propShadows.includes(type) && pi === 0, defaultCarHex = 0x777777) {
     const meshes = [];
-    for (const [type, list] of Object.entries(inst)) {
-      const casts = CONFIG.graphics.propShadows.includes(type);
+    const defCol = new THREE.Color(defaultCarHex);
+    for (const [type, list] of entries) {
+      if (!list?.length || !P[type]) continue;
       for (const [pi, [geo, mat]] of P[type].entries()) {
-        const useColor = mat === M.carPaint;
         const im = new THREE.InstancedMesh(geo, mat, list.length);
-        im.name = 'prop:' + type;
-        list.forEach((it, i) => { im.setMatrixAt(i, it.m); if (useColor) im.setColorAt(i, it.c || new THREE.Color(0x777777)); });
-        im.castShadow = casts && pi === 0; im.receiveShadow = true; // shadow: first part of the big props only (draw calls of the shadow pass)
-        im.frustumCulled = false;
-        scene.add(im);
+        const useColor = mat === M.carPaint;
+        for (let i = 0; i < list.length; i++) {
+          const entry = list[i];
+          im.setMatrixAt(i, entry.isMatrix4 ? entry : entry.m);
+          if (useColor) im.setColorAt(i, (!entry.isMatrix4 && entry.c) || defCol);
+        }
+        im.instanceMatrix.needsUpdate = true;
+        if (im.instanceColor) im.instanceColor.needsUpdate = true;
+        im.computeBoundingSphere();
+        im.castShadow = !!shadowFn(type, pi, mat);
+        im.receiveShadow = true;
+        im.name = prefix + type;
+        parent.add(im);
         meshes.push(im);
       }
     }
     return meshes;
+  }
+
+  function finish(scene) {
+    return emit(Object.entries(inst), scene, 'prop:');
   }
 
   // ---- barricade de porte (planches clouées sur poteaux), longueur variable, construite à la demande
@@ -638,5 +660,5 @@ export function createProps() {
     return g;
   }
 
-  return { place, finish, gate, sealWall, portalDoors, sizes: { car: P.car.size, bench: P.bench.size }, M, lib: P }; // lib : [[geometry, material]…] per type (the station builds its own instances)
+  return { place, finish, emit, gate, sealWall, portalDoors, sizes: { car: P.car.size, bench: P.bench.size }, M, lib: P }; // lib : [[geometry, material]…] per type (the station builds its own instances)
 }

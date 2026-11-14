@@ -172,6 +172,7 @@ export function installTiles(game, ctx) {
         const L = W.lampLight, src = { x, y: L.y, z, color: L.color, intensity: L.intensity, dist: L.dist, tile: t.key };
         SK.lightSources.push(src); o.lights.push(src);
       });
+      SK.lightSources._v = (SK.lightSources._v || 0) + 1;
       for (const m of [poles, lanterns]) { m.instanceMatrix.needsUpdate = true; m.computeBoundingSphere(); m.name = 'tile:lamps'; add(m); }
       poles.castShadow = false;
     }
@@ -199,7 +200,10 @@ export function installTiles(game, ctx) {
       if (m.isInstancedMesh) m.dispose(); else m.geometry.dispose(); // (the lamp geometries are shared)
     }
     if (o.proxy) removeShadowProxy(o.proxy);
-    for (const s of o.lights) { const i = SK.lightSources.indexOf(s); if (i >= 0) SK.lightSources.splice(i, 1); }
+    if (o.lights.length) {
+      for (const s of o.lights) { const i = SK.lightSources.indexOf(s); if (i >= 0) SK.lightSources.splice(i, 1); }
+      SK.lightSources._v = (SK.lightSources._v || 0) + 1;
+    }
     SK.trees?.removeSet(o.treeKey);
     t.obj = null;
   }

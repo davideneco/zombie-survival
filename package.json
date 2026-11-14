@@ -10,6 +10,8 @@
     "start": "node server/prod.mjs"
   },
   "dependencies": {
+    "flatbush": "^4.7.0",
+    "meshoptimizer": "^1.3.0",
     "three": "^0.170.0",
     "ws": "^8.22.0"
   },

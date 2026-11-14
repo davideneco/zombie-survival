@@ -8,6 +8,8 @@ import { createKeyBuildings } from './keyBuildings.js';
 import { installTerrain, terrainY, terrainWaterY, terrainOn, patchObject, tessellate } from './terrain.js';
 import { contact } from './contact.js';
 import * as THREE from 'three';
+import Flatbush from 'flatbush';
+import { initMeshOpt } from './meshOpt.js';
 import { CONFIG } from './config.js';
 import { Collision } from './collision.js';
 import { NavGrid } from './nav.js';
@@ -170,7 +172,7 @@ const NO_EDGE = -2; // (détection des portes) pas de limite entre deux cases
 
 export async function buildRealWorld(scene, renderer) {
   const rnd = seeded(20240611);
-  const [data, gareData, krData] = await Promise.all([fetch('/data/area.json').then((r) => r.json()), loadGareData(), loadKrutenauData()]); // gare : Gare de Strasbourg (v0.79.0, src/gare/)
+  const [data, gareData, krData] = await Promise.all([fetch('/data/area.json').then((r) => r.json()), loadGareData(), loadKrutenauData(), initMeshOpt()]); // gare : Gare de Strasbourg (v0.79.0, src/gare/)
   const halfX = data.half, halfZ = data.halfZ || data.half;
   const Z = CONFIG.sector;
 
@@ -2330,18 +2332,53 @@ export async function buildRealWorld(scene, renderer) {
   let reliefTimer = 0;
   let lightTimer = 0, lampScale = 1; // lampScale : l'Aube éteint peu à peu les lampadaires (summit.js)
   let lightY = 0; // height of the local player: the light pool is sorted by 3D distance (key buildings stack floors)
+  let lightIndex = null, lightStatic = [], lightDyn = [], lightIndexedVer = -1, lightIndexedLen = -1;
+  const _topS = new Array(LIGHTS).fill(null), _topD = new Float64Array(LIGHTS);
+  const isLightActive = (s) => !(s.door && s.door.open) && !(s.box && !s.box.active) && !s.off;
+  const isStaticActive = (i) => isLightActive(lightStatic[i]);
+  const rebuildLightIndex = () => {
+    lightIndexedVer = lightSources._v || 0;
+    lightIndexedLen = lightSources.length;
+    lightStatic.length = 0; lightDyn.length = 0;
+    for (let i = 0; i < lightSources.length; i++) {
+      const s = lightSources[i];
+      if (s.dyn) lightDyn.push(s); else lightStatic.push(s);
+    }
+    if (!lightStatic.length) { lightIndex = null; return; }
+    const tree = new Flatbush(lightStatic.length);
+    for (let i = 0; i < lightStatic.length; i++) {
+      const s = lightStatic[i];
+      tree.add(s.x, s.z, s.x, s.z);
+    }
+    tree.finish();
+    lightIndex = tree;
+  };
+  const considerLight = (s, px, pz) => {
+    const dy = (s.y ?? lightY) - lightY;
+    const d = (s.x - px) ** 2 + (s.z - pz) ** 2 + dy * dy;
+    let pos = -1;
+    for (let j = LIGHTS - 1; j >= 0 && d < _topD[j]; j--) pos = j;
+    if (pos < 0) return;
+    for (let j = LIGHTS - 1; j > pos; j--) { _topD[j] = _topD[j - 1]; _topS[j] = _topS[j - 1]; }
+    _topD[pos] = d; _topS[pos] = s;
+  };
   const assignLights = (px, pz) => {
-    const sorted = lightSources
-      .filter((s) => !(s.door && s.door.open) && !(s.box && !s.box.active) && !s.off)
-      .map((s) => ({ s, d: (s.x - px) ** 2 + (s.z - pz) ** 2 + ((s.y ?? lightY) - lightY) ** 2 }))
-      .sort((a, b) => a.d - b.d)
-      .slice(0, LIGHTS);
-    lightPool.forEach((l, i) => {
-      const e = sorted[i];
-      l.userData.src = e ? e.s : null;
-      if (!e) { l.intensity = 0; return; }
-      l.color.setHex(e.s.color); l.intensity = e.s.intensity * lampScale; l.distance = e.s.dist; l.position.set(e.s.x, e.s.y, e.s.z);
-    });
+    if ((lightSources._v || 0) !== lightIndexedVer || lightSources.length !== lightIndexedLen) rebuildLightIndex();
+    _topD.fill(Infinity); _topS.fill(null);
+    if (lightIndex) {
+      const cand = lightIndex.neighbors(px, pz, 24, Infinity, isStaticActive);
+      for (let i = 0; i < cand.length; i++) considerLight(lightStatic[cand[i]], px, pz);
+    }
+    for (let i = 0; i < lightDyn.length; i++) {
+      const s = lightDyn[i];
+      if (isLightActive(s)) considerLight(s, px, pz);
+    }
+    for (let i = 0; i < LIGHTS; i++) {
+      const l = lightPool[i], s = _topS[i];
+      l.userData.src = s;
+      if (!s) { l.intensity = 0; continue; }
+      l.color.setHex(s.color); l.intensity = s.intensity * lampScale; l.distance = s.dist; l.position.set(s.x, s.y, s.z);
+    }
   };
   // Boîte mystère : une seule active parmi tous ses emplacements possibles
   const boxes = machines.filter((m) => m.type === 'box');

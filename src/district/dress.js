@@ -75,21 +75,18 @@ export function dressBoxes(list) {
 }
 
 export function buildDress(list, { props, scene, collision, lamps, lightSources }) {
-  const P = props.lib, meshes = [], byType = new Map();
-  for (const o of list) { if (o.type === 'lamp') continue; (byType.get(o.type) || byType.set(o.type, []).get(o.type)).push(o); }
-  const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), p = new THREE.Vector3(), s = new THREE.Vector3(1, 1, 1), col = new THREE.Color();
-  for (const [type, items] of byType) {
-    for (const [pi, [geo, mat]] of P[type].entries()) {
-      const im = new THREE.InstancedMesh(geo, mat, items.length);
-      items.forEach((o, i) => {
-        m4.compose(p.set(o.x, o.y || 0, o.z), q.setFromEuler(e.set(0, o.rot, 0)), s); im.setMatrixAt(i, m4);
-        if (mat === props.M.carPaint) im.setColorAt(i, col.set(o.color ?? 0x2a2826));
-      });
-      im.instanceMatrix.needsUpdate = true; im.computeBoundingSphere();
-      im.castShadow = pi === 0; im.receiveShadow = true; im.name = 'krutenau:' + type;
-      scene.add(im); meshes.push(im);
-    }
+  const meshes = [], byType = new Map();
+  const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), p = new THREE.Vector3(), s = new THREE.Vector3(1, 1, 1);
+  for (const o of list) {
+    if (o.type === 'lamp') continue;
+    let arr = byType.get(o.type);
+    if (!arr) byType.set(o.type, arr = []);
+    arr.push({
+      m: new THREE.Matrix4().compose(p.set(o.x, o.y || 0, o.z), q.setFromEuler(e.set(0, o.rot, 0)), s),
+      c: o.color != null ? new THREE.Color(o.color) : null,
+    });
   }
+  meshes.push(...props.emit(byType, scene, 'krutenau:', (_type, pi) => pi === 0, 0x2a2826));
   // lamps: the same two instanced meshes as the tiles' lamps (shared materials: no new program) + a light SOURCE each (the 8-light pool lights the nearest ones only)
   const lampList = list.filter((o) => o.type === 'lamp');
   if (lampList.length && lamps) {

@@ -805,15 +805,7 @@ export function buildGareMeshes({ plan, gare, rail, pbr, tiled, props, envMap, r
   }
   for (const [u, v, a] of [[60, 108, 0.4], [-30, 112, 0.1], [104, 66, 1.4], [-96, 40, 2.6]]) { put('car', u, v, a); colliders.push({ u, v, lu: 4.4, lv: 1.9, rot: a, h: 1.5, prop: true }); }
   for (const u of [-50, -20, 15, 40]) put('bench', u, B.v0 - 3.2, 0); // platform benches
-  const P = props.lib;
-  for (const [type, list] of inst) {
-    for (const [geo, mat] of P[type] || []) {
-      const im = new THREE.InstancedMesh(geo, mat, list.length);
-      list.forEach((m, i) => { im.setMatrixAt(i, m); if (type === 'car' && geo === P.car[0][0]) im.setColorAt(i, new THREE.Color(0x2a2826)); });
-      im.castShadow = im.receiveShadow = true; im.frustumCulled = false; im.name = 'gare:' + type;
-      root.add(im);
-    }
-  }
+  props.emit(inst, root, 'gare:', () => true, 0x2a2826);
   for (const u of [-50, -20, 15, 40]) colliders.push({ u, v: B.v0 - 3.2, lu: 1.9, lv: 0.6, rot: 0, h: 0.9, vault: true, prop: true });
 
   // ---------------------------------------------------------------- platform signs and screens (emissive, local)
