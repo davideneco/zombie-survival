@@ -87,19 +87,15 @@ export function carLayouts() {
       Q.blocks.push({ u0, u1, w0: -0.08, w1: 0.08 });
       Q.blocksUpper.push({ u0, u1, w0: -0.08, w1: 0.08 });
 
-      // 2. Lower-deck under-stair bulkhead at |u| in [3.76, 3.92], w in [-wall, -0.06] closing the space under the stairs
-      const us0 = sDir > 0 ? 3.76 : -3.92, us1 = sDir > 0 ? 3.92 : -3.76;
-      Q.blocks.push({ u0: us0, u1: us1, w0: -wall, w1: -0.06 });
+      // 2. Lower-deck under-stair bulkhead at |u| in [3.78, 4.85], w in [-wall, 0.08] closing the entire space under the left stairs
+      const us0 = sDir > 0 ? 3.78 : -4.85, us1 = sDir > 0 ? 4.85 : -3.78;
+      Q.blocks.push({ u0: us0, u1: us1, w0: -wall - 0.1, w1: 0.08 });
 
-      // 3. Upper-deck right stairwell balustrade & luggage rack at |u| >= 4.25, w in [-0.06, wall] (leaves |u| in [3.25, 4.25] as a full-width upper landing!)
-      const ub0 = sDir > 0 ? 4.25 : -h - 0.5, ub1 = sDir > 0 ? h + 0.5 : -4.25;
-      Q.blocksUpper.push({ u0: ub0, u1: ub1, w0: -0.06, w1: wall + 0.2 });
+      // 3. Upper-deck right stairwell balustrade at |u| >= 3.78, w in [-0.08, wall] (leaves |u| in [2.90, 3.78] as a full-width 0.88 m upper landing!)
+      const ub0 = sDir > 0 ? 3.78 : -h - 0.5, ub1 = sDir > 0 ? h + 0.5 : -3.78;
+      Q.blocksUpper.push({ u0: ub0, u1: ub1, w0: -0.08, w1: wall + 0.2 });
 
-      // 4. Upper-deck end bulkhead at |u| >= 5.56 closing the top of the staircase above the vestibule
-      const ue0 = sDir > 0 ? 5.56 : -h - 0.5, ue1 = sDir > 0 ? h + 0.5 : -5.56;
-      Q.blocksUpper.push({ u0: ue0, u1: ue1, w0: -wall - 0.2, w1: wall + 0.2 });
-
-      // 5. Vestibule 3-tier aluminum luggage shelves near the gangways (|u| in [7.25, 8.20], leaves 1.64 m central aisle w in [-0.82, +0.82])
+      // 4. Vestibule 3-tier aluminum luggage shelves near the gangways (|u| in [7.25, 8.20], leaves 1.64 m central aisle w in [-0.82, +0.82])
       const ul0 = sDir > 0 ? 7.25 : -8.20, ul1 = sDir > 0 ? 8.20 : -7.25;
       for (const blk of [Q.blocks, Q.blocksUpper]) {
         blk.push({ u0: ul0, u1: ul1, w0: -wall, w1: -0.82 });
@@ -109,9 +105,9 @@ export function carLayouts() {
     return Q;
   };
 
-  // R1..R3 : 1re Classe TGV M (17.20 m, 3 spacious bays @ 2.16 m on BOTH Lower and Upper decks, 2+1 burgundy/terracotta seats, wide 1.24 m aisle)
+  // R1..R3 : 1re Classe TGV M (17.20 m, 3 spacious bays @ 1.98 m on BOTH Lower and Upper decks, 2+1 burgundy/terracotta seats, wide 1.24 m aisle, 0.95 m stair landings)
   const makeR1 = (len) => {
-    const bay = 2.16, u0 = -3.24, Q = initDuplex('coachR1', len, 3, bay, u0);
+    const bay = 1.98, u0 = -2.97, Q = initDuplex('coachR1', len, 3, bay, u0);
     for (let b = 0; b < 3; b++) {
       const a = u0 + b * bay, uc = a + bay / 2;
       Q.win.push({ u: uc, dy: 0, side: 0 });
@@ -125,7 +121,7 @@ export function carLayouts() {
         const blocks = upper ? Q.blocksUpper : Q.blocks;
         const fy = upper ? FU : FL;
         if (carre) {
-          for (const [ub, dir] of [[a + 0.30, 1], [a + bay - 0.30, -1]]) {
+          for (const [ub, dir] of [[a + 0.28, 1], [a + bay - 0.28, -1]]) {
             seats.push({ u: ub, dir, w: -1.18, width: 0.56, arm: 1 });
             seats.push({ u: ub, dir, w: 0.88, width: 0.46, arm: -1 });
             seats.push({ u: ub, dir, w: 1.38, width: 0.46, arm: 0 });
@@ -133,12 +129,12 @@ export function carLayouts() {
             blocks.push({ u0: lo, u1: hi, w0: -wall, w1: -0.66 });
             blocks.push({ u0: lo, u1: hi, w0: 0.58, w1: wall });
           }
-          tables.push({ u: uc, w0: -1.62, w1: -0.82, y: fy + 0.72, len: 0.50, lamp: -1.48 });
-          tables.push({ u: uc, w0: 0.72, w1: 1.62, y: fy + 0.72, len: 0.50, lamp: 1.48 });
-          blocks.push({ u0: uc - 0.24, u1: uc + 0.24, w0: -wall, w1: -0.78 });
-          blocks.push({ u0: uc - 0.24, u1: uc + 0.24, w0: 0.68, w1: wall });
+          tables.push({ u: uc, w0: -1.62, w1: -0.82, y: fy + 0.72, len: 0.48, lamp: -1.48 });
+          tables.push({ u: uc, w0: 0.72, w1: 1.62, y: fy + 0.72, len: 0.48, lamp: 1.48 });
+          blocks.push({ u0: uc - 0.22, u1: uc + 0.22, w0: -wall, w1: -0.78 });
+          blocks.push({ u0: uc - 0.22, u1: uc + 0.22, w0: 0.68, w1: wall });
         } else {
-          for (const ub of [a + 0.36, a + 1.52]) {
+          for (const ub of [a + 0.34, a + 1.38]) {
             seats.push({ u: ub, dir: 1, w: -1.18, width: 0.56, arm: 1, tablette: true });
             seats.push({ u: ub, dir: 1, w: 0.88, width: 0.46, arm: -1, tablette: true });
             seats.push({ u: ub, dir: 1, w: 1.38, width: 0.46, arm: 0, tablette: true });
@@ -175,15 +171,15 @@ export function carLayouts() {
       Q.winUpper.push({ u, dy: 0, side: 0 });
     }
     // Left side (-w) : long light-oak high bar table + turquoise poufs + yellow lamps (w in [-wall, -0.58])
-    Q.blocksUpper.push({ u0: -3.10, u1: 3.10, w0: -wall, w1: -0.58 });
+    Q.blocksUpper.push({ u0: -2.90, u1: 2.90, w0: -wall, w1: -0.58 });
     // Right side (+w) : 3 sculpted lounge banquettes/alcoves + rounded oak tables + burgundy sorting bins (w in [0.58, wall])
-    Q.blocksUpper.push({ u0: -3.10, u1: 3.10, w0: 0.58, w1: wall });
+    Q.blocksUpper.push({ u0: -2.90, u1: 2.90, w0: 0.58, w1: wall });
     return Q;
   };
 
-  // R5..R8 : 2nde Classe TGV M (17.20 m, 4 bays @ 1.62 m on BOTH Lower and Upper decks, 2+2 navy/petrol-blue seats, wide 1.16 m central aisle)
+  // R5..R8 : 2nde Classe TGV M (17.20 m, 4 bays @ 1.48 m on BOTH Lower and Upper decks, 2+2 navy/petrol-blue seats, wide 1.16 m central aisle, 0.95 m stair landings)
   const makeR3 = (len) => {
-    const bay = 1.62, u0 = -3.24, Q = initDuplex('coachR3', len, 4, bay, u0);
+    const bay = 1.48, u0 = -2.96, Q = initDuplex('coachR3', len, 4, bay, u0);
     for (let b = 0; b < 4; b++) {
       const a = u0 + b * bay, uc = a + bay / 2;
       Q.win.push({ u: uc, dy: 0, side: 0 });
@@ -206,11 +202,11 @@ export function carLayouts() {
             }
           }
           for (const sd of [-1, 1]) {
-            tables.push({ u: uc, w0: sd > 0 ? 0.72 : -1.62, w1: sd > 0 ? 1.62 : -0.72, y: fy + 0.72, len: 0.40, lamp: 0 });
+            tables.push({ u: uc, w0: sd > 0 ? 0.72 : -1.62, w1: sd > 0 ? 1.62 : -0.72, y: fy + 0.72, len: 0.38, lamp: 0 });
             blocks.push({ u0: uc - 0.18, u1: uc + 0.18, w0: sd > 0 ? 0.72 : -wall, w1: sd > 0 ? wall : -0.72 });
           }
         } else {
-          for (const ub of [a + 0.22, a + 1.10]) {
+          for (const ub of [a + 0.18, a + 0.94]) {
             for (const sd of [-1, 1]) {
               seats.push({ u: ub, dir: 1, w: sd * 0.86, width: 0.43, arm: -sd, tablette: true });
               seats.push({ u: ub, dir: 1, w: sd * 1.36, width: 0.43, arm: 0, tablette: true });
@@ -258,13 +254,13 @@ export function floorOfCar(Q, u, w = 0, relY = null) {
     if (a >= 5.55) return F0;
     if (a >= 3.85) {
       // The central divider wall at w in [-0.08, +0.08] separates the left staircase (w < 0) from the right lower ramp (w >= 0).
-      // On the upper landing (|u| in [3.85, 4.25]), a player already on the upper deck (relY > 1.85) stays at FU = 2.76 m across the full width.
-      if (a <= 4.25 && relY != null && relY > 1.85) return FU;
-      if (w < 0) {
+      // Guard against corner grazing from the lower saloon (relY < 0.70) or upper saloon (relY > 1.85):
+      if (w >= -0.08 && a < 4.50 && relY != null && relY > 1.85) return FU;
+      if (w < 0 && !(a < 4.50 && relY != null && relY < 0.70)) {
         const t = (5.55 - a) / 1.70; // 0 at vestibule (5.55), 1 at upper landing (3.85)
         return F0 + clamp(t, 0, 1) * (FU - F0);
       }
-      const tLow = (5.55 - a) / 1.40; // reaches FL = 0.30 m by |u| = 4.15 m
+      const tLow = (5.55 - a) / 1.70; // 0 at vestibule (5.55), 1 at lower saloon (3.85)
       return F0 + clamp(tLow, 0, 1) * (FL - F0);
     }
     return (relY != null && relY > 1.55) ? FU : FL;
@@ -862,7 +858,7 @@ export function buildCarGeometry(kind) {
   const T = CONFIG.train, W = T.walk, Lay = carLayouts(), Q = Lay[kind] || Lay.coachR3;
   const L = Q.len, h = Q.h, Wd = T.width / 2, F0 = T.floor, F1 = T.floorHigh, FL = Lay.FL, FU = Lay.FU, B = buckets();
   const isMotrice = kind === 'motrice', Ln = T.layout.taper, uF = isMotrice ? h - Ln : h, uA = -h;
-  const yb = 0.26, yc = 4.68, lin = W.wall + 0.01, ceil = T.ceil ?? 5.10, ceilLow = FU - 0.10, ceilVest = 3.28;
+  const yb = 0.26, yc = 4.68, lin = W.wall + 0.01, ceil = T.ceil ?? 5.10, ceilLow = FU - 0.10, ceilVest = 3.56;
   const { winW, winY0, winY1, winYU0, winYU1 } = Lay, dw = T.doorWidth / 2, dTop = F0 + T.doorH;
   const sideRegion = isMotrice ? ATLAS.sideMotrice : kind === 'coachR1' ? ATLAS.sideR1 : kind === 'coachR2' ? ATLAS.sideR2 : ATLAS.sideR3;
 
@@ -1066,38 +1062,35 @@ export function buildCarGeometry(kind) {
     B.add('inside', cbox(sDir * 6.20, (FL + F0) / 2, 0, 1.50, F0 - FL, 2 * lin - 0.02, 0.01), C.stairStep);
     // Gangway raised floor slab at F1 = 0.88 m
     B.add('inside', cbox(sDir * 7.75, (FL + F1) / 2, 0, 1.65, F1 - FL, 2 * lin - 0.02, 0.01), C.stairStep);
-    // Vestibule high ceiling at ceilVest = 3.28 m across |u| in [5.55, 8.55] (+78 cm above standing eye 2.50 m!)
+    // Vestibule high ceiling at ceilVest = 3.56 m across |u| in [5.55, 8.55] (+1.06 m above standing eye 2.50 m!)
     B.add('inside', new THREE.PlaneGeometry(2 * lin - 0.04, 3.00).rotateX(Math.PI / 2).translate(0, ceilVest, -sDir * 7.05), C.ceiling);
     B.add('panel', uvRect(new THREE.PlaneGeometry(0.22, 1.10).rotateX(Math.PI / 2).translate(0, ceilVest - 0.008, -sDir * 6.35), PANEL.led));
     // Vestibule 3-tier brushed-aluminum TGV M luggage racks (couloir.jpg: |u| in [7.25, 8.20], w in [-lin, -0.82] & [0.82, lin])
     addLuggageRackTGVM(B, sDir > 0 ? 7.25 : -8.20, sDir > 0 ? 8.20 : -7.25, -lin + 0.04, -0.84, F1, ceilVest);
     addLuggageRackTGVM(B, sDir > 0 ? 7.25 : -8.20, sDir > 0 ? 8.20 : -7.25, 0.84, lin - 0.04, F1, ceilVest);
 
-    // Right-hand ramp/steps down from vestibule (0.80 m at |u|=5.55) to Lower Saloon (0.30 m at |u|=4.15) on w in [0.06, +lin]
+    // Right-hand lower stairs down from vestibule (0.80 m at |u|=5.55) to Lower Saloon (0.30 m at |u|=3.85) on w in [0.06, +lin]
     const wRampMid = (lin + 0.06) / 2, wRampW = lin - 0.06;
     for (let st = 0; st < 4; st++) {
-      const uSt = sDir * (5.38 - st * 0.34), ySt = F0 - ((st + 1) / 4) * (F0 - FL);
-      B.add('inside', cbox(uSt, (FL + ySt) / 2, wRampMid, 0.36, Math.max(0.04, ySt - FL), wRampW - 0.02, 0.008), C.stairStep);
-      B.add('dark', cbox(uSt - sDir * 0.16, ySt + 0.004, wRampMid, 0.03, 0.01, wRampW - 0.04, 0.003), C.yellow);
+      const uSt = sDir * (5.34 - st * 0.42), ySt = F0 - ((st + 1) / 4) * (F0 - FL);
+      B.add('inside', cbox(uSt, (FL + ySt) / 2, wRampMid, 0.42, Math.max(0.04, ySt - FL), wRampW - 0.02, 0.008), C.stairStep);
+      B.add('dark', cbox(uSt - sDir * 0.19, ySt + 0.004, wRampMid, 0.03, 0.01, wRampW - 0.04, 0.003), C.yellow);
     }
-    // High ceiling over the right-hand lower ramp (y = ceilVest = 3.28 m from |u|=4.25 to 5.58, with vertical fascia down to ceilLow = 2.66 m at |u|=4.25)
-    B.add('inside', new THREE.PlaneGeometry(wRampW, 1.34).rotateX(Math.PI / 2).translate(wRampMid, ceilVest, -sDir * 4.91), C.ceiling);
-    B.add('inside', cbox(sDir * 4.25, (ceilLow + ceilVest) / 2, wRampMid, 0.06, ceilVest - ceilLow, wRampW, 0.008), C.partition);
 
     // 2. Left-hand TGV M Staircase (couloir2.jpeg: 9 dark ribbed steps climbing from F0 = 0.80 m at |u|=5.55 up to FU = 2.76 m at |u|=3.85, on w in [-lin, -0.06])
     const wStMid = (-lin - 0.06) / 2, wStW = lin - 0.06;
     for (let st = 0; st < 9; st++) {
       const uSt = sDir * (5.45 - st * 0.188), ySt = F0 + ((st + 1) / 9) * (FU - F0);
-      B.add('inside', cbox(uSt, ySt - 0.11, wStMid, 0.21, 0.22, wStW - 0.02, 0.008), C.stairStep);
+      B.add('inside', cbox(uSt, (FL + ySt) / 2, wStMid, 0.21, ySt - FL, wStW - 0.02, 0.008), C.stairStep);
       B.add('dark', cbox(uSt + sDir * 0.09, ySt + 0.003, wStMid, 0.03, 0.01, wStW - 0.04, 0.003), C.yellow);
     }
     // Under-stair vertical bulkhead at |u| = 3.85, w in [-lin, -0.06], y in [FL, FU] closing the space under the stairs from the lower saloon
-    B.add('inside', cbox(sDir * 3.85, (FL + FU) / 2, wStMid, 0.08, FU - FL, wStW, 0.01), C.partition);
-    // Pill-shaped TGV M seat-direction sign on the stair bulkhead facing the vestibule (couloir.jpg: ↑ 240-287 / ↘ 200-235)
-    B.add('panel', uvRect(onEnd(plane(0.56, 0.14), sDir * 5.52, sDir).translate(0, F0 + 1.52, 0), PANEL.extLed));
+    B.add('inside', cbox(sDir * 3.85, (FL + FU) / 2, wStMid, 0.06, FU - FL, wStW, 0.01), C.partition);
+    // Pill-shaped TGV M seat-direction sign mounted high on the upper stairwell header (y = 3.88 m, completely above the walkable staircase!)
+    B.add('panel', uvRect(onEnd(plane(0.56, 0.14), sDir * 5.53, -sDir).translate(-0.82, 3.88, 0), PANEL.extLed));
 
     // Stairwell central divider wall at w = 0, |u| in [3.85, 5.55] : pearl-white lower wall + fluted glass upper balustrade + black tubular handrails (wagonbarhaut.jpg, couloir2.jpeg)
-    B.add('inside', cbox(sDir * 4.70, (FL + FU) / 2, 0, 1.72, FU - FL, 0.08, 0.01), C.partition);
+    B.add('inside', cbox(sDir * 4.70, (FL + FU) / 2, 0, 1.70, FU - FL, 0.08, 0.01), C.partition);
     // Properly oriented side glass panel along w = 0 (onSide first, then translate along Y and Z!)
     B.add('glass', onSide(plane(1.66, 0.96), 0, 1).translate(0, FU + 0.48, -sDir * 4.70));
     B.add('dark', tube([sDir * 5.52, FU + 0.96, 0], [sDir * 3.86, FU + 0.96, 0], 0.022, 6), C.black);
@@ -1105,25 +1098,22 @@ export function buildCarGeometry(kind) {
     B.add('dark', tube([sDir * 5.52, F0 + 0.92, -lin + 0.05], [sDir * 3.86, FU + 0.92, -lin + 0.05], 0.020, 6), C.black);
   }
 
-  // 3. Intermediate Structural Deck Slab (separating Lower Saloon y <= 2.66 m from Upper Saloon y >= 2.76 m)
-  // Full width across u in [-3.85, +3.85], plus right half w in [0, +lin] across |u| in [3.85, 4.25] (leaving |u| in [3.85, 4.25] as a full-width upper landing!)
-  B.add('inside', cbox(0, (ceilLow + FU) / 2, 0, 7.72, FU - ceilLow, 2 * lin - 0.02, 0.01), C.ceiling);
-  B.add('inside', new THREE.PlaneGeometry(1.14, 8.40).rotateX(-Math.PI / 2).translate(0, FU + 0.004, 0), aCol);
+  // 3. Intermediate Structural Deck Slab (separating Lower Saloon y <= 2.66 m from Upper Saloon y >= 2.76 m across u in [-3.85, +3.85])
+  B.add('inside', cbox(0, (ceilLow + FU) / 2, 0, 7.70, FU - ceilLow, 2 * lin - 0.02, 0.01), C.ceiling);
+  B.add('inside', new THREE.PlaneGeometry(1.14, 7.68).rotateX(-Math.PI / 2).translate(0, FU + 0.004, 0), aCol);
   for (const sDir of [-1, 1]) {
     const wRightMid = lin / 2, wRightW = lin;
-    B.add('inside', cbox(sDir * 4.05, (ceilLow + FU) / 2, wRightMid, 0.42, FU - ceilLow, wRightW, 0.01), C.ceiling);
-    // Upper-deck right bulkhead & fluted glass balustrade at |u| = 4.25, w in [0, +lin] (matching Q.blocksUpper |u| >= 4.25, w >= -0.06 1:1!)
-    B.add('inside', cbox(sDir * 4.25, FU + 0.52, wRightMid, 0.06, 1.04, wRightW - 0.02, 0.01), C.partition);
-    B.add('glass', onEnd(plane(wRightW - 0.08, 0.88), sDir * 4.25, -sDir).translate(wRightMid, FU + 1.48, 0));
-    B.add('dark', tube([sDir * 4.25, FU + 1.04, 0.02], [sDir * 4.25, FU + 1.04, lin - 0.04], 0.022, 6), C.black);
-    // Upper-deck end bulkhead at |u| = 5.58 closing the upper level above the vestibule (starts at FU = 2.76 m on left, ceilVest = 3.28 m on right)
-    B.add('inside', cbox(sDir * 5.58, (FU + ceil) / 2, -lin / 2, 0.07, ceil - FU, lin, 0.01), C.partition);
-    B.add('inside', cbox(sDir * 5.58, (ceilVest + ceil) / 2, lin / 2, 0.07, ceil - ceilVest, lin, 0.01), C.partition);
+    // Upper-deck right bulkhead & fluted glass balustrade at |u| = 3.85, w in [0, +lin] (matching Q.blocksUpper |u| >= 3.78, w >= -0.08 1:1!)
+    B.add('inside', cbox(sDir * 3.85, FU + 0.52, wRightMid, 0.06, 1.04, wRightW - 0.02, 0.01), C.partition);
+    B.add('glass', onEnd(plane(wRightW - 0.08, 0.88), sDir * 3.85, -sDir).translate(wRightMid, FU + 1.48, 0));
+    B.add('dark', tube([sDir * 3.85, FU + 1.04, 0.02], [sDir * 3.85, FU + 1.04, lin - 0.04], 0.022, 6), C.black);
+    // Upper-deck end bulkhead at |u| = 5.58 closing the upper level above the vestibule (starts at ceilVest = 3.56 m across full width so the stairs have 100% head clearance!)
+    B.add('inside', cbox(sDir * 5.58, (ceilVest + ceil) / 2, 0, 0.07, ceil - ceilVest, 2 * lin, 0.01), C.partition);
 
-    // 16:9 TGV INOUI passenger information screens above the lower saloon doorway (y = 2.46 m, bottom = 2.35 m > 2.00 m eye!) and upper saloon (y = 4.78 m > 4.46 m eye!)
+    // 16:9 TGV INOUI passenger information screens flush-mounted on the solid left under-stair wall (w = -0.82, y = 2.22 m) and upper saloon header (w = -0.82, y = 4.78 m)
     const scr = kind === 'coachR1' ? PANEL.screenR1 : kind === 'coachR2' ? PANEL.screenBar : PANEL.screenR3;
-    B.add('inside', cbox(sDir * 3.82, 2.46, 0.68, 0.05, 0.24, 0.72, 0.008), C.black);
-    B.add('panel', uvRect(onEnd(plane(0.66, 0.20), sDir * 3.79, -sDir).translate(0.68, 2.46, 0), scr));
+    B.add('inside', cbox(sDir * 3.81, 2.22, -0.82, 0.04, 0.22, 0.70, 0.008), C.black);
+    B.add('panel', uvRect(onEnd(plane(0.64, 0.18), sDir * 3.78, -sDir).translate(-0.82, 2.22, 0), scr));
     B.add('inside', cbox(sDir * 5.54, 4.78, -0.82, 0.05, 0.24, 0.72, 0.008), C.black);
     B.add('panel', uvRect(onEnd(plane(0.66, 0.20), sDir * 5.51, -sDir).translate(-0.82, 4.78, 0), scr));
   }
@@ -1177,11 +1167,11 @@ export function buildCarGeometry(kind) {
           onSide(fr, side * (lin - 0.025), -side); B.add('inside', fr, C.partition);
         }
       }
-      // Upper-deck overhead transparent glass & aluminum luggage racks in R1..R3 & R5..R8 at y = 4.68 m (+22 cm above 4.46 m standing eyes!)
+      // Upper-deck overhead transparent glass & aluminum luggage racks in R1..R3 & R5..R8 at y = 4.74 m above the seat bays u in [-3.10, +3.10]
       if (kind === 'coachR1' || kind === 'coachR3') {
-        const [r0, r1] = Q.saloon, rw = side * 1.12;
-        B.add('inside', cyl((r0 + r1) / 2, 4.68, rw, 0.020, r1 - r0 - 0.2, 'u', 6), C.rack);
-        B.add('glass', new THREE.PlaneGeometry(lin - 1.14, r1 - r0 - 0.2).rotateX(-Math.PI / 2).translate(side * (lin + 1.12) / 2, 4.67, -(r0 + r1) / 2));
+        const rw = side * 1.12;
+        B.add('inside', cyl(0, 4.74, rw, 0.020, 6.20, 'u', 6), C.rack);
+        B.add('glass', new THREE.PlaneGeometry(lin - 1.14, 6.20).rotateX(-Math.PI / 2).translate(side * (lin + 1.12) / 2, 4.73, 0));
       }
     }
   }
@@ -1256,8 +1246,8 @@ export function buildCarGeometry(kind) {
 
     // ---- B. UPPER DECK "LE BISTRO" SALON DETENTE (wagonbarhaut.jpg & wagonbarhaut2.jpg, FU = 2.76 m)
     // Left side (-w, w in [-lin, -0.58]) : Long Light-Oak high bar table along panoramic windows + Turquoise square pouf stools + Yellow TGV M lamps
-    B.add('inside', cbox(0, FU + 0.88, -1.32, 6.10, 0.06, 0.68, 0.015), C.barOak);
-    for (const uLeg of [-2.85, -0.95, 0.95, 2.85]) {
+    B.add('inside', cbox(0, FU + 0.88, -1.32, 5.76, 0.06, 0.68, 0.015), C.barOak);
+    for (const uLeg of [-2.75, -0.92, 0.92, 2.75]) {
       B.add('dark', tube([uLeg, FU, -1.04], [uLeg, FU + 0.86, -1.04], 0.026, 6), C.black);
       B.add('dark', tube([uLeg, FU, -1.58], [uLeg, FU + 0.86, -1.58], 0.026, 6), C.black);
     }

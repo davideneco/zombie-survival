@@ -757,7 +757,7 @@ export const CONFIG = {
     // walking inside (same fields as tram.walk) : radius, side walls at `wall` m from the axis (thickness thick), gangway opening, partition door ;
     // doors pass when open past doorOpen and slower than boardSpeed m/s ; board : push against an open door from up to boardW m off the axis
     // (the platform edge is gap + width / 2 away), or interact within boardReach ; step off past exitW (put down outW m off the axis, on the platform)
-    walk: { radius: 0.3, wall: 1.70, thick: 0.12, gangway: 1.32, partitionDoor: 1.12, doorOpen: 0.6, boardSpeed: 0.5, boardW: 2.76, boardPush: 0.8, boardReach: 2.9, exitW: 1.92, outW: 2.66, enterEase: 10, cabReach: 2.0 },
+    walk: { radius: 0.3, wall: 1.70, thick: 0.12, gangway: 1.32, partitionDoor: 1.12, doorOpen: 0.6, boardSpeed: 0.5, boardW: 2.76, boardPush: 0.8, boardReach: 2.9, exitW: 1.92, outW: 2.66, enterEase: 38, cabReach: 2.0 },
     // zombies of the station board a parked train with open doors : they reach the door spot (doorSpot m outside the body), step in, then walk the aisle
     zombie: { radius: 0.3, doorSpot: 0.75, enter: 1.0, speedK: 0.9 },
     light: { color: 0xfff4e4, barColor: 0xffe8c8, intensity: 1.45, barIntensity: 1.55, dist: 14.5, y: 3.20 },   // pooled warm TGV M coach lights
