@@ -189,8 +189,17 @@ export function planGare(gare, rail) {
   for (let u = pu0 + 6; u <= pu1 - 4; u += 16) { lights.push({ l: [u, (vBack(u) + at(q1W, u)) / 2], y: 5.2, color: 0xffb060, intensity: 10, dist: 16 }); lights.push({ l: [u + 8, (at(q23E, u + 8) + at(q23W, u + 8)) / 2], y: 5.2, color: 0xffa858, intensity: 9, dist: 16 }); }
   lights.push({ l: [cMid - 12, 0], y: 9, color: 0xffc27a, intensity: 14, dist: 22 }, { l: [cMid + 12, 0], y: 9, color: 0xffc27a, intensity: 14, dist: 22 });
   for (let u = verU0 + 12; u <= verU1 - 12; u += 24) lights.push({ l: [u, body.v1 + 3], y: 1.2, color: 0x9ec8ff, intensity: 7, dist: 14 }); // cold LED uplights
-  for (const [u, v] of [[-60, 70], [-20, 100], [30, 104], [70, 80], [100, 40], [60, 45], [-40, 50], [-90, 30]]) lights.push({ l: [u, v], y: 6.5, color: 0xffa040, intensity: 9, dist: 20, post: true }); // street lamps
+  for (const [u, v] of [[-60, 70], [-20, 100], [30, 104], [70, 80], [100, 40], [60, 45], [-40, 50], [-90, 30], [-18, 70], [16, 70], [-44, 88], [40, 92]]) lights.push({ l: [u, v], y: 6.5, color: 0xffa040, intensity: 9, dist: 20, post: true }); // street lamps
   lights.push({ l: [stopL[0], stopL[1] + 6], y: 3, color: 0xdfe8ff, intensity: 6, dist: 10 });
+  lights.push(
+    { l: [-1, 82], y: 2.3, color: 0x9cd4ff, intensity: 8, dist: 14 },     // central fountain plaza
+    { l: [20, 62], y: 3.1, color: 0xdfe8ff, intensity: 7, dist: 12 },     // underground tram A/D & lift
+    { l: [-34.5, 63.7], y: 2.9, color: 0xffdfb0, intensity: 7, dist: 11 }, // Velhop covered bike hub
+    { l: [-59, 31.2], y: 2.8, color: 0xffe09a, intensity: 6, dist: 10 },  // taxi / drop-off canopy
+    { l: [-24, 35.5], y: 2.4, color: 0xffc878, intensity: 6, dist: 9 },   // west promenade kiosk
+    { l: [24, 36.0], y: 2.4, color: 0xffc878, intensity: 6, dist: 9 },    // east promenade kiosk
+    { l: [-1, 110], y: 1.6, color: 0xff8c30, intensity: 6, dist: 10 },    // north checkpoint beacon
+  );
 
   // ---------------------------------------------------------------- tram stop « Gare Centrale » (line C) and the start spot
   const stopTrack = stop ? stop.track : [W(stopL[0], stopL[1] - 22), W(stopL[0], stopL[1] + 40)];

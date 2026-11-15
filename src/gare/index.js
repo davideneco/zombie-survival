@@ -90,7 +90,7 @@ export function buildGare(ctx) {
   for (const c of colliders) {
     const [x, z] = W(c.u, c.v);
     const du = Math.cos(c.rot || 0), dv = Math.sin(c.rot || 0), dx = F.ux * du + F.vx * dv, dz = F.uz * du + F.vz * dv;
-    collision.addBox(x, z, c.lu, c.lv, Math.atan2(dz, dx), c.h ?? 3, -Infinity, c.prop ? 'prop' : 'wall', false);
+    collision.addBox(x, z, c.lu, c.lv, Math.atan2(dz, dx), c.h ?? 3, -Infinity, c.prop ? 'prop' : 'wall', !!c.vault);
   }
   collision.addBounds?.(plan.bounds);
 
@@ -317,6 +317,14 @@ function drawMap(plan, gare, bldPolys, S) {
   for (const p of gare.platforms || []) fill(p.pts, '#2a2d31');
   fill(plan.walk.place, '#3a3e44'); fill(plan.walk.q1, '#44484e'); fill(plan.walk.q23, '#44484e'); for (const k of Object.keys(plan.walk)) if (k.startsWith('crossing')) fill(plan.walk[k], '#5a5040');
   fill(plan.walk.hall, '#4c4436'); fill(plan.walk.verriere, '#2f4a5e');
+  // forecourt landmarks (fountain plaza, tram A/D access, Velhop hub, taxi bay, kiosks)
+  x.strokeStyle = 'rgba(180,175,165,0.22)'; x.lineWidth = 2 * S;
+  const [fcx, fcy] = P(plan.W(-1, 82)); x.beginPath(); x.arc(fcx, fcy, 16.5 * S, 0, Math.PI * 2); x.stroke();
+  x.fillStyle = '#4c545c'; x.beginPath(); x.arc(fcx, fcy, 5 * S, 0, Math.PI * 2); x.fill();
+  x.fillStyle = '#314c52';
+  for (const [u, v, lu, lv] of [[14, 62, 3.8, 8.2], [20, 62, 2.6, 2.6], [26, 62, 3.8, 8.2], [-34.5, 63.7, 11, 5.2], [-59, 31.2, 7.6, 2.4]]) {
+    fill([[u - lu / 2, v - lv / 2], [u + lu / 2, v - lv / 2], [u + lu / 2, v + lv / 2], [u - lu / 2, v + lv / 2]].map(([uu, vv]) => plan.W(uu, vv)), '#314c52');
+  }
   for (const p of bldPolys) fill(p, '#7a6a55');
   const B = plan.body;
   const box = (u0, u1, v0, v1) => [[u0, v0], [u1, v0], [u1, v1], [u0, v1]].map(([u, v]) => plan.W(u, v));

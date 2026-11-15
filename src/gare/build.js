@@ -682,16 +682,71 @@ export function buildGareMeshes({ plan, gare, rail, pbr, tiled, props, envMap, r
     }
   }
 
-  // ================================================================ Place de la Gare : paving, roads, tram stop, lamps, barriers
+  // ================================================================ Place de la Gare : esplanade inlays, roads, tram stop, lamps, shelters, kiosks, plaza furniture
   {
+    const busPtsList = [];
+    const rbx = (uc, vc, lu, lv, y0, y1, rot = 0) => {
+      const w = Math.abs(lv), h = Math.abs(y1 - y0), d = Math.abs(lu);
+      const g = new THREE.BoxGeometry(w, h, d), uv = g.attributes.uv;
+      const dims = [[d, h], [d, h], [w, d], [w, d], [w, h], [w, h]];
+      for (let f = 0; f < 6; f++) for (let k = 0; k < 4; k++) { const i = f * 4 + k; uv.setXY(i, uv.getX(i) * dims[f][0], uv.getY(i) * dims[f][1]); }
+      if (rot) g.rotateY(-rot);
+      g.translate(vc, (y0 + y1) / 2, -uc);
+      return g;
+    };
+    // Shared 2x2 forecourt signage atlas (1 material / 1 draw call for all parvis totems & canopies)
+    const parvisSignTex = canvasTex(1024, 512, (ctx, w, h) => {
+      const cells = [
+        [0, 0, '#13212f', '#60e6ea', '#d6f7fa', 'TRAM A · D — SOUTERRAIN', 'Gare Centrale · Accès fermé'],
+        [512, 0, '#123325', '#7df0b8', '#ddfbe9', 'VÉLHOP — STATION GARE', 'Vélos en libre-service · 24h/24'],
+        [0, 256, '#0f203c', '#ffd24a', '#ebe8d8', 'TAXIS · DÉPOSE-MINUTE', 'Parvis Sud · Voie réservée'],
+        [512, 256, '#1c2026', '#f2efe8', '#b8c4d0', 'GARE DE STRASBOURG', 'TGV · TER · Tram · Taxis · Vélhop'],
+      ];
+      for (const [ox, oy, bg, fg, subCol, title, sub] of cells) {
+        ctx.fillStyle = bg; ctx.fillRect(ox, oy, 512, 256);
+        ctx.strokeStyle = fg; ctx.lineWidth = 4; ctx.strokeRect(ox + 10, oy + 10, 492, 236);
+        ctx.fillStyle = fg; ctx.textAlign = 'center'; ctx.font = 'bold 34px Arial, sans-serif';
+        ctx.fillText(title, ox + 256, oy + 114, 460);
+        ctx.fillStyle = subCol; ctx.font = '24px Arial, sans-serif';
+        ctx.fillText(sub, ox + 256, oy + 168, 460);
+      }
+    });
+    const signParvis = new THREE.MeshStandardMaterial({ map: parvisSignTex, emissive: 0xffffff, emissiveMap: parvisSignTex, emissiveIntensity: 0.48, roughness: 0.45 });
+    noCast.add(signParvis);
+    const uvPanel = (w, h, slot) => {
+      const g = new THREE.PlaneGeometry(w, h), uv = g.attributes.uv;
+      const u0 = (slot % 2) * 0.5 + 0.01, u1 = u0 + 0.48;
+      const v0 = slot < 2 ? 0.51 : 0.01, v1 = v0 + 0.48;
+      for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) > 0.5 ? u1 : u0, uv.getY(i) > 0.5 ? v1 : v0);
+      return g;
+    };
+
     // paving : the whole forecourt side, clipped at x = -851 (the island ground starts there)
     const big = [[-175, B.v0 + 1], [180, B.v0 + 1], [180, 215], [-175, 215]].map(([u, v]) => plan.W(u, v));
     const clipped = clipX(big, -851);
     if (clipped.length >= 3) add(M.paving, flatPoly(loc(clipped), 0));
+
+    // architectural stone paving inlays : central ceremonial promenade, concentric plaza circle & axis ribs
+    {
+      const fcu = -1, fcv = 82;
+      add(M.concrete, flatPoly([[-8.0, 28.4], [-7.1, 28.4], [-7.1, 102], [-8.0, 102]], 0.011));
+      add(M.concrete, flatPoly([[5.1, 28.4], [6.0, 28.4], [6.0, 102], [5.1, 102]], 0.011));
+      for (let v = 34; v <= 98; v += 8) add(M.concrete, flatPoly([[-7.1, v - 0.3], [5.1, v - 0.3], [5.1, v + 0.3], [-7.1, v + 0.3]], 0.010));
+      // circular plaza medallion & outer promenade ring around (-1, 82)
+      const ring = (r0, r1, y, mat, seg = 32) => {
+        const g = new THREE.RingGeometry(r0, r1, seg); g.rotateX(-Math.PI / 2); g.translate(fcv, y, -fcu); add(mat, g);
+      };
+      ring(15.8, 17.5, 0.011, M.concrete, 36);
+      ring(5.3, 10.8, 0.010, M.floor, 32);
+      // cross promenade strips connecting Velhop (-34, 64) and Tram A/D (20, 62) to central axis
+      add(M.concrete, flatPoly([[-38, 63.0], [26, 61.0], [26, 62.6], [-38, 64.6]], 0.009));
+    }
+
     // roads (OSM) : asphalt ribbons over the paving
     for (const r of gare.roads || []) {
       if (!['secondary', 'busway'].includes(r.type)) continue;
       const w = r.type === 'secondary' ? 3.5 : 1.8, pts = loc(r.pts);
+      if (r.type === 'busway') busPtsList.push(pts);
       for (let i = 1; i < pts.length; i++) {
         const [a, b] = [pts[i - 1], pts[i]], len = Math.hypot(b[0] - a[0], b[1] - a[1]); if (len < 0.1) continue;
         const nu = -(b[1] - a[1]) / len * w, nv = (b[0] - a[0]) / len * w;
@@ -700,6 +755,30 @@ export function buildGareMeshes({ plan, gare, rail, pbr, tiled, props, envMap, r
         add(M.asphalt, flatPoly(quad, 0.008));
       }
     }
+
+    // pedestrian crosswalks (passages pietons) & tactile warning strips across the busway
+    const busAtU = (u) => {
+      for (const pts of busPtsList) for (let i = 1; i < pts.length; i++) {
+        const [a, b] = [pts[i - 1], pts[i]];
+        if (u >= Math.min(a[0], b[0]) - 0.5 && u <= Math.max(a[0], b[0]) + 0.5 && Math.abs(b[0] - a[0]) > 0.05) {
+          const t = (u - a[0]) / (b[0] - a[0]);
+          if (t >= -0.05 && t <= 1.05) return { v: a[1] + t * (b[1] - a[1]), ang: Math.atan2(b[1] - a[1], b[0] - a[0]) };
+        }
+      }
+      return null;
+    };
+    for (const u of [-44, -1, 20, 68]) {
+      const hit = busAtU(u); if (!hit) continue;
+      for (let k = -3; k <= 3; k++) {
+        const du = k * 0.9 * Math.cos(hit.ang), dv = k * 0.9 * Math.sin(hit.ang);
+        add(M.white, rbx(u + du, hit.v + dv, 0.48, 3.2, 0.011, 0.016, hit.ang));
+      }
+      for (const s of [-1, 1]) {
+        const off = s * 2.15;
+        add(M.tactile, rbx(u - Math.sin(hit.ang) * off, hit.v + Math.cos(hit.ang) * off, 6.2, 0.42, 0.011, 0.016, hit.ang));
+      }
+    }
+
     // CTS line C : grooved rails in a concrete slab, the two platforms, shelters, totem
     const st = plan.stop, tr = loc(st.track).filter(([u, v]) => v < 95);
     for (let i = 1; i < tr.length; i++) {
@@ -747,13 +826,177 @@ export function buildGareMeshes({ plan, gare, rail, pbr, tiled, props, envMap, r
       add(M.lamp, new THREE.SphereGeometry(0.26, 10, 8).scale(1, 1.3, 1).translate(v, 6.45, -u)); add(M.zinc, new THREE.ConeGeometry(0.42, 0.3, 10).translate(v, 6.85, -u));
       colliders.push({ u, v, lu: 0.4, lv: 0.4, rot: 0, h: 6 });
     }
-    // underground tram entrances (lines A / D) : glass pavilions, escalators blocked by debris
+
+    // underground tram entrances (lines A / D) : stepped concrete stairwells, steel balustrades, glass canopies, central PMR glass elevator
     for (const [u, v] of [[14, 62], [26, 62]]) {
-      add(M.steel, bx(u - 1.8, u + 1.8, v - 4, v + 4, 2.9, 3.05));
-      for (const [du, dv] of [[-1.8, -4], [1.8, -4], [-1.8, 4], [1.8, 4]]) add(M.steel, bx(u + du - 0.06, u + du + 0.06, v + dv - 0.06, v + dv + 0.06, 0, 2.9));
-      add(M.verre, bx(u - 1.8, u + 1.8, v + 3.95, v + 4.0, 0.1, 2.9)); for (const s of [-1, 1]) add(M.verre, bx(u + s * 1.8 - 0.03, u + s * 1.8 + 0.03, v - 4, v + 4, 0.1, 2.9));
-      add(M.rubble, bx(u - 1.5, u + 1.5, v - 3.6, v + 3.6, 0, 0.9));
-      colliders.push({ u, v, lu: 3.8, lv: 8.2, rot: 0, h: 3.05 });
+      // concrete perimeter apron & tactile warning strip before the stairs
+      add(M.concrete, bx(u - 2.3, u + 2.3, v - 4.8, v + 4.7, 0, 0.04));
+      add(M.tactile, bx(u - 1.7, u + 1.7, v - 4.6, v - 4.15, 0.04, 0.055));
+      // U-shaped sandstone/concrete stairwell parapets (low solid walls + glass safety screens + tubular steel rails)
+      add(M.sandTrim, bx(u - 1.95, u + 1.95, v + 4.0, v + 4.35, 0, 1.0));
+      for (const s of [-1, 1]) {
+        add(M.sandTrim, bx(u + s * 1.85 - 0.15, u + s * 1.85 + 0.15, v - 4.0, v + 4.2, 0, 1.0));
+        add(M.steel, bx(u + s * 1.85 - 0.04, u + s * 1.85 + 0.04, v - 4.0, v + 4.2, 1.5, 1.58));
+        add(M.verre, bx(u + s * 1.85 - 0.02, u + s * 1.85 + 0.02, v - 3.9, v + 4.1, 1.0, 1.52));
+      }
+      add(M.steel, bx(u - 1.95, u + 1.95, v + 4.15, v + 4.23, 1.5, 1.58));
+      add(M.verre, bx(u - 1.85, u + 1.85, v + 4.17, v + 4.21, 1.0, 1.52));
+      // descending steps + collapsed concrete ceiling rubble blocking the lower shaft
+      for (let k = 0; k < 7; k++) add(M.concrete, bx(u - 1.65, u + 1.65, v - 3.9 + k * 0.9, v - 3.0 + k * 0.9, -0.25 * (k + 1), -0.25 * k + 0.04));
+      for (const c of [-0.55, 0.55]) add(M.steel, beam([u + c, 0.95, v - 3.9], [u + c, 0.15, v - 0.5], 0.05));
+      for (let k = 0; k < 10; k++) {
+        const g = new THREE.DodecahedronGeometry(0.45 + hash(u, k) * 0.4, 0).scale(1, 0.65, 1).rotateY(hash(k, u) * TAU);
+        g.translate(v + 0.8 + (hash(k, 2) - 0.5) * 3.8, 0.15 + hash(k, 3) * 0.75, -(u + (hash(k, 4) - 0.5) * 2.6));
+        add(M.rubble, g);
+      }
+      // glazed steel canopy roof with ribs, LED soffit strip, and Tram A/D header sign
+      add(M.ctsGreen, bx(u - 2.05, u + 2.05, v - 4.2, v + 4.4, 3.02, 3.16));
+      add(M.verre, bx(u - 1.85, u + 1.85, v - 4.0, v + 4.2, 3.16, 3.20));
+      add(M.led, bx(u - 1.4, u + 1.4, v - 3.6, v + 3.6, 2.97, 3.02));
+      for (let dv = -4.0; dv <= 4.01; dv += 2.0) {
+        add(M.steel, bx(u - 1.98, u + 1.98, v + dv - 0.06, v + dv + 0.06, 2.94, 3.06));
+        if (dv === -4.0 || dv === 0 || dv === 4.0) for (const s of [-1, 1]) add(M.steel, cyl(u + s * 1.86, v + dv, 0.95, 2.1, 0.06, 0.06, 8));
+      }
+      for (const [dv, rot] of [[-4.24, -Math.PI / 2], [4.44, Math.PI / 2]]) {
+        const sg = uvPanel(3.4, 0.65, 0); sg.rotateY(rot); sg.translate(v + dv, 2.72, -u); add(signParvis, sg);
+      }
+      colliders.push({ u, v, lu: 4.1, lv: 8.7, rot: 0, h: 3.2 });
+    }
+    // central PMR glass elevator shaft between both underground tram entrances [20, 62]
+    {
+      const u = 20, v = 62;
+      add(M.concrete, bx(u - 1.6, u + 1.6, v - 1.6, v + 1.6, 0, 0.05));
+      for (const [du, dv] of [[-1.2, -1.2], [1.2, -1.2], [-1.2, 1.2], [1.2, 1.2]]) add(M.steel, bx(u + du - 0.09, u + du + 0.09, v + dv - 0.09, v + dv + 0.09, 0, 4.1));
+      add(M.ctsGreen, bx(u - 1.38, u + 1.38, v - 1.38, v + 1.38, 3.85, 4.22));
+      add(M.led, bx(u - 1.0, u + 1.0, v - 1.0, v + 1.0, 3.78, 3.85));
+      add(M.verre, bx(u - 1.22, u + 1.22, v - 1.22, v + 1.22, 0.15, 3.85));
+      add(M.iron, bx(u - 0.85, u + 0.85, v - 0.85, v + 0.85, 0.08, 2.35));
+      add(M.glassDark, bx(u - 0.7, u + 0.7, v - 1.25, v - 1.18, 0.05, 2.2));
+      for (const [dv, rot] of [[-1.41, -Math.PI / 2], [1.41, Math.PI / 2]]) {
+        const sg = uvPanel(2.2, 0.45, 0); sg.rotateY(rot); sg.translate(v + dv, 3.55, -u); add(signParvis, sg);
+      }
+      colliders.push({ u, v, lu: 2.8, lv: 2.8, rot: 0, h: 4.2 });
+    }
+
+    // central monumental fountain plaza at (-1, 82) : stepped octagonal sandstone plinth + outer curved granite backrest walls
+    {
+      const fcu = -1, fcv = 82;
+      const step1 = new THREE.CylinderGeometry(5.2, 5.4, 0.14, 8); step1.translate(fcv, 0.07, -fcu); add(M.concrete, step1);
+      const step2 = new THREE.CylinderGeometry(3.8, 4.0, 0.14, 8); step2.translate(fcv, 0.21, -fcu); add(M.sandTrim, step2);
+      colliders.push({ u: fcu, v: fcv, lu: 4.3, lv: 4.3, rot: Math.PI / 8, h: 1.8, prop: true });
+      for (const deg of [32, 90, 148, 212, 270, 328]) {
+        const a = (deg * Math.PI) / 180, r = 10.9;
+        const bu = fcu + Math.cos(a) * r, bv = fcv + Math.sin(a) * r, rot = a + Math.PI / 2;
+        add(M.sandTrim, rbx(bu, bv, 2.8, 0.5, 0, 0.52, rot));
+        add(M.wood, rbx(bu, bv, 2.6, 0.42, 0.50, 0.55, rot));
+        colliders.push({ u: bu, v: bv, lu: 2.8, lv: 0.55, rot, h: 0.56, vault: true, prop: true });
+      }
+    }
+
+    // covered Velhop bicycle hub at (-34.5, 63.7) : glazed green canopy, LED bay, 12 steel U-racks, terminal
+    {
+      const vu = -34.5, vv = 63.7;
+      add(M.concrete, bx(vu - 6.6, vu + 6.6, vv - 2.9, vv + 2.9, 0, 0.04));
+      add(M.ctsGreen, bx(vu - 5.8, vu + 5.8, vv - 2.3, vv + 2.3, 2.75, 2.95));
+      add(M.verre, bx(vu - 5.5, vu + 5.5, vv - 2.0, vv + 2.0, 2.95, 2.99));
+      add(M.led, bx(vu - 4.8, vu + 4.8, vv - 0.35, vv + 0.35, 2.70, 2.76));
+      for (const du of [-5.2, -1.75, 1.75, 5.2]) for (const dv of [-1.9, 1.9]) add(M.ctsGreen, cyl(vu + du, vv + dv, 0, 2.76, 0.08, 0.08, 8));
+      for (const dv of [-1.15, 1.15]) for (let k = -2; k <= 2; k++) {
+        const ru = vu + k * 2.1;
+        for (const s of [-0.32, 0.32]) add(M.steel, cyl(ru + s, vv + dv, 0.04, 0.72, 0.03, 0.03, 6));
+        add(M.steel, beam([ru - 0.34, 0.75, vv + dv], [ru + 0.34, 0.75, vv + dv], 0.05));
+      }
+      for (const [dv, rot] of [[-2.33, -Math.PI / 2], [2.33, Math.PI / 2]]) {
+        const sg = uvPanel(4.2, 0.46, 1); sg.rotateY(rot); sg.translate(vv + dv, 2.86, -vu); add(signParvis, sg);
+      }
+      colliders.push({ u: vu, v: vv - 1.15, lu: 10.6, lv: 1.4, rot: 0, h: 0.9, vault: true, prop: true });
+      colliders.push({ u: vu, v: vv + 1.15, lu: 10.6, lv: 1.4, rot: 0, h: 0.9, vault: true, prop: true });
+      // self-service Velhop rental terminal at (-27.2, 63.5)
+      const tu = -27.2, tv = 63.5;
+      add(M.ctsGreen, bx(tu - 0.35, tu + 0.35, tv - 0.35, tv + 0.35, 0, 2.25));
+      const ts = uvPanel(0.62, 0.7, 1); ts.rotateY(Math.PI / 2); ts.translate(tv + 0.37, 1.55, -tu); add(signParvis, ts);
+      colliders.push({ u: tu, v: tv, lu: 0.85, lv: 0.85, rot: 0, h: 2.25, prop: true });
+    }
+
+    // Taxi / Depose-Minute shelter & bay at (-59, 31.2)
+    {
+      const tu = -59, tv = 31.2, ang = -0.14;
+      add(M.concrete, rbx(tu, tv + 1.2, 16, 3.6, 0, 0.035, ang));
+      add(M.ctsGreen, rbx(tu, tv, 7.4, 2.2, 2.55, 2.74, ang));
+      add(M.led, rbx(tu, tv, 6.4, 1.2, 2.49, 2.55, ang));
+      add(M.verre, rbx(tu + Math.sin(ang) * 0.95, tv - Math.cos(ang) * 0.95, 7.0, 0.06, 0.15, 2.55, ang));
+      for (const du of [-3.3, 0, 3.3]) {
+        const pu = tu + Math.cos(ang) * du + Math.sin(ang) * 0.95, pv = tv + Math.sin(ang) * du - Math.cos(ang) * 0.95;
+        add(M.steel, cyl(pu, pv, 0, 2.55, 0.06, 0.06, 8));
+      }
+      const sg = uvPanel(3.4, 0.45, 2); sg.rotateY(Math.PI / 2 - ang); sg.translate(tv + Math.cos(ang) * 1.13, 2.65, -(tu - Math.sin(ang) * 1.13)); add(signParvis, sg);
+      colliders.push({ u: tu + Math.sin(ang) * 0.95, v: tv - Math.cos(ang) * 0.95, lu: 7.2, lv: 0.4, rot: ang, h: 2.6 });
+    }
+
+    // Illuminated Gare de Strasbourg wayfinding totems framing the Verriere entrance (-10.5, 35.5) & (8.5, 35.5)
+    for (const u of [-10.5, 8.5]) {
+      const v = 35.5;
+      add(M.iron, bx(u - 0.6, u + 0.6, v - 0.16, v + 0.16, 0, 3.25));
+      for (const [dv, rot] of [[-0.18, -Math.PI / 2], [0.18, Math.PI / 2]]) {
+        const sg = uvPanel(1.05, 1.85, 3); sg.rotateY(rot); sg.translate(v + dv, 1.75, -u); add(signParvis, sg);
+      }
+      colliders.push({ u, v, lu: 1.3, lv: 0.45, rot: 0, h: 3.25 });
+    }
+
+    // Promenade & outer square sandstone garden-bench plinths
+    for (const [pu, pv, lu, rot] of [[-16.5, 37.5, 5.2, 0.14], [14.5, 37.5, 5.2, -0.14], [-36, 86, 6.2, -0.35], [32, 96, 6.2, 0.35]]) {
+      add(M.sandTrim, rbx(pu, pv, lu, 0.95, 0, 0.48, rot));
+      add(M.wood, rbx(pu, pv, lu - 0.3, 0.78, 0.48, 0.54, rot));
+      colliders.push({ u: pu, v: pv, lu, lv: 1.0, rot, h: 0.54, vault: true, prop: true });
+    }
+
+    // West Verriere promenade cafe pergola deck at (-32, 34.5)
+    {
+      const cu = -32, cv = 34.5, ang = 0.22;
+      add(M.wood, rbx(cu, cv, 6.6, 3.8, 0.015, 0.06, ang));
+      for (const du of [-3.0, 0, 3.0]) for (const dv of [-1.6, 1.6]) {
+        const xu = cu + Math.cos(ang) * du - Math.sin(ang) * dv, xv = cv + Math.sin(ang) * du + Math.cos(ang) * dv;
+        add(M.iron, cyl(xu, xv, 0.05, 2.85, 0.05, 0.05, 8));
+      }
+      for (const du of [-3.0, -1.5, 0, 1.5, 3.0]) add(M.iron, rbx(cu + Math.cos(ang) * du, cv + Math.sin(ang) * du, 0.08, 3.6, 2.85, 2.98, ang));
+      for (const du of [-1.9, 0, 1.9]) {
+        const tu = cu + Math.cos(ang) * du, tv = cv + Math.sin(ang) * du;
+        add(M.iron, cyl(tu, tv, 0.05, 0.72, 0.04, 0.04, 8));
+        add(M.wood, cyl(tu, tv, 0.75, 0.05, 0.42, 0.42, 12));
+        colliders.push({ u: tu, v: tv, lu: 0.9, lv: 0.9, rot: 0, h: 0.85, vault: true, prop: true });
+      }
+    }
+
+    // East promenade bus shelter near (68, 37.5)
+    {
+      const su = 68, sv = 37.5, ang = -0.32;
+      add(M.concrete, rbx(su, sv, 5.4, 2.4, 0, 0.04, ang));
+      add(M.ctsGreen, rbx(su, sv, 4.8, 1.8, 2.5, 2.68, ang));
+      add(M.led, rbx(su, sv, 4.0, 0.9, 2.45, 2.5, ang));
+      add(M.verre, rbx(su - Math.sin(ang) * 0.75, sv + Math.cos(ang) * 0.75, 4.6, 0.05, 0.15, 2.5, ang));
+      for (const du of [-2.2, 2.2]) add(M.steel, cyl(su + Math.cos(ang) * du - Math.sin(ang) * 0.75, sv + Math.sin(ang) * du + Math.cos(ang) * 0.75, 0, 2.5, 0.06, 0.06, 8));
+      colliders.push({ u: su - Math.sin(ang) * 0.75, v: sv + Math.cos(ang) * 0.75, lu: 4.8, lv: 0.35, rot: ang, h: 2.6 });
+    }
+
+    // East wing CTS ticketing / info kiosk near (88, 16)
+    {
+      const ku = 88, kv = 16;
+      add(M.concrete, bx(ku - 1.8, ku + 1.8, kv - 1.5, kv + 1.5, 0, 0.04));
+      add(M.ctsGreen, bx(ku - 1.3, ku + 1.3, kv - 1.0, kv + 1.0, 0.04, 2.55));
+      add(M.steel, bx(ku - 1.5, ku + 1.5, kv - 1.2, kv + 1.2, 2.55, 2.75));
+      add(M.glassDark, bx(ku - 0.95, ku + 0.95, kv + 1.01, kv + 1.04, 0.9, 2.1));
+      add(M.lamp, bx(ku - 1.0, ku + 1.0, kv + 1.02, kv + 1.08, 2.22, 2.38));
+      colliders.push({ u: ku, v: kv, lu: 2.8, lv: 2.2, rot: 0, h: 2.75 });
+    }
+
+    // Cast-iron / granite tree-pit curbs & grates under forecourt trees (walkable <= 0.08m, 0 extra draw calls)
+    for (const [tx, tz] of gare.trees || []) {
+      const [u, v] = L(tx, tz);
+      if (!inPoly(plan.placeL, u, v) || v - plan.vFront(u) < 2.2) continue;
+      if (nearCollider(colliders, u, v, 0.9)) continue;
+      const hb = busAtU(u); if (hb && Math.abs(v - hb.v) < 2.8) continue;
+      add(M.sandDark, bx(u - 0.78, u + 0.78, v - 0.78, v + 0.78, 0, 0.08));
+      add(M.iron, bx(u - 0.56, u + 0.56, v - 0.56, v + 0.56, 0.01, 0.085));
     }
   }
 
@@ -772,11 +1015,11 @@ export function buildGareMeshes({ plan, gare, rail, pbr, tiled, props, envMap, r
 
   flush(local);
 
-  // ---------------------------------------------------------------- instanced props (props.js library) : barriers, benches, boards, bikes, cars
+  // ---------------------------------------------------------------- instanced props (props.js library) : barriers, benches, boards, bikes, cars, kiosks, fountain, planters, bollards
   const inst = new Map(); // type -> [Matrix4]
-  const put = (type, u, v, yawLocal, s = 1) => {
+  const put = (type, u, v, yawLocal, s = 1, y = 0) => {
     const [x, z] = plan.W(u, v);
-    const m = new THREE.Matrix4().compose(new THREE.Vector3(x, 0, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(0, yawLocal + local.rotation.y, 0)), new THREE.Vector3(s, s, s));
+    const m = new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(0, yawLocal + local.rotation.y, 0)), new THREE.Vector3(s, s, s));
     (inst.get(type) || inst.set(type, []).get(type)).push(m);
   };
   // crowd barriers along every barrier wall, concrete blocks every few metres ; platform end barricades
@@ -790,10 +1033,102 @@ export function buildGareMeshes({ plan, gare, rail, pbr, tiled, props, envMap, r
     }
   }
   for (const u of [plan.walls.length ? G.playU[0] : 0, G.playU[1]]) for (const vv of [B.v0 - 3, B.v0 - 7, plan.at(plan.q23E, u) - 3, plan.at(plan.q23W, u) + 3]) put('crate', u + (u < 0 ? -1.2 : 1.2), vv, hash(u, vv) * 3);
+
+  // Forecourt focal fountain on raised octagon plinth (-1, 82) & radial benches + alternating planters + bins
+  put('fountain', -1, 82, 0, 1.45, 0.28);
+  for (const deg of [32, 90, 148, 212, 270, 328]) {
+    const a = (deg * Math.PI) / 180, fcu = -1, fcv = 82, r = 9.95;
+    const bu = fcu + Math.cos(a) * r, bv = fcv + Math.sin(a) * r, yw = Math.atan2(-Math.cos(a), -Math.sin(a));
+    put('bench', bu, bv, yw);
+    colliders.push({ u: bu, v: bv, lu: 1.9, lv: 0.6, rot: Math.PI / 2 - yw, h: 0.9, vault: true, prop: true });
+    if (deg === 32 || deg === 148 || deg === 212 || deg === 328) put('bin', fcu + Math.cos(a + 0.16) * 10.6, fcv + Math.sin(a + 0.16) * 10.6, 0);
+  }
+  for (const deg of [61, 119, 241, 299]) {
+    const a = (deg * Math.PI) / 180, fcu = -1, fcv = 82, r = 10.8;
+    const pu = fcu + Math.cos(a) * r, pv = fcv + Math.sin(a) * r, yw = Math.atan2(-Math.cos(a), -Math.sin(a));
+    put('planter', pu, pv, yw);
+    colliders.push({ u: pu, v: pv, lu: 1.7, lv: 0.9, rot: Math.PI / 2 - yw, h: 0.9, vault: true, prop: true });
+  }
+
+  // Velhop hub bikes slotted alongside each U-rack (-34.5, 63.7), oriented cleanly across the stall
+  for (const dv of [-1.15, 1.15]) for (const k of [-2, -1, 0, 1, 2]) {
+    if ((k + (dv > 0 ? 1 : 0)) % 5 === 3) continue; // a couple vacant stalls for realism
+    put('bike', -34.5 + k * 2.1 + 0.24, 63.7 + dv, (k % 2 ? 0.06 : -0.06));
+  }
+  put('bin', -28.0, 61.5, 0);
+  for (const k of [-1, 0, 1]) put('bike', 10.5 + k * 1.1, 57.5, 0.08);
+
+  // Promenade kiosks (-24, 35.5) & (24, 36.0), wing columns, postboxes, planters, benches
+  for (const [ku, kv, yw] of [[-24, 35.5, 0.3], [24, 36.0, -0.35]]) {
+    put('kiosk', ku, kv, yw);
+    colliders.push({ u: ku, v: kv, lu: 2.75, lv: 2.75, rot: 0, h: 3.8, prop: true });
+    put('bin', ku + (ku < 0 ? 1.9 : -1.9), kv + 1.2, 0);
+  }
+  for (const [cu, cv] of [[28.5, 35.5], [-82, 16], [80, 14]]) {
+    put('column', cu, cv, 0);
+    colliders.push({ u: cu, v: cv, lu: 1.4, lv: 1.4, rot: 0, h: 4.1, prop: true });
+  }
+  for (const [pu, pv, yw] of [[-78, 12, 0], [20.5, 34.2, Math.PI / 2], [78, 11, 0]]) {
+    put('postbox', pu, pv, yw);
+    colliders.push({ u: pu, v: pv, lu: 0.6, lv: 0.6, rot: 0, h: 1.3, prop: true });
+  }
+  // Promenade planters & benches (Verriere, Cafe pergola, Taxi bay, Bus shelter, Wings, Outer squares — spaced cleanly beside stone plinths)
+  for (const [pu, pv, yw] of [
+    [-16.5, 36.1, 0.14], [14.5, 36.1, -0.14],
+    [-28.8, 33.4, 0.22], [-35.2, 35.6, 0.22],
+    [-86, 13, 0], [-98, 13, 0], [84, 24, 0], [94, 22, 0],
+    [-19, 82, Math.PI / 2], [17, 82, Math.PI / 2],
+    [-34.6, 84.8, -0.35], [30.8, 94.8, 0.35],
+  ]) {
+    put('planter', pu, pv, yw);
+    colliders.push({ u: pu, v: pv, lu: 1.7, lv: 0.9, rot: Math.PI / 2 - yw, h: 0.9, vault: true, prop: true });
+  }
+  for (const [bu, bv, rot] of [
+    [-59 - Math.sin(-0.14) * 0.45, 31.2 + Math.cos(-0.14) * 0.45, -0.14],
+    [68 - Math.sin(-0.32) * 0.3, 37.5 + Math.cos(-0.32) * 0.3, -0.32],
+    [-86, 20, 0],
+    [-37.2, 87.2, -0.35], [33.2, 97.2, 0.35],
+    [-16.5, 38.9, 0.14], [14.5, 38.9, -0.14],
+  ]) {
+    const yw = Math.PI / 2 - rot;
+    put('bench', bu, bv, yw);
+    colliders.push({ u: bu, v: bv, lu: 1.9, lv: 0.6, rot, h: 0.9, vault: true, prop: true });
+  }
+
+  // Pedestrian edge bollards separating Verriere promenade & Tram A/D forecourt from the busway (3.2m spacing, clear at crosswalks)
+  for (const [u0, u1, vFn] of [
+    [-38, -8.5, (u) => 43.2 + (u + 40) * 0.12],
+    [6.5, 16.5, () => 44.3],
+    [23.5, 42, (u) => 44.0 - (u - 23) * 0.12],
+    [-16, -7.5, () => 49.6],
+    [5.5, 14, () => 49.6],
+  ]) {
+    for (let u = u0; u <= u1 + 0.1; u += 3.2) {
+      const v = vFn(u);
+      put('bollard', u, v, 0);
+      colliders.push({ u, v, lu: 0.25, lv: 0.25, rot: 0, h: 0.92, vault: true, prop: true });
+    }
+  }
+
+  // North boulevard evacuation / quarantine checkpoint (-1, 110) — tactical cover facing outer spawns
+  for (const [ju, jv, rot] of [[-5.5, 111.5, 0.25], [3.5, 111.5, -0.25]]) {
+    put('jersey', ju, jv, Math.PI / 2 - rot);
+    colliders.push({ u: ju, v: jv, lu: 2.4, lv: 0.65, rot, h: 0.85, vault: true, prop: true });
+  }
+  for (const [su, sv, rot] of [[-1.0, 112.0, 0], [-3.2, 108.5, 0.45], [1.4, 108.5, -0.45]]) {
+    put('sandbags', su, sv, Math.PI / 2 - rot);
+    colliders.push({ u: su, v: sv, lu: 2.0, lv: 0.85, rot, h: 0.78, vault: true, prop: true });
+  }
+  put('pallet', 4.8, 108.0, 0.2);
+  put('crate', 4.8, 108.0, 0.25, 1, 0.15);
+  put('crate', -5.5, 108.2, -0.4);
+  colliders.push({ u: 4.8, v: 108.0, lu: 1.25, lv: 1.25, rot: 0.2, h: 1.15, vault: true, prop: true });
+  colliders.push({ u: -5.5, v: 108.2, lu: 1.15, lv: 1.15, rot: -0.4, h: 1.0, vault: true, prop: true });
+
   for (const f of gare.furniture || []) {
     const [u, v] = L(f.p[0], f.p[1]);
-    if (!inPoly(plan.placeL, u, v)) continue;
-    if (f.kind === 'bench') { put('bench', u, v, hash(u, v) > 0.5 ? 0 : Math.PI / 2); colliders.push({ u, v, lu: 1.9, lv: 0.6, rot: 0, h: 0.9, vault: true, prop: true }); }
+    if (!inPoly(plan.placeL, u, v) || nearCollider(colliders, u, v, 0.8)) continue;
+    if (f.kind === 'bench') { const yw = hash(u, v) > 0.5 ? 0 : Math.PI / 2; put('bench', u, v, yw); colliders.push({ u, v, lu: 1.9, lv: 0.6, rot: Math.PI / 2 - yw, h: 0.9, vault: true, prop: true }); }
     else if (f.kind === 'bicycle_parking' && hash(u, v, 5) > 0.55) put('bike', u, v, Math.PI / 2 + hash(u, v) * 0.3);
     else if (f.kind === 'waste_basket') put('bin', u, v, 0);
   }
@@ -803,7 +1138,10 @@ export function buildGareMeshes({ plan, gare, rail, pbr, tiled, props, envMap, r
     if (f.kind === 'board') put('board', u, v, hash(u, v) * TAU);
     else if (f.kind === 'column') put('column', u, v, 0);
   }
-  for (const [u, v, a] of [[60, 108, 0.4], [-30, 112, 0.1], [104, 66, 1.4], [-96, 40, 2.6]]) { put('car', u, v, a); colliders.push({ u, v, lu: 4.4, lv: 1.9, rot: a, h: 1.5, prop: true }); }
+  for (const [u, v, a] of [[60, 106.5, 0.4], [-30, 112, 0.1], [104, 66, 1.4], [-96, 40, 2.6], [-61, 35.4, Math.PI / 2 + 0.14], [-46, 36.2, Math.PI / 2 + 0.12], [7.5, 110.2, 0.75]]) {
+    put('car', u, v, a);
+    colliders.push({ u, v, lu: 4.4, lv: 1.9, rot: Math.PI / 2 - a, h: 1.5, prop: true });
+  }
   for (const u of [-50, -20, 15, 40]) put('bench', u, B.v0 - 3.2, 0); // platform benches
   props.emit(inst, root, 'gare:', () => true, 0x2a2826);
   for (const u of [-50, -20, 15, 40]) colliders.push({ u, v: B.v0 - 3.2, lu: 1.9, lv: 0.6, rot: 0, h: 0.9, vault: true, prop: true });
