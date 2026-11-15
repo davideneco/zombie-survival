@@ -108,7 +108,7 @@ export class Train {
       });
     }
     for (const l of this.lights) opts.lightSources?.push(l);
-    this._dynBoxes = this.veh.map(() => ({ x: 0, z: 0, w: 0, d: T.width, rot: 0, h: this.railY + T.height }));
+    this._dynBoxes = this.veh.map(() => ({ x: 0, z: 0, w: 0, d: T.width, rot: 0, h: this.railY + (T.shotH ?? T.height) }));
     this.s = route.parkHeadS;
     this.apply();
     this.flickT = 0;
@@ -387,9 +387,9 @@ export class Train {
     this.applyWindows();
     // coach lights follow R1..R3
     if (this.lights) for (const l of this.lights) { l.x = l.veh.x + l.veh.tx * (l.du || 0); l.z = l.veh.z + l.veh.tz * (l.du || 0); }
-    // world collision : one oriented box per vehicle (dynamic : bullets and camera rays pass, see collision.js)
-    const D = this._dynBoxes;
-    for (const v of this.veh) { const o = D[v.i]; o.x = v.x; o.z = v.z; o.w = v.len; o.rot = Math.atan2(v.tz, v.tx); }
+    // world collision : one oriented box per vehicle (dynamic : bullets and blasts stop from outside, camera rays pass, see collision.js)
+    const D = this._dynBoxes, gPad = (T.gap ?? 0.38) * 1.3;
+    for (const v of this.veh) { const o = D[v.i]; o.x = v.x; o.z = v.z; o.w = v.len + (!v.head && !v.tail ? gPad : 0); o.rot = Math.atan2(v.tz, v.tx); }
     this.collision?.setDynamic(this.dynKey, D);
   }
   applyDoors() {
