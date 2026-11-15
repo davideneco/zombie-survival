@@ -45,7 +45,7 @@ function mirrorLayout(Q) {
 
 export function carLayouts() {
   const T = CONFIG.train, W = T.walk, F0 = T.floor, F1 = T.floorHigh, FL = T.floorLow ?? 0.30, FU = T.floorUpper ?? 2.76, wall = W.wall;
-  const winW = 1.48, [winY0, winY1] = T.winY, [winYU0, winYU1] = T.winYUpper || [3.44, 4.40];
+  const winW = 1.22, [winY0, winY1] = T.winY, [winYU0, winYU1] = T.winYUpper || [3.44, 4.40];
 
   // M1 / M2 : walkable power cars with glazed engine-room corridor (u in [-9.1, 2.05], w in [-0.58, 0.58]) + elevated TGV M driver's cockpit (u in [2.95, 5.65], w in [-1.28, 1.28])
   const makeMotrice = (len) => {
@@ -157,8 +157,8 @@ export function carLayouts() {
       lowerU: [-2.20, 0.00, 2.20],
     };
     // Lower deck (wagonbarbas.jpg) : burgundy & light-oak Bistro counter on -w (w in [-wall, -0.68]), refrigerated drink fridges & oak counter on +w (w in [0.82, wall])
+    for (const u of [0.60, 2.20]) Q.win.push({ u, dy: 0, side: 1 });
     for (const u of Q.bar.lowerU) {
-      if (u > 1.0) Q.win.push({ u, dy: 0, side: 1 });
       Q.legroom.push({ u });
       Q.ledU.push(u);
     }
@@ -525,15 +525,15 @@ export function trainMaterials(envMap = null) {
     body:     new THREE.MeshStandardMaterial({ map: bodyTex(), roughness: 0.44, metalness: 0.42 }),
     dark:     new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.70, metalness: 0.45 }),
     inside:   new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.72, metalness: 0.08, emissive: 0x16181c }),
-    glass:    new THREE.MeshStandardMaterial({ color: 0x9ab4c4, roughness: 0.08, metalness: 0.18, transparent: true, opacity: 0.24, depthWrite: false, side: THREE.DoubleSide, envMapIntensity: 1.2 }),
-    screen:   new THREE.MeshStandardMaterial({ color: 0x162430, roughness: 0.06, metalness: 0.3, transparent: true, opacity: 0.30, depthWrite: false, side: THREE.DoubleSide, envMapIntensity: 1.3 }),
+    glass:    new THREE.MeshStandardMaterial({ color: 0x4a687a, roughness: 0.14, metalness: 0.04, transparent: true, opacity: 0.13, depthWrite: false, side: THREE.DoubleSide, envMapIntensity: 0.22 }),
+    screen:   new THREE.MeshStandardMaterial({ color: 0x162430, roughness: 0.10, metalness: 0.12, transparent: true, opacity: 0.20, depthWrite: false, side: THREE.DoubleSide, envMapIntensity: 0.35 }),
     panel:    new THREE.MeshStandardMaterial({ map: panel, emissiveMap: panel, emissive: 0xffffff, emissiveIntensity: 0.95, roughness: 0.38 }),
     flicker:  new THREE.MeshStandardMaterial({ map: panel, emissiveMap: panel, emissive: 0xffffff, emissiveIntensity: 0.95, roughness: 0.38 }),
     decal:    new THREE.MeshStandardMaterial({ map: bloodTex(), transparent: true, depthWrite: false, roughness: 0.35, metalness: 0, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4 }),
     lampHead: new THREE.MeshStandardMaterial({ color: 0x20201c, emissive: 0xfff0d0, emissiveIntensity: 3.2, roughness: 0.3 }),
     lampTail: new THREE.MeshStandardMaterial({ color: 0x300806, emissive: 0xff2412, emissiveIntensity: 2.6, roughness: 0.3 }),
     crack:    new THREE.MeshStandardMaterial({ map: crackTex(), color: 0xdfe6ea, roughness: 0.2, metalness: 0.1, transparent: true, depthWrite: false, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -2 }),
-    shards:   new THREE.MeshStandardMaterial({ color: 0x7c8e96, roughness: 0.12, metalness: 0.25, transparent: true, opacity: 0.55, depthWrite: false, side: THREE.DoubleSide, envMapIntensity: 1.2 }),
+    shards:   new THREE.MeshStandardMaterial({ color: 0x7c8e96, roughness: 0.14, metalness: 0.15, transparent: true, opacity: 0.42, depthWrite: false, side: THREE.DoubleSide, envMapIntensity: 0.35 }),
   };
   if (envMap) { MATS.glass.envMap = envMap; MATS.shards.envMap = envMap; MATS.screen.envMap = envMap; }
   return MATS;
@@ -692,29 +692,29 @@ const C = {
 // ------------------------------------------------------------------ TGV Y230 / Y266 bogies ('motor' | 'trailer')
 export function buildBogieGeometry(kind = 'motor') {
   const B = buckets(), motor = kind === 'motor';
-  const r = motor ? 0.46 : 0.44, wb = CONFIG.train.bogieWb ?? 3.0, yAx = r, g = CONFIG.railNet.gauge / 2 + 0.036, u = 0;
+  const r = motor ? 0.36 : 0.34, wb = CONFIG.train.bogieWb ?? 2.35, yAx = r, g = CONFIG.railNet.gauge / 2 + 0.036, u = 0;
   for (const a of [-wb / 2, wb / 2]) {
     for (const s of [-1, 1]) {
       B.add('dark', cyl(u + a, yAx, s * g, r, 0.13, 'w', 14), C.wheel);
       B.add('dark', cyl(u + a, yAx, s * (g + 0.072), r * 0.82, 0.03, 'w', 14), C.rust);
-      B.add('dark', cbox(u + a, yAx, s * 1.12, 0.38, 0.30, 0.22, 0.03), C.steel);
+      B.add('dark', cbox(u + a, yAx, s * 1.12, 0.34, 0.24, 0.20, 0.025), C.steel);
       for (const dw of [0.35, 0.48]) B.add('dark', cyl(u + a, yAx, s * dw, r * 0.68, 0.045, 'w', 12), C.disc);
     }
-    B.add('dark', cyl(u + a, yAx, 0, 0.085, 2 * g, 'w', 8), C.axle);
+    B.add('dark', cyl(u + a, yAx, 0, 0.08, 2 * g, 'w', 8), C.axle);
   }
-  const fs = new THREE.Shape(), L = wb / 2 + 0.55, y0 = yAx + 0.14;
-  fs.moveTo(-L, y0); fs.lineTo(-L, y0 + 0.27); fs.lineTo(-0.78, y0 + 0.36); fs.lineTo(-0.52, y0 + 0.12);
-  fs.lineTo(0.52, y0 + 0.12); fs.lineTo(0.78, y0 + 0.36); fs.lineTo(L, y0 + 0.27); fs.lineTo(L, y0);
-  fs.lineTo(0.62, y0 - 0.05); fs.lineTo(-0.62, y0 - 0.05); fs.lineTo(-L, y0);
+  const fs = new THREE.Shape(), L = wb / 2 + 0.22, y0 = yAx + 0.06;
+  fs.moveTo(-L, y0); fs.lineTo(-L, y0 + 0.18); fs.lineTo(-0.62, y0 + 0.23); fs.lineTo(-0.42, y0 + 0.07);
+  fs.lineTo(0.42, y0 + 0.07); fs.lineTo(0.62, y0 + 0.23); fs.lineTo(L, y0 + 0.18); fs.lineTo(L, y0);
+  fs.lineTo(0.48, y0 - 0.04); fs.lineTo(-0.48, y0 - 0.04); fs.lineTo(-L, y0);
   for (const s of [-1, 1]) {
-    const gf = extr(fs, 0.14, 0.015, 2); gf.translate(0, 0, -0.07); onSide(gf, s * 1.12, 1); gf.translate(0, 0, -u); B.add('dark', gf, C.steel);
-    B.add('dark', cyl(u, yAx + 0.54, s * 0.98, 0.27, 0.25, 'y', 10), C.rubber);
+    const gf = extr(fs, 0.12, 0.012, 2); gf.translate(0, 0, -0.06); onSide(gf, s * 1.12, 1); gf.translate(0, 0, -u); B.add('dark', gf, C.steel);
+    B.add('dark', cyl(u, yAx + 0.26, s * 0.98, 0.25, 0.14, 'y', 10), C.rubber);
   }
-  B.add('dark', cbox(u, yAx + 0.27, 0, 0.54, 0.24, 2.16, 0.04), C.steel);
+  B.add('dark', cbox(u, yAx + 0.18, 0, 0.46, 0.18, 2.12, 0.03), C.steel);
   if (motor) {
-    for (const s of [-1, 1]) for (const du of [-0.62, 0.62]) B.add('dark', cyl(u + du, yAx + 0.06, s * 0.38, 0.17, 0.52, 'u', 8), C.axle);
+    for (const s of [-1, 1]) for (const du of [-0.52, 0.52]) B.add('dark', cyl(u + du, yAx + 0.04, s * 0.38, 0.14, 0.46, 'u', 8), C.axle);
   } else {
-    B.add('dark', cyl(u, yAx + 0.45, 0, 0.24, 0.12, 'y', 10), C.steel);
+    B.add('dark', cyl(u, yAx + 0.29, 0, 0.22, 0.09, 'y', 10), C.steel);
   }
   return B.merge().dark;
 }
@@ -1061,7 +1061,7 @@ export function buildCarGeometry(kind) {
     // Vestibule floor slab at F0 = 0.80 m
     B.add('inside', cbox(sDir * 6.20, (FL + F0) / 2, 0, 1.50, F0 - FL, 2 * lin - 0.02, 0.01), C.stairStep);
     // Gangway raised floor slab at F1 = 0.88 m
-    B.add('inside', cbox(sDir * 7.75, (FL + F1) / 2, 0, 1.65, F1 - FL, 2 * lin - 0.02, 0.01), C.stairStep);
+    B.add('inside', cbox(sDir * 7.77, (FL + F1) / 2, 0, 1.66, F1 - FL, 2 * lin - 0.02, 0.01), C.stairStep);
     // Vestibule high ceiling at ceilVest = 3.56 m across |u| in [5.55, 8.55] (+1.06 m above standing eye 2.50 m!)
     B.add('inside', new THREE.PlaneGeometry(2 * lin - 0.04, 3.00).rotateX(Math.PI / 2).translate(0, ceilVest, -sDir * 7.05), C.ceiling);
     B.add('panel', uvRect(new THREE.PlaneGeometry(0.22, 1.10).rotateX(Math.PI / 2).translate(0, ceilVest - 0.008, -sDir * 6.35), PANEL.led));
@@ -1154,10 +1154,10 @@ export function buildCarGeometry(kind) {
       for (const u of doors) { pieces.push([a, u - dw]); a = u + dw; } pieces.push([a, uHi]);
       for (const [p, q] of pieces) {
         if (q - p < 0.05) continue;
-        B.add('inside', onSide(new THREE.ShapeGeometry(rangeShape(p, q, FL, winY0)), side * lin, -side), C.liningLow);
-        const sh = rangeShape(p, q, winY0, ceil);
-        for (const w of sideWins) if (w.u - winW / 2 > p && w.u + winW / 2 < q) sh.holes.push(rrect(X(w.u) - winW / 2, winY0 + w.dy + 0.001, X(w.u) + winW / 2, winY1 + w.dy - 0.001, 0.12, true));
-        for (const w of sideWinsU) if (w.u - winW / 2 > p && w.u + winW / 2 < q) sh.holes.push(rrect(X(w.u) - winW / 2, winYU0 + w.dy + 0.001, X(w.u) + winW / 2, winYU1 + w.dy - 0.001, 0.12, true));
+        B.add('inside', onSide(new THREE.ShapeGeometry(rangeShape(p, q, FL, winY0 - 0.10)), side * lin, -side), C.liningLow);
+        const sh = rangeShape(p, q, winY0 - 0.10, ceil);
+        for (const w of sideWins) if (w.u - winW / 2 > p && w.u + winW / 2 < q) sh.holes.push(rrect(X(w.u) - winW / 2, winY0 + w.dy, X(w.u) + winW / 2, winY1 + w.dy, 0.12, true));
+        for (const w of sideWinsU) if (w.u - winW / 2 > p && w.u + winW / 2 < q) sh.holes.push(rrect(X(w.u) - winW / 2, winYU0 + w.dy, X(w.u) + winW / 2, winYU1 + w.dy, 0.12, true));
         B.add('inside', onSide(new THREE.ShapeGeometry(sh, 3), side * lin, -side), C.lining);
       }
       for (const u of doors) B.add('inside', onSide(new THREE.ShapeGeometry(rangeShape(u - dw, u + dw, dTop, ceil)), side * lin, -side), C.lining);
@@ -1237,12 +1237,12 @@ export function buildCarGeometry(kind) {
     B.add('panel', uvRect(onSide(plane(0.32, 0.22), -0.71, 1).translate(0, FL + 1.26, 0.85), PANEL.screenBar));
     B.add('inside', cbox(0.95, FL + 1.14, -0.92, 0.55, 0.16, 0.38, 0.015), C.barOak);
 
-    // Right side (+w, w in [0.82, lin]) : Self-service tall glass-door refrigerated fridges (u in [-2.65, -0.25]) + oak service counter (u in [0.15, 2.65])
-    B.add('inside', cbox(-1.45, FL + 1.08, 1.26, 2.35, 2.12, 0.82, 0.02), C.steel);
-    B.add('panel', uvRect(onSide(plane(2.15, 1.68), 0.84, -1).translate(0, FL + 1.14, 1.45), PANEL.vitrine));
-    B.add('inside', cbox(1.40, FL + 0.50, 1.26, 2.40, 1.00, 0.82, 0.02), C.barBurgundy);
-    B.add('inside', cbox(1.40, FL + 1.03, 1.24, 2.44, 0.06, 0.86, 0.015), C.barOak);
-    B.add('inside', cbox(1.40, FL + 1.28, 1.36, 0.62, 0.44, 0.42, 0.02), C.barChrome); // Espresso / hot drinks station
+    // Right side (+w, w in [0.82, lin]) : Self-service tall glass-door refrigerated fridges (u in [-2.65, -0.45]) + low oak service counter under the two Bistro windows (u = 0.60 & 2.20)
+    B.add('inside', cbox(-1.55, FL + 1.08, 1.26, 2.20, 2.12, 0.82, 0.02), C.steel);
+    B.add('panel', uvRect(onSide(plane(2.00, 1.68), 0.84, -1).translate(0, FL + 1.14, 1.55), PANEL.vitrine));
+    B.add('inside', cbox(1.20, FL + 0.41, 1.26, 2.95, 0.82, 0.82, 0.02), C.barBurgundy);
+    B.add('inside', cbox(1.20, FL + 0.85, 1.24, 3.00, 0.06, 0.86, 0.015), C.barOak);
+    B.add('inside', cbox(1.40, FL + 1.07, 1.36, 0.34, 0.38, 0.38, 0.02), C.barChrome); // Espresso station on the pillar between u=0.60 and u=2.20 windows
 
     // ---- B. UPPER DECK "LE BISTRO" SALON DETENTE (wagonbarhaut.jpg & wagonbarhaut2.jpg, FU = 2.76 m)
     // Left side (-w, w in [-lin, -0.58]) : Long Light-Oak high bar table along panoramic windows + Turquoise square pouf stools + Yellow TGV M lamps

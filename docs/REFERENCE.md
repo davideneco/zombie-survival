@@ -1,6 +1,6 @@
 # Zombie Survival — fiche de référence
 
-Version du jeu : **v0.100.0** (package 0.100.0). Générée automatiquement par `node tools/make-docs.mjs` à partir de `src/config.js` et du jeu.
+Version du jeu : **v0.100.1** (package 0.100.1). Générée automatiquement par `node tools/make-docs.mjs` à partir de `src/config.js` et du jeu.
 Carte annotée : [carte.png](carte.png). Armes de profil : [armes.png](armes.png). Les mêmes tableaux en tableur : dossier [csv/](csv/).
 
 Pour demander une modification, citez la ligne (ex. « Mitrailleuse RPK : chargeur 100 », « Mastodonte à 3000 pts », « porte P3 à 500 pts », « mettre la boîte mystère dans la zone Temple-Neuf »).
@@ -681,7 +681,7 @@ Prix d'une porte : le plus cher des deux prix de zone (colonne « Prix de la por
 | Réglage | Valeur | Remarque |
 |---|---|---|
 | Composition | rame TGV M 10 véhicules (2 motrices M1/M2 de 18,2 m + 8 voitures Duplex R1..R8 dont Bistro R4, 177,75999999999996 m au total), 3,64 m de large, planchers à 0,3 m (salle basse), 0,8 m (vestibules) et 2,76 m (salle haute) | numéro « 9572 » (livrée Carmillon / inOui) ; nez de M1 à u = 89 m (repère de la gare), entre les passerelles |
-| Repère | une position s sur l'itinéraire ; chaque caisse est rigide entre ses pivots de bogies (empattement 3 m, bogies moteurs et Jacobs articulés) | u le long du train (continu d'une voiture à l'autre), w à droite ; mêmes messages réseau que le tram (p_state vh, lx, ly, lz, lyw) |
+| Repère | une position s sur l'itinéraire ; chaque caisse est rigide entre ses pivots de bogies (empattement 2,35 m, bogies moteurs et Jacobs articulés) | u le long du train (continu d'une voiture à l'autre), w à droite ; mêmes messages réseau que le tram (p_state vh, lx, ly, lz, lyw) |
 | Intérieur | 2 niveaux reliés par escaliers, sièges en vis-à-vis, voiture bar Bistro R4, cabines de conduite accessibles, cloisons (porte 1,12 m), intercirculations de 1,32 m | cercle de 0,3 m contre des boîtes (salle basse ou haute selon Y) ; seules la voiture courante et ses voisines sont testées |
 | Monter / descendre | pousser contre une porte ouverte côté quai (à moins de 2,76 m de l'axe) ou E ; descendre : dépasser 1,92 m dans une porte (niveau quai) | posé sur le quai à 2,66 m de l'axe ; les portes côté voie restent fermées |
 | Zombies | ceux de la gare montent par la porte la plus proche (à 0,75 m de la caisse), montent/descendent les escaliers et suivent l'allée | vitesse x 0,9 dans le train ; ils redescendent quand leur cible est sortie ; de l'extérieur, la caisse encaisse sauf devant une porte ouverte |
@@ -695,18 +695,18 @@ Prix d'une porte : le plus cher des deux prix de zone (colonne « Prix de la por
 | Réglage | Valeur | Remarque |
 |---|---|---|
 | Départ par défaut | intro en train | menu « Départ » : intro en train / Gare Centrale / Classique (Grande Île) ; le choix est retenu ; ?debug seul garde le départ classique, ?debug&intro lance l'intro |
-| Trajet | 5965 m en 267 s depuis le sud-ouest, arrêt au quai 1 | vitesses (s : km/h) 0 : 100 · 160 : 100 · 172 : 80 · 198 : 80 · 208 : 15 · 224 : 15 · 232 : 50 · 250 : 50 · 267 : 0 ; la position du train ne dépend que de l'horloge de l'intro |
+| Trajet | 2271 m en 135 s depuis le sud-ouest, arrêt au quai 1 | vitesses (s : km/h) 0 : 144 · 32 : 144 · 42 : 15 · 84 : 15 · 96 : 58 · 116 : 58 · 135 : 0 ; la position du train ne dépend que de l'horloge de l'intro |
 | Ouverture | carton noir « TGV INOUI 9572 — DIRECTION STRASBOURG » (4 s, fondu 2,5 s) | nuit : l'horloge reste à 4.9 h pendant le trajet (le cycle jour / nuit reprend ensuite) |
-| Annonces | 6 s : Mesdames et messieurs, bienvenue à bord de ce TGV inOui à destination de Strasbourg. · 78 s : Prochain arrêt : Strasbourg-Ville, terminus. Ce train ne dessert ni Lingolsheim ni Koenigshoffen. · 138 s : Mesdames et messieurs, dans quelques minutes notre train arrivera en gare de Strasbourg, son terminus… · 146 s : … (grésillements — des cris dans le haut-parleur) … · 198 s : RALENTISSEMENT — Obstacle sur la voie · 205 s : ILS S'ACCROCHENT AUX FENÊTRES ! — Abattez-les avant qu'ils ne montent · 227.6 s : (des pas sur le toit…) · 251 s : Strasbourg. Strasbourg, terminus de ce train. | à l'arrivée : « STRASBOURG — Terminus. Tout le monde descend. » |
+| Annonces | 5 s : Mesdames et messieurs, bienvenue à bord de ce TGV inOui à destination de Strasbourg. · 19 s : Prochain arrêt : Strasbourg-Ville, terminus. Nous approchons de l'agglomération. · 27 s : … (grésillements — des hurlements dans le haut-parleur) : Ils sont sur les voies ! · 34 s : Attention ! Obstacle sur la voie, freinage d'urgence ! · 41 s : Alerte passagers ! Des infectés attaquent les vitres ! · 83 s : (bruits de pas lourds sur le toit — les portes cèdent !) · 114 s : Strasbourg. Strasbourg-Ville, terminus de ce train. Préparez-vous à descendre sur le quai. | à l'arrivée : « STRASBOURG — Terminus. Tout le monde descend. » |
 | Dans le train | debout en R3 / R4 Bar / R5 (arrivants en cours de route : voiture R4), portes verrouillées | on marche dans les deux étages, les intercirculations et les cabines en roulant ; balancement de la caméra 0,4° / 0,015 m, secousse à chaque joint de rail (25 m) |
-| Arrivée | portes ouvertes en 1,6 s ; manche 1 5 s après l'arrêt (zone Quais) | 6 zombies sortent du ballast sur le quai (hors décompte ; la manche 1 finit quand ils sont morts aussi) ; les zombies encore à bord poursuivent les joueurs ou descendent par une porte ouverte |
-| Zombies du trajet | 16 le long de la voie (8 sur la voie), 14 au bord de la voie au ralentissement, 20 aux fenêtres, 12 par l'intercirculation | solo ; x (1 + 0,75 par joueur en plus) comme une manche ; vie de la manche 1 (100 PV) ; points habituels par zombie tué |
-| Le long de la voie | 182 à 200 s (80 km/h), à 3,5-9 m de l'axe | ceux qui sont sur la voie sont percutés par la locomotive (choc, sang sur la cabine, 0 pt) au-dessus de 3 m/s |
-| Fenêtres | ils s'accrochent 2,3 s (la vitre se fend), la brisent (elle reste cassée, vent) puis entrent en 1 s | au plus 8 accrochés à la fois (14 à 4 joueurs) ; ils courent le long du train à 7,5 m/s au plus : un train plus rapide les sème ; on peut les abattre ou les poignarder à la fenêtre |
-| Toit et intercirculation | pas sur le toit de la dernière voiture à 227 s, porte arrière forcée à 233 s | puis un zombie toutes les 1 s par l'intercirculation |
-| Passer l'intro | maintenir Espace 1,5 s | solo : le joueur ; coop : l'hôte seulement ; le train arrive à quai, portes ouvertes ; les zombies du trajet disparaissent |
+| Arrivée | portes ouvertes en 1,6 s ; manche 1 5 s après l'arrêt (zone Quais) | 8 zombies sortent du ballast sur le quai (hors décompte ; la manche 1 finit quand ils sont morts aussi) ; les zombies encore à bord poursuivent les joueurs ou descendent par une porte ouverte |
+| Zombies du trajet | 20 le long de la voie (10 sur la voie), 18 au bord de la voie au ralentissement, 28 aux fenêtres, 16 par l'intercirculation | solo ; x (1 + 0,75 par joueur en plus) comme une manche ; vie de la manche 1 (100 PV) ; points habituels par zombie tué |
+| Le long de la voie | 16 à 38 s (80 km/h), à 3,5-9 m de l'axe | ceux qui sont sur la voie sont percutés par la locomotive (choc, sang sur la cabine, 0 pt) au-dessus de 3 m/s |
+| Fenêtres | ils s'accrochent 2,3 s (la vitre se fend), la brisent (elle reste cassée, vent) puis entrent en 1 s | au plus 10 accrochés à la fois (16 à 4 joueurs) ; ils courent le long du train à 7,5 m/s au plus : un train plus rapide les sème ; on peut les abattre ou les poignarder à la fenêtre |
+| Toit et intercirculation | pas sur le toit de la dernière voiture à 82 s, porte arrière forcée à 88.2 s | puis un zombie toutes les 0,85 s par l'intercirculation |
+| Passer l'intro | maintenir Espace 2,2 s | solo : le joueur ; coop : l'hôte seulement ; le train arrive à quai, portes ouvertes ; les zombies du trajet disparaissent |
 | Grenades dans le train | simulées dans le repère de la voiture | elles gardent la vitesse du train, rebondissent sur les parois, les sièges et le plafond, et restent posées au freinage |
-| Décor du trajet | clôtures, 520 arbres, 700 buissons, 90 bâtiments, 90 lampadaires, signaux, wagons déraillés à 216 s | instanciés, en tronçons de 300 m dessinés à moins de 190 m ; sol sombre de 460 m autour de la caméra |
+| Décor du trajet | clôtures, 520 arbres, 700 buissons, 90 bâtiments, 90 lampadaires, signaux, wagons déraillés à 63 s | instanciés, en tronçons de 300 m dessinés à moins de 190 m ; sol sombre de 460 m autour de la caméra |
 | Réseau | l'hôte envoie tn_sync (τ, phase) toutes les 0,5 s ; intro_skip | le client avance τ lui-même et rattrape l'hôte (+ demi-ping, plafonné à 0,5 s) ; arrivant : sync.intro ; zombies du trajet : z_spawn + tn, positions dans le repère du train (z_tick), tn_win, tn_rk, tn_rm |
 
 ## Tram : l'aiguillage du nœud de Homme de Fer (croisement des lignes A / D et B / C / F)

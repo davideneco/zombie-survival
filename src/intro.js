@@ -59,14 +59,16 @@ export function installIntro(game, { world, hud, sfx }) {
   card.style.cssText = 'position:fixed;inset:0;background:#000;opacity:0;pointer-events:none;z-index:38;display:none;align-items:center;justify-content:center;flex-direction:column;font-family:Georgia,"Times New Roman",serif;color:#d8d2c4;letter-spacing:6px;text-align:center';
   card.innerHTML = `<div style="font-size:clamp(18px,3vw,34px);padding:0 6vw">${I.title}</div><div style="margin-top:18px;width:120px;height:1px;background:#6a6458"></div><div style="margin-top:14px;font-size:clamp(11px,1.3vw,15px);letter-spacing:4px;color:#8a8478">STRASBOURG — NUIT</div>`;
   const sub = document.createElement('div');
-  sub.style.cssText = 'position:fixed;left:50%;bottom:21%;transform:translateX(-50%);max-width:min(860px,88vw);padding:8px 18px;background:rgba(0,0,0,0.55);border-left:3px solid #c8b070;color:#efe6cf;font:italic 18px Georgia,serif;letter-spacing:0.5px;line-height:1.35;pointer-events:none;z-index:37;display:none;text-align:left';
+  sub.style.cssText = 'position:fixed;left:50%;bottom:21%;transform:translateX(-50%);max-width:min(860px,88vw);padding:9px 18px;background:rgba(8,10,14,0.72);border-left:3px solid #c8b070;color:#efe6cf;font:italic 18px Georgia,serif;letter-spacing:0.4px;line-height:1.35;pointer-events:none;z-index:37;display:none;text-align:left';
+  sub.innerHTML = '<div style="font:700 11px Arial,sans-serif;letter-spacing:1.8px;color:#ffd24a;margin-bottom:3px;font-style:normal">HAUT-PARLEUR TGV</div><div></div>';
+  const subHead = sub.firstChild, subBody = sub.lastChild;
   const skipEl = document.createElement('div');
   skipEl.style.cssText = 'position:fixed;right:24px;top:18px;padding:6px 12px;background:rgba(0,0,0,0.5);color:#ddd;font:13px Arial,sans-serif;letter-spacing:1px;pointer-events:none;z-index:37;display:none';
   skipEl.innerHTML = '<span></span><div style="margin-top:5px;height:3px;background:#333"><div style="height:3px;width:0;background:#ffd24a"></div></div>';
   const skipTxt = skipEl.firstChild, skipBar = skipEl.lastChild.firstChild;
   for (const el of [card, sub, skipEl]) document.body.appendChild(el);
   let subText = null, skipShown = null, skipW = -1, cardO = -1;
-  const showSub = (text, dur) => { sub.textContent = text; sub.style.display = 'block'; subText = text; S.sub = dur; };
+  const showSub = (text, dur, panic = false) => { subHead.textContent = panic ? 'HAUT-PARLEUR — ALERTE' : 'HAUT-PARLEUR TGV'; subHead.style.color = panic ? '#ff6b5a' : '#ffd24a'; sub.style.borderLeftColor = panic ? '#e04838' : '#c8b070'; subBody.textContent = text; sub.style.display = 'block'; subText = text; S.sub = dur; };
   const hideUi = () => { card.style.display = 'none'; card.style.opacity = '0'; cardO = -1; sub.style.display = 'none'; subText = null; skipEl.style.display = 'none'; skipShown = null; };
 
   const canSkip = () => !game.isMultiplayer || game.isHost;
@@ -150,16 +152,19 @@ export function installIntro(game, { world, hud, sfx }) {
     poseAt(S.stopTau);
     S.ann = I.announce.length; // (skipped : the remaining announcements are dropped, and the ride events before the stop)
     while (S.ev < I.events.length && I.events[S.ev].at < S.stopTau) S.ev++;
+    sfx.stopVoices?.();
     sub.style.display = 'none'; subText = null;
     rideAtmosphere(false);
     sfx.airRelease?.(0.8);
     sfx.trainDoors?.(0.9);
     hud.announce(I.arrival.title, I.arrival.sub, 4500);
+    if (!skipped && I.arrival.speak) { sfx.paSpeak?.(I.arrival.speak, { delay: 0.35 }); showSub(I.arrival.speak, 4.5, false); }
     game.rideOnStop?.(skipped); // ride zombies : released at the station, or removed (skip)
   }
   function finish() {
     S.on = false; S.ph = 'done';
     game.introGraceUntil = game.time + (I.graceAfter || 0); // (Player.hurt keeps the HP floor until then)
+    sfx.stopVoices?.();
     hideUi();
     train.setDoors(1); train.setPose(sEnd, 0);
     S.sound?.stop(); S.sound = null;
@@ -171,6 +176,7 @@ export function installIntro(game, { world, hud, sfx }) {
     game.introGraceUntil = 0;
     if (S.ph === 'off') return;
     S.on = false; S.ph = 'off';
+    sfx.stopVoices?.();
     hideUi();
     S.sound?.stop(); S.sound = null;
     train.onJoint = null;
@@ -209,7 +215,8 @@ export function installIntro(game, { world, hud, sfx }) {
       if (a.horn) sfx.trainHorn?.(0.85);
       if (a.static) sfx.radioStatic?.(a.dur, 0.8);
       if (a.big) { hud.announce(a.title, a.sub || '', a.dur * 1000); if (!a.quiet) sfx.tramBrake?.(0.6, 14); }
-      else if (a.text) showSub(a.text, a.dur);
+      if (a.text) showSub(a.text, a.dur, !!a.panic);
+      if (a.speak && a.text) sfx.paSpeak?.(a.text, { panic: !!a.panic, delay: a.chime ? 1.0 : a.horn ? 0.9 : 0 });
     }
     while (S.ev < I.events.length && tau >= I.events[S.ev].at) { const e = I.events[S.ev++]; try { game.introHooks[e.id]?.(tau, e); } catch (err) { console.warn('[intro] hook', e.id, err); } }
     if (subText) { S.sub -= dt; if (S.sub <= 0) { sub.style.display = 'none'; subText = null; } }
@@ -233,7 +240,7 @@ export function installIntro(game, { world, hud, sfx }) {
     // main.js round loop : no round while the intro runs
     introBlocksRound: () => S.on,
     // solo pause (main.js : the game is frozen) : the rolling sound goes quiet until the next update
-    introFrozen() { if (S.on && S.sound) S.sound.set(0, 0, 0); },
+    introFrozen() { if (S.on && S.sound) S.sound.set(0, 0, 0); sfx.stopVoices?.(); },
     // reset() : start the intro when the start spot is the intro's, otherwise make sure it is off
     introReset() { if (this.activeSpawn?.intro) begin(0); else end(); },
     introForceDone() { if (S.on) finish(); },

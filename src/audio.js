@@ -730,6 +730,45 @@ export class Sfx {
     this._tone('sawtooth', 470, 470, 0.65, 0.32 * v, { at: 0.45, send: 0.3 });
     this._tone('sawtooth', 370, 370, 0.65, 0.28 * v, { at: 0.45, send: 0.3 });
   }
+  paSpeak(text, { panic = false, delay = 0 } = {}) { // haut-parleur TGV : clic/souffle micro + voix française
+    if (!text || this.volume <= 0.01) return;
+    const tAt = Math.max(0, delay);
+    if (this.ctx) {
+      this._noise(0.05, 0.10 * (panic ? 1.3 : 1), 2200, 'bandpass', { at: tAt, q: 1.8 });
+      this._tone('sine', panic ? 880 : 1200, panic ? 540 : 1200, 0.035, 0.04, { at: tAt });
+      if (panic) this._noise(0.32, 0.06, 1700, 'bandpass', { at: tAt + 0.05, q: 0.9 });
+    }
+    try {
+      const ss = typeof window !== 'undefined' && window.speechSynthesis;
+      if (!ss || typeof SpeechSynthesisUtterance === 'undefined') return;
+      if (this._paTimer) { clearTimeout(this._paTimer); this._paTimer = null; }
+      const fire = () => {
+        this._paTimer = null;
+        if (this.volume <= 0.01) return;
+        try {
+          ss.cancel();
+          const u = new SpeechSynthesisUtterance(text);
+          u.lang = 'fr-FR';
+          const voices = ss.getVoices?.() || [];
+          const fr = voices.find((vo) => /^fr\b/i.test(vo.lang) && /french|fran|thomas|amelie|audrey|denise|henri|paul|julie/i.test(vo.name))
+            || voices.find((vo) => /^fr/i.test(vo.lang));
+          if (fr) u.voice = fr;
+          u.rate = panic ? 1.12 : 0.98;
+          u.pitch = panic ? 1.14 : 1.0;
+          u.volume = Math.min(1, this.volume * (panic ? 0.95 : 0.85));
+          ss.speak(u);
+        } catch { /* environnement sans synthèse vocale */ }
+      };
+      if (tAt > 0.02) this._paTimer = setTimeout(fire, tAt * 1000);
+      else fire();
+    } catch { /* no-op */ }
+  }
+  stopVoices() {
+    if (this._paTimer) { clearTimeout(this._paTimer); this._paTimer = null; }
+    try {
+      if (typeof window !== 'undefined' && window.speechSynthesis) window.speechSynthesis.cancel();
+    } catch { /* no-op */ }
+  }
 
   // ------------------------------------------------------------ Footsteps and ambience loops
   // surface : 'stone' (cobble) | 'wood' (interior, upper floors) | 'metal' (train, tram) | 'concrete' (station) ; v : 0..1 (distance, sprint, crawl)

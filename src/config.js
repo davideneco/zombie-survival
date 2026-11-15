@@ -749,8 +749,8 @@ export const CONFIG = {
     width: 3.64, height: 5.28, ceil: 5.10,         // spacious TGV M width (3.64 m), tall double-deck roof (5.28 m), upper-deck ceiling (5.10 m)
     floorLow: 0.30, floor: 0.80, floorHigh: 0.88, floorUpper: 2.76, // lower deck (0.30 m), vestibule (0.80 m), gangway (0.88 m), upper deck (2.76 m)
     motriceBogies: [4.60, 2.80],                   // M1/M2 motor bogie offsets
-    coachOuterBogie: 2.80,                         // R1 front / R8 rear outer trailer bogie offset
-    bogieWb: 3.0,                                  // axle wheelbase of motor & trailer/Jacobs bogies (m)
+    coachOuterBogie: 1.55,                         // R1 front / R8 rear outer trailer bogie offset (strictly under vestibule/gangway)
+    bogieWb: 2.35,                                 // compact axle wheelbase of motor & trailer/Jacobs bogies (m)
     noseBogie: 4.60,                               // legacy alias
     doorWidth: 1.18, doorH: 2.22,                  // TGV M recessed plug door width & height above vestibule floor
     layout: { bulkhead: 0.65, step: 0.60, vestibule: 1.95, bay1: 2.15, bay2: 1.88, bay: 1.88, taper: 5.40 },
@@ -812,14 +812,14 @@ export const CONFIG = {
   // the keys) and the stop lands on the parked position (CONFIG.train.park). The host owns τ (tn_sync twice a second) ; clients follow.
   intro: {
     enabled: true,
-    // [τ s, speed m/s] : 100 km/h along the open line for 160 s (about 4.5 km : fields, villages, level crossings), 80 km/h at the city outskirts (172 s),
-    // 15 km/h past the obstacle, 50 km/h, stop at 267 s (4 min 27 s, 6.0 km from the start)
-    profile: [[0, 27.8], [160, 27.8], [172, 22.2], [198, 22.2], [208, 4.2], [224, 4.2], [232, 13.9], [250, 13.9], [267, 0]],
+    // [τ s, speed m/s] : 144 km/h along the approach (0..32 s), braking past red signals for derailed wreck (32..42 s),
+    // 15 km/h during window siege (42..84 s), accelerating to 58 km/h during roof/gangway assault (84..116 s), stop at Gare Quai 1 at 135 s (2 min 15 s, ~2.27 km)
+    profile: [[0, 40.0], [32, 40.0], [42, 4.2], [84, 4.2], [96, 16.0], [116, 16.0], [135, 0]],
     card: 4.0, fadeIn: 2.5,       // s : black title card, then the picture fades in over the last fadeIn s of it
     title: 'TGV INOUI 9572 — DIRECTION STRASBOURG',
     doorTime: 1.6,                // s : the doors open at the stop
     roundDelay: 5,                // s after the stop : round 1 starts at the station
-    skipHold: 1.5,                // s : hold [jump] (Espace) to skip the ride (solo : anyone ; co-op : the host)
+    skipHold: 2.2,                // s : hold [jump] (Espace) to skip the ride (solo : anyone ; co-op : the host)
     rideMinHealth: 15,            // HP floor while the train rides : zombies on board wound, they cannot kill before the arrival
     graceAfter: 10,               // s : the same HP floor still holds after round 1 starts (spawn protection : an idle player is not killed the instant the ride ends) ; then zombies kill normally
     fog: 0.5, far: 320,           // fog density x fog during the ride (the landscape is the show), camera far plane (m) ; restored at the stop
@@ -830,38 +830,30 @@ export const CONFIG = {
     sync: 0.5,                    // s between two tn_sync of the host
     nudge: 2,                     // 1/s : a client's τ converges toward the host τ (+ half the ping) ; snaps past 1 s of error
     maxPing: 0.5,                 // s : the ping used for that lead is capped (a stalled tab measures absurd pings)
-    // on-board announcements (French) at τ (s) : chime, subtitle (text) for dur s ; static : radio static and screams after it ; big : title / sub
+    // on-board loudspeaker announcements (French) at τ (s) : chime, speak (WebSpeech PA), static, big title/sub
     announce: [
-      { at: 6, chime: true, dur: 6.5, text: 'Mesdames et messieurs, bienvenue à bord de ce TGV inOui à destination de Strasbourg.' },
-      { at: 78, dur: 6, text: 'Prochain arrêt : Strasbourg-Ville, terminus. Ce train ne dessert ni Lingolsheim ni Koenigshoffen.' },
-      { at: 138, chime: true, dur: 7, text: 'Mesdames et messieurs, dans quelques minutes notre train arrivera en gare de Strasbourg, son terminus…' },
-      { at: 146, dur: 3.2, static: true, text: '… (grésillements — des cris dans le haut-parleur) …' },
-      { at: 198, big: true, horn: true, dur: 4, title: 'RALENTISSEMENT', sub: 'Obstacle sur la voie' },
-      { at: 205, big: true, quiet: true, dur: 3.2, title: 'ILS S\'ACCROCHENT AUX FENÊTRES !', sub: 'Abattez-les avant qu\'ils ne montent' },   // quiet : no brake squeal
-      { at: 227.6, dur: 3.5, text: '(des pas sur le toit…)' },
-      { at: 251, chime: true, dur: 6, text: 'Strasbourg. Strasbourg, terminus de ce train.' },
+      { at: 5.0, chime: true, speak: true, dur: 6.5, text: 'Mesdames et messieurs, bienvenue à bord de ce TGV inOui à destination de Strasbourg.' },
+      { at: 19.0, chime: true, speak: true, dur: 6.0, text: 'Prochain arrêt : Strasbourg-Ville, terminus. Nous approchons de l\'agglomération.' },
+      { at: 27.0, dur: 3.6, static: true, speak: true, panic: true, text: '… (grésillements — des hurlements dans le haut-parleur) : Ils sont sur les voies !' },
+      { at: 34.0, big: true, horn: true, speak: true, panic: true, dur: 4.0, title: 'RALENTISSEMENT', sub: 'Obstacle sur la voie', text: 'Attention ! Obstacle sur la voie, freinage d\'urgence !' },
+      { at: 41.0, big: true, quiet: true, speak: true, panic: true, dur: 3.8, title: 'ILS S\'ACCROCHENT AUX FENÊTRES !', sub: 'Abattez-les avant qu\'ils ne montent', text: 'Alerte passagers ! Des infectés attaquent les vitres !' },
+      { at: 83.0, speak: true, panic: true, dur: 4.0, text: '(bruits de pas lourds sur le toit — les portes cèdent !)' },
+      { at: 114.0, chime: true, speak: true, dur: 6.5, text: 'Strasbourg. Strasbourg-Ville, terminus de ce train. Préparez-vous à descendre sur le quai.' },
     ],
-    arrival: { title: 'STRASBOURG — Terminus.', sub: 'Tout le monde descend.' },
+    arrival: { title: 'STRASBOURG — Terminus.', sub: 'Tout le monde descend.', speak: 'Strasbourg, terminus de ce train. Tout le monde descend.' },
     // ---- zombies of the ride (v0.82.0, src/rideZombies.js ; the host simulates them) : game.introHooks[id](τ) is called at τ (events) ;
     // counts are solo, × (1 + 0.75 per extra player) like startRound ; health of round healthRound (100 HP), speed of round 1
-    events: [{ at: 180, id: 'track' }, { at: 202, id: 'breach' }, { at: 227, id: 'roof' }, { at: 267, id: 'trackbed' }],
-    trackZombies: 16, sideZombies: 14, breachers: 20, gangway: 12,
-    trackOnRail: 8,               // of the trackZombies : standing on the track ahead (run over by the head car, roadkillPoints each)
-    trackbed: 6,                  // at the stop : zombies climbing out of the track bed onto quai 1 (outside the round count ; round 1 ends when they are dead too)
-    // 180-210 s (4 min 27 ride) : the train passes trackside zombies at τ in pass[0..1] (s) ; they appear lead s before (ahead, in the fog), off m from the axis,
-    // walk toward the track ; despawned `lose` m behind the tail (not counted)
-    track: { pass: [182, 200], lead: 6, off: [3.5, 9], lose: 40 },
-    // 202-227 s (15 km/h past the derailed wagons) : side zombies (sideZombies) stand beside the track, passed at τ in pass ; breachers run alongside
-    // (spawned between spawn[0] and spawn[1] s, from back or ahead of their window, `from` m away and `out` m off the body side), up to `run` m/s
-    // faster or slower than the train, at most maxRun m/s on the ground (a faster train leaves them behind, lost `lose` m behind the tail) ;
-    // at the window : hang grab s (attack animation, the glass cracks at crackAt of it, knocks every knock s), smash it (stays broken, wind),
-    // climb in climb s (arc m over the sill), then walk the aisle. Hanging (hang + climb) is capped at maxHanging (maxHanging4p with 4 players) :
-    // the others wait `wait` m behind their window. Hanging pose : `hangOut` m off the body side, feet `hangY` m above the rail head.
-    side: { pass: [204, 226], lead: 8, off: [3.8, 9] },
-    breach: { grab: 2.3, climb: 1.0, maxHanging: 8, maxHanging4p: 14, spawn: [202.5, 224], from: [6, 13], out: 3.2, run: 2.5, maxRun: 7.5, lose: 18, wait: 2.2, crackAt: 0.30, knock: 0.40, hangOut: 0.3, hangY: 0.75, arc: 0.9 },
-    // 227-250 s : footsteps on the roof of the last car (steps every `every` s from its front to its tail), bangs on its rear cab door (at bangAt, bangs
-    // knocks), the door is forced at forceAt ; then the gangway zombies come in through it, one every gangEvery s
-    roof: { steps: 10, every: 0.55, bangAt: 231.0, bangs: 4, forceAt: 233.0, gangEvery: 1.0 },
+    events: [{ at: 14, id: 'track' }, { at: 40, id: 'breach' }, { at: 82, id: 'roof' }, { at: 135, id: 'trackbed' }],
+    trackZombies: 20, sideZombies: 18, breachers: 28, gangway: 16,
+    trackOnRail: 10,              // of the trackZombies : standing on the track ahead (run over by the head car, roadkillPoints each)
+    trackbed: 8,                  // at the stop : zombies climbing out of the track bed onto quai 1 (outside the round count ; round 1 ends when they are dead too)
+    // 14-40 s : the train passes trackside zombies at τ in pass[0..1] (s) ; they appear lead s before (ahead, in the fog), off m from the axis
+    track: { pass: [16, 38], lead: 5, off: [3.5, 9], lose: 40 },
+    // 40-84 s (15 km/h past the derailed wagons) : side zombies + window breachers across both sides of all coaches
+    side: { pass: [42, 82], lead: 8, off: [3.8, 9] },
+    breach: { grab: 2.3, climb: 1.0, maxHanging: 10, maxHanging4p: 16, spawn: [41.0, 80.0], from: [6, 13], out: 3.2, run: 2.6, maxRun: 7.5, lose: 18, wait: 2.0, crackAt: 0.30, knock: 0.40, hangOut: 0.3, hangY: 0.14, arc: 0.90 },
+    // 82-112 s : footsteps on the roof, bangs on the rear bulkhead door, door forced, gangway zombies swarm into the coach
+    roof: { steps: 12, every: 0.55, bangAt: 86.0, bangs: 4, forceAt: 88.2, gangEvery: 0.85 },
     healthRound: 1, roadkillPoints: 0,
     roadkill: { minSpeed: 3, fling: 0.6, up: 4.5 },   // run over above minSpeed m/s : thrown forward at fling x the train speed, up m/s ; blood on the cab front
     wind: { reach: 7, gain: 0.5 },                    // wind noise at broken windows : heard up to reach m (along the train), gain at full speed
@@ -875,7 +867,7 @@ export const CONFIG = {
       treesPerKm: 70,                           // verge and garden trees per km of route (the woods and orchards come from the OSM polygons)
       land: { band: 170, woodSpacing: 7, treesMax: 7500, hedgesMax: 3500 },   // real landscape (rideLand.js) : lateral range of trees (m), wood tree spacing (m), caps of tree and hedge instances
       band: [8, 120],                           // m from the route : lateral range of trees, bushes and buildings
-      wreck: { at: 216, side: -1, off: 7.5, n: 3 },   // derailed wagons : beside the train at τ = at (s), side (-1 : left), off m from the route, count
+      wreck: { at: 63, side: -1, off: 7.5, n: 3 },   // derailed wagons : beside the train at τ = at (s), side (-1 : left), off m from the route, count
     },
   },
 
