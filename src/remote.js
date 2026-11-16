@@ -210,9 +210,9 @@ export class RemotePlayer {
     const fwd = -(this.vel.x * Math.sin(ya) + this.vel.z * Math.cos(ya)); // -z = avant
     const isDown = this.downed || this.dead;
     this.avatar.setWeapon(this.weapon, this.pap);
-    this.avatar.update({ dt, speed: isDown ? 0 : speed, fwd, pitch: this.pitch, reloading: this.reloading, aiming: this.aiming, crouching: this.crouching, downed: isDown, fire: this.fireNext });
+    this.avatar.update({ dt, speed: this.dead ? 0 : speed, fwd, pitch: this.pitch, reloading: this.reloading, aiming: this.aiming, crouching: this.crouching, downed: isDown, fire: this.fireNext });
     this.fireNext = false;
-    // à terre : allongé sur le dos
+    // à terre : allongé sur le dos, rampe lentement si en mouvement
     this.group.rotation.x += ((isDown ? -Math.PI / 2 : 0) - this.group.rotation.x) * k;
     this.group.position.y += isDown ? 0.25 : 0;
     if (this.vt > 0) this.group.position.y += 0.55 * Math.sin(Math.PI * Math.min(1, this.vt)); // enjambement : l'avatar passe par-dessus

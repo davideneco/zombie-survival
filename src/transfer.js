@@ -293,9 +293,10 @@ export function installTransfer(game, { world, hud, sfx, scene }) {
     const st = stops[stopId]; if (!st) return;
     S.stop = st; S.state = STATE.call; S.t = 0; S.dep = dep; S.ev = {};
     car.doorSide = sideAt(st.sStop + dep, termSide(st));
-    S.call = buildCall(route, st.sStop + dep, 1, X.approach, X.countdown - X.doorTime - 0.4, vlim, X);
+    const tStop = Math.min(X.approachTime ?? 5, X.countdown - X.doorTime - 1.0);
+    S.call = buildCall(route, st.sStop + dep, 1, X.approach, tStop, vlim, X);
     const p = game.player;
-    if (Math.hypot(p.pos.x - st.terminal.x, p.pos.z - st.terminal.z) < 40) { hud.announce('TRAM C', `Direction ${stops[st.dest].name} — départ dans ${X.countdown} s, montez à bord`, 3200); sfx.buy?.(); }
+    if (Math.hypot(p.pos.x - st.terminal.x, p.pos.z - st.terminal.z) < 40) { hud.announce('TRAM C', `Direction ${stops[st.dest].name} — arrivée dans ${Math.ceil(tStop)} s, départ dans ${X.countdown} s`, 3400); sfx.buy?.(); }
   }
   function startGo(stopId, pids, dep, arr) {
     const st = stops[stopId]; if (!st) return;
@@ -407,7 +408,10 @@ export function installTransfer(game, { world, hud, sfx, scene }) {
         if (!S.ev.open && pose.doors > 0.05) { // : the tram rings its bell and opens its doors (heard within 40 m of the terminal)
           S.ev.open = 1;
           const tm = S.stop.terminal;
-          if (Math.hypot(p.pos.x - tm.x, p.pos.z - tm.z) < 40) { sfx.tramBell?.(0.8); sfx.tramDoors?.(true, 0.6); }
+          if (Math.hypot(p.pos.x - tm.x, p.pos.z - tm.z) < 40) {
+            sfx.tramBell?.(0.8); sfx.tramDoors?.(true, 0.6);
+            hud.announce('TRAM C — PORTES OUVERTES', `Montez à bord ! Départ dans ${Math.max(1, Math.ceil(X.countdown - S.t))} s`, 3600);
+          }
         }
         if (S.t >= X.countdown && !this.isClient) { // host : who boards, where the car stops
           const st = S.stop, players = [[myId(), p], ...this.remotes.entries()];

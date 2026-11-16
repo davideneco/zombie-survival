@@ -656,7 +656,7 @@ export function buildGareMeshes({ plan, gare, rail, pbr, tiled, props, envMap, r
     // tracks (v0.80.0, railNet.trackGeometry) : SNCF Réseau shapes (rail.json) clipped to the station box, except the pieces the intro route
     // follows : the route itself is laid instead (moved beside quai 1, see CONFIG.railNet.route). Mesh frame : X = v, Z = -u.
     const tg = {}, toMesh = ([u, v]) => [v, -u];
-    const offRoute = (x, z) => !route || route.track.project(x, z, 2, _pr).d > 1.6;
+    const offRoute = (x, z) => !route || route.track.project(x, z, 2.5, _pr).d > 2.2;
     const _pr = {};
     let phase = 0;
     const lay = (pts) => { if (pts.length > 1) trackGeometry(pts.map(toMesh), bot, tg, { phase: (phase += 0.23) % CONFIG.railNet.sleeperEvery }); };

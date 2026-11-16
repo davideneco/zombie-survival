@@ -725,14 +725,14 @@ export const CONFIG = {
     ballast: { top: 3.1, foot: 4.9, h: 0.34 },   // prism : top width, foot width, height (m)
     chunk: 200,               // m : chunk size of the approach (one mesh per material per chunk)
     corridor: 24,             // m : neighbouring tracks drawn up to this distance from the route ; ground strip on each side
-    simplify: 0.03,           // m : polyline simplification tolerance (Douglas-Peucker)
-    smooth: { radius: 6, passes: 3 },   // route : moving average (± radius samples, passes) : the SNCF pieces meet with small kinks at the switches
+    simplify: 0.012,          // m : polyline simplification tolerance (Douglas-Peucker)
+    smooth: { radius: 12, passes: 3 },  // approach : Gaussian fairing sigma / passes in railNet.js
     mast: { every: 55, offset: 3.2, height: 8.2 },        // catenary masts : spacing (m along the track), offset from the axis, height
     wire: { contact: 6.1, messenger: 7.2, dropper: 9 },   // m above the rail head ; dropper spacing (m)
     stationClip: { u: 230, v0: -140 },                    // station frame : tracks with |u| < u and v0 < v < (track-side wall) are drawn by gare/build.js
     // the quai 1 track of the SNCF shapes runs ~0.85 m too close to the OSM platform edge (a train would overlap the platform) : the route is moved
     // sideways so a coach side is `gap` m from the edge, with a smooth ramp in : u from blendIn[0] to blendIn[1], out : u from blendOut[0] to blendOut[1]
-    route: { gap: 0.2, blendIn: [-200, -100], blendOut: [100, 175], extendTo: 235 },
+    route: { gap: 0.2, blendIn: [-260, -105], blendOut: [145, 225], extendTo: 235 },
     // embankment of the approach (v0.88.0) : the track stands `drop` m above the fields (slope `slope` m wide beyond the ballast shoulder) ; it eases out
     // toward the station (rampOut m before the station clip, ending `endBefore` m short of it). Bridges (rideland.json) : the deck keeps the ground
     // low beyond its sides (floor level `drop` below), girders `girder` m high above the rail bed
@@ -880,10 +880,11 @@ export const CONFIG = {
   // departure (legs.*.depart m), the middle stretch (middle.before m before the passed stop to the middle of the bridge), then the last
   // legs.*.arrive m into the stop. The first cut also hides the switch between the drawn areas (station / island).
   transfer: {
-    countdown: 8, cooldown: 20, price: 0, boardRadius: 6, reach: 2.6,
+    countdown: 24, cooldown: 20, price: 0, boardRadius: 6, reach: 2.6,
     approach: 60,             // m parcourus par la rame qui arrive à l'arrêt de départ pendant le compte à rebours
+    approachTime: 5,          // s : temps d'approche jusqu'à l'arrêt (le reste du compte à rebours garde les portes ouvertes)
     doorTime: 1.0,            // s : ouverture / fermeture des portes
-    dwell: 10,                // s : à l'arrivée, portes ouvertes ; ensuite les passagers encore à bord sont posés sur le quai et la rame repart
+    dwell: 20,                // s : à l'arrivée, portes ouvertes ; ensuite les passagers encore à bord sont posés sur le quai et la rame repart
     leave: 45,                // m : la rame repart (dans le sens des abscisses croissantes) puis disparaît
     // speeds (m/s, m/s²) : cruise ~45 km/h (a Citadis on its own track), CTS-like acceleration and service braking ; curves are capped at
     // sqrt(aLat * R) ; the intermediate stop is passed at `pass` m/s over ± passLen m ; step : m between two samples of a speed profile

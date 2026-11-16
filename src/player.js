@@ -134,11 +134,6 @@ export class Player {
     this.perks = {};
     this.statsVersion++;
     this.health = Math.min(this.health, this.maxHealth);
-    if (this.inventory.length > this.maxWeapons) { // Mule Kick perdu : on perd la 3e arme
-      this.inventory.length = this.maxWeapons;
-      if (this.weaponIdx >= this.inventory.length) this.weaponIdx = 0;
-      this.switchWeapon(this.weaponIdx);
-    }
   }
 
   // ---------------------------------------------------------------- Inventaire
@@ -226,6 +221,24 @@ export class Player {
   }
   prevWeapon() {
     this.switchWeapon((this.weaponIdx - 1 + this.inventory.length) % this.inventory.length);
+  }
+
+  // Bascule automatiquement sur une autre arme disposant encore de balles (chargeur non vide d'abord, sinon réserve)
+  autoSwitchAmmoWeapon() {
+    if (this.inventory.length <= 1 || this.locked || this.downed || this.dead) return false;
+    let bestIdx = -1;
+    for (let pass = 0; pass < 2 && bestIdx < 0; pass++) {
+      for (let off = 1; off < this.inventory.length; off++) {
+        const idx = (this.weaponIdx + off) % this.inventory.length;
+        const iw = this.inventory[idx];
+        if (pass === 0 ? iw.ammo > 0 : iw.reserve > 0) { bestIdx = idx; break; }
+      }
+    }
+    if (bestIdx < 0) return false;
+    this.switchWeapon(bestIdx);
+    const nw = this.curW;
+    if (nw && nw.ammo <= 0 && nw.reserve > 0) this.reload();
+    return true;
   }
 
   // ---------------------------------------------------------------- Input
@@ -523,8 +536,17 @@ export class Player {
       // Jusqu'à MAX_SHOTS_PER_FRAME tirs par image : le temps restant d'un tir est reporté au suivant (voir shoot),
       // donc la cadence réelle égale fireRate même quand une image dure plus qu'une période de tir.
       for (let n = 0; n < MAX_SHOTS_PER_FRAME && this.mouseDown && now >= this.nextShot; n++) {
-        if (w.ammo > 0) { this.shoot(now, moving); if (cfg.autoReload && w.ammo <= 0) this.reload(); } // chargeur d'une cartouche : recharge seule
+        if (w.ammo > 0) {
+          this.shoot(now, moving);
+          if (!this.infiniteAmmo && w.ammo <= 0 && w.reserve <= 0 && !w.gl && this.autoSwitchAmmoWeapon()) {
+            this.nextShot = Math.max(this.nextShot, now + 0.16);
+            if (cfg.type === 'semi') this.mouseDown = false;
+            break;
+          }
+          if (cfg.autoReload && w.ammo <= 0) this.reload();
+        } // chargeur d'une cartouche : recharge seule
         else if (w.reserve > 0) { this.reload(); break; }
+        else if (!w.gl && this.autoSwitchAmmoWeapon()) { this.nextShot = Math.max(this.nextShot, now + 0.16); break; }
         else { // chargeur et réserve vides : coup de couteau à la place du clic à vide (maintenu : un coup toutes les cooldown s)
           this.nextShot = now + 0.1;
           if (this.meleeT < 0 && now >= this.nextMelee && !this.melee(now)) { this.nextShot = now + 0.3; this.game.sfx.empty(); }
@@ -917,6 +939,7 @@ export class Player {
   reload() {
     const cfg = this.curCfg;
     const w = this.curW;
+    if (w.ammo <= 0 && w.reserve <= 0 && !w.gl) { this.autoSwitchAmmoWeapon(); return; }
     if (w.reloading || w.ammo >= cfg.magSize || w.reserve <= 0) return;
     this.game.perkFx?.onReload(w, cfg); // Cerise-foudre (munitions restantes avant le rechargement)
     w.reloading = true;
@@ -992,6 +1015,10 @@ export class Player {
     this.downed = true;
     this.bleedout = 45;
     this.health = 0;
+    this.aiming = false;
+    this.mouseDown = false;
+    this.vault = null;
+    if (this.vehicle) this.game.leaveVehicle?.(true);
     this.game.perkFx?.onDown(); // Pierre tombale : la tombe garde les atouts
     if (!this.game.blessed) this.clearPerks(); // à terre : on perd tous ses atouts (sauf sous la Bénédiction de l'Aube)
     if (solo && hadQR) {
@@ -999,7 +1026,7 @@ export class Player {
       this.game.hud.announce('À TERRE !', 'Réanimation rapide : vous vous relevez…', 3500);
       return;
     }
-    this.game.hud.announce('VOUS ÊTES À TERRE !', 'Attendez un coéquipier…', 4000);
+    this.game.hud.announce('VOUS ÊTES À TERRE !', 'Rampez vers un coéquipier pour être réanimé…', 4000);
     this.game.onPlayerDowned?.();
   }
 

@@ -545,16 +545,27 @@ export function buildVoiture(variant = 0) {
   const revL = box(body, 0.14, 0.035, 0.05, revMat, -0.52, 0.60, 2.21);
   const revR = box(body, 0.14, 0.035, 0.05, revMat, 0.52, 0.60, 2.21);
 
-  // Faisceaux lumineux avant (SpotLights attachés à la carrosserie)
-  const spotL = new THREE.SpotLight(0xfff6dd, 28, 60, 0.58, 0.55, 1.2);
-  spotL.position.set(-0.62, 0.64, -2.25);
-  spotL.target.position.set(-0.62, 0.15, -28);
-  body.add(spotL, spotL.target);
+  // Faisceaux lumineux avant (cônes émissifs légers : ne pas ajouter de THREE.SpotLight qui recompilent tous les shaders au montage)
+  const beamGeo = new THREE.ConeGeometry(0.9, 9.0, 14, 1, true);
+  beamGeo.translate(0, -4.5, 0);
+  beamGeo.rotateX(Math.PI / 2 - 0.12);
+  const beamMat = new THREE.MeshBasicMaterial({
+    color: 0xfff6dd,
+    transparent: true,
+    opacity: 0.085,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+  });
+  const spotL = new THREE.Mesh(beamGeo, beamMat);
+  spotL.position.set(-0.62, 0.62, -2.25);
+  spotL.visible = false;
+  body.add(spotL);
 
-  const spotR = new THREE.SpotLight(0xfff6dd, 28, 60, 0.58, 0.55, 1.2);
-  spotR.position.set(0.62, 0.64, -2.25);
-  spotR.target.position.set(0.62, 0.15, -28);
-  body.add(spotR, spotR.target);
+  const spotR = new THREE.Mesh(beamGeo, beamMat);
+  spotR.position.set(0.62, 0.62, -2.25);
+  spotR.visible = false;
+  body.add(spotR);
 
   // 8. Train roulant (4 roues non suspendues + pivots de direction + étriers fixes)
   const wRL = carWheel(R, 0.25, M.chrome);
@@ -872,15 +883,27 @@ export function buildSuv(variant = 0) {
   const revL = box(body, 0.12, 0.09, 0.06, revMat, -0.82, 0.62, 2.31);
   const revR = box(body, 0.12, 0.09, 0.06, revMat, 0.82, 0.62, 2.31);
 
-  const spotL = new THREE.SpotLight(0xfff8e7, 34, 68, 0.62, 0.55, 1.15);
-  spotL.position.set(-0.66, 0.84, -2.42);
-  spotL.target.position.set(-0.66, 0.15, -32);
-  body.add(spotL, spotL.target);
+  // Faisceaux lumineux avant (cônes émissifs légers sans SpotLight pour éviter la recompilation des shaders)
+  const beamGeo = new THREE.ConeGeometry(1.05, 10.5, 14, 1, true);
+  beamGeo.translate(0, -5.25, 0);
+  beamGeo.rotateX(Math.PI / 2 - 0.13);
+  const beamMat = new THREE.MeshBasicMaterial({
+    color: 0xfff8e7,
+    transparent: true,
+    opacity: 0.095,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+  });
+  const spotL = new THREE.Mesh(beamGeo, beamMat);
+  spotL.position.set(-0.66, 0.82, -2.42);
+  spotL.visible = false;
+  body.add(spotL);
 
-  const spotR = new THREE.SpotLight(0xfff8e7, 34, 68, 0.62, 0.55, 1.15);
-  spotR.position.set(0.66, 0.84, -2.42);
-  spotR.target.position.set(0.66, 0.15, -32);
-  body.add(spotR, spotR.target);
+  const spotR = new THREE.Mesh(beamGeo, beamMat);
+  spotR.position.set(0.66, 0.82, -2.42);
+  spotR.visible = false;
+  body.add(spotR);
 
   // 7. Train roulant (4 roues tout-terrain R=0.43 m + pivots de direction Ackermann)
   const wRL = offroadWheel(R, 0.29, armorMat, beadMat);

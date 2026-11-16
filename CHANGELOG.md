@@ -2,6 +2,15 @@
 
 Chaque changement est poussé sur `main` (déploiement Render) avec un nouveau numéro de version et sa description ici.
 
+## v0.100.2 (2026-11-16)
+- Voitures conduisibles sans gel ni blocage à la montée/descente (phares sur le pool dynamique de lumières, aucune création/suppression de SpotLight en jeu).
+- Tram de liaison du parvis : approche en 5 s, portes ouvertes ~18 s au départ (24 s au total) et 20 s à l'arrivée pour laisser le temps de monter.
+- Rails d'approche lissés sans zigzags et alignés le long du quai 1 ; retrait du roulis latéral exagéré en approche.
+- Bonus au sol dotés chacun d'un modèle 3D distinct (crâne + os pour Mort instantanée, médaillon doré « ×2 » pour Double points, ogive nucléaire inclinée pour Bombe atomique, caisse de munitions verte + balles pour Munitions max).
+- Passage automatique vers une autre arme possédant encore des munitions lorsque l'arme en main est à sec.
+- À terre, le joueur conserve son arme en main (seuls les atouts sont perdus) et peut ramper lentement vers ses coéquipiers.
+- Vérifié : `node tools/make-docs.mjs` et `npx vite build` sans erreur ; en jeu sous Chromium headless SwiftShader : conduite voiture (`speedDuring 11.21`, `avgFrameMs 10.7`, sortie propre, capture vérifiée), modèles 3D des 4 bonus vérifiés visuellement par capture, changement d'arme auto à vide vérifié, conservation de l'arme et rampement à terre (`0,52 m / 0,5 s`) vérifiés, géométrie des rails vérifiée en Node (`maxCarDiff 0,728°`). Non vérifié : session multijoueur complète client-hôte sur le rampement répliqué ni trajet complet du tram C en jeu en temps réel.
+
 ## v0.100.1 (2026-11-15)
 - **Correctifs du TGV M et du trajet d'introduction (`src/trainModel.js`, `src/config.js`, `src/audio.js`, `src/intro.js`) :**
   - **Bogies abaissés sous les planchers** : compactage des bogies moteurs (hauteur max `0,711 m`) et porteurs/Jacobs (`0,675 m`), empattement `2,35 m`, et recul des bogies d'extrémité R1/R8 (`coachOuterBogie: 1,55 m`) strictement sous les dalles de vestibule et d'intercirculation (`0,80..0,88 m`) pour éliminer toute pénétration dans les sols et escaliers.

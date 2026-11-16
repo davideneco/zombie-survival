@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { warmUpload } from './gpuOnly.js';
 import { shareProgramFlags } from './programShare.js';
 import { CONFIG, papAmmoMult } from './config.js';
@@ -128,6 +129,137 @@ const JERRY_HANDLE = new THREE.BoxGeometry(0.1, 0.06, 0.05);
 const NADE_GEO = new THREE.SphereGeometry(0.09, 10, 8);
 const NADE_MAT = new THREE.MeshStandardMaterial({ color: 0x2f3b1f, roughness: 0.6, metalness: 0.4 });
 const TRACER_MATS = new Map();
+
+// Modèles 3D distincts par type de bonus (construits et mis en cache une seule fois : aucune allocation de shader en pleine partie)
+const POWERUP_ASSETS = (() => {
+  const mkPart = (g, x = 0, y = 0, z = 0, rx = 0, ry = 0, rz = 0, sx = 1, sy = 1, sz = 1) => {
+    const c = g.index ? g.toNonIndexed() : g.clone();
+    if (sx !== 1 || sy !== 1 || sz !== 1) c.scale(sx, sy, sz);
+    if (rx) c.rotateX(rx);
+    if (ry) c.rotateY(ry);
+    if (rz) c.rotateZ(rz);
+    if (x || y || z) c.translate(x, y, z);
+    c.computeVertexNormals();
+    return c;
+  };
+  const merge = (list) => {
+    const m = mergeGeometries(list, false);
+    for (const g of list) g.dispose();
+    return m;
+  };
+  const matOf = (color, emissive, ei = 1.15, rough = 0.28, metal = 0.35) => new THREE.MeshStandardMaterial({
+    color, emissive, emissiveIntensity: ei, roughness: rough, metalness: metal,
+  });
+  const haloMat = (color, opacity = 0.34) => new THREE.MeshBasicMaterial({
+    color, transparent: true, opacity, blending: THREE.AdditiveBlending, depthWrite: false,
+  });
+
+  // 1) Mort instantanée : Crâne avec cavités sombres + fémurs croisés
+  const boneParts = [
+    mkPart(new THREE.SphereGeometry(0.24, 14, 10), 0, 0.13, 0, 0, 0, 0, 0.92, 1.05, 1.0), // crâne
+    mkPart(new THREE.BoxGeometry(0.22, 0.14, 0.22), 0, -0.02, 0.04),                     // mâchoire
+    mkPart(new THREE.BoxGeometry(0.28, 0.045, 0.08), 0, 0.14, 0.18),                     // arcade sourcilière
+    mkPart(new THREE.CylinderGeometry(0.036, 0.036, 0.72, 8), 0, -0.22, -0.04, 0, 0, 1.05),  // os 1
+    mkPart(new THREE.CylinderGeometry(0.036, 0.036, 0.72, 8), 0, -0.22, -0.04, 0, 0, -1.05), // os 2
+  ];
+  for (const sx of [-1, 1]) for (const sy of [-1, 1]) {
+    boneParts.push(mkPart(new THREE.SphereGeometry(0.052, 8, 6), sx * 0.31, -0.22 + sy * 0.16, -0.04));
+  }
+  const skullEyes = merge([
+    mkPart(new THREE.SphereGeometry(0.058, 8, 6), -0.082, 0.12, 0.19, 0, 0, 0, 1.0, 0.85, 0.6),
+    mkPart(new THREE.SphereGeometry(0.058, 8, 6), 0.082, 0.12, 0.19, 0, 0, 0, 1.0, 0.85, 0.6),
+    mkPart(new THREE.ConeGeometry(0.036, 0.07, 4), 0, 0.04, 0.21),
+    mkPart(new THREE.BoxGeometry(0.16, 0.024, 0.04), 0, -0.06, 0.155),
+  ]);
+
+  // 2) Double points : Médaillon doré avec « ×2 » en relief
+  const dpRing = merge([
+    mkPart(new THREE.TorusGeometry(0.36, 0.045, 10, 28)),
+    mkPart(new THREE.TorusGeometry(0.30, 0.02, 8, 24), 0, 0, 0.025),
+    mkPart(new THREE.TorusGeometry(0.30, 0.02, 8, 24), 0, 0, -0.025),
+  ]);
+  const dpText = merge([
+    // Signe « × » à gauche
+    mkPart(new THREE.BoxGeometry(0.055, 0.24, 0.08), -0.15, 0, 0, 0, 0, 0.78),
+    mkPart(new THREE.BoxGeometry(0.055, 0.24, 0.08), -0.15, 0, 0, 0, 0, -0.78),
+    // Chiffre « 2 » à droite
+    mkPart(new THREE.BoxGeometry(0.19, 0.055, 0.09), 0.12, 0.14, 0),            // barre haute
+    mkPart(new THREE.BoxGeometry(0.055, 0.14, 0.09), 0.19, 0.07, 0),            // montant haut-droit
+    mkPart(new THREE.BoxGeometry(0.19, 0.055, 0.09), 0.12, 0.0, 0),             // barre médiane
+    mkPart(new THREE.BoxGeometry(0.055, 0.14, 0.09), 0.05, -0.07, 0),           // montant bas-gauche
+    mkPart(new THREE.BoxGeometry(0.20, 0.058, 0.09), 0.12, -0.14, 0),           // base
+  ]);
+
+  // 3) Bombe nucléaire : ogive profilée inclinée + collerette sombre + 4 ailerons
+  const nukeBody = merge([
+    mkPart(new THREE.SphereGeometry(0.18, 14, 12), 0, 0.02, 0, 0, 0, 0, 1.0, 1.75, 1.0), // corps ogival
+    mkPart(new THREE.CylinderGeometry(0.11, 0.15, 0.22, 12), 0, -0.27, 0),                // cône de queue
+    mkPart(new THREE.TorusGeometry(0.155, 0.026, 8, 18), 0, -0.35, 0, Math.PI / 2),       // anneau stabilisateur
+  ]);
+  const nukeFins = merge([
+    mkPart(new THREE.BoxGeometry(0.36, 0.16, 0.025), 0, -0.31, 0),
+    mkPart(new THREE.BoxGeometry(0.025, 0.16, 0.36), 0, -0.31, 0),
+    mkPart(new THREE.SphereGeometry(0.075, 10, 8), 0, 0.31, 0),
+  ]);
+  nukeBody.rotateZ(-0.45);
+  nukeFins.rotateZ(-0.45);
+
+  // 4) Munitions max : Caisse militaire nervurée + 3 cartouches dorées sur le dessus
+  const ammoBox = merge([
+    mkPart(new THREE.BoxGeometry(0.50, 0.32, 0.34), 0, -0.05, 0),              // caisse
+    mkPart(new THREE.BoxGeometry(0.54, 0.07, 0.38), 0, 0.12, 0),               // couvercle
+    mkPart(new THREE.BoxGeometry(0.16, 0.04, 0.04), 0, 0.19, 0),               // poignée
+    mkPart(new THREE.BoxGeometry(0.52, 0.05, 0.36), 0, -0.18, 0),              // rebord inférieur
+  ]);
+  const ammoBullets = merge([
+    mkPart(new THREE.CylinderGeometry(0.038, 0.038, 0.16, 8), -0.12, 0.24, 0),
+    mkPart(new THREE.ConeGeometry(0.038, 0.08, 8), -0.12, 0.36, 0),
+    mkPart(new THREE.CylinderGeometry(0.038, 0.038, 0.18, 8), 0.0, 0.25, 0),
+    mkPart(new THREE.ConeGeometry(0.038, 0.08, 8), 0.0, 0.38, 0),
+    mkPart(new THREE.CylinderGeometry(0.038, 0.038, 0.16, 8), 0.12, 0.24, 0),
+    mkPart(new THREE.ConeGeometry(0.038, 0.08, 8), 0.12, 0.36, 0),
+  ]);
+
+  return {
+    insta_kill: {
+      col: 0xff2222,
+      parts: [
+        [merge(boneParts), matOf(0xff4444, 0xff1111, 1.05, 0.35, 0.15)],
+        [skullEyes, matOf(0x160404, 0x220000, 0.2, 0.8, 0.1)],
+      ],
+      halo: haloMat(0xff2222, 0.34),
+    },
+    double_points: {
+      col: 0xffaa00,
+      parts: [
+        [dpRing, matOf(0xffaa00, 0xff8800, 0.9, 0.22, 0.7)],
+        [dpText, matOf(0xffe066, 0xffcc22, 1.35, 0.2, 0.6)],
+      ],
+      halo: haloMat(0xffaa00, 0.32),
+    },
+    nuke: {
+      col: 0xffdd22,
+      parts: [
+        [nukeBody, matOf(0xffcc22, 0xff9900, 0.95, 0.25, 0.65)],
+        [nukeFins, matOf(0x3a2810, 0xff5500, 0.65, 0.4, 0.7)],
+      ],
+      halo: haloMat(0xffdd22, 0.36),
+    },
+    max_ammo: {
+      col: 0x22ff66,
+      parts: [
+        [ammoBox, matOf(0x1fd855, 0x11cc44, 0.9, 0.35, 0.35)],
+        [ammoBullets, matOf(0xffd24a, 0xffaa22, 1.1, 0.22, 0.75)],
+      ],
+      halo: haloMat(0x22ff66, 0.34),
+    },
+    fuel: {
+      col: 0xb81208,
+      mat: matOf(0xb81208, 0xb81208, 0.25, 0.3, 0.15),
+      halo: haloMat(0xb81208, 0.16),
+    },
+  };
+})();
 
 const game = {
   started: false,
@@ -554,28 +686,19 @@ const game = {
     const puid = customId || nextPuId++;
 
     const grp = new THREE.Group();
-    let col = 0x22ff66;
-    if (type === 'insta_kill') col = 0xff2222;
-    if (type === 'nuke') col = 0xffdd22;
-    if (type === 'double_points') col = 0xffaa00;
-    if (type === 'fuel') col = 0xb81208; // jerrican rouge (bonus d'essence des motos)
+    const asset = POWERUP_ASSETS[type] || POWERUP_ASSETS.max_ammo;
 
-    const baseGeo = type === 'fuel' ? JERRY_GEO : new THREE.DodecahedronGeometry(0.35);
-    const baseMat = new THREE.MeshStandardMaterial({
-      color: col,
-      emissive: col,
-      emissiveIntensity: type === 'fuel' ? 0.25 : 1.2, // le bidon reste bien rouge (une forte émission le délave en rose)
-      roughness: 0.3,
-    });
-    const m = new THREE.Mesh(baseGeo, baseMat);
-    grp.add(m);
     if (type === 'fuel') { // bidon d'essence : corps, goulot et poignée
+      const baseMat = asset.mat;
+      grp.add(new THREE.Mesh(JERRY_GEO, baseMat));
       const nz = new THREE.Mesh(JERRY_NECK, baseMat); nz.position.set(0.1, 0.27, 0); grp.add(nz);
       const hd = new THREE.Mesh(JERRY_HANDLE, baseMat); hd.position.set(-0.07, 0.27, 0); grp.add(hd);
+    } else {
+      for (const [geo, mat] of asset.parts) grp.add(new THREE.Mesh(geo, mat));
     }
 
     // halo lumineux (pas de PointLight : ajouter/cacher une lumière fait recompiler tous les shaders)
-    const halo = new THREE.Mesh(HALO_GEO, new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: type === 'fuel' ? 0.16 : 0.35, blending: THREE.AdditiveBlending, depthWrite: false }));
+    const halo = new THREE.Mesh(HALO_GEO, asset.halo);
     halo.scale.setScalar(0.9);
     grp.add(halo);
 

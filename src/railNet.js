@@ -24,6 +24,28 @@ export function inStationClip(plan, u, v) {
   return Math.abs(u) < C.u && v > C.v0 && v < plan.body.v0 - 1;
 }
 
+// Clamped Gaussian fairing so endpoints and bridge alignments stay true while polygonal kinks disappear
+export function smoothTrackPts(pts, sigma = 4, passes = 1) {
+  if (!pts || pts.length < 3) return pts ? pts.slice() : [];
+  const rad = Math.max(1, Math.ceil(sigma * 2.5));
+  const ker = [];
+  for (let j = -rad; j <= rad; j++) ker.push(Math.exp(-0.5 * (j / sigma) ** 2));
+  let cur = pts.map((p) => p.slice());
+  for (let pass = 0; pass < passes; pass++) {
+    const n = cur.length, out = cur.map((p) => p.slice());
+    for (let i = 1; i < n - 1; i++) {
+      let x = 0, z = 0, wsum = 0;
+      for (let j = -rad; j <= rad; j++) {
+        const idx = clamp(i + j, 0, n - 1), w = ker[j + rad];
+        x += cur[idx][0] * w; z += cur[idx][1] * w; wsum += w;
+      }
+      out[i] = [x / wsum, z / wsum];
+    }
+    cur = out;
+  }
+  return cur;
+}
+
 // ------------------------------------------------------------------ route (pure)
 export function buildIntroRoute(rail, plan) {
   const R = CONFIG.railNet, RT = R.route, TR = CONFIG.train;
@@ -49,13 +71,8 @@ export function buildIntroRoute(rail, plan) {
     }
   }
   pts = pts.filter((p) => plan.L(p[0], p[1])[0] <= RT.extendTo);
-  // smoothing : moving average, ends pinned (the SNCF pieces join with small angles at the switches)
-  for (let pass = 0; pass < R.smooth.passes; pass++) {
-    const k = R.smooth.radius, n = pts.length, out = pts.map((p) => p.slice());
-    for (let i = k; i < n - k; i++) { let x = 0, z = 0; for (let j = -k; j <= k; j++) { x += pts[i + j][0]; z += pts[i + j][1]; } out[i] = [x / (2 * k + 1), z / (2 * k + 1)]; }
-    pts = out;
-  }
-  // sideways correction : the platform track of the SNCF shapes, compared with the OSM quai 1 edge
+
+  // Move beside quai 1 BEFORE curve fairing so transitions into/out of the station blend seamlessly
   const platT = (rail.tracks || []).find((t) => t.id === src.platformTrack);
   const platV = (u) => { // v of the SNCF platform track at u (station frame), extrapolated flat
     if (!platT) return null;
@@ -64,16 +81,34 @@ export function buildIntroRoute(rail, plan) {
     for (let i = 1; i < L.length; i++) if (u <= L[i][0]) return L[i - 1][1] + ((L[i][1] - L[i - 1][1]) * (u - L[i - 1][0])) / (L[i][0] - L[i - 1][0] || 1);
     return L[L.length - 1][1];
   };
-  const [pu0, pu1] = CONFIG.gare.playU, half = TR.width / 2 + RT.gap;
-  const xs = [], zs = [];
-  for (const [x, z] of pts) {
-    const [u, v] = plan.L(x, z);
+  const [pu0, pu1] = CONFIG.gare.playU, half = TR.width / 2 + RT.gap, F = plan.frame;
+  pts = pts.map(([x, z]) => {
+    const [u] = plan.L(x, z);
     const wgt = smoothstep(RT.blendIn[0], RT.blendIn[1], u) * (1 - smoothstep(RT.blendOut[0], RT.blendOut[1], u));
     let dv = 0;
     if (wgt > 0) { const pv = platV(clamp(u, pu0, pu1)); if (pv != null) dv = wgt * (plan.at(plan.q1W, clamp(u, pu0, pu1)) - half - pv); }
-    const F = plan.frame;
-    xs.push(x + F.vx * dv); zs.push(z + F.vz * dv);
-  }
+    return [x + F.vx * dv, z + F.vz * dv];
+  });
+
+  // Mild Gaussian fairing on open-country bridges/curves; stronger fairing across yard/station throat switches
+  const splitIdx = pts.length - 1700;
+  const pMild = smoothTrackPts(pts, 12, 2);
+  const pStrong = smoothTrackPts(pts, 28, 3);
+  pts = pts.map((_, i) => {
+    const blend = smoothstep(splitIdx - 200, splitIdx + 200, i);
+    return [pMild[i][0] * (1 - blend) + pStrong[i][0] * blend, pMild[i][1] * (1 - blend) + pStrong[i][1] * blend];
+  });
+  // Keep quai 1 straight and flush next to the platform along the parked train zone [-95, +130]
+  pts = pts.map(([x, z]) => {
+    const [u, v] = plan.L(x, z);
+    const w = smoothstep(-450, -95, u) * (1 - smoothstep(130, 225, u));
+    if (w <= 0) return [x, z];
+    const dv = (plan.at(plan.q1W, clamp(u, pu0, pu1)) - half - v) * w;
+    return [x + F.vx * dv, z + F.vz * dv];
+  });
+  pts = smoothTrackPts(pts, 10, 2);
+
+  const xs = pts.map((p) => p[0]), zs = pts.map((p) => p[1]);
   const track = new Track({ id: 'intro', name: 'Itinéraire du train', samples: { x: xs, z: zs } }, 1, 25);
   // park : the nose at u = park.headU (first abscissa past it)
   let parkHeadS = track.L;
@@ -315,11 +350,12 @@ export function buildRailNet({ rail, plan, route, mats }) {
   // 2) neighbouring SNCF tracks (not the pieces the route already follows), within the corridor
   for (const t of rail.tracks || []) {
     if (t.type === 'OSM') continue;
-    const dense = [];
-    for (let i = 1; i < t.pts.length; i++) { const [ax, az] = t.pts[i - 1], [bx, bz] = t.pts[i], d = Math.hypot(bx - ax, bz - az), n = Math.max(1, Math.ceil(d / 2)); for (let k = i === 1 ? 0 : 1; k <= n; k++) dense.push([ax + ((bx - ax) * k) / n, az + ((bz - az) * k) / n]); }
+    const dense0 = [];
+    for (let i = 1; i < t.pts.length; i++) { const [ax, az] = t.pts[i - 1], [bx, bz] = t.pts[i], d = Math.hypot(bx - ax, bz - az), n = Math.max(1, Math.ceil(d / 2)); for (let k = i === 1 ? 0 : 1; k <= n; k++) dense0.push([ax + ((bx - ax) * k) / n, az + ((bz - az) * k) / n]); }
+    const dense = smoothTrackPts(dense0, 4, 1);
     let cur = [];
     const flush = () => { if (cur.length > 2) lines.push({ pts: cur, electrified: t.type === 'VPL' }); cur = []; };
-    for (const p of dense) { const p0 = tr.project(p[0], p[1], R.corridor + 1, _pr); if (p0.d > 1.6 && p0.d <= R.corridor) cur.push(p); else flush(); }
+    for (const p of dense) { const p0 = tr.project(p[0], p[1], R.corridor + 1, _pr); if (p0.d > 2.2 && p0.d <= R.corridor) cur.push(p); else flush(); }
     flush();
   }
   let phase = 0;

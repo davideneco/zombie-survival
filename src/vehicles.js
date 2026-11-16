@@ -39,6 +39,11 @@ export class Vehicle {
     this.pos = new THREE.Vector3();
     this.seats = Array(this.def.seats).fill(null); // id réseau du joueur assis (0 en solo), null = libre
     this.engine = null;
+    if (this.def.isCar && game.world?.lightSources) {
+      this.headLight = { x: spawn.x, y: 0.9, z: spawn.z, color: 0xfff2cc, intensity: 16, dist: 32, dyn: true, off: true };
+      game.world.lightSources.push(this.headLight);
+      game.world.lightSources._v = (game.world.lightSources._v || 0) + 1;
+    }
     this.reset();
   }
 
@@ -209,6 +214,8 @@ export class Vehicle {
       if (m.body) { m.body.rotation.set(0, 0, 0); m.body.position.y = 0; }
       this.group.rotation.set(0, this.yaw, (this.id % 2 ? 1 : -1) * 1.5);
       this.group.position.y += this.def.wreckLift ?? 0.45;
+      if (m.headlights) for (const h of m.headlights) h.visible = false;
+      if (this.headLight) this.headLight.off = true;
       return;
     }
     if (m.body) {
@@ -234,9 +241,17 @@ export class Vehicle {
     if (m.crank) m.crank.rotation.x = -this.wheelRot * m.crankRatio; // le pédalier tourne avec les roues
 
     // Phares avant, feux stop dynamiques et feux de recul
+    const lightsOn = this.hasDriver && this.state === 'ok';
     if (m.headlights) {
-      const lightsOn = this.hasDriver && this.state === 'ok';
       for (const h of m.headlights) h.visible = lightsOn;
+    }
+    if (this.headLight) {
+      this.headLight.off = !lightsOn;
+      if (lightsOn) {
+        this.headLight.x = this.pos.x - Math.sin(this.yaw) * 4.6;
+        this.headLight.y = (this.pos.y || 0) + 0.95;
+        this.headLight.z = this.pos.z - Math.cos(this.yaw) * 4.6;
+      }
     }
     if (m.brakeMat) {
       m.brakeMat.emissiveIntensity = (this.hasDriver && this.braking) ? 5.2 : 1.5;
