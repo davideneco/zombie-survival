@@ -378,7 +378,7 @@ export async function buildRealWorld(scene, renderer) {
   // Rohan). L'ancienne règle sert à placer le décor, les machines et les armes (leur position ne change pas) ; la correction est appliquée
   // à la fin (applyMapFixes), juste avant la grille de navigation définitive.
   const SUPPORT_TOL = 0.35;
-  const supportedRuns = (k, ax, az, bx, bz, tight = false) => {
+  const supportedRuns = (k, ax, az, bx, bz, tight = false, keepHeight = false) => {
     const parts = partsOf.get(k) || [], tol = tight ? SUPPORT_TOL : 1;
     const len = Math.hypot(bx - ax, bz - az), n = Math.max(1, Math.ceil(len / (tight ? 0.25 : 0.5)));
     const supAt = (t) => { // hauteur de la partie la plus haute qui porte ce point (-1 : aucune)
@@ -400,7 +400,8 @@ export async function buildRealWorld(scene, renderer) {
     if (!tight) return runs.filter(([a, b]) => b > a);
     // v0.47.3 : hauteur du mur = celle de la partie qui le porte, si elle est basse (marches de l'Opera : 1,5 m ; avant, un mur infini au-dessus
     // d'une marche dessinee, donc un mur invisible). Les runs sont coupes la ou cette hauteur change.
-    const capOf = (t) => { const h = supAt(t); return h >= 0 && h < 2.6 ? h : Infinity; };
+    // keepHeight (cathédrale) : conserve la vraie hauteur de la partie au lieu d'Infinity pour éviter les murs invisibles en hauteur.
+    const capOf = (t) => { const h = supAt(t); return keepHeight ? (h >= 0 ? (h === Infinity ? (blds[k]?.h || 32) : h) : Infinity) : (h >= 0 && h < 2.6 ? h : Infinity); };
     const out = [];
     for (const [a, b] of runs) {
       if (b <= a) continue;
@@ -2075,7 +2076,7 @@ export async function buildRealWorld(scene, renderer) {
     // (1) murs du contour resserrés sur le maillage (voir supportedRuns) : le mur ne dépasse plus le bâtiment dessiné de plus de SUPPORT_TOL m
     for (const e of partialEdges) {
       const len = Math.hypot(e.bx - e.ax, e.bz - e.az), dx = e.bx - e.ax, dz = e.bz - e.az;
-      const solid = clipRuns(supportedRuns(e.k, e.ax, e.az, e.bx, e.bz, true), e.cuts).filter(([t0, t1]) => (t1 - t0) * len > 0.05);
+      const solid = clipRuns(supportedRuns(e.k, e.ax, e.az, e.bx, e.bz, true, e.k === kCath), e.cuts).filter(([t0, t1]) => (t1 - t0) * len > 0.05);
       for (const sg of e.made) sg.dead = true;
       for (const [t0, t1, cap] of solid) collision.addSegment(e.ax + dx * t0, e.az + dz * t0, e.ax + dx * t1, e.az + dz * t1, cap ?? Infinity);
     }
@@ -2089,7 +2090,7 @@ export async function buildRealWorld(scene, renderer) {
     {
     const G = 8, segGrid = new Map(), partGrid = new Map(), grounded = [];
     const cellsOf = (x0, z0, x1, z1, f) => { for (let gx = Math.floor(x0 / G); gx <= Math.floor(x1 / G); gx++) for (let gz = Math.floor(z0 / G); gz <= Math.floor(z1 / G); gz++) f(gx * 4096 + gz); };
-    for (const sg of collision.segs) if (sg.kind === 'wall' && sg.h === Infinity) cellsOf(Math.min(sg.ax, sg.bx) - 0.4, Math.min(sg.az, sg.bz) - 0.4, Math.max(sg.ax, sg.bx) + 0.4, Math.max(sg.az, sg.bz) + 0.4, (key) => { const a = segGrid.get(key); if (a) a.push(sg); else segGrid.set(key, [sg]); });
+    for (const sg of collision.segs) if (sg.kind === 'wall' && sg.h >= 2.6 && sg.y0 < 0) cellsOf(Math.min(sg.ax, sg.bx) - 0.4, Math.min(sg.az, sg.bz) - 0.4, Math.max(sg.ax, sg.bx) + 0.4, Math.max(sg.az, sg.bz) + 0.4, (key) => { const a = segGrid.get(key); if (a) a.push(sg); else segGrid.set(key, [sg]); });
     for (const prt of data.parts || []) {
       const pts = cleanRing(prt.pts);
       if (pts.length < 3 || (parseFloat(prt.tags?.min_height) || 0) >= 0.5 || Math.abs(polyArea(pts)) < 1) continue;
@@ -2128,11 +2129,12 @@ export async function buildRealWorld(scene, renderer) {
         const need = (t) => { // ce point de l'arête doit-il recevoir un mur ?
           if (cuts.some(([c0, c1]) => t >= c0 - 0.001 && t <= c1 + 0.001)) return false;
           const x = ax + dx * t, z = az + dz * t;
+          if (q.inCath && cath.ceilAt(x + nx * 0.7, z + nz * 0.7) != null && cath.ceilAt(x - nx * 0.7, z - nz * 0.7) != null) return false;
           if (inParts(x + nx * 0.3, z + nz * 0.3) && inParts(x - nx * 0.3, z - nz * 0.3)) return false; // cloison entre deux parties
           return !covered(x, z);
         };
         let start = -1;
-        const flush = (t1) => { if (start >= 0 && (t1 - start) * len > 0.3) { collision.addSegment(ax + dx * start, az + dz * start, ax + dx * t1, az + dz * t1, q.h < 2.6 ? q.h : Infinity); partWalls++; } start = -1; };
+        const flush = (t1) => { if (start >= 0 && (t1 - start) * len > 0.3) { collision.addSegment(ax + dx * start, az + dz * start, ax + dx * t1, az + dz * t1, q.inCath ? (Number.isFinite(q.h) ? q.h : 32) : (q.h < 2.6 ? q.h : Infinity)); partWalls++; } start = -1; };
         for (let k = 0; k <= n; k++) { const t = k / n; if (need(t)) { if (start < 0) start = Math.max(0, (k - 0.5) / n); } else flush(Math.min(1, (k - 0.5) / n)); }
         flush(1);
       }

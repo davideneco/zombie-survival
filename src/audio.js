@@ -875,6 +875,22 @@ export class Sfx {
     this._tone('sine', 150, 25, 1.4, 0.8);
     this._tone('sawtooth', 100, 30, 0.8, 0.3, { dist: true });
   }
+  heliRotor(dur = 12) {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime, step = 0.095, n = Math.floor(dur / step);
+    // Turbine whine
+    const osc = this.ctx.createOscillator(), g = this.ctx.createGain();
+    osc.type = 'sawtooth'; osc.frequency.setValueAtTime(160, t); osc.frequency.linearRampToValueAtTime(220, t + 2.5);
+    const f = this.ctx.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 340; f.Q.value = 2.5;
+    g.gain.setValueAtTime(0.001, t); g.gain.linearRampToValueAtTime(0.06, t + 0.8); g.gain.setValueAtTime(0.06, t + dur - 1.2); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    osc.connect(f); f.connect(g); g.connect(this.master); osc.start(t); osc.stop(t + dur);
+    // Blade chop pulses
+    for (let i = 0; i < n; i++) {
+      const at = i * step, env = at < 1.2 ? 0.4 + 0.6 * (at / 1.2) : at > dur - 1.5 ? Math.max(0.15, (dur - at) / 1.5) : 1;
+      this._noise(0.065, 0.16 * env, 260, 'bandpass', { at, f1: 140 });
+      this._tone('triangle', 68, 42, 0.055, 0.13 * env, { at });
+    }
+  }
   tick(p = 0) { // défilement des armes de la boîte mystère
     if (!this.ctx) return;
     this._tone('triangle', 700 + 500 * p, 500 + 300 * p, 0.05, 0.12);

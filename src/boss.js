@@ -79,7 +79,7 @@ export class Boss extends Zombie {
     axe.position.set(0, -0.34, 0.02); axe.rotation.x = -0.9;
     this.arms[1].elbow.add(axe);
     this.axe = axe;
-    this.group.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+    this.group.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.frustumCulled = false; } });
   }
 
   // -------------------------------------------------------------- phases

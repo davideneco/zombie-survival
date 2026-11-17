@@ -41,7 +41,7 @@ export class Tanner extends Boss {
     }
     for (const e of this.eyes) { e.material = e.material.clone(); e.material.color.setHex(0xb8ff30); e.scale.setScalar(1.5); }
     this.axe = null; this.lantern = null; this.lanternGlow = null;
-    this.group.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+    this.group.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.frustumCulled = false; } });
   }
 
   _enterPhase() { this.cool = this.cool || {}; this.speed = CONFIG.tanner.speed; }

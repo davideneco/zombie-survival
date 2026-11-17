@@ -46,9 +46,9 @@ export function buildSpire(h) {
     const g = [];
     for (let k = 0; k < 32; k++) {
       const A = polar(c, RING_OUT + 0.1, k * 11.25), B = polar(c, RING_OUT + 0.1, (k + 1) * 11.25);
-      collision.addSegment(A[0], A[1], B[0], B[1], TOP_Y + 1.4, TOP_Y - 0.3);
+      collision.addSegment(A[0], A[1], B[0], B[1], TOP_Y + 0.98, TOP_Y - 0.3);
       const L = Math.hypot(B[0] - A[0], B[1] - A[1]);
-      g.push(new THREE.BoxGeometry(0.5, 1.1, L + 0.05).rotateY(Math.atan2(B[0] - A[0], B[1] - A[1])).translate((A[0] + B[0]) / 2, TOP_Y + 0.55, (A[1] + B[1]) / 2));
+      g.push(new THREE.BoxGeometry(0.5, 0.95, L + 0.05).rotateY(Math.atan2(B[0] - A[0], B[1] - A[1])).translate((A[0] + B[0]) / 2, TOP_Y + 0.475, (A[1] + B[1]) / 2));
     }
     mesher.geo(mats.stone, mergeSimple(g));
   }
@@ -113,7 +113,7 @@ export function buildSpire(h) {
         const a0 = k * 11.25, a1 = a0 + 11.25;
         if (y < TOP_Y + DOOR_H - 0.1 && (a0 > 360 - 15 || a1 < 15)) continue; // porte
         const A = polar(c, r, a0), B = polar(c, r, a1);
-        collision.addSegment(A[0], A[1], B[0], B[1], y + 0.8, y + 1.7);
+        collision.addSegment(A[0], A[1], B[0], B[1], y + 1.7, y - 0.05);
       }
     }
   }
@@ -146,9 +146,9 @@ export function buildSpire(h) {
     wedges.push(g);
     // garde-corps extérieur
     const A = polar(c, rho(yA) + 0.55, pA), B = polar(c, rho(yB) + 0.55, pB);
-    collision.addSegment(A[0], A[1], B[0], B[1], yM + 1.4, yM - 0.5);
-    if (k % 2 === 0) { const [mx, mz] = polar(c, rho(yM) + 0.55, (pA + pB) / 2); iron.push(new THREE.BoxGeometry(0.06, 1.1, 0.06).translate(mx, yM + 0.55, mz)); }
-    iron.push(new THREE.BoxGeometry(0.06, 0.06, Math.hypot(B[0] - A[0], B[1] - A[1]) + 0.04).rotateY(Math.atan2(B[0] - A[0], B[1] - A[1])).translate((A[0] + B[0]) / 2, yM + 1.1, (A[1] + B[1]) / 2));
+    collision.addSegment(A[0], A[1], B[0], B[1], yM + 0.98, yM - 0.5);
+    if (k % 2 === 0) { const [mx, mz] = polar(c, rho(yM) + 0.55, (pA + pB) / 2); iron.push(new THREE.BoxGeometry(0.06, 0.95, 0.06).translate(mx, yM + 0.475, mz)); }
+    iron.push(new THREE.BoxGeometry(0.06, 0.06, Math.hypot(B[0] - A[0], B[1] - A[1]) + 0.04).rotateY(Math.atan2(B[0] - A[0], B[1] - A[1])).translate((A[0] + B[0]) / 2, yM + 0.95, (A[1] + B[1]) / 2));
   }
   mesher.geo(mats.stone, mergeSimple(wedges));
   mesher.geo(mats.iron, mergeSimple(iron));
@@ -161,10 +161,10 @@ export function buildSpire(h) {
       const back = ((((phiR(TIP_Y) - (k * 18 + 9)) % 360) + 360) % 360);
       if (back < 190 || back > 320) continue;
       const A = polar(c, 2.85, k * 18), B = polar(c, 2.85, (k + 1) * 18);
-      collision.addSegment(A[0], A[1], B[0], B[1], TIP_Y + 1.4, TIP_Y);
-      // garde-corps dessine (v0.47.3) : ces 8 segments etaient un parapet invisible ; lisse a 1,1 m et poteau a chaque extremite
-      tipRail.push(new THREE.BoxGeometry(0.06, 0.06, Math.hypot(B[0] - A[0], B[1] - A[1]) + 0.04).rotateY(Math.atan2(B[0] - A[0], B[1] - A[1])).translate((A[0] + B[0]) / 2, TIP_Y + 1.1, (A[1] + B[1]) / 2));
-      tipRail.push(new THREE.BoxGeometry(0.06, 1.1, 0.06).translate(A[0], TIP_Y + 0.55, A[1]), new THREE.BoxGeometry(0.06, 1.1, 0.06).translate(B[0], TIP_Y + 0.55, B[1]));
+      collision.addSegment(A[0], A[1], B[0], B[1], TIP_Y + 0.98, TIP_Y);
+      // garde-corps dessine (v0.47.3) : ces 8 segments etaient un parapet invisible ; lisse a 0,95 m et poteau a chaque extremite
+      tipRail.push(new THREE.BoxGeometry(0.06, 0.06, Math.hypot(B[0] - A[0], B[1] - A[1]) + 0.04).rotateY(Math.atan2(B[0] - A[0], B[1] - A[1])).translate((A[0] + B[0]) / 2, TIP_Y + 0.95, (A[1] + B[1]) / 2));
+      tipRail.push(new THREE.BoxGeometry(0.06, 0.95, 0.06).translate(A[0], TIP_Y + 0.475, A[1]), new THREE.BoxGeometry(0.06, 0.95, 0.06).translate(B[0], TIP_Y + 0.475, B[1]));
     }
     if (tipRail.length) mesher.geo(mats.iron, mergeSimple(tipRail));
     collision.addCircle(...(() => { const [x, z] = W(c[0], c[1]); return [x, z]; })(), 1.8, TIP_Y + 20, TIP_Y - 0.5);

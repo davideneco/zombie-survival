@@ -111,6 +111,11 @@ export function installUi(game, { hud, canvas, lockAndPlay }) {
       if (game.modMenu?.absorbUnlock()) return; // libérée par le menu mods
       if (!game.started || game.over) return;
       if (!hidden(el.overlay)) return;
+      if (game.summitFx?.escape.on) {
+        game.playing = false; game.player.releaseInputs();
+        game.summitFx.endEscape();
+        return;
+      }
       if (game.summitFx?.orbit.on) { // Échap pendant la vue orbitale (souris déjà rendue) : on la passe ; l'écran « STRASBOURG LIBÉRÉE » suit
         game.playing = false; game.player.releaseInputs();
         game.summitFx.endOrbit();
@@ -126,6 +131,7 @@ export function installUi(game, { hud, canvas, lockAndPlay }) {
     // ---------------------------------------------------------------- Échap
     escape() {
       if (game.chat?.open) { game.chat.close({ send: false }); return 'chat'; } // la saisie du chat se ferme d'abord : ni pause, ni fin de la vue orbitale
+      if (game.summitFx?.escape.on) { game.summitFx.endEscape(); return 'escape'; }
       if (game.summitFx?.orbit.on) { game.summitFx.endOrbit(); return 'orbit'; } // vue orbitale de l'Aube : Échap la passe
       const ae = document.activeElement;
       if (ae && /^(INPUT|TEXTAREA)$/.test(ae.tagName) && ae.type !== 'range') { ae.blur(); return 'blur'; } // champ de texte : d'abord retirer le focus

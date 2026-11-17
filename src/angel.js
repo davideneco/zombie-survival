@@ -28,6 +28,7 @@ export class Angel extends Boss {
     this.state = 'orbit'; this.stateT = 0; this.bs = 0;
     this.t = 0;
     this.az = 200;                      // azimut sur le cercle (degrés)
+    this.altY = A().height;
     this.center = { x: 0, z: 0 };
     this.feathers = [];
     this.groanT = Infinity;
@@ -100,15 +101,17 @@ export class Angel extends Boss {
     }
     // halo large dans le dos (additif)
     const back = add(new THREE.CircleGeometry(0.9, 24), glow.clone(), rig, 0, 1.5, -0.32); back.material.opacity = 0.18; this.backGlow = back;
-    // hitbox : trompette (point faible, tête = dégâts fixés par weakMult), ailes (corps) ; la tête de zombie ne compte plus comme tête
+    // hitbox : trompette (point faible, dégâts x weakMult), ailes et buste (corps)
     const hit = this.meshes[0].material;
     this.meshes[0].userData.head = false;
-    this.trumpetHit = add(new THREE.SphereGeometry(0.3, 8, 6), hit, trumpet, 0, -0.82, 0);
+    this.trumpetHit = add(new THREE.SphereGeometry(0.52, 10, 8), hit, trumpet, 0, -0.82, 0);
     this.trumpetHit.userData = { zombie: this, head: true };
-    const wingHit = add(new THREE.BoxGeometry(3.3, 1.5, 0.35), hit, rig, 0, 1.45, -0.28);
+    const wingHit = add(new THREE.BoxGeometry(3.6, 1.85, 0.85), hit, rig, 0, 1.45, -0.28);
     wingHit.userData = { zombie: this, head: false };
-    this.meshes.push(this.trumpetHit, wingHit);
-    this.group.traverse((o) => { if (o.isMesh) o.castShadow = false; });
+    const bodyHit = add(new THREE.CylinderGeometry(0.38, 0.58, 1.75, 10), hit, rig, 0, 0.88, 0);
+    bodyHit.userData = { zombie: this, head: false };
+    this.meshes.push(this.trumpetHit, wingHit, bodyHit);
+    this.group.traverse((o) => { if (o.isMesh) { o.castShadow = false; o.frustumCulled = false; } });
   }
 
   _arm(rig, sx, white, gold) {
@@ -169,11 +172,15 @@ export class Angel extends Boss {
     const c = this.center, ctx = this.ctx;
     const all = targets.filter((p) => p && !p.dead && !p.downed && this.exposed(p));
     const hurt = (p, dmg, kx, kz, src) => ctx?.hurtPlayer(p, dmg, kx, kz, src);
+    let nearP = null, nearD = Infinity;
+    for (const p of all) { const d = Math.hypot(p.pos.x - this.pos.x, p.pos.z - this.pos.z); if (d < nearD) { nearD = d; nearP = p; } }
+    const goalY = nearP ? Math.max(T.height, Math.min(TIP + 2.5, nearP.pos.y + 0.8)) : T.height;
+    this.altY += Math.sign(goalY - this.altY) * Math.min(Math.abs(goalY - this.altY), 4.2 * dt);
     const orbit = (k = 1) => { // le cercle : l'azimut avance, l'ange regarde l'axe de la flèche
       this.az += T.omega * dt * k;
       const a = (this.az * Math.PI) / 180;
       this.pos.x = c.x + Math.cos(a) * T.radius; this.pos.z = c.z + Math.sin(a) * T.radius;
-      this.pos.y = T.height + Math.sin(this.t * 1.3) * T.bob;
+      this.pos.y = this.altY + Math.sin(this.t * 1.3) * T.bob;
       this.yaw = Math.atan2(c.x - this.pos.x, c.z - this.pos.z);
       this.group.rotation.set(0, this.yaw, 0);
     };
@@ -205,7 +212,7 @@ export class Angel extends Boss {
         const a = this._aim;
         if (this.stateT < T.trumpet.tel - 0.35) { const tg = all.includes(a.target) ? a.target : all[0]; if (tg) { a.dx = tg.pos.x - this.pos.x; a.dz = tg.pos.z - this.pos.z; const l = Math.hypot(a.dx, a.dz) || 1; a.dx /= l; a.dz /= l; } }
         faceTo(this.pos.x + a.dx, this.pos.z + a.dz, 8);
-        this.pos.y = T.height + Math.sin(this.t * 1.3) * T.bob;
+        this.pos.y = this.altY + Math.sin(this.t * 1.3) * T.bob;
         if (this.stateT >= T.trumpet.tel) { this._blast(all, hurt); this._setState('trumpet'); }
         break;
       }
@@ -215,7 +222,7 @@ export class Angel extends Boss {
       case 'plumes_tel': {
         const a = this._aim, tg = all.includes(a.target) ? a.target : all[0];
         if (tg) faceTo(tg.pos.x, tg.pos.z, 8);
-        this.pos.y = T.height + Math.sin(this.t * 1.3) * T.bob;
+        this.pos.y = this.altY + Math.sin(this.t * 1.3) * T.bob;
         if (this.stateT >= T.plumes.tel) { this._firePlumes(tg); this._setState('plumes'); }
         break;
       }
@@ -225,7 +232,7 @@ export class Angel extends Boss {
       case 'judge_tel': {
         const m = this.mark;
         if (m) faceTo(m.target.pos.x, m.target.pos.z, 4);
-        this.pos.y = T.height + 0.8 * Math.min(1, this.stateT) + Math.sin(this.t * 1.3) * T.bob;
+        this.pos.y = this.altY + 0.8 * Math.min(1, this.stateT) + Math.sin(this.t * 1.3) * T.bob;
         if (this.stateT >= T.judgment.tel) this._fireJudge(all, hurt);
         break;
       }
@@ -244,15 +251,15 @@ export class Angel extends Boss {
     const T = A().trumpet, dx = target.pos.x - this.pos.x, dz = target.pos.z - this.pos.z, l = Math.hypot(dx, dz) || 1;
     this._aim = { target, dx: dx / l, dz: dz / l };
     this._setState('trumpet_tel');
-    this.ctx?.event('angel_trumpet', { x: this.pos.x, y: this.pos.y, z: this.pos.z, fy: TOWER_TOP, dx: dx / l, dz: dz / l, range: T.range, ang: T.angle, tel: T.tel, dur: T.dur });
+    this.ctx?.event('angel_trumpet', { x: this.pos.x, y: this.pos.y, z: this.pos.z, fy: Math.max(TOWER_TOP, this.altY - 1.2), dx: dx / l, dz: dz / l, range: T.range, ang: T.angle, tel: T.tel, dur: T.dur });
   }
   _blast(all, hurt) {
     const T = A().trumpet, a = this._aim, cos = Math.cos((T.angle * Math.PI) / 180);
     for (const p of all) {
       const dx = p.pos.x - this.pos.x, dz = p.pos.z - this.pos.z, d = Math.hypot(dx, dz);
-      if (d > T.range || Math.abs(p.pos.y - TOWER_TOP) > 24) continue;
+      if (d > T.range || Math.abs(p.pos.y - this.pos.y) > 12) continue;
       if (d > 0.8 && (dx * a.dx + dz * a.dz) / d < cos) continue;
-      if (this.blocked(this.pos.x, this.pos.y + 3, this.pos.z, p.pos.x, p.pos.y + 1, p.pos.z)) continue; // la flèche protège
+      if (this.blocked(this.pos.x, this.pos.y + 1.2, this.pos.z, p.pos.x, p.pos.y + 1, p.pos.z)) continue; // la flèche protège
       hurt(p, T.damage, 0, 0, 'holy');
     }
   }

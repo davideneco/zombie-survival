@@ -119,6 +119,7 @@ export class Player {
 
   // Apparence des bras en vue à la première personne
   setCharacter(ch) {
+    this.ch = ch;
     this.sleeveMat.color.setHex(ch.fp.sleeve);
     for (const m of new Set(this.handMats)) m.color.setHex(ch.fp.hand);
   }

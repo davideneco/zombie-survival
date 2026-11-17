@@ -1467,13 +1467,18 @@ const game = {
     this.resetPap();
     if (resetStats) this.resetBox();
     if (resetStats) {
-      this.finale = null; this.finaleDone = false; this.eternal = false; this.blessed = false; this.freeDoors = false; this.dawnOn = false;
+      this.finale = null; this.finaleDone = false; this.eternal = false; this.blessed = false; this.freeDoors = false; this.dawnOn = false; this.heliOn = false;
       this.bonusZones?.clear(); this.parkingSeen?.clear(); this.miniBar = null; this.miniBarT = 0;
       world.resetDoors?.();
       this.barricades?.reset?.();
       this.barrels?.reset?.();
       hud.setBanner?.(null); hud.setBossBar?.(null); hud.setFanal?.(null);
     }
+    this.heliOn = false;
+    hud.el.hud.style.visibility = '';
+    hud.el.announce.style.visibility = '';
+    hud.el.announce.classList.remove('show');
+    for (const tm of this.remotes.values()) { if (tm.group) tm.group.visible = true; }
     this.summitFx?.clear();
     this.perkFx?.reset();
     this.clearBossFx?.();
@@ -2185,7 +2190,7 @@ function setupNetworkHandlers(net) {
         box: (world.boxes || []).findIndex((b) => b.active),
         finale: game.finale ? 1 : null,
         finaleDone: game.finaleDone,
-        summit: game.finaleDone && (game.finale || game.dawnOn) ? { st: game.summitState?.() || null, fan: game.finale?.fan || 0, dawn: game.dawnOn ? Math.round((game.time - game.dawnT0) * 10) / 10 : null, eternal: !!game.eternal } : null, // Acte V en cours (ou Aube passée)
+        summit: game.finaleDone && (game.finale || game.dawnOn || game.heliOn) ? { st: game.summitState?.() || null, fan: game.finale?.fan || 0, dawn: game.dawnOn ? Math.round((game.time - game.dawnT0) * 10) / 10 : null, heli: !!game.heliOn, eternal: !!game.eternal } : null, // Acte V en cours (ou Aube passée)
         vehicles: game.vehicleSnapshot(),
         bars: game.barricades?.snapshot() || null, // plank counts that differ from full, deployed barricades
         brls: game.barrels?.snapshot() || [], // exploded barrels
@@ -2352,6 +2357,7 @@ function setupNetworkHandlers(net) {
   net.onHost('finale_win', () => game.winFinale());
   net.onHost('finale_info', (m) => game.finaleInfo(m));
   net.onHost('dawn', (m) => game.dawnRun(m.k || 0)); // Acte V : l'Aube se lève (k : secondes déjà écoulées chez un joueur qui arrive en cours)
+  net.onHost('heli_escape', (m) => game.heliRun(m.k || 0));
   net.onHost('finale_say', (m) => hud.announce(m.title, game.keyed ? game.keyed(m.sub) : m.sub, m.ms));
   net.onHost('boss_fx', (m) => game.bossEvent(m.name, m));
   net.onHost('mini_info', (m) => { game.miniBar = { hp: m.hp, max: m.max, phase: 1, inv: false, name: m.name || 'MAÎTRE TANNEUR', thresholds: [] }; game.miniBarT = 1.5; });

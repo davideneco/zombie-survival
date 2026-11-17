@@ -513,10 +513,13 @@ export function installFinale(game, { world, scene, hud, sfx, fx }) {
           f.fh = hold.length;
           const rate = hold.length ? (hold.length / Math.max(1, ps.length)) / Fn.hold : -Fn.decay / Fn.hold;
           f.fan = Math.max(0, Math.min(1, (f.fan || 0) + rate * dt));
-          if (f.fan >= 1) game.dawnBegin(0);
+          if (f.fan >= 1) game.heliBegin(0);
         }
         break;
       }
+      case 'summit_heli':
+        f.banner = 'ÉVACUATION — FUYEZ STRASBOURG';
+        break;
       case 'summit_dawn':
         f.banner = 'L\'AUBE';
         if (f.t > Sc.dawn.orbit + 2) game.endSummit();
@@ -580,7 +583,7 @@ export function installFinale(game, { world, scene, hud, sfx, fx }) {
       this.updateFanal(f);
       if (!f) { hud.setBanner?.(null); hud.setBossBar?.(this.miniBar || null); return; } // (barre du Maître Tanneur : main.js, updateMiniBar)
       if (this.isClient || f.remote) {
-        if (this.dawnOn && this.time - this.dawnT0 > S().dawn.orbit + 2) { this.finale = null; hud.setBanner?.(null); hud.setBossBar?.(null); return; } // fin de l'Acte V chez un client
+        if (this.dawnOn && !this.heliOn && this.time - this.dawnT0 > S().dawn.orbit + 2) { this.finale = null; hud.setBanner?.(null); hud.setBossBar?.(null); return; } // fin de l'Acte V chez un client
         hud.setBanner(f.banner || ''); return;
       }
       f.t += dt; f.infoT -= dt;
@@ -768,7 +771,71 @@ export function installFinale(game, { world, scene, hud, sfx, fx }) {
     applySummitSync(m) {
       this.summitFx?.show();
       this.eternal = !!m.eternal;
+      if (m.heli) { this.heliRun(0); return; }
       if (m.dawn != null) { this.blessed = true; this.freeDoors = true; this.dawnRun(Math.max(0.1, m.dawn)); }
+    },
+
+    // Évacuation hélicoptère + frappe nucléaire sur Strasbourg, puis arrêt de la partie
+    heliBegin(k = 0) {
+      if (this.heliOn) return;
+      const f = this.finale;
+      if (f && !f.remote) { f.state = 'summit_heli'; f.t = 0; f.fan = 1; f.boss = null; }
+      if (this.isHost) this.net?.send({ t: 'heli_escape', k });
+      this.heliRun(k);
+    },
+    heliRun(k = 0) {
+      if (this.heliOn) return;
+      this.heliOn = true; this.dawnOn = true;
+      if (this.finale?.remote) this.finale.st = 'summit_heli';
+      const p = this.player;
+      for (const z of this.zombies) if (!z.dead) z.becomeAsh();
+      if (p.downed || p.dead) p.revive();
+      if (p.vehicle) this.dismount?.(true);
+      p.onTram = null;
+      p.health = Math.max(p.health, p.maxHealth);
+      for (const tm of this.remotes.values()) {
+        if (tm.group) tm.group.visible = false;
+        if (tm.mark) tm.mark.visible = false;
+        if (tm.bleed) tm.bleed.visible = false;
+      }
+      hud.setFanal(null); hud.setBanner?.(null); hud.setBossBar?.(null);
+      this.summitFx?.setFanal(1, true); this.summitFx?.boost(1.7);
+      sfx.powerup?.();
+      sfx.heliRotor?.(12);
+      const squad = [p, ...this.remotes.values()];
+      if (this.summitFx) this.summitFx.startEscape(squad, () => this.finishEscape());
+      else this.finishEscape();
+    },
+    finishEscape() {
+      this.finale = null;
+      this.over = true;
+      const t = Math.round(this.time), mm = Math.floor(t / 60), ss = String(t % 60).padStart(2, '0');
+      const zones = this.openZones(), np = 1 + this.remotes.size;
+      let trophies = 0;
+      try {
+        const o = JSON.parse(localStorage.getItem('zombie_trophy') || '{"n":0}');
+        o.n = (o.n | 0) + 1; o.last = { round: this.round, kills: this.kills, time: t, players: np, date: new Date().toISOString().slice(0, 10) };
+        localStorage.setItem('zombie_trophy', JSON.stringify(o)); trophies = o.n;
+      } catch {}
+      this.trophy = trophies || this.trophy || 0;
+      this.player.releaseInputs();
+      this.ui?.closeOverlays();
+      document.exitPointerLock();
+      hud.prompt(null);
+      clearTimeout(hud.announceTimer);
+      hud.el.announce.classList.remove('show');
+      hud.el.announce.style.visibility = 'hidden';
+      hud.el.hud.style.visibility = 'hidden';
+      const btnLabel = (this.isHost || !this.isMultiplayer) ? 'REJOUER' : null;
+      const tail = (this.isHost || !this.isMultiplayer) ? '' : "<br><span style=\"color:#9fb4ff\">En attente que l'hôte relance…</span>";
+      hud.showOverlay(
+        'VICTOIRE — ÉVACUATION RÉUSSIE',
+        "Toute l'escouade a embarqué dans l'hélicoptère juste avant la frappe nucléaire sur Strasbourg !<br>"
+          + `<span style="color:#fff">Manche <b>${this.round}</b> · <b>${this.kills}</b> zombies tués · <b>${this.points.toLocaleString('fr-FR')}</b> points · ${zones} quartiers ouverts · ${np} joueur${np > 1 ? 's' : ''} · ${mm} min ${ss} s</span>`
+          + (trophies ? `<br><span style="color:#ffd24a">Trophée « Victoire » n° ${trophies} enregistré sur cet appareil.</span>` : '')
+          + tail,
+        btnLabel
+      );
     },
 
     // L'Aube (tous les joueurs, à la réception de `dawn`) : le ciel passe au jour en `dawn.sky` s, les zombies tombent en cendres, la Bénédiction de
@@ -794,7 +861,7 @@ export function installFinale(game, { world, scene, hud, sfx, fx }) {
       hud.setFanal(null); hud.setBanner?.(null); hud.setBossBar?.(null);
       this.summitFx?.setFanal(1, true); this.summitFx?.boost(1.7);
       this.summitFx?.startDawn(k);
-      hud.announce('L\'AUBE', `Le Fanal d'Erwin est allumé : les ténèbres reculent…${k ? '' : ' (Échap : passer la vue)'}`, 6000);
+      hud.announce("L'AUBE", `Le Fanal d'Erwin est allumé : les ténèbres reculent…${k ? '' : ' (Échap : passer la vue)'}`, 6000);
       if (this.summitFx && !k) this.summitFx.startOrbit(() => this.showLiberated());
     },
     // fin de l'Acte V (hôte) : plus de machine à états, les manches reprennent en Nuit éternelle
@@ -827,6 +894,7 @@ export function installFinale(game, { world, scene, hud, sfx, fx }) {
     // réseau : événements reçus par les clients
     bossEvent: showBossEvent,
     finaleInfo(m) {
+      if (this.heliOn) return;
       if (!this.finale && this.dawnOn) return; // l'Acte V est fini chez nous : un message en retard ne le ressuscite pas
       if (!this.finale) this.finale = { remote: true };
       this.finale.banner = m.b;

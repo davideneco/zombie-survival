@@ -44,11 +44,11 @@ export function buildUpper(ctx) {
   const ironBoxes = [];
   const ironBox = (cx, cy, cz, w, h, d, rotY) => ironBoxes.push({ cx, cy, cz, w, h, d, rotY });
   // Garde-corps : mur de collision + barreaux visibles. closed : relie le dernier point au premier.
-  const rail = (ptsST, y, h = 1.15) => {
+  const rail = (ptsST, y, h = 0.98) => {
     const pts = ptsST.map(([s, t]) => W(s, t));
     for (let i = 0; i + 1 < pts.length; i++) {
       const [ax, az] = pts[i], [bx, bz] = pts[i + 1];
-      collision.addSegment(ax, az, bx, bz, y + h + 0.2, y - 0.2);
+      collision.addSegment(ax, az, bx, bz, y + h, y - 0.2);
       const L = Math.hypot(bx - ax, bz - az), rot = Math.atan2(bx - ax, bz - az);
       ironBox((ax + bx) / 2, y + h, (az + bz) / 2, 0.07, 0.07, L, rot);       // lisse
       ironBox((ax + bx) / 2, y + h * 0.5, (az + bz) / 2, 0.04, 0.04, L, rot);  // lisse basse
@@ -277,11 +277,11 @@ export function buildUpper(ctx) {
     const g = [];
     for (const [a, b] of edges) {
       const A = W(...a), B = W(...b);
-      collision.addSegment(A[0], A[1], B[0], B[1], Y.PLAT + 1.3, Y.PLAT - 0.3);
+      collision.addSegment(A[0], A[1], B[0], B[1], Y.PLAT + 1.0, Y.PLAT - 0.3);
       const L = Math.hypot(B[0] - A[0], B[1] - A[1]);
-      g.push(new THREE.BoxGeometry(0.5, 1.2, L).rotateY(Math.atan2(B[0] - A[0], B[1] - A[1])).translate((A[0] + B[0]) / 2, Y.PLAT + 0.6, (A[1] + B[1]) / 2));
+      g.push(new THREE.BoxGeometry(0.5, 1.0, L).rotateY(Math.atan2(B[0] - A[0], B[1] - A[1])).translate((A[0] + B[0]) / 2, Y.PLAT + 0.5, (A[1] + B[1]) / 2));
       // créneaux
-      for (let k = 0; k < L / 1.8; k++) { const f = (k * 1.8 + 0.5) / L; g.push(new THREE.BoxGeometry(0.6, 0.45, 0.7).rotateY(Math.atan2(B[0] - A[0], B[1] - A[1])).translate(A[0] + (B[0] - A[0]) * f, Y.PLAT + 1.4, A[1] + (B[1] - A[1]) * f)); }
+      for (let k = 0; k < L / 1.8; k++) { const f = (k * 1.8 + 0.5) / L; g.push(new THREE.BoxGeometry(0.6, 0.3, 0.7).rotateY(Math.atan2(B[0] - A[0], B[1] - A[1])).translate(A[0] + (B[0] - A[0]) * f, Y.PLAT + 1.15, A[1] + (B[1] - A[1]) * f)); }
     }
     mesher.geo(mats.stone, mergeSimple(g));
   }
@@ -303,6 +303,7 @@ export function buildUpper(ctx) {
     const apex = W((s0 + s1) / 2, (t0 + t1) / 2);
     for (let i = 0; i < 4; i++) { const a = roof[i], b = roof[(i + 1) % 4]; mesher.tri(mats.stoneDark, [a[0], y + H, a[1]], [b[0], y + H, b[1]], [apex[0], y + H + 2.2, apex[1]]); }
     mesher.flat(mats.stoneDark, roof, y + H, { up: false });
+    collision.addFloor(y + H, [[roof[0][0], roof[0][1], roof[1][0], roof[1][1], roof[2][0], roof[2][1]], [roof[0][0], roof[0][1], roof[2][0], roof[2][1], roof[3][0], roof[3][1]]]);
   }
 
   // ---------------------------------------------------------------- tour nord et flèche

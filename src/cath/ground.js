@@ -88,6 +88,13 @@ export function buildGround(ctx) {
     mesher.flat(mats.floor, quad, 0.03, { uvScale: 4.8, holes });
     const ceilHoles = (CEIL_HOLES[B.id] || []).map((h) => h.map(([s, t]) => W(s, t)));
     mesher.flat(mats.vault, quad, B.H, { holes: ceilHoles, up: false, uvFn: (x, z) => [S(x, z) / 8, T(x, z) / 8] });
+    { // roof/vault ray collider so bullets cannot pierce ceilings/roofs vertically
+      const c2 = quad.map(([x, z]) => new THREE.Vector2(x, z));
+      const h2 = ceilHoles.map((h) => h.map(([x, z]) => new THREE.Vector2(x, z)));
+      const all = [...c2, ...h2.flat()];
+      const tris = THREE.ShapeUtils.triangulateShape(c2, h2).map(([i, j, k]) => [all[i].x, all[i].y, all[j].x, all[j].y, all[k].x, all[k].y]);
+      if (tris.length) collision.addFloor(B.H, tris);
+    }
   }
 
   // ------------------------------------------------------------------ murs
@@ -96,9 +103,9 @@ export function buildGround(ctx) {
   for (const e of exterior) {
     const B = blockOf(e.block);
     const [A, Bp] = lineOf(e.axis, e.pos, e.from, e.to);
-    // grand portail : mur occidental du narthex percé à l'axe
+    // grand portail : mur occidental du narthex percé à l'axe sous le linteau (5,42 m)
     if (B.id === 'narthex' && e.axis === 's' && e.pos === -46) {
-      wallWithOpenings(A, Bp, (t) => t - e.from, B.H, B.tex, [{ c: 0, w: portalHW * 2, h: PORTAL_H, kind: 'door' }]);
+      wallWithOpenings(A, Bp, (t) => t - e.from, B.H, B.tex, [{ c: 0, w: portalHW * 2, h: 5.42, kind: 'door' }]);
       continue;
     }
     wallWithOpenings(A, Bp, () => 0, B.H, B.tex, []);
@@ -156,7 +163,7 @@ export function buildGround(ctx) {
     const [P0, P1] = lineOf(f.axis, f.pos, f.from, f.to);
     if (def.type === 'arcade' || def.type === 'west') continue; // construits à part
     if (def.type === 'open') {
-      if (hi > lo + 0.05) wallStrip(mats.plain, P0, P1, lo, hi, 'plain'); // le plafond change de hauteur
+      if (hi > lo + 0.05) { wallStrip(mats.plain, P0, P1, lo, hi, 'plain'); colSeg(P0, P1, lo, hi); } // le plafond change de hauteur
       continue;
     }
     if (def.type === 'wall') { wallWithOpenings(P0, P1, () => 0, hi, hiB.tex, []); continue; }
@@ -180,6 +187,7 @@ export function buildGround(ctx) {
     // mur haut : triforium puis fenêtres hautes (14,5 -> 32 m)
     const A = W(NAVE.s0, t), B = W(NAVE.s1, t);
     mesher.strip(mats.wall.naveUp, [A, B], 14.5, 32, { uScale: 6, vScale: 17.5, vOrigin: 14.5 });
+    colSeg(A, B, 14.5, 32);
   }
   mesher.geo(mats.stone, mergeGeos(pillarGeo));
 
@@ -233,22 +241,136 @@ export function buildGround(ctx) {
     const [x, z] = W(s, t);
     lightSources.push({ x, y: 6, z, color: col, intensity: 11, dist: 16 });
   }
-  // ébrasement du grand portail (entre le contour extérieur et le mur ouest) : deux joues et un linteau
+  // ébrasement gothique du grand portail ouest : colonnettes en faisceau, voussures en arc brisé, tympan, gâble à crochets, pinacles et cadre intérieur
   {
-    const [ox, oz] = plan.portal.pts[0], [ix, iz] = W(-46, 0), hw = plan.portal.hw;
+    const [ox, oz] = plan.portal.pts[0], hw = plan.portal.hw;
+    const sFacade = S(ox, oz) + 4;
+    const sOut = Math.min(-47.4, sFacade - 1.3), sIn = -45.6, sInUp = -46.02;
+    const depth = sIn - sOut, sMid = (sOut + sIn) / 2;
+    const depthUp = sInUp - sOut, sMidUp = (sOut + sInUp) / 2;
+    const theta = Math.atan2(axis.ux, axis.uz);
+    const M = new THREE.Matrix4().makeTranslation(axis.cx, 0, axis.cz).multiply(new THREE.Matrix4().makeRotationY(theta));
+    const stG = [], dkG = [], irG = [], gdG = [], glG = [];
+    const push = (arr, g, x, y, z, rx = 0, ry = 0, rz = 0) => {
+      if (rx) g.rotateX(rx); if (ry) g.rotateY(ry); if (rz) g.rotateZ(rz);
+      arr.push(g.translate(x, y, z));
+    };
+
+    // seuils en pierre douce (perron progressif à 3 degrés, sous WALK_OVER = 0.3)
+    push(dkG, new THREE.BoxGeometry(hw * 2 + 2.4, 0.14, depth + 0.8), 0, 0.07, sMid);
+    push(stG, new THREE.BoxGeometry(hw * 2 + 3.2, 0.10, 0.9), 0, 0.05, sOut - 0.35);
+    push(stG, new THREE.BoxGeometry(hw * 2 + 3.8, 0.06, 0.7), 0, 0.03, sOut - 1.0);
+
+    // cadre intérieur étanche reliant l'ébrasement extérieur à l'ouverture du narthex (s = -46)
+    push(dkG, new THREE.BoxGeometry(hw * 2 + 0.5, 0.34, depth + 0.4), 0, 5.52, sMid);
+    push(stG, new THREE.BoxGeometry(hw * 2 + 1.0, 0.28, 0.36), 0, 5.54, sIn + 0.06);
+
+    // 3 ressauts ébrasés par côté + colonnettes adossées sur fond de pierre sombre + contreforts + pinacles extérieurs
+    const orders = [
+      { t: hw + 0.18, s0: sOut + 0.92, s1: sIn, r: 0.16, yTop: 5.42 },
+      { t: hw + 0.62, s0: sOut + 0.42, s1: sOut + 1.08, r: 0.18, yTop: 5.42 },
+      { t: hw + 1.08, s0: sOut - 0.08, s1: sOut + 0.58, r: 0.20, yTop: 5.42 },
+    ];
     for (const side of [-1, 1]) {
-      const a = [ox + axis.vx * hw * side, oz + axis.vz * hw * side], b = [ix + axis.vx * hw * side, iz + axis.vz * hw * side];
-      collision.addSegment(a[0], a[1], b[0], b[1]);
-      const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
-      const m = new THREE.Mesh(new THREE.BoxGeometry(0.6, PORTAL_H + 1, len), mats.stone);
-      m.position.set((a[0] + b[0]) / 2 + axis.vx * 0.3 * side, (PORTAL_H + 1) / 2, (a[1] + b[1]) / 2 + axis.vz * 0.3 * side);
-      m.rotation.y = Math.atan2(b[0] - a[0], b[1] - a[1]); m.castShadow = m.receiveShadow = true;
-      scene.add(m);
+      // collision dégagée à la largeur libre du portail (±hw)
+      const [ax, az] = W(sOut - 0.2, side * hw), [bx, bz] = W(sIn, side * hw);
+      collision.addSegment(ax, az, bx, bz, 12, -0.5);
+
+      // parement intérieur de la baie jusqu'au narthex (aucune fente ni vue sur les arêtes OSM)
+      push(dkG, new THREE.BoxGeometry(0.42, 5.6, depth + 0.45), side * (hw + 0.2), 2.8, sMid);
+      push(stG, new THREE.BoxGeometry(0.32, 5.65, 0.35), side * (hw + 0.18), 2.82, sIn + 0.06);
+      if (side < 0) push(dkG, new THREE.BoxGeometry(0.46, 5.6, 0.52), -(hw - 0.15), 2.8, -45.82);
+
+      // soubassement / banc de pierre et corniche d'imposte
+      push(dkG, new THREE.BoxGeometry(1.48, 0.95, depth + 0.3), side * (hw + 0.74), 0.475, sMid);
+      push(stG, new THREE.BoxGeometry(1.58, 0.18, depth + 0.38), side * (hw + 0.74), 0.99, sMid);
+      push(dkG, new THREE.BoxGeometry(1.58, 0.24, depth + 0.38), side * (hw + 0.74), 5.44, sMid);
+
+      // dosserets sombres en retrait + fûts élancés en grès rose avec bases, chapiteaux et anneaux dorés
+      for (const o of orders) {
+        const lenO = o.s1 - o.s0;
+        push(dkG, new THREE.BoxGeometry(0.38, o.yTop - 1.0, lenO), side * (o.t + 0.22), 1.0 + (o.yTop - 1.0) / 2, (o.s0 + o.s1) / 2);
+        push(stG, new THREE.CylinderGeometry(o.r * 0.96, o.r * 1.04, o.yTop - 1.42, 12), side * o.t, 1.08 + (o.yTop - 1.42) / 2, o.s0 + 0.14);
+        push(dkG, new THREE.CylinderGeometry(o.r * 1.42, o.r * 1.56, 0.26, 10), side * o.t, 1.15, o.s0 + 0.14);
+        push(dkG, new THREE.CylinderGeometry(o.r * 1.62, o.r * 1.05, 0.44, 10), side * o.t, o.yTop - 0.18, o.s0 + 0.14);
+        push(gdG, new THREE.TorusGeometry(o.r * 1.18, 0.032, 6, 14), side * o.t, o.yTop - 0.40, o.s0 + 0.14, Math.PI / 2);
+      }
+
+      // contreforts massifs et grands pinacles à crochets encadrant le portail
+      const px = side * (hw + 1.62), pz = sOut + 0.08;
+      push(stG, new THREE.BoxGeometry(0.98, 13.8, 1.18), px, 6.9, pz);
+      push(dkG, new THREE.BoxGeometry(1.16, 0.34, 1.36), px, 13.8, pz);
+      push(stG, new THREE.CylinderGeometry(0.32, 0.44, 2.2, 6), px, 14.9, pz);
+      push(dkG, new THREE.ConeGeometry(0.48, 3.1, 6), px, 17.5, pz);
+      push(gdG, new THREE.SphereGeometry(0.14, 8, 6), px, 19.1, pz);
+
+      // lanternes en fer forgé sur les piédroits (éclairent directement les colonnettes et les vantaux)
+      const lx = side * (hw + 1.06), ly = 4.15, lz = sOut - 0.35;
+      push(irG, new THREE.BoxGeometry(0.1, 0.1, 0.6), lx, ly + 0.28, lz);
+      push(irG, new THREE.CylinderGeometry(0.18, 0.14, 0.36, 6), lx, ly, lz - 0.24);
+      push(dkG, new THREE.ConeGeometry(0.24, 0.22, 6), lx, ly + 0.26, lz - 0.24);
+      push(glG, new THREE.CylinderGeometry(0.13, 0.1, 0.26, 6), lx, ly, lz - 0.24);
+      const [wx, wz] = W(sOut - 0.8, side * (hw + 0.6));
+      lightSources.push({ x: wx, y: 3.9, z: wz, color: 0xffb86c, intensity: 18, dist: 16 });
     }
-    const len = Math.hypot(ix - ox, iz - oz);
-    const lintel = new THREE.Mesh(new THREE.BoxGeometry(hw * 2 + 1.2, 1, len), mats.stone);
-    lintel.position.set((ox + ix) / 2, PORTAL_H + 0.5, (oz + iz) / 2); lintel.rotation.y = Math.atan2(ix - ox, iz - oz);
-    scene.add(lintel);
+
+    // voussures en arc brisé équilatéral (4 rangs profonds)
+    const archSteps = 12;
+    const archRings = [
+      { tw: hw + 0.06, rThick: 0.46, s0: sOut + 0.72, s1: sInUp, mat: stG },
+      { tw: hw + 0.54, rThick: 0.46, s0: sOut + 0.30, s1: sOut + 0.85, mat: dkG },
+      { tw: hw + 1.00, rThick: 0.48, s0: sOut - 0.16, s1: sOut + 0.42, mat: stG },
+      { tw: hw + 1.40, rThick: 0.38, s0: sOut - 0.40, s1: sOut + 0.05, mat: dkG },
+    ];
+    for (const ar of archRings) {
+      const lenA = ar.s1 - ar.s0, sAvg = (ar.s0 + ar.s1) / 2;
+      const ptsA = archPoints(-ar.tw, ar.tw, 5.45, archSteps);
+      for (let i = 0; i + 1 < ptsA.length; i++) {
+        const [x0, y0] = ptsA[i], [x1, y1] = ptsA[i + 1];
+        const mx = (x0 + x1) / 2, my = (y0 + y1) / 2;
+        const segL = Math.hypot(x1 - x0, y1 - y0) + 0.08;
+        const ang = Math.atan2(y1 - y0, x1 - x0);
+        push(ar.mat, new THREE.BoxGeometry(segL, ar.rThick, lenA), mx, my, sAvg, 0, 0, ang);
+      }
+    }
+
+    // linteau mouluré + tympan sculpté plein jusqu'au parement ouest du narthex (strictement <= -46,02)
+    push(dkG, new THREE.BoxGeometry(hw * 2 + 0.7, 0.52, depth + 0.15), 0, 5.65, sMid);
+    push(stG, new THREE.BoxGeometry(hw * 2 + 0.3, 0.22, depthUp + 0.08), 0, 5.95, sMidUp);
+    const tympY0 = 5.9, tympH = 4.25;
+    for (let i = 0; i < 8; i++) {
+      const f = i / 8, wRow = hw * 2 * Math.max(0.18, 1 - f * 0.88), yRow = tympY0 + f * (tympH * 0.82);
+      push(stG, new THREE.BoxGeometry(wRow + 0.4, 0.58, depthUp - 0.06), 0, yRow + 0.25, sMidUp);
+    }
+    // rosace / mandorle sculptée au centre du tympan
+    push(dkG, new THREE.TorusGeometry(1.15, 0.14, 8, 20), 0, 7.35, sOut + 0.02);
+    push(gdG, new THREE.TorusGeometry(0.75, 0.08, 6, 16), 0, 7.35, sOut - 0.04);
+    push(gdG, new THREE.CylinderGeometry(0.16, 0.16, 0.24, 12), 0, 7.35, sOut - 0.06, Math.PI / 2);
+
+    // grand gâble triangulaire à crochets couronnant le portail (y = 5.9 -> 14.8 m)
+    const gBaseW = hw + 1.32, gBaseY = 5.9, gPeakY = 14.6, gAng = Math.atan2(gPeakY - gBaseY, gBaseW), gSlope = Math.hypot(gBaseW, gPeakY - gBaseY);
+    for (const side of [-1, 1]) {
+      push(stG, new THREE.BoxGeometry(gSlope + 0.4, 0.56, 0.58), side * gBaseW * 0.5, (gBaseY + gPeakY) / 2, sOut - 0.34, 0, 0, -side * gAng);
+      push(dkG, new THREE.BoxGeometry(gSlope + 0.3, 0.24, 0.66), side * gBaseW * 0.5, (gBaseY + gPeakY) / 2 + 0.26, sOut - 0.34, 0, 0, -side * gAng);
+      for (let c = 1; c <= 5; c++) {
+        const u = c / 6;
+        push(stG, new THREE.BoxGeometry(0.28, 0.48, 0.36), side * gBaseW * (1 - u), gBaseY + u * (gPeakY - gBaseY) + 0.48, sOut - 0.34, 0, 0, -side * 0.35);
+      }
+    }
+    // fleuron et croix dorée au sommet du gâble + écoinçon ajouré
+    push(stG, new THREE.BoxGeometry(0.55, 1.35, 0.55), 0, gPeakY + 0.45, sOut - 0.34);
+    push(gdG, new THREE.BoxGeometry(0.14, 1.45, 0.14), 0, gPeakY + 1.7, sOut - 0.34);
+    push(gdG, new THREE.BoxGeometry(0.75, 0.14, 0.14), 0, gPeakY + 1.95, sOut - 0.34);
+    push(dkG, new THREE.TorusGeometry(0.95, 0.13, 6, 18), 0, 11.4, sOut - 0.32);
+
+    // pont d'étanchéité haut entre gâble et mur OSM (sOut -> sInUp à 8,5..11 m)
+    push(stG, new THREE.BoxGeometry(hw * 2 + 2.4, 1.6, depthUp), 0, 10.1, sMidUp);
+
+    mesher.geo(mats.stone, mergeGeos(stG), M);
+    mesher.geo(mats.stoneDark, mergeGeos(dkG), M);
+    if (irG.length) mesher.geo(mats.iron, mergeGeos(irG), M);
+    if (gdG.length) mesher.geo(mats.gold, mergeGeos(gdG), M);
+    if (glG.length) mesher.geo(new THREE.MeshBasicMaterial({ color: 0xffd27a }), mergeGeos(glG), M);
   }
   return out;
 }
