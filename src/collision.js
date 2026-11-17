@@ -63,7 +63,7 @@ export class Collision {
     for (const b of boxes) {
       const c = Math.cos(b.rot), s = Math.sin(b.rot), hx = b.w / 2, hz = b.d / 2;
       const o = e.boxes[n] || (e.boxes[n] = {});
-      o.x = b.x; o.z = b.z; o.hx = hx; o.hz = hz; o.c = c; o.s = s; o.h = b.h ?? 3.4; o.r2 = (Math.hypot(hx, hz) + 1.2) ** 2;
+      o.x = b.x; o.z = b.z; o.hx = hx; o.hz = hz; o.c = c; o.s = s; o.y0 = b.y0 ?? -Infinity; o.h = b.h ?? 3.4; o.r2 = (Math.hypot(hx, hz) + 1.2) ** 2;
       n++;
     }
     e.boxes.length = n;
@@ -219,7 +219,7 @@ export class Collision {
       for (const [key, e] of this.dyn) {
         if (key === ignore) continue;
         for (const b of e.boxes) {
-          if (py >= b.h - 0.3) continue;
+          if (py + 1.7 <= b.y0 || py >= b.h - 0.3) continue;
           const dx = pos.x - b.x, dz = pos.z - b.z;
           if (dx * dx + dz * dz > b.r2 + radius * radius + 2 * radius) continue;
           const lx = b.c * dx + b.s * dz, lz = -b.s * dx + b.c * dz;

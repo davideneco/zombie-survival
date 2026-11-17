@@ -2448,7 +2448,7 @@ export async function buildRealWorld(scene, renderer) {
     mapAt: (x, z) => { mapArea = kr && kr.inArea(x, z) ? 'krutenau' : 'island'; },
     logicAreaOf: (x, z) => (kr && kr.inArea(x, z) ? 'krutenau' : areaOf(x, z)), // the area whose nav / spawns apply (the RENDER area stays 'island' in Krutenau)
     navAt: (x, z) => (gare && gare.inArea(x, z) && gare.nav ? gare.nav : kr && kr.inArea(x, z) && kr.nav ? kr.nav : nav), // grid of the area of a point
-    regionAt: (x, z) => (gare && gare.inRegion(x, z) ? gare.region : kr && kr.inRegion(x, z) ? kr.region : 0),      // floor region of a spawn point (station zombies use its grid)
+    regionAt: (x, z) => (gare && gare.inRegion(x, z) ? (gare.regionAt ? gare.regionAt(x, z) : gare.region) : kr && kr.inRegion(x, z) ? kr.region : 0),      // floor region of a spawn point (station zombies use its grid)
     get localArea() { return localArea; },
     // shows only the local player's area (local only : each client draws its own)
     setLocalArea(area) {

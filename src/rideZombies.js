@@ -157,19 +157,19 @@ export function installRideZombies(game, { world, scene, sfx }) {
     sendSpawn(z, { tn: [wo.ci, sd, wo.k] });
     return z;
   };
-  // a gangway zombie : enters from an adjacent coach gangway (rear or front of the players, lower or upper deck) and walks in
+  // a gangway zombie : enters from an adjacent coach vestibule across the bellows and walks into the players' coach
   const spawnGang = (idx = 0) => {
     const pCi = clamp(t.moduleAt(midU()), 1, Math.max(1, t.n - 2));
-    const dir = idx % 2 === 0 ? -1 : 1; // -1 : from rear coach, +1 : from front coach
+    const dir = idx % 2 === 0 ? -1 : 1; // -1 : smaller index (+u forward), +1 : larger index (-u rear)
     const adjCi = clamp(pCi + dir, 0, t.n - 1);
     const vAdj = t.veh[adjCi], vPl = t.veh[pCi];
-    const useTail = adjCi === t.n - 1 && dir < 0;
-    const u = useTail ? t.tailU - 0.6 : vAdj.uc - dir * Math.min(3.2, vAdj.len / 2 - 1.2);
-    const gu = useTail ? t.tailU + 0.9 : vPl.uc + dir * (vPl.len / 2 - 2.2);
-    const w = rnd(-0.18, 0.18), fy = t.floorAt(u, w, t.railY + T.floor);
+    const toPl = Math.sign(vPl.uc - vAdj.uc) || 1; // +u when vPl is forward of vAdj, -u when rear
+    const u = vAdj.uc + toPl * Math.min(6.0, vAdj.len / 2 - 1.8);
+    const gu = vPl.uc - toPl * Math.min(6.0, vPl.len / 2 - 2.4);
+    const w = rnd(-0.16, 0.16), fy = t.floorAt(u, w, t.railY + T.floor);
     t.walkToWorld(u, w, fy, wp);
     const z = make('gang', wp.x, fy, wp.z);
-    z.onTrain = { v: t, u, w, y: fy, st: 'gang', sd: 1, win: -1, t: 0, gu };
+    z.onTrain = { v: t, u, w, y: fy, st: 'gang', sd: 1, win: -1, t: 0, gu, stairEnd: 0, stuckT: 0 };
     z.yaw = frameYaw(u) + (gu < u ? Math.PI : 0); z.group.rotation.set(0, z.yaw, 0);
     sendSpawn(z);
     return z;

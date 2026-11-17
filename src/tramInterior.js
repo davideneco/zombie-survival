@@ -209,8 +209,10 @@ export function installTramWalk(game, { world, hud, sfx }) {
         if (!t.usable || !t.walkOpen()) continue;
         if (t.walkBounds ? !t.walkBounds(p.pos.x, p.pos.z) : Math.abs(p.pos.x - t.pos.x) > 20 || Math.abs(p.pos.z - t.pos.z) > 20) continue;
         t.worldToWalk(p.pos.x, p.pos.z, loc);
+        const refY = groundOf(t, loc.u, p.pos) + (t.floorY ?? T.car.floor);
+        if (Math.abs(p.pos.y - refY) > 1.6) continue;
         const aw = Math.abs(loc.w), Wc = t.walkCfg || W;
-        if (aw > Wc.boardW || aw < Wc.wall - 0.1 || p.pos.y - terrainY(p.pos.x, p.pos.z) > 0.4 || (t.doorSide && Math.sign(loc.w) !== t.doorSide)) continue;
+        if (aw > Wc.boardW || aw < Wc.wall - 0.1 || (t.doorSide && Math.sign(loc.w) !== t.doorSide)) continue;
         const di = doorIndexAt(t.interior, loc.u, -0.2);
         if (di < 0) continue;
         t.frame(loc.u, f2);
@@ -245,7 +247,8 @@ export function installTramWalk(game, { world, hud, sfx }) {
         if (!t.usable || !t.walkOpen()) continue;
         if (t.walkBounds ? !t.walkBounds(p.pos.x, p.pos.z) : Math.abs(p.pos.x - t.pos.x) > 20 || Math.abs(p.pos.z - t.pos.z) > 20) continue;
         t.worldToWalk(p.pos.x, p.pos.z, loc);
-        if (Math.abs(loc.w) > 4 || (t.doorSide && Math.sign(loc.w) !== t.doorSide)) continue;
+        const refY = groundOf(t, loc.u, p.pos) + (t.floorY ?? T.car.floor);
+        if (Math.abs(loc.w) > 4 || Math.abs(p.pos.y - refY) > 1.6 || (t.doorSide && Math.sign(loc.w) !== t.doorSide)) continue;
         const Wc = t.walkCfg || W;
         t.interior.spans.forEach((sp, i) => {
           const du = Math.max(0, Math.abs(loc.u - (sp[0] + sp[1]) / 2) - 0.4), dw = Math.abs(Math.abs(loc.w) - Wc.wall), d = Math.hypot(du, dw);

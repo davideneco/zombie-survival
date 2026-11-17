@@ -452,7 +452,7 @@ export function buildRideScenery({ route, plan, rail, gare, land = null, sFrom, 
   let flash = null, landStats = null;
   if (land) {
     const api = {
-      C, R, route, tr, rnd, land, sFrom, sTo, proj, nearTrack, freeLand, reserve, isFree, mat4, add, merge: merge1, setS: (v) => { curS = v; },
+      C, R, route, tr, rnd, land, sFrom, sTo, proj, nearTrack, freeLand, bounds: B, reserve, isFree, mat4, add, merge: merge1, setS: (v) => { curS = v; },
       mats: { concrete, steel, bark, leaf }, kit, V: (y, Ht) => 0.25 + 0.75 * clamp(y / Ht, 0, 1), buildingGeo,
       facade: (kind) => (facCache[kind] ||= facadeAtlas(kind, rnd)),
       crownGeometry: () => merge([blob(2.3, 1, rnd).translate(0, 4.5, 0), blob(1.7, 1, rnd).translate(0.5, 6.0, 0.2), blob(1.5, 1, rnd).translate(-0.8, 5.2, -0.6)]),
@@ -480,6 +480,10 @@ export function buildRideScenery({ route, plan, rail, gare, land = null, sFrom, 
     // per frame : the far ground follows the camera ; chunks near the camera's stretch of the route are drawn (local look)
     update(cam) {
       if (root.parent && !root.parent.visible) return; // (the station area is not drawn : on the island)
+      const [cu, cv] = plan.L(cam.x, cam.z);
+      const inStation = cam.y < -0.2 || inStationClip(plan, cu, cv) || (cam.x > B.x0 && cam.x < B.x1 && cam.z > B.z0 && cam.z < B.z1);
+      ground.visible = !inStation;
+      if (!ground.visible) return;
       ground.position.x = Math.round(cam.x / tile) * tile; ground.position.z = Math.round(cam.z / tile) * tile;
       if (flash) { const on = Math.floor(performance.now() / 600) % 2 === 0; flash.a.emissiveIntensity = on ? 3.4 : 0.15; flash.b.emissiveIntensity = on ? 0.15 : 3.4; } // level-crossing lamps, alternating
       if (Math.abs(cam.x - lastX) + Math.abs(cam.z - lastZ) < 4) return;

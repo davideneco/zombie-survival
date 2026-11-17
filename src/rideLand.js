@@ -118,7 +118,15 @@ function crossingGeos() {
 
 // ====================================================================== the builder
 export function buildLand(api) {
-  const { C, R, route, tr, rnd, land, sFrom, sTo, mats, proj, nearTrack, freeLand, reserve, isFree, mat4, add, merge, setS } = api;
+  const { C, R, route, tr, rnd, land, sFrom, sTo, mats, proj, nearTrack, freeLand, bounds, reserve, isFree, mat4, add, merge, setS } = api;
+  const polyFree = (ring) => {
+    let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
+    for (const [x, z] of ring) {
+      if (!freeLand(x, z)) return false;
+      if (x < x0) x0 = x; if (x > x1) x1 = x; if (z < z0) z0 = z; if (z > z1) z1 = z;
+    }
+    return !bounds || x1 < bounds.x0 - 4 || x0 > bounds.x1 + 4 || z1 < bounds.z0 - 4 || z0 > bounds.z1 + 4;
+  };
   woods.length = 0; orchards.length = 0;
   const groundAt = (w, s) => groundProfile(w, s, route);
   const fy = (s) => farGroundY(route, s);
@@ -310,15 +318,16 @@ export function buildLand(api) {
       let piece = [], ps = 0;
       const flush = () => { if (piece.length > 1) { merge(ribbon(piece, wStream[r.k] || 3, 8), waterMat, ps / piece.length, 'water'); n++; } piece = []; ps = 0; };
       for (const [x, z] of r.p) {
-        const q = proj(x, z, 220); if (q.d === Infinity || !inRange(q.s)) { flush(); continue; }
+        const q = proj(x, z, 220); if (q.d === Infinity || !inRange(q.s) || !freeLand(x, z)) { flush(); continue; }
         const br = bridgeAt(route, q.s);
         piece.push([x, fy(q.s) + 0.05 + (br ? 0 : 0), z]); ps += q.s;
       }
       flush();
     }
     for (const w of land.water || []) {
-      const ring = w.p.slice(0, -1); let cx = 0, cz = 0; for (const p of ring) { cx += p[0]; cz += p[1]; } cx /= ring.length; cz /= ring.length;
-      const q = proj(cx, cz, 240); if (q.d === Infinity || !inRange(q.s)) continue;
+      const ring = w.p.slice(0, -1); if (ring.length < 3) continue;
+      let cx = 0, cz = 0; for (const p of ring) { cx += p[0]; cz += p[1]; } cx /= ring.length; cz /= ring.length;
+      const q = proj(cx, cz, 240); if (q.d === Infinity || !inRange(q.s) || !freeLand(cx, cz) || !polyFree(ring)) continue;
       const g = flatPoly(ring, fy(q.s) + 0.05, new THREE.Color(1, 1, 1), 0, 8); if (g) { g.deleteAttribute('color'); merge(g, waterMat, q.s, 'pond'); n++; }
     }
     stats.water = n;
@@ -332,7 +341,7 @@ export function buildLand(api) {
     for (const f of land.fields || []) {
       const ring = f.p.slice(0, -1); if (ring.length < 3) continue;
       let cx = 0, cz = 0; for (const p of ring) { cx += p[0]; cz += p[1]; } cx /= ring.length; cz /= ring.length;
-      const q = proj(cx, cz, 300); if (q.d === Infinity || !inRange(q.s) || !freeLand(cx, cz)) continue;
+      const q = proj(cx, cz, 300); if (q.d === Infinity || !inRange(q.s) || !freeLand(cx, cz) || !polyFree(ring)) continue;
       // longest edge sets the furrow direction
       let best = 0, ang = 0; for (let i = 0; i < ring.length; i++) { const a = ring[i], b = ring[(i + 1) % ring.length], l = Math.hypot(b[0] - a[0], b[1] - a[1]); if (l > best) { best = l; ang = Math.atan2(b[1] - a[1], b[0] - a[0]); } }
       const cols = fieldCol[f.k] || fieldCol.g, col = new THREE.Color(cols[Math.floor(hash(cx, cz, 9) * cols.length)]);
@@ -344,7 +353,7 @@ export function buildLand(api) {
     for (const f of land.woods || []) {
       const ring = f.p.slice(0, -1); if (ring.length < 3) continue;
       let cx = 0, cz = 0; for (const p of ring) { cx += p[0]; cz += p[1]; } cx /= ring.length; cz /= ring.length;
-      const q = proj(cx, cz, 300); if (q.d === Infinity || !inRange(q.s) || !freeLand(cx, cz)) continue;
+      const q = proj(cx, cz, 300); if (q.d === Infinity || !inRange(q.s) || !freeLand(cx, cz) || !polyFree(ring)) continue;
       const g = flatPoly(ring, fy(q.s) + 0.05, new THREE.Color(woodCol[Math.floor(hash(cx, cz, 7) * woodCol.length)]), 0.4, 5);
       if (g) { merge(g, fieldMat, q.s, 'wood'); n++; }
       woods.push({ ring, q, scrub: f.k === 's' });

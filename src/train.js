@@ -108,7 +108,7 @@ export class Train {
       });
     }
     for (const l of this.lights) opts.lightSources?.push(l);
-    this._dynBoxes = this.veh.map(() => ({ x: 0, z: 0, w: 0, d: T.width, rot: 0, h: this.railY + (T.shotH ?? T.height) }));
+    this._dynBoxes = this.veh.map(() => ({ x: 0, z: 0, w: 0, d: T.width, rot: 0, y0: this.railY - 0.4, h: this.railY + (T.shotH ?? T.height) }));
     this.s = route.parkHeadS;
     this.apply();
     this.flickT = 0;
@@ -179,7 +179,7 @@ export class Train {
   walkBounds(x, z, r = 6) { const o = this._wb || (this._wb = {}); this.worldToWalk(x, z, o); return o.w !== 99 && Math.abs(o.w) < r && o.u > -this.L / 2 - r && o.u < this.L / 2 + r; }
   // collision lists around u : the car of u and its neighbours (lower vs upper Duplex deck selected by curY)
   walkLists(u, pass, curY = null) {
-    const k = this.moduleAt(u), out = this._wl || (this._wl = []), upper = curY != null && (curY - this.railY) > 1.55;
+    const k = this.moduleAt(u), out = this._wl || (this._wl = []), upper = curY != null && (curY - this.railY) > 1.45;
     out.length = 0;
     for (let i = Math.max(0, k - 1); i <= Math.min(this.n - 1, k + 1); i++) {
       const c = this.interior.byCoach[i];
@@ -530,37 +530,103 @@ export function installTrain(game, { world, hud }) {
         for (const sp of t.interior.spans) { const d = Math.abs((sp[0] + sp[1]) / 2 - O.u); if (d < bd) { bd = d; best = (sp[0] + sp[1]) / 2; } }
         O.st = 'leave'; O.door = best;
       } else if ((tgtIn || !open) && O.st === 'leave') O.st = 'in';
-      const zUpper = (O.y - t.railY) > 1.35, tgtUpper = tgtIn ? (target.pos.y - t.railY) > 1.35 : false;
-      const vc = t.veh[t.moduleAt(O.u)], du0 = O.u - vc.uc, au = Math.abs(du0), sDir = du0 >= 0 ? 1 : -1;
-      const sameCoach = tgtIn ? t.moduleAt(O.u) === t.moduleAt(loc2.u) : false;
+      const relY = O.y - t.railY, zUpper = relY > 1.45, tgtUpper = tgtIn ? (target.pos.y - t.railY) > 1.45 : false;
+      const vIdx = t.moduleAt(O.u), vc = t.veh[vIdx], tIdx = tgtIn ? t.moduleAt(loc2.u) : vIdx;
+      const du0 = O.u - vc.uc, au = Math.abs(du0), sameCoach = tgtIn ? vIdx === tIdx : false;
+      // Clear stair commitment once cleanly back in a saloon/vestibule or switching coach targets
+      if (!vc.Q.duplex || (sameCoach && zUpper === tgtUpper && au < 3.60) || (!tgtIn && O.st !== 'leave')) O.stairEnd = 0;
+      const pickEnd = (wantU) => {
+        if (O.stairEnd === 1 || O.stairEnd === -1) return O.stairEnd;
+        const d = wantU != null ? (wantU >= vc.uc ? 1 : -1) : (du0 >= 0 ? 1 : -1);
+        O.stairEnd = d;
+        return d;
+      };
+      // Lower-deck Duplex waypoint helper toward target u `wantU` without colliding with divider wall, under-stair bulkhead, or seats
+      const duplexLowerGoal = (wantU, finalW) => {
+        const wantAu = Math.abs(wantU - vc.uc);
+        const crossBulkhead = (au < 3.85 && wantAu > 3.65) || (au >= 3.85 && (wantAu < 3.85 || Math.sign(wantU - vc.uc) !== Math.sign(du0)));
+        // In or approaching the stairwell zone [3.05..5.68]: shift to open right ramp w = +0.52 first if crossing bulkhead
+        if (au >= 3.05 && au < 5.68 && (au >= 3.75 || crossBulkhead)) {
+          return [wantU, 0.52, O.w < 0.36];
+        }
+        // Through the lower saloon seats (|du0| < 3.25), keep in the open central aisle
+        if (au < 3.25) return [wantU, Math.abs(wantU - O.u) > 0.9 ? 0 : finalW, Math.abs(wantU - O.u) > 0.9];
+        // Outside stairwell zone in vestibule/gangway: center through gangway [-0.66..+0.66]
+        return [wantU, 0, Math.abs(wantU - O.u) > 0.9];
+      };
       // goal in (u, w)
       let gu, gw, aisle = false;
-      if (O.st === 'enter') { gu = O.door; gw = 0; if (Math.abs(O.w) < W.wall - 0.2) O.st = 'in'; }
-      else if (O.st === 'leave') {
-        if (zUpper) {
-          if (O.w > -0.75) { gu = vc.uc + sDir * 6.50; gw = au < 6.25 ? 0 : -1.00; }
-          else { gu = vc.uc + sDir * 3.90; gw = -1.00; }
-        } else { gu = O.door; gw = Math.abs(O.u - O.door) > 0.35 ? 0 : t.doorSide * (W.outW + 0.3); aisle = Math.abs(O.u - O.door) > 0.35; }
+      if (O.st === 'enter') {
+        gu = O.door; gw = 0;
+        if (Math.abs(O.w) < W.wall - 0.15) O.st = 'in';
+      } else if (O.st === 'leave') {
+        if (zUpper && vc.Q.duplex) {
+          const sDir = pickEnd(O.door);
+          if (au < 3.65 && O.w > -0.45) { gu = vc.uc + sDir * 3.35; gw = -0.82; }
+          else { gu = vc.uc + sDir * 6.05; gw = -0.82; }
+        } else {
+          const sameDoor = t.moduleAt(O.door) === vIdx;
+          if (!sameDoor || (vc.Q.duplex && au < 5.65 && Math.abs(O.u - O.door) > 0.5)) {
+            [gu, gw, aisle] = vc.Q.duplex ? duplexLowerGoal(O.door, 0) : [O.door, 0, Math.abs(O.u - O.door) > 0.35];
+          } else {
+            gu = O.door; gw = Math.abs(O.u - O.door) > 0.35 ? 0 : t.doorSide * (W.outW + 0.3);
+            aisle = Math.abs(O.u - O.door) > 0.35;
+          }
+        }
+      } else if (!tgtIn) {
+        gu = O.u; gw = 0; aisle = Math.abs(O.w) > 0.18;
+      } else if (zUpper && (!tgtUpper || !sameCoach) && vc.Q.duplex) {
+        // Upper deck zombie descending Duplex left stairs (w = -0.82) to vestibule (to reach lower deck or another coach)
+        const sDir = !sameCoach ? pickEnd(loc2.u) : pickEnd(null);
+        if (au < 3.65 && O.w > -0.45) { gu = vc.uc + sDir * 3.35; gw = -0.82; }
+        else { gu = vc.uc + sDir * 6.05; gw = -0.82; }
+      } else if (!zUpper && tgtUpper && sameCoach && vc.Q.duplex) {
+        // Lower/vestibule deck zombie climbing Duplex left stairs up to target's coach upper deck
+        const sDir = pickEnd(null);
+        if (au < 3.70) {
+          // Inside lower saloon: must route right past bulkhead through right lower ramp to vestibule first
+          gu = vc.uc + (O.w < 0.25 ? sDir * 3.25 : sDir * 6.05); gw = 0.52;
+        } else if (au < 5.68 && O.w >= -0.05) {
+          // Currently in right lower ramp heading outward to vestibule
+          gu = vc.uc + sDir * 6.05; gw = 0.52;
+        } else if (au >= 5.68 && O.w > -0.45) {
+          // In open vestibule: cross safely at au >= 5.75 onto left stair line w = -0.82
+          gu = vc.uc + sDir * 6.00; gw = -0.82;
+        } else {
+          // On left stair line (w <= -0.45): climb INWARD up staircase onto upper landing!
+          gu = vc.uc + sDir * 3.20; gw = -0.82;
+        }
+      } else if (zUpper && vc.Q.duplex && O.w < -0.50 && au >= 3.70) {
+        // Finishing climb onto the upper landing before walking into upper saloon
+        const sDir = du0 >= 0 ? 1 : -1;
+        gu = vc.uc + sDir * 3.20; gw = -0.82;
+      } else if (!sameCoach) {
+        // Cross-coach traversal on lower/vestibule deck
+        [gu, gw, aisle] = vc.Q.duplex ? duplexLowerGoal(loc2.u, 0) : [loc2.u, 0, Math.abs(loc2.u - O.u) > 0.6];
+      } else if (!vc.Q.duplex) {
+        // Same Motrice M1/M2 coach: stay in engine corridor [-0.45, +0.45] and steer around central driver's armchair (um in [4.10, 4.62])
+        const um = vc.Q.mirrored ? -du0 : du0, tum = vc.Q.mirrored ? -(loc2.u - vc.uc) : (loc2.u - vc.uc);
+        gu = loc2.u; gw = loc2.w; aisle = Math.abs(loc2.u - O.u) > 0.7;
+        if (aisle) gw = 0;
+        if (um > 3.55 && um < 5.15 && ((um - 4.36) * (tum - 4.36) <= 0 || Math.abs(O.w) < 0.48)) {
+          gw = O.w >= 0 ? 0.72 : -0.72; aisle = false;
+        }
+      } else if (!zUpper) {
+        // Same Duplex coach, both on lower deck
+        const tgtAu = Math.abs(loc2.u - vc.uc);
+        if (Math.abs(loc2.u - O.u) > 0.75 || (au >= 3.75) !== (tgtAu >= 3.75)) {
+          [gu, gw, aisle] = duplexLowerGoal(loc2.u, loc2.w);
+        } else {
+          gu = loc2.u; gw = loc2.w;
+        }
+      } else {
+        // Same Duplex coach, both on upper deck
+        gu = loc2.u; gw = loc2.w; aisle = Math.abs(loc2.u - O.u) > 0.75;
+        if (aisle) gw = 0;
       }
-      else if (!tgtIn) { gu = O.u; gw = 0; aisle = Math.abs(O.w) > 0.12; } // nobody to chase in the train : back to the aisle and wait
-      else if (zUpper && (!tgtUpper || !sameCoach)) {
-        // Upper deck zombie descending Duplex stairs to lower/vestibule deck (or to cross gangway to another coach)
-        if (O.w > -0.75) { gu = vc.uc + sDir * 6.50; gw = au < 6.25 ? 0 : -1.00; }
-        else { gu = vc.uc + sDir * 3.90; gw = -1.00; }
-      }
-      else if (!zUpper && tgtUpper && sameCoach) {
-        // Lower/vestibule deck zombie climbing Duplex stairs to upper deck in the target's coach
-        if (O.w <= -0.75 && au >= 3.80) { gu = vc.uc + sDir * 6.55; gw = -1.00; }
-        else if (au >= 3.80 && au <= 4.20) { gu = vc.uc + sDir * 3.95; gw = -1.00; }
-        else { gu = vc.uc + sDir * 3.92; gw = au > 4.20 ? 0.25 : 0; }
-      }
-      else if (zUpper && O.w < -0.55 && au > 4.8) {
-        // Finishing stair climb onto the upper landing before entering upper saloon
-        gu = vc.uc + sDir * 6.55; gw = au < 6.25 ? -1.00 : 0;
-      }
-      else {
-        gu = loc2.u; gw = loc2.w; aisle = Math.abs(loc2.u - O.u) > 0.9;
-        if (aisle) gw = (!zUpper && au > 3.70 && au < 6.40 && O.w > -0.45) ? 0.22 : 0;
+      // Stuck sidestep relief if blocked by geometry or another zombie in tight gangways
+      if ((O.tryT = Math.max(0, (O.tryT || 0) - dt)) > 0) {
+        gw = clamp(gw + (O.trySign || 1) * 0.34, -W.wall + 0.35, W.wall - 0.35);
       }
       let du = gu - O.u, dw = gw - O.w;
       if (aisle && Math.abs(O.w - gw) > 0.15) { du = Math.sign(du) * Math.min(Math.abs(du), 0.35); dw = (gw - O.w) * 3; } // back to the aisle first
@@ -571,14 +637,24 @@ export function installTrain(game, { world, hud }) {
       if (!inRange && z.attackWindup < 0 && dl > 0.05) {
         const sp = (z.limp ? z.speed * 0.8 : z.speed) * (z.slowT > 0 ? z.slowK : 1) * Z.speedK, k = Math.min(dl, sp * dt) / dl;
         pt.u = O.u + du * k; pt.w = O.w + dw * k;
-        // other zombies in the train : keep apart (in the frame)
+        // other zombies in the train : keep apart softly (gentler during sidestep so crowds don't deadlock in corridors)
+        const sepK = O.tryT > 0 ? 0.18 : 0.42;
         for (const o of game.zombies) {
           if (o === z || o.dead || !o.onTrain || o.onTrain.v !== t) continue;
           const eu = pt.u - o.onTrain.u, ew = pt.w - o.onTrain.w, d = Math.hypot(eu, ew);
-          if (d > 0 && d < 0.6) { pt.u += (eu / d) * (0.6 - d) * 0.5; pt.w += (ew / d) * (0.6 - d) * 0.25; }
+          if (d > 0.001 && d < 0.56) {
+            const pPush = (0.56 - d) * sepK;
+            pt.u += (eu / d) * pPush; pt.w += (ew / d) * pPush * 0.5;
+          }
         }
-        pushOut(t.walkLists(pt.u, O.st !== 'in', O.y), pt, Z.radius);
+        pushOut(t.walkLists(pt.u, O.st !== 'in' && !zUpper, O.y), pt, Z.radius);
         moving = Math.hypot(pt.u - O.u, pt.w - O.w) > sp * dt * 0.2;
+        if (!moving && dl > 0.25) {
+          O.stuckT = (O.stuckT || 0) + dt;
+          if (O.stuckT > 0.35) { O.tryT = 0.75; O.trySign = (O.trySign || (z.id % 2 ? 1 : -1)) * -1; O.stuckT = 0; }
+        } else {
+          O.stuckT = Math.max(0, (O.stuckT || 0) - dt);
+        }
         if (moving) { // face the way it walks (world)
           t.frame(pt.u, tmp);
           const wu = pt.u - O.u, ww = pt.w - O.w, wx = tmp.tx * wu - tmp.tz * ww, wz = tmp.tz * wu + tmp.tx * ww;
@@ -586,10 +662,17 @@ export function installTrain(game, { world, hud }) {
         }
         O.u = pt.u; O.w = pt.w;
       } else if (inRange) { // face the target
+        O.stuckT = 0;
         let d = Math.atan2(target.pos.x - z.pos.x, target.pos.z - z.pos.z) - z.yaw; d = Math.atan2(Math.sin(d), Math.cos(d)); z.yaw += d * Math.min(1, dt * 8);
       }
       const inside = Math.abs(O.w) < T.width / 2;
-      O.y += ((inside ? t.floorAt(O.u, O.w, O.y) : 0) - O.y) * Math.min(1, dt * 10);
+      const tgtY = inside ? t.floorAt(O.u, O.w, O.y) : 0;
+      if (inside) {
+        O.y += (tgtY - O.y) * Math.min(1, dt * 28);
+        if (Math.abs(tgtY - O.y) > 0.14 && Math.abs(tgtY - O.y) < 1.5) O.y = tgtY - Math.sign(tgtY - O.y) * 0.12; // keep stairwell feet strictly synced above 1.55 threshold
+      } else {
+        O.y += (0 - O.y) * Math.min(1, dt * 10);
+      }
       t.walkToWorld(O.u, O.w, O.y, z.pos);
       z.group.rotation.set(0, z.yaw, 0);
       if (O.st === 'leave' && Math.abs(O.w) > W.outW) { z.onTrain = null; z.pos.y = 0; } // back on the platform (the station's floor region)

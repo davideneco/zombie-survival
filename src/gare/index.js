@@ -84,22 +84,48 @@ export function buildGare(ctx) {
   // ---------------------------------------------------------------- collision : walkable boundary walls, furniture boxes
   for (const w of plan.walls) {
     const [ax, az] = W(...w.a), [bx, bz] = W(...w.b);
-    collision.addSegment(ax, az, bx, bz, w.h, -Infinity, w.kind === 'barrier' ? 'prop' : 'wall');
+    collision.addSegment(ax, az, bx, bz, w.h, w.y0 ?? -0.6, w.kind === 'barrier' ? 'prop' : 'wall');
   }
   const F = plan.frame;
   for (const c of colliders) {
     const [x, z] = W(c.u, c.v);
     const du = Math.cos(c.rot || 0), dv = Math.sin(c.rot || 0), dx = F.ux * du + F.vx * dv, dz = F.uz * du + F.vz * dv;
-    collision.addBox(x, z, c.lu, c.lv, Math.atan2(dz, dx), c.h ?? 3, -Infinity, c.prop ? 'prop' : 'wall', !!c.vault);
+    collision.addBox(x, z, c.lu, c.lv, Math.atan2(dz, dx), c.h ?? 3, c.y0 ?? -0.6, c.prop ? 'prop' : 'wall', !!c.vault);
   }
   collision.addBounds?.(plan.bounds);
 
-  // ---------------------------------------------------------------- floor region (own nav grid ; no stair link : island and station zombies stay apart)
+  // ---------------------------------------------------------------- floor regions (Quai 1/Hall/Place, Quais 2/3, 4/5/30, 6/7, 8/9, and underpass -3.8 m)
   const region = levels.addRegion('Gare de Strasbourg', 0, 'floor', { ground: true, navCell: G.navCell, navMaxCost: G.navMaxCost, navMargin: 0.5 });
-  for (const poly of Object.values(plan.walk)) {
-    let pts = poly.slice();
+  const regQ23 = levels.addRegion('Gare — Quais 2/3', 0, 'floor', { ground: true, navCell: G.navCell, navMaxCost: G.navMaxCost, navMargin: 0.5 });
+  const regQ45 = levels.addRegion('Gare — Quais 4/5/30', 0, 'floor', { ground: true, navCell: G.navCell, navMaxCost: G.navMaxCost, navMargin: 0.5 });
+  const regQ67 = levels.addRegion('Gare — Quais 6/7', 0, 'floor', { ground: true, navCell: G.navCell, navMaxCost: G.navMaxCost, navMargin: 0.5 });
+  const regQ89 = levels.addRegion('Gare — Quais 8/9', 0, 'floor', { ground: true, navCell: G.navCell, navMaxCost: G.navMaxCost, navMargin: 0.5 });
+  const regUnder = levels.addRegion('Gare — Souterrain', plan.underpass ? plan.underpass.yFloor : -3.8, 'floor', { navCell: G.navCell, navMaxCost: G.navMaxCost, navMargin: 0.45 });
+  const platRegions = { q1: region, q23: regQ23, q45: regQ45, q67: regQ67, q89: regQ89 };
+  const surfaceRegions = [region, regQ23, regQ45, regQ67, regQ89];
+  const U = plan.underpass;
+  const addPolyReg = (regId, poly, y, holes = []) => {
+    const pts = poly.slice();
     if (polyArea(pts) < 0) pts.reverse();
-    try { levels.addPoly(region, pts, 0); } catch (e) { console.warn('[gare] floor polygon', e.message); }
+    const hs = holes.map((h) => { const c = h.slice(); if (polyArea(c) > 0) c.reverse(); return c; });
+    try { levels.addPoly(regId, pts, y, hs); } catch (e) { console.warn('[gare] floor polygon', e.message); }
+  };
+  for (const [k, poly] of Object.entries(plan.walk)) {
+    const regId = (k === 'q23' || k === 'q45' || k === 'q67' || k === 'q89') ? platRegions[k] : region;
+    const holes = U ? U.stairs.filter((s) => s.key === k).map((s) => s.holeW) : [];
+    addPolyReg(regId, poly, 0, holes);
+  }
+  if (U) {
+    addPolyReg(regUnder, U.spineL.map(([u, v]) => W(u, v)), U.yFloor);
+    for (const s of U.stairs) {
+      addPolyReg(regUnder, s.throat.map(([u, v]) => W(u, v)), U.yFloor);
+      levels.addGroundHole(s.holeW.slice());
+      const sReg = levels.addRegion('Esc. ' + s.label, U.yFloor / 2, 'stair');
+      const qW = s.quadL.map(([u, y, v]) => { const [x, z] = W(u, v); return [x, y, z]; });
+      levels.addQuad(sReg, qW[0], qW[1], qW[2], qW[3]);
+      const pathW = s.pathL.map(([u, y, v]) => { const [x, z] = W(u, v); return [x, y, z]; });
+      levels.addLink('Esc. ' + s.label, regUnder, platRegions[s.key], pathW, sReg);
+    }
   }
 
   // ---------------------------------------------------------------- the regional train, parked at quai 1, doors open (train.js ; v0.80.0)
@@ -155,8 +181,16 @@ export function buildGare(ctx) {
     zoneCenters[zoneIdx[name]] = { name, x: c[0], z: c[1], area: polys.reduce((s, p) => s + Math.abs(polyArea(p)), 0) };
   }
 
-  // ---------------------------------------------------------------- spawn points (world) per zone
-  const spawns = plan.spawns.map((s) => { const [x, z] = W(...s.l); return { x, z, zone: zoneIdx[s.zone] }; }).filter((s) => s.zone >= 0);
+  // ---------------------------------------------------------------- spawn points (world) per zone & surface region
+  const regionAt = (x, z) => {
+    if (!inArea(x, z)) return 0;
+    for (const r of surfaceRegions) if (levels.inRegion(r, x, z)) return r;
+    return levels.inRegion(regUnder, x, z) ? regUnder : 0;
+  };
+  const spawns = plan.spawns.map((s) => {
+    const [x, z] = W(...s.l);
+    return { x, z, zone: zoneIdx[s.zone], floorReg: regionAt(x, z) || region };
+  }).filter((s) => s.zone >= 0);
 
   // ---------------------------------------------------------------- doors (same fields as the island doors ; their cells live in the region grid)
   const doors = [];
@@ -170,7 +204,7 @@ export function buildGare(ctx) {
       const signMat = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.72 });
       for (const [p, q] of d.segs) {
         const [x0, z0] = W(...p), [x1, z1] = W(...q), len = Math.hypot(x1 - x0, z1 - z0);
-        door.segs.push(collision.addSegment(x0, z0, x1, z1, 3.4));
+        door.segs.push(collision.addSegment(x0, z0, x1, z1, 3.4, -0.6));
         const gm = props.gate(len);
         gm.position.set((x0 + x1) / 2, 0, (z0 + z1) / 2); gm.rotation.y = -Math.atan2(z1 - z0, x1 - x0);
         for (const side of [-1, 1]) {
@@ -239,7 +273,8 @@ export function buildGare(ctx) {
     const ok = (s, lo, hi) => {
       const d = Math.hypot(s.x - px, s.z - pz);
       if (d < lo || d > hi || !(isOpen(s.zone) || s.zone === pZone)) return false;
-      if (nav && nav.isBlockedAt(s.x, s.z)) return false;
+      const sn = levels.regions[s.floorReg]?.nav || nav;
+      if (sn && sn.isBlockedAt(s.x, s.z)) return false;
       probe.x = s.x; probe.y = 0.1; probe.z = s.z; probeOut.push = 0; collision.resolve(probe, 0.45, probeOut);
       return probeOut.push < 0.05;
     };
@@ -282,9 +317,9 @@ export function buildGare(ctx) {
   const start = { ...CONFIG.gareSpawn, x: plan.start.x, z: plan.start.z, yaw: plan.start.yaw };
   const api = {
     plan, root, region, trees, arch, nav, doors, spawns, zoneIdx, zoneCenters, start, route, railNet, train, scenery, rail: data.rail, // (rail : rail.json, the tram transfer's line C route)
-    bounds: plan.bounds, inArea, inCorridor, zoneOf,
+    bounds: plan.bounds, inArea, inCorridor, zoneOf, regionAt,
     zoneName: (x, z) => zoneNames[zoneOf(x, z)] || null, // 'Quais' | 'Hall de la Gare' | 'Place de la Gare' (null outside) : drives the station ambience (src/ambience.js)
-    inRegion: (x, z) => inArea(x, z) && levels.inRegion(region, x, z),
+    inRegion: (x, z) => inArea(x, z) && (surfaceRegions.some((r) => levels.inRegion(r, x, z)) || levels.inRegion(regUnder, x, z)),
     makeDoors, placeItems, beforeNavs, finishNav, pickGround, cullItems,
     stop: plan.stop, map: { image: map, view: { halfX: -plan.bounds.x0, halfZ: -plan.bounds.z0, scale: mapScale }, crop: { ...plan.bounds }, title: 'GARE CENTRALE — STRASBOURG' },
   };
@@ -306,7 +341,7 @@ export function doorSignTex(price, names) {
   return t;
 }
 
-// station map : walkable floor by zone, buildings, platforms, tracks, the verrière
+// station map : walkable floor by zone, buildings, platforms, tracks, underpass, the verrière
 function drawMap(plan, gare, bldPolys, S) {
   const b = plan.bounds, W = Math.round((b.x1 - b.x0) * S), H = Math.round((b.z1 - b.z0) * S);
   const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
@@ -315,7 +350,13 @@ function drawMap(plan, gare, bldPolys, S) {
   const fill = (pts, col) => { x.fillStyle = col; x.beginPath(); pts.forEach((p, i) => { const [X, Y] = P(p); if (i) x.lineTo(X, Y); else x.moveTo(X, Y); }); x.closePath(); x.fill(); };
   x.fillStyle = '#16181c'; x.fillRect(0, 0, W, H);
   for (const p of gare.platforms || []) fill(p.pts, '#2a2d31');
-  fill(plan.walk.place, '#3a3e44'); fill(plan.walk.q1, '#44484e'); fill(plan.walk.q23, '#44484e'); for (const k of Object.keys(plan.walk)) if (k.startsWith('crossing')) fill(plan.walk[k], '#5a5040');
+  fill(plan.walk.place, '#3a3e44');
+  for (const k of ['q1', 'q23', 'q45', 'q67', 'q89']) if (plan.walk[k]) fill(plan.walk[k], '#44484e');
+  for (const k of Object.keys(plan.walk)) if (k.startsWith('crossing')) fill(plan.walk[k], '#5a5040');
+  if (plan.underpass) {
+    fill(plan.underpass.spineL.map(([u, v]) => plan.W(u, v)), 'rgba(92,148,184,0.48)');
+    for (const s of plan.underpass.stairs) fill(s.holeW, '#78b4d8');
+  }
   fill(plan.walk.hall, '#4c4436'); fill(plan.walk.verriere, '#2f4a5e');
   // forecourt landmarks (fountain plaza, tram A/D access, Velhop hub, taxi bay, kiosks)
   x.strokeStyle = 'rgba(180,175,165,0.22)'; x.lineWidth = 2 * S;

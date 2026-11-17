@@ -2,6 +2,11 @@
 
 Chaque changement est poussé sur `main` (déploiement Render) avec un nouveau numéro de version et sa description ici.
 
+## v0.101.0 (2026-11-17)
+- **Zombies dans le train TGV d'intro** : correction des blocages et hésitations dans les escaliers et salles basses des rames Duplex grâce à des points de passage adaptés par niveau, des boîtes de collision recalées sur le plancher et un seuil de pont relevé à `1,45 m`.
+- **Passage souterrain de la gare** : ajout d'un tunnel piéton à `-3,8 m` reliant directement le Quai 1 aux quais arrière (`Quais 2 · 3`, `4 · 5 · 30`, `6 · 7`, `8 · 9`) sous les voies et le train garé, avec escaliers, balustrades, signalétique lumineuse, liens de navigation zombie/joueur et spawns sur les quais arrière. Correction d'un recouvrement du sol d'approche (`ride:ground` / `ride:field` / eau) qui traversait le souterrain.
+- Vérifié : `npx vite build`, inspection visuelle headless dans le tunnel et sur `Quais 8 · 9` (`harness.mjs`, 0 erreur console/page, connectivité `levels.hopDistance` de `8,63 m` vers le souterrain) / Non vérifié : traversée complète d'une vague multi-joueurs en direct dans le train d'intro.
+
 ## v0.100.2 (2026-11-16)
 - Voitures conduisibles sans gel ni blocage à la montée/descente (phares sur le pool dynamique de lumières, aucune création/suppression de SpotLight en jeu).
 - Tram de liaison du parvis : approche en 5 s, portes ouvertes ~18 s au départ (24 s au total) et 20 s à l'arrivée pour laisser le temps de monter.

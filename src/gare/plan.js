@@ -66,18 +66,25 @@ export function planGare(gare, rail) {
   const verFront = [[verU0, body.v1], ...frontS, [verU1, body.v1]];
   const vFront = (u) => { for (let i = 1; i < verFront.length; i++) { const [a, va] = verFront[i - 1], [b, vb] = verFront[i]; if (u >= a && u <= b) return va + ((vb - va) * (u - a)) / (b - a || 1); } return body.v1; };
 
-  // ---------------------------------------------------------------- platforms 1 and 2/3, tracks between them
+  // ---------------------------------------------------------------- platforms 1, 2/3, 4/5/30, 6/7, 8/9 and tracks between them
   const plat = (ref) => (gare.platforms || []).find((p) => p.ref === ref);
-  const q1 = plat('1'), q23 = plat('2;3');
+  const q1 = plat('1'), q23 = plat('2;3'), q45 = plat('4;5;30'), q67 = plat('6;7'), q89 = plat('8;9');
   const [pu0, pu1] = G.playU;
-  const edge = (poly, side) => { // [[u, v]…] every 4 m over the playable range ; side 0 : min v (west), 1 : max v (east)
+  const edge = (poly, side, uMin = pu0, uMax = pu1) => { // [[u, v]…] every 4 m over the playable range ; side 0 : min v (west), 1 : max v (east)
     const out = [], P = loc(poly.pts);
-    for (let u = pu0; u <= pu1 + 1e-6; u += 4) { const s = scanV(P, Math.min(u, pu1)); if (s) out.push([Math.min(u, pu1), s[side]]); }
+    for (let u = uMin; u <= uMax + 1e-6; u += 4) { const s = scanV(P, Math.min(u, uMax)); if (s) out.push([Math.min(u, uMax), s[side]]); }
     return out;
   };
   const q1W = q1 ? edge(q1, 0) : [[pu0, -21.5], [pu1, -22.5]];
   const q23E = q23 ? edge(q23, 1) : [[pu0, -30], [pu1, -30]];
   const q23W = q23 ? edge(q23, 0) : [[pu0, -42.5], [pu1, -42.5]];
+  const q45E = q45 ? edge(q45, 1) : [[pu0, -51.5], [pu1, -51.5]];
+  const q45W = q45 ? edge(q45, 0) : [[pu0, -64.6], [pu1, -64.6]];
+  const q67E = q67 ? edge(q67, 1) : [[pu0, -73.2], [pu1, -73.2]];
+  const q67W = q67 ? edge(q67, 0) : [[pu0, -83.5], [pu1, -83.5]];
+  const u89Max = q89 ? Math.min(pu1, Math.floor(Math.max(...loc(q89.pts).map((p) => p[0])) - 1.5)) : pu1;
+  const q89E = q89 ? edge(q89, 1, pu0, u89Max) : [[pu0, -91.5], [u89Max, -91.5]];
+  const q89W = q89 ? edge(q89, 0, pu0, u89Max) : [[pu0, -100.5], [u89Max, -100.5]];
   const at = (line, u) => { for (let i = 1; i < line.length; i++) { const [a, va] = line[i - 1], [b, vb] = line[i]; if (u >= a - 1e-6 && u <= b + 1e-6) return va + ((vb - va) * (u - a)) / (b - a || 1); } return line[u < line[0][0] ? 0 : line.length - 1][1]; };
   const cUs = [].concat(G.crossingU), cW = G.crossingW, cGaps = cUs.map((c) => [c - cW / 2, c + cW / 2]);
 
@@ -100,12 +107,45 @@ export function planGare(gare, rail) {
     : [[pu0, body.v0], [pu1, body.v0]];
   const q1Poly = [...q1W.map(([u, v]) => [u, v]), ...q1Back.slice().reverse()];
   const q23Poly = [...q23W, ...q23E.slice().reverse()];
+  const q45Poly = [...q45W, ...q45E.slice().reverse()];
+  const q67Poly = [...q67W, ...q67E.slice().reverse()];
+  const q89Poly = [...q89W, ...q89E.slice().reverse()];
   const crossings = cUs.map((cU) => [[cU - cW / 2, at(q1W, cU - cW / 2) + 0.05], [cU - cW / 2, at(q23E, cU - cW / 2) - 0.05], [cU + cW / 2, at(q23E, cU + cW / 2) - 0.05], [cU + cW / 2, at(q1W, cU + cW / 2) + 0.05]]);
 
+  // ---------------------------------------------------------------- pedestrian underpass tunnel (passage souterrain : Quai 1 -> Quai 8/9)
+  const cMid = (H.u0 + H.u1) / 2;
+  const tunU = cMid, tunHW = 2.6, tunY = -3.8, tunCeil = -1.35;
+  const stairs = [
+    { key: 'q1', ref: '1', label: 'Quai 1', sub: 'Voies A · B', vc: (vBack(tunU) + at(q1W, tunU)) / 2 },
+    { key: 'q23', ref: '2;3', label: 'Quais 2 · 3', sub: 'Voies C · D', vc: (at(q23E, tunU) + at(q23W, tunU)) / 2 },
+    { key: 'q45', ref: '4;5;30', label: 'Quais 4 · 5 · 30', sub: 'Voies E · F', vc: (at(q45E, tunU) + at(q45W, tunU)) / 2 },
+    { key: 'q67', ref: '6;7', label: 'Quais 6 · 7', sub: 'Voies G · H', vc: (at(q67E, tunU) + at(q67W, tunU)) / 2 },
+    { key: 'q89', ref: '8;9', label: 'Quais 8 · 9', sub: 'Voies I · J', vc: (at(q89E, tunU) + at(q89W, tunU)) / 2 },
+  ].map((s) => {
+    const u0 = tunU + tunHW - 0.2, uLand = tunU + tunHW + 0.2, u1 = tunU + tunHW + 6.0;
+    const v0 = s.vc - 1.35, v1 = s.vc + 1.35;
+    const hole = [[u0, v0], [u1, v0], [u1, v1], [u0, v1]];
+    return {
+      ...s, u0, uLand, u1, v0, v1, hole,
+      holeW: hole.map(([u, v]) => W(u, v)),
+      botL: [tunU + tunHW, s.vc], topL: [u1, s.vc],
+      pathL: [[tunU + tunHW - 0.8, tunY, s.vc], [uLand, tunY, s.vc], [u1, 0, s.vc], [u1 + 0.7, 0, s.vc]],
+      quadL: [[uLand, tunY, v0], [u1, 0, v0], [u1, 0, v1], [uLand, tunY, v1]],
+      throat: [[tunU + tunHW - 0.2, v0], [uLand + 0.1, v0], [uLand + 0.1, v1], [tunU + tunHW - 0.2, v1]],
+    };
+  });
+  const tunV0 = Math.min(...stairs.map((s) => s.v0)) - 1.5;
+  const tunV1 = Math.max(...stairs.map((s) => s.v1)) + 1.5;
+  const underpass = {
+    u: tunU, hw: tunHW, yFloor: tunY, yCeil: tunCeil, v0: tunV0, v1: tunV1,
+    spineL: [[tunU - tunHW, tunV0], [tunU + tunHW, tunV0], [tunU + tunHW, tunV1], [tunU - tunHW, tunV1]],
+    stairs,
+  };
+
   // ---------------------------------------------------------------- walls (local segments) : the boundary of the walkable floor, openings excepted
-  const walls = [];  // { a: [u, v], b: [u, v], h, kind }  kind : 'wall' (building), 'edge' (platform edge), 'barrier' (crowd barriers), 'glass'
-  const seg = (a, b, h, kind) => walls.push({ a, b, h, kind });
-  const polyline = (pts, h, kind, gaps = []) => { // gaps : [[u0, u1]] along u where no wall is laid
+  const walls = [];  // { a: [u, v], b: [u, v], h, y0, kind }
+  const seg = (a, b, h, kind, y0 = -0.6) => walls.push({ a, b, h, y0, kind });
+  const polyline = (pts, h, kind, gaps = [], y0 = -0.6) => { // gaps : [[u0, u1]] along u where no wall is laid
     for (let i = 1; i < pts.length; i++) {
       let [a, b] = [pts[i - 1], pts[i]];
       const pieces = [[a, b]];
@@ -120,11 +160,10 @@ export function planGare(gare, rail) {
           pieces.splice(k, 1, ...repl);
         }
       }
-      for (const [p, q] of pieces) if (Math.hypot(q[0] - p[0], q[1] - p[1]) > 0.05) seg(p, q, h, kind);
+      for (const [p, q] of pieces) if (Math.hypot(q[0] - p[0], q[1] - p[1]) > 0.05) seg(p, q, h, kind, y0);
     }
   };
   // hall <-> quai 1 : two doorways in the track-side wall ; hall <-> verrière : three arches of the central pavilion
-  const cMid = (H.u0 + H.u1) / 2;
   const rearDoors = [[cMid - 13, cMid - 8.5], [cMid + 8.5, cMid + 13]];
   const arches = [[cMid - 9.5, cMid - 4.5], [cMid - 2.5, cMid + 2.5], [cMid + 4.5, cMid + 9.5]];
   const EDGE_H = 0.4, WALL_H = Infinity;
@@ -132,10 +171,33 @@ export function planGare(gare, rail) {
   polyline(q1W, EDGE_H, 'edge', cGaps);                                                    // quai 1 edge (track bed beyond)
   polyline(q23E, EDGE_H, 'edge', cGaps);                                                   // quai 2/3, east edge
   polyline(q23W, EDGE_H, 'edge');                                                          // quai 2/3, west edge
+  polyline(q45E, EDGE_H, 'edge'); polyline(q45W, EDGE_H, 'edge');
+  polyline(q67E, EDGE_H, 'edge'); polyline(q67W, EDGE_H, 'edge');
+  polyline(q89E, EDGE_H, 'edge'); polyline(q89W, EDGE_H, 'edge');
   for (const cU of cUs) for (const s of [-1, 1]) seg([cU + s * cW / 2, at(q1W, cU + s * cW / 2)], [cU + s * cW / 2, at(q23E, cU + s * cW / 2)], 1.1, 'edge'); // railings of the plank footbridges
   for (const u of [pu0, pu1]) { // platform ends : barricades
     seg([u, vBack(u)], [u, at(q1W, u)], 1.3, 'barrier');
     seg([u, at(q23E, u)], [u, at(q23W, u)], 1.3, 'barrier');
+    seg([u, at(q45E, u)], [u, at(q45W, u)], 1.3, 'barrier');
+    seg([u, at(q67E, u)], [u, at(q67W, u)], 1.3, 'barrier');
+  }
+  for (const u of [pu0, u89Max]) seg([u, at(q89E, u)], [u, at(q89W, u)], 1.3, 'barrier');
+  // Underpass walls (tunnel height -4.2 .. -0.8, so zero effect at surface y = 0!)
+  const UG_Y0 = -4.2, UG_H = -0.8;
+  seg([tunU - tunHW, tunV0], [tunU - tunHW, tunV1], UG_H, 'wall', UG_Y0);
+  seg([tunU - tunHW, tunV0], [tunU + tunHW, tunV0], UG_H, 'wall', UG_Y0);
+  seg([tunU - tunHW, tunV1], [tunU + tunHW, tunV1], UG_H, 'wall', UG_Y0);
+  let uvCursor = tunV0;
+  for (const st of [...stairs].sort((a, b) => a.v0 - b.v0)) {
+    if (st.v0 > uvCursor + 0.05) seg([tunU + tunHW, uvCursor], [tunU + tunHW, st.v0], UG_H, 'wall', UG_Y0);
+    uvCursor = st.v1;
+  }
+  if (tunV1 > uvCursor + 0.05) seg([tunU + tunHW, uvCursor], [tunU + tunHW, tunV1], UG_H, 'wall', UG_Y0);
+  // Stairwell retaining walls (stair edges from -4.2 up to surface rail +1.05) & surface head balustrade (y0 = -0.15 so underpass stays open below!)
+  for (const st of stairs) {
+    seg([st.uLand - 0.1, st.v0], [st.u1, st.v0], 1.05, 'barrier', UG_Y0);
+    seg([st.uLand - 0.1, st.v1], [st.u1, st.v1], 1.05, 'barrier', UG_Y0);
+    seg([st.u0, st.v0], [st.u0, st.v1], 1.05, 'barrier', -0.15);
   }
   seg([H.u0, body.v0], [H.u0, body.v1], WALL_H, 'wall');   // hall partitions (the wings are closed)
   seg([H.u1, body.v0], [H.u1, body.v1], WALL_H, 'wall');
@@ -171,7 +233,21 @@ export function planGare(gare, rail) {
   const E = G.spawnEvery;
   for (let u = pu0 + 4; u <= pu1 - 4; u += E) {
     if (cUs.some((cU) => Math.abs(u - cU) < cW)) continue;
-    spawns.push({ zone: 'Quais', l: [u, at(q1W, u) + 0.9] }, { zone: 'Quais', l: [u + E / 2, at(q23E, u + E / 2) - 0.9] }, { zone: 'Quais', l: [u, at(q23W, u) + 0.9] });
+    spawns.push(
+      { zone: 'Quais', l: [u, at(q1W, u) + 0.9] },
+      { zone: 'Quais', l: [u + E / 2, at(q23E, u + E / 2) - 0.9] },
+      { zone: 'Quais', l: [u, at(q23W, u) + 0.9] },
+      { zone: 'Quais', l: [u + E / 2, at(q45E, u + E / 2) - 0.9] },
+      { zone: 'Quais', l: [u, at(q45W, u) + 0.9] },
+      { zone: 'Quais', l: [u + E / 2, at(q67E, u + E / 2) - 0.9] },
+      { zone: 'Quais', l: [u, at(q67W, u) + 0.9] },
+    );
+  }
+  for (let u = pu0 + 4; u <= u89Max - 4; u += E) {
+    spawns.push(
+      { zone: 'Quais', l: [u + E / 2, at(q89E, u + E / 2) - 0.9] },
+      { zone: 'Quais', l: [u, at(q89W, u) + 0.9] },
+    );
   }
   spawns.push({ zone: 'Hall de la Gare', l: [cMid - 6, body.v0 + 3.2] }, { zone: 'Hall de la Gare', l: [cMid + 6, body.v0 + 3.2] }); // underpass stairs (rubble)
   for (let u = verU0 + 8; u <= verU1 - 8; u += 14) if (Math.abs(u - cMid) > 12) spawns.push({ zone: 'Hall de la Gare', l: [u, body.v1 + 2.2] }); // boarded-up shops of the wings
@@ -185,8 +261,16 @@ export function planGare(gare, rail) {
 
   // ---------------------------------------------------------------- lights (pooled point lights : realworld.js keeps the nearest ones)
   const lights = [];
-  const sp = G.shed;
-  for (let u = pu0 + 6; u <= pu1 - 4; u += 16) { lights.push({ l: [u, (vBack(u) + at(q1W, u)) / 2], y: 5.2, color: 0xffb060, intensity: 10, dist: 16 }); lights.push({ l: [u + 8, (at(q23E, u + 8) + at(q23W, u + 8)) / 2], y: 5.2, color: 0xffa858, intensity: 9, dist: 16 }); }
+  for (let u = pu0 + 6; u <= pu1 - 4; u += 16) {
+    lights.push({ l: [u, (vBack(u) + at(q1W, u)) / 2], y: 5.2, color: 0xffb060, intensity: 10, dist: 16 });
+    lights.push({ l: [u + 8, (at(q23E, u + 8) + at(q23W, u + 8)) / 2], y: 5.2, color: 0xffa858, intensity: 9, dist: 16 });
+    lights.push({ l: [u + 4, (at(q45E, u + 4) + at(q45W, u + 4)) / 2], y: 5.2, color: 0xffa858, intensity: 8, dist: 15 });
+    lights.push({ l: [u + 12, (at(q67E, u + 12) + at(q67W, u + 12)) / 2], y: 5.2, color: 0xffa858, intensity: 8, dist: 15 });
+  }
+  for (let u = pu0 + 8; u <= u89Max - 4; u += 18) {
+    lights.push({ l: [u, (at(q89E, u) + at(q89W, u)) / 2], y: 5.2, color: 0xffa858, intensity: 8, dist: 15 });
+  }
+  for (const st of stairs) lights.push({ l: [tunU + 0.5, st.vc], y: -1.6, color: 0xdfe8ff, intensity: 7, dist: 18 }); // underpass lighting beneath each platform
   lights.push({ l: [cMid - 12, 0], y: 9, color: 0xffc27a, intensity: 14, dist: 22 }, { l: [cMid + 12, 0], y: 9, color: 0xffc27a, intensity: 14, dist: 22 });
   for (let u = verU0 + 12; u <= verU1 - 12; u += 24) lights.push({ l: [u, body.v1 + 3], y: 1.2, color: 0x9ec8ff, intensity: 7, dist: 14 }); // cold LED uplights
   for (const [u, v] of [[-60, 70], [-20, 100], [30, 104], [70, 80], [100, 40], [60, 45], [-40, 50], [-90, 30], [-18, 70], [16, 70], [-44, 88], [40, 92]]) lights.push({ l: [u, v], y: 6.5, color: 0xffa040, intensity: 9, dist: 20, post: true }); // street lamps
@@ -203,13 +287,20 @@ export function planGare(gare, rail) {
 
   // ---------------------------------------------------------------- tram stop « Gare Centrale » (line C) and the start spot
   const stopTrack = stop ? stop.track : [W(stopL[0], stopL[1] - 22), W(stopL[0], stopL[1] + 40)];
-  const start = { l: [cMid + 6, at(q1W, cMid + 6) + 4.2], yaw: 0 };
+  const start = { l: [cMid + 6, at(q1W, cMid + 6) + 3.0], yaw: 0 };
 
   // ---------------------------------------------------------------- world space
   const wp = (pts) => pts.map(([u, v]) => W(u, v));
-  const walk = { q1: wp(q1Poly), q23: wp(q23Poly), hall: wp(hall), verriere: wp(verFloor), place: wp(place) };
+  const walk = {
+    q1: wp(q1Poly), q23: wp(q23Poly), q45: wp(q45Poly), q67: wp(q67Poly), q89: wp(q89Poly),
+    hall: wp(hall), verriere: wp(verFloor), place: wp(place),
+  };
   crossings.forEach((c, i) => { walk['crossing' + i] = wp(c); });
-  const zones = { 'Quais': [walk.q1, walk.q23, ...crossings.map((c, i) => walk['crossing' + i])], 'Hall de la Gare': [walk.hall, walk.verriere], 'Place de la Gare': [walk.place] };
+  const zones = {
+    'Quais': [walk.q1, walk.q23, walk.q45, walk.q67, walk.q89, ...crossings.map((c, i) => walk['crossing' + i])],
+    'Hall de la Gare': [walk.hall, walk.verriere],
+    'Place de la Gare': [walk.place],
+  };
   let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
   for (const poly of Object.values(walk)) for (const [x, z] of poly) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); z0 = Math.min(z0, z); z1 = Math.max(z1, z); }
   const m = G.margin;
@@ -217,8 +308,8 @@ export function planGare(gare, rail) {
   return {
     frame: { ox, oz, ux, uz, vx, vz, yaw }, W, L,
     body, pavilions, annexes, shed: shedParts, verFront, vFront, pavFront, northEdge,
-    q1W, q23E, q23W, at, crossings, cW, hall: H, cMid, rearDoors, arches, entrance: entr,
-    placeL: place, outer, walk, zones, walls, doors, items, spawns, lights,
+    q1W, q23E, q23W, q45E, q45W, q67E, q67W, q89E, q89W, at, crossings, cW, hall: H, cMid, rearDoors, arches, entrance: entr,
+    underpass, placeL: place, outer, walk, zones, walls, doors, items, spawns, lights,
     stop: { at: stop ? stop.at : W(...stopL), l: stopL, buffer: stop ? stop.buffer : W(stopL[0], stopL[1] - 22), track: stopTrack },
     start: { x: startW[0], z: startW[1], yaw: Math.atan2(-vx, -vz), l: start.l }, // facing the hall wall (toward +v)
     bounds: { x0: x0 - m, x1: x1 + m, z0: z0 - m, z1: z1 + m },

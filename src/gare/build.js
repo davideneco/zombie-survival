@@ -172,9 +172,15 @@ function flatPoly(pts, y, holes = []) {
   for (let i = 0; i < pos.count; i++) { pos.setY(i, y); nor.setXYZ(i, 0, 1, 0); }
   return g; // (the mirror turned the downward-facing triangles of the rotation back up : counter-clockwise from above)
 }
-// slab : polygon extruded from y0 to y1 (platforms)
-function slab(pts, y0, y1) {
-  const s = new THREE.Shape(pts.map(([u, v]) => new THREE.Vector2(v, u)));
+// slab : polygon extruded from y0 to y1 (platforms, with optional stairwell holes)
+function slab(pts, y0, y1, holes = []) {
+  const toV2 = (list, wantCw) => {
+    const v = list.map(([u, vv]) => new THREE.Vector2(vv, u));
+    if (THREE.ShapeUtils.isClockWise(v) !== wantCw) v.reverse();
+    return v;
+  };
+  const s = new THREE.Shape(toV2(pts, false));
+  for (const h of holes) s.holes.push(new THREE.Path(toV2(h, true)));
   const g = new THREE.ExtrudeGeometry(s, { depth: y1 - y0, bevelEnabled: false });
   g.rotateX(-Math.PI / 2); // (x, y, z) -> (x, z, -y) : X = v, Y = extrusion, Z = -u
   g.translate(0, y0, 0);
@@ -628,16 +634,18 @@ export function buildGareMeshes({ plan, gare, rail, pbr, tiled, props, envMap, r
     }
   }
 
-  // ================================================================ platforms, tracks, the dead train
+  // ================================================================ platforms, tracks, the underpass tunnel
   {
-    const top = G.platformY, bot = G.railY;
+    const top = G.platformY, bot = G.railY, U = plan.underpass;
+    const stairHoles = U ? U.stairs.map((s) => s.hole) : [];
     for (const p of gare.platforms || []) {
       const pts = loc(p.pts);
       if (/^230/.test(p.ref || '')) continue; // CTS platforms : see the tram stop
       let minU = Infinity, maxU = -Infinity; for (const [u] of pts) { minU = Math.min(minU, u); maxU = Math.max(maxU, u); }
       const c = pts.reduce((a, q) => [a[0] + q[0] / pts.length, a[1] + q[1] / pts.length], [0, 0]);
       if (Math.abs(c[0]) > 260 || c[1] < -140 || c[1] > -5) continue;
-      try { add(M.concrete, slab(pts, bot, top)); } catch { /* degenerate outline */ }
+      const pHoles = U ? U.stairs.filter((s) => s.ref === p.ref).map((s) => s.hole) : [];
+      try { add(M.concrete, slab(pts, bot, top, pHoles)); } catch { /* degenerate outline */ }
       // edge lines : white line at the edge, yellow tactile strip 0.9 m in (along the long edges)
       for (const side of [0, 1]) {
         const line = [];
@@ -651,8 +659,8 @@ export function buildGareMeshes({ plan, gare, rail, pbr, tiled, props, envMap, r
         }
       }
     }
-    // rail yard ground (ballast) under everything west of the building
-    add(M.ballast, flatPoly([[-260, -150], [260, -150], [260, B.v0 - 0.2], [-260, B.v0 - 0.2]], bot));
+    // rail yard ground (ballast) under everything west of the building, pierced at the underpass stairwells
+    add(M.ballast, flatPoly([[-260, -150], [260, -150], [260, B.v0 - 0.2], [-260, B.v0 - 0.2]], bot, stairHoles));
     // tracks (v0.80.0, railNet.trackGeometry) : SNCF Réseau shapes (rail.json) clipped to the station box, except the pieces the intro route
     // follows : the route itself is laid instead (moved beside quai 1, see CONFIG.railNet.route). Mesh frame : X = v, Z = -u.
     const tg = {}, toMesh = ([u, v]) => [v, -u];
@@ -689,6 +697,70 @@ export function buildGareMeshes({ plan, gare, rail, pbr, tiled, props, envMap, r
         for (let k = 0; k <= 4; k++) { const v = va + ((vb - va) * k) / 4; add(M.iron, beam([u, 0, v], [u, 1.05, v], 0.05)); }
       }
       for (let u = u0 + 0.25; u < u1; u += 0.3) add(M.rubber, bx(u, u + 0.02, va, vb, top - 0.003, top + 0.002)); // plank joints
+    }
+    // pedestrian underpass tunnel (passage souterrain : Quai 1 <-> Quais 2..9 underneath the parked train & tracks)
+    if (U) {
+      const { u: tu, hw, yFloor, yCeil, v0: tv0, v1: tv1, stairs } = U;
+      const ugMatSign = new THREE.MeshStandardMaterial({ map: signTex('SOUTERRAIN', 'QUAIS 1 à 9'), emissive: 0xffffff, emissiveIntensity: 0.45, roughness: 0.45 });
+      ugMatSign.emissiveMap = ugMatSign.map;
+      // Spine floor, ceiling (below rail ballast at y <= -1.07), west/end concrete walls & dado strips
+      add(M.floor, bx(tu - hw - 0.1, tu + hw + 0.3, tv0, tv1, yFloor - 0.25, yFloor));
+      add(M.concrete, bx(tu - hw - 0.25, tu + hw + 0.25, tv0 - 0.2, tv1 + 0.2, yCeil, yCeil + 0.24));
+      add(M.concrete, bx(tu - hw - 0.25, tu - hw, tv0 - 0.2, tv1 + 0.2, yFloor, yCeil));
+      add(M.concrete, bx(tu - hw, tu + hw, tv0 - 0.25, tv0, yFloor, yCeil));
+      add(M.concrete, bx(tu - hw, tu + hw, tv1, tv1 + 0.25, yFloor, yCeil));
+      add(M.tactile, bx(tu - hw + 0.02, tu - hw + 0.06, tv0, tv1, yFloor + 0.95, yFloor + 1.06));
+      let curV = tv0;
+      for (const s of [...stairs].sort((a, b) => a.v0 - b.v0)) {
+        if (s.v0 > curV + 0.05) {
+          add(M.concrete, bx(tu + hw, tu + hw + 0.25, curV, s.v0, yFloor, yCeil));
+          add(M.tactile, bx(tu + hw - 0.04, tu + hw + 0.02, curV, s.v0, yFloor + 0.95, yFloor + 1.06));
+        }
+        curV = s.v1;
+      }
+      if (tv1 > curV + 0.05) add(M.concrete, bx(tu + hw, tu + hw + 0.25, curV, tv1, yFloor, yCeil));
+      // Ceiling LED battens along tunnel axis
+      for (let v = tv0 + 2; v <= tv1 - 2; v += 5.5) add(M.led, bx(tu - 0.14, tu + 0.14, v - 0.85, v + 0.85, yCeil - 0.05, yCeil));
+      // Stairwells + steps + surface balustrades + portal signs
+      const N_STEPS = 18;
+      for (const s of stairs) {
+        // Side retaining walls & west head bulkhead above portal lintel
+        add(M.concrete, bx(s.u0, s.u1, s.v0 - 0.16, s.v0, yFloor, 0.04));
+        add(M.concrete, bx(s.u0, s.u1, s.v1, s.v1 + 0.16, yFloor, 0.04));
+        add(M.concrete, bx(s.u0 - 0.18, s.u0 + 0.04, s.v0, s.v1, yCeil, 0.04));
+        add(M.concrete, bx(tu + hw, s.uLand, s.v0, s.v1, yFloor - 0.25, yFloor));
+        // Concrete steps ascending from (uLand, yFloor) to (u1, 0)
+        for (let k = 0; k < N_STEPS; k++) {
+          const ua = s.uLand + (k / N_STEPS) * (s.u1 - s.uLand), ub = s.uLand + ((k + 1) / N_STEPS) * (s.u1 - s.uLand);
+          const yTop = yFloor + ((k + 1) / N_STEPS) * (0 - yFloor);
+          add(M.concrete, bx(ua, ub, s.v0, s.v1, yFloor - 0.15, yTop));
+        }
+        add(M.tactile, flatPoly([[s.u1 - 0.35, s.v0], [s.u1 + 0.05, s.v0], [s.u1 + 0.05, s.v1], [s.u1 - 0.35, s.v1]], 0.005));
+        // U-shaped surface balustrade (west head + 2 sides)
+        for (const [a, b] of [[[s.u0, s.v0], [s.u1, s.v0]], [[s.u0, s.v1], [s.u1, s.v1]], [[s.u0, s.v0], [s.u0, s.v1]]]) {
+          add(M.iron, beam([a[0], 1.0, a[1]], [b[0], 1.0, b[1]], 0.065));
+          add(M.iron, beam([a[0], 0.54, a[1]], [b[0], 0.54, b[1]], 0.04));
+          const n = Math.max(2, Math.round(Math.hypot(b[0] - a[0], b[1] - a[1]) / 1.1));
+          for (let i = 0; i <= n; i++) { const f = i / n; add(M.iron, beam([a[0] + (b[0] - a[0]) * f, 0, a[1] + (b[1] - a[1]) * f], [a[0] + (b[0] - a[0]) * f, 1.0, a[1] + (b[1] - a[1]) * f], 0.04)); }
+        }
+        // Overhead entrance gantry + glowing sign at stair head
+        add(M.iron, beam([s.u1, 0, s.v0 - 0.08], [s.u1, 2.55, s.v0 - 0.08], 0.075));
+        add(M.iron, beam([s.u1, 0, s.v1 + 0.08], [s.u1, 2.55, s.v1 + 0.08], 0.075));
+        add(M.iron, beam([s.u1, 2.55, s.v0 - 0.12], [s.u1, 2.55, s.v1 + 0.12], 0.09));
+        for (const sd of [1, -1]) {
+          const g = new THREE.PlaneGeometry(1.9, 0.46);
+          g.rotateY(sd > 0 ? Math.PI : 0);
+          g.translate(s.vc, 2.55, -s.u1 - sd * 0.06);
+          add(ugMatSign, g);
+        }
+        // Underground platform direction plaque above portal opening inside tunnel
+        const ugLbl = new THREE.MeshStandardMaterial({ map: signTex('↑ ' + s.label, s.sub), emissive: 0xffffff, emissiveIntensity: 0.42, roughness: 0.45 });
+        ugLbl.emissiveMap = ugLbl.map;
+        const gp = new THREE.PlaneGeometry(2.0, 0.48);
+        gp.rotateY(-Math.PI / 2);
+        gp.translate(tu + hw - 0.04, yCeil - 0.30, -s.vc);
+        add(ugLbl, gp);
+      }
     }
   }
 
@@ -1159,8 +1231,14 @@ export function buildGareMeshes({ plan, gare, rail, pbr, tiled, props, envMap, r
   // ---------------------------------------------------------------- platform signs and screens (emissive, local)
   {
     const mk = (t, s) => { const m = new THREE.MeshStandardMaterial({ map: signTex(t, s), emissive: 0xffffff, emissiveIntensity: 0.4, roughness: 0.5 }); m.emissiveMap = m.map; return m; };
-    const signs = [[mk('Quai 1', 'Voie A · B'), (u) => [u, B.v0 - 4.5]], [mk('Quai 2 / 3', 'Voies C · D'), (u) => [u, (plan.at(plan.q23E, u) + plan.at(plan.q23W, u)) / 2]]];
-    for (const [mat, at] of signs) for (const u of [-40, 0, 40]) {
+    const signs = [
+      [mk('Quai 1', 'Voies A · B'), (u) => [u, B.v0 - 4.5]],
+      [mk('Quai 2 / 3', 'Voies C · D'), (u) => [u, (plan.at(plan.q23E, u) + plan.at(plan.q23W, u)) / 2]],
+      [mk('Quai 4 / 5 / 30', 'Voies E · F'), (u) => [u, (plan.at(plan.q45E, u) + plan.at(plan.q45W, u)) / 2]],
+      [mk('Quai 6 / 7', 'Voies G · H'), (u) => [u, (plan.at(plan.q67E, u) + plan.at(plan.q67W, u)) / 2]],
+      [mk('Quai 8 / 9', 'Voies I · J'), (u) => [u, (plan.at(plan.q89E, u) + plan.at(plan.q89W, u)) / 2]],
+    ];
+    for (const [mat, at] of signs) for (const u of [-40, -14, 40]) {
       const [uu, vv] = at(u);
       add(M.iron, beam([uu, 0, vv], [uu, 3.1, vv], 0.08));
       for (const s of [1, -1]) { const g = new THREE.PlaneGeometry(1.7, 0.42); g.rotateY(s > 0 ? Math.PI : 0); g.translate(vv, 3.3, -uu - s * 0.03); add(mat, g); }

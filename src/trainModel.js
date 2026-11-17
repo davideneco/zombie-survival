@@ -256,14 +256,14 @@ export function floorOfCar(Q, u, w = 0, relY = null) {
       // The central divider wall at w in [-0.08, +0.08] separates the left staircase (w < 0) from the right lower ramp (w >= 0).
       // Guard against corner grazing from the lower saloon (relY < 0.70) or upper saloon (relY > 1.85):
       if (w >= -0.08 && a < 4.50 && relY != null && relY > 1.85) return FU;
-      if (w < 0 && !(a < 4.50 && relY != null && relY < 0.70)) {
+      if (w < -0.08 && !(a < 4.50 && relY != null && relY < 0.70)) {
         const t = (5.55 - a) / 1.70; // 0 at vestibule (5.55), 1 at upper landing (3.85)
         return F0 + clamp(t, 0, 1) * (FU - F0);
       }
       const tLow = (5.55 - a) / 1.70; // 0 at vestibule (5.55), 1 at lower saloon (3.85)
       return F0 + clamp(tLow, 0, 1) * (FL - F0);
     }
-    return (relY != null && relY > 1.55) ? FU : FL;
+    return (relY != null && relY > 1.45) ? FU : FL;
   }
   let t = 0;
   for (const z of Q.zones) {

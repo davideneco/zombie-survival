@@ -41,13 +41,16 @@ export class Tram {
     this.reg = game.world.tram?.trackById || { [track.id]: track }; // voies par identifiant : lignes et itinéraires des aiguillages (v0.41.0)
     this.jn = game.world.tram?.net.junction || null;
     this.sw = 0; // aiguillage : 0 tout droit, 1 dévié (voir junctionStep)
-    this.def = { name: 'TRAM', seats: 16, camArm: C.camArm, maxSpeed: D.maxSpeed, hp: T.hp, zombieHit: T.zombieHit, roadkill: { vmin: T.hit.zombieSpeed }, tank: 1 };
     this.n = C.modules; this.M = C.module; this.L = this.n * this.M;
-    this.seats = Array(16).fill(null);
+    if (!CAR) CAR = carGeometries();
+    const sd = CAR.seats, front = sd.find((s) => s.driver && s.module === this.n - 1), rear = sd.find((s) => s.driver && s.module === 0);
+    const pass = sd.filter((s) => !s.driver).sort((a, b) => a.module - b.module || a.side - b.side || b.hip[2] - a.hip[2]);
+    const seatList = [front, rear, ...pass].filter(Boolean);
+    this.def = { name: 'TRAM', seats: seatList.length, camArm: C.camArm, maxSpeed: D.maxSpeed, hp: T.hp, zombieHit: T.zombieHit, roadkill: { vmin: T.hit.zombieSpeed }, tank: 1 };
+    this.seats = Array(seatList.length).fill(null);
     this.pos = new THREE.Vector3(); this.yaw = 0; this.dyaw = 0; this.lean = 0; this.throttle = 0;
     this._o = {}; this._o2 = {}; this._out = new THREE.Vector3();
     // ---- modèle
-    if (!CAR) CAR = carGeometries();
     const M = mats();
     this.group = new THREE.Group(); this.group.rotation.order = 'YXZ'; scene.add(this.group);
     this.mods = CAR.modules.map((m, i) => {
@@ -61,9 +64,7 @@ export class Tram {
       return { g, inner, body, dark, glass, leaves: m.leaves, leafBase: base, glassLeaves: m.glassLeaves || [], glassLeafBase: baseG, pose: { x: 0, z: 0, yaw: 0, tx: 1, tz: 0, dyaw: 0 }, openF: -1 };
     });
     // places : 0 conducteur avant, 1 conducteur arrière, puis les passagers (rangés par module, côté gauche puis droit)
-    const sd = CAR.seats, front = sd.find((s) => s.driver && s.module === this.n - 1), rear = sd.find((s) => s.driver && s.module === 0);
-    const pass = sd.filter((s) => !s.driver).sort((a, b) => a.module - b.module || a.side - b.side || b.hip[2] - a.hip[2]);
-    this.model = { group: this.group, seats: [front, rear, ...pass].map((s) => ({ hip: s.hip, eye: s.eye, ry: s.ry, module: s.module, driver: s.driver, twist: s.driver ? 0 : 2.2 })), wheelRadius: 0.4, steer: null, wheels: [] };
+    this.model = { group: this.group, seats: seatList.map((s) => ({ hip: s.hip, eye: s.eye, ry: s.ry, module: s.module, driver: s.driver, twist: s.driver ? 0 : 2.2 })), wheelRadius: 0.4, steer: null, wheels: [] };
     this.doorSpots = CAR.doorsAt;
     this.interior = interiorOf(this); // sièges, pupitres, parois : collision locale du joueur debout (v0.40.0)
     this.doors = { open: false, f: 0 };
