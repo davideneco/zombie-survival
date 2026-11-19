@@ -5,6 +5,7 @@ import { shareProgramFlags } from './programShare.js';
 import { CONFIG, papAmmoMult } from './config.js';
 import { buildRealWorld } from './realworld.js';
 import { Player } from './player.js';
+import { makeGrenadeModel } from './fpHands.js';
 import { Zombie, zombieTextures } from './zombie.js';
 import { Boss } from './boss.js';
 import { Tanner } from './tanner.js';
@@ -96,7 +97,9 @@ const gfx = createGraphics({ renderer, scene, camera, hemi, moon, settings });
 gfx.setTone();
 let appliedQuality = null;
 function applyVisualSettings() {
-  hemi.intensity = 0.28 * settings.brightness;
+  const sb = scene.userData.skyBase;
+  if (sb) sb.hemiI = sb.hemiBase * settings.brightness;
+  hemi.intensity = (sb ? sb.hemiI : 0.28 * settings.brightness);
   gfx.applyExposure();
   const q = settings.quality ?? 1;
   if (q === appliedQuality) return;
@@ -126,8 +129,6 @@ const HALO_GEO = new THREE.SphereGeometry(0.6, 12, 10);
 const JERRY_GEO = new THREE.BoxGeometry(0.34, 0.46, 0.16);
 const JERRY_NECK = new THREE.CylinderGeometry(0.035, 0.035, 0.1, 8);
 const JERRY_HANDLE = new THREE.BoxGeometry(0.1, 0.06, 0.05);
-const NADE_GEO = new THREE.SphereGeometry(0.09, 10, 8);
-const NADE_MAT = new THREE.MeshStandardMaterial({ color: 0x2f3b1f, roughness: 0.6, metalness: 0.4 });
 const TRACER_MATS = new Map();
 
 // Modèles 3D distincts par type de bonus (construits et mis en cache une seule fois : aucune allocation de shader en pleine partie)
@@ -328,8 +329,8 @@ const game = {
   },
 
   // Bruit de tir (chaque arme a le sien) ; v : volume, dist : distance de la source en mètres
-  weaponSound(id, v = 1, dist = 0) {
-    sfx.gun(id, v, dist);
+  weaponSound(id, v = 1, dist = 0, silenced = false) {
+    sfx.gun(id, v, dist, silenced);
   },
 
   // Zombies seuls (les murs sont gérés par world.rayHit sur la grande carte)
@@ -804,9 +805,10 @@ const game = {
       } else {
         if (this.points < ww.price) { sfx.deny(); return; }
         this.points -= ww.price;
-        p.giveWeapon(ww.id);
+        const nw = p.giveWeapon(ww.id, 0, 'wall');
         sfx.buy();
-        hud.announce(ww.name, 'Arme acquise !', 2000);
+        const attNames = (nw?.atts || []).map((k) => CONFIG.attachments?.defs?.[k]?.name).filter(Boolean);
+        hud.announce(ww.name, attNames.length ? attNames.join(' · ') : 'Arme acquise !', 2500);
       }
       return;
     }
@@ -877,6 +879,10 @@ const game = {
   machinePrompt(m) {
     const p = this.player;
     if (m.type === 'clock') return this.finalePrompt(m);
+    if (m.type === 'nvg') {
+      if (p.hasNvg) return `${CONFIG.nvg.name} (acquise — ${game.binds.tag('nvg')} activer / désactiver)`;
+      return `${game.binds.tag('interact')} Acheter Lunettes de vision nocturne (${CONFIG.nvg.price} pts)`;
+    }
     if (m.type === 'perk') {
       if (p.perks[m.id]) return `${m.name} (déjà acquis)`;
       if (this.perkFx?.full()) return `${m.name} — ${this.perkFx.slots} atouts au maximum`;
@@ -895,6 +901,15 @@ const game = {
       this.points -= F.price;
       if (this.isClient) this.net?.send({ t: 'finale_req' });
       else this.startFinale();
+      return;
+    }
+    if (m.type === 'nvg') {
+      if (p.hasNvg) { p.toggleNvg(); return; }
+      if (this.points < CONFIG.nvg.price) { sfx.deny(); return; }
+      this.points -= CONFIG.nvg.price;
+      p.grantNvg(true);
+      sfx.buy();
+      hud.announce('VISION NOCTURNE', `Appuyez sur ${game.binds.tag('nvg')} pour activer / désactiver`, 3000);
       return;
     }
     if (m.type === 'perk') {
@@ -977,11 +992,15 @@ const game = {
 
   // ---------------------------------------------------------- Grenades / explosions
   throwGrenade(origin, vel, mine, fromPid = null) {
-    const mesh = new THREE.Mesh(NADE_GEO, NADE_MAT);
+    const mesh = makeGrenadeModel({ withPin: false, withLed: true, scale: 1.05 });
     mesh.position.copy(origin);
-    mesh.castShadow = true;
     scene.add(mesh);
-    this.grenadesLive.push({ mesh, pos: origin.clone(), vel: vel.clone(), t: CONFIG.grenade.fuse, mine, owner: mine ? null : fromPid, tram: mine ? this.player.onTram?.v || null : null }); // tram : lancée de l'intérieur d'une rame (v0.40.0) : elle ignore la caisse et rebondit sur le plancher
+    const led = mesh.getObjectByName('fuseLed') || null;
+    this.grenadesLive.push({
+      mesh, led, pos: origin.clone(), vel: vel.clone(), t: CONFIG.grenade.fuse,
+      rx: 7 + Math.random() * 5, ry: (Math.random() - 0.5) * 8,
+      mine, owner: mine ? null : fromPid, tram: mine ? this.player.onTram?.v || null : null,
+    }); // tram : lancée de l'intérieur d'une rame (v0.40.0) : elle ignore la caisse et rebondit sur le plancher
     if (mine && this.isMultiplayer) {
       this.net?.send({ t: 'nade', o: { x: origin.x, y: origin.y, z: origin.z }, v: { x: vel.x, y: vel.y, z: vel.z }, tr: this.player.onTram ? this.player.onTram.v.id : undefined });
     }
@@ -989,11 +1008,25 @@ const game = {
 
   updateGrenades(dt) {
     const G = 18;
+    const allySelf = (g) => (CONFIG.grenade.allyDamage ? true : g.mine);
+    const pulseLed = (g) => {
+      if (!g.led) return;
+      const frac = 1 - Math.max(0, g.t) / CONFIG.grenade.fuse;
+      const freq = 5 + frac * 24;
+      const p = 0.5 + 0.5 * Math.sin((CONFIG.grenade.fuse - g.t) * freq * Math.PI);
+      g.led.material.emissiveIntensity = 0.5 + 3.2 * p;
+    };
     for (let i = this.grenadesLive.length - 1; i >= 0; i--) {
       const g = this.grenadesLive[i];
       g.t -= dt;
+      pulseLed(g);
       if (g.tram?.isTrain && this.trainGrenadeStep(g, g.tram, dt, G)) { // inside the train (v0.81.0) : simulated in the coach frame
-        if (g.t <= 0) { scene.remove(g.mesh); this.grenadesLive.splice(i, 1); this.explode(g.pos, CONFIG.grenade.radius, CONFIG.grenade.damage, g.mine ? null : g.owner, 0xff8a2a, true); }
+        if (g.t <= 0) {
+          g.led?.material?.dispose?.();
+          scene.remove(g.mesh);
+          this.grenadesLive.splice(i, 1);
+          this.explode(g.pos, CONFIG.grenade.radius, CONFIG.grenade.damage, g.mine ? null : g.owner, 0xff8a2a, allySelf(g));
+        }
         continue;
       }
       g.vel.y -= G * dt;
@@ -1005,7 +1038,13 @@ const game = {
       const nx = pushed.x - g.pos.x, nz = pushed.z - g.pos.z, l = Math.hypot(nx, nz);
       if (l > 1e-4) {
         const ux = nx / l, uz = nz / l, dot = g.vel.x * ux + g.vel.z * uz;
-        if (dot < 0) { g.vel.x -= 1.6 * dot * ux; g.vel.z -= 1.6 * dot * uz; }
+        if (dot < 0) {
+          g.vel.x -= 1.6 * dot * ux; g.vel.z -= 1.6 * dot * uz;
+          if (Math.abs(dot) > 1.8) {
+            const dist = Math.hypot(g.pos.x - this.player.pos.x, g.pos.z - this.player.pos.z);
+            if (dist < 28) sfx.grenadeBounce?.(Math.min(1, Math.abs(dot) / 10) * Math.max(0.15, 1 - dist / 28));
+          }
+        }
         g.pos.x = pushed.x; g.pos.z = pushed.z;
       }
       let gy = world.floorAt ? world.floorAt(g.pos.x, g.pos.z, g.pos.y + 0.3, this._gfl || (this._gfl = { y: 0, region: 0 })).y + 0.09 : 0.09;
@@ -1026,14 +1065,25 @@ const game = {
           const fy = t.walkFloorAt(g.pos.x, g.pos.z); if (fy != null) gy = fy + 0.09;
         } else { const tl = g.tram.worldToWalk(g.pos.x, g.pos.z, this._gtl || (this._gtl = { u: 0, w: 0 })); if (Math.abs(tl.w) < 1.15 && Math.abs(tl.u) < g.tram.interior.uEnd) gy = CONFIG.tram.car.floor + 0.09; } // plancher de la rame
       }
-      if (g.pos.y < gy) { g.pos.y = gy; g.vel.y = Math.abs(g.vel.y) * 0.35; g.vel.x *= 0.6; g.vel.z *= 0.6; if (g.vel.y < 0.6) g.vel.y = 0; }
+      if (g.pos.y < gy) {
+        const impact = Math.abs(g.vel.y);
+        g.pos.y = gy; g.vel.y = impact * 0.35; g.vel.x *= 0.6; g.vel.z *= 0.6;
+        g.rx *= 0.62; g.ry *= 0.62;
+        if (impact > 1.6) {
+          const dist = Math.hypot(g.pos.x - this.player.pos.x, g.pos.z - this.player.pos.z);
+          if (dist < 28) sfx.grenadeBounce?.(Math.min(1, impact / 11) * Math.max(0.15, 1 - dist / 28));
+        }
+        if (g.vel.y < 0.6) g.vel.y = 0;
+      }
       g.mesh.position.copy(g.pos);
-      g.mesh.rotation.x += dt * 8;
+      const spd = Math.hypot(g.vel.x, g.vel.y, g.vel.z);
+      if (spd > 0.12) { g.mesh.rotation.x += dt * g.rx; g.mesh.rotation.y += dt * g.ry; }
       if (Number.isNaN(before.x)) g.t = 0;
       if (g.t <= 0) {
+        g.led?.material?.dispose?.();
         scene.remove(g.mesh);
         this.grenadesLive.splice(i, 1);
-        this.explode(g.pos, CONFIG.grenade.radius, CONFIG.grenade.damage, g.mine ? null : g.owner, 0xff8a2a, true);
+        this.explode(g.pos, CONFIG.grenade.radius, CONFIG.grenade.damage, g.mine ? null : g.owner, 0xff8a2a, allySelf(g));
       }
     }
   },
@@ -1064,17 +1114,22 @@ const game = {
       }
     }
     if (L.y > ceil) { L.y = ceil; if (L.vy > 0) L.vy *= -0.3; }
-    if (L.y < floor) { L.y = floor; L.vy = Math.abs(L.vy) * 0.35; L.vu *= 0.6; L.vw *= 0.6; if (L.vy < 0.6) L.vy = 0; }
+    if (L.y < floor) {
+      const impact = Math.abs(L.vy);
+      L.y = floor; L.vy = impact * 0.35; L.vu *= 0.6; L.vw *= 0.6;
+      if (impact > 1.6) sfx.grenadeBounce?.(Math.min(1, impact / 11) * 0.8);
+      if (L.vy < 0.6) L.vy = 0;
+    }
     t.walkToWorld(L.u, L.w, L.y, g.pos);
     g.mesh.position.copy(g.pos);
-    if (Math.abs(L.vu) + Math.abs(L.vw) > 0.05 || L.vy) g.mesh.rotation.x += dt * 8;
+    if (Math.abs(L.vu) + Math.abs(L.vw) > 0.05 || L.vy) { g.mesh.rotation.x += dt * g.rx; g.mesh.rotation.y += dt * g.ry; }
     return true;
   },
 
   // Explosion : effets pour tout le monde ; dégâts aux zombies calculés par l'hôte (ou en solo).
   // owner : id du joueur distant à récompenser, null = joueur local.
   // self : dégâts maximaux au joueur local (décroissent avec la distance) ; true = ceux des grenades ; faux = aucun
-  // (le M79 ne blesse que son tireur, une grenade blesse tout le monde). src : origine des dégâts reçus ('blast').
+  // (le M79 et les grenades ne blessent jamais les PV des alliés : seul le lanceur peut subir des dégâts propres). src : origine ('blast').
   explode(pos, radius, damage, owner, color, self = false, src = 'blast') {
     fx.explosion(pos.x, pos.y, pos.z, radius, color);
     const p = this.player;
@@ -1439,6 +1494,8 @@ const game = {
       ping: this.netPing || 0,
       w: p.curW.id,
       pap: p.curW.pap | 0,                                           // niveau du Pack-a-Punch (0 à 3) : couleur et accessoires chez les coéquipiers
+      att: p.curW.atts || [],                                        // accessoires aléatoires montés sur l'arme
+      nvg: p.nvgOn ? 1 : 0,                                          // lunettes de vision nocturne abaissées
       rl: p.curW.reloading ? 1 : 0,
       ads: p.aiming ? 1 : 0,
       cr: p.crouching ? 1 : 0,
@@ -1859,6 +1916,9 @@ const game = {
     if (world.wallWeapons) {
       for (const ww of world.wallWeapons) pois.push({ x: ww.pos.x, z: ww.pos.z, color: '#ffaa33' });
     }
+    if (world.machines) {
+      for (const m of world.machines) if (m.type === 'nvg') pois.push({ x: m.pos.x, z: m.pos.z, color: '#39ff6a' });
+    }
     hud.drawRadar(p, this.zombies, pois, [...this.remotes.values()]);
 
     // HUD
@@ -2252,7 +2312,7 @@ function setupNetworkHandlers(net) {
     if (!m.nt) game.tracer(o, e, m.tc); // pas de traînée pour un projectile (M79) ; couleur propre à l'arme (carreau)
     game.remotes.get(m.from)?.fire();
     const d = Math.hypot(m.origin.x - game.player.pos.x, m.origin.z - game.player.pos.z);
-    if (d < 80) game.weaponSound(m.w, Math.max(0.25, 1 - d / 100), d);
+    if (d < 80) game.weaponSound(m.w, Math.max(0.25, 1 - d / 100), d, !!m.sil);
   });
 
   // Dégâts reçus
@@ -2932,7 +2992,7 @@ function precompileShaders() {
   const add = (o) => { scene.add(o); temp.push(o); };
   const sp = { type: 'ground', pos: world.startPos.clone() };
   const zs = [new Zombie(scene, sp, 100, 1, () => {}), new Zombie(scene, sp, 100, 1, () => {}, null, { crawler: true }), new Zombie(scene, sp, 100, 1, () => {}, null, { boss: true })];
-  add(new THREE.Mesh(NADE_GEO, NADE_MAT));
+  add(makeGrenadeModel({ withPin: true, withLed: true }));
   add(makeTeddy());
   const disp = makeDisplay(); add(disp.root); disp.showPap('rifle');
   for (const k of ['armored', 'bloat']) zs.push(new Zombie(scene, sp, 100, 1, () => {}, null, { kind: k }));

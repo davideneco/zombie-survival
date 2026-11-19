@@ -130,6 +130,8 @@ export class RemotePlayer {
     if (s.ping != null) this.ping = s.ping | 0;
     this.weapon = s.w;
     this.pap = s.pap | 0; // niveau du Pack-a-Punch (0 à 3)
+    this.atts = Array.isArray(s.att) ? s.att : null;
+    this.nvg = !!s.nvg;
     this.reloading = !!s.rl;
     this.aiming = !!s.ads;
     this.downed = !!s.downed;
@@ -170,7 +172,7 @@ export class RemotePlayer {
     if (this.ride) { // sur une moto : position et cap suivent la moto, jambes pliées ; le passager peut tourner le buste pour tirer
       const { v, seat } = this.ride;
       v.hipWorld(seat, this.pos);
-      seatedUpdate(this.group, v, seat, this.avatar, { dt, aimYaw: this.tyaw, pitch: this.pitch, weapon: this.weapon, pap: this.pap, reloading: this.reloading, aiming: this.aiming, fire: this.fireNext });
+      seatedUpdate(this.group, v, seat, this.avatar, { dt, aimYaw: this.tyaw, pitch: this.pitch, weapon: this.weapon, pap: this.pap, atts: this.atts, nvg: this.nvg, reloading: this.reloading, aiming: this.aiming, fire: this.fireNext });
       this.fireNext = false;
       this.tag.visible = true;
       this.updateMarks(dt, view);
@@ -209,8 +211,8 @@ export class RemotePlayer {
     const speed = Math.hypot(this.vel.x, this.vel.z);
     const fwd = -(this.vel.x * Math.sin(ya) + this.vel.z * Math.cos(ya)); // -z = avant
     const isDown = this.downed || this.dead;
-    this.avatar.setWeapon(this.weapon, this.pap);
-    this.avatar.update({ dt, speed: this.dead ? 0 : speed, fwd, pitch: this.pitch, reloading: this.reloading, aiming: this.aiming, crouching: this.crouching, downed: isDown, fire: this.fireNext });
+    this.avatar.setWeapon(this.weapon, this.pap, this.atts);
+    this.avatar.update({ dt, speed: this.dead ? 0 : speed, fwd, pitch: this.pitch, reloading: this.reloading, aiming: this.aiming, crouching: this.crouching, downed: isDown, fire: this.fireNext, nvg: this.nvg });
     this.fireNext = false;
     // à terre : allongé sur le dos, rampe lentement si en mouvement
     this.group.rotation.x += ((isDown ? -Math.PI / 2 : 0) - this.group.rotation.x) * k;

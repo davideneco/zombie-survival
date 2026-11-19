@@ -15,14 +15,15 @@ export function weaponKit() {
   const built = buildWeaponModels(holder);
   const models = {}, hands = {}, muzzles = {};
   for (const [id, grp] of Object.entries(built.vms)) {
-    const hs = [], skins = [];
-    grp.traverse((o) => { if (o.userData.skin) { hs.push(o.position.clone().add(grp.position)); skins.push(o); } });
-    for (const o of skins) o.parent.remove(o);
-    hs.sort((a, b) => a.z - b.z); // main avant (z le plus négatif) puis main arrière
     holder.remove(grp);
     grp.visible = true;
     models[id] = grp;
-    hands[id] = { front: hs.length > 1 ? hs[0] : null, back: hs[hs.length - 1] || new THREE.Vector3(0, -0.11, 0.08) };
+    const bh = built.hands[id];
+    hands[id] = {
+      front: bh?.front ? bh.front.clone() : null,
+      fg: bh?.fg ? bh.fg.clone() : null,
+      back: bh?.back ? bh.back.clone() : new THREE.Vector3(0, -0.11, 0.08),
+    };
     muzzles[id] = built.info[id].muzzle;
   }
   KIT = { models, hands, muzzles };
@@ -30,18 +31,18 @@ export function weaponKit() {
 }
 
 // Copie d'une arme (même orientation que la vue à la première personne : -z vers l'avant).
-// level : niveau du Pack-a-Punch (0 à 3) : accessoires du niveau (viewmodels.js) et reflet de sa couleur.
-export function cloneWeapon(id, level = 0) {
+// level : niveau du Pack-a-Punch (0 à 3) ; atts : liste d'accessoires aléatoires (optionnel).
+export function cloneWeapon(id, level = 0, atts = null) {
   const kit = weaponKit();
   const mid = kit.models[id] ? id : 'rifle';
   const src = kit.models[mid];
   const g = src.clone(true);
   g.visible = true;
   level = level | 0;
-  if (level > 0) {
-    attachAccessories(g, mid, level, src); // les accessoires sont construits une fois par arme et niveau, puis clonés (géométries partagées)
-    papify(g, level);
+  if (level > 0 || (Array.isArray(atts) && atts.length)) {
+    attachAccessories(g, mid, level, src, { atts });
   }
+  if (level > 0) papify(g, level);
   return g;
 }
 

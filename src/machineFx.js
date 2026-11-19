@@ -163,9 +163,10 @@ export function installMachineFx(game, { world, hud, sfx, fx }) {
       const id = r.result;
       this.endBoxRoll();
       if (isMe(pid)) {
-        this.player.giveWeapon(id);
+        const nw = this.player.giveWeapon(id, 0, 'box');
         sfx.buy();
-        hud.announce(CONFIG.weapons[id].name, 'Boîte mystère', 2500);
+        const attNames = (nw?.atts || []).map((k) => CONFIG.attachments?.defs?.[k]?.name).filter(Boolean);
+        hud.announce(CONFIG.weapons[id].name, attNames.length ? `Boîte mystère · ${attNames.join(' · ')}` : 'Boîte mystère', 3000);
       } else {
         hud.announce(`${nameOf(pid)} a pris ${CONFIG.weapons[id].name}`, 'Boîte mystère', 2000);
       }

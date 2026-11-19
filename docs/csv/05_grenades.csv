@@ -5,5 +5,5 @@ Gagnées par manche;2;
 Retardement;2,2;s
 Rayon;6,5;m
 Dégâts au centre;900;PV
-Dégâts max aux joueurs proches;60;PV
+Dégâts max au lanceur (alliés épargnés);60;PV
 Chance d'arracher les jambes (zombie survivant);50;%

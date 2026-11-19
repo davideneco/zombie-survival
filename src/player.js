@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { CONFIG, PAP_LEVELS, falloffMult, papPulse, papStats } from './config.js';
-import { buildWeaponModels, attachAccessories } from './viewmodels.js';
+import { buildWeaponModels, attachAccessories, rollAttachments } from './viewmodels.js';
+import { FPHands } from './fpHands.js';
 import { RideCam } from './rideCam.js';
 import { flashMaterial } from './fx.js';
 
@@ -30,6 +31,9 @@ export class Player {
     this.lastMouse = -99;  // game.time du dernier mouvement de souris (recentrage de la vue du conducteur)
     this.ride = new RideCam(this); // vue à la troisième personne sur une moto
     this.mc = 0; // compteur de coups de couteau (p_state.mc) : les coéquipiers jouent l'animation à chaque incrément
+    this.hasNvg = false;
+    this.nvgOn = false;
+    this.nvgK = 0;
 
     camera.rotation.order = 'YXZ';
     scene.add(camera);
@@ -51,13 +55,43 @@ export class Player {
   get maxHealth() { return this.perks.juggernog ? 250 : CONFIG.player.maxHealth; }
   get maxWeapons() { return this.perks.mulekick ? 3 : 2; }
 
-  // Statistiques effectives d'une arme : base + Pack-a-Punch (niveau w.pap, 0 à 3) + atouts
+  // Statistiques effectives d'une arme : base + Pack-a-Punch (niveau w.pap, 0 à 3) + accessoires aléatoires + atouts
   statsOf(w) {
     const lv = w.pap | 0;
-    const key = `${lv}|${this.statsVersion}`;
+    const atts = Array.isArray(w.atts) ? w.atts : [];
+    const key = `${lv}|${atts.join(',')}|${this.statsVersion}`;
     if (w._statsKey === key) return w._stats;
     const base = CONFIG.weapons[w.id];
     const s = { ...base, ...papStats(base, lv) };
+    // Accessoires aléatoires : chargeur, viseur, silencieux, poignée, laser…
+    let magM = 1, resM = 1, relM = 1, sprM = 1, hipM = 1, recM = 1, rngM = 1, adsDelta = 0, silenced = false;
+    const attLabels = [];
+    const defs = CONFIG.attachments?.defs || {};
+    for (const aId of atts) {
+      const d = defs[aId];
+      if (!d) continue;
+      attLabels.push(d.short || d.name);
+      if (d.magMult) magM *= d.magMult;
+      if (d.reserveMult) resM *= d.reserveMult;
+      if (d.reloadMult) relM *= d.reloadMult;
+      if (d.spreadMult) sprM *= d.spreadMult;
+      if (d.hipSpreadMult) hipM *= d.hipSpreadMult;
+      if (d.recoilMult) recM *= d.recoilMult;
+      if (d.rangeMult) rngM *= d.rangeMult;
+      if (d.adsFovDelta) adsDelta += d.adsFovDelta;
+      if (d.silenced) silenced = true;
+    }
+    if (magM !== 1) s.magSize = Math.max(1, Math.round(s.magSize * magM));
+    if (resM !== 1) s.maxReserve = Math.max(s.magSize, Math.round(s.maxReserve * resM));
+    if (relM !== 1) s.reloadTime *= relM;
+    if (sprM !== 1) s.spread *= sprM;
+    if (rngM !== 1) s.range = Math.round(s.range * rngM);
+    s.hipSpreadMult = hipM;
+    s.recoilMult = recM;
+    s.adsZoomBonus = adsDelta; // zoom optique supplémentaire sans cacher le modèle 3D
+    s.silenced = silenced || (lv >= 3 && (base.cat === 'pistol' || base.cat === 'smg' || base.cat === 'sniper'));
+    s.attLabels = attLabels;
+
     if (this.perks.doubletap) { s.fireRate *= 1.33; s.damage *= 1.25; }
     if (this.perks.speedcola) s.reloadTime *= 0.5;
     const PF = CONFIG.perkFx;
@@ -84,6 +118,10 @@ export class Player {
     this.bleedout = 0;
     this.selfRevive = 0;
     this.grenades = CONFIG.grenade.start;
+    this.hasNvg = false;
+    this.nvgOn = false;
+    this.nvgK = 0;
+    this.game.hud?.setNvg?.(false, false);
     this.locked = false; // arme confisquée par le Pack-a-Punch
     this.region = 0; this.wasGrounded = true;
     this.airT = 0; this.peakY = 0; this.jumpSprint = false; this.flopCd = 0; // PHD Flopper (plongeon)
@@ -95,9 +133,9 @@ export class Player {
     this.crouching = false; this.crouchToggle = false; this.crouchK = 0; this._crouchDownAt = 0;
     this.ride?.reset();
 
-    // Inventaire d'armes
-    const pistols = CONFIG.startPistols; // un seul pistolet de base, au hasard (chaque joueur tire le sien)
-    this.inventory = [this.newWeapon(pistols[Math.floor(Math.random() * pistols.length)])];
+    // Inventaire d'armes (pistolet de départ avec accessoires aléatoires)
+    const pistols = CONFIG.startPistols;
+    this.inventory = [this.newWeapon(pistols[Math.floor(Math.random() * pistols.length)], 'start')];
     this.weaponIdx = 0;
     this.switchWeapon(0);
 
@@ -112,16 +150,42 @@ export class Player {
     this.camera.updateProjectionMatrix();
   }
 
-  newWeapon(id) {
+  newWeapon(id, source = 'wall', forcedAtts = null) {
     const cfg = CONFIG.weapons[id];
-    return { id, ammo: cfg.magSize, reserve: cfg.startReserve, reloading: false, reloadT: 0, pap: 0, gl: 0 };
+    const atts = Array.isArray(forcedAtts) ? forcedAtts.slice() : rollAttachments(id, source);
+    const w = { id, ammo: cfg.magSize, reserve: cfg.startReserve, reloading: false, reloadT: 0, pap: 0, gl: 0, atts };
+    const s = this.statsOf(w);
+    w.ammo = s.magSize;
+    w.reserve = Math.min(s.maxReserve, Math.round(cfg.startReserve * (s.maxReserve / Math.max(1, cfg.maxReserve))));
+    return w;
   }
 
-  // Apparence des bras en vue à la première personne
+  // Apparence des bras et mains en vue à la première personne (armes + couteau)
   setCharacter(ch) {
     this.ch = ch;
-    this.sleeveMat.color.setHex(ch.fp.sleeve);
-    for (const m of new Set(this.handMats)) m.color.setHex(ch.fp.hand);
+    this.fpHands?.setCharacter(ch);
+    if (this.sleeveMat) this.sleeveMat.color.setHex(ch.fp.sleeve);
+    for (const m of new Set(this.handMats || [])) m.color.setHex(ch.fp.hand);
+  }
+
+  // ---------------------------------------------------------------- Lunettes de vision nocturne
+  grantNvg(activate = true) {
+    this.hasNvg = true;
+    if (activate) this.toggleNvg(true);
+    else this.game.hud?.setNvg?.(true, this.nvgOn);
+  }
+
+  toggleNvg(force = null) {
+    if (!this.hasNvg) {
+      if (force === null) this.game.hud?.popup?.('ACHETEZ DES LUNETTES NVG', '');
+      return false;
+    }
+    const next = force === null ? !this.nvgOn : !!force;
+    if (next === this.nvgOn && force !== null) return next;
+    this.nvgOn = next;
+    this.game.sfx?.nvgToggle?.(next);
+    this.game.hud?.setNvg?.(this.hasNvg, this.nvgOn, true);
+    return next;
   }
 
   // ---------------------------------------------------------------- Atouts
@@ -142,17 +206,18 @@ export class Player {
     return this.inventory.some((w) => w.id === id);
   }
 
-  // Nouvelle arme : prend un emplacement libre, sinon remplace l'arme en main (pap: 0 à 3)
-  giveWeapon(id, pap = 0) {
+  // Nouvelle arme : prend un emplacement libre, sinon remplace l'arme en main (pap: 0 à 3, source: 'start' | 'wall' | 'box')
+  giveWeapon(id, pap = 0, source = 'wall', forcedAtts = null) {
     const cfg = CONFIG.weapons[id];
-    if (!cfg) return;
+    if (!cfg) return null;
     let w;
-    const existing = this.inventory.findIndex((w) => w.id === id);
+    const existing = this.inventory.findIndex((x) => x.id === id);
     if (existing >= 0) {
       w = this.inventory[existing];
+      if (Array.isArray(forcedAtts)) { w.atts = forcedAtts.slice(); w._statsKey = null; }
       this.switchWeapon(existing);
     } else {
-      w = this.newWeapon(id);
+      w = this.newWeapon(id, source, forcedAtts);
       if (this.inventory.length < this.maxWeapons) {
         this.inventory.push(w);
         this.switchWeapon(this.inventory.length - 1);
@@ -169,6 +234,7 @@ export class Player {
       this.refill(w);
       this.switchWeapon(this.weaponIdx);
     }
+    return w;
   }
 
   // Pack-a-Punch : améliore l'arme en main d'un niveau (0 -> I -> II -> III ; chargeur et réserve pleins)
@@ -196,16 +262,18 @@ export class Player {
     if (this.curW) this.curW.reloading = false;
     this.weaponIdx = idx;
     const w = this.curW;
+    if (this.fpHands) this.fpHands.shotT = 99;
     // bouche du canon (éclair de tir, départ des traçantes) selon la longueur de l'arme
     const mi = this.vmInfo && this.vmInfo[w.id];
-    this.muzzle.position.set(0, mi ? mi.muzzleY : 0.015, mi ? mi.muzzle : -0.6);
-    this.flash.position.set(0, mi ? mi.muzzleY : 0.015, (mi ? mi.muzzle : -0.6) - 0.04);
-    this.flashLight.position.set(0, 0.05, (mi ? mi.muzzle : -0.6) - 0.1);
+    const extraZ = w.atts?.includes('suppressor') ? -0.16 : 0;
+    this.muzzle.position.set(0, mi ? mi.muzzleY : 0.015, (mi ? mi.muzzle : -0.6) + extraZ);
+    this.flash.position.set(0, mi ? mi.muzzleY : 0.015, (mi ? mi.muzzle : -0.6) + extraZ - 0.04);
+    this.flashLight.position.set(0, 0.05, (mi ? mi.muzzle : -0.6) + extraZ - 0.1);
     for (const [id, grp] of Object.entries(this.vms)) {
       grp.visible = id === w.id;
       if (grp.visible) {
-        attachAccessories(grp, w.id, w.pap | 0, grp, { local: true }); // accessoires du niveau (reconstruits seulement si le niveau change)
-        const bl = []; grp.traverse((o) => { if (o.userData.bolt) bl.push(o); }); // carreaux (arbalète), accessoires compris
+        attachAccessories(grp, w.id, w.pap | 0, grp, { local: true, atts: w.atts });
+        const bl = []; grp.traverse((o) => { if (o.userData.bolt) bl.push(o); });
         if (bl.length) this.bolts[w.id] = bl;
         const L = PAP_LEVELS[w.pap | 0];
         this.tintMats = new Set();
@@ -214,7 +282,8 @@ export class Player {
         });
       }
     }
-    this.game.hud.setWeapon(this.curCfg.name, this.curCfg.caliber);
+    const cfg = this.curCfg;
+    this.game.hud.setWeapon(cfg.name, cfg.caliber, cfg.attLabels);
   }
 
   nextWeapon() {
@@ -265,6 +334,7 @@ export class Player {
       if (B.is('reload', e) && !this.locked && !this.driving) this.reload();
       if (B.is('interact', e)) this.game.interact();
       if (B.is('torch', e)) this.setTorch(!this.torchOn);
+      if (B.is('nvg', e)) this.toggleNvg();
       if (B.is('grenade', e)) this.throwGrenade();
       if (this.vehicle) { // voiture, moto, rame : bascule troisième / première personne, boîte auto/manuelle, rapports +/-, gong et portes
         if (B.is('vehicleView', e)) this.game.toggleVehicleView?.();
@@ -321,7 +391,7 @@ export class Player {
     document.addEventListener('contextmenu', (e) => e.preventDefault());
     document.addEventListener('mousemove', (e) => {
       if (!this.game.playing || this.game.chat?.open) return; // saisie : la souris est libérée, elle ne tourne plus la caméra
-      const zoom = this.aim > 0.5 ? (this.curCfg.adsFov ? 0.3 : this.curCfg.zoom ? 0.45 : 0.6) : 1;
+      const zoom = this.aim > 0.5 ? (this.curCfg.adsFov ? 0.3 : this.curCfg.adsZoomBonus <= -12 ? 0.42 : this.curCfg.zoom ? 0.45 : 0.6) : 1;
       const sens = 0.0022 * this.game.settings.sens * zoom;
       this.yaw -= e.movementX * sens;
       this.pitch -= e.movementY * sens;
@@ -353,6 +423,7 @@ export class Player {
     const built = buildWeaponModels(this.vm);
     Object.assign(this.vms, built.vms);
     this.vmInfo = built.info;
+    this.vmHands = built.hands;
     // pièces cachées quand le chargeur est vide (carreau de l'arbalète)
     this.bolts = {};
     for (const [id, grp] of Object.entries(built.vms)) {
@@ -360,18 +431,10 @@ export class Player {
       grp.traverse((o) => { if (o.userData.bolt) list.push(o); });
       if (list.length) this.bolts[id] = list;
     }
-    // Mains et manches : couleurs du personnage choisi (setCharacter)
+    // Bras et mains articulés adaptés à chaque personnage (fpHands.js) + matériaux du couteau
     this.sleeveMat = new THREE.MeshStandardMaterial({ color: 0x4a5530, roughness: 0.9 });
     this.handMats = [];
-    for (const grp of Object.values(this.vms)) {
-      grp.traverse((o) => {
-        if (!o.isMesh || !o.userData.skin) return;
-        this.handMats.push(o.material);
-        const sl = new THREE.Mesh(new THREE.BoxGeometry(0.095, 0.095, 0.34), this.sleeveMat); // avant-bras
-        sl.position.set(0, 0.012, 0.22); sl.rotation.x = -0.18;
-        o.add(sl);
-      });
-    }
+    this.fpHands = new FPHands(this.vm);
     this.muzzle = new THREE.Object3D();
     this.muzzle.position.set(0, 0.015, -0.6);
     this.vm.add(this.muzzle);
@@ -505,10 +568,12 @@ export class Player {
       if (w.gl) w.gl = cfg.gl?.shells || 0;
     }
 
-    // ---- visée (ADS) ----
+    // ---- visée (ADS) & vision nocturne ----
+    this.nvgK += ((this.nvgOn ? 1 : 0) - this.nvgK) * Math.min(1, dt * 10);
     this.aim += ((this.aiming && !this.downed ? 1 : 0) - this.aim) * Math.min(1, dt * 12);
     const base = this.game.settings.fov;
-    const fov = base - (cfg.adsFov || cfg.zoom ? base - (cfg.adsFov || cfg.zoom) : ADS_DELTA) * this.aim + (veh ? Math.min(12, Math.abs(veh.v.speed) * 0.55) * (1 - 0.5 * this.ride.k) : 0);
+    const adsDelta = cfg.adsFov || cfg.zoom ? base - (cfg.adsFov || cfg.zoom) : ADS_DELTA - (cfg.adsZoomBonus || 0);
+    const fov = base - adsDelta * this.aim + (veh ? Math.min(12, Math.abs(veh.v.speed) * 0.55) * (1 - 0.5 * this.ride.k) : 0);
     if (!this.game.camLock && Math.abs(fov - this.camera.fov) > 0.01) {
       this.camera.fov = fov;
       this.camera.updateProjectionMatrix();
@@ -516,7 +581,8 @@ export class Player {
     // lunette : on cache l'arme quand on vise au fusil de précision
     // (on cache le modèle de l'arme, pas le groupe entier qui contient la lumière de tir)
     // (jamais le groupe entier : il porte la lumière de tir, et masquer une lumière recompile tous les shaders)
-    this.vms[w.id].visible = !this.locked && !(cfg.adsFov && this.aim > 0.8) && !this.driving && !this.ride.external; // vue externe : c'est le personnage qui tient l'arme
+    const showVm = !this.locked && !(cfg.adsFov && this.aim > 0.8) && !this.driving && !this.ride.external;
+    this.vms[w.id].visible = showVm; // vue externe : c'est le personnage qui tient l'arme
     const pk = papPulse(w.pap | 0, now); // niveau III : le reflet pulse
     if (pk !== 1 && this.tintMats) for (const m of this.tintMats) m.emissiveIntensity = PAP_INTENSITY * pk;
     const bolts = this.bolts[w.id];
@@ -584,21 +650,31 @@ export class Player {
       this.camera.rotation.set(this.pitch + this.recoil, this.yaw, veh ? veh.v.lean * 0.5 : sway ? sway.roll : 0);
     }
 
-    // ---- animation de l'arme ----
+    // ---- animation de l'arme et des mains articulées (adaptées au personnage) ----
     this.kick *= Math.max(0, 1 - dt * 14);
     const a = this.aim;
-    let x = 0.22 * (1 - a), y = -0.22 + 0.06 * a - 0.018 * this.crouchK * (1 - a), z = -0.45 + 0.05 * a + 0.012 * this.crouchK * (1 - a);
-    let rx = this.kick * (cfg.type === 'launcher' ? 0.45 : cfg.type === 'shotgun' || cfg.type === 'semi' ? 0.22 : 0.12);
-    if (w.reloading) {
-      const p = w.reloadT / cfg.reloadTime;
-      const dip = Math.sin(Math.min(1, p) * Math.PI);
-      y -= dip * 0.25;
-      rx += dip * 0.7;
-      x -= dip * 0.05;
-    }
-    if (sprinting) { rx += 0.25; x -= 0.05; y -= 0.05; }
-    this.vm.position.set(x + (moving ? Math.sin(this.bobT * 0.5) * 0.008 : 0), y, z + this.kick * 0.07);
-    this.vm.rotation.set(rx, sprinting ? 0.35 : 0, 0);
+    const wGrp = this.vms[w.id];
+    const hAnim = this.fpHands ? this.fpHands.update(dt, {
+      weaponGrp: wGrp,
+      handDef: this.vmHands?.[w.id],
+      activeAcc: wGrp?.userData.activeAcc || w.atts || [],
+      reloading: !!w.reloading,
+      reloadFrac: w.reloading ? w.reloadT / Math.max(0.1, cfg.reloadTime) : 0,
+      aiming: a,
+      sprinting,
+      visible: showVm,
+    }) : { dx: 0, dy: 0, dz: 0, rx: 0, ry: 0, rz: 0 };
+
+    let x = 0.22 * (1 - a) + hAnim.dx;
+    let y = -0.22 + 0.06 * a - 0.018 * this.crouchK * (1 - a) + hAnim.dy;
+    let z = -0.45 + 0.05 * a + 0.012 * this.crouchK * (1 - a) + hAnim.dz;
+    const recM = cfg.recoilMult ?? 1;
+    let rx = this.kick * recM * (cfg.type === 'launcher' ? 0.45 : cfg.type === 'shotgun' || cfg.type === 'semi' ? 0.2 : 0.11) + hAnim.rx;
+    let ry = (sprinting ? 0.35 : 0) + hAnim.ry;
+    let rz = hAnim.rz;
+    if (sprinting) { rx += 0.22; x -= 0.05; y -= 0.05; }
+    this.vm.position.set(x + (moving ? Math.sin(this.bobT * 0.5) * 0.008 : 0), y + (moving ? Math.abs(Math.cos(this.bobT * 0.5)) * 0.006 : 0), z + this.kick * 0.065 * recM);
+    this.vm.rotation.set(rx, ry, rz);
     if (this.vault) { const lo = Math.sin(Math.PI * Math.min(1, this.vault.t / this.vault.dur)); this.vm.position.y -= 0.16 * lo; this.vm.rotation.x += 0.5 * lo; } // arme baissée
     this.animateKnife(dt);
 
@@ -817,30 +893,34 @@ export class Player {
     const period = 1 / cfg.fireRate;
     this.nextShot = cfg.type === 'semi' || now - this.nextShot > FIRE_RESUME_GAP ? now + period : this.nextShot + period;
     this.kick = 1;
+    this.fpHands?.onFire();
 
-    // Recul
+    // Recul (modulé par les accessoires : poignée, compensateur, frein de bouche, silencieux)
     const heavy = cfg.type === 'shotgun' || cfg.type === 'semi' || cfg.type === 'launcher';
-    this.recoil += (cfg.type === 'launcher' ? 0.05 : heavy ? 0.016 : 0.005) + Math.random() * 0.004;
-    this.yaw += (Math.random() - 0.5) * 0.002;
+    const recM = cfg.recoilMult ?? 1;
+    this.recoil += ((cfg.type === 'launcher' ? 0.05 : heavy ? 0.016 : 0.005) + Math.random() * 0.004) * recM;
+    this.yaw += (Math.random() - 0.5) * 0.002 * recM;
 
-    // Sons
-    this.game.weaponSound(cfg.id);
+    // Sons (silencieux si monté)
+    const sil = !!cfg.silenced;
+    this.game.weaponSound(cfg.id, 1, 0, sil);
 
-    // Muzzle flash (l'arbalète n'en a pas) ; en vue externe, c'est l'éclair du personnage (pas de lumière de tir)
+    // Muzzle flash (très discret avec un silencieux ; l'arbalète n'en a pas)
     const ext = this.ride.external;
     if (ext && cfg.flash !== false) this.ride.fire();
     else if (cfg.flash !== false) {
       this.flash.visible = true;
-      this.flash.material.color.setHex(cfg.id === 'raygun' ? 0x66ff88 : cfg.pap ? PAP_LEVELS[cfg.pap].flash : 0xffcc66);
+      this.flash.material.color.setHex(cfg.id === 'raygun' ? 0x66ff88 : cfg.pap ? PAP_LEVELS[cfg.pap].flash : sil ? 0x99b8cc : 0xffcc66);
       this.flash.rotation.z = Math.random() * Math.PI;
-      this.flash.scale.setScalar(heavy ? 1.4 : 0.8 + Math.random() * 0.5);
-      this.flashLight.intensity = heavy ? 40 : 25;
-      this.flashT = 0.045;
+      this.flash.scale.setScalar(sil ? 0.28 : heavy ? 1.4 : 0.8 + Math.random() * 0.5);
+      this.flashLight.intensity = sil ? 3 : heavy ? 40 : 25;
+      this.flashT = sil ? 0.025 : 0.045;
     }
 
     // Raycast(s)
     this.camera.updateMatrixWorld(true);
-    const mul = (this.aiming ? (cfg.adsFov ? 0.05 : 0.4) : 1) * (moving ? 1.8 : 1) * (this.crouching ? 0.7 : 1);
+    const hipM = this.aiming ? 1 : (cfg.hipSpreadMult ?? 1);
+    const mul = (this.aiming ? (cfg.adsFov ? 0.05 : 0.4) : 1) * hipM * (moving ? 1.8 : 1) * (this.crouching ? 0.7 : 1);
     if (cfg.type === 'launcher') { this.fireLauncher(cfg, mul); return; }
     // origine visuelle des traçantes : la bouche de l'arme (de la vue, ou du personnage en vue externe)
     const origin = this.shotOrigin(ext);
@@ -882,7 +962,7 @@ export class Player {
       if (cfg.splash) this.game.splash(end, cfg.splash.radius, cfg.splash.damage, cfg.splash.color);
       if (cfg.boom) this.game.splash(end, cfg.boom.radius, cfg.damage * cfg.boom.frac, cfg.boom.color); // balles explosives (fusils de précision, niveau III)
       this.game.tracer(origin, end, cfg.tracer);
-      this.game.onPlayerShot?.(origin, end, cfg.id, { tc: cfg.tracer });
+      this.game.onPlayerShot?.(origin, end, cfg.id, { tc: cfg.tracer, sil: sil ? 1 : 0 });
     }
   }
 
@@ -951,6 +1031,8 @@ export class Player {
   throwGrenade() {
     if (this.downed || this.dead || this.grenades <= 0 || this.driving) return;
     this.grenades--;
+    this.fpHands?.onThrowGrenade();
+    this.game.sfx.grenadePin?.();
     this.camera.updateMatrixWorld(true);
     const dir = new THREE.Vector3(0, 0, -1).applyQuaternion(this.camera.quaternion);
     // vue externe : la grenade part de l'œil du pilote (pas de la caméra, 3 m derrière)

@@ -6,43 +6,104 @@ import { PARTS } from './weaponParts.js';
 import { bakeGroup } from './bake.js';
 
 // =====================================================================
-//  Modèles 3D des armes (vue à la première personne). Chaque arme a sa silhouette :
-//  canon, garde-main, chargeur, crosse, lunette… construite avec des pièces simples.
-//  Axe : -z vers l'avant, y vers le haut. muzzle = position de la bouche du canon.
+//  Modèles 3D des armes (vue à la première personne et coéquipiers).
+//  Textures PBR procédurales (acier brossé, polymère granulé, veinage bois),
+//  pièces mobiles (culasse/glissière, chargeur, pompe), accessoires aléatoires
+//  et Pack-a-Punch. Axe : -z vers l'avant, y vers le haut.
 // =====================================================================
 
 const COLORS = {
-  black: [0x1b1c1e, 0.45, 0.75], gun: [0x2c2e33, 0.5, 0.7], parker: [0x3a3c40, 0.6, 0.6], poly: [0x222326, 0.85, 0.1],
-  wood: [0x5a3820, 0.75, 0.05], lwood: [0x7a4f2c, 0.7, 0.05], tan: [0xb59e78, 0.8, 0.1], od: [0x4a5536, 0.8, 0.15],
-  silver: [0xc4c8cc, 0.25, 0.95], brass: [0xc89a40, 0.3, 0.9], bakelite: [0x3a2618, 0.6, 0.1], skin: [0xc9a07a, 0.8, 0],
-  lens: [0x203850, 0.1, 0.6], smoke: [0x2a3036, 0.3, 0.2], red: [0x9a2a1e, 0.4, 0.6], green: [0x2e3a2e, 0.85, 0.1],
-  gold: [0xe0b040, 0.35, 0.3, 0x7a5a14, 1.2], // doré : garde sa couleur sous le reflet du Pack-a-Punch (userData.glow)
-  // matériaux qui brillent d'eux-mêmes (point rouge, bulbe, cellule d'Éther, laser…) : [couleur, rugosité, métal, émissive, intensité] ; ils gardent leur
-  // couleur sous le reflet du Pack-a-Punch (userData.glow)
-  glow: [0x55ff77, 0.5, 0, 0x33ff55, 2], dot: [0xff2a2a, 0.4, 0, 0xff2020, 2.5], cyan: [0x66ccff, 0.3, 0, 0x33aaff, 2], orange: [0xff7a20, 0.4, 0, 0xff6a10, 2.5],
-  ether: [0x40e0c0, 0.3, 0, 0x20c0a0, 1.1],
+  black: [0x1c1e21, 0.4, 0.82], gun: [0x2e3138, 0.44, 0.78], parker: [0x3d4148, 0.54, 0.68], poly: [0x24262b, 0.82, 0.12],
+  wood: [0x684024, 0.72, 0.05], lwood: [0x885832, 0.66, 0.06], tan: [0xb8a17a, 0.78, 0.12], od: [0x4b5738, 0.78, 0.14],
+  silver: [0xcad0d6, 0.22, 0.96], brass: [0xd0a042, 0.26, 0.92], bakelite: [0x482a18, 0.56, 0.12], skin: [0xc9a07a, 0.8, 0],
+  lens: [0x1b3c58, 0.08, 0.72], smoke: [0x2a3036, 0.28, 0.22], red: [0xa62a1e, 0.36, 0.65], green: [0x303e30, 0.82, 0.12],
+  gold: [0xe4b444, 0.32, 0.4, 0x7a5a14, 1.2],
+  // matériaux lumineux (gardent leur couleur sous le reflet Pack-a-Punch : userData.glow)
+  glow: [0x55ff77, 0.45, 0, 0x33ff55, 2], dot: [0xff2a2a, 0.35, 0, 0xff2020, 2.8], cyan: [0x66ccff, 0.3, 0, 0x33aaff, 2.2],
+  orange: [0xff7a20, 0.38, 0, 0xff6a10, 2.6], ether: [0x40e0c0, 0.3, 0, 0x20c0a0, 1.1],
+  tritium: [0x66ff88, 0.3, 0, 0x38ff66, 2.4],
 };
-const GLOW = new Set(['gold', 'glow', 'dot', 'cyan', 'orange', 'ether', 'beam']);
+const GLOW = new Set(['gold', 'glow', 'dot', 'cyan', 'orange', 'ether', 'beam', 'tritium']);
 
-// Métaux : reflets d'ambiance (envmap.js, intensité par matière) ; la peinture noire s'use aux arêtes (usure : couleur de sommet plus claire sur les chanfreins)
-const REFLECT = { black: 0.9, gun: 1, parker: 1, silver: 1.5, brass: 1.2, gold: 1, bakelite: 0.35, lwood: 0.25, wood: 0.25, lens: 1.6, smoke: 1 };
+const REFLECT = { black: 1.0, gun: 1.15, parker: 1.05, silver: 1.65, brass: 1.35, gold: 1.15, bakelite: 0.4, lwood: 0.28, wood: 0.28, lens: 1.8, smoke: 1.1 };
 const WORN = new Set(['black', 'gun', 'parker']);
+
+// ------------------------------------------------------------------ Textures PBR procédurales partagées (0 shader supplémentaire)
+let W_TEX = null;
+function weaponTextures() {
+  if (W_TEX) return W_TEX;
+  const make = (size, draw, rep = 2) => {
+    const c = document.createElement('canvas'); c.width = c.height = size;
+    draw(c.getContext('2d'), size);
+    const t = new THREE.CanvasTexture(c);
+    t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(rep, rep); t.colorSpace = THREE.SRGBColorSpace;
+    return t;
+  };
+  let seed = 4219;
+  const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  // Brushed gunmetal micro-streaks & subtle edge wear
+  const metal = make(128, (x, s) => {
+    x.fillStyle = '#dcdedf'; x.fillRect(0, 0, s, s);
+    for (let y = 0; y < s; y++) {
+      const a = 0.03 + rnd() * 0.08;
+      x.fillStyle = rnd() < 0.5 ? `rgba(0,0,0,${a})` : `rgba(255,255,255,${a})`;
+      x.fillRect(0, y, s, 1);
+    }
+    for (let i = 0; i < 40; i++) {
+      x.fillStyle = `rgba(255,255,255,${0.04 + rnd() * 0.08})`;
+      x.fillRect(rnd() * s, rnd() * s, 6 + rnd() * 24, 1);
+    }
+  }, 2.5);
+  // Fine stippled polymer grip texture
+  const poly = make(128, (x, s) => {
+    x.fillStyle = '#dadce0'; x.fillRect(0, 0, s, s);
+    for (let y = 0; y < s; y += 2) for (let px = 0; px < s; px += 2) {
+      const v = rnd();
+      x.fillStyle = v < 0.45 ? 'rgba(0,0,0,0.12)' : v > 0.72 ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.04)';
+      x.fillRect(px, y, 2, 2);
+    }
+  }, 4);
+  // Natural walnut/birch wood grain
+  const wood = make(128, (x, s) => {
+    x.fillStyle = '#e2ccb4'; x.fillRect(0, 0, s, s);
+    for (let y = 0; y < s; y++) {
+      const w = Math.sin(y * 0.28 + Math.sin(y * 0.07) * 2.2) * 0.5 + 0.5;
+      x.fillStyle = `rgba(48,22,8,${0.06 + w * 0.22})`;
+      x.fillRect(0, y, s, 1.3);
+    }
+    for (let i = 0; i < 320; i++) {
+      x.fillStyle = 'rgba(30,12,4,0.12)';
+      x.fillRect(rnd() * s, rnd() * s, 8 + rnd() * 22, 1);
+    }
+  }, 2);
+  W_TEX = { metal, poly, wood };
+  return W_TEX;
+}
+
+const TEX_KIND = {
+  black: 'metal', gun: 'metal', parker: 'metal', silver: 'metal', brass: 'metal',
+  poly: 'poly', tan: 'poly', od: 'poly', green: 'poly',
+  wood: 'wood', lwood: 'wood', bakelite: 'wood',
+};
 
 // Chaque arme a ses propres matériaux (pour le reflet du Pack-a-Punch)
 function mats() {
   const m = {};
+  const tx = weaponTextures();
   for (const [k, [color, roughness, metalness, em, emI]] of Object.entries(COLORS)) {
-    m[k] = new THREE.MeshStandardMaterial({ color, roughness, metalness, vertexColors: true }); // couleurs de sommet : usure des arêtes (boxGeo) ; blanc ailleurs
+    const map = TEX_KIND[k] ? tx[TEX_KIND[k]] : null;
+    m[k] = new THREE.MeshStandardMaterial({ color, roughness, metalness, vertexColors: true, map });
     if (em != null) { m[k].emissive = new THREE.Color(em); m[k].emissiveIntensity = emI; }
     if (REFLECT[k]) reflective(m[k], REFLECT[k] * CONFIG.graphics.weapons.env);
   }
-  m.beam = new THREE.MeshBasicMaterial({ color: 0xff3030, transparent: true, opacity: 0.5, depthWrite: false }); // faisceau du laser (joueur local seulement)
-  m.smoke.transparent = true; m.smoke.opacity = 0.7;
-  m.lens.emissive = new THREE.Color(0x0a1830);
+  m.beam = new THREE.MeshBasicMaterial({ color: 0xff2828, transparent: true, opacity: 0.45, depthWrite: false });
+  m.smoke.transparent = true; m.smoke.opacity = 0.72;
+  m.lens.emissive = new THREE.Color(0x0b223d);
+  m.lens.transparent = true; m.lens.opacity = 0.86;
   return m;
 }
 
-// Boîte biseautée (arêtes arrondies, CONFIG.graphics.weapons) : géométries mises en cache par dimensions. worn : usure aux arêtes (métal nu)
+// Boîte biseautée (arêtes arrondies, CONFIG.graphics.weapons) : géométries mises en cache par dimensions.
 const BOX_CACHE = new Map();
 function boxGeo(w, h, d, worn) {
   const key = `${w}|${h}|${d}|${worn ? 1 : 0}`;
@@ -60,21 +121,19 @@ function boxGeo(w, h, d, worn) {
   BOX_CACHE.set(key, g);
   return g;
 }
-// couleurs de sommet blanches (les matériaux de l'arme utilisent vertexColors)
+
 function whiteColors(g) {
   const c = new Float32Array(g.attributes.position.count * 3).fill(1);
   g.setAttribute('color', new THREE.BufferAttribute(c, 3));
   return g;
 }
 
-// Profil extrudé (v0.75.0) : polygone [z, y] (vu de côté, -z vers l'avant) aux angles arrondis (rd : part de l'arête adoucie, 0 = vif ; un 3e nombre par point la remplace),
-// épaissi sur x (th) avec un petit biseau qui accroche la lumière ; { hole: [[z, y]…] } perce un trou (pontet, crosse squelette)
 const PROF_CACHE = new Map();
 function profileGeo(pts, th, rd, hole) {
   const key = JSON.stringify([pts, th, rd, hole]);
   let g = PROF_CACHE.get(key);
   if (g) return g;
-  const n = pts.length, sh = new THREE.Shape(), V = (p) => new THREE.Vector2(-p[0], p[1]); // x du shape = -z : l'avant du modèle est +x avant la rotation
+  const n = pts.length, sh = new THREE.Shape(), V = (p) => new THREE.Vector2(-p[0], p[1]);
   const A = [], Bq = [];
   for (let i = 0; i < n; i++) {
     const c = V(pts[i]), pr = V(pts[(i + n - 1) % n]), nx = V(pts[(i + 1) % n]), r = pts[i][2] ?? rd;
@@ -83,22 +142,22 @@ function profileGeo(pts, th, rd, hole) {
   sh.moveTo(Bq[0].x, Bq[0].y);
   for (let i = 1; i <= n; i++) { const k = i % n; sh.lineTo(A[k].x, A[k].y); sh.quadraticCurveTo(V(pts[k]).x, V(pts[k]).y, Bq[k].x, Bq[k].y); }
   if (hole) { const h = new THREE.Path(); hole.forEach((p, i) => (i ? h.lineTo(-p[0], p[1]) : h.moveTo(-p[0], p[1]))); h.closePath(); sh.holes.push(h); }
-  const bt = Math.min(0.003, th * 0.2), depth = Math.max(0.0005, th - 2 * bt);
-  g = new THREE.ExtrudeGeometry(sh, { depth, bevelEnabled: true, bevelThickness: bt, bevelSize: bt * 0.8, bevelSegments: 2, curveSegments: 5 });
+  const bt = Math.min(0.0032, th * 0.22), depth = Math.max(0.0005, th - 2 * bt);
+  g = new THREE.ExtrudeGeometry(sh, { depth, bevelEnabled: true, bevelThickness: bt, bevelSize: bt * 0.85, bevelSegments: 2, curveSegments: 6 });
   g.translate(0, 0, -depth / 2);
-  g.rotateY(Math.PI / 2); // x du shape -> -z monde, extrusion -> x monde
+  g.rotateY(Math.PI / 2);
   whiteColors(g);
   PROF_CACHE.set(key, g);
   return g;
 }
-// Solide de révolution autour de l'axe z (canons, garde-mains ronds, silencieux, tambours) : profil [[z, rayon]…]
+
 const LATHE_CACHE = new Map();
 function latheGeo(prof, seg) {
   const key = JSON.stringify([prof, seg]);
   let g = LATHE_CACHE.get(key);
   if (g) return g;
   g = new THREE.LatheGeometry(prof.map(([z, r]) => new THREE.Vector2(r, z)), seg);
-  g.rotateX(Math.PI / 2); // l'axe y de la révolution devient z
+  g.rotateX(Math.PI / 2);
   whiteColors(g);
   LATHE_CACHE.set(key, g);
   return g;
@@ -106,6 +165,9 @@ function latheGeo(prof, seg) {
 
 // Pièces : B = boîte, C = cylindre le long de z, Y = cylindre vertical, P = profil extrudé, L = solide de révolution (axe z), S = sphère
 function build(grp, M, parts) {
+  const slidePiv = new THREE.Group(); slidePiv.name = 'slidePivot';
+  const pumpPiv = new THREE.Group(); pumpPiv.name = 'pumpPivot';
+  const magPiv = new THREE.Group(); magPiv.name = 'magPivot';
   for (const p of parts) {
     const [kind, ...a] = p;
     let mesh;
@@ -114,11 +176,11 @@ function build(grp, M, parts) {
       mesh = new THREE.Mesh(boxGeo(w, h, d, WORN.has(mat)), M[mat]);
       mesh.position.set(x, y, z); mesh.rotation.set(rx, ry, rz);
     } else if (kind === 'C') {
-      const [r, len, x, y, z, mat, seg = 10, r2 = r] = a;
+      const [r, len, x, y, z, mat, seg = 12, r2 = r] = a;
       mesh = new THREE.Mesh(whiteColors(new THREE.CylinderGeometry(r, r2, len, seg)), M[mat]);
       mesh.rotation.x = Math.PI / 2; mesh.position.set(x, y, z);
     } else if (kind === 'Y') {
-      const [r, len, x, y, z, mat, rz = 0, rx = 0, seg = 8] = a;
+      const [r, len, x, y, z, mat, rz = 0, rx = 0, seg = 10] = a;
       mesh = new THREE.Mesh(whiteColors(new THREE.CylinderGeometry(r, r, len, seg)), M[mat]);
       mesh.position.set(x, y, z); mesh.rotation.set(rx, 0, rz);
     } else if (kind === 'P') {
@@ -137,225 +199,443 @@ function build(grp, M, parts) {
     }
     if (p[0] && mesh) {
       if (a.includes('skin')) mesh.userData.skin = true;
-      if (a.includes('bolt')) mesh.userData.bolt = true; // carreau d'arbalète : caché quand le chargeur est vide
-      if (a.includes('mag')) mesh.userData.mag = true;   // chargeur : caché quand un tambour le remplace (accessoire)
-      if (a.includes('optic')) mesh.userData.optic = true; // viseur d'origine : caché quand une lunette le remplace
-      if (a.includes('stock')) mesh.userData.stock = true; // crosse : cachée quand l'accessoire la remplace (crosse sciée du M79)
-      if (GLOW.has(kind === 'S' ? a[4] : kind === 'B' ? a[6] : kind === 'P' || kind === 'L' ? a[3] : a[5])) mesh.userData.glow = true; // matière lumineuse
-      grp.add(mesh);
+      if (a.includes('bolt')) mesh.userData.bolt = true;
+      if (a.includes('mag')) mesh.userData.mag = true;
+      if (a.includes('optic')) mesh.userData.optic = true;
+      if (a.includes('stock')) mesh.userData.stock = true;
+      if (a.includes('slide')) mesh.userData.slide = true;
+      if (a.includes('pump')) mesh.userData.pump = true;
+      const matName = kind === 'S' ? a[4] : kind === 'B' ? a[6] : kind === 'P' || kind === 'L' ? a[3] : a[5];
+      if (GLOW.has(matName)) mesh.userData.glow = true;
+      if (mesh.userData.slide) slidePiv.add(mesh);
+      else if (mesh.userData.pump) pumpPiv.add(mesh);
+      else if (mesh.userData.mag) magPiv.add(mesh);
+      else grp.add(mesh);
     }
   }
-  // draw calls: static parts of one material become one mesh; the parts game code looks up or hides (hands, magazine, optic, stock, bolt) stay separate
-  bakeGroup(grp, grp.children.filter((o) => o.userData.skin || o.userData.bolt || o.userData.mag || o.userData.optic || o.userData.stock), false);
+  bakeGroup(grp, grp.children.filter((o) => o.userData.skin || o.userData.bolt || o.userData.optic || o.userData.stock), false);
+  if (slidePiv.children.length) { bakeGroup(slidePiv, slidePiv.children.filter((o) => o.userData.glow), false); grp.add(slidePiv); }
+  if (pumpPiv.children.length) { bakeGroup(pumpPiv, [], false); grp.add(pumpPiv); }
+  if (magPiv.children.length) { bakeGroup(magPiv, [], false); grp.add(magPiv); }
 }
-// mains : avant (garde-main) et arrière (poignée)
-const hands = (front, back) => [
-  ...(front ? [['B', 0.09, 0.09, 0.14, front[0], front[1], front[2], 'skin']] : []),
-  ['B', 0.09, 0.09, 0.1, back[0], back[1], back[2], 'skin'],
-];
-// pièces communes
-const grip = (z, mat = 'poly', y = -0.08) => ['B', 0.036, 0.1, 0.046, 0, y, z, mat, -0.3];
-const curvedMag = (z, mat = 'gun', len = 1) => [['B', 0.034, 0.09 * len, 0.06, 0, -0.08, z, mat, 0.18, 0, 0, 'mag'], ['B', 0.034, 0.09 * len, 0.058, 0, -0.08 - 0.08 * len, z - 0.035 * len, mat, 0.45, 0, 0, 'mag']];
-const bipod = (z) => [['Y', 0.008, 0.2, 0.03, -0.09, z, 'black', 0.25, 0.2], ['Y', 0.008, 0.2, -0.03, -0.09, z, 'black', -0.25, 0.2]];
-const scope = (y, z, len = 0.3, r = 0.02, bell = 0.03) => [
-  ['C', r, len, 0, y, z, 'black', 14], ['C', bell, 0.07, 0, y, z - len / 2 - 0.02, 'black', 14, r], ['C', r * 1.25, 0.06, 0, y, z + len / 2, 'black', 14],
-  ['C', bell * 0.85, 0.005, 0, y, z - len / 2 - 0.058, 'lens', 14], ['B', 0.012, 0.035, 0.03, 0, y - 0.035, z - 0.06, 'black'], ['B', 0.012, 0.035, 0.03, 0, y - 0.035, z + 0.08, 'black'],
-];
 
-// Définitions : { parts, muzzle (z), offset (position du modèle), hands }
+// Définitions des 23 armes : ancres d'accessoires, bouche, décalage, poses des mains (back, front, fg, mag, bolt, style)
 const DEFS = {
   // ------------------------------------------------ pistolets
-  m1911: { anchors: { top: [0, 0.019, -0.01], muz: [0, 0.002, -0.156], under: [0, -0.043, -0.08], mag: [0, -0.139, 0.062], magRx: -0.22, side: [0.017, 0, -0.04], k: 0.85 }, muzzle: -0.17, offset: [0, -0.02, -0.12], parts: [...PARTS.m1911, ...hands(null, [0, -0.11, 0.06])] },
-
-  arex: { anchors: { top: [0, 0.026, -0.01], muz: [0, 0, -0.14], under: [0, -0.046, -0.08], mag: [0, -0.147, 0.055], magRx: -0.18, side: [0.017, 0, -0.04], k: 0.85 }, muzzle: -0.17, offset: [0, -0.02, -0.12], parts: [...PARTS.arex, ...hands(null, [0, -0.11, 0.055])] },
-
-  deagle: { anchors: { top: [0, 0.045, -0.06], muz: [0, 0.002, -0.2], under: [0, -0.05, -0.1], mag: [0, -0.164, 0.0615], magRx: -0.18, side: [0.023, 0, -0.06], k: 1 }, muzzle: -0.22, offset: [0, -0.01, -0.1], parts: [...PARTS.deagle, ...hands(null, [0, -0.12, 0.055])] },
-
-  magnum: { anchors: { top: [0, 0.038, -0.1], muz: [0, 0.012, -0.23], under: [0, -0.002, -0.13], mag: [0, -0.13, 0.085], magRx: -0.3, side: [0.016, 0.01, -0.13], k: 0.9 }, muzzle: -0.21, offset: [0, -0.02, -0.1], parts: [...PARTS.magnum, ...hands(null, [0, -0.11, 0.08])] },
+  m1911: {
+    anchors: { top: [0, 0.026, -0.01], muz: [0, 0.008, -0.156], under: [0, -0.04, -0.08], mag: [0, -0.135, 0.056], magRx: -0.22, side: [0.017, 0, -0.04], k: 0.85 },
+    muzzle: -0.17, offset: [0, -0.02, -0.12],
+    hands: { back: [0, -0.085, 0.055], front: null, mag: [0, -0.135, 0.055], bolt: [0, 0.012, 0.02], style: 'pistol' },
+    parts: PARTS.m1911,
+  },
+  arex: {
+    anchors: { top: [0, 0.03, -0.01], muz: [0, 0.008, -0.148], under: [0, -0.044, -0.08], mag: [0, -0.142, 0.052], magRx: -0.18, side: [0.017, 0, -0.04], k: 0.85 },
+    muzzle: -0.17, offset: [0, -0.02, -0.12],
+    hands: { back: [0, -0.088, 0.052], front: null, mag: [0, -0.14, 0.052], bolt: [0, 0.014, 0.02], style: 'pistol' },
+    parts: PARTS.arex,
+  },
+  deagle: {
+    anchors: { top: [0, 0.045, -0.06], muz: [0, 0.012, -0.205], under: [0, -0.05, -0.1], mag: [0, -0.162, 0.058], magRx: -0.18, side: [0.023, 0, -0.06], k: 1 },
+    muzzle: -0.22, offset: [0, -0.01, -0.1],
+    hands: { back: [0, -0.095, 0.054], front: null, mag: [0, -0.16, 0.055], bolt: [0, 0.02, 0.02], style: 'pistol' },
+    parts: PARTS.deagle,
+  },
+  magnum: {
+    anchors: { top: [0, 0.038, -0.1], muz: [0, 0.019, -0.236], under: [0, -0.002, -0.13], mag: [0, -0.13, 0.085], magRx: -0.3, side: [0.016, 0.01, -0.13], k: 0.9 },
+    muzzle: -0.21, offset: [0, -0.02, -0.1],
+    hands: { back: [0, -0.082, 0.072], front: null, mag: [-0.03, 0.0, -0.02], bolt: [0, 0.02, 0.07], style: 'revolver' },
+    parts: PARTS.magnum,
+  },
 
   // ------------------------------------------------ fusils d'assaut
-  rifle: { anchors: { top: [0, 0.052, -0.02], muz: [0, 0.004, -0.605], under: [0, -0.025, -0.26], fg: [0, -0.025, -0.34], side: [0.028, 0, -0.26], drum: [0, -0.115, -0.06, 0.07], k: 1 }, muzzle: -0.62, parts: [...PARTS.rifle, ...hands([0.02, -0.05, -0.24], [0, -0.12, 0.15])] },
-
-  ak47: { anchors: { top: [0, 0.055, -0.12], muz: [0, 0.002, -0.575], under: [0, -0.034, -0.24], fg: [0, -0.034, -0.31], side: [0.028, 0, -0.24], drum: [0, -0.115, -0.06, 0.075], k: 1 }, muzzle: -0.58, parts: [...PARTS.ak47, ...hands([0.02, -0.05, -0.23], [0, -0.12, 0.15])] },
-
-  famas: { anchors: { top: [0, 0.105, -0.02], muz: [0, 0, -0.42], under: [0, -0.055, -0.14], fg: [0, -0.055, -0.15], side: [0.031, -0.01, -0.08], drum: [0, -0.125, 0.2, 0.07], k: 1 }, muzzle: -0.42, parts: [...PARTS.famas, ...hands([0.02, -0.1, -0.06], [0, -0.13, -0.02])] },
-
-  scar: { anchors: { top: [0, 0.05, -0.02], muz: [0, 0, -0.595], under: [0, -0.03, -0.27], fg: [0, -0.03, -0.35], side: [0.029, 0, -0.27], drum: [0, -0.12, -0.06, 0.075], k: 1 }, muzzle: -0.62, parts: [...PARTS.scar, ...hands([0.02, -0.05, -0.25], [0, -0.12, 0.15])] },
+  rifle: {
+    anchors: { top: [0, 0.064, -0.02], muz: [0, 0.004, -0.585], under: [0, -0.025, -0.26], fg: [0, -0.025, -0.32], side: [0.028, 0, -0.26], mag: [0, -0.145, -0.052], magRx: 0.22, drum: [0, -0.115, -0.055, 0.07], k: 1 },
+    muzzle: -0.62,
+    hands: { back: [0, -0.088, 0.078], front: [-0.015, -0.024, -0.27], fg: [0, -0.072, -0.32], mag: [0, -0.12, -0.052], bolt: [0, 0.052, 0.11], style: 'rifle' },
+    parts: PARTS.rifle,
+  },
+  ak47: {
+    anchors: { top: [0, 0.054, -0.06], muz: [0, 0.004, -0.545], under: [0, -0.032, -0.24], fg: [0, -0.032, -0.29], side: [0.028, 0, -0.24], mag: [0, -0.18, -0.055], magRx: 0.36, drum: [0, -0.115, -0.055, 0.075], k: 1 },
+    muzzle: -0.58,
+    hands: { back: [0, -0.088, 0.11], front: [-0.015, -0.028, -0.25], fg: [0, -0.078, -0.29], mag: [0, -0.13, -0.05], bolt: [0.03, 0.03, -0.04], style: 'rifle' },
+    parts: PARTS.ak47,
+  },
+  famas: {
+    anchors: { top: [0, 0.112, -0.01], muz: [0, 0, -0.42], under: [0, -0.054, -0.15], fg: [0, -0.054, -0.16], side: [0.031, -0.01, -0.08], mag: [0, -0.145, 0.145], magRx: 0.05, drum: [0, -0.125, 0.15, 0.068], k: 1 },
+    muzzle: -0.42,
+    hands: { back: [0, -0.105, -0.062], front: [-0.015, -0.054, -0.16], fg: [0, -0.095, -0.16], mag: [0, -0.125, 0.145], bolt: [0, 0.075, -0.02], style: 'bullpup' },
+    parts: PARTS.famas,
+  },
+  scar: {
+    anchors: { top: [0, 0.062, -0.02], muz: [0, 0, -0.605], under: [0, -0.034, -0.28], fg: [0, -0.034, -0.34], side: [0.03, 0, -0.28], mag: [0, -0.145, -0.05], magRx: 0.1, drum: [0, -0.12, -0.05, 0.075], k: 1 },
+    muzzle: -0.62,
+    hands: { back: [0, -0.09, 0.082], front: [-0.015, -0.032, -0.29], fg: [0, -0.08, -0.34], mag: [0, -0.125, -0.05], bolt: [-0.032, 0.028, -0.08], style: 'rifle' },
+    parts: PARTS.scar,
+  },
 
   // ------------------------------------------------ pistolets-mitrailleurs
-  smg: { anchors: { top: [0, 0.026, -0.03], muz: [0, 0, -0.29], under: [0, -0.055, -0.14], fg: [0, -0.055, -0.15], side: [0.026, 0, -0.05], drum: [0, -0.11, -0.06, 0.07], k: 0.9 }, muzzle: -0.34, parts: [...PARTS.smg, ...hands([0.01, -0.1, -0.06], [0, -0.11, 0.13])] },
-
-  mp5: { anchors: { top: [0, 0.046, -0.1], muz: [0, 0, -0.35], under: [0, -0.035, -0.2], fg: [0, -0.035, -0.26], side: [0.027, 0, -0.2], drum: [0, -0.11, -0.065, 0.07], k: 0.95 }, muzzle: -0.36, parts: [...PARTS.mp5, ...hands([0.02, -0.05, -0.2], [0, -0.12, 0.15])] },
-
-  p90: { anchors: { top: [0, 0.07, 0.06], muz: [0, 0, -0.245], under: [0, -0.1, -0.08], fg: [0, -0.1, -0.12], side: [0.031, 0, 0.0], drum: [0, -0.15, 0.1, 0.06], k: 0.95 }, muzzle: -0.27, parts: [...PARTS.p90, ...hands([0.02, -0.1, -0.09], [0, -0.12, 0.04])] },
+  smg: {
+    anchors: { top: [0, 0.038, 0.02], muz: [0, 0, -0.315], under: [0, -0.048, -0.13], fg: [0, -0.048, -0.14], side: [0.026, 0, -0.05], mag: [0, -0.21, -0.022], magRx: 0, drum: [0, -0.11, -0.025, 0.068], k: 0.9 },
+    muzzle: -0.34,
+    hands: { back: [0, -0.072, 0.115], front: [-0.012, -0.05, -0.12], fg: [0, -0.09, -0.14], mag: [0, -0.14, -0.022], bolt: [-0.03, 0.01, -0.02], style: 'rifle' },
+    parts: PARTS.smg,
+  },
+  mp5: {
+    anchors: { top: [0, 0.05, -0.02], muz: [0, 0.004, -0.36], under: [0, -0.034, -0.2], fg: [0, -0.034, -0.23], side: [0.027, 0, -0.2], mag: [0, -0.145, -0.05], magRx: 0.28, drum: [0, -0.11, -0.055, 0.068], k: 0.95 },
+    muzzle: -0.36,
+    hands: { back: [0, -0.085, 0.078], front: [-0.014, -0.03, -0.2], fg: [0, -0.078, -0.23], mag: [0, -0.12, -0.05], bolt: [-0.03, 0.038, -0.24], style: 'rifle' },
+    parts: PARTS.mp5,
+  },
+  p90: {
+    anchors: { top: [0, 0.064, -0.05], muz: [0, -0.002, -0.255], under: [0, -0.105, -0.06], fg: [0, -0.105, -0.07], side: [0.03, 0, 0.0], mag: [0, 0.055, 0.08], magRx: 0, drum: [0, -0.15, 0.1, 0.06], k: 0.95 },
+    muzzle: -0.27,
+    hands: { back: [0, -0.065, 0.08], front: [-0.012, -0.085, -0.06], fg: [0, -0.11, -0.07], mag: [0, 0.06, 0.08], bolt: [-0.028, 0.01, -0.08], style: 'bullpup' },
+    parts: PARTS.p90,
+  },
 
   // ------------------------------------------------ mitrailleuses
-  lmg: { anchors: { top: [0, 0.036, -0.02], muz: [0, 0, -0.745], under: [0, -0.036, -0.25], fg: [0, -0.036, -0.34], side: [0.029, 0, -0.25], drum: [0, -0.17, -0.02, 0.085], k: 1 }, muzzle: -0.74, parts: [...PARTS.lmg, ...hands([0.02, -0.05, -0.25], [0, -0.12, 0.15])] },
-
-  m249: { anchors: { top: [0, 0.045, 0.06], muz: [0, 0.004, -0.665], under: [0, -0.045, -0.26], fg: [0, -0.045, -0.34], side: [0.036, 0, -0.05], belt: [-0.075, -0.08, -0.02], k: 1 }, muzzle: -0.68, parts: [...PARTS.m249, ...hands([0.02, -0.04, -0.26], [0, -0.12, 0.15])] },
-
-  mg42: { anchors: { top: [0, 0.0425, 0.06], muz: [0, 0.012, -0.6], under: [0, -0.018, -0.3], fg: [0, -0.018, -0.22], side: [0.03, 0, 0.04], belt: [-0.05, -0.17, 0.02], k: 1 }, muzzle: -0.6, parts: [...PARTS.mg42, ...hands([0.02, -0.04, -0.12], [0, -0.12, 0.16])] },
-
-  pkm: { anchors: { top: [0, 0.04, 0], muz: [0, 0.004, -0.69], under: [0, -0.03, -0.3], fg: [0, -0.03, -0.39], side: [0.03, 0, 0], belt: [-0.06, -0.1, -0.03], k: 1 }, muzzle: -0.74, parts: [...PARTS.pkm, ...hands([0.02, -0.04, -0.2], [0, -0.12, 0.15])] },
+  lmg: {
+    anchors: { top: [0, 0.052, -0.04], muz: [0, 0.004, -0.745], under: [0, -0.034, -0.25], fg: [0, -0.034, -0.31], side: [0.029, 0, -0.25], drum: [0, -0.11, -0.02, 0.082], k: 1 },
+    muzzle: -0.74,
+    hands: { back: [0, -0.088, 0.11], front: [-0.018, -0.032, -0.26], fg: [0, -0.08, -0.31], mag: [0, -0.12, -0.02], bolt: [0.03, 0.028, -0.04], style: 'mg' },
+    parts: PARTS.lmg,
+  },
+  m249: {
+    anchors: { top: [0, 0.068, 0.02], muz: [0, 0.006, -0.67], under: [0, -0.045, -0.26], fg: [0, -0.045, -0.32], side: [0.036, 0, -0.05], belt: [-0.075, -0.08, -0.02], k: 1 },
+    muzzle: -0.68,
+    hands: { back: [0, -0.095, 0.105], front: [-0.02, -0.036, -0.28], fg: [0, -0.09, -0.32], mag: [0, -0.13, -0.04], bolt: [0.04, 0.02, 0.06], style: 'mg' },
+    parts: PARTS.m249,
+  },
+  mg42: {
+    anchors: { top: [0, 0.076, 0.02], muz: [0, 0.012, -0.602], under: [0, -0.024, -0.28], fg: [0, -0.024, -0.22], side: [0.032, 0, 0.04], belt: [-0.05, -0.15, 0.02], k: 1 },
+    muzzle: -0.6,
+    hands: { back: [0, -0.088, 0.105], front: [-0.02, -0.025, -0.18], fg: [0, -0.075, -0.22], mag: [0, -0.12, 0.0], bolt: [0.04, 0.02, 0.08], style: 'mg' },
+    parts: PARTS.mg42,
+  },
+  pkm: {
+    anchors: { top: [0, 0.072, 0.0], muz: [0, 0.004, -0.692], under: [0, -0.06, -0.28], fg: [0, -0.06, -0.34], side: [0.032, 0, 0], belt: [-0.06, -0.1, -0.03], k: 1 },
+    muzzle: -0.74,
+    hands: { back: [0, -0.088, 0.108], front: [-0.02, -0.048, -0.26], fg: [0, -0.1, -0.34], mag: [0, -0.12, -0.04], bolt: [0.038, 0.02, 0.06], style: 'mg' },
+    parts: PARTS.pkm,
+  },
 
   // ------------------------------------------------ fusils de précision
-  sniper: { anchors: { sf: [0, 0.085, -0.235], muz: [0, 0.012, -0.78], mag: [0, -0.15, -0.06], magW: 0.036, magD: 0.064, shells: [0.03, -0.03, 0.2], k: 1, acc: { suppressor: { len: 0.22, r: 0.026 } } }, muzzle: -0.78, parts: [...PARTS.sniper, ...hands([0.02, -0.06, -0.22], [0, -0.12, 0.14])] },
+  sniper: {
+    anchors: { sf: [0, 0.085, -0.235], muz: [0, 0.012, -0.764], mag: [0, -0.155, -0.06], magRx: 0, magW: 0.036, magD: 0.064, shells: [0.03, -0.03, 0.2], k: 1, acc: { suppressor: { len: 0.22, r: 0.026 } } },
+    muzzle: -0.78,
+    hands: { back: [0, -0.065, 0.055], front: [-0.015, -0.032, -0.22], mag: [0, -0.12, -0.06], bolt: [0.04, 0.032, 0.05], style: 'bolt' },
+    parts: PARTS.sniper,
+  },
+  svd: {
+    anchors: { sf: [0, 0.075, -0.185], muz: [0, 0.004, -0.815], mag: [0, -0.165, -0.05], magRx: 0.3, shells: [0.028, -0.03, 0.26], k: 1, acc: { suppressor: { len: 0.22, r: 0.025 } } },
+    muzzle: -0.82,
+    hands: { back: [0, -0.088, 0.108], front: [-0.015, -0.028, -0.25], mag: [0, -0.13, -0.05], bolt: [0.03, 0.024, 0.02], style: 'rifle' },
+    parts: PARTS.svd,
+  },
+  barrett: {
+    anchors: { sf: [0, 0.12, -0.285], muz: [0, 0.01, -0.86], mag: [0, -0.175, -0.06], magRx: 0, magW: 0.054, magD: 0.094, shells: [0.036, -0.02, 0.22], k: 1, acc: { suppressor: { len: 0.26, r: 0.034 }, muzzleBrake: { len: 0.06 } } },
+    muzzle: -0.86,
+    hands: { back: [0, -0.11, 0.06], front: [-0.02, -0.045, -0.22], mag: [0, -0.14, -0.06], bolt: [0.04, 0.025, 0.04], style: 'rifle' },
+    parts: PARTS.barrett,
+  },
 
-  svd: { anchors: { sf: [0, 0.075, -0.185], muz: [0, 0.004, -0.805], mag: [0, -0.168, -0.05], magRx: 0.3, shells: [0.028, -0.03, 0.26], k: 1, acc: { suppressor: { len: 0.22, r: 0.025 } } }, muzzle: -0.82, parts: [...PARTS.svd, ...hands([0.02, -0.05, -0.24], [0, -0.12, 0.15])] },
+  // ------------------------------------------------ fusils à pompe
+  shotgun: {
+    anchors: { muz: [0, 0.018, -0.635], tubeEnd: [0, -0.018, -0.52], tubeR: 0.0145, lamp: [0, -0.05, -0.44], shells: [0.03, -0.01, 0.26], k: 1 },
+    muzzle: -0.66,
+    hands: { back: [0, -0.055, 0.16], front: [-0.012, -0.034, -0.32], mag: [0, -0.045, -0.02], bolt: [0, -0.034, -0.24], style: 'pump' },
+    parts: PARTS.shotgun,
+  },
+  saiga: {
+    anchors: { muz: [0, 0.012, -0.602], drum: [0, -0.12, -0.06, 0.085], mag: [0, -0.19, -0.06], magRx: 0.28, lamp: [0, -0.052, -0.3], shells: [0.03, -0.02, 0.26], k: 1 },
+    muzzle: -0.6,
+    hands: { back: [0, -0.088, 0.108], front: [-0.016, -0.028, -0.25], mag: [0, -0.14, -0.06], bolt: [0.03, 0.028, -0.04], style: 'rifle' },
+    parts: PARTS.saiga,
+  },
 
-  barrett: { anchors: { sf: [0, 0.12, -0.285], muz: [0, 0.01, -0.82], mag: [0, -0.165, 0], magW: 0.054, magD: 0.094, shells: [0.036, -0.02, 0.22], k: 1, acc: { suppressor: { len: 0.26, r: 0.034 }, muzzleBrake: { len: 0.06 } } }, muzzle: -0.86, parts: [...PARTS.barrett, ...hands([0.02, -0.06, -0.2], [0, -0.14, 0.2])] },
-
-  // ------------------------------------------------ fusil à pompe
-  shotgun: { anchors: { muz: [0, 0.018, -0.61], tubeEnd: [0, -0.018, -0.5], tubeR: 0.014, lamp: [0, -0.052, -0.4], shells: [0.03, -0.01, 0.26], k: 1 }, muzzle: -0.66, parts: [...PARTS.shotgun, ...hands([0.02, -0.04, -0.27], [0, -0.12, 0.16])] },
-
-  // ------------------------------------------------ armes de la zone de l'Homme de Fer
-  saiga: { anchors: { muz: [0, 0.012, -0.6], drum: [0, -0.12, -0.06, 0.085], lamp: [0, -0.052, -0.3], shells: [0.03, -0.02, 0.26], k: 1 }, muzzle: -0.6, parts: [...PARTS.saiga, ...hands([0.02, -0.05, -0.25], [0, -0.12, 0.15])] },
-
-  crossbow: { anchors: { top: [0, 0.047, -0.06], tip: [0, 0.052, -0.34], side: [0.03, -0.02, 0.12], k: 1 }, muzzle: -0.3, parts: [...PARTS.crossbow, ...hands([0.0, -0.07, -0.1], [0, -0.12, 0.18])] },
-
-  m79: { anchors: { muz: [0, 0.02, -0.51], k: 1 }, muzzle: -0.5, parts: [...PARTS.m79, ...hands([0.02, -0.04, -0.24], [0, -0.12, 0.09])] },
-
-  // ------------------------------------------------ pistolet à rayons : corps rouge, ailettes, bulbe vert lumineux
-  raygun: { anchors: { muz: [0, 0, -0.235], top: [0, 0.04, -0.05], k: 1 }, muzzle: -0.22, parts: [...PARTS.raygun, ...hands([0, -0.09, 0.05], [0, -0.11, 0.09])] },
-
+  // ------------------------------------------------ armes spéciales
+  crossbow: {
+    anchors: { top: [0, 0.048, -0.04], tip: [0, 0.052, -0.34], side: [0.03, -0.02, 0.12], k: 1 },
+    muzzle: -0.3,
+    hands: { back: [0, -0.082, 0.165], front: [0, -0.045, -0.12], mag: [0, 0.04, -0.14], bolt: [0, 0.02, -0.04], style: 'crossbow' },
+    parts: PARTS.crossbow,
+  },
+  m79: {
+    anchors: { muz: [0, 0.02, -0.51], k: 1 },
+    muzzle: -0.5,
+    hands: { back: [0, -0.085, 0.045], front: [-0.012, -0.028, -0.24], mag: [0, 0.01, -0.15], bolt: [0, 0.03, 0.04], style: 'break' },
+    parts: PARTS.m79,
+  },
+  raygun: {
+    anchors: { muz: [0, 0.002, -0.235], top: [0, 0.05, -0.05], k: 1 },
+    muzzle: -0.22,
+    hands: { back: [0, -0.088, 0.042], front: null, mag: [0, 0.02, -0.02], bolt: [0, 0.04, -0.06], style: 'raygun' },
+    parts: PARTS.raygun,
+  },
 };
 
 // =====================================================================
-//  Accessoires du Pack-a-Punch. Chaque arme a des points d'ancrage (DEFS[id].anchors : sommet du rail, bouche, dessous du garde-main,
-//  bas du chargeur, tambour…) et chaque niveau une liste d'accessoires (LOADOUT, cumulative sauf remplacement). ACC est la bibliothèque,
-//  partagée par toutes les armes : chaque fonction renvoie des pièces (même format que DEFS) placées d'après les ancres.
-//  Les accessoires d'un niveau sont construits UNE fois par arme (première amélioration), puis clonés (géométries partagées).
+//  Bibliothèque d'accessoires (aléatoires + Pack-a-Punch)
 // =====================================================================
-const B = (w, h, d, x, y, z, mat, rx = 0, ry = 0, rz = 0) => ['B', w, h, d, x, y, z, mat, rx, ry, rz];
-const CZ = (r, len, x, y, z, mat, seg = 12, r2 = r) => ['C', r, len, x, y, z, mat, seg, r2];              // cylindre le long de z (r2 : rayon côté bouche)
-const CX = (r, len, x, y, z, mat, seg = 16) => ['Y', r, len, x, y, z, mat, Math.PI / 2, 0, seg];            // cylindre le long de x (tambour)
-const SP = (r, x, y, z, mat) => ['S', r, x, y, z, mat];
+const B = (w, h, d, x, y, z, mat, rx = 0, ry = 0, rz = 0, ...tags) => ['B', w, h, d, x, y, z, mat, rx, ry, rz, ...tags];
+const CZ = (r, len, x, y, z, mat, seg = 14, r2 = r, ...tags) => ['C', r, len, x, y, z, mat, seg, r2, ...tags];
+const CX = (r, len, x, y, z, mat, seg = 18, ...tags) => ['Y', r, len, x, y, z, mat, Math.PI / 2, 0, seg, ...tags];
+const SP = (r, x, y, z, mat, ...tags) => ['S', r, x, y, z, mat, ...tags];
 
 const ACC = {
   // ---- viseurs
-  redDot: (a) => { // point rouge : socle, boîtier, fenêtre, point lumineux
+  redDot: (a) => {
     const [, y, z] = a.top, k = a.k;
-    return [B(0.028 * k, 0.006, 0.07 * k, 0, y + 0.003, z, 'black'), B(0.026 * k, 0.022, 0.045 * k, 0, y + 0.017, z, 'black'), B(0.026 * k, 0.005, 0.024 * k, 0, y + 0.0295, z - 0.03 * k, 'black'),
-      B(0.017 * k, 0.015, 0.002, 0, y + 0.019, z - 0.0235 * k, 'lens'), SP(0.0028 * k, 0, y + 0.019, z + 0.0225 * k, 'dot')];
+    return [
+      B(0.03 * k, 0.007, 0.072 * k, 0, y + 0.0035, z, 'black'),
+      B(0.028 * k, 0.024, 0.046 * k, 0, y + 0.018, z, 'gun'),
+      B(0.03 * k, 0.006, 0.048 * k, 0, y + 0.032, z - 0.006 * k, 'black'),
+      B(0.005, 0.024, 0.044 * k, 0.013 * k, y + 0.02, z - 0.006 * k, 'black'),
+      B(0.005, 0.024, 0.044 * k, -0.013 * k, y + 0.02, z - 0.006 * k, 'black'),
+      B(0.019 * k, 0.017, 0.002, 0, y + 0.02, z - 0.024 * k, 'lens'),
+      SP(0.003 * k, 0, y + 0.02, z + 0.016 * k, 'dot'),
+    ];
   },
-  holo: (a) => { // viseur holographique : cadre ouvert, vitre, réticule
+  holo: (a) => {
     const [, y, z] = a.top, k = a.k;
-    return [B(0.034 * k, 0.008, 0.09 * k, 0, y + 0.004, z, 'black'), B(0.006, 0.034, 0.07 * k, 0.0155 * k, y + 0.025, z, 'black'), B(0.006, 0.034, 0.07 * k, -0.0155 * k, y + 0.025, z, 'black'),
-      B(0.037 * k, 0.008, 0.09 * k, 0, y + 0.046, z, 'black'), B(0.025 * k, 0.03, 0.003, 0, y + 0.026, z - 0.034 * k, 'lens'), SP(0.0028 * k, 0, y + 0.026, z + 0.03 * k, 'dot')];
+    return [
+      B(0.036 * k, 0.009, 0.094 * k, 0, y + 0.0045, z, 'black'),
+      B(0.034 * k, 0.012, 0.032 * k, 0, y + 0.014, z - 0.028 * k, 'gun'), // compartiment pile avant
+      B(0.006, 0.036, 0.074 * k, 0.0165 * k, y + 0.026, z, 'black'),
+      B(0.006, 0.036, 0.074 * k, -0.0165 * k, y + 0.026, z, 'black'),
+      B(0.04 * k, 0.008, 0.092 * k, 0, y + 0.047, z, 'black'),
+      B(0.027 * k, 0.031, 0.003, 0, y + 0.027, z - 0.034 * k, 'lens'),
+      SP(0.003 * k, 0, y + 0.027, z + 0.028 * k, 'dot'),
+      B(0.009 * k, 0.002, 0.002, 0, y + 0.027, z + 0.028 * k, 'dot'),
+      B(0.002, 0.009 * k, 0.002, 0, y + 0.027, z + 0.028 * k, 'dot'),
+    ];
+  },
+  acog: (a) => {
+    const [, y, z] = a.top, k = a.k;
+    return [
+      B(0.03, 0.02, 0.075, 0, y + 0.01, z, 'black'),
+      CZ(0.019, 0.125, 0, y + 0.031, z, 'gun', 16),
+      CZ(0.019, 0.038, 0, y + 0.031, z - 0.08, 'black', 16, 0.028 * k),
+      CZ(0.023, 0.032, 0, y + 0.031, z + 0.078, 'black', 16),
+      CZ(0.025, 0.004, 0, y + 0.031, z - 0.1, 'lens', 14),
+      CZ(0.018, 0.004, 0, y + 0.031, z + 0.095, 'lens', 14),
+      B(0.006, 0.005, 0.064, 0, y + 0.053, z, 'orange'), // fibre lumineuse
+      B(0.012, 0.014, 0.012, 0.022, y + 0.031, z, 'black'), // tourelle de réglage
+    ];
   },
   // ---- bouche
-  compensator: (a) => { // compensateur : bloc fendu
+  compensator: (a) => {
     const [, y, z] = a.muz;
-    return [B(0.026, 0.026, 0.045, 0, y, z - 0.012, 'gun'), ...[0, 1, 2].map((i) => B(0.028, 0.004, 0.006, 0, y + 0.0135, z - 0.004 - i * 0.012, 'black'))];
+    return [
+      B(0.026, 0.026, 0.048, 0, y, z - 0.014, 'gun'),
+      ...[0, 1, 2].map((i) => B(0.029, 0.0045, 0.006, 0, y + 0.0135, z - 0.005 - i * 0.012, 'black')),
+    ];
   },
-  suppressor: (a, c) => { // silencieux : tube noir, bague et embout (dorés au niveau III)
-    const [, y, z] = a.muz, len = c.len ?? 0.17, r = (c.r ?? 0.021) * (a.k > 0.9 ? 1 : 0.95);
-    return [CZ(r, len, 0, y, z - len / 2 + 0.01, 'black', 14), CZ(r * 1.07, 0.012, 0, y, z - 0.012, 'gold', 14), CZ(r * 1.07, 0.012, 0, y, z - len + 0.005, 'gold', 14)];
+  suppressor: (a, c) => {
+    const [, y, z] = a.muz, len = c.len ?? 0.175, r = (c.r ?? 0.02) * (a.k > 0.9 ? 1 : 0.92);
+    const ringMat = (c.level || 0) >= 3 ? 'gold' : 'parker';
+    return [
+      CZ(r, len, 0, y, z - len / 2 + 0.008, 'black', 16),
+      CZ(r * 1.07, 0.014, 0, y, z - 0.012, ringMat, 16),
+      CZ(r * 1.05, 0.055, 0, y, z - len * 0.48, 'gun', 16), // manchon thermique
+      CZ(r * 1.07, 0.012, 0, y, z - len + 0.006, ringMat, 16),
+    ];
   },
-  goldBarrel: (a) => { // canon doré : manchon à la bouche et filets d'or sur le dessus
+  goldBarrel: (a) => {
     const [, y, z] = a.muz, k = a.k;
     return [CZ(0.0115 * (k > 0.9 ? 1.25 : 1), 0.06, 0, y, z + 0.02, 'gold', 12), B(0.006, 0.003, 0.18, 0, a.top[1] + 0.001, a.top[2] - 0.04, 'gold')];
   },
   // ---- dessous et flancs
-  foregrip: (a) => { // poignée verticale
+  foregrip: (a) => {
     const [, y, z] = a.fg;
-    return [B(0.036, 0.012, 0.05, 0, y - 0.006, z, 'black'), B(0.028, 0.075, 0.034, 0, y - 0.047, z, 'poly'), B(0.03, 0.01, 0.036, 0, y - 0.088, z, 'black')];
+    return [
+      B(0.036, 0.012, 0.052, 0, y - 0.006, z, 'black'),
+      CZ(0.016, 0.082, 0, y - 0.05, z, 'poly', 12, 0.014),
+      B(0.032, 0.01, 0.038, 0, y - 0.092, z, 'black'),
+    ];
   },
-  laser: (a, c) => { // module laser : boîtier sous le canon ; le faisceau n'existe que pour le joueur local
-    const [, y, z] = c.at || a.under, k = a.k, zf = z - 0.045 * k;
-    const parts = [B(0.026 * k, 0.024 * k, 0.055 * k, 0, y - 0.012 * k, z - 0.02 * k, 'black'), B(0.016 * k, 0.016 * k, 0.004, 0, y - 0.012 * k, zf - 0.012 * k, 'dot')];
-    if (c.local) parts.push(B(0.0025, 0.0025, 40, 0, y - 0.012 * k, zf - 20.012, 'beam'));
+  laser: (a, c) => {
+    const [, y, z] = c.at || a.under || a.side, k = a.k, zf = z - 0.045 * k;
+    const parts = [
+      B(0.026 * k, 0.024 * k, 0.058 * k, 0, y - 0.012 * k, z - 0.02 * k, 'black'),
+      B(0.014 * k, 0.014 * k, 0.006, 0, y - 0.012 * k, zf - 0.012 * k, 'dot'),
+    ];
+    if (c.local) parts.push(B(0.0022, 0.0022, 36, 0, y - 0.012 * k, zf - 18.012, 'beam'));
     return parts;
   },
-  extMag: (a) => { // chargeur allongé : prolongement dans l'axe du chargeur
-    const [, y, z] = a.mag, t = a.magRx, dy = -Math.cos(t), dz = -Math.sin(t), w = a.magW ?? 0.036, d = a.magD ?? 0.052;
-    return [B(w, 0.065, d, 0, y + dy * 0.0325, z + dz * 0.0325, 'gun', t), B(w + 0.006, 0.01, d + 0.008, 0, y + dy * 0.07, z + dz * 0.07, 'black', t)];
+  tacLight: (a) => {
+    const src = a.lamp || a.under;
+    const [x0, y, z] = src;
+    const x = a.lamp ? x0 : (a.side ? a.side[0] + 0.014 : 0.028);
+    const yy = a.lamp ? y : y + 0.012;
+    return [
+      B(0.02, 0.014, 0.046, x * 0.65, yy, z, 'black'),
+      CZ(0.015, 0.095, x, yy, z - 0.01, 'gun', 14),
+      CZ(0.018, 0.022, x, yy, z - 0.062, 'black', 14, 0.015),
+      CZ(0.014, 0.004, x, yy, z - 0.074, 'cyan', 12),
+    ];
   },
-  drum: (a) => { // tambour à la place du chargeur : disque, moyeu, nervures
+  extMag: (a) => {
+    if (!a.mag) return [];
+    const [, y, z] = a.mag, t = a.magRx || 0, dy = -Math.cos(t), dz = -Math.sin(t), w = a.magW ?? 0.034, d = a.magD ?? 0.054;
+    return [
+      B(w, 0.072, d, 0, y + dy * 0.036, z + dz * 0.036, 'gun', t, 0, 0, 'mag'),
+      B(w + 0.008, 0.012, d + 0.01, 0, y + dy * 0.076, z + dz * 0.076, 'black', t, 0, 0, 'mag'),
+    ];
+  },
+  fastMag: (a) => {
+    if (!a.mag) return [];
+    const [, y, z] = a.mag, t = a.magRx || 0, dy = -Math.cos(t), dz = -Math.sin(t), w = a.magW ?? 0.034, d = a.magD ?? 0.054;
+    // Chargeur jumelé / sangle tactique d'extraction rapide (bande bleue/tan + boucle Magpul)
+    return [
+      B(w * 0.9, 0.09, d * 0.92, w + 0.008, y - dy * 0.025, z - dz * 0.025, 'parker', t, 0, 0, 'mag'),
+      B(w * 2.2, 0.026, d + 0.008, w * 0.48, y - dy * 0.02, z - dz * 0.02, 'tan', t, 0, 0, 'mag'), // ruban de couplage
+      B(w + 0.006, 0.016, d * 0.7, 0, y + dy * 0.014, z + dz * 0.014, 'poly', t, 0, 0, 'mag'),   // boucle d'extraction
+    ];
+  },
+  drum: (a) => {
+    if (!a.drum) return [];
     const [, y, z, r] = a.drum;
-    return [CX(r, 0.075, 0, y, z, 'gun', 18), CX(r * 0.6, 0.086, 0, y, z, 'black', 12), CX(r * 0.85, 0.082, 0, y, z, 'parker', 18),
-      B(0.034, 0.03, 0.05, 0, y + r - 0.012, z, 'black')];
+    return [
+      CX(r, 0.076, 0, y, z, 'gun', 20, 'mag'),
+      CX(r * 0.6, 0.088, 0, y, z, 'black', 14, 'mag'),
+      CX(r * 0.85, 0.084, 0, y, z, 'parker', 20, 'mag'),
+      B(0.034, 0.032, 0.05, 0, y + r - 0.012, z, 'black', 0, 0, 0, 'mag'),
+    ];
   },
-  // ================= v0.35 : mitrailleuses, précision, pompes, spéciales, lance-grenades sous canon, Éther =================
-  acog: (a) => { // lunette ACOG : tube, objectif évasé, oculaire, fibre lumineuse
-    const [, y, z] = a.top, k = a.k;
-    return [B(0.03, 0.02, 0.07, 0, y + 0.01, z, 'black'), CZ(0.019, 0.12, 0, y + 0.03, z, 'black', 14), CZ(0.019, 0.035, 0, y + 0.03, z - 0.0775, 'black', 14, 0.027 * k), CZ(0.022, 0.03, 0, y + 0.03, z + 0.075, 'black', 14),
-      CZ(0.024, 0.004, 0, y + 0.03, z - 0.097, 'lens', 14), B(0.005, 0.004, 0.06, 0, y + 0.052, z, 'orange')];
-  },
-  thermal: (a) => { // lunette thermique additionnelle, devant la lunette du fusil de précision
+  // ---- accessoires spéciaux / Pack-a-Punch
+  thermal: (a) => {
     const [, y, z] = a.sf;
     return [B(0.062, 0.062, 0.13, 0, y, z - 0.075, 'gun'), B(0.03, 0.012, 0.2, 0, y - 0.04, z - 0.05, 'black'), CZ(0.023, 0.01, 0, y, z - 0.143, 'cyan', 14), B(0.014, 0.022, 0.02, 0.037, y + 0.01, z - 0.05, 'black'),
       B(0.05, 0.008, 0.1, 0, y + 0.035, z - 0.075, 'black')];
   },
-  muzzleBrake: (a, c) => { // frein de bouche : bloc à évents
+  muzzleBrake: (a, c) => {
     const [, y, z] = a.muz, len = c.len ?? 0.07;
     return [B(0.034, 0.034, len, 0, y, z - len / 2 + 0.01, 'gun'), ...[0, 1, 2].flatMap((i) => [B(0.038, 0.005, 0.01, 0, y + 0.0175, z - 0.012 - i * (len / 4), 'black'), B(0.005, 0.022, 0.01, 0.0175, y, z - 0.012 - i * (len / 4), 'black'), B(0.005, 0.022, 0.01, -0.0175, y, z - 0.012 - i * (len / 4), 'black')])];
   },
-  heavyBarrel: (a) => { // canon lourd : manchon épais à ailettes et bague dorée
+  heavyBarrel: (a) => {
     const [, y, z] = a.muz;
     return [CZ(0.024, 0.26, 0, y, z + 0.16, 'gun', 14), ...[0, 1, 2, 3, 4].map((i) => CZ(0.03, 0.01, 0, y, z + 0.05 + i * 0.045, 'black', 14)), CZ(0.028, 0.014, 0, y, z + 0.035, 'gold', 14)];
   },
-  belt: (a) => { // bande de cartouches qui pend du boîtier
+  belt: (a) => {
     const [bx, by, bz] = a.belt;
     return [0, 1, 2, 3, 4, 5, 6].map((i) => { const t = i / 6; return B(0.02, 0.036, 0.03, bx - 0.012 - 0.04 * Math.sin(t * Math.PI), by - 0.12 * t, bz, 'gold', 0, 0, -0.5 * Math.cos(t * Math.PI)); });
   },
-  choke: (a) => { // choke : bague de bouche resserrée
+  choke: (a) => {
     const [, y, z] = a.muz;
     return [CZ(0.021, 0.045, 0, y, z + 0.0, 'black', 12), CZ(0.0235, 0.008, 0, y, z - 0.015, 'gun', 12)];
   },
-  tubeExt: (a) => { // tube-magasin allongé
+  tubeExt: (a) => {
     const [, y, z] = a.tubeEnd, r = a.tubeR;
     return [CZ(r, 0.1, 0, y, z - 0.045, 'black', 10), CZ(r * 1.25, 0.012, 0, y, z - 0.098, 'gun', 10)];
   },
-  flashlight: (a) => { // lampe sous le canon (le faisceau n'existe pas : aucune lumière en plus)
+  flashlight: (a) => {
     const [, y, z] = a.lamp;
     return [B(0.024, 0.012, 0.05, 0, y + 0.014, z, 'black'), CZ(0.018, 0.1, 0, y, z, 'black', 12), CZ(0.016, 0.004, 0, y, z - 0.052, 'cyan', 12)];
   },
-  dragon: (a) => { // souffle du dragon : bouche évasée à l'incandescence orange
+  dragon: (a) => {
     const [, y, z] = a.muz;
     return [CZ(0.02, 0.07, 0, y, z - 0.02, 'black', 12, 0.034), CZ(0.031, 0.006, 0, y, z - 0.056, 'orange', 14), CZ(0.024, 0.002, 0, y, z - 0.0595, 'orange', 14)];
   },
-  shells: (a) => { // cartouches orange rangées sur le flanc de la crosse
+  shells: (a) => {
     const [x, y, z] = a.shells;
     return [B(0.01, 0.014, 0.1, x, y - 0.024, z + 0.033, 'poly'), ...[0, 1, 2, 3].map((i) => ['Y', 0.0085, 0.044, x + 0.005, y, z + i * 0.022, 'orange', 0, 0, 8])];
   },
-  explosiveRounds: (a) => { // balles explosives : cartouches à pointe orange sur le flanc de la crosse
+  explosiveRounds: (a) => {
     const [x, y, z] = a.shells;
     return [B(0.01, 0.014, 0.1, x, y - 0.024, z + 0.033, 'poly'), ...[0, 1, 2, 3].flatMap((i) => [['Y', 0.0075, 0.04, x + 0.005, y, z + i * 0.022, 'gold', 0, 0, 8], SP(0.0078, x + 0.005, y + 0.022, z + i * 0.022, 'orange')])];
   },
-  warhead: (a) => { // carreau explosif : ogive rouge à bague orange (se cache avec le carreau quand l'arme est vide)
+  warhead: (a) => {
     const [, y, z] = a.tip;
     return [[...CZ(0.015, 0.05, 0, y, z + 0.035, 'red', 10, 0.007), 'bolt'], [...CZ(0.0158, 0.008, 0, y, z + 0.05, 'orange', 10), 'bolt']];
   },
-  fragWarhead: (a) => { // carreau à fragmentation : tête sphérique cloutée
+  fragWarhead: (a) => {
     const [, y, z] = a.tip;
     return [[...SP(0.02, 0, y, z + 0.04, 'gold'), 'bolt'], ...[[1, 0], [-1, 0], [0, 1], [0, -1]].map(([sx, sy]) => [...B(0.012, 0.012, 0.012, sx * 0.02, y + sy * 0.02, z + 0.04, 'black', 0.5, 0.5, 0), 'bolt']),
       [...CZ(0.022, 0.008, 0, y, z + 0.06, 'orange', 12), 'bolt']];
   },
-  quiver: (a) => { // carquois de trois carreaux sur le flanc
+  quiver: (a) => {
     const [x, y, z] = a.side;
     return [B(0.04, 0.05, 0.16, x + 0.02, y, z, 'poly'), ...[-1, 0, 1].flatMap((i) => [CZ(0.006, 0.12, x + 0.02 + i * 0.012, y + 0.008, z - 0.1, 'black', 8), CZ(0.007, 0.02, x + 0.02 + i * 0.012, y + 0.008, z - 0.165, 'red', 8, 0.003)])];
   },
-  shortStock: () => [B(0.044, 0.08, 0.05, 0, -0.03, 0.095, 'wood', 0.15), B(0.05, 0.09, 0.012, 0, -0.035, 0.125, 'poly', 0.15)], // crosse sciée (la crosse d'origine est cachée)
-  m79Drum: () => [CZ(0.05, 0.075, 0, 0.008, -0.205, 'gun', 14), ...[0, 1, 2].map((j) => { const t = Math.PI / 2 + j * Math.PI * 2 / 3; return CZ(0.011, 0.004, Math.cos(t) * 0.03, 0.008 + Math.sin(t) * 0.03, -0.2435, 'black', 8); })], // tambour de trois obus
-  bigMuzzle: (a) => { // canon renforcé pour l'explosion x4,5 : manchon, bande orange
+  shortStock: () => [B(0.044, 0.08, 0.05, 0, -0.03, 0.095, 'wood', 0.15), B(0.05, 0.09, 0.012, 0, -0.035, 0.125, 'poly', 0.15)],
+  m79Drum: () => [CZ(0.05, 0.075, 0, 0.008, -0.205, 'gun', 14), ...[0, 1, 2].map((j) => { const t = Math.PI / 2 + j * Math.PI * 2 / 3; return CZ(0.011, 0.004, Math.cos(t) * 0.03, 0.008 + Math.sin(t) * 0.03, -0.2435, 'black', 8); })],
+  bigMuzzle: (a) => {
     const [, y, z] = a.muz;
     return [CZ(0.046, 0.07, 0, y, z + 0.02, 'gun', 14), CZ(0.0475, 0.012, 0, y, z + 0.02, 'orange', 14), CZ(0.05, 0.01, 0, y, z - 0.012, 'black', 14)];
   },
-  goldFins: () => [...[0, 1, 2].map((i) => B(0.15, 0.016, 0.036, 0, 0, -0.08 - i * 0.05, 'gold')), B(0.012, 0.045, 0.12, 0, 0.055, -0.11, 'gold')], // ailettes dorées
-  twinBulb: () => [SP(0.028, 0, 0.06, -0.15, 'glow'), B(0.012, 0.03, 0.012, 0, 0.045, -0.15, 'gold')],                                           // second bulbe
-  coil: () => [B(0.01, 0.01, 0.15, 0.04, 0, -0.3, 'gold'), B(0.01, 0.01, 0.15, -0.04, 0, -0.3, 'gold'), SP(0.014, 0.04, 0, -0.38, 'cyan'), SP(0.014, -0.04, 0, -0.38, 'cyan'), B(0.08, 0.004, 0.004, 0, 0, -0.372, 'cyan')], // Porte-Tonnerre : bobine
-  glauncher: (a) => { // lance-grenades sous canon : tube, bague, boîtier, pontet, hausse
+  goldFins: () => [...[0, 1, 2].map((i) => B(0.15, 0.016, 0.036, 0, 0, -0.08 - i * 0.05, 'gold')), B(0.012, 0.045, 0.12, 0, 0.055, -0.11, 'gold')],
+  twinBulb: () => [SP(0.028, 0, 0.06, -0.15, 'glow'), B(0.012, 0.03, 0.012, 0, 0.045, -0.15, 'gold')],
+  coil: () => [B(0.01, 0.01, 0.15, 0.04, 0, -0.3, 'gold'), B(0.01, 0.01, 0.15, -0.04, 0, -0.3, 'gold'), SP(0.014, 0.04, 0, -0.38, 'cyan'), SP(0.014, -0.04, 0, -0.38, 'cyan'), B(0.08, 0.004, 0.004, 0, 0, -0.372, 'cyan')],
+  glauncher: (a) => {
     const [, y, z] = a.under;
     return [CZ(0.027, 0.22, 0, y - 0.028, z - 0.02, 'black', 12), CZ(0.03, 0.012, 0, y - 0.028, z - 0.128, 'gun', 12), B(0.05, 0.034, 0.1, 0, y - 0.016, z + 0.06, 'gun'), B(0.006, 0.03, 0.04, 0, y - 0.045, z + 0.1, 'black'), B(0.006, 0.035, 0.012, 0.03, y, z, 'black')];
   },
-  etherCell: (a) => { // cellule d'Éther : fiole lumineuse sur le flanc
+  etherCell: (a) => {
     const [x, y, z] = a.side;
     return [CZ(0.011, 0.09, x + 0.011, y + 0.012, z, 'ether', 8), B(0.008, 0.026, 0.016, x + 0.004, y + 0.012, z - 0.03, 'black'), B(0.008, 0.026, 0.016, x + 0.004, y + 0.012, z + 0.03, 'black')];
   },
 };
 
-// Accessoires par niveau (cumulatifs, sauf remplacement) et par catégorie ; surcharges par arme dans LOADOUT_ID
+// Slot mapping so random attachments & Pack-a-Punch accessories never overlap on the same mount
+const ACC_SLOT = {
+  redDot: 'optic', holo: 'optic', acog: 'optic',
+  suppressor: 'muzzle', compensator: 'muzzle', muzzleBrake: 'muzzle', choke: 'muzzle', dragon: 'muzzle', bigMuzzle: 'muzzle',
+  extMag: 'mag', fastMag: 'mag', drum: 'mag', tubeExt: 'mag',
+  foregrip: 'under', glauncher: 'under',
+  laser: 'tac', tacLight: 'tac', flashlight: 'tac',
+};
+
+// Vérifie qu'un accessoire dispose bien de ses ancres sur cette arme
+function canMount(id, accName) {
+  const def = DEFS[id], a = def?.anchors;
+  if (!a || !ACC[accName]) return false;
+  if ((accName === 'redDot' || accName === 'holo' || accName === 'acog') && !a.top) return false;
+  if ((accName === 'suppressor' || accName === 'compensator' || accName === 'muzzleBrake' || accName === 'choke') && !a.muz) return false;
+  if ((accName === 'extMag' || accName === 'fastMag') && !a.mag) return false;
+  if (accName === 'drum' && !a.drum) return false;
+  if (accName === 'tubeExt' && !a.tubeEnd) return false;
+  if (accName === 'foregrip' && !a.fg) return false;
+  if (accName === 'laser' && !a.under && !a.side) return false;
+  if (accName === 'tacLight' && !a.lamp && !a.under) return false;
+  return true;
+}
+
+// Tire un ensemble aléatoire d'accessoires compatibles pour une arme (source: 'start' | 'wall' | 'box')
+export function rollAttachments(id, source = 'wall') {
+  const A = CONFIG.attachments, W = CONFIG.weapons[id];
+  if (!A || !W || !DEFS[id]) return [];
+  const profile = A.roll[source] || A.roll.wall;
+  const bySlot = {};
+  for (const [accId, d] of Object.entries(A.defs)) {
+    if (d.exclude?.includes(id)) continue;
+    const match = d.ids ? d.ids.includes(id) : d.cats?.includes(W.cat);
+    if (!match || !canMount(id, accId)) continue;
+    (bySlot[d.slot] ||= []).push(accId);
+  }
+  const availSlots = A.slots.filter((s) => bySlot[s]?.length);
+  if (!availSlots.length) return [];
+  // Shuffle available slots
+  const shuffled = availSlots.slice().sort(() => Math.random() - 0.5);
+  const out = [];
+  for (const slot of shuffled) {
+    if (out.length >= profile.max) break;
+    if (Math.random() < profile.slotChance) {
+      const pool = bySlot[slot];
+      out.push(pool[Math.floor(Math.random() * pool.length)]);
+    }
+  }
+  // Guarantee minimum count when compatible slots exist
+  while (out.length < Math.min(profile.min, shuffled.length)) {
+    const slot = shuffled.find((s) => !out.some((o) => A.defs[o].slot === s));
+    if (!slot) break;
+    const pool = bySlot[slot];
+    out.push(pool[Math.floor(Math.random() * pool.length)]);
+  }
+  return out;
+}
+
+// Accessoires Pack-a-Punch par niveau (cumulatifs, sauf remplacement)
 const LOADOUT = {
   pistol: [['redDot', 'compensator'], ['redDot', 'compensator', 'extMag', 'laser'], ['redDot', 'extMag', 'laser', 'suppressor', 'goldBarrel', 'etherCell']],
   ar: [['holo'], ['holo', 'foregrip', 'drum'], ['holo', 'drum', 'glauncher', 'etherCell']],
@@ -376,51 +656,110 @@ const loadoutOf = (id, level) => {
   return l?.[level - 1] || null;
 };
 
-const MATS = new WeakMap();  // groupe de base -> ses matériaux
-const CACHE = new WeakMap(); // groupe de base -> { 'niveau[L]': groupe d'accessoires }
+// Fusionne accessoires aléatoires et accessoires Pack-a-Punch sans chevauchement sur un même rail/emplacement
+function mergeAccessoryList(id, level, atts) {
+  const papList = level > 0 ? (loadoutOf(id, level) || []) : [];
+  const randList = Array.isArray(atts) ? atts.filter((n) => canMount(id, n)) : [];
+  if (!papList.length && !randList.length) return null;
+  const out = [];
+  const usedSlots = new Set();
+  // Pack-a-Punch accessories take priority on conflicting slots, then random attachments fill remaining slots
+  for (const name of papList) {
+    out.push(name);
+    if (ACC_SLOT[name]) usedSlots.add(ACC_SLOT[name]);
+  }
+  for (const name of randList) {
+    if (out.includes(name)) continue;
+    const sl = ACC_SLOT[name];
+    if (sl && usedSlots.has(sl)) continue;
+    out.push(name);
+    if (sl) usedSlots.add(sl);
+  }
+  return out;
+}
 
-// Pose les accessoires du niveau `level` (0 : aucun) sur `target`, un modèle de l'arme `id`. base : le modèle d'origine dont viennent les matériaux et le
-// cache (target lui-même pour la vue à la première personne, le modèle du kit pour une copie). opts.local : vue du joueur local (faisceau du laser).
-// Sans effet si le niveau n'a pas changé.
+const MATS = new WeakMap();
+const CACHE = new WeakMap();
+
+// Pose les accessoires du niveau `level` et les accessoires aléatoires `opts.atts` sur `target`.
 export function attachAccessories(target, id, level, base = target, opts = {}) {
-  const key = level + (opts.local ? 'L' : '');
+  const atts = Array.isArray(opts.atts) ? opts.atts.slice().sort() : [];
+  const key = `${level | 0}${opts.local ? 'L' : ''}|${atts.join(',')}`;
   if (target.userData.accKey === key) return;
   target.userData.accKey = key;
   const old = target.getObjectByName('acc');
   if (old) target.remove(old);
+  const oldMagAcc = target.getObjectByName('magAcc');
+  if (oldMagAcc) oldMagAcc.parent.remove(oldMagAcc);
+
+  // Restore base visibility of replaceable parts
   target.traverse((o) => { if (o.userData.mag || o.userData.stock || o.userData.optic) o.visible = true; });
-  const list = level > 0 ? loadoutOf(id, level) : null;
-  if (!list) return;
+  const magPiv = target.getObjectByName('magPivot');
+  if (magPiv) magPiv.visible = true;
+
+  const list = mergeAccessoryList(id, level | 0, atts);
+  target.userData.activeAcc = list || [];
+  if (!list || !list.length) return;
+
   let c = CACHE.get(base);
   if (!c) CACHE.set(base, c = {});
-  let proto = c[key];
-  if (!proto) {
+  let entry = c[key];
+  if (!entry) {
     const def = DEFS[id], a = { k: 1, magRx: 0, ...def.anchors };
-    proto = new THREE.Group();
-    proto.name = 'acc';
-    const parts = [];
-    for (const name of list) parts.push(...ACC[name](a, { level, local: !!opts.local, ...(a.acc?.[name]) }));
-    build(proto, MATS.get(base), parts);
-    c[key] = proto;
+    const staticParts = [], magParts = [];
+    for (const name of list) {
+      if (!ACC[name]) continue;
+      const built = ACC[name](a, { level: level | 0, local: !!opts.local, ...(a.acc?.[name]) });
+      for (const p of built) {
+        if (p.includes('mag')) magParts.push(p);
+        else staticParts.push(p);
+      }
+    }
+    const proto = new THREE.Group(); proto.name = 'acc';
+    if (staticParts.length) build(proto, MATS.get(base), staticParts);
+    const magProto = magParts.length ? new THREE.Group() : null;
+    if (magProto) { magProto.name = 'magAcc'; build(magProto, MATS.get(base), magParts); }
+    entry = { proto, magProto };
+    c[key] = entry;
   }
-  target.add(proto.clone(true));
-  if (list.includes('drum')) target.traverse((o) => { if (o.userData.mag) o.visible = false; });
+
+  if (entry.proto.children.length) target.add(entry.proto.clone(true));
+  if (entry.magProto) {
+    const mp = entry.magProto.clone(true);
+    if (magPiv) magPiv.add(mp);
+    else target.add(mp);
+  }
+  if (list.includes('drum')) {
+    // Hide base magazine meshes but keep the newly attached drum inside magAcc visible!
+    if (magPiv) for (const ch of magPiv.children) if (ch.name !== 'magAcc') ch.visible = false;
+  }
   if (list.includes('shortStock')) target.traverse((o) => { if (o.userData.stock) o.visible = false; });
-  if (list.includes('acog')) target.traverse((o) => { if (o.userData.optic) o.visible = false; });
+  if (list.includes('acog') || list.includes('redDot') || list.includes('holo')) target.traverse((o) => { if (o.userData.optic) o.visible = false; });
 }
 
 export function buildWeaponModels(parentGroup) {
-  const vms = {}, info = {};
+  const vms = {}, info = {}, hands = {};
   for (const [id, def] of Object.entries(DEFS)) {
     const grp = new THREE.Group();
     const M = mats();
     MATS.set(grp, M);
     build(grp, M, def.parts);
+    const off = def.offset || [0, 0, 0];
     if (def.offset) grp.position.set(...def.offset);
     grp.visible = false;
     parentGroup.add(grp);
     vms[id] = grp;
-    info[id] = { muzzle: def.muzzle + (def.offset ? def.offset[2] : 0), muzzleY: def.offset ? def.offset[1] + 0.005 : 0.015 };
+    info[id] = { muzzle: def.muzzle + off[2], muzzleY: off[1] + 0.008 };
+    const h = def.hands;
+    const addOff = (v) => (v ? new THREE.Vector3(v[0] + off[0], v[1] + off[1], v[2] + off[2]) : null);
+    hands[id] = {
+      back: addOff(h.back),
+      front: addOff(h.front),
+      fg: addOff(h.fg),
+      mag: addOff(h.mag),
+      bolt: addOff(h.bolt),
+      style: h.style || 'rifle',
+    };
   }
-  return { vms, info };
+  return { vms, info, hands };
 }

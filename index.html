@@ -63,9 +63,31 @@
 
     #points { position: absolute; left: 24px; bottom: 130px; font-size: 34px; color: #ffd24a; text-shadow: 0 0 4px #000; }
 
+    /* Vision nocturne (NVG) : viseur binoculaire, teinte phosphore vert en qualité Rapide/Normale, flash d'activation */
+    #nvgOverlay { position: fixed; inset: 0; pointer-events: none; opacity: 0; transition: opacity .16s ease-out; }
+    body.nvg-active #nvgOverlay { opacity: var(--nvg, 1); }
+    #nvgOverlay .nvg-tint { position: absolute; inset: 0; opacity: 0; background: linear-gradient(180deg, rgba(24,255,95,0.28), rgba(10,165,58,0.22)); mix-blend-mode: color; }
+    body.nvg-nopost #nvgOverlay .nvg-tint { opacity: 1; }
+    #nvgOverlay .nvg-lift { position: absolute; inset: 0; opacity: 0; background: radial-gradient(circle at 50% 50%, rgba(48,255,112,0.16) 0%, rgba(12,92,36,0.12) 68%, rgba(0,22,8,0.28) 100%); mix-blend-mode: screen; }
+    body.nvg-nopost #nvgOverlay .nvg-lift { opacity: 1; }
+    #nvgOverlay .nvg-scan { position: absolute; inset: 0; opacity: 0.22; background: repeating-linear-gradient(0deg, rgba(0,28,8,0.34) 0px, rgba(0,28,8,0.34) 1px, transparent 1px, transparent 3px); }
+    #nvgOverlay .nvg-tubes { position: absolute; inset: 0; background:
+      radial-gradient(circle at 31% 50%, transparent 0%, transparent 33%, rgba(0,12,4,0.42) 44%, rgba(0,6,2,0.88) 60%),
+      radial-gradient(circle at 69% 50%, transparent 0%, transparent 33%, rgba(0,12,4,0.42) 44%, rgba(0,6,2,0.88) 60%);
+      mix-blend-mode: multiply; }
+    #nvgOverlay .nvg-frame { position: absolute; inset: 0; box-shadow: inset 0 0 90px 16px rgba(0,16,5,0.82); }
+    #nvgFlash { position: fixed; inset: 0; pointer-events: none; background: radial-gradient(circle at 50% 50%, rgba(140,255,175,0.85), rgba(20,180,70,0.45)); opacity: 0; }
+    #nvgFlash.pulse { animation: nvgPulse .32s ease-out; }
+    @keyframes nvgPulse { 0% { opacity: 0.72; } 100% { opacity: 0; } }
+    #nvgBadge { display: none; margin-top: 4px; font-family: Arial, sans-serif; font-size: 12px; font-weight: bold; letter-spacing: 1.5px; color: #75b884; text-shadow: 0 0 4px #000; }
+    #nvgBadge.owned { display: block; }
+    #nvgBadge.on { color: #4dff7e; text-shadow: 0 0 8px rgba(57,255,106,0.75); }
+
     #stats { position: absolute; right: 28px; bottom: 20px; text-align: right; text-shadow: 0 0 4px #000; }
     #weapon { font-size: 18px; letter-spacing: 2px; color: #bbb; }
     #weapon small { display: block; font-size: 12px; letter-spacing: 1px; color: #888; font-family: Arial, sans-serif; margin-top: -1px; }
+    #weapon .att-row { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 4px; margin-top: 3px; }
+    #weapon .att-tag { font-family: Arial, sans-serif; font-size: 10px; font-weight: bold; letter-spacing: 0.6px; padding: 1px 6px; border-radius: 3px; background: rgba(12, 22, 32, 0.72); border: 1px solid rgba(110, 210, 255, 0.42); color: #bfe8ff; }
     #inv { font-size: 13px; color: #888; font-family: Arial, sans-serif; letter-spacing: 1px; margin-bottom: 2px; }
     #ammo { font-size: 56px; }
     #ammo span { font-size: 28px; color: #aaa; }
@@ -676,6 +698,8 @@
 </head>
 <body>
   <div id="cinema" aria-hidden="true"><i class="vig"></i><i class="grain"></i></div>
+  <div id="nvgOverlay" aria-hidden="true"><i class="nvg-tint"></i><i class="nvg-lift"></i><i class="nvg-scan"></i><i class="nvg-tubes"></i><i class="nvg-frame"></i></div>
+  <div id="nvgFlash" aria-hidden="true"></div>
   <div id="version"></div>
   <div id="chat">
     <div id="chatLog"></div>
@@ -714,6 +738,7 @@
       <div id="ammo">30 <span>/ 120</span></div>
       <div id="healthbar"><div id="healthfill"></div></div>
       <div id="nades"></div>
+      <div id="nvgBadge"></div>
     </div>
     <div id="perks"></div>
     <div id="compassWrap">

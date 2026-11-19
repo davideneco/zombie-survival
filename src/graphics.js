@@ -60,6 +60,7 @@ const POST_VERT = /* glsl */`
 const POST_FRAG = /* glsl */`
   precision highp float;
   uniform sampler2D tDiffuse; uniform sampler2D tLut; uniform float uGrade;
+  uniform float uNvg; uniform float uTime;
   #ifdef HALO
   uniform sampler2D tHalo; uniform float uHalo;
   #endif
@@ -81,6 +82,17 @@ const POST_FRAG = /* glsl */`
     #endif
     gl_FragColor = sRGBTransferOETF(base);
     gl_FragColor.rgb = mix(gl_FragColor.rgb, lutSample(gl_FragColor.rgb), uGrade);
+    if (uNvg > 0.001) {
+      vec3 c = gl_FragColor.rgb;
+      float lum = dot(c, vec3(0.24, 0.68, 0.08));
+      // Image intensifier curve: strong shadow lift with controlled highlight compression
+      float amp = pow(clamp(lum * 1.65 + 0.055, 0.0, 1.0), 0.78);
+      float scan = 0.96 + 0.04 * sin(vUv.y * 720.0);
+      float grain = (fract(sin(dot(vUv * 420.0 + uTime * 3.7, vec2(12.9898, 78.233))) * 43758.5453) - 0.5) * 0.055;
+      vec3 nvg = vec3(0.10, 0.98, 0.34) * clamp(amp * scan + grain, 0.0, 1.0);
+      nvg += vec3(0.26, 0.36, 0.22) * pow(clamp(amp, 0.0, 1.0), 3.4);
+      gl_FragColor.rgb = mix(gl_FragColor.rgb, nvg, uNvg);
+    }
   }`;
 
 // Halo lumineux (Haute) : passe de seuil à demi-résolution (l'image est déjà tone-mappée : valeurs 0..1), flou gaussien séparable, ajout à l'image finale.
@@ -119,9 +131,10 @@ export function createGraphics({ renderer, scene, camera, hemi, moon, settings }
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     scene.traverse((o) => { if (o.material) for (const m of [].concat(o.material)) m.needsUpdate = true; });
   };
-  // exposition : valeur de base x Luminosité (Options) x zone ; hemi suit la Luminosité (inchangé)
+  // exposition : valeur de base x Luminosité (Options) x zone x amplification vision nocturne
   api.applyExposure = () => {
-    renderer.toneMappingExposure = G().tone.exposure * settings.brightness * api.zoneK.exposure;
+    const nvgK = api.player?.nvgK || 0;
+    renderer.toneMappingExposure = G().tone.exposure * settings.brightness * api.zoneK.exposure * (1 + nvgK * (CONFIG.nvg?.exposureBoost || 0));
   };
 
   // ------------------------------------------------------------ reflets d'ambiance (PMREM d'un petit ciel)
@@ -170,7 +183,7 @@ export function createGraphics({ renderer, scene, camera, hemi, moon, settings }
     rt.isXRRenderTarget = true;
     const lut = buildLut();
     const H = G().halo, halo = H.enabled && settings.halo !== false && (api.level?.halo ?? true);
-    const mat = new THREE.RawShaderMaterial({ uniforms: { tDiffuse: { value: rt.texture }, tLut: { value: lut }, uGrade: { value: 1 }, tHalo: { value: null }, uHalo: { value: H.intensity } }, defines: halo ? { HALO: 1 } : {}, vertexShader: POST_VERT, fragmentShader: POST_FRAG, depthTest: false, depthWrite: false });
+    const mat = new THREE.RawShaderMaterial({ uniforms: { tDiffuse: { value: rt.texture }, tLut: { value: lut }, uGrade: { value: 1 }, uNvg: { value: 0 }, uTime: { value: 0 }, tHalo: { value: null }, uHalo: { value: H.intensity } }, defines: halo ? { HALO: 1 } : {}, vertexShader: POST_VERT, fragmentShader: POST_FRAG, depthTest: false, depthWrite: false });
     api.post = { rt, mat, lut, quad: new FullScreenQuad(mat), w: size.x, h: size.y, halo: null };
     if (halo) {
       const hw = Math.max(2, Math.floor(size.x / 2)), hh = Math.max(2, Math.floor(size.y / 2));
@@ -245,9 +258,13 @@ export function createGraphics({ renderer, scene, camera, hemi, moon, settings }
 
   // ------------------------------------------------------------ chaque image
   const _v = new THREE.Vector3();
+  const _nvgSky = new THREE.Color(0x52cc72), _nvgGnd = new THREE.Color(0x28663a), _nvgFog = new THREE.Color(0x0c2816);
+  let _nvgApplied = false;
   api.update = (dt) => {
     const game = api.game; if (!game || !api.world) return;
     const p = game.player;
+    const nvgK = p.nvgK || 0;
+    const NV = CONFIG.nvg;
     // zone courante : exposition, intensité des reflets et de la torche (lissées : pas de saut en franchissant une porte)
     let name = null;
     if (api.world.zoneOf) { const zi = api.world.zoneOf(p.pos.x, p.pos.z); name = zi >= 0 ? api.world.zoneNames[zi] : null; }
@@ -256,9 +273,33 @@ export function createGraphics({ renderer, scene, camera, hemi, moon, settings }
     zk.exposure += (Z.exposure - zk.exposure) * k; zk.env += (Z.env - zk.env) * k; zk.torch += (Z.torch - zk.torch) * k;
     api.zone = name;
     api.applyExposure();
-    scene.environmentIntensity = G().env.enabled ? envIntensity() : 0;
+    scene.environmentIntensity = G().env.enabled ? envIntensity() * (1 + nvgK * 0.55) : 0;
     setEnvTint(G().env.enabled ? pickN(G().env.phaseIntensity, api.skyK) * zk.env : 0);
-    if (p.torchOn) p.flashlight.intensity = G().torch.intensity * zk.torch;
+    // Night vision light & fog amplification (non-destructive using skyBase saved by summit.js)
+    const sb = scene.userData.skyBase;
+    if (sb && (nvgK > 0.001 || _nvgApplied)) {
+      _nvgApplied = nvgK > 0.001;
+      const nightFactor = 1 - Math.min(1, api.skyK * 0.65);
+      hemi.intensity = sb.hemiI + nvgK * (NV?.hemiBoost || 1.55) * nightFactor;
+      hemi.color.copy(sb.hemiSky).lerp(_nvgSky, nvgK * 0.65);
+      hemi.groundColor.copy(sb.hemiGround).lerp(_nvgGnd, nvgK * 0.72);
+      if (scene.fog) {
+        scene.fog.density = sb.fogD * (1 - nvgK * (1 - (NV?.fogScale ?? 0.42)));
+        scene.fog.color.copy(sb.fogColor).lerp(_nvgFog, nvgK * 0.7);
+      }
+    }
+    if (p.torchOn) {
+      const nvgScale = 1 - nvgK * (1 - (NV?.torchScale ?? 0.55));
+      p.flashlight.intensity = G().torch.intensity * zk.torch * nvgScale;
+    }
+    if (api.post) {
+      api.post.mat.uniforms.uNvg.value = nvgK;
+      api.post.mat.uniforms.uTime.value = performance.now() * 0.001;
+    }
+    const nvgVis = nvgK > 0.01;
+    document.body.classList.toggle('nvg-active', nvgVis);
+    document.body.classList.toggle('nvg-nopost', nvgVis && !api.post);
+    if (nvgVis) document.documentElement.style.setProperty('--nvg', nvgK.toFixed(3));
     // ciel
     api.sky?.update?.(dt);
     api.world?.trees?.update(performance.now() / 1000, camera.position);

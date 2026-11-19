@@ -523,6 +523,87 @@ export function makeAstronomicalClock() {
   return g;
 }
 
+// ------------------------------------------------------------------ Borne tactique : Lunettes de Vision Nocturne (NVG)
+function nvgFront(price) {
+  const draw = (x, w, h, emis) => {
+    if (!emis) {
+      x.fillStyle = '#1b221e'; x.fillRect(0, 0, w, h);
+      grime(x, w, h, 450, 0.24);
+      x.strokeStyle = '#39ff6a'; x.lineWidth = 8; x.strokeRect(18, 18, w - 36, h - 36);
+      rivets(x, 38, 42, w - 38, h - 42, 70);
+      // écran tactique supérieur
+      x.fillStyle = '#06120a'; roundRect(x, 42, 46, w - 84, 240, 18); x.fill();
+      x.strokeStyle = '#1e5c2c'; x.lineWidth = 5; x.stroke();
+      // panneau central avec schéma de jumelles NVG
+      x.fillStyle = '#0a160e'; roundRect(x, 48, 320, w - 96, 360, 16); x.fill();
+      // plaque de prix
+      x.fillStyle = '#0c1e12'; roundRect(x, 76, 720, w - 152, 120, 12); x.fill();
+      x.strokeStyle = '#39ff6a'; x.lineWidth = 4; x.stroke();
+      // rayures de sécurité bas
+      for (let i = -2; i < 14; i++) { x.fillStyle = i % 2 ? '#0e120f' : '#26803e'; x.beginPath(); x.moveTo(i * 44, 885); x.lineTo(i * 44 + 44, 885); x.lineTo(i * 44 + 88, 965); x.lineTo(i * 44 + 44, 965); x.fill(); }
+    }
+    neonText(x, 'VISION', w / 2, 118, 66, '#39ff6a', emis);
+    neonText(x, 'NOCTURNE', w / 2, 196, 62, '#39ff6a', emis);
+    neonText(x, 'NVG · PVS-31', w / 2, 256, 26, '#88ffb0', emis, '"Courier New", monospace');
+    // icône jumelles lumineuses
+    const cy = 500;
+    x.strokeStyle = emis ? '#39ff6a' : '#2be058'; x.lineWidth = 14;
+    for (const sx of [-1, 1]) {
+      x.beginPath(); x.arc(w / 2 + sx * 92, cy, 68, 0, 7); x.stroke();
+      x.fillStyle = emis ? 'rgba(57,255,106,0.55)' : 'rgba(57,255,106,0.28)';
+      x.beginPath(); x.arc(w / 2 + sx * 92, cy, 48, 0, 7); x.fill();
+    }
+    x.fillStyle = emis ? '#39ff6a' : '#2be058';
+    x.fillRect(w / 2 - 28, cy - 16, 56, 24);
+    neonText(x, `${price} PTS`, w / 2, 780, 62, '#7aff99', emis);
+  };
+  return [tex(`nvg:${price}`, 512, 1024, draw, false), tex(`nvg:${price}`, 512, 1024, draw, true)];
+}
+
+export function makeNvgStation(price = 1500) {
+  const g = new THREE.Group();
+  const W = 1.15, H = 1.82, D = 0.68;
+  const bodyMat = new THREE.MeshStandardMaterial({ color: 0xffffff, vertexColors: true, roughness: 0.68, metalness: 0.48 });
+  const neonMat = new THREE.MeshStandardMaterial({ color: 0x39ff6a, emissive: 0x22ff55, emissiveIntensity: 2.4, roughness: 0.2, metalness: 0.1 });
+  const [map, emap] = nvgFront(price);
+  const front = new THREE.MeshStandardMaterial({ map, emissiveMap: emap, emissive: 0x39ff6a, emissiveIntensity: 1.5, roughness: 0.65, metalness: 0.15 });
+
+  // Corps blindé + socle
+  const body = new THREE.Mesh(tint(new THREE.BoxGeometry(W, H, D), 0x1d2520), bodyMat);
+  body.position.y = H / 2 + 0.06; g.add(body);
+  const base = new THREE.Mesh(tint(new THREE.BoxGeometry(W + 0.1, 0.12, D + 0.1), 0x121513), bodyMat);
+  base.position.y = 0.06; g.add(base);
+  const face = new THREE.Mesh(new THREE.PlaneGeometry(W - 0.06, H - 0.06), front);
+  face.position.set(0, H / 2 + 0.06, D / 2 + 0.012); g.add(face);
+
+  // Bandes LED vertes latérales pour repérage la nuit
+  for (const sx of [-1, 1]) {
+    const post = new THREE.Mesh(tint(new THREE.BoxGeometry(0.05, H, 0.05), 0x141816), bodyMat);
+    post.position.set(sx * (W / 2 + 0.005), H / 2 + 0.06, D / 2); g.add(post);
+    const strip = new THREE.Mesh(new THREE.BoxGeometry(0.032, H * 0.78, 0.032), neonMat);
+    strip.position.set(sx * (W / 2 + 0.03), H / 2 + 0.08, 0); g.add(strip);
+  }
+
+  // Mallette tactique ouverte sur le dessus + modèle 3D des lunettes NVG en vitrine
+  const caseBase = new THREE.Mesh(tint(new THREE.BoxGeometry(0.76, 0.16, 0.46), 0x242c24), bodyMat);
+  caseBase.position.set(0, H + 0.14, 0); g.add(caseBase);
+  const caseLid = new THREE.Mesh(tint(new THREE.BoxGeometry(0.76, 0.06, 0.44), 0x202720), bodyMat);
+  caseLid.position.set(0, H + 0.38, -0.22); caseLid.rotation.x = -1.25; g.add(caseLid);
+  // Jumelles NVG posées sur un présentoir
+  const bridge = new THREE.Mesh(tint(new THREE.BoxGeometry(0.26, 0.08, 0.12), 0x121416), bodyMat);
+  bridge.position.set(0, H + 0.3, 0.02); g.add(bridge);
+  for (const sx of [-1, 1]) {
+    const tube = new THREE.Mesh(tint(new THREE.CylinderGeometry(0.055, 0.05, 0.22, 12), 0x16181a), bodyMat);
+    tube.rotation.x = Math.PI / 2; tube.position.set(sx * 0.1, H + 0.3, 0.07); g.add(tube);
+    const lens = new THREE.Mesh(new THREE.CylinderGeometry(0.044, 0.044, 0.015, 12), neonMat);
+    lens.rotation.x = Math.PI / 2; lens.position.set(sx * 0.1, H + 0.3, 0.184); g.add(lens);
+  }
+
+  bakeGroup(g);
+  g.userData.size = [W + 0.1, D + 0.1, H + 0.52];
+  return g;
+}
+
 // Only the largest solid part of a machine casts a shadow (the small parts are not worth a shadow-pass draw call each)
 export function castShadowBiggest(g) {
   let best = null, r = 0;

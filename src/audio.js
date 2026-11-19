@@ -309,10 +309,21 @@ export class Sfx {
   }
 
   // ------------------------------------------------------------ Armes
-  // id : arme (config) ; v : volume (coéquipier loin = faible) ; dist : distance en mètres (plus loin = plus sourd)
-  gun(id, v = 1, dist = 0) {
+  // id : arme (config) ; v : volume (coéquipier loin = faible) ; dist : distance en mètres ; silenced : silencieux monté
+  gun(id, v = 1, dist = 0, silenced = false) {
     if (!this.ctx || v < 0.03) return;
     if (id === 'raygun') return this.ray(v);
+    if (silenced) {
+      const r = rnd(0.94, 1.06), j = v * rnd(0.9, 1);
+      const out = this._far(dist);
+      const o = { out };
+      // Souffle subsonique sec + claquement mécanique de culasse, sans écho de rue
+      this._noise(0.06, 0.38 * j, 2200 * r, 'bandpass', { ...o, q: 1.3, atk: 0.0005, send: 0.08 });
+      this._noise(0.04, 0.24 * j, 5200 * r, 'highpass', { ...o, atk: 0.0004, send: 0.05 });
+      this._tone('sine', 240 * r, 78, 0.065, 0.34 * j, o);
+      if (dist < 12) this._clack(0.014, 0.42 * j, 2700 * r);
+      return;
+    }
     if (id === 'shotgun') return this.shotgun(v, dist);
     const p = GUNS[id] || GUNS[GUN_FALLBACK[id]] || GUNS.rifle;
     const r = rnd(0.95, 1.05);     // chaque coup est un peu différent : sinon on entend la boucle
@@ -418,6 +429,32 @@ export class Sfx {
     this._noise(0.14, 0.22, 1400, 'bandpass', { f1: 500, q: 0.8, atk: 0.03 });
     this._tone('sine', 120, 60, 0.08, 0.3, { at: 0.04 });
     this._tone('sine', 150, 55, 0.1, 0.35, { at: 0.42 });
+  }
+
+  grenadePin() { // dégoupillage + libération de la cuillère
+    if (!this.ctx) return;
+    this._clack(0.01, 0.85, 3400);
+    this._tone('triangle', 3200, 2600, 0.08, 0.14, { at: 0.02 });
+    this._clack(0.13, 0.65, 2200);
+    this._noise(0.12, 0.22, 1100, 'bandpass', { at: 0.14, f1: 2400, q: 0.9, atk: 0.02 });
+  }
+
+  grenadeBounce(v = 0.5) { // rebond métallique au sol
+    if (!this.ctx || v < 0.05) return;
+    const r = rnd(0.9, 1.12);
+    this._clack(0, 0.55 * v, 1900 * r);
+    this._tone('triangle', 1450 * r, 980 * r, 0.06, 0.12 * v);
+  }
+
+  nvgToggle(on = true) { // allumage / extinction des lunettes de vision nocturne (sifflement de tube caractéristique)
+    if (!this.ctx) return;
+    this._clack(0, 0.75, on ? 2600 : 1800);
+    if (on) {
+      this._tone('sine', 1400, 6400, 0.38, 0.14, { at: 0.03, atk: 0.04 });
+      this._tone('triangle', 420, 920, 0.16, 0.08, { at: 0.02 });
+    } else {
+      this._tone('sine', 3800, 900, 0.18, 0.09, { at: 0.02 });
+    }
   }
 
   // Couteau : 'swing' (souffle de la lame), 'flesh' (chair : choc mou et humide), 'metal' (armure : deux notes métalliques)

@@ -98,6 +98,14 @@ export function installSummit(game, { world, scene, hud, sfx, fx, hemi, moon, mo
   // ----------------------------------------------------------------- le ciel
   const sky = { phase: 'night', t: 0, k: 0, apply: null };
   const NIGHT = { bg: scene.background.clone(), fog: scene.fog.color.clone(), density: scene.fog.density, hemiSky: hemi.color.clone(), hemiGround: hemi.groundColor.clone(), moon: moon.color.clone(), hemiI: 0.28, moonI: 0.42 };
+  const skyBase = (scene.userData.skyBase = {
+    hemiI: NIGHT.hemiI * (game.settings?.brightness ?? 1.4),
+    hemiBase: NIGHT.hemiI,
+    fogD: NIGHT.density,
+    hemiSky: NIGHT.hemiSky.clone(),
+    hemiGround: NIGHT.hemiGround.clone(),
+    fogColor: NIGHT.fog.clone(),
+  });
   const dn = { hour: CONFIG.dayNight.startHour, days: 0, cycle: false, lastK: -1, acc: 0, sunEl: -30, sunAz: 0, hold: null, fogScale: 1 };
   const tmpC = new THREE.Color(), tmpD = new THREE.Color();
   const pickC = (arr, k, out, night) => (k < 0.5 ? (night ? out.copy(night).lerp(C3(arr[1]), sm(k * 2)) : lerpHex(out, arr[0], arr[1], sm(k * 2))) : lerpHex(out, arr[1], arr[2], sm((k - 0.5) * 2)));
@@ -107,7 +115,14 @@ export function installSummit(game, { world, scene, hud, sfx, fx, hemi, moon, mo
     const k = sky.k, b = game.settings?.brightness ?? 1.4;
     pickC(SKY.bg, k, scene.background, NIGHT.bg);
     pickC(SKY.fog, k, scene.fog.color, NIGHT.fog); scene.fog.density = pickN(SKY.density, k, NIGHT.density) * dn.fogScale;
-    pickC(SKY.hemiSky, k, hemi.color, NIGHT.hemiSky); pickC(SKY.hemiGround, k, hemi.groundColor, NIGHT.hemiGround); hemi.intensity = pickN(SKY.hemi, k, NIGHT.hemiI) * b;
+    pickC(SKY.hemiSky, k, hemi.color, NIGHT.hemiSky); pickC(SKY.hemiGround, k, hemi.groundColor, NIGHT.hemiGround);
+    skyBase.hemiBase = pickN(SKY.hemi, k, NIGHT.hemiI);
+    skyBase.hemiI = skyBase.hemiBase * b;
+    skyBase.fogD = scene.fog.density;
+    skyBase.hemiSky.copy(hemi.color);
+    skyBase.hemiGround.copy(hemi.groundColor);
+    skyBase.fogColor.copy(scene.fog.color);
+    hemi.intensity = skyBase.hemiI;
     pickC(SKY.sun, k, moon.color, NIGHT.moon); moon.intensity = pickN(SKY.sunI, k, NIGHT.moonI);
     const i0 = k < 0.5 ? 0 : 1, i1 = k < 0.5 ? 1 : 2, u = k < 0.5 ? sm(k * 2) : sm((k - 0.5) * 2);
     moonOffset.set(SKY.sunPos[i0][0] + (SKY.sunPos[i1][0] - SKY.sunPos[i0][0]) * u, SKY.sunPos[i0][1] + (SKY.sunPos[i1][1] - SKY.sunPos[i0][1]) * u, SKY.sunPos[i0][2] + (SKY.sunPos[i1][2] - SKY.sunPos[i0][2]) * u);

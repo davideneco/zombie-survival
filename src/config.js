@@ -23,20 +23,20 @@ export const STRASBOURG_SECTOR = {
   // d'origine garde son tirage et ses plafonds propres (14 voitures, 47 objets de barricade)
   outerDecor: { carArea: 6000, junkArea: 2500, bikeMax: 30, chaletRadius: 40 },
   zones: [
-    { name: 'Marché-Neuf', start: true, items: ['station', 'wall:m1911', 'wall:shotgun', 'wall:smg', 'perk:quickrevive', 'box'] },
+    { name: 'Marché-Neuf', start: true, items: ['station', 'wall:m1911', 'wall:shotgun', 'wall:smg', 'perk:quickrevive', 'box', 'nvg'] },
     { name: 'Temple-Neuf', seed: { x: -35, z: -95 }, doorPrice: 750, items: ['station', 'wall:arex', 'wall:mp5', 'wall:famas', 'perk:staminup', 'perk:bandolier', 'box'] },
     { name: 'Rue des Orfèvres', seed: { x: 40, z: -70 }, doorPrice: 750, items: ['station', 'wall:famas', 'wall:smg', 'perk:speedcola', 'perk:deadshot', 'box'] },
     { name: 'Rue du Dôme', seed: { x: 110, z: -111 }, doorPrice: 1000, items: ['station', 'wall:sniper', 'wall:svd', 'wall:arex', 'box'] },
     { name: 'Grandes Arcades', seed: { x: -110, z: -45 }, doorPrice: 1000, items: ['station', 'wall:ak47', 'wall:p90', 'wall:shotgun', 'perk:mulekick', 'perk:deathperception', 'box'] },
-    { name: 'Place Kléber', seed: { x: -199, z: -145 }, doorPrice: 1250, items: ['station', 'wall:rifle', 'wall:lmg', 'wall:m249', 'perk:juggernog', 'perk:stronghold', 'box'] },
-    { name: 'Place Gutenberg', seed: { x: -20, z: 90 }, doorPrice: 1250, items: ['station', 'wall:shotgun', 'wall:scar', 'wall:pkm', 'perk:doubletap', 'perk:electriccherry', 'box'] },
-    { name: 'Cathédrale', seed: { x: 103, z: 33 }, doorPrice: 1000, items: ['station', 'wall:deagle', 'wall:rifle', 'wall:magnum', 'box'] },
+    { name: 'Place Kléber', seed: { x: -199, z: -145 }, doorPrice: 1250, items: ['station', 'wall:rifle', 'wall:lmg', 'wall:m249', 'perk:juggernog', 'perk:stronghold', 'box', 'nvg'] },
+    { name: 'Place Gutenberg', seed: { x: -20, z: 90 }, doorPrice: 1250, items: ['station', 'wall:shotgun', 'wall:scar', 'wall:pkm', 'perk:doubletap', 'perk:electriccherry', 'box', 'nvg'] },
+    { name: 'Cathédrale', seed: { x: 103, z: 33 }, doorPrice: 1000, items: ['station', 'wall:deagle', 'wall:rifle', 'wall:magnum', 'box', 'nvg'] },
     // fin de partie : l'intérieur de la cathédrale, derrière le grand portail (porte la plus chère)
     { name: 'Intérieur de la Cathédrale', seed: 'cathedral', portal: true, doorPrice: 5000, items: ['pap', 'clock', 'station', 'box', 'wall:barrett'] },
     // place de l'Homme de Fer (rotonde du tram), derrière la place Kléber : profondeur 4, donc 1500 pts calculés. Ajoutée en dernier :
     // le tirage des emplacements des autres zones ne change pas.
     // isolatedRnd : ses emplacements (et son décor) ne consomment pas le tirage commun aux autres zones
-    { name: 'Homme de Fer', seed: { x: -290, z: -203 }, isolatedRnd: true, doorPrice: 1500, items: ['station', 'wall:p90', 'wall:crossbow', 'wall:m79', 'perk:phdflopper', 'box'] },
+    { name: 'Homme de Fer', seed: { x: -290, z: -203 }, isolatedRnd: true, doorPrice: 1500, items: ['station', 'wall:p90', 'wall:crossbow', 'wall:m79', 'perk:phdflopper', 'box', 'nvg'] },
     // ---- le reste de la Grande Île (v0.27.0) : zones `outer`, dans cet ordre (le tirage des zones d'origine ne bouge pas :
     // les zones `outer` ont leur propre générateur). Noms tirés des monuments OpenStreetMap ; « Grand'Rue » et « Quai Schoepflin »
     // sont des noms déduits du plan (à confirmer). Armes premium au mur (v0.28.0) : magnum 2000, saiga 3000, mg42 4000, barrett 5000.
@@ -47,7 +47,7 @@ export const STRASBOURG_SECTOR = {
     { name: 'Palais Rohan', outer: true, seed: { x: 260, z: 140 }, doorPrice: 1500, items: ['station', 'wall:ak47', 'wall:arex', 'perk:doubletap', 'perk:tombstone', 'box'] },
     { name: 'Musée historique', outer: true, seed: { x: 200, z: 215 }, doorPrice: 1500, items: ['station', 'wall:arex', 'wall:scar', 'wall:smg', 'box'] },
     // palier B : 2000
-    { name: 'Place Broglie', outer: true, seed: { x: 150, z: -345 }, doorPrice: 2000, chalets: 4, items: ['station', 'wall:smg', 'wall:famas', 'wall:lmg', 'perk:juggernog', 'box'] },
+    { name: 'Place Broglie', outer: true, seed: { x: 150, z: -345 }, doorPrice: 2000, chalets: 4, items: ['station', 'wall:smg', 'wall:famas', 'wall:lmg', 'perk:juggernog', 'box', 'nvg'] },
     { name: 'Quai Schoepflin', outer: true, seed: { x: -20, z: -470 }, doorPrice: 2000, items: ['station', 'wall:svd', 'wall:mp5', 'box'] },
     { name: 'Hôtel de Neuwiller', outer: true, seed: { x: -450, z: -250 }, doorPrice: 2000, items: ['station', 'wall:famas', 'wall:saiga', 'box'] },
     { name: 'Monument Stoeber', outer: true, seed: { x: -490, z: -150 }, doorPrice: 2000, items: ['station', 'wall:scar', 'wall:p90', 'box'] },
@@ -59,16 +59,16 @@ export const STRASBOURG_SECTOR = {
     { name: 'Préfecture', outer: true, seed: { x: 400, z: -340 }, doorPrice: 2500, items: ['station', 'wall:pkm', 'wall:rifle', 'box'] },
     { name: 'Saint-Étienne', outer: true, seed: { x: 540, z: -90 }, doorPrice: 2500, items: ['station', 'wall:m249', 'wall:scar', 'perk:staminup', 'box'] },
     { name: 'Saint-Pierre-le-Vieux', outer: true, seed: { x: -620, z: -60 }, doorPrice: 2500, items: ['station', 'wall:deagle', 'wall:shotgun', 'perk:quickrevive', 'box'] },
-    { name: 'Petite France', outer: true, seed: { x: -660, z: 150 }, doorPrice: 2500, items: ['station', 'wall:barrett', 'wall:saiga', 'wall:mp5', 'perk:juggernog', 'box'] },
+    { name: 'Petite France', outer: true, seed: { x: -660, z: 150 }, doorPrice: 2500, items: ['station', 'wall:barrett', 'wall:saiga', 'wall:mp5', 'perk:juggernog', 'box', 'nvg'] },
     // ---- Gare de Strasbourg (v0.79.0, src/gare/) : zones d'une aire séparée (pocket: 'gare'), reliée à l'île par le tram (src/transfer.js).
     // Ajoutées en dernier, sans `seed` : les zones de l'île, leurs portes et leurs tirages ne changent pas. Emplacements fixes (src/gare/plan.js).
     { name: 'Quais', pocket: 'gare', isolatedRnd: true, doorPrice: 750, items: ['station', 'wall:m1911', 'wall:shotgun'] },
-    { name: 'Hall de la Gare', pocket: 'gare', isolatedRnd: true, doorPrice: 750, items: ['station', 'wall:mp5', 'perk:quickrevive', 'box'] },
+    { name: 'Hall de la Gare', pocket: 'gare', isolatedRnd: true, doorPrice: 750, items: ['station', 'wall:mp5', 'perk:quickrevive', 'box', 'nvg'] },
     { name: 'Place de la Gare', pocket: 'gare', isolatedRnd: true, doorPrice: 1000, items: ['station', 'wall:famas', 'perk:staminup'] },
     // ---- Krutenau (step B chunk 2, src/district/): zones of a walkable district outside the island core, entered through ONE gate (CONFIG.districts.krutenau.gatePrice) that opens
     // all of them. Appended after the station's and without `seed`: the island loops skip them. `site` = where the zone starts (walking-distance flood fill); spots are found by
     // scanning the data (deterministic, no `rnd`).
-    { name: 'Quai des Bateliers', pocket: 'krutenau', isolatedRnd: true, site: { x: 900, z: 160 }, items: ['station', 'wall:mp5', 'wall:ak47'] },
+    { name: 'Quai des Bateliers', pocket: 'krutenau', isolatedRnd: true, site: { x: 900, z: 160 }, items: ['station', 'wall:mp5', 'wall:ak47', 'nvg'] },
     { name: 'Saint-Guillaume', pocket: 'krutenau', isolatedRnd: true, site: { x: 1040, z: 170 }, items: ['station', 'wall:scar', 'perk:doubletap'] },
     { name: 'Place de Zurich', pocket: 'krutenau', isolatedRnd: true, site: { x: 900, z: 340 }, items: ['station', 'wall:famas', 'wall:saiga'] },
     { name: 'Manufacture des Tabacs', pocket: 'krutenau', isolatedRnd: true, site: { x: 1040, z: 340 }, items: ['station', 'wall:mg42', 'perk:juggernog'] },
@@ -207,6 +207,37 @@ export const CONFIG = {
   },
   // Arme au départ : un seul pistolet de base, tiré au hasard dans cette liste pour chaque joueur (v0.85.1)
   startPistols: ['m1911', 'arex'],
+
+  // Accessoires aléatoires sur les armes (v0.103.0) : tirés à l'obtention (départ, mur, boîte mystère) selon les emplacements compatibles
+  // de l'arme (optic, muzzle, mag, under). Appliqués à la fois en 3D (viewmodels.js), dans le HUD et sur les statistiques (player.js).
+  attachments: {
+    roll: {
+      start: { min: 1, max: 2, slotChance: 0.55 },
+      wall:  { min: 1, max: 2, slotChance: 0.6 },
+      box:   { min: 2, max: 3, slotChance: 0.72 },
+    },
+    slots: ['optic', 'muzzle', 'mag', 'under'],
+    defs: {
+      // ---- viseurs
+      redDot:      { slot: 'optic',  name: 'Viseur point rouge',   short: 'POINT ROUGE',  spreadMult: 0.86, adsFovDelta: -5,  cats: ['pistol', 'ar', 'smg', 'mg'] },
+      holo:        { slot: 'optic',  name: 'Viseur holographique', short: 'HOLO',         spreadMult: 0.82, recoilMult: 0.92, adsFovDelta: -7, cats: ['ar', 'smg', 'mg'] },
+      acog:        { slot: 'optic',  name: 'Lunette ACOG ×2,5',    short: 'ACOG ×2,5',    spreadMult: 0.72, rangeMult: 1.15, adsFovDelta: -16, cats: ['ar', 'mg', 'special'], ids: ['rifle', 'ak47', 'famas', 'scar', 'lmg', 'm249', 'mg42', 'pkm', 'crossbow'] },
+      // ---- bouche
+      suppressor:  { slot: 'muzzle', name: 'Silencieux',           short: 'SILENCIEUX',   silenced: true, recoilMult: 0.82, spreadMult: 0.9, cats: ['pistol', 'ar', 'smg', 'sniper'], exclude: ['magnum'] },
+      compensator: { slot: 'muzzle', name: 'Compensateur',         short: 'COMPENSATEUR', recoilMult: 0.76, spreadMult: 0.88, cats: ['pistol', 'ar', 'smg'] },
+      muzzleBrake: { slot: 'muzzle', name: 'Frein de bouche',      short: 'FREIN BOUCHE', recoilMult: 0.72, rangeMult: 1.08, cats: ['ar', 'mg', 'sniper'] },
+      choke:       { slot: 'muzzle', name: 'Choke tactique',       short: 'CHOKE',        spreadMult: 0.76, rangeMult: 1.18, cats: ['shotgun'] },
+      // ---- chargeurs
+      extMag:      { slot: 'mag',    name: 'Chargeur grande capacité', short: 'CHARGEUR XL', magMult: 1.4,  reserveMult: 1.25, reloadMult: 1.06, cats: ['pistol', 'ar', 'smg', 'sniper'], exclude: ['magnum'] },
+      fastMag:     { slot: 'mag',    name: 'Chargeur rapide',      short: 'CHARG. RAPIDE', magMult: 1.15, reloadMult: 0.78, cats: ['pistol', 'ar', 'smg', 'sniper'], exclude: ['magnum', 'p90'] },
+      drum:        { slot: 'mag',    name: 'Chargeur tambour',     short: 'TAMBOUR',      magMult: 1.75, reserveMult: 1.35, reloadMult: 1.14, cats: ['ar', 'smg', 'shotgun', 'mg'], ids: ['rifle', 'ak47', 'famas', 'scar', 'smg', 'mp5', 'saiga', 'lmg'] },
+      tubeExt:     { slot: 'mag',    name: 'Tube-magasin allongé', short: 'TUBE +3',      magMult: 1.5,  reserveMult: 1.25, ids: ['shotgun'] },
+      // ---- sous-canon / tactique
+      foregrip:    { slot: 'under',  name: 'Poignée verticale',    short: 'POIGNÉE',      recoilMult: 0.75, spreadMult: 0.86, cats: ['ar', 'smg', 'mg'] },
+      laser:       { slot: 'under',  name: 'Pointeur laser',       short: 'LASER',        hipSpreadMult: 0.65, cats: ['pistol', 'ar', 'smg', 'mg'] },
+      tacLight:    { slot: 'under',  name: 'Lampe tactique',       short: 'LAMPE TAC.',   hipSpreadMult: 0.84, cats: ['shotgun', 'ar', 'smg', 'pistol'], ids: ['shotgun', 'saiga', 'rifle', 'scar', 'mp5', 'm1911', 'arex', 'deagle'] },
+    },
+  },
 
   // Noms des armes améliorées au Pack-a-Punch
   papNames: {
@@ -440,7 +471,9 @@ export const CONFIG = {
     points: { hit: 10, kill: 100 },
     stab: 0.35, hostRange: 4,
   },
-  grenade: { start: 2, max: 4, perRound: 2, fuse: 2.2, radius: 6.5, damage: 900, selfDamage: 60 },
+  grenade: { start: 2, max: 4, perRound: 2, fuse: 2.2, radius: 6.5, damage: 900, selfDamage: 60, allyDamage: false },
+  // Lunettes de vision nocturne (v0.103.0) : achetables aux bornes tactiques réparties sur la carte, activables via la touche `nvg` (L)
+  nvg: { price: 1500, name: 'VISION NOCTURNE', desc: 'Lunettes de vision nocturne tactiques', color: '#39ff6a', letter: 'V', exposureBoost: 0.78, hemiBoost: 1.55, fogScale: 0.42, torchScale: 0.55 },
   // Occlusion des explosions (main.js blastExposed) : le souffle ne traverse ni murs, ni planchers, ni rames. Une cible est touchée si un des rayons
   // centre -> cible (à ces hauteurs au-dessus de ses pieds) arrive jusqu'à elle ; le rayon part `lift` m au-dessus du centre et `nudge` m vers la cible
   // (un obus qui éclate collé à un mur, ou à peine dedans, ne doit pas s'occulter lui-même).
@@ -1037,10 +1070,10 @@ export const CONFIG = {
     ],
     // tone mapping : 'aces' | 'agx' | 'neutral' ; exposition de base (multipliée par Luminosité des Options et par la zone)
     tone: { type: 'aces', exposure: 1.05 },
-    // lampe torche (player.js) : intensité (v0.43.0 : 55), ouverture, bord adouci (penumbra), décroissance, portée, teinte (chaude : les zombies ne blanchissent plus)
-    torch: { intensity: 9, angle: 0.5, penumbra: 0.9, decay: 1.1, distance: 40, color: 0xffe0b0 },
+    // lampe torche (player.js) : intensité renforcée pour bien voir de nuit, cône large et portée accrue
+    torch: { intensity: 26, angle: 0.64, penumbra: 0.72, decay: 1.0, distance: 62, color: 0xfff0d6 },
     // armes (viewmodels.js) : chanfrein des boîtes (m), segments d'arrondi, usure des arêtes (gain de clarté, seuil), intensité des reflets d'ambiance
-    weapons: { bevel: 0.0035, bevelSegments: 1, wear: 3.2, wearFrom: 0.05, env: 1.6 },
+    weapons: { bevel: 0.0038, bevelSegments: 2, wear: 3.4, wearFrom: 0.05, env: 2.0 },
     // pieds de murs assombris (architecture.js, couleurs de sommet) : [hauteur au-dessus de la base (m), facteur de luminosité]
     footAO: [[0, 0.5], [2.4, 1]],
     // réglages par zone (nom de zone de sector.zones) : exposition, reflets d'ambiance, torche (multiplicateurs, lissés sur ~1/zoneBlend s)
@@ -1108,6 +1141,7 @@ CONFIG.keybinds = [
   { id: 'grenade', group: 'Combat', label: 'Grenade', def: 'key:g', kind: 'key', ctx: 'all' },
   { id: 'knife', group: 'Combat', label: 'Coup de couteau (à pied)', def: 'key:v', kind: 'key', ctx: 'foot' },
   { id: 'torch', group: 'Équipement', label: 'Lampe torche', def: 'key:f', kind: 'key', ctx: 'all' },
+  { id: 'nvg', group: 'Équipement', label: 'Lunettes de vision nocturne (activer / désactiver)', def: 'key:l', kind: 'key', ctx: 'all' },
   { id: 'interact', group: 'Équipement', label: 'Interagir (acheter, porte, machine, réanimer, moto, vélo)', def: 'key:e', kind: 'key', ctx: 'all' },
   { id: 'map', group: 'Équipement', label: 'Carte', def: 'key:m', kind: 'key', ctx: 'all' },
   { id: 'vehicleView', group: 'Conduite & Véhicules', label: 'Changer de vue (en voiture, moto, vélo ou tram)', def: 'key:v', kind: 'key', ctx: 'moto' },

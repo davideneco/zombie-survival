@@ -108,7 +108,7 @@ table('03_boite_mystere', 'Boîte mystère (' + C.box.price + ' pts, une seule b
 table('04_atouts', 'Atouts', ['id', 'Atout', 'Lettre', 'Effet', 'Prix (pts)', 'Prix solo (pts)', 'Zone'], Object.entries(C.perks).map(([id, p]) => [id, p.name, p.letter, p.desc, p.price, p.soloPrice ?? p.price, zoneOfMachine(id)]));
 table('05_grenades', 'Grenades', ['Réglage', 'Valeur', 'Unité'], [
   ['Au départ', C.grenade.start, `(+${C.grenade.perRound} au début de la manche 1)`], ['Maximum', C.grenade.max, ''], ['Gagnées par manche', C.grenade.perRound, ''],
-  ['Retardement', C.grenade.fuse, 's'], ['Rayon', C.grenade.radius, 'm'], ['Dégâts au centre', C.grenade.damage, 'PV'], ['Dégâts max aux joueurs proches', C.grenade.selfDamage, 'PV'],
+  ['Retardement', C.grenade.fuse, 's'], ['Rayon', C.grenade.radius, 'm'], ['Dégâts au centre', C.grenade.damage, 'PV'], ['Dégâts max au lanceur (alliés épargnés)', C.grenade.selfDamage, 'PV'],
   ['Chance d\'arracher les jambes (zombie survivant)', Zc.legBlowChance * 100, '%']]);
 table('06_joueur', 'Joueur', ['Réglage', 'Valeur', 'Unité'], [
   ['Points au départ', P.startPoints, 'pts'], ['Santé max', P.maxHealth, 'PV (250 avec Mastodonte)'], ['Délai avant régénération', P.regenDelay, 's'], ['Régénération', P.regenRate, 'PV/s'],
@@ -327,7 +327,7 @@ table('14_commandes', 'Commandes (touches par défaut, modifiables dans Options 
   [kn('interact'), 'Acheter, ouvrir une porte, utiliser une machine ou la borne des motos, réanimer (maintenir), monter / descendre d\'une moto ou d\'un vélo'],
   [`ZQSD / ${kn('forward')}${kn('left')}${kn('back')}${kn('right')} (en moto ou à vélo)`, 'Accélérer, freiner / reculer, tourner'], [`${kn('jump')} (en moto ou à vélo)`, 'Frein à main (frein à vélo)'], [`${kn('vehicleView')} (en moto ou à vélo)`, 'Vue à la 3e personne / à la 1re personne'],
   [`${kn('forward')}${kn('back')} / ${kn('jump')} (en tram, conducteur)`, 'Accélérer / frein de service puis marche arrière ; frein d\'urgence'], [`${kn('tramDoors')} / ${kn('tramGong')} (en tram)`, 'Ouvrir ou fermer les portes (conducteur, à l\'arrêt) ; gong qui attire les zombies'], [`${kn('tramSwitch')} (en tram, conducteur)`, 'Aiguillage : tout droit / dévié au nœud de l\'Homme de Fer'],
-  [kn('torch'), 'Lampe torche'], [`${kn('jump')} (devant un obstacle bas)`, 'Enjamber'],
+  [kn('torch'), 'Lampe torche'], [kn('nvg'), `Lunettes de vision nocturne (à acheter aux bornes NVG : ${C.nvg.price} pts)`], [`${kn('jump')} (devant un obstacle bas)`, 'Enjamber'],
   [`${kn('knife')} (à pied)`, 'Coup de couteau (aussi : clic gauche quand le chargeur et la réserve sont vides)'], [kn('map'), 'Carte'],
   ['Clic molette', 'Lance-grenades sous le canon (fusil d\'assaut Pack-a-Punch niveau III)'],
   [kn('chat'), 'Chat écrit (multijoueur) : ouvre la saisie en bas à gauche ; Entrée envoie, Échap annule ; aucune autre touche n\'agit pendant la saisie (200 caractères, 5 messages par 4 s ; option « Afficher le chat » dans Options)'],

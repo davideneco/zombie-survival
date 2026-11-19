@@ -27,7 +27,7 @@ import { HDF, isRotunda, isOpenShelter, rotundaInfo, shelterInfo, planHdf, legac
 import { planTram, buildTramNetwork } from './tramNet.js';
 import { parkingLayout, buildParkingDecor } from './parking.js';
 import { bikeStationLayout, buildBikeStationDecor } from './bikeStation.js';
-import { makePerkMachine, makeAmmoStation, makeWallBuy, addPosts, makeMysteryBox, makePackAPunch, makeAstronomicalClock, castShadowBiggest } from './machines.js';
+import { makePerkMachine, makeAmmoStation, makeWallBuy, addPosts, makeMysteryBox, makePackAPunch, makeAstronomicalClock, makeNvgStation, castShadowBiggest } from './machines.js';
 import { loadGareData, buildGare } from './gare/index.js';
 import { loadKrutenauData, buildKrutenau } from './district/index.js';
 
@@ -1565,6 +1565,9 @@ export async function buildRealWorld(scene, renderer) {
       } else if (type === 'clock') {
         name = 'HORLOGE ASTRONOMIQUE'; price = CONFIG.finale.price; color = '#d4a640';
         g = makeAstronomicalClock();
+      } else if (type === 'nvg') {
+        name = CONFIG.nvg.name; price = CONFIG.nvg.price; color = CONFIG.nvg.color;
+        g = makeNvgStation(price);
       } else {
         name = 'BOÎTE MYSTÈRE'; price = CONFIG.box.price; color = '#5fb8ff';
         g = makeMysteryBox();
@@ -1582,13 +1585,14 @@ export async function buildRealWorld(scene, renderer) {
       scene.add(g);
       if (type !== 'box') detailCull.addPoint(g, type === 'clock' ? 12 : 3); // (the mystery boxes are shown one at a time by setActiveBox)
       collision.addBox(x, z, w, d, -g.rotation.y, h);
-      const entry = { type, id, name, price, color, letter: type === 'perk' ? CONFIG.perks[id].letter : null, zone: zi, pos: new THREE.Vector3(x, 0, z), group: g, active: true };
+      const entry = { type, id, name, price, color, letter: type === 'perk' ? CONFIG.perks[id].letter : type === 'nvg' ? CONFIG.nvg.letter : null, zone: zi, pos: new THREE.Vector3(x, 0, z), group: g, active: true };
       machines.push(entry);
       lightSources.push({ x: x + Math.sin(g.rotation.y) * 1.2, y: h + 0.6, z: z + Math.cos(g.rotation.y) * 1.2, color: new THREE.Color(color).getHex(), intensity: 7, dist: 8, box: type === 'box' ? entry : null });
     };
     addMachineRef = addMachine;
     // zones `outer` : tout objet à plus de 4 m d'une porte si possible (6,5 m pour un atout, comme avant : voir PERK_DOOR_GAPS)
     const OUTER_DOOR_GAPS = [8, 6.5, 4, 0];
+    const pendingNvg = [];
     Z.zones.forEach((zone, zi) => {
       if (!seeds[zi] || !Number.isFinite(door_depth[zi])) return;
       const [fx, fz] = seeds[zi];
@@ -1597,6 +1601,7 @@ export async function buildRealWorld(scene, renderer) {
       const rndState = zone.isolatedRnd ? rnd.save() : null; // la zone tire ses emplacements puis rend le tirage intact
       for (const item of zone.items || []) {
         const [type, id] = item.split(':');
+        if (type === 'nvg') { pendingNvg.push({ zone, zi, start, gaps }); continue; }
         if (type === 'station') {
           const sp = spotIn(zi, 3, start ? 7 : 3, start ? 14 : 30, gaps) || spotIn(zi, 3, start ? 7 : 3, start ? 14 : 30);
           if (sp) { addStation(sp[0], sp[1], fx, fz); stations[stations.length - 1].zone = zi; }
@@ -1618,6 +1623,14 @@ export async function buildRealWorld(scene, renderer) {
       }
       if (rndState != null) rnd.load(rndState);
     });
+    // Seconde passe dédiée aux bornes de vision nocturne : aucun emplacement existant n'est décalé
+    const nvgRndSave = rnd.save();
+    for (const { zi, start, gaps } of pendingNvg) {
+      const R = start ? 24 : 34;
+      const sp = spotIn(zi, 3, start ? 6 : 4, R, PERK_DOOR_GAPS) || spotIn(zi, 3, start ? 5 : 4, R, gaps) || spotIn(zi, 3, 3, R);
+      if (sp) addMachine('nvg', 'nvg', sp, zi);
+    }
+    rnd.load(nvgRndSave);
     // axe de la rue le plus long autour d'un point (orientation des motos du repli)
     const alongStreet = (x, z) => {
       let best = -1, ang = 0;

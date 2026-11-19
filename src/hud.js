@@ -54,6 +54,8 @@ export class Hud {
       lobbyPlayers: $('lobbyPlayers'),
       btnStartGame: $('btnStartGame'),
       nades: $('nades'),
+      nvgBadge: $('nvgBadge'),
+      nvgFlash: $('nvgFlash'),
       perks: $('perks'),
       compass: $('compass'),
       zoneName: $('zoneName'),
@@ -66,12 +68,14 @@ export class Hud {
     this.damageFlash = 0;
     this.nukeFlash = 0;
     this.announceTimer = null;
+    this._nvgState = { has: false, on: false };
   }
 
   // Une touche a changé (game.binds) : les textes HUD qui la citent sont refaits à la prochaine mise à jour
   refreshKeys() {
-    for (const k of ['inv', 'nades', 'ammo']) delete this.cache[k];
+    for (const k of ['inv', 'nades', 'ammo', 'nvg']) delete this.cache[k];
     if (this.el.mapHint && this.binds) this.el.mapHint.textContent = `${this.binds.tag('map')} carte`;
+    if (this._nvgState) this.setNvg(this._nvgState.has, this._nvgState.on, false);
   }
 
   _set(key, value, apply) {
@@ -108,16 +112,46 @@ export class Hud {
     });
   }
 
-  // Nom de l'arme, avec le calibre en petit dessous
-  setWeapon(name, caliber = '') {
-    this._set('weapon', `${name}|${caliber}`, () => {
+  // Nom de l'arme, avec le calibre et les accessoires aléatoires en petit dessous
+  setWeapon(name, caliber = '', atts = []) {
+    const attKey = Array.isArray(atts) ? atts.join(',') : '';
+    this._set('weapon', `${name}|${caliber}|${attKey}`, () => {
       this.el.weapon.textContent = name;
       if (caliber) {
         const small = document.createElement('small');
         small.textContent = caliber;
         this.el.weapon.appendChild(small);
       }
+      if (Array.isArray(atts) && atts.length) {
+        const row = document.createElement('div');
+        row.className = 'att-row';
+        for (const label of atts) {
+          const tag = document.createElement('span');
+          tag.className = 'att-tag';
+          tag.textContent = label;
+          row.appendChild(tag);
+        }
+        this.el.weapon.appendChild(row);
+      }
     });
+  }
+
+  // Indicateur HUD des lunettes de vision nocturne + flash vert à l'activation
+  setNvg(has, on, flash = false) {
+    this._nvgState = { has: !!has, on: !!on };
+    const keyTag = this.binds ? this.binds.tag('nvg') : '[L]';
+    this._set('nvg', `${has ? 1 : 0}|${on ? 1 : 0}|${keyTag}`, () => {
+      const b = this.el.nvgBadge;
+      if (!b) return;
+      b.classList.toggle('owned', !!has);
+      b.classList.toggle('on', !!(has && on));
+      b.textContent = has ? (on ? `◉ NVG ACTIF ${keyTag}` : `○ NVG ${keyTag}`) : '';
+    });
+    if (flash && on && this.el.nvgFlash) {
+      this.el.nvgFlash.classList.remove('pulse');
+      void this.el.nvgFlash.offsetWidth;
+      this.el.nvgFlash.classList.add('pulse');
+    }
   }
 
   setInventory(inventory, activeIdx) {
@@ -862,7 +896,16 @@ export class Hud {
       else { ctx.fillStyle = col; ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.beginPath(); ctx.roundRect(qx - 9, qy - 9, 18, 18, 4); ctx.fill(); ctx.stroke(); ctx.fillStyle = '#fff'; ctx.font = 'bold 13px Arial'; ctx.fillText('T', qx, qy + 4.5); }
     }
     if (world.tram?.substation) { const [qx, qy] = P(world.tram.substation.x, world.tram.substation.z); ctx.fillStyle = '#e8c04a'; ctx.strokeStyle = '#000'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(qx, qy, 7, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); ctx.fillStyle = '#000'; ctx.font = 'bold 11px Arial'; ctx.fillText('⚡', qx, qy + 4); } // sous-station du tram
-    for (const m of world.machines || []) if (m.type !== 'box' || m.active) icon(m.pos.x, m.pos.z, m.type === 'box' ? '#3f8fd8' : m.color, m.type === 'box' ? '?' : m.type === 'pap' ? 'P' : (m.letter || m.name[0]));
+    for (const m of world.machines || []) if (m.type !== 'box' || m.active) {
+      if (m.type === 'nvg') {
+        const [qx, qy] = P(m.pos.x, m.pos.z);
+        ctx.fillStyle = '#39ff6a'; ctx.strokeStyle = '#062010'; ctx.lineWidth = 1.8;
+        ctx.beginPath(); ctx.arc(qx, qy, 7.5, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+        ctx.fillStyle = '#041409'; ctx.font = 'bold 10px Arial'; ctx.fillText('N', qx, qy + 3.5);
+      } else {
+        icon(m.pos.x, m.pos.z, m.type === 'box' ? '#3f8fd8' : m.color, m.type === 'box' ? '?' : m.type === 'pap' ? 'P' : (m.letter || m.name[0]));
+      }
+    }
     // coéquipiers
     for (const tm of teammates) {
       const [x, y] = P(tm.pos.x, tm.pos.z);
@@ -882,7 +925,7 @@ export class Hud {
     ctx.font = 'bold 26px Impact, Arial'; ctx.fillStyle = '#ffd24a';
     ctx.fillText(world.mapTitle || 'GRANDE ÎLE DE STRASBOURG', 30, 36);
     ctx.font = '13px Arial'; ctx.fillStyle = '#ccc';
-    ctx.fillText('▲ vous   ● vert : munitions   ● orange : arme murale   ● bleu ? : boîte mystère   P : Pack-a-Punch   ● couleurs : atouts   ■ rouge : porte verrouillée (prix)   P bleu : motos   V turquoise : vélos   — doré : passage sous immeuble   ━ lignes de tram   N ↑', 30, H - 18);
+    ctx.fillText('▲ vous   ● vert : munitions   ● vert vif N : vision nocturne   ● orange : arme murale   ● bleu ? : boîte mystère   P : Pack-a-Punch   ● couleurs : atouts   ■ rouge : porte verrouillée   P bleu : motos   V turquoise : vélos   ━ tram   N ↑', 30, H - 18);
   }
 
   setRoomBadge(code) {

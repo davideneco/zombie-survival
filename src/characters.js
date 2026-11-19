@@ -12,14 +12,22 @@ import { CONFIG } from './config.js';
 // =====================================================================
 
 export const CHARACTERS = [
-  { id: 'marc', name: 'MARC', role: 'Soldat', accent: '#7cb342', skin: 0xe0b48f, hair: 0x2b1d12, hairStyle: 'short', beard: false, scale: [1.04, 1.02], fp: { sleeve: 0x4a5530, hand: 0x1c1c1e } },
-  { id: 'lea', name: 'LÉA', role: 'Infirmière', accent: '#4fc3f7', skin: 0xf1d0b0, hair: 0x8a3a18, hairStyle: 'ponytail', beard: false, scale: [0.94, 0.97], fp: { sleeve: 0xdfe6ee, hand: 0x4aa8e0 } },
-  { id: 'karim', name: 'KARIM', role: 'Pompier', accent: '#ff8a3d', skin: 0x8d5a3b, hair: 0x111111, hairStyle: 'buzz', beard: true, scale: [1.1, 1.04], fp: { sleeve: 0xd8541a, hand: 0x2a2a2e } },
-  { id: 'chloe', name: 'CHLOÉ', role: 'Étudiante', accent: '#ff5c7a', skin: 0xc9a07a, hair: 0x1c1a24, hairStyle: 'long', beard: false, scale: [0.96, 0.99], fp: { sleeve: 0xb8283c, hand: 0xe0d0b8 } },
-  { id: 'lucian', name: 'LUCIAN', role: 'Le Purificateur', accent: '#dfe6ff', skin: 0x6b4630, hair: 0x15110e, hairStyle: 'buzz', beard: true, scale: [1.03, 1.05], fp: { sleeve: 0x16161c, hand: 0x24242a } },
-  { id: 'picsou', name: 'PICSOU', role: 'Milliardaire', accent: '#ffd24a', skin: 0xf6f4ee, hair: 0xf6f4ee, hairStyle: 'none', duck: true, scale: [1.02, 0.8], fp: { sleeve: 0xb02020, hand: 0xf6f4ee } },
-  { id: 'klukai', name: 'KLUKAI', role: 'Poupée tactique', accent: '#8fd3ff', skin: 0xf3dccb, hair: 0x9fd0ee, hairStyle: 'longtail', beard: false, eye: 0x3aa060, scale: [0.93, 0.98], fp: { sleeve: 0x6a3a9a, hand: 0x141418 } },
-  { id: 'harry', name: 'HARRY', role: 'Sorcier', accent: '#e0b040', skin: 0xf0cfb4, hair: 0x16110d, hairStyle: 'messy', beard: false, eye: 0x2f8a3a, scale: [0.95, 0.97], fp: { sleeve: 0x141416, hand: 0xf0cfb4 } },
+  { id: 'marc', name: 'MARC', role: 'Soldat', accent: '#7cb342', skin: 0xe0b48f, hair: 0x2b1d12, hairStyle: 'short', beard: false, scale: [1.04, 1.02],
+    fp: { sleeve: 0x4a5530, cuff: 0x262a1e, hand: 0x232620, finger: 0x1b1e19, knuckle: 0x3b4032, accent: 0x8ea850, camo: true, wrist: 'watch', handScale: 1.04, stance: 'tactical' } },
+  { id: 'lea', name: 'LÉA', role: 'Infirmière', accent: '#4fc3f7', skin: 0xf1d0b0, hair: 0x8a3a18, hairStyle: 'ponytail', beard: false, scale: [0.94, 0.97],
+    fp: { sleeve: 0xdfe6ee, cuff: 0x3a8ab8, hand: 0x4aa8e0, finger: 0x5ab8ee, knuckle: 0x3894cc, accent: 0xd02834, wrist: 'medband', handScale: 0.92, stance: 'steady' } },
+  { id: 'karim', name: 'KARIM', role: 'Pompier', accent: '#ff8a3d', skin: 0x8d5a3b, hair: 0x111111, hairStyle: 'buzz', beard: true, scale: [1.1, 1.04],
+    fp: { sleeve: 0xd8541a, cuff: 0xdfe600, hand: 0x28282d, finger: 0x1e1e22, knuckle: 0x4a4236, accent: 0xdfe600, wrist: 'hivis', handScale: 1.12, stance: 'heavy' } },
+  { id: 'chloe', name: 'CHLOÉ', role: 'Étudiante', accent: '#ff5c7a', skin: 0xc9a07a, hair: 0x1c1a24, hairStyle: 'long', beard: false, scale: [0.96, 0.99],
+    fp: { sleeve: 0xb8283c, cuff: 0xe8dcc4, hand: 0x323038, finger: 0xc9a07a, knuckle: 0x45424d, accent: 0xece0c8, fingerless: true, wrist: 'bracelet', handScale: 0.93, stance: 'agile' } },
+  { id: 'lucian', name: 'LUCIAN', role: 'Le Purificateur', accent: '#dfe6ff', skin: 0x6b4630, hair: 0x15110e, hairStyle: 'buzz', beard: true, scale: [1.03, 1.05],
+    fp: { sleeve: 0x16161c, cuff: 0xe6e8f0, hand: 0x1f1f26, finger: 0x17171d, knuckle: 0xc8a040, accent: 0xc8a040, wrist: 'relic', handScale: 1.03, stance: 'tactical' } },
+  { id: 'picsou', name: 'PICSOU', role: 'Milliardaire', accent: '#ffd24a', skin: 0xf6f4ee, hair: 0xf6f4ee, hairStyle: 'none', duck: true, scale: [1.02, 0.8],
+    fp: { sleeve: 0xb02020, cuff: 0xf6f6f8, hand: 0xf6f4ee, finger: 0xf8f6f0, knuckle: 0xeae6dc, accent: 0xffd24a, duck: true, wrist: 'cufflink', handScale: 1.0, stance: 'steady' } },
+  { id: 'klukai', name: 'KLUKAI', role: 'Poupée tactique', accent: '#8fd3ff', skin: 0xf3dccb, hair: 0x9fd0ee, hairStyle: 'longtail', beard: false, eye: 0x3aa060, scale: [0.93, 0.98],
+    fp: { sleeve: 0x6a3a9a, cuff: 0x141418, hand: 0x141418, finger: 0x1c1c22, knuckle: 0x3ac8ff, accent: 0x3ac8ff, wrist: 'tech', handScale: 0.91, stance: 'tactical' } },
+  { id: 'harry', name: 'HARRY', role: 'Sorcier', accent: '#e0b040', skin: 0xf0cfb4, hair: 0x16110d, hairStyle: 'messy', beard: false, eye: 0x2f8a3a, scale: [0.95, 0.97],
+    fp: { sleeve: 0x141418, cuff: 0x8a1a1a, hand: 0xf0cfb4, finger: 0xe8c4a6, knuckle: 0xe2ba98, accent: 0xd0a030, bare: true, wrist: 'gryff', handScale: 0.95, stance: 'agile' } },
 ];
 export const charOf = (slot) => CHARACTERS[((slot % CHARACTERS.length) + CHARACTERS.length) % CHARACTERS.length];
 export const slotColor = (slot) => charOf(slot).accent;
@@ -33,74 +41,179 @@ const mat = (color, rough = 0.8, metal = 0.05, map = null) => {
   return m;
 };
 
-function camoTexture() {
-  const c = document.createElement('canvas'); c.width = c.height = 128;
+export function camoTexture() {
+  if (CAMO) return CAMO;
+  const c = document.createElement('canvas'); c.width = c.height = 256;
   const x = c.getContext('2d');
-  x.fillStyle = '#4a5530'; x.fillRect(0, 0, 128, 128);
+  x.fillStyle = '#4a5530'; x.fillRect(0, 0, 256, 256);
   let seed = 7; const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
-  for (const col of ['#2f3a22', '#6b6a44', '#1f261a', '#7a7550']) {
+  for (const col of ['#2d3820', '#6d6b44', '#1d2418', '#7d7852', '#3a4628']) {
     x.fillStyle = col;
-    for (let i = 0; i < 14; i++) {
-      const cx = rnd() * 128, cy = rnd() * 128, r = 6 + rnd() * 16;
+    for (let i = 0; i < 18; i++) {
+      const cx = rnd() * 256, cy = rnd() * 256, r = 12 + rnd() * 28;
       x.beginPath();
-      for (let k = 0; k < 9; k++) { const a = (k / 9) * 6.283, rr = r * (0.6 + rnd() * 0.7); x.lineTo(cx + Math.cos(a) * rr * 1.5, cy + Math.sin(a) * rr * 0.8); }
+      for (let k = 0; k < 10; k++) { const a = (k / 10) * 6.283, rr = r * (0.55 + rnd() * 0.75); x.lineTo(cx + Math.cos(a) * rr * 1.5, cy + Math.sin(a) * rr * 0.85); }
       x.closePath(); x.fill();
     }
   }
+  // ripstop weave grid
+  x.strokeStyle = 'rgba(0,0,0,0.09)'; x.lineWidth = 1;
+  for (let i = 0; i < 256; i += 8) { x.beginPath(); x.moveTo(i, 0); x.lineTo(i, 256); x.moveTo(0, i); x.lineTo(256, i); x.stroke(); }
   const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(1.5, 1.5); t.colorSpace = THREE.SRGBColorSpace;
+  CAMO = t;
   return t;
 }
 let CAMO = null;
 
-// ------------------------------------------------------------------ visage (v0.47.0)
+// Shared subtle woven cloth texture (tinted by material color so all outfits gain crisp fabric detail)
+let CLOTH_TEX = null;
+export function clothTexture() {
+  if (CLOTH_TEX) return CLOTH_TEX;
+  const c = document.createElement('canvas'); c.width = c.height = 128;
+  const x = c.getContext('2d');
+  x.fillStyle = '#e8e8e8'; x.fillRect(0, 0, 128, 128);
+  let seed = 91; const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  for (let y = 0; y < 128; y += 2) {
+    x.fillStyle = y % 4 === 0 ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.04)';
+    x.fillRect(0, y, 128, 1);
+  }
+  for (let i = 0; i < 128; i += 4) {
+    x.fillStyle = 'rgba(0,0,0,0.045)';
+    x.fillRect(i, 0, 1, 128);
+  }
+  for (let i = 0; i < 600; i++) {
+    x.fillStyle = rnd() < 0.5 ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.04)';
+    x.fillRect(rnd() * 128, rnd() * 128, 2, 2);
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(3, 3); t.colorSpace = THREE.SRGBColorSpace;
+  CLOTH_TEX = t;
+  return t;
+}
+
+// ------------------------------------------------------------------ visage (v0.103.0 — 512x512 haute précision)
 // Tête sculptée d'une seule pièce (front, arcades, nez, lèvres, menton) dont la texture est peinte par personnage (peau, yeux, sourcils, bouche,
-// barbe de trois jours, lunettes…) : 256 x 256, créée au premier avatar de ce personnage, partagée ensuite. Avant = -z ; UV plane sur la face.
+// barbe de trois jours, lunettes…) : 512 x 512, créée au premier avatar de ce personnage, partagée ensuite. Avant = -z ; UV plane sur la face.
 const FACE_TEX = new Map();
 const FEMALE = new Set(['lea', 'chloe', 'klukai']);
 const hexCss = (h) => `#${new THREE.Color(h).getHexString()}`;
 function faceTexture(ch) {
   let t = FACE_TEX.get(ch.id);
   if (t) return t;
-  const S = 256, c = document.createElement('canvas'); c.width = c.height = S;
+  const S = 512, c = document.createElement('canvas'); c.width = c.height = S;
   const x = c.getContext('2d'), U = (u) => u * S, V = (v) => (1 - v) * S;
   const skin = new THREE.Color(ch.skin), hair = hexCss(ch.hair), female = FEMALE.has(ch.id);
-  const shade = (k) => `rgb(${Math.round(skin.r * 255 * k)},${Math.round(skin.g * 255 * k)},${Math.round(skin.b * 255 * k)})`;
+  const shade = (k) => `rgb(${Math.min(255, Math.round(skin.r * 255 * k))},${Math.min(255, Math.round(skin.g * 255 * k))},${Math.min(255, Math.round(skin.b * 255 * k))})`;
   x.fillStyle = shade(1); x.fillRect(0, 0, S, S);
-  let g = x.createRadialGradient(S / 2, S * 0.5, S * 0.25, S / 2, S * 0.5, S * 0.72); g.addColorStop(0, 'rgba(255,255,255,0.05)'); g.addColorStop(1, 'rgba(0,0,0,0.22)'); x.fillStyle = g; x.fillRect(0, 0, S, S);
+  // natural facial ambient occlusion & forehead/cheekbone lighting
+  let g = x.createRadialGradient(S * 0.5, S * 0.48, S * 0.16, S * 0.5, S * 0.5, S * 0.72);
+  g.addColorStop(0, 'rgba(255,248,240,0.08)'); g.addColorStop(0.65, 'rgba(0,0,0,0.04)'); g.addColorStop(1, 'rgba(0,0,0,0.28)');
+  x.fillStyle = g; x.fillRect(0, 0, S, S);
+  // subtle chin & brow contour shadows
+  g = x.createLinearGradient(0, V(0.75), 0, V(0.56));
+  g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(30,15,10,0.12)');
+  x.fillStyle = g; x.fillRect(U(0.18), V(0.75), U(0.64), V(0.56) - V(0.75));
+  // fine skin micro-grain
   const rng = (() => { let q = 12345 + ch.id.length * 77; return () => ((q = (q * 16807) % 2147483647) / 2147483647); })();
-  for (let i = 0; i < 900; i++) { x.fillStyle = `rgba(${rng() < 0.5 ? '0,0,0' : '255,255,255'},${rng() * 0.05})`; x.fillRect(rng() * S, rng() * S, 2, 2); } // grain de peau
-  // joues
-  for (const sx of [-1, 1]) { g = x.createRadialGradient(U(0.5 + sx * 0.28), V(0.4), 2, U(0.5 + sx * 0.28), V(0.4), 34); g.addColorStop(0, female ? 'rgba(226,100,100,0.22)' : 'rgba(180,80,70,0.1)'); g.addColorStop(1, 'rgba(180,80,70,0)'); x.fillStyle = g; x.fillRect(0, 0, S, S); }
-  // nez : ombres latérales, narines, reflet
-  x.fillStyle = shade(0.72); for (const sx of [-1, 1]) { x.beginPath(); x.ellipse(U(0.5 + sx * 0.05), V(0.385), 4.5, 3, sx * 0.4, 0, 7); x.fill(); }
-  g = x.createLinearGradient(U(0.4), 0, U(0.6), 0); g.addColorStop(0, 'rgba(0,0,0,0.12)'); g.addColorStop(0.5, 'rgba(255,255,255,0.06)'); g.addColorStop(1, 'rgba(0,0,0,0.12)'); x.fillStyle = g; x.fillRect(U(0.4), V(0.58), U(0.2), V(0.36) - V(0.58));
-  // yeux : blanc, iris, pupille, reflet, paupières, cils
-  const iris = hexCss(ch.eye || (ch.id === 'lea' ? 0x3a7a98 : ch.id === 'marc' ? 0x4a6a80 : 0x3a2a1c));
+  for (let i = 0; i < 2400; i++) { x.fillStyle = `rgba(${rng() < 0.5 ? '0,0,0' : '255,255,255'},${rng() * 0.045})`; x.fillRect(rng() * S, rng() * S, 2.2, 2.2); }
+  // warm cheeks & cheekbones
   for (const sx of [-1, 1]) {
-    const cx = U(0.5 + sx * 0.215), cy = V(0.575);
-    x.fillStyle = shade(0.8); x.beginPath(); x.ellipse(cx, cy, 22, 12.5, 0, 0, 7); x.fill();           // orbite
-    x.fillStyle = '#f2efe8'; x.beginPath(); x.ellipse(cx, cy, 18, 9.5, 0, 0, 7); x.fill();
-    x.save(); x.beginPath(); x.ellipse(cx, cy, 18, 9.5, 0, 0, 7); x.clip();
-    x.fillStyle = iris; x.beginPath(); x.arc(cx, cy, 8.5, 0, 7); x.fill(); x.fillStyle = 'rgba(0,0,0,0.4)'; x.beginPath(); x.arc(cx, cy, 8.5, 0, 7); x.lineWidth = 1.5; x.strokeStyle = 'rgba(0,0,0,0.5)'; x.stroke();
-    x.fillStyle = '#0a0806'; x.beginPath(); x.arc(cx, cy, 4, 0, 7); x.fill(); x.fillStyle = 'rgba(255,255,255,0.9)'; x.beginPath(); x.arc(cx - 3, cy - 3, 1.8, 0, 7); x.fill();
-    x.fillStyle = 'rgba(0,0,0,0.25)'; x.fillRect(cx - 20, cy - 12, 40, 5); x.restore();             // ombre de la paupière
-    x.strokeStyle = shade(0.35); x.lineWidth = female ? 3 : 2.2; x.beginPath(); x.ellipse(cx, cy, 18, 9.5, 0, Math.PI * 1.05, Math.PI * 1.95); x.stroke(); // paupière haute
-    x.strokeStyle = shade(0.6); x.lineWidth = 1; x.beginPath(); x.ellipse(cx, cy, 18, 9.5, 0, 0.1, Math.PI - 0.1); x.stroke();
-    if (female) { x.strokeStyle = '#120c0a'; x.lineWidth = 1.6; for (let k = 0; k < 5; k++) { const a = Math.PI * (1.12 + k * 0.18); x.beginPath(); x.moveTo(cx + Math.cos(a) * 18, cy + Math.sin(a) * 9.5); x.lineTo(cx + Math.cos(a) * 22, cy + Math.sin(a) * 13); x.stroke(); } }
-    // sourcils
-    x.strokeStyle = hair; x.lineWidth = female ? 4 : 6.5; x.lineCap = 'round'; x.beginPath(); x.moveTo(cx - sx * 20, V(0.665) + 2); x.quadraticCurveTo(cx, V(0.7) - 3, cx + sx * 20, V(0.665) + 5); x.stroke();
+    g = x.createRadialGradient(U(0.5 + sx * 0.27), V(0.41), 4, U(0.5 + sx * 0.27), V(0.41), 68);
+    g.addColorStop(0, female ? 'rgba(232,108,112,0.24)' : 'rgba(184,88,74,0.12)');
+    g.addColorStop(1, 'rgba(184,88,74,0)');
+    x.fillStyle = g; x.fillRect(0, 0, S, S);
   }
-  // bouche
-  const lip = female ? '#b0505a' : shade(0.62);
-  x.fillStyle = shade(0.55); x.beginPath(); x.ellipse(U(0.5), V(0.268), 21, 2.2, 0, 0, 7); x.fill();
-  x.fillStyle = lip; x.beginPath(); x.moveTo(U(0.5) - 20, V(0.268)); x.quadraticCurveTo(U(0.5), V(0.268) - 12, U(0.5) + 20, V(0.268)); x.quadraticCurveTo(U(0.5), V(0.268) - 3, U(0.5) - 20, V(0.268)); x.fill(); // lèvre haute
-  x.fillStyle = female ? '#c4606a' : shade(0.7); x.beginPath(); x.moveTo(U(0.5) - 18, V(0.268) + 1); x.quadraticCurveTo(U(0.5), V(0.268) + 14, U(0.5) + 18, V(0.268) + 1); x.closePath(); x.fill();
-  x.fillStyle = 'rgba(255,255,255,0.18)'; x.beginPath(); x.ellipse(U(0.5), V(0.268) + 6, 7, 2, 0, 0, 7); x.fill();
-  // barbe de trois jours
-  if (ch.beard) { x.fillStyle = hair; for (let i = 0; i < 2600; i++) { const px = U(0.18 + rng() * 0.64), py = V(0.04 + rng() * 0.34); if (Math.abs(px - S / 2) < 15 && Math.abs(py - V(0.268)) < 6) continue; x.globalAlpha = 0.12 + rng() * 0.25; x.fillRect(px, py, 1.4, 2); } x.globalAlpha = 1; }
-  // signes particuliers
-  if (ch.id === 'harry') { x.strokeStyle = '#0a0a0c'; x.lineWidth = 3; for (const sx of [-1, 1]) { x.beginPath(); x.arc(U(0.5 + sx * 0.215), V(0.575), 24, 0, 7); x.stroke(); } x.beginPath(); x.moveTo(U(0.5) - 8, V(0.575) - 2); x.lineTo(U(0.5) + 8, V(0.575) - 2); x.stroke(); x.strokeStyle = '#b02a2a'; x.lineWidth = 2.5; x.beginPath(); x.moveTo(U(0.58), V(0.82)); x.lineTo(U(0.55), V(0.77)); x.lineTo(U(0.6), V(0.76)); x.lineTo(U(0.56), V(0.7)); x.stroke(); }
-  if (ch.id === 'lea') { x.fillStyle = 'rgba(150,80,50,0.4)'; for (let i = 0; i < 40; i++) { const px = U(0.5 + (rng() - 0.5) * 0.7), py = V(0.42 + rng() * 0.08); x.fillRect(px, py, 1.6, 1.6); } }
+  // nose bridge, soft shadows, nostrils & highlight
+  g = x.createLinearGradient(U(0.41), 0, U(0.59), 0);
+  g.addColorStop(0, 'rgba(0,0,0,0.15)'); g.addColorStop(0.32, 'rgba(0,0,0,0.03)');
+  g.addColorStop(0.5, 'rgba(255,255,255,0.10)'); g.addColorStop(0.68, 'rgba(0,0,0,0.03)'); g.addColorStop(1, 'rgba(0,0,0,0.15)');
+  x.fillStyle = g; x.fillRect(U(0.41), V(0.58), U(0.18), V(0.37) - V(0.58));
+  x.fillStyle = shade(0.64);
+  for (const sx of [-1, 1]) { x.beginPath(); x.ellipse(U(0.5 + sx * 0.048), V(0.382), 9, 5.5, sx * 0.42, 0, 7); x.fill(); }
+  x.fillStyle = 'rgba(255,250,245,0.16)'; x.beginPath(); x.ellipse(U(0.5), V(0.41), 10, 7, 0, 0, 7); x.fill();
+  // eyes: socket shadow, sclera with upper shadow, layered iris with limbal ring, pupil, dual catchlights, eyelids & brows
+  const irisCol = new THREE.Color(ch.eye || (ch.id === 'lea' ? 0x3a82a4 : ch.id === 'marc' ? 0x4c7288 : ch.id === 'chloe' ? 0x4b3424 : 0x3a2a1c));
+  const irisDark = `#${irisCol.clone().multiplyScalar(0.5).getHexString()}`;
+  const irisMid = `#${irisCol.getHexString()}`;
+  const irisLight = `#${irisCol.clone().lerp(new THREE.Color(0xffffff), 0.35).getHexString()}`;
+  for (const sx of [-1, 1]) {
+    const cx = U(0.5 + sx * 0.212), cy = V(0.575);
+    // orbital recess
+    g = x.createRadialGradient(cx, cy, 10, cx, cy, 48);
+    g.addColorStop(0, 'rgba(20,10,8,0.22)'); g.addColorStop(1, 'rgba(20,10,8,0)');
+    x.fillStyle = g; x.beginPath(); x.ellipse(cx, cy, 48, 28, 0, 0, 7); x.fill();
+    // sclera
+    x.fillStyle = '#f4f1ea'; x.beginPath(); x.ellipse(cx, cy, 35, 18.5, 0, 0, 7); x.fill();
+    x.save(); x.beginPath(); x.ellipse(cx, cy, 35, 18.5, 0, 0, 7); x.clip();
+    // radial layered iris
+    const ir = female ? 17.5 : 16;
+    const ig = x.createRadialGradient(cx, cy + 2, 3, cx, cy, ir);
+    ig.addColorStop(0, irisLight); ig.addColorStop(0.65, irisMid); ig.addColorStop(1, irisDark);
+    x.fillStyle = ig; x.beginPath(); x.arc(cx, cy, ir, 0, 7); x.fill();
+    // radial iris fibers
+    x.strokeStyle = 'rgba(255,255,255,0.16)'; x.lineWidth = 1.2;
+    for (let k = 0; k < 14; k++) { const a = (k / 14) * 6.283; x.beginPath(); x.moveTo(cx + Math.cos(a) * 6, cy + Math.sin(a) * 6); x.lineTo(cx + Math.cos(a) * (ir - 2), cy + Math.sin(a) * (ir - 2)); x.stroke(); }
+    // limbal ring & pupil
+    x.strokeStyle = 'rgba(0,0,0,0.65)'; x.lineWidth = 3; x.beginPath(); x.arc(cx, cy, ir - 1, 0, 7); x.stroke();
+    x.fillStyle = '#080605'; x.beginPath(); x.arc(cx, cy, 7.8, 0, 7); x.fill();
+    // dual catchlights
+    x.fillStyle = 'rgba(255,255,255,0.95)'; x.beginPath(); x.arc(cx - 5.5, cy - 5.5, 3.6, 0, 7); x.fill();
+    x.fillStyle = 'rgba(255,255,255,0.55)'; x.beginPath(); x.arc(cx + 5, cy + 4.5, 1.8, 0, 7); x.fill();
+    // upper lid cast shadow on eye
+    g = x.createLinearGradient(0, cy - 20, 0, cy - 4);
+    g.addColorStop(0, 'rgba(0,0,0,0.42)'); g.addColorStop(1, 'rgba(0,0,0,0)');
+    x.fillStyle = g; x.fillRect(cx - 40, cy - 22, 80, 20);
+    x.restore();
+    // upper & lower lid crease
+    x.strokeStyle = shade(0.28); x.lineWidth = female ? 5.2 : 4; x.beginPath(); x.ellipse(cx, cy, 35, 18.5, 0, Math.PI * 1.04, Math.PI * 1.96); x.stroke();
+    x.strokeStyle = shade(0.55); x.lineWidth = 1.8; x.beginPath(); x.ellipse(cx, cy, 35, 18.5, 0, 0.08, Math.PI - 0.08); x.stroke();
+    x.strokeStyle = 'rgba(30,15,10,0.22)'; x.lineWidth = 2; x.beginPath(); x.ellipse(cx, cy - 5, 34, 19, 0, Math.PI * 1.12, Math.PI * 1.88); x.stroke();
+    if (female) {
+      x.strokeStyle = '#140c0a'; x.lineWidth = 2.6;
+      for (let k = 0; k < 6; k++) { const a = Math.PI * (1.1 + k * 0.16); x.beginPath(); x.moveTo(cx + Math.cos(a) * 35, cy + Math.sin(a) * 18.5); x.lineTo(cx + Math.cos(a) * 43, cy + Math.sin(a) * 25); x.stroke(); }
+    }
+    // textured eyebrow strokes
+    x.strokeStyle = hair; x.lineWidth = female ? 7.5 : 11.5; x.lineCap = 'round';
+    x.beginPath(); x.moveTo(cx - sx * 39, V(0.665) + 4); x.quadraticCurveTo(cx, V(0.706) - 6, cx + sx * 39, V(0.662) + 9); x.stroke();
+  }
+  // sculpted mouth & lips
+  const lip = female ? '#b8525e' : shade(0.62);
+  x.fillStyle = shade(0.48); x.beginPath(); x.ellipse(U(0.5), V(0.268), 42, 4.2, 0, 0, 7); x.fill();
+  x.fillStyle = lip; x.beginPath(); x.moveTo(U(0.5) - 40, V(0.268)); x.quadraticCurveTo(U(0.5) - 12, V(0.268) - 22, U(0.5), V(0.268) - 14);
+  x.quadraticCurveTo(U(0.5) + 12, V(0.268) - 22, U(0.5) + 40, V(0.268)); x.quadraticCurveTo(U(0.5), V(0.268) - 5, U(0.5) - 40, V(0.268)); x.fill();
+  x.fillStyle = female ? '#cc6672' : shade(0.72); x.beginPath(); x.moveTo(U(0.5) - 36, V(0.268) + 2); x.quadraticCurveTo(U(0.5), V(0.268) + 28, U(0.5) + 36, V(0.268) + 2); x.closePath(); x.fill();
+  x.fillStyle = 'rgba(255,255,255,0.22)'; x.beginPath(); x.ellipse(U(0.5), V(0.268) + 11, 14, 3.8, 0, 0, 7); x.fill();
+  // chin shadow below lower lip
+  g = x.createRadialGradient(U(0.5), V(0.22), 2, U(0.5), V(0.22), 28);
+  g.addColorStop(0, 'rgba(0,0,0,0.16)'); g.addColorStop(1, 'rgba(0,0,0,0)');
+  x.fillStyle = g; x.fillRect(U(0.35), V(0.26), U(0.3), V(0.16) - V(0.26));
+  // dense beard stubble
+  if (ch.beard) {
+    x.fillStyle = hair;
+    for (let i = 0; i < 6500; i++) {
+      const px = U(0.17 + rng() * 0.66), py = V(0.04 + rng() * 0.34);
+      if (Math.abs(px - S / 2) < 32 && Math.abs(py - V(0.268)) < 12) continue;
+      x.globalAlpha = 0.14 + rng() * 0.28;
+      x.fillRect(px, py, 2.2, 3.4);
+    }
+    x.globalAlpha = 1;
+  }
+  // character-specific facial marks
+  if (ch.id === 'marc') {
+    // subtle tactical cheek camo streaks
+    x.fillStyle = 'rgba(38,48,26,0.28)';
+    for (const sx of [-1, 1]) { x.fillRect(U(0.5 + sx * 0.24) - 24, V(0.45), 48, 8); x.fillRect(U(0.5 + sx * 0.23) - 18, V(0.42), 36, 6); }
+  }
+  if (ch.id === 'harry') {
+    x.strokeStyle = '#0e0e12'; x.lineWidth = 5.5;
+    for (const sx of [-1, 1]) { x.beginPath(); x.arc(U(0.5 + sx * 0.212), V(0.575), 46, 0, 7); x.stroke(); }
+    x.beginPath(); x.moveTo(U(0.5) - 16, V(0.575) - 4); x.lineTo(U(0.5) + 16, V(0.575) - 4); x.stroke();
+    x.strokeStyle = '#b42828'; x.lineWidth = 4.5; x.beginPath(); x.moveTo(U(0.58), V(0.83)); x.lineTo(U(0.545), V(0.77)); x.lineTo(U(0.605), V(0.755)); x.lineTo(U(0.56), V(0.69)); x.stroke();
+  }
+  if (ch.id === 'lea') {
+    x.fillStyle = 'rgba(155,82,48,0.42)';
+    for (let i = 0; i < 65; i++) { const px = U(0.5 + (rng() - 0.5) * 0.68), py = V(0.41 + rng() * 0.09); x.beginPath(); x.arc(px, py, 1.8 + rng() * 1.2, 0, 7); x.fill(); }
+  }
   t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
   FACE_TEX.set(ch.id, t);
   return t;
@@ -192,53 +305,61 @@ export class Avatar {
     const out = this.outfit();
     this.mats.out = out;
     put(this.hips, capsule(0.15, 0.08), out.pants, 0, 0.02, 0, 0, 0, Math.PI / 2, 1, 1.05, 0.8);
+    const cuffMat = mat(ch.fp.cuff, 0.72, 0.12);
+    const fingerMat = mat(ch.fp.finger, ch.fp.bare || ch.fp.fingerless ? 0.74 : 0.68, 0.05);
     for (const side of [-1, 1]) {
       const hip = new THREE.Group(); hip.position.set(side * 0.095, 0, 0); this.hips.add(hip);
-      put(hip, capsule(0.078, 0.3), out.pants, 0, -0.23, 0);
+      put(hip, capsule(0.08, 0.29), out.pants, 0, -0.225, 0, 0, 0, 0, 1.02, 1, 1.04);
       const knee = new THREE.Group(); knee.position.y = -T1; hip.add(knee);
-      put(knee, capsule(0.062, 0.29), out.pantsLow || out.pants, 0, -0.225, 0);
-      put(knee, sphere(0.068), out.pants, 0, 0, 0.012); // genou
+      put(knee, capsule(0.064, 0.28), out.pantsLow || out.pants, 0, -0.22, 0);
+      put(knee, sphere(0.07), out.pants, 0, 0, -0.01, 0, 0, 0, 0.95, 1, 0.9); // genou
       const foot = new THREE.Group(); foot.position.y = -T2; knee.add(foot);
-      put(foot, box(0.1, 0.09, 0.27), out.boots, 0, -0.03, -0.05);
-      put(foot, box(0.1, 0.035, 0.28), out.sole, 0, -0.075, -0.05);
-      put(foot, cyl(0.062, 0.066, 0.12, 10), out.boots, 0, 0.03, 0.02); // tige de la chaussure
+      // sculpted combat boot / sneaker: ankle collar, mid vamp, rounded toe cap, contoured heel & lug sole
+      put(foot, cyl(0.06, 0.066, 0.13, 12), out.boots, 0, 0.035, 0.015);
+      put(foot, torus(0.06, 0.012), out.sole, 0, 0.09, 0.015, Math.PI / 2, 0, 0);
+      put(foot, capsule(0.052, 0.12), out.boots, 0, -0.028, -0.045, Math.PI / 2, 0, 0, 1.02, 1, 0.86);
+      put(foot, sphere(0.052), out.boots, 0, -0.032, -0.12, 0, 0, 0, 1.02, 0.78, 1.25); // rounded toe cap
+      put(foot, capsule(0.054, 0.14), out.sole, 0, -0.066, -0.052, Math.PI / 2, 0, 0, 1.04, 1, 0.42); // sole
+      put(foot, box(0.098, 0.028, 0.08), out.sole, 0, -0.07, 0.025); // heel block
       this.legs.push({ hip, knee, side });
     }
 
-    // ---- buste
+    // ---- buste (silhouette sculptée : taille affinée, poitrine, épaules, col)
     const t = this.torsoG;
-    put(t, capsule(0.15, 0.1), out.pants, 0, 0.02, 0, 0, 0, Math.PI / 2, 1, 1.0, 0.82);
-    put(t, cyl(0.15, 0.16, 0.26, 14), out.top, 0, 0.17, 0, 0, 0, 0, 1.05, 1, 0.82);
-    put(t, capsule(0.165, 0.16), out.top, 0, 0.4, 0, 0, 0, 0, 1.15, 1, 0.78);
-    put(t, cyl(0.045, 0.05, 0.1, 10), skin, 0, 0.6, 0);
-    put(t, cyl(0.158, 0.158, 0.035, 16), out.belt, 0, 0.065, 0, 0, 0, 0, 1.07, 1, 0.84);
-    put(t, box(0.045, 0.04, 0.012), mat(0xc0c0c8, 0.3, 0.9), 0, 0.065, -0.14);
-    // épaulières / manches
-    for (const side of [-1, 1]) put(t, sphere(0.068), out.sleeve, side * SHOULDER_X, 0.5, 0, 0, 0, 0, 1, 0.95, 1);
+    put(t, capsule(0.146, 0.1), out.pants, 0, 0.02, 0, 0, 0, Math.PI / 2, 1, 1.0, 0.82);
+    put(t, cyl(0.162, 0.146, 0.27, 16), out.top, 0, 0.18, 0, 0, 0, 0, 1.06, 1, 0.82);
+    put(t, capsule(0.168, 0.15), out.top, 0, 0.41, 0, 0, 0, 0, 1.16, 1, 0.8);
+    put(t, torus(0.072, 0.022), out.top, 0, 0.56, 0, Math.PI / 2, 0, 0, 1.1, 1, 1); // col de veste
+    put(t, cyl(0.044, 0.052, 0.11, 12), skin, 0, 0.6, 0);
+    put(t, cyl(0.156, 0.156, 0.038, 16), out.belt, 0, 0.068, 0, 0, 0, 0, 1.08, 1, 0.86);
+    put(t, box(0.048, 0.042, 0.016), mat(0xc4c8d0, 0.25, 0.92), 0, 0.068, -0.142); // boucle de ceinture
+    // épaulières / manches sculptées
+    for (const side of [-1, 1]) put(t, sphere(0.072), out.sleeve, side * SHOULDER_X, 0.5, 0, 0, 0, 0, 1.04, 0.96, 1.02);
 
-    // ---- pivot de visée : épaules, bras, arme
+    // ---- pivot de visée : épaules, bras, avant-bras à manchettes, mains articulées (paume + pouce + doigts)
     this.pitchG = new THREE.Group(); this.pitchG.position.set(0, 0.5, 0); t.add(this.pitchG);
     this.arms = [];
     for (const side of [-1, 1]) {
       const sh = new THREE.Group(); sh.position.set(side * SHOULDER_X, 0, 0); this.pitchG.add(sh);
-      put(sh, capsule(0.052, 0.2), out.sleeve, 0, -0.15, 0);
+      put(sh, capsule(0.054, 0.2), out.sleeve, 0, -0.15, 0);
       const el = new THREE.Group(); el.position.y = -L1; sh.add(el);
-      put(el, sphere(0.05), out.sleeve, 0, 0, 0);
-      put(el, capsule(0.044, 0.18), out.foreSleeve || out.sleeve, 0, -0.15, 0);
+      put(el, sphere(0.052), out.sleeve, 0, 0, 0);
+      put(el, capsule(0.045, 0.175), out.foreSleeve || out.sleeve, 0, -0.145, 0);
+      put(el, cyl(0.047, 0.049, 0.045, 12), cuffMat, 0, -0.265, 0); // manchette
       const wrist = new THREE.Group(); wrist.position.y = -L2; el.add(wrist);
-      put(wrist, box(0.075, 0.1, 0.05), out.gloves, 0, -0.04, 0);
-      put(wrist, box(0.075, 0.035, 0.07), out.gloves, 0, -0.1, -0.012); // doigts
+      put(wrist, capsule(0.032, 0.048), out.gloves, 0, -0.042, 0, 0, 0, 0, 1.18, 1, 0.72); // paume sculptée
+      put(wrist, capsule(0.015, 0.036), fingerMat, -side * 0.036, -0.052, -0.018, 0.35, 0, side * 0.45); // pouce
+      put(wrist, capsule(0.026, 0.044), fingerMat, 0, -0.095, -0.014, 0.35, 0, 0, 1.25, 1, 0.65); // doigts courbés
       this.arms.push({ sh, el, wrist, side });
     }
 
     // ---- tête
     this.headG = new THREE.Group(); this.headG.position.set(0, 0.66, 0); this.headG.scale.setScalar(1.1); t.add(this.headG);
-    const white = mat(0xf2f2f2, 0.4), dark = mat(0x16100c, 0.5);
     if (ch.duck) this.duckHead(skin);
     else {
-    const faceMat = mat(0xffffff, 0.72, 0.03, faceTexture(ch));
-    put(this.headG, G('facehead', faceHeadGeometry), faceMat, 0, 0, 0);
-    for (const sx of [-1, 1]) put(this.headG, G('ear', () => new THREE.SphereGeometry(0.022, 8, 6)), skin, sx * 0.093, 0.06, 0.0, 0, 0, 0, 0.5, 1.1, 0.8); // oreilles
+      const faceMat = mat(0xffffff, 0.7, 0.03, faceTexture(ch));
+      put(this.headG, G('facehead', faceHeadGeometry), faceMat, 0, 0, 0);
+      for (const sx of [-1, 1]) put(this.headG, G('ear', () => new THREE.SphereGeometry(0.022, 8, 6)), skin, sx * 0.093, 0.06, 0.0, 0, 0, 0, 0.5, 1.1, 0.8); // oreilles
     }
     this.hairStyle(hair);
     this.gear();
@@ -246,41 +367,59 @@ export class Avatar {
     this.flash = null;
     this.walk = 0; this.kick = 0; this.sway = 0;
     this.pole = [new THREE.Vector3(-0.5, -1, 0.15), new THREE.Vector3(0.5, -1, 0.15)];
-    mergeStatic(this.root); // ~80 maillages -> ~30 : beaucoup moins d'appels de dessin par coéquipier
+    mergeStatic(this.root); // ~90 maillages -> ~32 : peu d'appels de dessin par coéquipier
+    // Lunettes de vision nocturne tactiques (visibles quand le joueur active les NVG en multijoueur)
+    this.nvgG = this.buildNvgGear();
+    this.nvgG.visible = false;
+    this.headG.add(this.nvgG);
     this.setWeapon('rifle');
   }
 
-  // -------------------------------------------------------------- vêtements
+  buildNvgGear() {
+    const g = new THREE.Group();
+    const blk = mat(0x16181a, 0.45, 0.65), strap = mat(0x1c1e1c, 0.85, 0.1);
+    const lens = new THREE.MeshStandardMaterial({ color: 0x22ff66, emissive: 0x39ff6a, emissiveIntensity: 2.2, roughness: 0.15, metalness: 0.3 });
+    put(g, torus(0.098, 0.011), strap, 0, 0.088, 0.004, Math.PI / 2, 0, 0, 1.0, 1.06, 1.0); // harnais
+    put(g, box(0.095, 0.032, 0.036), blk, 0, 0.082, -0.108); // pont avant
+    for (const sx of [-1, 1]) {
+      put(g, cyl(0.02, 0.018, 0.068, 10), blk, sx * 0.034, 0.076, -0.132, Math.PI / 2); // tubes jumelés
+      put(g, cyl(0.015, 0.015, 0.006, 10), lens, sx * 0.034, 0.076, -0.167, Math.PI / 2); // lentilles vertes
+    }
+    return g;
+  }
+
+  // -------------------------------------------------------------- vêtements (avec grain textile procédural)
   outfit() {
     const id = this.ch.id;
+    const cl = clothTexture();
     if (id === 'marc') {
-      CAMO = CAMO || camoTexture();
-      const camo = mat(0xffffff, 0.9, 0, CAMO);
-      return { top: camo, sleeve: camo, pants: camo, pantsLow: camo, boots: mat(0x1b1710, 0.85), sole: mat(0x0c0c0c, 0.9), belt: mat(0x2a2418, 0.6), gloves: mat(0x1a1a1a, 0.7) };
+      CAMO = camoTexture();
+      const camo = mat(0xffffff, 0.88, 0.04, CAMO);
+      return { top: camo, sleeve: camo, pants: camo, pantsLow: camo, boots: mat(0x1b1710, 0.82, 0.08), sole: mat(0x0c0c0c, 0.92), belt: mat(0x2a2418, 0.6), gloves: mat(0x1e201b, 0.72) };
     }
     if (id === 'lea') {
-      return { top: mat(0xdfe6ee, 0.8), sleeve: mat(0xdfe6ee, 0.8), foreSleeve: mat(0x3a8ab8, 0.8), pants: mat(0x3a8ab8, 0.8), boots: mat(0xf0f0f0, 0.6), sole: mat(0x9a9aa4, 0.7), belt: mat(0x1c3a52, 0.7), gloves: mat(0x4aa8e0, 0.6) };
+      return { top: mat(0xe4ebf2, 0.78, 0.02, cl), sleeve: mat(0xe4ebf2, 0.78, 0.02, cl), foreSleeve: mat(0x3a8ab8, 0.78, 0.02, cl), pants: mat(0x3a8ab8, 0.8, 0.02, cl), boots: mat(0xf0f2f4, 0.58), sole: mat(0x9a9aa4, 0.75), belt: mat(0x1c3a52, 0.7), gloves: mat(0x4aa8e0, 0.55) };
     }
     if (id === 'lucian') {
-      const blk = mat(0x16161c, 0.65);
-      return { top: blk, sleeve: blk, pants: mat(0x1e1e24, 0.8), boots: mat(0x0e0e10, 0.6), sole: mat(0x060606, 0.9), belt: mat(0xc8a040, 0.35, 0.8), gloves: mat(0x24242a, 0.6) };
+      const blk = mat(0x18181f, 0.6, 0.15, cl);
+      return { top: blk, sleeve: blk, pants: mat(0x1e1e26, 0.75, 0.08, cl), boots: mat(0x0e0e10, 0.52, 0.18), sole: mat(0x060606, 0.9), belt: mat(0xc8a040, 0.32, 0.85), gloves: mat(0x22222a, 0.58, 0.12) };
     }
     if (id === 'picsou') {
-      const red = mat(0xb02020, 0.75), white = mat(0xf6f4ee, 0.9);
-      return { top: red, sleeve: red, foreSleeve: red, pants: white, pantsLow: white, boots: mat(0xf0f0f0, 0.7), sole: mat(0xf0a020, 0.5), belt: red, gloves: white };
+      const red = mat(0xb42222, 0.72, 0.04, cl), white = mat(0xf6f4ee, 0.88);
+      return { top: red, sleeve: red, foreSleeve: red, pants: white, pantsLow: white, boots: mat(0xf0f0f0, 0.68), sole: mat(0xf0a020, 0.5), belt: red, gloves: white };
     }
     if (id === 'klukai') {
-      const blk = mat(0x141418, 0.6);
-      return { top: blk, sleeve: mat(0x6a3a9a, 0.7), foreSleeve: blk, pants: mat(0x22222a, 0.7), pantsLow: mat(0x0c0c10, 0.5), boots: mat(0x101014, 0.5), sole: mat(0x050505, 0.9), belt: mat(0x3ac8ff, 0.3, 0.3), gloves: blk };
+      const blk = mat(0x16161c, 0.52, 0.22, cl);
+      return { top: blk, sleeve: mat(0x6e3ca0, 0.66, 0.12, cl), foreSleeve: blk, pants: mat(0x24242e, 0.68, 0.1, cl), pantsLow: mat(0x0e0e14, 0.48, 0.2), boots: mat(0x101016, 0.45, 0.22), sole: mat(0x050505, 0.9), belt: mat(0x3ac8ff, 0.28, 0.4), gloves: blk };
     }
     if (id === 'harry') {
-      const robe = mat(0x141416, 0.85);
-      return { top: robe, sleeve: robe, pants: mat(0x4a4a50, 0.85), boots: mat(0x1a120c, 0.6), sole: mat(0x0a0a0a, 0.9), belt: mat(0x141416, 0.85), gloves: mat(0xf0cfb4, 0.75) };
+      const robe = mat(0x161619, 0.86, 0.02, cl);
+      return { top: robe, sleeve: robe, pants: mat(0x4a4a52, 0.84, 0.02, cl), boots: mat(0x1c140d, 0.58, 0.12), sole: mat(0x0a0a0a, 0.9), belt: robe, gloves: mat(0xf0cfb4, 0.74) };
     }
     if (id === 'karim') {
-      return { top: mat(0xd8541a, 0.75), sleeve: mat(0xd8541a, 0.75), pants: mat(0x1d2536, 0.85), boots: mat(0x141414, 0.7), sole: mat(0x0a0a0a, 0.9), belt: mat(0x111111, 0.6), gloves: mat(0x2a2a2e, 0.7) };
+      return { top: mat(0xdc561a, 0.72, 0.06, cl), sleeve: mat(0xdc561a, 0.72, 0.06, cl), pants: mat(0x1f283a, 0.82, 0.05, cl), boots: mat(0x141416, 0.66, 0.12), sole: mat(0x0a0a0a, 0.9), belt: mat(0x111111, 0.6), gloves: mat(0x2a2a2e, 0.7) };
     }
-    return { top: mat(0xb8283c, 0.85), sleeve: mat(0xb8283c, 0.85), pants: mat(0x3f5f9a, 0.9), boots: mat(0xf2f2f2, 0.65), sole: mat(0xc8c8d0, 0.8), belt: mat(0x3a2a22, 0.7), gloves: mat(0xe0d0b8, 0.9) };
+    return { top: mat(0xbe2a3e, 0.82, 0.03, cl), sleeve: mat(0xbe2a3e, 0.82, 0.03, cl), pants: mat(0x3f5f9a, 0.88, 0.02, cl), boots: mat(0xf2f2f4, 0.62), sole: mat(0xc8c8d0, 0.8), belt: mat(0x3a2a22, 0.7), gloves: mat(0x323038, 0.85) };
   }
 
   hairStyle(hair) {
@@ -438,15 +577,16 @@ export class Avatar {
   }
 
   // -------------------------------------------------------------- arme tenue à deux mains
-  // level : niveau du Pack-a-Punch (0 à 3) : couleur du reflet et accessoires
-  setWeapon(id, level = 0) {
+  // level : niveau du Pack-a-Punch (0 à 3) : couleur du reflet et accessoires ; atts : liste d'accessoires aléatoires
+  setWeapon(id, level = 0, atts = null) {
     level = level | 0;
-    const key = id + (level ? '+' + level : '');
+    const attKey = Array.isArray(atts) && atts.length ? atts.slice().sort().join(',') : '';
+    const key = id + (level ? '+' + level : '') + (attKey ? '@' + attKey : '');
     if (this.weaponId === key) return;
     this.weaponId = key;
     if (this.weapon) this.pitchG.remove(this.weapon);
     const kit = weaponKit();
-    const w = cloneWeapon(kit.models[id] ? id : 'rifle', level);
+    const w = cloneWeapon(kit.models[id] ? id : 'rifle', level, atts);
     this.wModel = w;
     this.scaleW = 1.15;
     this.weapon = new THREE.Group();
@@ -455,6 +595,8 @@ export class Avatar {
     this.pitchG.add(this.weapon);
     const hd = kit.hands[id] || kit.hands.rifle;
     this.hands = hd;
+    this.hasForegrip = !!(atts && atts.includes('foregrip')) || (level >= 2 && (CONFIG.weapons[id]?.cat === 'ar' || CONFIG.weapons[id]?.cat === 'smg' || CONFIG.weapons[id]?.cat === 'mg'));
+    this.silenced = !!(atts && atts.includes('suppressor'));
     // la main arrière sert de repère : elle se pose sur un point fixe devant l'épaule droite
     this.grip = new THREE.Vector3(0.1, -0.19, -0.12);
     this.weapon.position.copy(this.grip).addScaledVector(hd.back, -this.scaleW);
@@ -491,9 +633,10 @@ export class Avatar {
   }
 
   // -------------------------------------------------------------- animation
-  // s : { dt, speed, fwd (vitesse avant/arrière locale), pitch, reloading, aiming, downed, fire }
+  // s : { dt, speed, fwd (vitesse avant/arrière locale), pitch, reloading, aiming, downed, fire, nvg }
   update(s) {
     const dt = s.dt;
+    if (this.nvgG) this.nvgG.visible = !!s.nvg;
     if (this.wModel) pulseWeapon(this.wModel, performance.now() / 1000); // niveau III : le reflet pulse
     if (s.seat) {
       // assis sur une moto : cuisses vers l'avant, genoux pliés, buste penché (plus pour le conducteur)
@@ -539,32 +682,40 @@ export class Avatar {
       return;
     }
     this.weapon.visible = true;
-    // arme : recul, rechargement (elle se baisse et s'incline), visée
+    // arme : recul, rechargement (elle se baisse et s'incline, main gauche au chargeur), visée
     this.kick = Math.max(0, this.kick - dt * 7);
     this.sway += dt;
     const w = this.weapon, g = this.grip;
     const rl = s.reloading ? 1 : 0;
     this.rl = (this.rl || 0) + (rl - (this.rl || 0)) * Math.min(1, dt * 8);
+    if (rl) this.rlPhase = (this.rlPhase || 0) + dt * 3.8;
+    else this.rlPhase = 0;
     const ads = s.aiming ? 1 : 0;
     this.ads = (this.ads || 0) + (ads - (this.ads || 0)) * Math.min(1, dt * 10);
     const breathe = Math.sin(this.sway * 1.6) * 0.004;
-    const back = this.hands.back, front = this.hands.front;
+    const back = this.hands.back, front = this.hasForegrip && this.hands.fg ? this.hands.fg : this.hands.front;
     const sc = this.scaleW;
-    w.position.set(g.x - back.x * sc - this.ads * 0.04, g.y - back.y * sc + breathe - this.rl * 0.1 + this.ads * 0.02, g.z - back.z * sc + this.kick * 0.05 - this.ads * 0.06);
+    w.position.set(g.x - back.x * sc - this.ads * 0.04, g.y - back.y * sc + breathe - this.rl * 0.09 + this.ads * 0.02, g.z - back.z * sc + this.kick * 0.05 - this.ads * 0.06);
     let sb = 0;
     if (this.stabT > 0) { this.stabT -= dt; const u = Math.max(0, this.stabT) / 0.35; sb = Math.sin(Math.min(1, 1 - u) * Math.PI); }
     w.position.y -= sb * 0.18;
-    w.rotation.set(this.kick * 0.18 + this.rl * 0.6 + sb * 0.5, 0, this.rl * -0.25);
+    w.rotation.set(this.kick * 0.18 + this.rl * 0.45 + sb * 0.5, 0, this.rl * -0.32);
     // cibles des mains, dans le repère du pivot
     w.updateMatrix();
     const tr = new THREE.Vector3().copy(back).multiplyScalar(sc).applyMatrix4(w.matrix);
     const tl = front ? new THREE.Vector3().copy(front).multiplyScalar(sc).applyMatrix4(w.matrix) : new THREE.Vector3().copy(back).multiplyScalar(sc).add(new THREE.Vector3(-0.045, -0.035, -0.02)).applyMatrix4(w.matrix);
+    if (this.rl > 0.15) {
+      // left hand reaches down to pull/insert magazine during reload
+      const dip = 0.5 - 0.5 * Math.cos(this.rlPhase);
+      tl.y -= this.rl * (0.08 + dip * 0.14);
+      tl.z += this.rl * 0.08;
+    }
     if (sb > 0) { tr.z -= sb * 0.34; tr.x -= sb * 0.1; tr.y += sb * 0.04; } // main droite : coup vers l'avant
     this.solveArm(this.arms[1], tr);
     this.solveArm(this.arms[0], tl);
-    // éclair de bouche
+    // éclair de bouche (atténué si silencieux)
     if (s.fire) this.kick = 1;
-    this.flash.visible = this.kick > 0.6;
+    this.flash.visible = !this.silenced && this.kick > 0.6;
     if (this.flash.visible) this.flash.rotation.z = Math.random() * 3;
   }
 
@@ -583,15 +734,15 @@ export function mountAvatar(holder, v, seat, avatar) {
   holder.rotation.set(0, v.model.seats[seat].ry || 0, 0);
 }
 export function dismountAvatar(holder) { holder.parent?.remove(holder); }
-// Pose et animation assis : s = { dt, aimYaw (cap visé), pitch, weapon, pap, reloading, aiming, fire }. Le conducteur a les deux mains
+// Pose et animation assis : s = { dt, aimYaw (cap visé), pitch, weapon, pap, atts, reloading, aiming, fire, nvg }. Le conducteur a les deux mains
 // sur le guidon (ou le pupitre) ; le buste du passager suit la visée (±1,3 rad autour de l'axe de la moto, ±2,2 rad en tram, où il est assis
 // de profil) pour pouvoir tirer.
 export function seatedUpdate(holder, v, seat, avatar, s) {
   const si = v.model.seats[seat], base = si.ry || 0, driver = v.isDriver ? v.isDriver(seat) : seat === 0;
   const d = Math.atan2(Math.sin(s.aimYaw - (v.seatYaw ? v.seatYaw(seat) : v.yaw) - base), Math.cos(s.aimYaw - (v.seatYaw ? v.seatYaw(seat) : v.yaw) - base)), tw = si.twist ?? 1.3;
   holder.rotation.y = base + (driver ? 0 : Math.max(-tw, Math.min(tw, d)));
-  avatar.setWeapon(s.weapon, s.pap);
-  avatar.update({ dt: s.dt, speed: 0, fwd: 0, pitch: s.pitch, reloading: s.reloading, aiming: s.aiming, fire: s.fire, seat: driver ? 1 : 2 });
+  avatar.setWeapon(s.weapon, s.pap, s.atts);
+  avatar.update({ dt: s.dt, speed: 0, fwd: 0, pitch: s.pitch, reloading: s.reloading, aiming: s.aiming, fire: s.fire, nvg: s.nvg, seat: driver ? 1 : 2 });
 }
 
 // Portrait pour le menu : rendu une fois dans un petit contexte WebGL à part

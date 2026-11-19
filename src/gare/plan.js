@@ -224,7 +224,7 @@ export function planGare(gare, rail) {
   // [type, id, u, v, facing φ : direction v·cos φ + u·sin φ (0 : toward the forecourt)]
   const items = {
     'Quais': [['station', null, 34, body.v0 - 0.9, Math.PI], ['wall', 'm1911', -36, body.v0 - 1.2, Math.PI], ['wall', 'shotgun', 50, body.v0 - 1.2, Math.PI]],
-    'Hall de la Gare': [['station', null, H.u0 + 1.4, body.v0 + 6, Math.PI / 2], ['wall', 'mp5', H.u1 - 1.2, 2, -Math.PI / 2], ['perk', 'quickrevive', H.u1 - 2.2, body.v1 - 3.4, -Math.PI / 2], ['box', null, H.u0 + 2.4, body.v1 - 3.6, Math.PI / 2]],
+    'Hall de la Gare': [['station', null, H.u0 + 1.4, body.v0 + 6, Math.PI / 2], ['wall', 'mp5', H.u1 - 1.2, 2, -Math.PI / 2], ['perk', 'quickrevive', H.u1 - 2.2, body.v1 - 3.4, -Math.PI / 2], ['box', null, H.u0 + 2.4, body.v1 - 3.6, Math.PI / 2], ['nvg', null, H.u1 - 2.2, body.v0 + 6, -Math.PI / 2]],
     'Place de la Gare': [['station', null, stopL[0] - 9, 46, -Math.PI / 2], ['wall', 'famas', 96, pavFront + 1.2, 0], ['perk', 'staminup', -92, pavFront + 1.9, 0]],
   };
 

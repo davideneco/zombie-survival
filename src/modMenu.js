@@ -11,6 +11,7 @@
 //   changer de manche, faire apparaître des bonus (Max Ammo, Insta-kill, Nuke, Double Points).
 
 import { CONFIG, PAP_LEVELS } from './config.js';
+import { rollAttachments } from './viewmodels.js';
 
 const RINGS = [1.5, 2.5, 3.5, 5.0];
 const ANGLES = 12;
@@ -614,6 +615,10 @@ export function installModMenu(game, { world, hud, sfx }) {
               <b>❤️ SOIN 100% & RÉANIMATION</b>
               <small>PV au maximum, relève si à terre, 4 grenades</small>
             </button>
+            <button class="mod-btn ${p.nvgOn ? 'mod-btn-active' : 'mod-btn-success'}" id="modNvgBtn">
+              <b>${p.nvgOn ? '◉ VISION NOCTURNE : ACTIVE' : p.hasNvg ? '○ VISION NOCTURNE : ÉTEINTE' : '🟢 DONNER VISION NOCTURNE (NVG)'}</b>
+              <small>Donne et active / désactive les lunettes de vision nocturne</small>
+            </button>
           </div>
         </div>
 
@@ -711,6 +716,10 @@ export function installModMenu(game, { world, hud, sfx }) {
               <b>⭐ AMÉLIORER L'ARME EN MAIN (+1 PaP)</b>
               <small>Niveau actuel : ${curW ? `PaP ${curW.pap || 0}` : '-'}</small>
             </button>
+            <button class="mod-btn mod-btn-primary" id="modRerollAttsBtn">
+              <b>🎲 ACCESSOIRES ALÉATOIRES</b>
+              <small>Relance viseur, silencieux, chargeur, poignée…</small>
+            </button>
           </div>
         </div>
 
@@ -720,13 +729,14 @@ export function installModMenu(game, { world, hud, sfx }) {
             ${p.inventory.map((w, idx) => {
               const s = p.statsOf(w);
               const isHeld = idx === p.weaponIdx;
+              const attsTxt = (s.attLabels || []).length ? ` · ${s.attLabels.join(', ')}` : '';
               return `
                 <div class="mod-inv-row ${isHeld ? 'mod-inv-row-held' : ''}">
                   <div>
                     <b>${idx + 1}. ${esc(s.name)}</b>
                     ${w.pap > 0 ? `<span class="mod-badge-pap">PaP ${'I'.repeat(w.pap)}</span>` : ''}
                     ${isHeld ? '<span class="mod-badge-held">EN MAIN</span>' : ''}
-                    <div style="font-size: 12px; color: #94a3b8;">${esc(s.caliber)} · Chargeur : ${w.ammo}/${s.magSize} · Réserve : ${w.reserve}</div>
+                    <div style="font-size: 12px; color: #94a3b8;">${esc(s.caliber)} · Chargeur : ${w.ammo}/${s.magSize} · Réserve : ${w.reserve}${esc(attsTxt)}</div>
                   </div>
                   <div style="display: flex; gap: 6px;">
                     <button class="mod-btn-sm" data-switch-w="${idx}">Équiper</button>
@@ -1073,6 +1083,13 @@ export function installModMenu(game, { world, hud, sfx }) {
     document.getElementById('modInfAmmo')?.addEventListener('click', () => mod.toggleInfiniteAmmo());
     document.getElementById('modSuperSpeed')?.addEventListener('click', () => mod.toggleSuperSpeed());
     document.getElementById('modHeal')?.addEventListener('click', () => mod.healAndRevive());
+    document.getElementById('modNvgBtn')?.addEventListener('click', () => {
+      const p = game.player;
+      if (!p.hasNvg) p.grantNvg(true);
+      else p.toggleNvg();
+      say(`Vision nocturne : ${p.nvgOn ? 'ACTIVÉE' : 'DÉSACTIVÉE'}`);
+      mod.render();
+    });
 
     box.querySelectorAll('[data-pts]').forEach((btn) => {
       btn.addEventListener('click', () => mod.addPoints(+btn.dataset.pts));
@@ -1094,6 +1111,19 @@ export function installModMenu(game, { world, hud, sfx }) {
     });
     document.getElementById('modMaxAmmoBtn')?.addEventListener('click', () => mod.maxAmmo());
     document.getElementById('modUpgradeCurBtn')?.addEventListener('click', () => mod.upgradeCurrent());
+    document.getElementById('modRerollAttsBtn')?.addEventListener('click', () => {
+      const p = game.player, w = p.curW;
+      if (!w) return;
+      w.atts = rollAttachments(w.id, 'box');
+      p.statsVersion++;
+      const s = p.statsOf(w);
+      w.ammo = s.magSize;
+      p.switchWeapon(p.weaponIdx);
+      const names = w.atts.map((k) => CONFIG.attachments?.defs?.[k]?.name).filter(Boolean);
+      hud.announce(s.name, names.length ? names.join(' · ') : 'Aucun accessoire', 2200);
+      say(`Accessoires relancés : ${names.join(', ') || 'aucun'}`);
+      mod.render();
+    });
 
     box.querySelectorAll('[data-switch-w]').forEach((btn) => {
       btn.addEventListener('click', () => {
