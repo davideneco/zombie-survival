@@ -5,6 +5,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { attachMultiplayer } from './rooms.mjs';
+import { handleAccountRequest } from './accounts.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -30,6 +31,9 @@ const MIME_TYPES = {
 };
 
 const server = http.createServer((req, res) => {
+  // API comptes & progression hybride (/api/account/*)
+  if (handleAccountRequest(req, res)) return;
+
   // Ignorer les requêtes non-GET/HEAD
   if (req.method !== 'GET' && req.method !== 'HEAD') {
     res.writeHead(405);

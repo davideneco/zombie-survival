@@ -36,6 +36,7 @@ import { makeDisplay } from './weaponDisplay.js';
 import { installUi } from './ui.js';
 import { installModMenu } from './modMenu.js';
 import { installGunsmith } from './gunsmith.js';
+import { installAccount } from './account.js';
 import { installUnstick } from './unstick.js';
 import { installBarricades } from './barricades.js';
 import { installBarrels } from './barrels.js';
@@ -414,6 +415,7 @@ const game = {
       if (killed) {
         this.kills++;
         if (head) this.headshots = (this.headshots || 0) + 1;
+        this.account?.onKill({ head, boss: Boolean(z.isBoss || z.mini) });
         sfx.kill();
         this.addPoints(award, head ? 'head' : '');
       } else {
@@ -1188,7 +1190,7 @@ const game = {
     }
     if (!pts || owner === false) return; // owner === false : personne à récompenser (moto sans conducteur qui explose)
     if (owner != null) this.net?.send({ t: 'pts', pts, kill: kills > 0, kills }, owner);
-    else { this.kills += kills; if (kills) sfx.kill(); this.addPoints(pts); }
+    else { this.kills += kills; if (kills) { this.account?.onKill({ count: kills }); sfx.kill(); } this.addPoints(pts); }
   },
 
   // Impact explosif d'une arme (pistolet à rayons, carreau explosif de l'arbalète) : l'effet est vu par tout le monde,
@@ -1304,6 +1306,7 @@ const game = {
     this.zombieSpeed = Math.min(CONFIG.zombie.speedStart + r * CONFIG.zombie.speedPerRound, CONFIG.zombie.speedMax);
     this.spawnTimer = 1;
     hud.setRound(r);
+    this.account?.onRoundReached(r);
     sfx.roundStart();
     hud.announce(`MANCHE ${r}`, `${this.toSpawn} zombies`);
 
@@ -1551,6 +1554,7 @@ const game = {
       this.statRevives = 0;
       if (this.player) this.player.statDowns = 0;
       this.round = 0;
+      if (this.started) this.account?.beginSession();
     }
     hud.setRound(this.round);
     this.intermission = (this.isHost || !this.isMultiplayer) ? 2 : 0;
@@ -1643,10 +1647,14 @@ const game = {
     document.exitPointerLock();
     hud.prompt(null);
 
+    const xpHtml = this.account?.finishMatch({
+      victory: false, round: this.round, kills: this.kills, headshots: this.headshots || 0,
+      revives: this.statRevives || 0, points: this.points, duration: Math.round(this.time), multiplayer: this.isMultiplayer,
+    }) || '';
     const btnLabel = (this.isHost || !this.isMultiplayer) ? 'REJOUER' : null;
-    const subtitle = (this.isHost || !this.isMultiplayer)
+    const subtitle = ((this.isHost || !this.isMultiplayer)
       ? `Vous avez survécu jusqu'à la <b style="color:#fff">manche ${this.round}</b><br>${this.kills} zombies tués`
-      : `Vous avez survécu jusqu'à la <b style="color:#fff">manche ${this.round}</b><br>En attente que l'hôte relance…`;
+      : `Vous avez survécu jusqu'à la <b style="color:#fff">manche ${this.round}</b><br>En attente que l'hôte relance…`) + xpHtml;
 
     hud.showOverlay('ÉQUIPE ÉLIMINÉE', subtitle, btnLabel);
 
@@ -1853,6 +1861,7 @@ const game = {
         this.reviveTimer = 0;
         this.reviveTarget = null;
         this.statRevives = (this.statRevives || 0) + 1;
+        this.account?.onRevive();
         this.addPoints(250, 'bonus');
         hud.announce('RÉANIMATION !', '+250 points', 2000);
         if (this.isHost) {
@@ -2381,6 +2390,7 @@ function setupNetworkHandlers(net) {
     if (m.kill) {
       game.kills += m.kills || 1;
       if (m.head) game.headshots = (game.headshots || 0) + 1;
+      game.account?.onKill({ count: m.kills || 1, head: Boolean(m.head) });
       sfx.kill();
     }
   });
@@ -2539,6 +2549,7 @@ function setupNetworkHandlers(net) {
     game.round = m.r;
     game.toSpawn = m.toSpawn;
     hud.setRound(m.r);
+    game.account?.onRoundReached(m.r);
     game.barrels?.reset();
     sfx.roundStart();
     hud.announce(`MANCHE ${m.r}`, `${m.toSpawn} zombies`);
@@ -2666,9 +2677,13 @@ function setupNetworkHandlers(net) {
     game.ui.closeOverlays();
     document.exitPointerLock();
     hud.prompt(null);
+    const xpHtml = game.account?.finishMatch({
+      victory: false, round: m.round || game.round, kills: game.kills, headshots: game.headshots || 0,
+      revives: game.statRevives || 0, points: game.points, duration: Math.round(game.time), multiplayer: true,
+    }) || '';
     hud.showOverlay(
       'ÉQUIPE ÉLIMINÉE',
-      `Vous avez survécu jusqu'à la <b style="color:#fff">manche ${m.round || game.round}</b><br>En attente que l'hôte relance…`,
+      `Vous avez survécu jusqu'à la <b style="color:#fff">manche ${m.round || game.round}</b><br>En attente que l'hôte relance…${xpHtml}`,
       null
     );
   });
@@ -2708,6 +2723,24 @@ function lockAndPlay() {
 installUi(game, { hud, canvas, lockAndPlay }); // pile de couches, Échap, carte, plein écran
 installKeysMenu(game, { hud }); // Options > Touches
 installChat(game, { hud, sfx, canvas }); // chat écrit (multijoueur)
+installAccount(game, {
+  hud,
+  sfx,
+  onProfileChange({ username, charPref }) {
+    if (username) {
+      game.playerName = username;
+      if (hud.el.playerName) hud.el.playerName.value = username;
+      try { localStorage.setItem('zombie_name', username); } catch {}
+    }
+    if (charPref != null && charPref >= 0 && charPref < CHARACTERS.length && charPref !== game.charPref) {
+      game.charPref = charPref;
+      try { localStorage.setItem('zombie_char', String(charPref)); } catch {}
+      game.player.setCharacter(charOf(charPref));
+      document.querySelectorAll('#charRow .char-card').forEach((x, k) => x.classList.toggle('sel', k === charPref));
+      syncTitleLoadout();
+    }
+  },
+});
 game.scoreboard = new Scoreboard(game); // tableau des scores [TAB]
 
 // Clic direct sur le canvas en cours de partie pour reprendre le contrôle
@@ -2728,6 +2761,8 @@ hud.el.playerName.value = game.playerName;
 hud.el.playerName.addEventListener('input', (e) => {
   game.playerName = e.target.value.trim() || 'Joueur';
   localStorage.setItem('zombie_name', game.playerName);
+  const nameEl = document.getElementById('accStripName');
+  if (nameEl && game.account?.state?.mode !== 'account') nameEl.textContent = `${game.playerName} (Invité)`;
 });
 
 // Mode Solo

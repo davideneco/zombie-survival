@@ -828,11 +828,16 @@ export function installFinale(game, { world, scene, hud, sfx, fx }) {
       hud.el.hud.style.visibility = 'hidden';
       const btnLabel = (this.isHost || !this.isMultiplayer) ? 'REJOUER' : null;
       const tail = (this.isHost || !this.isMultiplayer) ? '' : "<br><span style=\"color:#9fb4ff\">En attente que l'hôte relance…</span>";
+      const xpHtml = this.account?.finishMatch({
+        victory: true, round: this.round, kills: this.kills, headshots: this.headshots || 0,
+        revives: this.statRevives || 0, points: this.points, duration: t, multiplayer: this.isMultiplayer,
+      }) || '';
       hud.showOverlay(
         'VICTOIRE — ÉVACUATION RÉUSSIE',
         "Toute l'escouade a embarqué dans l'hélicoptère juste avant la frappe nucléaire sur Strasbourg !<br>"
           + `<span style="color:#fff">Manche <b>${this.round}</b> · <b>${this.kills}</b> zombies tués · <b>${this.points.toLocaleString('fr-FR')}</b> points · ${zones} quartiers ouverts · ${np} joueur${np > 1 ? 's' : ''} · ${mm} min ${ss} s</span>`
           + (trophies ? `<br><span style="color:#ffd24a">Trophée « Victoire » n° ${trophies} enregistré sur cet appareil.</span>` : '')
+          + xpHtml
           + tail,
         btnLabel
       );
@@ -885,10 +890,15 @@ export function installFinale(game, { world, scene, hud, sfx, fx }) {
       this.player.releaseInputs();
       if (document.pointerLockElement) this._victory = true;
       document.exitPointerLock();
+      const xpHtml = this.account?.finishMatch({
+        victory: true, round: this.round, kills: this.kills, headshots: this.headshots || 0,
+        revives: this.statRevives || 0, points: this.points, duration: t, multiplayer: this.isMultiplayer,
+      }) || '';
       hud.showOverlay('STRASBOURG LIBÉRÉE', `Le Fanal d'Erwin brûle au sommet de la cathédrale : l'aube se lève sur la ville.<br>`
         + `<span style="color:#fff">Manche <b>${this.round}</b> · <b>${this.kills}</b> zombies tués · <b>${this.points.toLocaleString('fr-FR')}</b> points · ${zones} quartiers ouverts · ${np} joueur${np > 1 ? 's' : ''} · ${mm} min ${ss} s</span><br>`
         + `<span style="color:#ffd24a">Bénédiction de l'Aube : les sept atouts, même à terre · toutes les portes sont gratuites.${trophies ? `<br>Trophée « Strasbourg libérée » n° ${trophies} enregistré sur cet appareil.` : ''}</span><br>`
-        + `<span style="color:#9fb4ff">La nuit reviendra : la Nuit éternelle commence, les zombies auront 30 % de vie en plus.</span>`, 'CONTINUER');
+        + `<span style="color:#9fb4ff">La nuit reviendra : la Nuit éternelle commence, les zombies auront 30 % de vie en plus.</span>`
+        + xpHtml, 'CONTINUER');
     },
 
     // réseau : événements reçus par les clients

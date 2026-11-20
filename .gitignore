@@ -14,3 +14,6 @@ public/music/theme.*
 
 # raw downloads of tools/tiles.mjs (untrusted data, rebuilt with --fetch)
 .cache/
+
+# runtime account storage (server/accounts.mjs)
+.data/

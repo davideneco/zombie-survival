@@ -1,6 +1,6 @@
 # Zombie Survival — fiche de référence
 
-Version du jeu : **v0.104.0** (package 0.104.0). Générée automatiquement par `node tools/make-docs.mjs` à partir de `src/config.js` et du jeu.
+Version du jeu : **v0.107.0** (package 0.107.0). Générée automatiquement par `node tools/make-docs.mjs` à partir de `src/config.js` et du jeu.
 Carte annotée : [carte.png](carte.png). Armes de profil : [armes.png](armes.png). Les mêmes tableaux en tableur : dossier [csv/](csv/).
 
 Pour demander une modification, citez la ligne (ex. « Mitrailleuse RPK : chargeur 100 », « Mastodonte à 3000 pts », « porte P3 à 500 pts », « mettre la boîte mystère dans la zone Temple-Neuf »).
@@ -280,8 +280,8 @@ Prix d'une porte : le plus cher des deux prix de zone (colonne « Prix de la por
 | Grandes Arcades |  | secteur d'origine | 5232 | 1000 | -110 ; -45 | P17, P20, P24, P26, P61, P65 | station, wall:ak47, wall:p90, wall:shotgun, perk:mulekick, perk:deathperception, box | 1 | AK-47, FN P90, REMINGTON 870 | MULE KICK, SIXIÈME SENS, BOÎTE MYSTÈRE |
 | Place Kléber |  | secteur d'origine | 11768 | 1250 | -199 ; -145 | P14, P15, P19, P20, P25 | station, wall:rifle, wall:lmg, wall:m249, perk:juggernog, perk:stronghold, box, nvg | 1 | M4A1, RPK, M249 SAW | MASTODONTE, BASTION, BOÎTE MYSTÈRE, VISION NOCTURNE |
 | Place Gutenberg |  | secteur d'origine | 8658 | 1250 | -20 ; 90 | P22, P23, P26, P28, P34, P37, P67, P68 | station, wall:shotgun, wall:scar, wall:pkm, perk:doubletap, perk:electriccherry, box, nvg | 1 | REMINGTON 870, SCAR-H, PKM | DOUBLE TAP, CERISE-FOUDRE, BOÎTE MYSTÈRE, VISION NOCTURNE |
-| Cathédrale |  | secteur d'origine | 6715 | 1000 | 103 ; 33 | P34, P36, P41, P43, P45, P46, P47, P69 | station, wall:deagle, wall:rifle, wall:magnum, box, nvg | 1 | DESERT EAGLE, M4A1, COLT PYTHON .357 | BOÎTE MYSTÈRE, VISION NOCTURNE |
-| Intérieur de la Cathédrale |  | secteur d'origine | 3588 | 5000 | 179 ; 40 | P46 | pap, clock, station, box, wall:barrett | 1 | BARRETT M82 | PACK-A-PUNCH, HORLOGE ASTRONOMIQUE, BOÎTE MYSTÈRE |
+| Cathédrale |  | secteur d'origine | 6719 | 1000 | 103 ; 33 | P34, P36, P41, P43, P45, P46, P47, P69 | station, wall:deagle, wall:rifle, wall:magnum, box, nvg | 1 | DESERT EAGLE, M4A1, COLT PYTHON .357 | BOÎTE MYSTÈRE, VISION NOCTURNE |
+| Intérieur de la Cathédrale |  | secteur d'origine | 3585 | 5000 | 179 ; 40 | P46 | pap, clock, station, box, wall:barrett | 1 | BARRETT M82 | PACK-A-PUNCH, HORLOGE ASTRONOMIQUE, BOÎTE MYSTÈRE |
 | Homme de Fer |  | secteur d'origine | 10097 | 1500 | -290 ; -203 | P8, P9, P11, P12, P15, P66, P70 | station, wall:p90, wall:crossbow, wall:m79, perk:phdflopper, box, nvg | 1 | FN P90, ARBALÈTE, M79 | PHD FLOPPER, BOÎTE MYSTÈRE, VISION NOCTURNE |
 | Saint-Pierre-le-Jeune |  | extérieure | 21062 | 1500 | -140 ; -340 | P12, P13, P18, P19, P27, P30, P71 | station, wall:magnum, wall:mp5, perk:staminup, perk:vultureaid, box | 1 | COLT PYTHON .357, MP5 | STAMIN-UP, VAUTOUR, BOÎTE MYSTÈRE |
 | Grand'Rue |  | extérieure | 19172 | 1500 | -400 ; 10 | P4, P5, P6, P7, P11, P14, P16, P17, P23, P64, P72, P73 | station, wall:mp5, wall:shotgun, perk:speedcola, box | 1 | MP5, REMINGTON 870 | SPEED COLA, BOÎTE MYSTÈRE |

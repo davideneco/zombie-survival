@@ -2,6 +2,12 @@
 
 Chaque changement est poussé sur `main` (déploiement Render) avec un nouveau numéro de version et sa description ici.
 
+## v0.107.0 (2026-11-20)
+- **Système de compte hybride (serveur + navigateur)** : créez un compte ou connectez-vous depuis le nouveau bandeau de profil en haut de l'accueil (`📊 PROFIL & STATS` / `🔐 COMPTE`). Les identifiants sont hachés (scrypt + jeton HMAC) côté serveur (`/api/account/*`) et la progression est synchronisée automatiquement avec un miroir local (`localStorage`), une fusion sans perte en cas de redémarrage serveur, et un code de sauvegarde portable (`ZS1:...`) pour transférer sa carrière d'un appareil à l'autre.
+- **Expérience (XP), niveaux et 11 grades militaires** : gagnez de l'XP en temps réel (éliminations, bonus tir à la tête, boss, manches franchies, réanimations d'alliés et victoires) avec annonces de montée de niveau en partie, barre de progression jusqu'au niveau 50 (*Recrue* → *Légende de Strasbourg*), et récapitulatif d'XP sur l'écran de fin de partie / victoire.
+- **Suivi de carrière et historique** : la fenêtre `PROFIL & CARRIÈRE` suit vos records cumulés (meilleure manche, zombies éliminés, tirs à la tête et pourcentage, réanimations, parties jouées, victoires, temps survécu, record de points) ainsi que le tableau de vos dernières parties.
+- Vérifié : build Vite (`npx vite build`), API serveur `/api/account/*` (inscription, doublon 409, mauvais mot de passe 401, session `/me`, synchronisation monotone `/sync`), test E2E headless Chromium (création de compte, synchronisation, gain d'XP/niveau 4 *Soldat*, pilule de fin de partie, export `ZS1:`, fermeture `Échap`, mise en page 1280×720 sans débordement, 0 erreur console/page) et inspection visuelle des 3 captures (accueil, profil/carrière, connexion/inscription). Non vérifié : partie multijoueur co-op réelle à plusieurs joueurs ni persistance inter-redéploiements sur Render avec disque monté (`DATA_DIR`).
+
 ## v0.106.0 (2026-11-20)
 - **Refonte complète du menu d'accueil en hub tactique à 2 colonnes** (`index.html`, `src/hud.js`, `src/main.js`) :
   - Présentation immersive sur verre dépoli laissant deviner Strasbourg en arrière-plan, badge de zone actif, résumé en direct du survivant (portrait + rôle) et du point de départ sélectionné avec raccourci « MODIFIER ».

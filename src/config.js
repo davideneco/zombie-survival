@@ -1136,6 +1136,36 @@ export const CONFIG = {
     // étalonnage (table de couleurs 32^3, Haute + « Effets cinéma ») : contraste en S (0..1), saturation, teintes des ombres / hautes lumières
     grade: { contrast: 0.45, saturation: 0.92, shadows: [0, 0.012, 0.03], highlights: [0.03, 0.012, -0.02] },
   },
+
+  // Système de compte, expérience et grades de carrière (src/account.js, server/accounts.mjs)
+  account: {
+    maxLevel: 50,
+    xpBase: 150,
+    xpPow: 1.35,
+    maxHistory: 8,
+    xp: {
+      kill: 15,
+      headshotBonus: 10,
+      bossKill: 150,
+      roundBase: 60,
+      roundStep: 15,
+      revive: 75,
+      victory: 500,
+    },
+    ranks: [
+      { level: 1, name: 'Recrue', icon: '🪖', color: '#94a3b8' },
+      { level: 3, name: 'Soldat', icon: '🎖', color: '#cbd5e1' },
+      { level: 6, name: 'Caporal', icon: '⚔', color: '#60a5fa' },
+      { level: 10, name: 'Sergent', icon: '🛡', color: '#38bdf8' },
+      { level: 14, name: 'Adjudant', icon: '⭐', color: '#34d399' },
+      { level: 19, name: 'Lieutenant', icon: '🌟', color: '#4ade80' },
+      { level: 25, name: 'Capitaine', icon: '🔥', color: '#fbbf24' },
+      { level: 32, name: 'Commandant', icon: '⚡', color: '#f59e0b' },
+      { level: 39, name: 'Colonel', icon: '🦅', color: '#f97316' },
+      { level: 45, name: 'Général', icon: '👑', color: '#f87171' },
+      { level: 50, name: 'Légende de Strasbourg', icon: '⛪', color: '#ffd24a' },
+    ],
+  },
 };
 
 // Touches par défaut (modifiables dans Options > Touches, voir keybinds.js). Une liaison s'écrit 'code:KeyW' (touche PHYSIQUE : ZQSD en

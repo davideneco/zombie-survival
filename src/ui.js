@@ -132,6 +132,7 @@ export function installUi(game, { hud, canvas, lockAndPlay }) {
 
     // ---------------------------------------------------------------- Échap
     escape() {
+      if (game.account?.open) { game.account.closeModal(); return 'account'; }
       if (game.chat?.open) { game.chat.close({ send: false }); return 'chat'; } // la saisie du chat se ferme d'abord : ni pause, ni fin de la vue orbitale
       if (game.summitFx?.escape.on) { game.summitFx.endEscape(); return 'escape'; }
       if (game.summitFx?.orbit.on) { game.summitFx.endOrbit(); return 'orbit'; } // vue orbitale de l'Aube : Échap la passe
