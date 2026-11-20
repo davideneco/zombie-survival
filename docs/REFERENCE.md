@@ -1,6 +1,6 @@
 # Zombie Survival — fiche de référence
 
-Version du jeu : **v0.103.0** (package 0.103.0). Générée automatiquement par `node tools/make-docs.mjs` à partir de `src/config.js` et du jeu.
+Version du jeu : **v0.104.0** (package 0.104.0). Générée automatiquement par `node tools/make-docs.mjs` à partir de `src/config.js` et du jeu.
 Carte annotée : [carte.png](carte.png). Armes de profil : [armes.png](armes.png). Les mêmes tableaux en tableur : dossier [csv/](csv/).
 
 Pour demander une modification, citez la ligne (ex. « Mitrailleuse RPK : chargeur 100 », « Mastodonte à 3000 pts », « porte P3 à 500 pts », « mettre la boîte mystère dans la zone Temple-Neuf »).
@@ -845,6 +845,7 @@ Prix d'une porte : le plus cher des deux prix de zone (colonne « Prix de la por
 | B (en tram, conducteur) | Aiguillage : tout droit / dévié au nœud de l'Homme de Fer |
 | F | Lampe torche |
 | L | Lunettes de vision nocturne (à acheter aux bornes NVG : 1500 pts) |
+| T | Atelier d'armes (à pied) : acheter, équiper ou retirer les accessoires de l'arme en main |
 | Espace (devant un obstacle bas) | Enjamber |
 | V (à pied) | Coup de couteau (aussi : clic gauche quand le chargeur et la réserve sont vides) |
 | M | Carte |

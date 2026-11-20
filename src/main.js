@@ -35,6 +35,7 @@ import { installLauncher } from './launcher.js';
 import { makeDisplay } from './weaponDisplay.js';
 import { installUi } from './ui.js';
 import { installModMenu } from './modMenu.js';
+import { installGunsmith } from './gunsmith.js';
 import { installUnstick } from './unstick.js';
 import { installBarricades } from './barricades.js';
 import { installBarrels } from './barrels.js';
@@ -2038,6 +2039,7 @@ installRideZombies(game, { world, scene, sfx }); // zombies of the train ride (v
 RemotePlayer.rideOf = (id) => game.rideById(id); // coéquipiers debout dans une rame : leur position est dans le repère de la rame
 installLauncher(game, { world, scene, fx });
 installModMenu(game, { world, hud, sfx });
+installGunsmith(game, { hud, sfx });
 installUnstick(game, { world, hud, sfx });
 installBarricades(game, { scene, world, hud, sfx }); // window barricades of the key buildings (barricades.js)
 installBarrels(game, { scene, world, sfx }); // explosive barrels next to them (barrels.js)
@@ -2408,7 +2410,7 @@ function setupNetworkHandlers(net) {
   // Grenades lancées par un coéquipier : simulées localement (effets + dégâts côté hôte)
   net.on('nade', (m) => {
     const o = new THREE.Vector3(m.o.x, m.o.y, m.o.z), v = new THREE.Vector3(m.v.x, m.v.y, m.v.z);
-    if (m.k === 'm79') game.launchShell(o, v, false, m.from, m.pap | 0); // projectile de M79 ; sans k : grenade à main
+    if (m.k === 'm79') game.launchShell(o, v, false, m.from, m.pap | 0, m.dm || 1); // projectile de M79 ; sans k : grenade à main
     else { game.throwGrenade(o, v, false, m.from); if (m.tr != null) { const t = game.rideById(m.tr | 0); if (t?.walkFrame) game.grenadesLive[game.grenadesLive.length - 1].tram = t; } } // lancée de l'intérieur d'une rame (ou du train)
   });
   // Fin de partie

@@ -321,19 +321,19 @@ const DEFS = {
 
   // ------------------------------------------------ fusils de précision
   sniper: {
-    anchors: { sf: [0, 0.085, -0.235], muz: [0, 0.012, -0.764], mag: [0, -0.155, -0.06], magRx: 0, magW: 0.036, magD: 0.064, shells: [0.03, -0.03, 0.2], k: 1, acc: { suppressor: { len: 0.22, r: 0.026 } } },
+    anchors: { sf: [0, 0.085, -0.235], muz: [0, 0.012, -0.764], side: [0.028, -0.01, -0.28], mag: [0, -0.155, -0.06], magRx: 0, magW: 0.036, magD: 0.064, shells: [0.03, -0.03, 0.2], k: 1, acc: { suppressor: { len: 0.22, r: 0.026 } } },
     muzzle: -0.78,
     hands: { back: [0, -0.065, 0.055], front: [-0.015, -0.032, -0.22], mag: [0, -0.12, -0.06], bolt: [0.04, 0.032, 0.05], style: 'bolt' },
     parts: PARTS.sniper,
   },
   svd: {
-    anchors: { sf: [0, 0.075, -0.185], muz: [0, 0.004, -0.815], mag: [0, -0.165, -0.05], magRx: 0.3, shells: [0.028, -0.03, 0.26], k: 1, acc: { suppressor: { len: 0.22, r: 0.025 } } },
+    anchors: { sf: [0, 0.075, -0.185], muz: [0, 0.004, -0.815], side: [0.026, -0.01, -0.26], mag: [0, -0.165, -0.05], magRx: 0.3, shells: [0.028, -0.03, 0.26], k: 1, acc: { suppressor: { len: 0.22, r: 0.025 } } },
     muzzle: -0.82,
     hands: { back: [0, -0.088, 0.108], front: [-0.015, -0.028, -0.25], mag: [0, -0.13, -0.05], bolt: [0.03, 0.024, 0.02], style: 'rifle' },
     parts: PARTS.svd,
   },
   barrett: {
-    anchors: { sf: [0, 0.12, -0.285], muz: [0, 0.01, -0.86], mag: [0, -0.175, -0.06], magRx: 0, magW: 0.054, magD: 0.094, shells: [0.036, -0.02, 0.22], k: 1, acc: { suppressor: { len: 0.26, r: 0.034 }, muzzleBrake: { len: 0.06 } } },
+    anchors: { sf: [0, 0.12, -0.285], muz: [0, 0.01, -0.86], side: [0.036, 0, -0.32], mag: [0, -0.175, -0.06], magRx: 0, magW: 0.054, magD: 0.094, shells: [0.036, -0.02, 0.22], k: 1, acc: { suppressor: { len: 0.26, r: 0.034 }, muzzleBrake: { len: 0.06 } } },
     muzzle: -0.86,
     hands: { back: [0, -0.11, 0.06], front: [-0.02, -0.045, -0.22], mag: [0, -0.14, -0.06], bolt: [0.04, 0.025, 0.04], style: 'rifle' },
     parts: PARTS.barrett,
@@ -341,13 +341,13 @@ const DEFS = {
 
   // ------------------------------------------------ fusils à pompe
   shotgun: {
-    anchors: { muz: [0, 0.018, -0.635], tubeEnd: [0, -0.018, -0.52], tubeR: 0.0145, lamp: [0, -0.05, -0.44], shells: [0.03, -0.01, 0.26], k: 1 },
+    anchors: { top: [0, 0.044, -0.04], muz: [0, 0.018, -0.635], side: [0.024, 0, -0.24], tubeEnd: [0, -0.018, -0.52], tubeR: 0.0145, lamp: [0, -0.05, -0.44], shells: [0.03, -0.01, 0.26], k: 1 },
     muzzle: -0.66,
     hands: { back: [0, -0.055, 0.16], front: [-0.012, -0.034, -0.32], mag: [0, -0.045, -0.02], bolt: [0, -0.034, -0.24], style: 'pump' },
     parts: PARTS.shotgun,
   },
   saiga: {
-    anchors: { muz: [0, 0.012, -0.602], drum: [0, -0.12, -0.06, 0.085], mag: [0, -0.19, -0.06], magRx: 0.28, lamp: [0, -0.052, -0.3], shells: [0.03, -0.02, 0.26], k: 1 },
+    anchors: { top: [0, 0.052, -0.05], muz: [0, 0.012, -0.602], side: [0.028, 0, -0.24], drum: [0, -0.12, -0.06, 0.085], mag: [0, -0.19, -0.06], magRx: 0.28, lamp: [0, -0.052, -0.3], shells: [0.03, -0.02, 0.26], k: 1 },
     muzzle: -0.6,
     hands: { back: [0, -0.088, 0.108], front: [-0.016, -0.028, -0.25], mag: [0, -0.14, -0.06], bolt: [0.03, 0.028, -0.04], style: 'rifle' },
     parts: PARTS.saiga,
@@ -355,19 +355,19 @@ const DEFS = {
 
   // ------------------------------------------------ armes spéciales
   crossbow: {
-    anchors: { top: [0, 0.048, -0.04], tip: [0, 0.052, -0.34], side: [0.03, -0.02, 0.12], k: 1 },
+    anchors: { top: [0, 0.048, -0.04], tip: [0, 0.052, -0.34], side: [0.03, -0.02, 0.12], under: [0, -0.032, -0.16], k: 1 },
     muzzle: -0.3,
     hands: { back: [0, -0.082, 0.165], front: [0, -0.045, -0.12], mag: [0, 0.04, -0.14], bolt: [0, 0.02, -0.04], style: 'crossbow' },
     parts: PARTS.crossbow,
   },
   m79: {
-    anchors: { muz: [0, 0.02, -0.51], k: 1 },
+    anchors: { top: [0, 0.058, -0.08], muz: [0, 0.02, -0.51], under: [0, -0.034, -0.22], side: [0.036, 0.01, -0.18], k: 1 },
     muzzle: -0.5,
     hands: { back: [0, -0.085, 0.045], front: [-0.012, -0.028, -0.24], mag: [0, 0.01, -0.15], bolt: [0, 0.03, 0.04], style: 'break' },
     parts: PARTS.m79,
   },
   raygun: {
-    anchors: { muz: [0, 0.002, -0.235], top: [0, 0.05, -0.05], k: 1 },
+    anchors: { muz: [0, 0.002, -0.235], top: [0, 0.056, -0.05], under: [0, -0.044, -0.1], side: [0.032, 0.005, -0.08], k: 0.9 },
     muzzle: -0.22,
     hands: { back: [0, -0.088, 0.042], front: null, mag: [0, 0.02, -0.02], bolt: [0, 0.04, -0.06], style: 'raygun' },
     parts: PARTS.raygun,
@@ -514,8 +514,24 @@ const ACC = {
     return [B(0.034, 0.034, len, 0, y, z - len / 2 + 0.01, 'gun'), ...[0, 1, 2].flatMap((i) => [B(0.038, 0.005, 0.01, 0, y + 0.0175, z - 0.012 - i * (len / 4), 'black'), B(0.005, 0.022, 0.01, 0.0175, y, z - 0.012 - i * (len / 4), 'black'), B(0.005, 0.022, 0.01, -0.0175, y, z - 0.012 - i * (len / 4), 'black')])];
   },
   heavyBarrel: (a) => {
-    const [, y, z] = a.muz;
-    return [CZ(0.024, 0.26, 0, y, z + 0.16, 'gun', 14), ...[0, 1, 2, 3, 4].map((i) => CZ(0.03, 0.01, 0, y, z + 0.05 + i * 0.045, 'black', 14)), CZ(0.028, 0.014, 0, y, z + 0.035, 'gold', 14)];
+    const [, y, z] = a.muz, k = a.k ?? 1;
+    const isShort = k < 0.96 || z > -0.25;
+    const len = isShort ? 0.11 : 0.24, r = isShort ? 0.017 : 0.024;
+    const ribs = isShort ? [0, 1, 2] : [0, 1, 2, 3, 4];
+    return [
+      CZ(r, len, 0, y, z + len * 0.52, 'gun', 14),
+      ...ribs.map((i) => CZ(r * 1.24, 0.009, 0, y, z + 0.025 + i * (len / (ribs.length + 0.5)), 'black', 14)),
+      CZ(r * 1.18, 0.013, 0, y, z + 0.012, 'gold', 14),
+    ];
+  },
+  speedloader: (a) => {
+    // Barillet renforcé + anneau d'extraction rapide laiton sur le Colt Python
+    return [
+      CZ(0.031, 0.056, 0, 0.004, -0.024, 'parker', 14),
+      CZ(0.0325, 0.01, 0, 0.004, -0.052, 'gold', 14),
+      CZ(0.0325, 0.01, 0, 0.004, 0.004, 'gold', 14),
+      B(0.014, 0.026, 0.034, -0.028, 0.002, 0.02, 'gun'),
+    ];
   },
   belt: (a) => {
     const [bx, by, bz] = a.belt;
@@ -577,12 +593,12 @@ const ACC = {
   },
 };
 
-// Slot mapping so random attachments & Pack-a-Punch accessories never overlap on the same mount
+// Slot mapping so attachments & Pack-a-Punch accessories never overlap on the same mount
 const ACC_SLOT = {
-  redDot: 'optic', holo: 'optic', acog: 'optic',
-  suppressor: 'muzzle', compensator: 'muzzle', muzzleBrake: 'muzzle', choke: 'muzzle', dragon: 'muzzle', bigMuzzle: 'muzzle',
-  extMag: 'mag', fastMag: 'mag', drum: 'mag', tubeExt: 'mag',
-  foregrip: 'under', glauncher: 'under',
+  redDot: 'optic', holo: 'optic', acog: 'optic', thermal: 'optic',
+  suppressor: 'muzzle', compensator: 'muzzle', muzzleBrake: 'muzzle', heavyBarrel: 'muzzle', choke: 'muzzle', dragon: 'muzzle', bigMuzzle: 'muzzle', warhead: 'muzzle', fragWarhead: 'muzzle', coil: 'muzzle',
+  extMag: 'mag', fastMag: 'mag', drum: 'mag', tubeExt: 'mag', speedloader: 'mag', belt: 'mag', quiver: 'mag', m79Drum: 'mag', twinBulb: 'mag',
+  foregrip: 'under', glauncher: 'under', shells: 'under',
   laser: 'tac', tacLight: 'tac', flashlight: 'tac',
 };
 
@@ -591,31 +607,44 @@ function canMount(id, accName) {
   const def = DEFS[id], a = def?.anchors;
   if (!a || !ACC[accName]) return false;
   if ((accName === 'redDot' || accName === 'holo' || accName === 'acog') && !a.top) return false;
-  if ((accName === 'suppressor' || accName === 'compensator' || accName === 'muzzleBrake' || accName === 'choke') && !a.muz) return false;
+  if (accName === 'thermal' && !a.sf) return false;
+  if ((accName === 'suppressor' || accName === 'compensator' || accName === 'muzzleBrake' || accName === 'heavyBarrel' || accName === 'choke' || accName === 'bigMuzzle') && !a.muz) return false;
+  if (accName === 'warhead' && !a.tip) return false;
   if ((accName === 'extMag' || accName === 'fastMag') && !a.mag) return false;
   if (accName === 'drum' && !a.drum) return false;
   if (accName === 'tubeExt' && !a.tubeEnd) return false;
+  if (accName === 'belt' && !a.belt) return false;
+  if (accName === 'quiver' && !a.side) return false;
+  if (accName === 'shells' && !a.shells) return false;
   if (accName === 'foregrip' && !a.fg) return false;
   if (accName === 'laser' && !a.under && !a.side) return false;
   if (accName === 'tacLight' && !a.lamp && !a.under) return false;
   return true;
 }
 
-// Tire un ensemble aléatoire d'accessoires compatibles pour une arme (source: 'start' | 'wall' | 'box')
-export function rollAttachments(id, source = 'wall') {
+// Retourne la liste des accessoires compatibles groupés par emplacement pour une arme donnée (utilisé par l'atelier [T] et le tirage aléatoire)
+export function compatibleAttachments(id) {
   const A = CONFIG.attachments, W = CONFIG.weapons[id];
-  if (!A || !W || !DEFS[id]) return [];
-  const profile = A.roll[source] || A.roll.wall;
   const bySlot = {};
+  if (!A || !W || !DEFS[id]) return bySlot;
+  for (const s of A.slots) bySlot[s] = [];
   for (const [accId, d] of Object.entries(A.defs)) {
     if (d.exclude?.includes(id)) continue;
     const match = d.ids ? d.ids.includes(id) : d.cats?.includes(W.cat);
     if (!match || !canMount(id, accId)) continue;
     (bySlot[d.slot] ||= []).push(accId);
   }
+  return bySlot;
+}
+
+// Tire un ensemble aléatoire d'accessoires compatibles pour une arme (source: 'start' | 'wall' | 'box')
+export function rollAttachments(id, source = 'wall') {
+  const A = CONFIG.attachments;
+  if (!A) return [];
+  const profile = A.roll[source] || A.roll.wall;
+  const bySlot = compatibleAttachments(id);
   const availSlots = A.slots.filter((s) => bySlot[s]?.length);
   if (!availSlots.length) return [];
-  // Shuffle available slots
   const shuffled = availSlots.slice().sort(() => Math.random() - 0.5);
   const out = [];
   for (const slot of shuffled) {
@@ -625,7 +654,6 @@ export function rollAttachments(id, source = 'wall') {
       out.push(pool[Math.floor(Math.random() * pool.length)]);
     }
   }
-  // Guarantee minimum count when compatible slots exist
   while (out.length < Math.min(profile.min, shuffled.length)) {
     const slot = shuffled.find((s) => !out.some((o) => A.defs[o].slot === s));
     if (!slot) break;
@@ -656,19 +684,28 @@ const loadoutOf = (id, level) => {
   return l?.[level - 1] || null;
 };
 
-// Fusionne accessoires aléatoires et accessoires Pack-a-Punch sans chevauchement sur un même rail/emplacement
+// Fusionne accessoires du joueur et accessoires Pack-a-Punch sans chevauchement sur un même rail/emplacement.
+// Les accessoires équipés par le joueur dans l'atelier [T] ont priorité sur les emplacements cosmétiques du PaP (sauf lance-grenades/ogives PaP III).
+const PAP_PRIORITY = new Set(['glauncher', 'fragWarhead', 'dragon']);
 function mergeAccessoryList(id, level, atts) {
   const papList = level > 0 ? (loadoutOf(id, level) || []) : [];
-  const randList = Array.isArray(atts) ? atts.filter((n) => canMount(id, n)) : [];
-  if (!papList.length && !randList.length) return null;
+  const playerList = Array.isArray(atts) ? atts.filter((n) => canMount(id, n)) : [];
+  if (!papList.length && !playerList.length) return null;
   const out = [];
   const usedSlots = new Set();
-  // Pack-a-Punch accessories take priority on conflicting slots, then random attachments fill remaining slots
   for (const name of papList) {
+    if (!PAP_PRIORITY.has(name)) continue;
     out.push(name);
     if (ACC_SLOT[name]) usedSlots.add(ACC_SLOT[name]);
   }
-  for (const name of randList) {
+  for (const name of playerList) {
+    if (out.includes(name)) continue;
+    const sl = ACC_SLOT[name];
+    if (sl && usedSlots.has(sl)) continue;
+    out.push(name);
+    if (sl) usedSlots.add(sl);
+  }
+  for (const name of papList) {
     if (out.includes(name)) continue;
     const sl = ACC_SLOT[name];
     if (sl && usedSlots.has(sl)) continue;

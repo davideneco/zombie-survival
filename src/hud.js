@@ -56,6 +56,7 @@ export class Hud {
       nades: $('nades'),
       nvgBadge: $('nvgBadge'),
       nvgFlash: $('nvgFlash'),
+      gunsmithHint: $('gunsmithHint'),
       perks: $('perks'),
       compass: $('compass'),
       zoneName: $('zoneName'),
@@ -75,6 +76,7 @@ export class Hud {
   refreshKeys() {
     for (const k of ['inv', 'nades', 'ammo', 'nvg']) delete this.cache[k];
     if (this.el.mapHint && this.binds) this.el.mapHint.textContent = `${this.binds.tag('map')} carte`;
+    if (this.el.gunsmithHint && this.binds) this.el.gunsmithHint.textContent = `${this.binds.tag('gunsmith')} Atelier d'armes`;
     if (this._nvgState) this.setNvg(this._nvgState.has, this._nvgState.on, false);
   }
 

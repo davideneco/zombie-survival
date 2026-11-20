@@ -1114,12 +1114,9 @@ export function installModMenu(game, { world, hud, sfx }) {
     document.getElementById('modRerollAttsBtn')?.addEventListener('click', () => {
       const p = game.player, w = p.curW;
       if (!w) return;
-      w.atts = rollAttachments(w.id, 'box');
-      p.statsVersion++;
+      p.setWeaponAttachments(w, rollAttachments(w.id, 'box'), { newlyBought: true });
       const s = p.statsOf(w);
-      w.ammo = s.magSize;
-      p.switchWeapon(p.weaponIdx);
-      const names = w.atts.map((k) => CONFIG.attachments?.defs?.[k]?.name).filter(Boolean);
+      const names = (w.atts || []).map((k) => CONFIG.attachments?.defs?.[k]?.name).filter(Boolean);
       hud.announce(s.name, names.length ? names.join(' · ') : 'Aucun accessoire', 2200);
       say(`Accessoires relancés : ${names.join(', ') || 'aucun'}`);
       mod.render();

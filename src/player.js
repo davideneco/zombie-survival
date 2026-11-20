@@ -55,22 +55,27 @@ export class Player {
   get maxHealth() { return this.perks.juggernog ? 250 : CONFIG.player.maxHealth; }
   get maxWeapons() { return this.perks.mulekick ? 3 : 2; }
 
-  // Statistiques effectives d'une arme : base + Pack-a-Punch (niveau w.pap, 0 à 3) + accessoires aléatoires + atouts
-  statsOf(w) {
+  // Statistiques effectives d'une arme : base + Pack-a-Punch (niveau w.pap, 0 à 3) + accessoires + atouts
+  // overrideAtts (optionnel) : permet à l'atelier [T] de prévisualiser les stats avant achat/équipement sans muter l'arme.
+  statsOf(w, overrideAtts = null) {
     const lv = w.pap | 0;
-    const atts = Array.isArray(w.atts) ? w.atts : [];
+    const atts = Array.isArray(overrideAtts) ? overrideAtts : (Array.isArray(w.atts) ? w.atts : []);
+    const useCache = overrideAtts == null;
     const key = `${lv}|${atts.join(',')}|${this.statsVersion}`;
-    if (w._statsKey === key) return w._stats;
+    if (useCache && w._statsKey === key) return w._stats;
     const base = CONFIG.weapons[w.id];
     const s = { ...base, ...papStats(base, lv) };
-    // Accessoires aléatoires : chargeur, viseur, silencieux, poignée, laser…
-    let magM = 1, resM = 1, relM = 1, sprM = 1, hipM = 1, recM = 1, rngM = 1, adsDelta = 0, silenced = false;
+    // Accessoires d'arme : dégâts, tête, cadence, chargeur, réserve, rechargement, précision, recul, portée…
+    let dmgM = 1, headM = 1, rateM = 1, magM = 1, resM = 1, relM = 1, sprM = 1, hipM = 1, recM = 1, rngM = 1, adsDelta = 0, silenced = false;
     const attLabels = [];
     const defs = CONFIG.attachments?.defs || {};
     for (const aId of atts) {
       const d = defs[aId];
       if (!d) continue;
       attLabels.push(d.short || d.name);
+      if (d.damageMult) dmgM *= d.damageMult;
+      if (d.headMult) headM *= d.headMult;
+      if (d.fireRateMult) rateM *= d.fireRateMult;
       if (d.magMult) magM *= d.magMult;
       if (d.reserveMult) resM *= d.reserveMult;
       if (d.reloadMult) relM *= d.reloadMult;
@@ -81,11 +86,19 @@ export class Player {
       if (d.adsFovDelta) adsDelta += d.adsFovDelta;
       if (d.silenced) silenced = true;
     }
+    if (dmgM !== 1) {
+      s.damage = Math.round(s.damage * dmgM);
+      if (s.splash) s.splash = { ...s.splash, damage: Math.round(s.splash.damage * dmgM) };
+      if (s.blast) s.blast = { ...s.blast, damage: Math.round(s.blast.damage * dmgM) };
+    }
+    if (headM !== 1) s.headMult = +((s.headMult || 1) * headM).toFixed(2);
+    if (rateM !== 1) s.fireRate = +(s.fireRate * rateM).toFixed(2);
     if (magM !== 1) s.magSize = Math.max(1, Math.round(s.magSize * magM));
     if (resM !== 1) s.maxReserve = Math.max(s.magSize, Math.round(s.maxReserve * resM));
-    if (relM !== 1) s.reloadTime *= relM;
+    if (relM !== 1) s.reloadTime = +(s.reloadTime * relM).toFixed(2);
     if (sprM !== 1) s.spread *= sprM;
     if (rngM !== 1) s.range = Math.round(s.range * rngM);
+    s.attDamageMult = dmgM;
     s.hipSpreadMult = hipM;
     s.recoilMult = recM;
     s.adsZoomBonus = adsDelta; // zoom optique supplémentaire sans cacher le modèle 3D
@@ -97,8 +110,10 @@ export class Player {
     const PF = CONFIG.perkFx;
     if (this.perks.deadshot) { s.headMult = (s.headMult || 1) * PF.deadshot.headMult; s.spread *= PF.deadshot.spreadMult; } // Œil-de-lynx
     if (this.perks.bandolier) s.maxReserve = Math.round(s.maxReserve * PF.bandolier.reserveMult); // Cartouchière
-    w._statsKey = key;
-    w._stats = s;
+    if (useCache) {
+      w._statsKey = key;
+      w._stats = s;
+    }
     return s;
   }
 
@@ -153,11 +168,35 @@ export class Player {
   newWeapon(id, source = 'wall', forcedAtts = null) {
     const cfg = CONFIG.weapons[id];
     const atts = Array.isArray(forcedAtts) ? forcedAtts.slice() : rollAttachments(id, source);
-    const w = { id, ammo: cfg.magSize, reserve: cfg.startReserve, reloading: false, reloadT: 0, pap: 0, gl: 0, atts };
+    const w = { id, ammo: cfg.magSize, reserve: cfg.startReserve, reloading: false, reloadT: 0, pap: 0, gl: 0, atts, ownedAtts: atts.slice() };
     const s = this.statsOf(w);
     w.ammo = s.magSize;
     w.reserve = Math.min(s.maxReserve, Math.round(cfg.startReserve * (s.maxReserve / Math.max(1, cfg.maxReserve))));
     return w;
+  }
+
+  // Met à jour les accessoires équipés sur une arme (utilisé par l'atelier [T])
+  setWeaponAttachments(w, nextAtts, { newlyBought = false } = {}) {
+    if (!w) return;
+    const prevS = this.statsOf(w);
+    w.atts = Array.isArray(nextAtts) ? nextAtts.slice() : [];
+    if (!Array.isArray(w.ownedAtts)) w.ownedAtts = w.atts.slice();
+    for (const a of w.atts) if (!w.ownedAtts.includes(a)) w.ownedAtts.push(a);
+    w._statsKey = null;
+    const nextS = this.statsOf(w);
+    if (newlyBought && nextS.magSize > prevS.magSize) {
+      // Bonus d'achat d'un chargeur plus grand : on complète le chargeur en cours
+      w.ammo = nextS.magSize;
+    } else {
+      w.ammo = Math.min(w.ammo, nextS.magSize);
+    }
+    if (newlyBought && nextS.maxReserve > prevS.maxReserve) {
+      w.reserve = Math.min(nextS.maxReserve, w.reserve + (nextS.maxReserve - prevS.maxReserve));
+    } else {
+      w.reserve = Math.min(w.reserve, nextS.maxReserve);
+    }
+    w.reloading = false;
+    if (w === this.curW) this.switchWeapon(this.weaponIdx);
   }
 
   // Apparence des bras et mains en vue à la première personne (armes + couteau)
@@ -999,7 +1038,7 @@ export class Player {
     const dir = target.sub(origin).normalize();
     const vel = dir.clone().multiplyScalar(cfg.proj.speed);
     if (this.onTram) { const t = this.onTram.v, q = t.frame(this.onTram.u, this._tq || (this._tq = {})); vel.x += q.tx * t.v; vel.z += q.tz * t.v; }
-    this.game.launchShell(origin, vel, true, null, cfg.pap | 0);
+    this.game.launchShell(origin, vel, true, null, cfg.pap | 0, cfg.attDamageMult || 1);
     this.game.onPlayerShot?.(origin, origin.clone().addScaledVector(dir, 1), cfg.id, { nt: 1 });
   }
 

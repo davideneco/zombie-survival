@@ -51,12 +51,13 @@ export function installUi(game, { hud, canvas, lockAndPlay }) {
       hud.toggleMap(on);
       if (on) this.open('map'); else this.close('map');
     },
-    closeOverlays() { // carte, menu debug, mod menu, saisie du chat, scoreboard
+    closeOverlays() { // carte, menu debug, mod menu, atelier d'armes, saisie du chat, scoreboard
       game.scoreboard?.hide();
       game.chat?.close({ send: false, relock: false });
       if (hud.mapOpen) hud.toggleMap(false);
       game.debugMenu?.close({ relock: false });
       game.modMenu?.close({ relock: false });
+      game.gunsmith?.close({ relock: false });
       this.over = [];
     },
     showBanner(on) {
@@ -109,6 +110,7 @@ export function installUi(game, { hud, canvas, lockAndPlay }) {
     onPointerUnlocked() {
       if (game.chat?.absorbUnlock()) return; // libérée par le chat (ouverture de la saisie), ou saisie ouverte : ce n'est pas un appui d'Échap
       if (game.modMenu?.absorbUnlock()) return; // libérée par le menu mods
+      if (game.gunsmith?.absorbUnlock()) return; // libérée par l'atelier d'armes [T]
       if (!game.started || game.over) return;
       if (!hidden(el.overlay)) return;
       if (game.summitFx?.escape.on) {
@@ -137,6 +139,7 @@ export function installUi(game, { hud, canvas, lockAndPlay }) {
       if (ae && /^(INPUT|TEXTAREA)$/.test(ae.tagName) && ae.type !== 'range') { ae.blur(); return 'blur'; } // champ de texte : d'abord retirer le focus
       const t = this.top();
       switch (t) {
+        case 'gunsmith': game.gunsmith?.close(); break;
         case 'modMenu':
         case 'debug': (game.modMenu || game.debugMenu)?.close(); break;
         case 'map': this.toggleMap(false); break;
