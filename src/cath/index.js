@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { Mesher, makeMaterials, roseTex } from './mesher.js';
 import { buildGround, PORTAL_H } from './ground.js';
+import { buildWestFacade } from './westFacade.js';
 import { buildUpper } from './upper.js';
 import { buildCrypt } from './crypt.js';
 import { BLOCKS, blockAt } from './plan2.js';
@@ -27,6 +28,7 @@ export function buildCathedral(ctx) {
   const c = { ...ctx, mats, mesher, roseTex };
   const ground = buildGround(c);
   c.ground = ground;
+  buildWestFacade(c);
   const upper = buildUpper(c);
   const out = { ground, upper, crypt: buildCrypt({ ...c, W: ctx.plan.P }) };
   mesher.build(ctx.scene);

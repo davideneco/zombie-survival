@@ -2,6 +2,15 @@
 
 Chaque changement est poussé sur `main` (déploiement Render) avec un nouveau numéro de version et sa description ici.
 
+## v0.105.0 (2026-11-20)
+- **Correction des murs invisibles (boîtes mystères inactives)** : les 27 emplacements inactifs de la Boîte Mystère (notamment rue des Orfèvres et place du Marché-Neuf) ne créent plus de collision statique invisible ; seule la Boîte Mystère actuellement active et visible possède une boîte de collision dynamique synchronisée lors de chaque déplacement.
+- **Façade occidentale fidèle de la cathédrale Notre-Dame de Strasbourg** (`src/cath/westFacade.js`) : modélisation complète sur l'emprise réelle OSM en grès rose des Vosges :
+  - Triple portail gothique ébrasé à voussures profondes garnies de figurines sculptées en niche, statues-colonnes sous dais, tympans à registres sculptés (Passion au centre), grands vantaux rouges aux portails Nord et Sud, vantaux monumentaux en bronze patiné repliés ouverts au portail central (passage jouable dégagé) et grilles basses en fer forgé sur le parvis.
+  - Grands gâbles triangulaires élancés à crochets et fleurons (niche de la Vierge et du Trône de Salomon au centre, rosettes ajourées sur les portails latéraux), encadrés de petits gâbles aigus.
+  - Résille verticale en « harpe » d'Erwin de Steinbach sur toute la façade, quatre contreforts massifs à niches équestres/royales et pinacles, galeries horizontales ajourées et galerie des Apôtres.
+  - Grande rosace extérieure à 16 rayons en pierre, 32 pétales, 4 écoinçons à rosettes et vitrail ancien, encadrée par les deux hautes baies en lancettes des beffrois.
+- Vérifié : `npx vite build`, exécution headless Chromium WebGL sans erreur console (`Total errors: 0`), tests automatisés de collision confirmant `disp = 0` sur les emplacements inactifs rue des Orfèvres et Marché-Neuf et `disp = 0.805` sur la boîte active (avant et après déplacement), passage central de la cathédrale dégagé, et inspection visuelle des captures jour/nuit et gros plan portail/rosace. / Non vérifié : test manuel interactif au clavier/souris dans un navigateur utilisateur ni partie multijoueur en réseau.
+
 ## v0.104.0 (2026-11-20)
 - **Atelier d'armes interactif (`[T]`)** : nouveau menu accessible à pied en appuyant sur `T` (modifiable dans Options > Touches, sans conflit avec la boîte manuelle en véhicule). Il affiche votre arme en main dans une **vue 3D interactive pivotable à la souris** ainsi que ses statistiques détaillées en temps réel (avec prévisualisation des gains/pertes au survol) et des onglets pour passer d'une arme de votre inventaire à l'autre.
 - **Accessoires payants à équiper et retirer librement** : chaque accessoire dispose d'un prix en points (500 à 1 450 pts). Une fois acheté (ou obtenu en bonus aléatoire), il reste acquis sur cette arme : vous pouvez le **retirer ou le ré-équiper gratuitement** à tout moment par emplacement (Optique, Bouche/Canon, Chargeur/Munitions, Sous-canon/Tactique) ou via le bouton « Tout retirer », avec mise à jour immédiate en 3D (1re et 3e personne), sur le HUD et en multijoueur.

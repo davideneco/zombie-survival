@@ -1583,9 +1583,11 @@ export async function buildRealWorld(scene, renderer) {
       if (type === 'clock') g.traverse((o) => { if (o.isMesh) o.receiveShadow = true; }); // (the clock keeps all its parts as casters: a 16 m monument, one instance)
       else castShadowBiggest(g);
       scene.add(g);
-      if (type !== 'box') detailCull.addPoint(g, type === 'clock' ? 12 : 3); // (the mystery boxes are shown one at a time by setActiveBox)
-      collision.addBox(x, z, w, d, -g.rotation.y, h);
-      const entry = { type, id, name, price, color, letter: type === 'perk' ? CONFIG.perks[id].letter : type === 'nvg' ? CONFIG.nvg.letter : null, zone: zi, pos: new THREE.Vector3(x, 0, z), group: g, active: true };
+      if (type !== 'box') {
+        detailCull.addPoint(g, type === 'clock' ? 12 : 3); // (the mystery boxes are shown one at a time by setActiveBox)
+        collision.addBox(x, z, w, d, -g.rotation.y, h);
+      }
+      const entry = { type, id, name, price, color, letter: type === 'perk' ? CONFIG.perks[id].letter : type === 'nvg' ? CONFIG.nvg.letter : null, zone: zi, pos: new THREE.Vector3(x, 0, z), group: g, active: true, boxCol: type === 'box' ? { x, z, w, d, rot: -g.rotation.y, h } : null };
       machines.push(entry);
       lightSources.push({ x: x + Math.sin(g.rotation.y) * 1.2, y: h + 0.6, z: z + Math.cos(g.rotation.y) * 1.2, color: new THREE.Color(color).getHex(), intensity: 7, dist: 8, box: type === 'box' ? entry : null });
     };
@@ -2430,7 +2432,12 @@ export async function buildRealWorld(scene, renderer) {
   // Boîte mystère : une seule active parmi tous ses emplacements possibles
   const boxes = machines.filter((m) => m.type === 'box');
   function setActiveBox(i) {
-    boxes.forEach((b, k) => { b.active = k === i; b.group.visible = b.active; b.group.position.y = 0; b.group.scale.setScalar(1); });
+    let activeCol = null;
+    boxes.forEach((b, k) => {
+      b.active = k === i; b.group.visible = b.active; b.group.position.y = 0; b.group.scale.setScalar(1);
+      if (b.active && b.boxCol) activeCol = b.boxCol;
+    });
+    collision.setDynamic('mystery_box', activeCol ? [activeCol] : [], 'prop');
     lightTimer = 0;
   }
   setActiveBox(Math.max(0, boxes.findIndex((b) => b.zone === startZone)));
