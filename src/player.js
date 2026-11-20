@@ -4,6 +4,7 @@ import { buildWeaponModels, attachAccessories, rollAttachments } from './viewmod
 import { FPHands } from './fpHands.js';
 import { RideCam } from './rideCam.js';
 import { flashMaterial } from './fx.js';
+import { charStatsOf } from './characters.js';
 
 const ADS_DELTA = 20; // réduction du FOV en visée
 const PAP_INTENSITY = 0.35; // intensité du reflet des armes améliorées (couleur : PAP_LEVELS[niveau].color)
@@ -52,16 +53,21 @@ export class Player {
   get driving() { const v = this.vehicle; return !!v && v.v.isDriver(v.seat); } // aux commandes d'une moto ou d'une rame : pas de tir, pas de rechargement
   get curW() { return this.inventory[this.weaponIdx]; }
   get curCfg() { return this.statsOf(this.curW); }
-  get maxHealth() { return this.perks.juggernog ? 250 : CONFIG.player.maxHealth; }
+  charStats() { return charStatsOf(this.ch); }
+  get maxHealth() {
+    const base = this.charStats().maxHealth || CONFIG.player.maxHealth;
+    return base + (this.perks.juggernog ? 150 : 0);
+  }
   get maxWeapons() { return this.perks.mulekick ? 3 : 2; }
 
-  // Statistiques effectives d'une arme : base + Pack-a-Punch (niveau w.pap, 0 à 3) + accessoires + atouts
+  // Statistiques effectives d'une arme : base + Pack-a-Punch (niveau w.pap, 0 à 3) + accessoires + personnage + atouts
   // overrideAtts (optionnel) : permet à l'atelier [T] de prévisualiser les stats avant achat/équipement sans muter l'arme.
   statsOf(w, overrideAtts = null) {
     const lv = w.pap | 0;
     const atts = Array.isArray(overrideAtts) ? overrideAtts : (Array.isArray(w.atts) ? w.atts : []);
     const useCache = overrideAtts == null;
-    const key = `${lv}|${atts.join(',')}|${this.statsVersion}`;
+    const cs = this.charStats();
+    const key = `${lv}|${atts.join(',')}|${this.statsVersion}|${this.ch?.id || ''}`;
     if (useCache && w._statsKey === key) return w._stats;
     const base = CONFIG.weapons[w.id];
     const s = { ...base, ...papStats(base, lv) };
@@ -105,6 +111,18 @@ export class Player {
     s.silenced = silenced || (lv >= 3 && (base.cat === 'pistol' || base.cat === 'smg' || base.cat === 'sniper'));
     s.attLabels = attLabels;
 
+    // Bonus passifs du personnage sélectionné (CONFIG.characters)
+    if (cs.dmgMult && cs.dmgMult !== 1) {
+      s.damage = Math.round(s.damage * cs.dmgMult);
+      if (s.splash) s.splash = { ...s.splash, damage: Math.round(s.splash.damage * cs.dmgMult) };
+      if (s.blast) s.blast = { ...s.blast, damage: Math.round(s.blast.damage * cs.dmgMult) };
+    }
+    if (cs.headMult && cs.headMult !== 1) s.headMult = +((s.headMult || 1) * cs.headMult).toFixed(2);
+    if (cs.fireRateMult && cs.fireRateMult !== 1) s.fireRate = +(s.fireRate * cs.fireRateMult).toFixed(2);
+    if (cs.reloadMult && cs.reloadMult !== 1) s.reloadTime = +(s.reloadTime * cs.reloadMult).toFixed(2);
+    if (cs.spreadMult && cs.spreadMult !== 1) s.spread *= cs.spreadMult;
+    if (cs.reserveMult && cs.reserveMult !== 1) s.maxReserve = Math.max(s.magSize, Math.round(s.maxReserve * cs.reserveMult));
+
     if (this.perks.doubletap) { s.fireRate *= 1.33; s.damage *= 1.25; }
     if (this.perks.speedcola) s.reloadTime *= 0.5;
     const PF = CONFIG.perkFx;
@@ -132,7 +150,7 @@ export class Player {
     this.statDowns = 0;
     this.bleedout = 0;
     this.selfRevive = 0;
-    this.grenades = CONFIG.grenade.start;
+    this.grenades = CONFIG.grenade.start + (this.charStats().extraGrenades || 0);
     this.hasNvg = false;
     this.nvgOn = false;
     this.nvgK = 0;
@@ -199,9 +217,11 @@ export class Player {
     if (w === this.curW) this.switchWeapon(this.weaponIdx);
   }
 
-  // Apparence des bras et mains en vue à la première personne (armes + couteau)
+  // Apparence des bras et mains en vue à la première personne (armes + couteau) + stats du personnage
   setCharacter(ch) {
     this.ch = ch;
+    this.statsVersion++;
+    if (!this.game?.started) this.health = this.maxHealth;
     this.fpHands?.setCharacter(ch);
     if (this.sleeveMat) this.sleeveMat.color.setHex(ch.fp.sleeve);
     for (const m of new Set(this.handMats || [])) m.color.setHex(ch.fp.hand);
@@ -535,8 +555,10 @@ export class Player {
       if (this.downed || this.dead || this.vault || (B.down('sprint', K) && mz > 0 && !crouchHeld) || B.down('jump', K)) this.crouchToggle = false;
       this.crouching = (crouchHeld || this.crouchToggle) && !this.downed && !this.dead && !this.vault && !this.game.camLock;
       sprinting = !this.downed && !this.crouching && B.down('sprint', K) && mz > 0 && !this.aiming;
+      const cs = this.charStats();
       const stamin = this.perks.staminup ? 1.3 : 1;
       let speed = this.downed ? 1.2 : this.crouching ? (P.crouchSpeed || 2.8) * (this.perks.staminup ? 1.15 : 1) : (sprinting ? P.sprintSpeed * stamin : P.walkSpeed * (this.perks.staminup ? 1.1 : 1));
+      if (!this.downed && cs.speedMult && cs.speedMult !== 1) speed *= cs.speedMult;
       if (this.superSpeed) speed *= 2.2;
       if (this.aiming && !this.downed) speed *= 0.6;
       if (moving) { const l = Math.hypot(mx, mz); mx /= l; mz /= l; }
@@ -596,8 +618,11 @@ export class Player {
     this.flopCd = Math.max(0, this.flopCd - dt);
 
     // ---- régénération ----
-    if (!this.downed && this.health < this.maxHealth && now - this.lastHurt > P.regenDelay) {
-      this.health = Math.min(this.maxHealth, this.health + P.regenRate * dt);
+    const rcs = this.charStats();
+    const rDelay = Math.max(1.5, P.regenDelay + (rcs.regenDelayDelta || 0));
+    const rRate = P.regenRate * (rcs.regenRateMult || 1);
+    if (!this.downed && this.health < this.maxHealth && now - this.lastHurt > rDelay) {
+      this.health = Math.min(this.maxHealth, this.health + rRate * dt);
     }
     if (this.godMode) {
       this.health = this.maxHealth;

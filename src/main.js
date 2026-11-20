@@ -20,7 +20,7 @@ import { Sfx } from './audio.js';
 import { fx } from './fx.js';
 import { Net } from './net.js';
 import { RemotePlayer, slotColor } from './remote.js';
-import { CHARACTERS, Avatar, charOf, renderPortraits } from './characters.js';
+import { CHARACTERS, Avatar, charOf, charStatsOf, isCharUnlocked, renderPortraits } from './characters.js';
 import { makeTeddy } from './machines.js';
 import { installMachineFx } from './machineFx.js';
 import { installVehicles } from './vehicles.js';
@@ -36,7 +36,7 @@ import { makeDisplay } from './weaponDisplay.js';
 import { installUi } from './ui.js';
 import { installModMenu } from './modMenu.js';
 import { installGunsmith } from './gunsmith.js';
-import { installAccount } from './account.js';
+import { installAccount, totalXpForLevel } from './account.js';
 import { installUnstick } from './unstick.js';
 import { installBarricades } from './barricades.js';
 import { installBarrels } from './barrels.js';
@@ -343,8 +343,10 @@ const game = {
   },
 
   addPoints(n, cls = '') {
-    this.points += n;
-    hud.popup(`+${n}`, cls);
+    const pm = n > 0 ? (this.player?.charStats?.().pointsMult || 1) : 1;
+    const gain = pm !== 1 ? Math.round(n * pm) : n;
+    this.points += gain;
+    hud.popup(`+${gain}`, cls);
   },
 
   // Santé d'un zombie ordinaire à la manche r (courbe de CONFIG.zombie.health)
@@ -357,8 +359,9 @@ const game = {
   meleeDamage(z, head, back) {
     const K = CONFIG.knife;
     const ax = this.player.hasAxe ? K.axe.dmgMult : 1; // Hache du Bourreau (récompense de la finale)
-    if (z.isBoss && !z.mini) return K.boss.dmg * ax; // face / dos : appliqués par Boss.damage (finale.boss.sens), comme pour les balles
-    return Math.max(K.minDamage, K.healthFrac * this.zombieHealthAt(this.round)) * (head || back ? K.weakMult : 1) * ax;
+    const cm = this.player?.charStats?.().meleeMult || 1;
+    if (z.isBoss && !z.mini) return K.boss.dmg * ax * cm; // face / dos : appliqués par Boss.damage (finale.boss.sens), comme pour les balles
+    return Math.max(K.minDamage, K.healthFrac * this.zombieHealthAt(this.round)) * (head || back ? K.weakMult : 1) * ax * cm;
   },
 
   // extra (le Bourreau) : { ray : tir direct du pistolet à rayons, back : coup de couteau porté dans son dos, ax, az : position de l'attaquant }
@@ -1548,7 +1551,7 @@ const game = {
     this.over = false;
     this.time = 0;
     if (resetStats) {
-      this.points = CONFIG.player.startPoints;
+      this.points = this.player?.charStats?.().startPoints ?? CONFIG.player.startPoints;
       this.kills = 0;
       this.headshots = 0;
       this.statRevives = 0;
@@ -2061,17 +2064,120 @@ const START_LABELS = {
   island: 'Grande Île — lieu aléatoire',
 };
 let portraitUrls = [];
+let previewCharIdx = game.charPref;
+let charCards = [];
+const fmtPct = (m) => {
+  const d = Math.round((m - 1) * 100);
+  return d === 0 ? 'Base' : `${d > 0 ? '+' : ''}${d}%`;
+};
+const fmtReload = (m) => {
+  const d = Math.round((1 - m) * 100);
+  return d === 0 ? 'Base' : `+${d}%`;
+};
+const renderCharDetail = (idx) => {
+  const box = document.getElementById('charDetail');
+  if (!box) return;
+  const ch = charOf(idx);
+  const st = charStatsOf(idx);
+  const info = game.account ? game.account.levelInfo() : { level: 1, totalXp: 0 };
+  const unlocked = isCharUnlocked(idx, info.level, !!game.unlockAllChars);
+  const isSel = idx === game.charPref;
+
+  const chips = [
+    { k: 'PV MAX', v: `${st.maxHealth}`, hi: st.maxHealth > CONFIG.player.maxHealth },
+    { k: 'DÉGÂTS', v: fmtPct(st.dmgMult), hi: st.dmgMult > 1 },
+    { k: 'VITESSE', v: fmtPct(st.speedMult), hi: st.speedMult > 1 },
+    { k: 'RECHARG.', v: fmtReload(st.reloadMult), hi: st.reloadMult < 1 },
+    { k: 'CADENCE', v: fmtPct(st.fireRateMult), hi: st.fireRateMult > 1 },
+    { k: 'TIR TÊTE', v: fmtPct(st.headMult), hi: st.headMult > 1 },
+    { k: 'RÉGÉN.', v: st.regenRateMult > 1 ? `+${Math.round((st.regenRateMult - 1) * 100)}%` : 'Base', hi: st.regenRateMult > 1 },
+    { k: 'PTS DÉPART', v: `${st.startPoints}`, hi: st.startPoints > CONFIG.player.startPoints },
+  ];
+  if (st.pointsMult > 1) chips.push({ k: 'GAINS PTS', v: fmtPct(st.pointsMult), hi: true });
+  if (st.reserveMult > 1) chips.push({ k: 'MUNITIONS', v: fmtPct(st.reserveMult), hi: true });
+  if (st.meleeMult > 1) chips.push({ k: 'MÊLÉE', v: fmtPct(st.meleeMult), hi: true });
+  if (st.extraGrenades > 0) chips.push({ k: 'GRENADES', v: `+${st.extraGrenades}`, hi: true });
+
+  let lockBar = '';
+  if (!unlocked) {
+    const reqTotal = totalXpForLevel(st.unlockLevel);
+    const curTotal = info.totalXp || 0;
+    const remain = Math.max(0, reqTotal - curTotal);
+    const pct = reqTotal > 0 ? Math.min(100, Math.round((curTotal / reqTotal) * 100)) : 0;
+    lockBar = `<div class="char-lock-info">`
+      + `<div class="char-lock-row"><b>🔒 Verrouillé — Niveau ${st.unlockLevel} requis</b><span>Encore ${remain.toLocaleString('fr-FR')} XP (${pct}%)</span></div>`
+      + `<div class="char-lock-bar"><i style="width:${pct}%"></i></div>`
+      + `</div>`;
+  }
+
+  const badge = isSel
+    ? '<span class="cd-status sel">✓ ÉQUIPÉ</span>'
+    : unlocked
+      ? '<span class="cd-status ok">✓ DÉBLOQUÉ</span>'
+      : `<span class="cd-status locked">🔒 NIV. ${st.unlockLevel}</span>`;
+
+  box.style.setProperty('--cc', ch.accent);
+  box.innerHTML = `
+    <div class="cd-head">
+      <div>
+        <b style="color:${ch.accent}">${ch.name}</b>
+        <span class="cd-role">${ch.role} · Palier ${st.tier}/8</span>
+        <span class="cd-pwr">⚡ ${st.power}</span>
+      </div>
+      ${badge}
+    </div>
+    <div class="cd-trait">${st.trait}</div>
+    <div class="cd-grid">
+      ${chips.map((c) => `<div class="cd-stat ${c.hi ? 'hi' : ''}"><span>${c.k}</span><b>${c.v}</b></div>`).join('')}
+    </div>
+    ${lockBar}
+  `;
+};
+
 const syncTitleLoadout = () => {
   const ch = charOf(game.charPref);
+  const st = charStatsOf(game.charPref);
   const nameEl = document.getElementById('titleCharName');
+  const statsEl = document.getElementById('titleCharStats');
   const startEl = document.getElementById('titleStartLabel');
   const imgEl = document.getElementById('titleCharImg');
   if (nameEl && ch) {
-    nameEl.textContent = `${ch.name} · ${ch.role}`;
+    nameEl.textContent = `${ch.name} · ${ch.role} · ⚡ ${st.power}`;
     nameEl.style.color = ch.accent || '#fff';
+  }
+  if (statsEl) {
+    const info = game.account ? game.account.levelInfo() : { level: 1 };
+    const unlockedCount = CHARACTERS.filter((_, i) => isCharUnlocked(i, info.level, !!game.unlockAllChars)).length;
+    const parts = [`❤ ${st.maxHealth} PV`];
+    if (st.dmgMult > 1) parts.push(`💥 +${Math.round((st.dmgMult - 1) * 100)}%`);
+    if (st.speedMult > 1) parts.push(`🏃 +${Math.round((st.speedMult - 1) * 100)}%`);
+    if (st.pointsMult > 1) parts.push(`🪙 +${Math.round((st.pointsMult - 1) * 100)}%`);
+    parts.push(`👥 ${unlockedCount}/${CHARACTERS.length}`);
+    statsEl.textContent = parts.join(' · ');
   }
   if (startEl) startEl.textContent = `Départ : ${START_LABELS[game.startArea] || START_LABELS.island}`;
   if (imgEl && portraitUrls[game.charPref]) imgEl.src = portraitUrls[game.charPref];
+};
+
+game.refreshCharacters = () => {
+  const info = game.account ? game.account.levelInfo() : { level: 1 };
+  if (!isCharUnlocked(game.charPref, info.level, !!game.unlockAllChars)) {
+    game.charPref = 0;
+    try { localStorage.setItem('zombie_char', '0'); } catch {}
+    game.player.setCharacter(charOf(0));
+    previewCharIdx = 0;
+  }
+  charCards.forEach((c, k) => {
+    const ok = isCharUnlocked(k, info.level, !!game.unlockAllChars);
+    const st = charStatsOf(k);
+    c.classList.toggle('sel', k === game.charPref);
+    c.classList.toggle('locked', !ok);
+    c.classList.toggle('preview', !ok && k === previewCharIdx);
+    const lockEl = c.querySelector('.char-lock');
+    if (lockEl) lockEl.textContent = ok ? '' : `🔒 NIV. ${st.unlockLevel}`;
+  });
+  renderCharDetail(previewCharIdx);
+  syncTitleLoadout();
 };
 { // menu : « Départ » (train intro / Gare Centrale / Grande Île au hasard), remembered locally ; default CONFIG.start (v0.81.0)
   const sel = document.getElementById('startArea'), qs = new URLSearchParams(location.search);
@@ -2116,31 +2222,36 @@ game.initVehicles();
 game.initTrams();
 game.player.setCharacter(charOf(game.charPref));
 
-// Choix du personnage (menu) : cartes avec portrait, rendu une seule fois
+// Choix du personnage (menu) : cartes avec portrait, stats et déblocage par niveau XP
 {
   const row = document.getElementById('charRow');
   if (row) {
-    const cards = CHARACTERS.map((ch, i) => {
+    charCards = CHARACTERS.map((ch, i) => {
+      const st = charStatsOf(i);
       const c = document.createElement('div');
       c.className = 'char-card'; c.style.setProperty('--c', ch.accent);
-      c.innerHTML = `<img alt="${ch.name}" /><b>${ch.name}</b><small>${ch.role}</small>`;
+      c.innerHTML = `<span class="char-tier">T${st.tier}</span><span class="char-pwr">⚡${st.power}</span><img alt="${ch.name}" /><b>${ch.name}</b><small>${ch.role}</small><span class="char-lock"></span>`;
       c.addEventListener('click', (e) => {
         e.stopPropagation();
-        game.charPref = i; localStorage.setItem('zombie_char', String(i));
-        game.player.setCharacter(ch);
-        cards.forEach((x, k) => x.classList.toggle('sel', k === i));
-        syncTitleLoadout();
+        previewCharIdx = i;
+        const lv = game.account ? game.account.levelInfo().level : 1;
+        if (isCharUnlocked(i, lv, !!game.unlockAllChars)) {
+          game.charPref = i;
+          try { localStorage.setItem('zombie_char', String(i)); } catch {}
+          game.player.setCharacter(ch);
+          if (game.account?.state?.mode === 'account') game.account.syncNow(true);
+        }
+        game.refreshCharacters();
       });
       row.appendChild(c);
       return c;
     });
-    cards[game.charPref].classList.add('sel');
-    syncTitleLoadout();
+    game.refreshCharacters();
     // les portraits sont dessinés juste après le premier affichage (un petit contexte WebGL à part)
     setTimeout(() => {
       try {
         portraitUrls = renderPortraits(200);
-        portraitUrls.forEach((u, i) => { cards[i].querySelector('img').src = u; });
+        portraitUrls.forEach((u, i) => { charCards[i].querySelector('img').src = u; });
         syncTitleLoadout();
       } catch (err) { console.warn('portraits', err); }
     }, 400);
@@ -2732,13 +2843,17 @@ installAccount(game, {
       if (hud.el.playerName) hud.el.playerName.value = username;
       try { localStorage.setItem('zombie_name', username); } catch {}
     }
-    if (charPref != null && charPref >= 0 && charPref < CHARACTERS.length && charPref !== game.charPref) {
+    const lv = game.account ? game.account.levelInfo().level : 1;
+    if (charPref != null && charPref >= 0 && charPref < CHARACTERS.length && charPref !== game.charPref && isCharUnlocked(charPref, lv, !!game.unlockAllChars)) {
       game.charPref = charPref;
+      previewCharIdx = charPref;
       try { localStorage.setItem('zombie_char', String(charPref)); } catch {}
       game.player.setCharacter(charOf(charPref));
-      document.querySelectorAll('#charRow .char-card').forEach((x, k) => x.classList.toggle('sel', k === charPref));
-      syncTitleLoadout();
     }
+    game.refreshCharacters?.();
+  },
+  onLevelChange() {
+    game.refreshCharacters?.();
   },
 });
 game.scoreboard = new Scoreboard(game); // tableau des scores [TAB]

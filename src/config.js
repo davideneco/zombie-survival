@@ -1166,6 +1166,66 @@ export const CONFIG = {
       { level: 50, name: 'Légende de Strasbourg', icon: '⛪', color: '#ffd24a' },
     ],
   },
+
+  // Statistiques et déblocage progressif par XP des 8 personnages jouables (ordre croissant de puissance)
+  characters: {
+    marc: {
+      tier: 1, unlockLevel: 1, power: 100,
+      trait: 'Équilibré · Survivant de départ',
+      maxHealth: 100, dmgMult: 1.00, headMult: 1.00, fireRateMult: 1.00, speedMult: 1.00,
+      reloadMult: 1.00, spreadMult: 1.00, regenRateMult: 1.00, regenDelayDelta: 0,
+      reserveMult: 1.00, meleeMult: 1.00, pointsMult: 1.00, startPoints: 500, extraGrenades: 0,
+    },
+    lea: {
+      tier: 2, unlockLevel: 2, power: 115,
+      trait: 'Secouriste · Régénération accélérée',
+      maxHealth: 110, dmgMult: 1.05, headMult: 1.02, fireRateMult: 1.00, speedMult: 1.04,
+      reloadMult: 0.95, spreadMult: 0.98, regenRateMult: 1.40, regenDelayDelta: -1.0,
+      reserveMult: 1.00, meleeMult: 1.00, pointsMult: 1.00, startPoints: 550, extraGrenades: 0,
+    },
+    karim: {
+      tier: 3, unlockLevel: 4, power: 130,
+      trait: 'Combattant robuste · PV, mêlée & +1 grenade',
+      maxHealth: 130, dmgMult: 1.10, headMult: 1.05, fireRateMult: 1.02, speedMult: 1.05,
+      reloadMult: 0.92, spreadMult: 0.96, regenRateMult: 1.25, regenDelayDelta: -0.5,
+      reserveMult: 1.05, meleeMult: 1.30, pointsMult: 1.00, startPoints: 600, extraGrenades: 1,
+    },
+    chloe: {
+      tier: 4, unlockLevel: 6, power: 150,
+      trait: 'Éclaireuse · Vitesse élevée & précision tête',
+      maxHealth: 135, dmgMult: 1.16, headMult: 1.18, fireRateMult: 1.05, speedMult: 1.14,
+      reloadMult: 0.86, spreadMult: 0.88, regenRateMult: 1.30, regenDelayDelta: -0.8,
+      reserveMult: 1.10, meleeMult: 1.15, pointsMult: 1.05, startPoints: 700, extraGrenades: 1,
+    },
+    lucian: {
+      tier: 5, unlockLevel: 9, power: 175,
+      trait: 'Purificateur · Cadence soutenue & critiques',
+      maxHealth: 150, dmgMult: 1.25, headMult: 1.24, fireRateMult: 1.10, speedMult: 1.15,
+      reloadMult: 0.82, spreadMult: 0.86, regenRateMult: 1.35, regenDelayDelta: -1.0,
+      reserveMult: 1.15, meleeMult: 1.25, pointsMult: 1.10, startPoints: 850, extraGrenades: 1,
+    },
+    picsou: {
+      tier: 6, unlockLevel: 13, power: 205,
+      trait: 'Milliardaire · Points +25%, capital & munitions',
+      maxHealth: 165, dmgMult: 1.32, headMult: 1.25, fireRateMult: 1.12, speedMult: 1.16,
+      reloadMult: 0.78, spreadMult: 0.84, regenRateMult: 1.40, regenDelayDelta: -1.2,
+      reserveMult: 1.25, meleeMult: 1.25, pointsMult: 1.25, startPoints: 1200, extraGrenades: 1,
+    },
+    klukai: {
+      tier: 7, unlockLevel: 18, power: 240,
+      trait: 'Opératrice tactique · Rechargement éclair & précision',
+      maxHealth: 180, dmgMult: 1.42, headMult: 1.32, fireRateMult: 1.16, speedMult: 1.18,
+      reloadMult: 0.72, spreadMult: 0.78, regenRateMult: 1.50, regenDelayDelta: -1.5,
+      reserveMult: 1.30, meleeMult: 1.35, pointsMult: 1.25, startPoints: 1250, extraGrenades: 1,
+    },
+    harry: {
+      tier: 8, unlockLevel: 25, power: 290,
+      trait: 'Archimage ultime · Puissance, vitesse & régén suprêmes',
+      maxHealth: 200, dmgMult: 1.55, headMult: 1.40, fireRateMult: 1.20, speedMult: 1.22,
+      reloadMult: 0.66, spreadMult: 0.75, regenRateMult: 1.70, regenDelayDelta: -2.0,
+      reserveMult: 1.40, meleeMult: 1.50, pointsMult: 1.30, startPoints: 1500, extraGrenades: 2,
+    },
+  },
 };
 
 // Touches par défaut (modifiables dans Options > Touches, voir keybinds.js). Une liaison s'écrit 'code:KeyW' (touche PHYSIQUE : ZQSD en

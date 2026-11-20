@@ -619,6 +619,10 @@ export function installModMenu(game, { world, hud, sfx }) {
               <b>${p.nvgOn ? '◉ VISION NOCTURNE : ACTIVE' : p.hasNvg ? '○ VISION NOCTURNE : ÉTEINTE' : '🟢 DONNER VISION NOCTURNE (NVG)'}</b>
               <small>Donne et active / désactive les lunettes de vision nocturne</small>
             </button>
+            <button class="mod-btn ${game.unlockAllChars ? 'mod-btn-active' : 'mod-btn-gold'}" id="modUnlockChars">
+              <b>${game.unlockAllChars ? '🔓 TOUS LES PERSOS : DÉBLOQUÉS' : '🔓 DÉBLOQUER TOUS LES PERSOS (SESSION)'}</b>
+              <small>Permet de tester les 8 survivants sans modifier votre XP</small>
+            </button>
           </div>
         </div>
 
@@ -1088,6 +1092,12 @@ export function installModMenu(game, { world, hud, sfx }) {
       if (!p.hasNvg) p.grantNvg(true);
       else p.toggleNvg();
       say(`Vision nocturne : ${p.nvgOn ? 'ACTIVÉE' : 'DÉSACTIVÉE'}`);
+      mod.render();
+    });
+    document.getElementById('modUnlockChars')?.addEventListener('click', () => {
+      game.unlockAllChars = !game.unlockAllChars;
+      game.refreshCharacters?.();
+      say(`Déblocage session des 8 persos : ${game.unlockAllChars ? 'ACTIVÉ' : 'DÉSACTIVÉ'}`);
       mod.render();
     });
 

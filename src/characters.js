@@ -31,6 +31,25 @@ export const CHARACTERS = [
 ];
 export const charOf = (slot) => CHARACTERS[((slot % CHARACTERS.length) + CHARACTERS.length) % CHARACTERS.length];
 export const slotColor = (slot) => charOf(slot).accent;
+export const charStatsOf = (chOrSlot) => {
+  const ch = typeof chOrSlot === 'number' ? charOf(chOrSlot) : (chOrSlot || CHARACTERS[0]);
+  return CONFIG.characters?.[ch?.id] || CONFIG.characters?.marc || {
+    tier: 1, unlockLevel: 1, power: 100, trait: '', maxHealth: CONFIG.player.maxHealth,
+    dmgMult: 1, headMult: 1, fireRateMult: 1, speedMult: 1, reloadMult: 1, spreadMult: 1,
+    regenRateMult: 1, regenDelayDelta: 0, reserveMult: 1, meleeMult: 1, pointsMult: 1,
+    startPoints: CONFIG.player.startPoints, extraGrenades: 0,
+  };
+};
+export const isCharUnlocked = (index, level = 1, unlockAll = false) => {
+  if (unlockAll || index <= 0) return true;
+  const st = charStatsOf(index);
+  return (level | 0) >= (st.unlockLevel || 1);
+};
+export const highestUnlockedChar = (level = 1, unlockAll = false) => {
+  let best = 0;
+  for (let i = 0; i < CHARACTERS.length; i++) if (isCharUnlocked(i, level, unlockAll)) best = i;
+  return best;
+};
 
 // ------------------------------------------------------------------ matériaux (partagés : peu de shaders différents)
 const MATS = new Map();

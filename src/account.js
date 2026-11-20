@@ -1,6 +1,7 @@
 // Système de compte hybride (serveur /api/account/* + miroir localStorage),
 // suivi de carrière et progression d'expérience / grades militaires.
 import { CONFIG } from './config.js';
+import { CHARACTERS, charStatsOf, isCharUnlocked } from './characters.js';
 
 const STORAGE_KEY = 'zombie_account_v1';
 const esc = (t) => String(t ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -31,6 +32,13 @@ function cleanStats(raw) {
 export function xpNeededForLevel(lv) {
   const A = CONFIG.account;
   return Math.round(A.xpBase * Math.pow(Math.max(1, lv), A.xpPow));
+}
+
+export function totalXpForLevel(targetLevel) {
+  let sum = 0;
+  const maxLv = Math.min(CONFIG.account.maxLevel, Math.max(1, targetLevel | 0));
+  for (let lv = 1; lv < maxLv; lv++) sum += xpNeededForLevel(lv);
+  return sum;
 }
 
 export function levelInfo(totalXp) {
@@ -98,7 +106,7 @@ function mergeLocalAndServer(local, remote) {
   return { stats, history };
 }
 
-export function installAccount(game, { hud, sfx, onProfileChange }) {
+export function installAccount(game, { hud, sfx, onProfileChange, onLevelChange }) {
   const A = CONFIG.account;
   const state = {
     mode: 'guest', // 'guest' | 'account'
@@ -125,6 +133,11 @@ export function installAccount(game, { hud, sfx, onProfileChange }) {
   let authMsg = null; // { kind: 'ok'|'err'|'info', text }
   let saveTimer = null;
   let syncTimer = null;
+
+  const unlockedBetween = (prevLv, nextLv) => CHARACTERS.filter((ch, idx) => {
+    const req = charStatsOf(idx).unlockLevel || 1;
+    return req > prevLv && req <= nextLv;
+  });
 
   // ------------------------------------------------ Persistance locale
   function loadLocal() {
@@ -190,6 +203,7 @@ export function installAccount(game, { hud, sfx, onProfileChange }) {
     state.lastSync = new Date().toISOString();
     saveLocal();
     onProfileChange?.({ username: state.username, charPref: user.charPref });
+    onLevelChange?.(levelInfo(state.stats.xp).level);
     renderAll();
   }
 
@@ -202,9 +216,16 @@ export function installAccount(game, { hud, sfx, onProfileChange }) {
     if (session.active) session.xpGained += add;
     const after = levelInfo(state.stats.xp);
 
-    if (after.level > before.level && game.started && !game.over) {
-      sfx.powerup?.();
-      hud.announce(`NIVEAU ${after.level} !`, `${after.rank.icon} ${after.rank.name.toUpperCase()}`, 3400);
+    if (after.level > before.level) {
+      onLevelChange?.(after.level);
+      if (game.started && !game.over) {
+        const newly = unlockedBetween(before.level, after.level);
+        sfx.powerup?.();
+        const extra = newly.length
+          ? ` · 🔓 ${newly.map((c) => c.name).join(', ')} DÉBLOQUÉ${newly.length > 1 ? 'S' : ''} !`
+          : '';
+        hud.announce(`NIVEAU ${after.level} !`, `${after.rank.icon} ${after.rank.name.toUpperCase()}${extra}`, newly.length ? 4400 : 3400);
+      }
     } else if (label && game.started && !game.over) {
       hud.toast(`+${add} XP · ${label}`, 2200);
     }
@@ -217,6 +238,23 @@ export function installAccount(game, { hud, sfx, onProfileChange }) {
     get state() { return state; },
     get open() { return modalOpen; },
     levelInfo: () => levelInfo(state.stats.xp),
+    xpForLevel: (lv) => totalXpForLevel(lv),
+    isCharUnlocked: (idx) => isCharUnlocked(idx, levelInfo(state.stats.xp).level, !!game.unlockAllChars),
+    unlockedCharsCount: () => {
+      const lv = levelInfo(state.stats.xp).level;
+      return CHARACTERS.filter((_, i) => isCharUnlocked(i, lv, !!game.unlockAllChars)).length;
+    },
+    nextUnlockChar: () => {
+      const lv = levelInfo(state.stats.xp).level;
+      for (let i = 0; i < CHARACTERS.length; i++) {
+        if (!isCharUnlocked(i, lv, !!game.unlockAllChars)) {
+          const st = charStatsOf(i);
+          const needXp = Math.max(0, totalXpForLevel(st.unlockLevel) - state.stats.xp);
+          return { index: i, ch: CHARACTERS[i], stats: st, needXp };
+        }
+      }
+      return null;
+    },
 
     beginSession() {
       const info = levelInfo(state.stats.xp);
@@ -302,9 +340,14 @@ export function installAccount(game, { hud, sfx, onProfileChange }) {
       const lvUp = info.level > session.startLevel
         ? ` <span style="color:#4ade80;font-weight:bold">▲ NIVEAU ${info.level} !</span>`
         : '';
+      const newly = unlockedBetween(session.startLevel, info.level);
+      const unlockLine = newly.length
+        ? `<span style="color:#ffd24a;font-weight:bold">🔓 Débloqué${newly.length > 1 ? 's' : ''} : ${newly.map((c) => esc(c.name)).join(', ')} !</span>`
+        : '';
       return `<div class="acc-end-pill">`
         + `<span class="acc-end-xp">+${session.xpGained.toLocaleString('fr-FR')} XP</span>`
         + `<span>${info.rank.icon} Niv. ${info.level} · <b style="color:${info.rank.color}">${esc(info.rank.name)}</b>${lvUp}</span>`
+        + unlockLine
         + `<div class="acc-end-bar"><i style="width:${info.pct}%"></i></div>`
         + `</div>`;
     },
@@ -412,6 +455,7 @@ export function installAccount(game, { hud, sfx, onProfileChange }) {
       saveLocal();
       authMsg = { kind: 'info', text: 'Déconnecté : votre progression locale reste conservée en mode Invité.' };
       activeTab = 'auth';
+      onLevelChange?.(levelInfo(state.stats.xp).level);
       renderAll();
     },
 
@@ -441,6 +485,7 @@ export function installAccount(game, { hud, sfx, onProfileChange }) {
         saveLocal();
         if (state.mode === 'account' && state.token) account.syncNow(true);
         authMsg = { kind: 'ok', text: 'Sauvegarde importée et fusionnée avec succès !' };
+        onLevelChange?.(levelInfo(state.stats.xp).level);
         renderAll();
         return true;
       } catch {
@@ -530,6 +575,16 @@ export function installAccount(game, { hud, sfx, onProfileChange }) {
         </table>`
       : `<div class="acc-empty">Aucune partie enregistrée pour l'instant. Lancez une partie pour commencer votre carrière !</div>`;
 
+    const unlockedCount = account.unlockedCharsCount();
+    const charsLadderHtml = CHARACTERS.map((ch, idx) => {
+      const cs = charStatsOf(idx);
+      const ok = isCharUnlocked(idx, info.level, !!game.unlockAllChars);
+      return `<div class="acc-char-pill ${ok ? 'ok' : 'locked'}" style="--cc:${ch.accent}" title="${esc(cs.trait)}">`
+        + `<b>${ok ? '✓' : '🔒'} ${esc(ch.name)}</b>`
+        + `<small>${ok ? `⚡ ${cs.power}` : `Niv. ${cs.unlockLevel}`}</small>`
+        + `</div>`;
+    }).join('');
+
     const profileTabHtml = `
       <div class="acc-xp-hero">
         <div class="acc-xp-top">
@@ -543,6 +598,11 @@ export function installAccount(game, { hud, sfx, onProfileChange }) {
           </div>
         </div>
         <div class="acc-xp-bar-lg"><i style="width:${info.pct}%"></i></div>
+      </div>
+
+      <div class="acc-section">
+        <div class="acc-sec-title">👥 SURVIVANTS DÉBLOQUÉS (${unlockedCount} / ${CHARACTERS.length})</div>
+        <div class="acc-chars-strip">${charsLadderHtml}</div>
       </div>
 
       <div class="acc-stats-grid">
@@ -716,6 +776,7 @@ export function installAccount(game, { hud, sfx, onProfileChange }) {
   }
 
   renderAll();
+  onLevelChange?.(levelInfo(state.stats.xp).level);
 
   // Vérification silencieuse de la session serveur au chargement (mode hybride)
   if (state.mode === 'account' && state.token) {
