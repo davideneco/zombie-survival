@@ -2046,19 +2046,62 @@ installBarrels(game, { scene, world, sfx }); // explosive barrels next to them (
 installTransfer(game, { world, hud, sfx, scene }); // tram Gare Centrale <-> Homme de Fer (v0.79.0)
 installBridge(game, { world, hud, sfx }); // gate + bridge to the Krutenau district (district/bridge.js)
 installTiles(game, { world, scene, camera }); // world tiles outside the island core, streamed around the local camera (step B, tiles.js)
+const START_LABELS = {
+  intro: 'TGV inOui 9572 — arrivée en gare (intro)',
+  gare: 'Gare Centrale (quai 1)',
+  island: 'Grande Île — lieu aléatoire',
+};
+let portraitUrls = [];
+const syncTitleLoadout = () => {
+  const ch = charOf(game.charPref);
+  const nameEl = document.getElementById('titleCharName');
+  const startEl = document.getElementById('titleStartLabel');
+  const imgEl = document.getElementById('titleCharImg');
+  if (nameEl && ch) {
+    nameEl.textContent = `${ch.name} · ${ch.role}`;
+    nameEl.style.color = ch.accent || '#fff';
+  }
+  if (startEl) startEl.textContent = `Départ : ${START_LABELS[game.startArea] || START_LABELS.island}`;
+  if (imgEl && portraitUrls[game.charPref]) imgEl.src = portraitUrls[game.charPref];
+};
 { // menu : « Départ » (train intro / Gare Centrale / Grande Île au hasard), remembered locally ; default CONFIG.start (v0.81.0)
   const sel = document.getElementById('startArea'), qs = new URLSearchParams(location.search);
+  const pickBtns = [...document.querySelectorAll('#spawnPicks .spawn-pick')];
   const ok = (v) => (v === 'intro' ? !!game.introAvailable : v === 'gare' ? !!world.gare : v === 'island');
   let v = localStorage.getItem('zombie_start') || (CONFIG.start === 'classic' ? 'island' : CONFIG.start);
   if (qs.has('debug')) v = qs.has('intro') ? 'intro' : qs.has('gare') ? 'gare' : 'island'; // ?debug alone : the classic start (test harness)
   if (!ok(v)) v = ok('intro') ? 'intro' : 'island';
   game.startArea = v;
+  const syncSpawnUi = () => {
+    if (sel) sel.value = game.startArea;
+    for (const b of pickBtns) {
+      const val = b.dataset.spawn;
+      b.disabled = !world.gare || !ok(val);
+      b.classList.toggle('sel', val === game.startArea);
+    }
+    syncTitleLoadout();
+  };
   if (sel) {
     for (const o of sel.options) o.disabled = !ok(o.value);
-    sel.value = v;
     sel.disabled = !world.gare;
-    sel.addEventListener('change', () => { game.startArea = sel.value; game.activeSpawn = null; try { localStorage.setItem('zombie_start', sel.value); } catch { /* private mode */ } });
+    sel.addEventListener('change', () => {
+      game.startArea = sel.value;
+      game.activeSpawn = null;
+      try { localStorage.setItem('zombie_start', sel.value); } catch { /* private mode */ }
+      syncSpawnUi();
+    });
   }
+  for (const b of pickBtns) {
+    b.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (b.disabled) return;
+      game.startArea = b.dataset.spawn;
+      game.activeSpawn = null;
+      try { localStorage.setItem('zombie_start', game.startArea); } catch { /* private mode */ }
+      syncSpawnUi();
+    });
+  }
+  syncSpawnUi();
 }
 game.initVehicles();
 game.initTrams();
@@ -2077,13 +2120,21 @@ game.player.setCharacter(charOf(game.charPref));
         game.charPref = i; localStorage.setItem('zombie_char', String(i));
         game.player.setCharacter(ch);
         cards.forEach((x, k) => x.classList.toggle('sel', k === i));
+        syncTitleLoadout();
       });
       row.appendChild(c);
       return c;
     });
     cards[game.charPref].classList.add('sel');
+    syncTitleLoadout();
     // les portraits sont dessinés juste après le premier affichage (un petit contexte WebGL à part)
-    setTimeout(() => { try { renderPortraits(200).forEach((u, i) => { cards[i].querySelector('img').src = u; }); } catch (err) { console.warn('portraits', err); } }, 400);
+    setTimeout(() => {
+      try {
+        portraitUrls = renderPortraits(200);
+        portraitUrls.forEach((u, i) => { cards[i].querySelector('img').src = u; });
+        syncTitleLoadout();
+      } catch (err) { console.warn('portraits', err); }
+    }, 400);
   }
 }
 
@@ -2927,19 +2978,36 @@ window.addEventListener('keydown', (e) => {
 
 // « Effets cinéma » : vignette et grain (CSS) et, en qualité Haute, la table de couleurs
 const btnCinema = document.getElementById('btnCinema');
-const syncCinema = () => { btnCinema.textContent = `EFFETS CINÉMA : ${settings.cinema !== false ? 'OUI' : 'NON'}`; };
+const syncCinema = () => {
+  const on = settings.cinema !== false;
+  btnCinema.textContent = `EFFETS CINÉMA : ${on ? 'OUI' : 'NON'}`;
+  btnCinema.classList.toggle('is-on', on);
+  btnCinema.classList.toggle('is-off', !on);
+};
 btnCinema.addEventListener('click', () => { settings.cinema = settings.cinema === false; syncCinema(); gfx.applyCinema(); game.saveSettings(); });
 syncCinema();
 // « Halo lumineux » (qualité Haute) : fenêtres, lampadaires et flammes rayonnent ; désactivable
 const btnHalo = document.getElementById('btnHalo');
-const syncHalo = () => { btnHalo.textContent = `HALO (HAUTE) : ${settings.halo !== false ? 'OUI' : 'NON'}`; };
+const syncHalo = () => {
+  const on = settings.halo !== false;
+  btnHalo.textContent = `HALO (HAUTE) : ${on ? 'OUI' : 'NON'}`;
+  btnHalo.classList.toggle('is-on', on);
+  btnHalo.classList.toggle('is-off', !on);
+};
 btnHalo.addEventListener('click', () => { settings.halo = settings.halo === false; syncHalo(); gfx.applyHalo(); game.saveSettings(); });
 syncHalo();
 
 // Cycle jour / nuit (summit.js) : auto (le temps passe), toujours nuit, toujours jour ; effectif dès la prochaine partie pour l'heure de départ, tout de suite pour le ciel
 const btnDay = document.getElementById('btnDayCycle');
 const DAY_LABELS = { auto: 'AUTO', night: 'TOUJOURS NUIT', day: 'TOUJOURS JOUR' };
-const syncDay = () => { if (btnDay) btnDay.textContent = `CYCLE JOUR / NUIT : ${DAY_LABELS[settings.dayCycle] || 'AUTO'}`; };
+const syncDay = () => {
+  if (!btnDay) return;
+  const v = settings.dayCycle || 'auto';
+  btnDay.textContent = `CYCLE JOUR / NUIT : ${DAY_LABELS[v] || 'AUTO'}`;
+  btnDay.classList.toggle('is-on', v === 'day');
+  btnDay.classList.toggle('is-alt', v === 'auto');
+  btnDay.classList.toggle('is-off', v === 'night');
+};
 if (btnDay) btnDay.addEventListener('click', () => { settings.dayCycle = settings.dayCycle === 'auto' ? 'night' : settings.dayCycle === 'night' ? 'day' : 'auto'; syncDay(); game.saveSettings(); });
 syncDay();
 const clockEl = document.getElementById('clock');
@@ -2951,18 +3019,48 @@ const updateClock = () => { // horloge du HUD (auto seulement)
 };
 
 const btnGearbox = document.getElementById('btnGearbox');
-const syncGearbox = () => { if (btnGearbox) btnGearbox.textContent = `BOÎTE DE VITESSES : ${settings.manualGearbox ? 'MANUELLE' : 'AUTOMATIQUE'}`; };
+const syncGearbox = () => {
+  if (!btnGearbox) return;
+  const man = !!settings.manualGearbox;
+  btnGearbox.textContent = `BOÎTE DE VITESSES : ${man ? 'MANUELLE' : 'AUTOMATIQUE'}`;
+  btnGearbox.classList.toggle('is-on', man);
+  btnGearbox.classList.toggle('is-alt', !man);
+};
 game.syncGearboxBtn = syncGearbox;
 if (btnGearbox) {
   btnGearbox.addEventListener('click', () => { settings.manualGearbox = !settings.manualGearbox; syncGearbox(); game.saveSettings(); });
 }
 syncGearbox();
 
+// Réinitialiser toutes les options (sauf les liaisons de touches qui ont leur propre bouton dans Touches)
+document.getElementById('btnOptReset')?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  Object.assign(settings, DEFAULT_SETTINGS);
+  for (const [key, input] of Object.entries(optInputs)) {
+    input.value = settings[key];
+    input.nextElementSibling.textContent = optFormat[key](settings[key]);
+  }
+  appliedQuality = null;
+  applyVisualSettings();
+  sfx.setVolume(settings.volume);
+  sfx.setMusicVolume(settings.music);
+  syncCinema(); gfx.applyCinema();
+  syncHalo(); gfx.applyHalo();
+  syncDay();
+  syncGearbox();
+  game.chat?.setVisible?.(settings.chat !== false);
+  game.chat?.syncButton?.();
+  game.saveSettings();
+});
+
 const openOptions = (back) => game.ui.openOptions(back);
 
 hud.el.titlePanel.addEventListener('click', (e) => e.stopPropagation());
+hud.el.menuPanel.addEventListener('click', (e) => e.stopPropagation());
 hud.el.pausePanel.addEventListener('click', (e) => e.stopPropagation());
 hud.el.optionsPanel.addEventListener('click', (e) => e.stopPropagation());
+document.getElementById('btnQuickSolo')?.addEventListener('click', (e) => { e.stopPropagation(); hud.el.btnSolo.click(); });
+document.getElementById('btnTitleEdit')?.addEventListener('click', (e) => { e.stopPropagation(); hud.showPanel('menuPanel'); });
 document.getElementById('btnPlay').addEventListener('click', () => hud.showPanel('menuPanel'));
 document.getElementById('btnOptions').addEventListener('click', () => openOptions('titlePanel'));
 document.getElementById('btnPauseOptions').addEventListener('click', () => openOptions('pausePanel'));

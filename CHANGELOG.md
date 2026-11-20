@@ -2,6 +2,15 @@
 
 Chaque changement est poussé sur `main` (déploiement Render) avec un nouveau numéro de version et sa description ici.
 
+## v0.106.0 (2026-11-20)
+- **Refonte complète du menu d'accueil en hub tactique à 2 colonnes** (`index.html`, `src/hud.js`, `src/main.js`) :
+  - Présentation immersive sur verre dépoli laissant deviner Strasbourg en arrière-plan, badge de zone actif, résumé en direct du survivant (portrait + rôle) et du point de départ sélectionné avec raccourci « MODIFIER ».
+  - Bouton d'action directe **▶ LANCER EN SOLO** en 1 clic, accès **⚔ ESCOUADE · CO-OP & DÉPART**, options et lecteur de piste audio.
+  - Panneau **Opération Strasbourg** mettant en avant les points forts du jeu (intro TGV 6 km, Cathédrale & Pack-a-Punch, 23 armes & Atelier `[T]`, véhicules, tram & vision nocturne) et les raccourcis essentiels.
+- **Écran Préparation & Déploiement réorganisé en 2 colonnes** : choix du pseudo et des 8 survivants en grille 4×2 à gauche, cartes visuelles cliquables pour le point d'insertion (Intro TGV / Gare Centrale / Grande Île), lancement solo, création et code de salon co-op à droite, plus bannière d'alerte dédiée en cas d'erreur réseau.
+- **Refonte du menu Options en tableau de bord 2×2 catégorisé** (*Graphismes & Ambiance*, *Caméra, Conduite & Écran*, *Audio & Bande-son*, *Interface & Touches*) : zéro défilement en 720p, boutons-interrupteurs colorés selon l'état actif/inactif, accès direct **⚙ CONFIGURER LES TOUCHES**, nouveau bouton **↺ RÉINITIALISER** par défaut, et menu **Pause** harmonisé.
+- Vérifié : `npx vite build`, exécution complète dans Chromium headless (`Total errors: 0`), vérifications interactives du hub d'accueil, du changement de survivant et de départ synchronisé, des bascules d'options + réinitialisation, de l'ouverture/fermeture du menu Touches, du lancement solo rapide (`btnQuickSolo`) et du menu Pause, ainsi qu'inspection visuelle des 4 captures d'écran en 1280×720. / Non vérifié : test manuel à la souris/clavier dans un navigateur utilisateur et création/rejoindre d'un salon co-op en réseau réel.
+
 ## v0.105.0 (2026-11-20)
 - **Correction des murs invisibles (boîtes mystères inactives)** : les 27 emplacements inactifs de la Boîte Mystère (notamment rue des Orfèvres et place du Marché-Neuf) ne créent plus de collision statique invisible ; seule la Boîte Mystère actuellement active et visible possède une boîte de collision dynamique synchronisée lors de chaque déplacement.
 - **Façade occidentale fidèle de la cathédrale Notre-Dame de Strasbourg** (`src/cath/westFacade.js`) : modélisation complète sur l'emprise réelle OSM en grès rose des Vosges :

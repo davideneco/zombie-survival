@@ -178,6 +178,8 @@ export function installUi(game, { hud, canvas, lockAndPlay }) {
       if (!btnFs) return;
       const fs = !!document.fullscreenElement, lock = !!navigator.keyboard?.lock;
       btnFs.textContent = fs ? 'PLEIN ÉCRAN : OUI' : 'PLEIN ÉCRAN : NON';
+      btnFs.classList.toggle('is-on', fs);
+      btnFs.classList.toggle('is-off', !fs);
       btnFs.title = lock ? 'En plein écran, Échap ouvre la pause sans libérer la souris (maintenir Échap pour quitter le plein écran)' : 'Ce navigateur ne permet pas de verrouiller Échap : il libérera la souris';
     },
   };

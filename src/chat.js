@@ -207,7 +207,14 @@ export function installChat(game, { hud, sfx, canvas }) {
   canvas.addEventListener('click', () => { if (S.open) chat.close({ send: false, relock: false }); });
 
   // ---------------------------------------------------------------- option « Afficher le chat »
-  function syncButton() { if (btnShow) btnShow.textContent = `AFFICHER LE CHAT : ${visible() ? 'OUI' : 'NON'}`; }
+  function syncButton() {
+    if (!btnShow) return;
+    const on = visible();
+    btnShow.textContent = `AFFICHER LE CHAT : ${on ? 'OUI' : 'NON'}`;
+    btnShow.classList.toggle('is-on', on);
+    btnShow.classList.toggle('is-off', !on);
+  }
+  chat.syncButton = syncButton;
   if (btnShow) btnShow.addEventListener('click', (e) => { e.stopPropagation(); chat.setVisible(!visible()); });
   syncButton();
   return chat;

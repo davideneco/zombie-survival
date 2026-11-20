@@ -977,6 +977,15 @@ export class Hud {
     }
     this.el.overlay.classList.toggle('keysOpen', name === 'keysPanel'); // le menu Touches prend toute la place (titre masqué)
     this.el.overlay.classList.toggle('optionsOpen', name === 'optionsPanel'); // options : titre masqué sur les petits écrans
+    this.el.overlay.classList.toggle('is-title', name === 'titlePanel');
+    this.el.overlay.classList.toggle('is-menu', name === 'menuPanel');
+    this.el.overlay.classList.toggle('is-pause', name === 'pausePanel');
+    this.el.overlay.classList.toggle('is-options', name === 'optionsPanel');
+    this.el.overlay.classList.toggle('is-resume', false);
+    if (name === 'titlePanel') {
+      const notice = document.getElementById('menuNotice');
+      if (notice) notice.classList.add('hidden');
+    }
   }
 
   showMenu(title, text) {
@@ -984,6 +993,15 @@ export class Hud {
     this.el.ovTitle.textContent = title;
     this.el.ovText.innerHTML = text;
     this.el.ovBtn.classList.add('hidden');
+    const notice = document.getElementById('menuNotice');
+    if (notice) {
+      if (title && title !== 'ZOMBIE SURVIVAL') {
+        notice.innerHTML = `<b>${title} :</b> ${text}`;
+        notice.classList.remove('hidden');
+      } else {
+        notice.classList.add('hidden');
+      }
+    }
     this.showPanel('titlePanel');
     this.el.overlay.classList.remove('hidden');
   }
@@ -992,7 +1010,9 @@ export class Hud {
     this.screenTitle = title; // écran à bouton en cours (lu par ui.js pour la pile de couches)
     this.el.ovTitle.textContent = title;
     this.el.ovText.innerHTML = text;
+    document.getElementById('menuNotice')?.classList.add('hidden');
     this.showPanel(null);
+    this.el.overlay.classList.toggle('is-resume', Boolean(btn));
     if (btn) {
       this.el.ovBtn.textContent = btn;
       this.el.ovBtn.classList.remove('hidden');
