@@ -166,9 +166,9 @@ export const CONFIG = {
     mg42: { id: 'mg42', cat: 'mg', name: 'MG42', cal: '792x57', mod: 0.8, headMult: 2, type: 'auto', magSize: 50, startReserve: 250, maxReserve: 450, fireRate: 20, reloadTime: 5, spread: 0.04, range: 90, price: 4000, ammoPrice: 1200 },
     pkm: { id: 'pkm', cat: 'mg', name: 'PKM', cal: '762x54r', mod: 0.8, headMult: 2, type: 'auto', magSize: 100, startReserve: 300, maxReserve: 500, fireRate: 10.5, reloadTime: 4.8, spread: 0.03, range: 100, price: 3200, ammoPrice: 1300 },
     // ---- fusils de précision
-    sniper: { id: 'sniper', cat: 'sniper', name: 'L96A1', cal: '762match', type: 'semi', magSize: 5, startReserve: 30, maxReserve: 45, fireRate: 1.1, reloadTime: 2.8, spread: 0.0015, range: 200, adsFov: 25, price: 1750, ammoPrice: 700 },
-    svd: { id: 'svd', cat: 'sniper', name: 'DRAGUNOV SVD', cal: '762x54r7n1', type: 'semi', magSize: 10, startReserve: 40, maxReserve: 70, fireRate: 3, reloadTime: 2.6, spread: 0.004, range: 180, adsFov: 28, price: 2000, ammoPrice: 800 },
-    barrett: { id: 'barrett', cat: 'sniper', name: 'BARRETT M82', cal: '50bmg', type: 'semi', magSize: 10, startReserve: 30, maxReserve: 50, fireRate: 1.2, reloadTime: 3.4, spread: 0.002, range: 220, adsFov: 20, price: 5000, ammoPrice: 1500 },
+    sniper: { id: 'sniper', cat: 'sniper', name: 'L96A1', cal: '762match', type: 'semi', magSize: 5, startReserve: 30, maxReserve: 45, fireRate: 1.1, reloadTime: 2.8, spread: 0.0015, range: 200, adsFov: 25, zoomMult: 5.0, price: 1750, ammoPrice: 700 },
+    svd: { id: 'svd', cat: 'sniper', name: 'DRAGUNOV SVD', cal: '762x54r7n1', type: 'semi', magSize: 10, startReserve: 40, maxReserve: 70, fireRate: 3, reloadTime: 2.6, spread: 0.004, range: 180, adsFov: 28, zoomMult: 4.0, price: 2000, ammoPrice: 800 },
+    barrett: { id: 'barrett', cat: 'sniper', name: 'BARRETT M82', cal: '50bmg', type: 'semi', magSize: 10, startReserve: 30, maxReserve: 50, fireRate: 1.2, reloadTime: 3.4, spread: 0.002, range: 220, adsFov: 20, zoomMult: 6.0, price: 5000, ammoPrice: 1500 },
     // ---- fusil à pompe et arme spéciale
     shotgun: { id: 'shotgun', cat: 'shotgun', name: 'REMINGTON 870', cal: '12ga', type: 'shotgun', pellets: 8, magSize: 6, startReserve: 30, maxReserve: 48, fireRate: 1.3, reloadTime: 2.4, spread: 0.046, range: 35, price: 750, ammoPrice: 350 },
     // fusil semi-automatique à pompe de salon : une salve de 8 plombs par clic ; au mur de Saint-Thomas (3000 pts) et dans la boîte mystère
@@ -208,13 +208,14 @@ export const CONFIG = {
   // Arme au départ : un seul pistolet de base, tiré au hasard dans cette liste pour chaque joueur (v0.85.1)
   startPistols: ['m1911', 'arex'],
 
-  // Accessoires d'armes (v0.103.0 / atelier [T] v0.104.0) : achetables et modifiables sur chaque arme dans l'atelier [T],
-  // et tirés en bonus aléatoire sur les armes récupérées. Compatibles avec les 23 armes (optic, muzzle, mag, under).
+  // Accessoires d'armes (atelier [T]) : débloqués selon le niveau XP du joueur et achetables en points dans l'atelier [T].
+  // Aucun accessoire aléatoire gratuit par défaut (roll.enabled = false) ; compatibles avec les 23 armes (optic, muzzle, mag, under).
   attachments: {
     roll: {
-      start: { min: 0, max: 1, slotChance: 0.3 },
-      wall:  { min: 0, max: 1, slotChance: 0.4 },
-      box:   { min: 1, max: 2, slotChance: 0.65 },
+      enabled: false,
+      start: { min: 0, max: 0, slotChance: 0 },
+      wall:  { min: 0, max: 0, slotChance: 0 },
+      box:   { min: 0, max: 0, slotChance: 0 },
     },
     slots: ['optic', 'muzzle', 'mag', 'under'],
     slotLabels: {
@@ -224,35 +225,36 @@ export const CONFIG = {
       under:  'SOUS-CANON / TACTIQUE',
     },
     defs: {
-      // ---- viseurs / optiques
-      redDot:      { slot: 'optic',  price: 500,  name: 'Viseur point rouge',    short: 'POINT ROUGE',   spreadMult: 0.86, headMult: 1.06, adsFovDelta: -5,  cats: ['pistol', 'ar', 'smg', 'mg', 'shotgun', 'special'] },
-      holo:        { slot: 'optic',  price: 750,  name: 'Viseur holographique',  short: 'HOLO',          spreadMult: 0.80, recoilMult: 0.90, headMult: 1.10, adsFovDelta: -7, cats: ['ar', 'smg', 'mg', 'shotgun', 'special'], ids: ['rifle', 'ak47', 'famas', 'scar', 'smg', 'mp5', 'p90', 'lmg', 'm249', 'mg42', 'pkm', 'shotgun', 'saiga', 'crossbow', 'm79', 'raygun', 'deagle'] },
-      acog:        { slot: 'optic',  price: 1100, name: 'Lunette ACOG ×2,5',     short: 'ACOG ×2,5',     spreadMult: 0.72, rangeMult: 1.18, headMult: 1.15, damageMult: 1.05, adsFovDelta: -16, ids: ['rifle', 'ak47', 'famas', 'scar', 'lmg', 'm249', 'mg42', 'pkm', 'crossbow'] },
-      thermal:     { slot: 'optic',  price: 1250, name: 'Lunette balistique ×8', short: 'BALISTIQUE',    spreadMult: 0.70, rangeMult: 1.25, headMult: 1.25, damageMult: 1.08, adsFovDelta: -8, cats: ['sniper'] },
+      // ---- viseurs / optiques (chaque optique a sa propre visée et son niveau de zoom)
+      redDot:      { slot: 'optic',  unlockLevel: 1,  price: 500,  name: 'Viseur point rouge ×1,45', short: 'POINT ROUGE',   sightType: 'redDot',  zoomMult: 1.45, spreadMult: 0.86, headMult: 1.06, cats: ['pistol', 'ar', 'smg', 'mg', 'shotgun', 'special'] },
+      holo:        { slot: 'optic',  unlockLevel: 3,  price: 750,  name: 'Viseur holographique ×1,75', short: 'HOLO ×1,75',  sightType: 'holo',    zoomMult: 1.75, spreadMult: 0.80, recoilMult: 0.90, headMult: 1.10, cats: ['ar', 'smg', 'mg', 'shotgun', 'special'], ids: ['rifle', 'ak47', 'famas', 'scar', 'smg', 'mp5', 'p90', 'lmg', 'm249', 'mg42', 'pkm', 'shotgun', 'saiga', 'crossbow', 'm79', 'raygun', 'deagle'] },
+      acog:        { slot: 'optic',  unlockLevel: 6,  price: 1100, name: 'Lunette ACOG ×3',          short: 'ACOG ×3',       sightType: 'acog',    zoomMult: 3.0,  spreadMult: 0.72, rangeMult: 1.18, headMult: 1.16, damageMult: 1.05, ids: ['rifle', 'ak47', 'famas', 'scar', 'mp5', 'p90', 'lmg', 'm249', 'mg42', 'pkm', 'crossbow'] },
+      scope4x:     { slot: 'optic',  unlockLevel: 8,  price: 1250, name: 'Lunette tactique ×4',      short: 'LUNETTE ×4',    sightType: 'scope4x', zoomMult: 4.0,  spreadMult: 0.66, rangeMult: 1.25, headMult: 1.22, damageMult: 1.08, ids: ['rifle', 'ak47', 'famas', 'scar', 'lmg', 'm249', 'mg42', 'pkm', 'crossbow'] },
+      thermal:     { slot: 'optic',  unlockLevel: 10, price: 1400, name: 'Lunette balistique ×8',    short: 'BALIST. ×8',    sightType: 'thermal', zoomMult: 8.0,  spreadMult: 0.64, rangeMult: 1.30, headMult: 1.28, damageMult: 1.10, cats: ['sniper'] },
       // ---- bouche / canon
-      suppressor:  { slot: 'muzzle', price: 850,  name: 'Silencieux tactique',   short: 'SILENCIEUX',    silenced: true, recoilMult: 0.80, spreadMult: 0.88, headMult: 1.08, cats: ['pistol', 'ar', 'smg', 'sniper'], exclude: ['magnum'] },
-      compensator: { slot: 'muzzle', price: 650,  name: 'Compensateur',          short: 'COMPENSATEUR',  recoilMult: 0.74, spreadMult: 0.86, fireRateMult: 1.06, cats: ['pistol', 'ar', 'smg', 'mg'] },
-      muzzleBrake: { slot: 'muzzle', price: 800,  name: 'Frein de bouche',       short: 'FREIN BOUCHE',  recoilMult: 0.70, rangeMult: 1.12, damageMult: 1.06, cats: ['ar', 'mg', 'sniper'] },
-      heavyBarrel: { slot: 'muzzle', price: 1200, name: 'Canon lourd renforcé',  short: 'CANON LOURD',   damageMult: 1.16, rangeMult: 1.20, recoilMult: 0.88, spreadMult: 0.90, cats: ['pistol', 'ar', 'smg', 'mg', 'sniper'] },
-      choke:       { slot: 'muzzle', price: 750,  name: 'Choke tactique',        short: 'CHOKE',         spreadMult: 0.74, rangeMult: 1.22, damageMult: 1.12, cats: ['shotgun'] },
-      warhead:     { slot: 'muzzle', price: 1100, name: 'Pointes renforcées',    short: 'POINTES +',     damageMult: 1.25, rangeMult: 1.20, headMult: 1.15, ids: ['crossbow'] },
-      bigMuzzle:   { slot: 'muzzle', price: 1200, name: 'Bouche haute pression', short: 'HAUTE PRESS.',  damageMult: 1.24, rangeMult: 1.20, recoilMult: 0.85, ids: ['m79'] },
-      coil:        { slot: 'muzzle', price: 1400, name: 'Bobine survoltée',      short: 'BOBINE +',      damageMult: 1.22, fireRateMult: 1.15, rangeMult: 1.15, ids: ['raygun'] },
+      compensator: { slot: 'muzzle', unlockLevel: 1,  price: 650,  name: 'Compensateur',          short: 'COMPENSATEUR',  recoilMult: 0.74, spreadMult: 0.86, fireRateMult: 1.06, cats: ['pistol', 'ar', 'smg', 'mg'] },
+      choke:       { slot: 'muzzle', unlockLevel: 2,  price: 750,  name: 'Choke tactique',        short: 'CHOKE',         spreadMult: 0.74, rangeMult: 1.22, damageMult: 1.12, cats: ['shotgun'] },
+      muzzleBrake: { slot: 'muzzle', unlockLevel: 4,  price: 800,  name: 'Frein de bouche',       short: 'FREIN BOUCHE',  recoilMult: 0.70, rangeMult: 1.12, damageMult: 1.06, cats: ['ar', 'mg', 'sniper'] },
+      suppressor:  { slot: 'muzzle', unlockLevel: 5,  price: 850,  name: 'Silencieux tactique',   short: 'SILENCIEUX',    silenced: true, recoilMult: 0.80, spreadMult: 0.88, headMult: 1.08, cats: ['pistol', 'ar', 'smg', 'sniper'], exclude: ['magnum'] },
+      warhead:     { slot: 'muzzle', unlockLevel: 6,  price: 1100, name: 'Pointes renforcées',    short: 'POINTES +',     damageMult: 1.25, rangeMult: 1.20, headMult: 1.15, ids: ['crossbow'] },
+      bigMuzzle:   { slot: 'muzzle', unlockLevel: 8,  price: 1200, name: 'Bouche haute pression', short: 'HAUTE PRESS.',  damageMult: 1.24, rangeMult: 1.20, recoilMult: 0.85, ids: ['m79'] },
+      heavyBarrel: { slot: 'muzzle', unlockLevel: 9,  price: 1200, name: 'Canon lourd renforcé',  short: 'CANON LOURD',   damageMult: 1.16, rangeMult: 1.20, recoilMult: 0.88, spreadMult: 0.90, cats: ['pistol', 'ar', 'smg', 'mg', 'sniper'] },
+      coil:        { slot: 'muzzle', unlockLevel: 12, price: 1400, name: 'Bobine survoltée',      short: 'BOBINE +',      damageMult: 1.22, fireRateMult: 1.15, rangeMult: 1.15, ids: ['raygun'] },
       // ---- chargeurs / munitions
-      extMag:      { slot: 'mag',    price: 700,  name: 'Chargeur grande capacité', short: 'CHARGEUR XL', magMult: 1.45, reserveMult: 1.30, reloadMult: 1.05, cats: ['pistol', 'ar', 'smg', 'sniper'], exclude: ['magnum'] },
-      fastMag:     { slot: 'mag',    price: 650,  name: 'Chargeur rapide',       short: 'CHARG. RAPIDE', magMult: 1.15, reloadMult: 0.72, fireRateMult: 1.05, cats: ['pistol', 'ar', 'smg', 'sniper'], exclude: ['magnum', 'p90'] },
-      drum:        { slot: 'mag',    price: 1250, name: 'Chargeur tambour',      short: 'TAMBOUR',       magMult: 1.80, reserveMult: 1.40, reloadMult: 1.12, ids: ['rifle', 'ak47', 'famas', 'scar', 'smg', 'mp5', 'saiga', 'lmg'] },
-      tubeExt:     { slot: 'mag',    price: 850,  name: 'Tube-magasin allongé',  short: 'TUBE +3',       magMult: 1.50, reserveMult: 1.30, reloadMult: 0.90, ids: ['shotgun'] },
-      speedloader: { slot: 'mag',    price: 850,  name: 'Barillet rapide',       short: 'SPEEDLOADER',   magMult: 1.33, reserveMult: 1.25, reloadMult: 0.65, fireRateMult: 1.10, ids: ['magnum'] },
-      belt:        { slot: 'mag',    price: 1300, name: 'Bande renforcée',       short: 'BANDE XL',      magMult: 1.45, reserveMult: 1.35, damageMult: 1.06, ids: ['m249', 'mg42', 'pkm'] },
-      quiver:      { slot: 'mag',    price: 950,  name: 'Carquois tactique',     short: 'CARQUOIS',      magMult: 2.0,  reserveMult: 1.45, reloadMult: 0.72, ids: ['crossbow'] },
-      m79Drum:     { slot: 'mag',    price: 1450, name: 'Barillet 3 coups',      short: 'BARILLET ×3',   magMult: 3.0,  reserveMult: 1.40, fireRateMult: 1.25, ids: ['m79'] },
-      twinBulb:    { slot: 'mag',    price: 1300, name: 'Cellules plasma XL',    short: 'PLASMA XL',     magMult: 1.50, reserveMult: 1.35, reloadMult: 0.82, ids: ['raygun'] },
+      fastMag:     { slot: 'mag',    unlockLevel: 2,  price: 650,  name: 'Chargeur rapide',       short: 'CHARG. RAPIDE', magMult: 1.15, reloadMult: 0.72, fireRateMult: 1.05, cats: ['pistol', 'ar', 'smg', 'sniper'], exclude: ['magnum', 'p90'] },
+      extMag:      { slot: 'mag',    unlockLevel: 3,  price: 700,  name: 'Chargeur grande capacité', short: 'CHARGEUR XL', magMult: 1.45, reserveMult: 1.30, reloadMult: 1.05, cats: ['pistol', 'ar', 'smg', 'sniper'], exclude: ['magnum'] },
+      tubeExt:     { slot: 'mag',    unlockLevel: 4,  price: 850,  name: 'Tube-magasin allongé',  short: 'TUBE +3',       magMult: 1.50, reserveMult: 1.30, reloadMult: 0.90, ids: ['shotgun'] },
+      speedloader: { slot: 'mag',    unlockLevel: 4,  price: 850,  name: 'Barillet rapide',       short: 'SPEEDLOADER',   magMult: 1.33, reserveMult: 1.25, reloadMult: 0.65, fireRateMult: 1.10, ids: ['magnum'] },
+      quiver:      { slot: 'mag',    unlockLevel: 5,  price: 950,  name: 'Carquois tactique',     short: 'CARQUOIS',      magMult: 2.0,  reserveMult: 1.45, reloadMult: 0.72, ids: ['crossbow'] },
+      drum:        { slot: 'mag',    unlockLevel: 8,  price: 1250, name: 'Chargeur tambour',      short: 'TAMBOUR',       magMult: 1.80, reserveMult: 1.40, reloadMult: 1.12, ids: ['rifle', 'ak47', 'famas', 'scar', 'smg', 'mp5', 'saiga', 'lmg'] },
+      belt:        { slot: 'mag',    unlockLevel: 9,  price: 1300, name: 'Bande renforcée',       short: 'BANDE XL',      magMult: 1.45, reserveMult: 1.35, damageMult: 1.06, ids: ['m249', 'mg42', 'pkm'] },
+      twinBulb:    { slot: 'mag',    unlockLevel: 11, price: 1300, name: 'Cellules plasma XL',    short: 'PLASMA XL',     magMult: 1.50, reserveMult: 1.35, reloadMult: 0.82, ids: ['raygun'] },
+      m79Drum:     { slot: 'mag',    unlockLevel: 12, price: 1450, name: 'Barillet 3 coups',      short: 'BARILLET ×3',   magMult: 3.0,  reserveMult: 1.40, fireRateMult: 1.25, ids: ['m79'] },
       // ---- sous-canon / tactique
-      foregrip:    { slot: 'under',  price: 650,  name: 'Poignée verticale',     short: 'POIGNÉE',       recoilMult: 0.72, spreadMult: 0.84, fireRateMult: 1.05, cats: ['ar', 'smg', 'mg'] },
-      laser:       { slot: 'under',  price: 600,  name: 'Pointeur laser',        short: 'LASER',         hipSpreadMult: 0.58, spreadMult: 0.92, headMult: 1.08, cats: ['pistol', 'ar', 'smg', 'mg', 'sniper', 'shotgun', 'special'] },
-      tacLight:    { slot: 'under',  price: 550,  name: 'Lampe tactique',        short: 'LAMPE TAC.',    hipSpreadMult: 0.78, recoilMult: 0.88, reloadMult: 0.92, ids: ['shotgun', 'saiga', 'rifle', 'ak47', 'scar', 'mp5', 'p90', 'm1911', 'arex', 'deagle', 'magnum', 'crossbow', 'm79', 'raygun'] },
-      shells:      { slot: 'under',  price: 900,  name: 'Cartouchière de crosse', short: 'CARTOUCHIÈRE', reloadMult: 0.74, reserveMult: 1.25, damageMult: 1.06, ids: ['shotgun', 'saiga', 'sniper', 'svd', 'barrett'] },
+      tacLight:    { slot: 'under',  unlockLevel: 1,  price: 550,  name: 'Lampe tactique',        short: 'LAMPE TAC.',    hipSpreadMult: 0.78, recoilMult: 0.88, reloadMult: 0.92, ids: ['shotgun', 'saiga', 'rifle', 'ak47', 'scar', 'mp5', 'p90', 'm1911', 'arex', 'deagle', 'magnum', 'crossbow', 'm79', 'raygun'] },
+      laser:       { slot: 'under',  unlockLevel: 2,  price: 600,  name: 'Pointeur laser',        short: 'LASER',         hipSpreadMult: 0.58, spreadMult: 0.92, headMult: 1.08, cats: ['pistol', 'ar', 'smg', 'mg', 'sniper', 'shotgun', 'special'] },
+      foregrip:    { slot: 'under',  unlockLevel: 4,  price: 650,  name: 'Poignée verticale',     short: 'POIGNÉE',       recoilMult: 0.72, spreadMult: 0.84, fireRateMult: 1.05, cats: ['ar', 'smg', 'mg'] },
+      shells:      { slot: 'under',  unlockLevel: 7,  price: 900,  name: 'Cartouchière de crosse', short: 'CARTOUCHIÈRE', reloadMult: 0.74, reserveMult: 1.25, damageMult: 1.06, ids: ['shotgun', 'saiga', 'sniper', 'svd', 'barrett'] },
     },
   },
 
@@ -1351,6 +1353,13 @@ export function falloffMult(cfg, dist) {
   if (cfg.falloffStart == null || dist <= cfg.falloffStart) return 1;
   if (dist >= cfg.falloffEnd) return cfg.minMult;
   return 1 - (1 - cfg.minMult) * (dist - cfg.falloffStart) / (cfg.falloffEnd - cfg.falloffStart);
+}
+
+// Vérifie si un accessoire d'arme est débloqué pour le niveau XP donné
+export function isAttachmentUnlocked(accId, level = 1, unlockAll = false) {
+  if (unlockAll) return true;
+  const req = CONFIG.attachments?.defs?.[accId]?.unlockLevel ?? 1;
+  return (level | 0) >= req;
 }
 
 // Contrôle de cohérence, en mode ?debug uniquement

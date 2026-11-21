@@ -57,6 +57,11 @@ export class Hud {
       nvgBadge: $('nvgBadge'),
       nvgFlash: $('nvgFlash'),
       gunsmithHint: $('gunsmithHint'),
+      crosshair: $('crosshair'),
+      opticOverlay: $('opticOverlay'),
+      opticStage: $('opticStage'),
+      opticZoom: $('opticZoom'),
+      opticRange: $('opticRange'),
       perks: $('perks'),
       compass: $('compass'),
       zoneName: $('zoneName'),
@@ -153,6 +158,58 @@ export class Hud {
       this.el.nvgFlash.classList.remove('pulse');
       void this.el.nvgFlash.offsetWidth;
       this.el.nvgFlash.classList.add('pulse');
+    }
+  }
+
+  // Viseur optique ADS (point rouge, holo, ACOG ×3, tactique ×4, sniper, balistique ×8) + fondu du réticule au jugé
+  setOptic({ type = 'iron', zoom = 1.25, label = '', aim = 0, fullScope = false, swayX = 0, swayY = 0, range = null, active = true } = {}) {
+    const ov = this.el.opticOverlay;
+    const ch = this.el.crosshair;
+    const isOptic = active && type && type !== 'iron';
+    const startAt = fullScope ? 0.58 : 0.24;
+    const span = fullScope ? 0.32 : 0.62;
+    const op = isOptic ? Math.max(0, Math.min(1, (aim - startAt) / span)) : 0;
+
+    if (ch) {
+      const chOp = !active ? 0 : isOptic ? Math.max(0, 1 - aim * 1.55) : Math.max(0.22, 1 - aim * 0.78);
+      const chKey = chOp.toFixed(2);
+      if (this.cache._chOp !== chKey) {
+        this.cache._chOp = chKey;
+        ch.style.opacity = chKey;
+      }
+    }
+
+    if (!ov) return;
+    const show = op > 0.01;
+    const clsKey = show ? `${type}|${fullScope ? 1 : 0}` : 'off';
+    if (this.cache._optCls !== clsKey) {
+      this.cache._optCls = clsKey;
+      ov.className = show ? `show ${fullScope ? 'is-full ' : ''}t-${type}` : '';
+    }
+    if (!show) {
+      if (this.cache._optOp !== '0') {
+        this.cache._optOp = '0';
+        ov.style.opacity = '0';
+      }
+      return;
+    }
+
+    const opKey = op.toFixed(2);
+    if (this.cache._optOp !== opKey) {
+      this.cache._optOp = opKey;
+      ov.style.opacity = opKey;
+    }
+    if (this.el.opticStage) {
+      const sc = (1 + (1 - op) * (fullScope ? 0.08 : 0.14)).toFixed(3);
+      this.el.opticStage.style.transform = `translate3d(${swayX.toFixed(1)}px, ${swayY.toFixed(1)}px, 0) scale(${sc})`;
+    }
+    if (fullScope && this.el.opticZoom) {
+      const zTxt = label ? label : `×${zoom.toFixed(1)}`;
+      this._set('_optZoom', zTxt, (v) => { this.el.opticZoom.textContent = v; });
+    }
+    if (this.el.opticRange) {
+      const rTxt = type === 'thermal' ? (range != null ? `🎯 ${range} m` : '🎯 --- m') : '';
+      this._set('_optRange', rTxt, (v) => { this.el.opticRange.textContent = v; });
     }
   }
 

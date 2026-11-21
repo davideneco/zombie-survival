@@ -1468,6 +1468,118 @@
     .gs-att-card.equipped .gs-att-cta { background: rgba(220, 38, 38, 0.22); color: #fecaca; border-color: rgba(248, 113, 113, 0.45); }
     .gs-att-card.owned .gs-att-cta { background: rgba(14, 165, 233, 0.24); color: #bae6fd; border-color: rgba(56, 189, 248, 0.45); }
     .gs-att-card.locked .gs-att-cta { background: rgba(127, 29, 29, 0.32); color: #fca5a5; border-color: rgba(239, 68, 68, 0.4); }
+    .gs-lvl-pill {
+      font-size: 13px;
+      font-weight: bold;
+      letter-spacing: 0.8px;
+      padding: 5px 10px;
+      border-radius: 6px;
+      background: rgba(14, 116, 144, 0.28);
+      border: 1px solid rgba(56, 189, 248, 0.45);
+      color: #bae6fd;
+    }
+    .gs-att-card.level-locked { opacity: 0.56; border-color: rgba(100, 116, 139, 0.4); background: rgba(12, 18, 30, 0.72); }
+    .gs-att-card.level-locked:hover { opacity: 0.85; border-color: #f59e0b; }
+    .gs-att-card.level-locked .gs-att-badge { background: rgba(120, 53, 15, 0.55); color: #fde68a; border: 1px solid rgba(245, 158, 11, 0.45); }
+    .gs-att-card.level-locked .gs-att-cta { background: rgba(51, 65, 85, 0.55); color: #fde68a; border-color: rgba(245, 158, 11, 0.4); }
+
+    /* ---------- VISEURS OPTIQUES & LUNETTES ADS (#opticOverlay) ---------- */
+    #opticOverlay {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      opacity: 0;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+    #opticOverlay.show { display: flex; }
+    #opticOverlay .opt-bg {
+      position: absolute;
+      inset: -48px;
+      pointer-events: none;
+      opacity: 0;
+    }
+    /* Tube sombre plein écran pour les lunettes tubulaires (ACOG, ×4, Sniper, Balistique ×8) */
+    #opticOverlay.is-full .opt-bg {
+      opacity: 1;
+      background: radial-gradient(circle at 50% 50%,
+        transparent 0%,
+        transparent 31vmin,
+        rgba(8, 14, 22, 0.34) 33.2vmin,
+        rgba(3, 5, 9, 0.96) 35.5vmin,
+        #020306 42vmin);
+    }
+    #opticOverlay.t-acog .opt-bg {
+      background: radial-gradient(circle at 50% 50%,
+        rgba(255, 225, 180, 0.03) 0%,
+        transparent 28.5vmin,
+        rgba(18, 14, 10, 0.42) 30.8vmin,
+        rgba(3, 5, 8, 0.96) 33.2vmin,
+        #020306 40vmin);
+    }
+    #opticOverlay.t-scope4x .opt-bg {
+      background: radial-gradient(circle at 50% 50%,
+        rgba(140, 255, 195, 0.03) 0%,
+        transparent 31vmin,
+        rgba(8, 18, 14, 0.4) 33.2vmin,
+        rgba(3, 5, 8, 0.96) 35.5vmin,
+        #020306 42vmin);
+    }
+    #opticOverlay.t-thermal .opt-bg {
+      background: radial-gradient(circle at 50% 50%,
+        rgba(40, 175, 255, 0.09) 0%,
+        rgba(14, 80, 130, 0.08) 32vmin,
+        rgba(6, 20, 34, 0.55) 35vmin,
+        rgba(2, 6, 12, 0.97) 37.2vmin,
+        #010409 44vmin);
+    }
+    #opticOverlay .opt-stage {
+      position: relative;
+      width: 100vmin;
+      height: 100vmin;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      will-change: transform;
+    }
+    #opticOverlay .opt-svg {
+      display: none;
+      width: 100%;
+      height: 100%;
+      overflow: visible;
+    }
+    #opticOverlay.t-redDot .opt-svg.svg-redDot,
+    #opticOverlay.t-holo .opt-svg.svg-holo,
+    #opticOverlay.t-acog .opt-svg.svg-acog,
+    #opticOverlay.t-scope4x .opt-svg.svg-scope4x,
+    #opticOverlay.t-sniper .opt-svg.svg-sniper,
+    #opticOverlay.t-thermal .opt-svg.svg-thermal { display: block; }
+    #opticOverlay .opt-meta {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, 36.5vmin);
+      display: none;
+      align-items: center;
+      gap: 12px;
+      padding: 4px 12px;
+      border-radius: 999px;
+      background: rgba(5, 10, 18, 0.78);
+      border: 1px solid rgba(148, 163, 184, 0.35);
+      font-family: monospace;
+      font-size: 12px;
+      font-weight: bold;
+      letter-spacing: 1.4px;
+      color: #e2e8f0;
+      text-shadow: 0 0 6px #000;
+    }
+    #opticOverlay.is-full .opt-meta { display: flex; }
+    #opticOverlay.t-thermal .opt-meta { border-color: rgba(56, 189, 248, 0.65); color: #7dd3fc; }
+    #opticOverlay.t-acog .opt-meta { border-color: rgba(248, 113, 113, 0.55); color: #fca5a5; }
+    #opticOverlay.t-scope4x .opt-meta { border-color: rgba(74, 222, 128, 0.5); color: #86efac; }
+    #opticRange { color: #ffd24a; }
 
     /* ---------- COMPTE, XP & CARRIÈRE (src/account.js) ---------- */
     .acc-strip {
@@ -1875,6 +1987,201 @@
     </div>
     <div id="roomBadge"></div>
     <div id="teammates"></div>
+
+    <div id="opticOverlay" aria-hidden="true">
+      <div class="opt-bg"></div>
+      <div class="opt-stage" id="opticStage">
+        <!-- 1. POINT ROUGE (Reflex ouvert ×1,45) -->
+        <svg class="opt-svg svg-redDot" viewBox="0 0 1000 1000">
+          <defs>
+            <radialGradient id="rdGlass" cx="50%" cy="46%" r="54%">
+              <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.02"/>
+              <stop offset="78%" stop-color="#38bdf8" stop-opacity="0.07"/>
+              <stop offset="100%" stop-color="#0ea5e9" stop-opacity="0.16"/>
+            </radialGradient>
+            <radialGradient id="rdGlow" cx="50%" cy="50%" r="50%">
+              <stop offset="0%" stop-color="#ffffff" stop-opacity="1"/>
+              <stop offset="28%" stop-color="#ff2a2a" stop-opacity="0.98"/>
+              <stop offset="65%" stop-color="#ff1a1a" stop-opacity="0.4"/>
+              <stop offset="100%" stop-color="#ff0000" stop-opacity="0"/>
+            </radialGradient>
+          </defs>
+          <!-- Vitre antireflet + boîtier Reflex ouvert -->
+          <path d="M 358 585 L 358 468 Q 358 355 500 355 Q 642 355 642 468 L 642 585 Z" fill="url(#rdGlass)"/>
+          <path d="M 382 405 L 448 372" stroke="rgba(186,230,253,0.22)" stroke-width="5" stroke-linecap="round"/>
+          <!-- Châssis métallique mat + embase rail Picatinny -->
+          <path d="M 344 598 L 344 468 Q 344 340 500 340 Q 656 340 656 468 L 656 598 L 634 598 L 634 468 Q 634 364 500 364 Q 366 364 366 468 L 366 598 Z" fill="#0d1118" stroke="#334155" stroke-width="3"/>
+          <rect x="336" y="588" width="328" height="32" rx="6" fill="#0a0e14" stroke="#334155" stroke-width="2.5"/>
+          <path d="M 412 620 L 588 620 L 566 672 L 434 672 Z" fill="#090c12" stroke="#1e293b" stroke-width="2"/>
+          <rect x="466" y="596" width="68" height="14" rx="3" fill="#1e293b"/>
+          <!-- Repères fins + Point rouge 2 MOA lumineux -->
+          <line x1="500" y1="364" x2="500" y2="380" stroke="#475569" stroke-width="2"/>
+          <line x1="366" y1="500" x2="382" y2="500" stroke="#475569" stroke-width="2"/>
+          <line x1="618" y1="500" x2="634" y2="500" stroke="#475569" stroke-width="2"/>
+          <circle cx="500" cy="500" r="18" fill="url(#rdGlow)"/>
+          <circle cx="500" cy="500" r="4.5" fill="#ff2626"/>
+          <circle cx="500" cy="500" r="1.9" fill="#ffffff"/>
+          <text x="500" y="611" text-anchor="middle" fill="#94a3b8" font-family="monospace" font-size="11" font-weight="bold" letter-spacing="1.5">REFLEX ×1.45</text>
+        </svg>
+
+        <!-- 2. HOLOGRAPHIQUE (EOTech capot rectangulaire ×1,75) -->
+        <svg class="opt-svg svg-holo" viewBox="0 0 1000 1000">
+          <defs>
+            <radialGradient id="hoGlass" cx="50%" cy="50%" r="55%">
+              <stop offset="0%" stop-color="#34d399" stop-opacity="0.02"/>
+              <stop offset="80%" stop-color="#10b981" stop-opacity="0.06"/>
+              <stop offset="100%" stop-color="#059669" stop-opacity="0.16"/>
+            </radialGradient>
+            <filter id="hoGlow" x="-40%" y="-40%" width="180%" height="180%">
+              <feGaussianBlur stdDeviation="2.6" result="b"/>
+              <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+            </filter>
+          </defs>
+          <!-- Vitre rectangulaire EOTech -->
+          <rect x="332" y="378" width="336" height="236" rx="22" fill="url(#hoGlass)"/>
+          <!-- Capot tactique blindé + embase rail -->
+          <path d="M 304 624 L 304 374 Q 304 344 334 344 L 666 344 Q 696 344 696 374 L 696 624 L 664 624 L 664 388 Q 664 374 650 374 L 350 374 Q 336 374 336 388 L 336 624 Z" fill="#0c1017" stroke="#3b485c" stroke-width="3.5"/>
+          <rect x="292" y="612" width="416" height="36" rx="7" fill="#090d13" stroke="#334155" stroke-width="2.5"/>
+          <path d="M 384 648 L 616 648 L 590 690 L 410 690 Z" fill="#080b10" stroke="#1e293b" stroke-width="2"/>
+          <rect x="292" y="476" width="14" height="54" rx="4" fill="#18202c" stroke="#334155" stroke-width="2"/>
+          <rect x="694" y="476" width="14" height="54" rx="4" fill="#18202c" stroke="#334155" stroke-width="2"/>
+          <!-- Réticule holographique 65 MOA (anneau segmenté + 4 repères + point central 1 MOA) -->
+          <g filter="url(#hoGlow)" stroke="#ff3b22" fill="none" stroke-linecap="round">
+            <circle cx="500" cy="500" r="54" stroke-width="2.6" stroke-dasharray="68 17" stroke-dashoffset="34"/>
+            <line x1="500" y1="432" x2="500" y2="454" stroke-width="2.8"/>
+            <line x1="500" y1="546" x2="500" y2="568" stroke-width="2.8"/>
+            <line x1="432" y1="500" x2="454" y2="500" stroke-width="2.8"/>
+            <line x1="546" y1="500" x2="568" y2="500" stroke-width="2.8"/>
+            <circle cx="500" cy="500" r="3.2" fill="#ff3b22" stroke="none"/>
+            <circle cx="500" cy="500" r="1.4" fill="#ffffff" stroke="none"/>
+          </g>
+          <text x="500" y="635" text-anchor="middle" fill="#94a3b8" font-family="monospace" font-size="11" font-weight="bold" letter-spacing="1.6">HOLO ×1.75</text>
+        </svg>
+
+        <!-- 3. LUNETTE ACOG ×3 (Chevron lumineux + échelle BDC) -->
+        <svg class="opt-svg svg-acog" viewBox="0 0 1000 1000">
+          <defs>
+            <filter id="acogGlow" x="-40%" y="-40%" width="180%" height="180%">
+              <feGaussianBlur stdDeviation="2.5" result="b"/>
+              <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+            </filter>
+          </defs>
+          <!-- Bague oculaire -->
+          <circle cx="500" cy="500" r="316" fill="none" stroke="#18202c" stroke-width="18"/>
+          <circle cx="500" cy="500" r="306" fill="none" stroke="rgba(255,190,120,0.22)" stroke-width="2"/>
+          <!-- Barres horizontales et verticale inférieure -->
+          <line x1="194" y1="500" x2="452" y2="500" stroke="#080b10" stroke-width="4.5"/>
+          <line x1="548" y1="500" x2="806" y2="500" stroke="#080b10" stroke-width="4.5"/>
+          <line x1="500" y1="528" x2="500" y2="806" stroke="#080b10" stroke-width="2.2"/>
+          <!-- Graduations BDC (200m, 400m, 600m) -->
+          <line x1="482" y1="546" x2="518" y2="546" stroke="#0b0f16" stroke-width="2.2"/>
+          <line x1="487" y1="582" x2="513" y2="582" stroke="#0b0f16" stroke-width="2"/>
+          <line x1="490" y1="624" x2="510" y2="624" stroke="#0b0f16" stroke-width="1.8"/>
+          <text x="525" y="550" fill="rgba(15,23,42,0.85)" font-family="monospace" font-size="14" font-weight="bold">2</text>
+          <text x="520" y="586" fill="rgba(15,23,42,0.85)" font-family="monospace" font-size="14" font-weight="bold">4</text>
+          <text x="517" y="628" fill="rgba(15,23,42,0.85)" font-family="monospace" font-size="14" font-weight="bold">6</text>
+          <!-- Chevron Trijicon rouge/ambre lumineux -->
+          <g filter="url(#acogGlow)" fill="none" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="484,518 500,500 516,518" stroke="#ff3824" stroke-width="4.5"/>
+            <polyline points="488,515 500,501 512,515" stroke="#ffb380" stroke-width="1.5"/>
+          </g>
+        </svg>
+
+        <!-- 4. LUNETTE TACTIQUE ×4 (Mil-Dot de précision + point vert) -->
+        <svg class="opt-svg svg-scope4x" viewBox="0 0 1000 1000">
+          <defs>
+            <filter id="s4Glow" x="-50%" y="-50%" width="200%" height="200%">
+              <feGaussianBlur stdDeviation="2.2" result="b"/>
+              <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+            </filter>
+          </defs>
+          <circle cx="500" cy="500" r="338" fill="none" stroke="#141c24" stroke-width="18"/>
+          <circle cx="500" cy="500" r="328" fill="none" stroke="rgba(74,222,128,0.22)" stroke-width="2"/>
+          <!-- Posts épais extérieurs -->
+          <line x1="172" y1="500" x2="345" y2="500" stroke="#070a0f" stroke-width="6"/>
+          <line x1="655" y1="500" x2="828" y2="500" stroke="#070a0f" stroke-width="6"/>
+          <line x1="500" y1="172" x2="500" y2="345" stroke="#070a0f" stroke-width="6"/>
+          <line x1="500" y1="655" x2="500" y2="828" stroke="#070a0f" stroke-width="6"/>
+          <!-- Croisillon central fin -->
+          <line x1="345" y1="500" x2="655" y2="500" stroke="#070a0f" stroke-width="1.6"/>
+          <line x1="500" y1="345" x2="500" y2="655" stroke="#070a0f" stroke-width="1.6"/>
+          <!-- Graduations Mil-Dot -->
+          <g fill="#070a0f">
+            <circle cx="380" cy="500" r="3.2"/><circle cx="410" cy="500" r="3.2"/><circle cx="440" cy="500" r="3.2"/><circle cx="470" cy="500" r="3.2"/>
+            <circle cx="530" cy="500" r="3.2"/><circle cx="560" cy="500" r="3.2"/><circle cx="590" cy="500" r="3.2"/><circle cx="620" cy="500" r="3.2"/>
+            <circle cx="500" cy="380" r="3.2"/><circle cx="500" cy="410" r="3.2"/><circle cx="500" cy="440" r="3.2"/><circle cx="500" cy="470" r="3.2"/>
+            <circle cx="500" cy="530" r="3.2"/><circle cx="500" cy="560" r="3.2"/><circle cx="500" cy="590" r="3.2"/><circle cx="500" cy="620" r="3.2"/>
+          </g>
+          <!-- Micro-point central vert lumineux -->
+          <g filter="url(#s4Glow)">
+            <circle cx="500" cy="500" r="4" fill="#22c55e"/>
+            <circle cx="500" cy="500" r="1.6" fill="#dcfce7"/>
+          </g>
+        </svg>
+
+        <!-- 5. LUNETTE DE PRÉCISION SNIPER (×4 SVD / ×5 L96A1 / ×6 Barrett) -->
+        <svg class="opt-svg svg-sniper" viewBox="0 0 1000 1000">
+          <circle cx="500" cy="500" r="342" fill="none" stroke="#11161f" stroke-width="20"/>
+          <circle cx="500" cy="500" r="331" fill="none" stroke="rgba(226,232,240,0.18)" stroke-width="2"/>
+          <!-- Duplex sniper -->
+          <line x1="168" y1="500" x2="360" y2="500" stroke="#05070a" stroke-width="7"/>
+          <line x1="640" y1="500" x2="832" y2="500" stroke="#05070a" stroke-width="7"/>
+          <line x1="500" y1="168" x2="500" y2="360" stroke="#05070a" stroke-width="5"/>
+          <line x1="500" y1="640" x2="500" y2="832" stroke="#05070a" stroke-width="7"/>
+          <line x1="360" y1="500" x2="640" y2="500" stroke="#05070a" stroke-width="1.4"/>
+          <line x1="500" y1="360" x2="500" y2="640" stroke="#05070a" stroke-width="1.4"/>
+          <!-- Repères de dérive et chute -->
+          <g stroke="#05070a" stroke-width="1.6">
+            <line x1="400" y1="492" x2="400" y2="508"/><line x1="440" y1="494" x2="440" y2="506"/><line x1="470" y1="495" x2="470" y2="505"/>
+            <line x1="530" y1="495" x2="530" y2="505"/><line x1="560" y1="494" x2="560" y2="506"/><line x1="600" y1="492" x2="600" y2="508"/>
+            <line x1="492" y1="540" x2="508" y2="540"/><line x1="489" y1="580" x2="511" y2="580"/><line x1="486" y1="620" x2="514" y2="620"/>
+          </g>
+          <!-- Courbe stadiamétrique de distance (bas gauche) -->
+          <line x1="270" y1="640" x2="410" y2="640" stroke="#05070a" stroke-width="1.6"/>
+          <path d="M 275 592 Q 332 628 408 634" fill="none" stroke="#05070a" stroke-width="1.5"/>
+          <circle cx="500" cy="500" r="2.6" fill="#ef4444"/>
+        </svg>
+
+        <!-- 6. LUNETTE BALISTIQUE ×8 (Optique numérique + télémètre laser) -->
+        <svg class="opt-svg svg-thermal" viewBox="0 0 1000 1000">
+          <defs>
+            <filter id="thGlow" x="-40%" y="-40%" width="180%" height="180%">
+              <feGaussianBlur stdDeviation="2.2" result="b"/>
+              <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+            </filter>
+          </defs>
+          <circle cx="500" cy="500" r="356" fill="none" stroke="#0d1b2a" stroke-width="20"/>
+          <circle cx="500" cy="500" r="345" fill="none" stroke="rgba(56,189,248,0.45)" stroke-width="2.2"/>
+          <circle cx="500" cy="500" r="326" fill="none" stroke="rgba(56,189,248,0.16)" stroke-width="1" stroke-dasharray="10 14"/>
+          <g filter="url(#thGlow)" stroke="#38bdf8" fill="none">
+            <!-- Crochets de ciblage -->
+            <path d="M 380 415 L 380 380 L 415 380" stroke-width="2.6"/>
+            <path d="M 585 380 L 620 380 L 620 415" stroke-width="2.6"/>
+            <path d="M 380 585 L 380 620 L 415 620" stroke-width="2.6"/>
+            <path d="M 585 620 L 620 620 L 620 585" stroke-width="2.6"/>
+            <!-- Réticule balistique fin -->
+            <line x1="165" y1="500" x2="478" y2="500" stroke-width="1.5" stroke-opacity="0.75"/>
+            <line x1="522" y1="500" x2="835" y2="500" stroke-width="1.5" stroke-opacity="0.75"/>
+            <line x1="500" y1="165" x2="500" y2="478" stroke-width="1.5" stroke-opacity="0.75"/>
+            <line x1="500" y1="522" x2="500" y2="835" stroke-width="1.5" stroke-opacity="0.75"/>
+            <!-- Graduations balistiques -->
+            <line x1="484" y1="542" x2="516" y2="542" stroke-width="1.8"/>
+            <line x1="488" y1="576" x2="512" y2="576" stroke-width="1.6"/>
+            <line x1="491" y1="612" x2="509" y2="612" stroke-width="1.5"/>
+            <line x1="440" y1="491" x2="440" y2="509" stroke-width="1.6"/>
+            <line x1="560" y1="491" x2="560" y2="509" stroke-width="1.6"/>
+            <!-- Point central ambre haute visibilité -->
+            <circle cx="500" cy="500" r="14" stroke="#ffd24a" stroke-width="1.8" stroke-opacity="0.85"/>
+            <circle cx="500" cy="500" r="3" fill="#ffd24a" stroke="none"/>
+          </g>
+        </svg>
+
+        <div class="opt-meta" id="opticMeta">
+          <span id="opticZoom">×3.0</span>
+          <span id="opticRange"></span>
+        </div>
+      </div>
+    </div>
 
     <div id="crosshair"><i></i><i></i><i></i><i></i></div>
     <div id="hitmarker"><i></i><i></i></div>

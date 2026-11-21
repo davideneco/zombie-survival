@@ -2,6 +2,17 @@
 
 Chaque changement est poussé sur `main` (déploiement Render) avec un nouveau numéro de version et sa description ici.
 
+## v0.109.0 (2026-11-21)
+- **Visée à travers les optiques & zooms différenciés** : chaque type de viseur dispose désormais de sa propre vue optique, de son réticule dédié et d'un grossissement optique réel (avec sensibilité souris automatiquement adaptée au zoom et fondu du réticule au jugé) :
+  - **Viseur point rouge (×1,45)** : boîtier Reflex ouvert monté sur le rail, vitre antireflet et point rouge 2 MOA lumineux ; modèle 3D corrigé sans bloc central opaque.
+  - **Viseur holographique (×1,75)** : capot EOTech rectangulaire avec réticule holographique 65 MOA (anneau segmenté + 4 repères + point central).
+  - **Lunette ACOG (×3)** : visée circulaire plein écran avec chevron Trijicon lumineux et graduations BDC (`2 / 4 / 6`).
+  - **Nouvelle Lunette tactique (×4)** : lunette longue avec réticule Mil-Dot fin et micro-point vert central (compatible fusils d'assaut, mitrailleuses et arbalète).
+  - **Lunettes sniper de série (×4 SVD / ×5 L96A1 / ×6 Barrett)** : optique de précision duplex avec courbe stadiamétrique.
+  - **Lunette balistique (×8)** : optique numérique haute précision avec télémètre laser temps réel (distance en mètres).
+- **Fin des accessoires aléatoires gratuits & déblocage par niveau XP** : toutes les armes démarrent désormais sans accessoire aléatoire gratuit ; les 26 accessoires se débloquent progressivement du niveau 1 au niveau 12 en gagnant de l'XP (notification en jeu à chaque niveau) puis s'achètent avec vos points dans l'Atelier d'armes `[T]` (qui affiche votre niveau, les cadenas `🔒 NIV. X` et conserve la prévisualisation 3D/stats au survol).
+- Vérifié : build Vite (`npx vite build`), vérification automatisée des 26 accessoires et des 5 paliers optiques, test E2E headless Chromium (0 accessoire gratuit au départ et à l'achat d'arme, blocage d'achat de l'ACOG Niv. 6 au Niv. 1, achat en points du Point rouge Niv. 1, progression stricte du FOV sur les 7 niveaux de zoom `80° → 67,7° → 60,1° → 51,2° → 31,3° → 23,7° → 19,1° → 12°`, télémètre balistique actif, 0 erreur console/page) et inspection visuelle des 5 captures (`Atelier [T]`, `Reflex ×1,45`, `Holo ×1,75`, `ACOG ×3`, `Balistique ×8`). Non vérifié : ressenti de visée en mouvement sur les 23 armes individuellement ni en partie co-op multijoueur.
+
 ## v0.108.0 (2026-11-20)
 - **8 survivants aux statistiques uniques et de puissance croissante** : chaque personnage possède désormais ses propres bonus réels en jeu (PV max, dégâts, tirs à la tête, cadence, vitesse de déplacement, rechargement, précision, régénération, réserves de munitions, mêlée, grenades et points de départ/bonus), du palier 1 (*Marc*, `⚡ 100`, `100 PV`) jusqu'au palier 8 (*Harry*, `⚡ 290`, `200 PV`, `+55%` dégâts, `+22%` vitesse, `+34%` rechargement, `+70%` régénération, `1 500` pts de départ et `+2` grenades).
 - **Déblocage progressif par l'XP** : seul **Marc** est débloqué au niveau 1 ; les 7 autres survivants se débloquent automatiquement en gagnant de l'XP et des niveaux (*Léa* Niv. 2 → *Karim* Niv. 4 → *Chloé* Niv. 6 → *Lucian* Niv. 9 → *Picsou* Niv. 13 → *Klukai* Niv. 18 → *Harry* Niv. 25), avec annonce en partie, récapitulatif de fin de partie et frise `SURVIVANTS DÉBLOQUÉS (X / 8)` dans `PROFIL & CARRIÈRE`.

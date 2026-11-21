@@ -225,6 +225,13 @@ export function installAccount(game, { hud, sfx, onProfileChange, onLevelChange 
           ? ` · 🔓 ${newly.map((c) => c.name).join(', ')} DÉBLOQUÉ${newly.length > 1 ? 'S' : ''} !`
           : '';
         hud.announce(`NIVEAU ${after.level} !`, `${after.rank.icon} ${after.rank.name.toUpperCase()}${extra}`, newly.length ? 4400 : 3400);
+        const newAtts = Object.values(CONFIG.attachments?.defs || {})
+          .filter((d) => (d.unlockLevel ?? 1) > before.level && (d.unlockLevel ?? 1) <= after.level)
+          .map((d) => d.short || d.name);
+        if (newAtts.length) {
+          const shown = newAtts.slice(0, 3).join(', ') + (newAtts.length > 3 ? ` (+${newAtts.length - 3})` : '');
+          hud.toast(`🔧 Atelier [T] débloqué : ${shown}`, 3400);
+        }
       }
     } else if (label && game.started && !game.over) {
       hud.toast(`+${add} XP · ${label}`, 2200);

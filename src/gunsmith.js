@@ -1,14 +1,14 @@
 import * as THREE from 'three';
-import { CONFIG, PAP_LEVELS } from './config.js';
+import { CONFIG, PAP_LEVELS, isAttachmentUnlocked } from './config.js';
 import { compatibleAttachments } from './viewmodels.js';
 import { cloneWeapon } from './weaponDisplay.js';
+import { totalXpForLevel } from './account.js';
 
 // =====================================================================
-//  Atelier d'armes interactif (touche [T], v0.104.0) :
+//  Atelier d'armes interactif (touche [T], v0.104.0+) :
 //   - Affiche l'arme en main avec aperçu 3D interactif (rotation souris 360°)
 //     et tableau complet de statistiques en temps réel (avec prévisualisation au survol) ;
-//   - Permet d'acheter (en points) puis d'équiper ou retirer librement les
-//     accessoires compatibles par emplacement (Optique, Bouche, Chargeur, Tactique) ;
+//   - Déblocage progressif des accessoires selon le niveau XP du joueur, puis achat en points ;
 //   - Chaque accessoire acheté reste acquis sur cette arme (ré-équipement gratuit).
 // =====================================================================
 
@@ -17,9 +17,12 @@ const pct = (m) => {
   const d = Math.round((m - 1) * 100);
   return `${d > 0 ? '+' : ''}${d}%`;
 };
+const fmtZoom = (z) => `×${String(z).replace('.', ',')}`;
 
 function describeBonuses(def) {
   const tags = [];
+  if (def.zoomMult) tags.push({ txt: `Zoom ${fmtZoom(def.zoomMult)}`, good: true });
+  else if (def.adsFovDelta) tags.push({ txt: 'Zoom optique', good: true });
   if (def.damageMult) tags.push({ txt: `${pct(def.damageMult)} Dégâts`, good: def.damageMult > 1 });
   if (def.headMult) tags.push({ txt: `${pct(def.headMult)} Tête`, good: def.headMult > 1 });
   if (def.fireRateMult) tags.push({ txt: `${pct(def.fireRateMult)} Cadence`, good: def.fireRateMult > 1 });
@@ -33,7 +36,6 @@ function describeBonuses(def) {
   if (def.hipSpreadMult) tags.push({ txt: `+${Math.round((1 - def.hipSpreadMult) * 100)}% Tir au jugé`, good: def.hipSpreadMult < 1 });
   if (def.recoilMult) tags.push({ txt: `${pct(def.recoilMult)} Recul`, good: def.recoilMult < 1 });
   if (def.rangeMult) tags.push({ txt: `${pct(def.rangeMult)} Portée`, good: def.rangeMult > 1 });
-  if (def.adsFovDelta) tags.push({ txt: 'Zoom optique', good: true });
   if (def.silenced) tags.push({ txt: 'Silencieux', good: true });
   return tags;
 }
@@ -230,6 +232,14 @@ export function installGunsmith(game, { hud, sfx }) {
       if (!def) return;
       const owned = w.ownedAtts.includes(accId);
       if (!owned) {
+        const info = game.account ? game.account.levelInfo() : { level: 1, totalXp: 0 };
+        if (!isAttachmentUnlocked(accId, info.level, !!game.unlockAllChars)) {
+          const reqLv = def.unlockLevel ?? 1;
+          const remXp = Math.max(0, totalXpForLevel(reqLv) - (info.totalXp || 0));
+          sfx.deny?.();
+          hud.toast(`🔒 ${def.name} : Niveau ${reqLv} requis (encore ${remXp.toLocaleString('fr-FR')} XP)`, 2400);
+          return;
+        }
         const price = def.price ?? 500;
         if (game.points < price) {
           sfx.deny?.();
@@ -278,7 +288,7 @@ export function installGunsmith(game, { hud, sfx }) {
       ];
       const badges = [];
       if (prevS.silenced) badges.push('<span class="gs-spec on">🔇 SILENCIEUX</span>');
-      if (prevS.adsZoomBonus) badges.push(`<span class="gs-spec on">🎯 ZOOM OPTIQUE (${Math.abs(prevS.adsZoomBonus)}°)</span>`);
+      if (prevS.zoomMult && prevS.zoomMult > 1.25) badges.push(`<span class="gs-spec on">🎯 ZOOM ${fmtZoom(prevS.zoomMult)}${prevS.opticLabel ? ` (${esc(prevS.opticLabel)})` : ''}</span>`);
       if (prevS.hipSpreadMult < 0.99) badges.push(`<span class="gs-spec on">⚡ TIR AU JUGÉ +${Math.round((1 - prevS.hipSpreadMult) * 100)}%</span>`);
       return `
         <div class="gs-stats-list">
@@ -327,6 +337,7 @@ export function installGunsmith(game, { hud, sfx }) {
       const bySlot = compatibleAttachments(w.id);
       const papRoman = w.pap > 0 ? PAP_LEVELS[w.pap]?.roman || '' : '';
       const keyTag = game.binds ? game.binds.tag('gunsmith') : '[T]';
+      const accInfo = game.account ? game.account.levelInfo() : { level: 1, totalXp: 0 };
 
       // Preserve existing preview canvas if already mounted so WebGL context stays intact!
       let prevCanvas = preview.canvas;
@@ -345,6 +356,7 @@ export function installGunsmith(game, { hud, sfx }) {
             }).join('')}
           </div>
           <div class="gs-right-meta">
+            <div class="gs-lvl-pill">🎖 NIV. ${accInfo.level}</div>
             <div class="gs-pts">💰 <b>${game.points.toLocaleString('fr-FR')}</b> pts</div>
             <button class="gs-close" id="gsCloseBtn" title="Fermer (${keyTag} / Échap)">✕</button>
           </div>
@@ -380,16 +392,25 @@ export function installGunsmith(game, { hud, sfx }) {
                       const d = A.defs[accId];
                       const isEq = equippedId === accId;
                       const isOwned = w.ownedAtts.includes(accId);
+                      const reqLv = d.unlockLevel ?? 1;
+                      const unlocked = isOwned || isAttachmentUnlocked(accId, accInfo.level, !!game.unlockAllChars);
                       const price = d.price ?? 500;
                       const canAfford = game.points >= price;
                       const bonuses = describeBonuses(d);
-                      const cls = isEq ? 'equipped' : isOwned ? 'owned' : canAfford ? 'buyable' : 'locked';
-                      const btnText = isEq ? 'RETIRER' : isOwned ? 'ÉQUIPER (GRATUIT)' : `ACHETER · ${price} PTS`;
+                      const cls = isEq ? 'equipped' : isOwned ? 'owned' : !unlocked ? 'level-locked' : canAfford ? 'buyable' : 'locked';
+                      const badge = isEq ? 'ÉQUIPÉ' : isOwned ? 'ACQUIS' : !unlocked ? `🔒 NIV. ${reqLv}` : `${price} pts`;
+                      const btnText = isEq
+                        ? 'RETIRER'
+                        : isOwned
+                          ? 'ÉQUIPER (GRATUIT)'
+                          : !unlocked
+                            ? `DÉBLOQUÉ NIV. ${reqLv} · ${price} PTS`
+                            : `ACHETER · ${price} PTS`;
                       return `
                         <button class="gs-att-card ${cls}" data-gs-slot="${slot}" data-gs-att="${accId}">
                           <div class="gs-att-top">
                             <b>${esc(d.name)}</b>
-                            <span class="gs-att-badge">${isEq ? 'ÉQUIPÉ' : isOwned ? 'ACQUIS' : `${price} pts`}</span>
+                            <span class="gs-att-badge">${badge}</span>
                           </div>
                           <div class="gs-att-tags">
                             ${bonuses.map((b) => `<span class="gs-btag ${b.good ? 'pos' : 'neg'}">${esc(b.txt)}</span>`).join('')}

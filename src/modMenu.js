@@ -620,8 +620,8 @@ export function installModMenu(game, { world, hud, sfx }) {
               <small>Donne et active / désactive les lunettes de vision nocturne</small>
             </button>
             <button class="mod-btn ${game.unlockAllChars ? 'mod-btn-active' : 'mod-btn-gold'}" id="modUnlockChars">
-              <b>${game.unlockAllChars ? '🔓 TOUS LES PERSOS : DÉBLOQUÉS' : '🔓 DÉBLOQUER TOUS LES PERSOS (SESSION)'}</b>
-              <small>Permet de tester les 8 survivants sans modifier votre XP</small>
+              <b>${game.unlockAllChars ? '🔓 TOUT DÉBLOQUÉ (PERSOS & ACCESSOIRES)' : '🔓 DÉBLOQUER PERSOS & ACCESSOIRES (SESSION)'}</b>
+              <small>Permet de tester les 8 survivants et tous les accessoires [T] sans toucher à votre XP</small>
             </button>
           </div>
         </div>
@@ -1124,7 +1124,7 @@ export function installModMenu(game, { world, hud, sfx }) {
     document.getElementById('modRerollAttsBtn')?.addEventListener('click', () => {
       const p = game.player, w = p.curW;
       if (!w) return;
-      p.setWeaponAttachments(w, rollAttachments(w.id, 'box'), { newlyBought: true });
+      p.setWeaponAttachments(w, rollAttachments(w.id, 'box', { force: true }), { newlyBought: true });
       const s = p.statsOf(w);
       const names = (w.atts || []).map((k) => CONFIG.attachments?.defs?.[k]?.name).filter(Boolean);
       hud.announce(s.name, names.length ? names.join(' · ') : 'Aucun accessoire', 2200);

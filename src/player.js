@@ -73,6 +73,7 @@ export class Player {
     const s = { ...base, ...papStats(base, lv) };
     // Accessoires d'arme : dégâts, tête, cadence, chargeur, réserve, rechargement, précision, recul, portée…
     let dmgM = 1, headM = 1, rateM = 1, magM = 1, resM = 1, relM = 1, sprM = 1, hipM = 1, recM = 1, rngM = 1, adsDelta = 0, silenced = false;
+    let sightType = null, zoomMult = 0, opticLabel = '';
     const attLabels = [];
     const defs = CONFIG.attachments?.defs || {};
     for (const aId of atts) {
@@ -90,6 +91,11 @@ export class Player {
       if (d.recoilMult) recM *= d.recoilMult;
       if (d.rangeMult) rngM *= d.rangeMult;
       if (d.adsFovDelta) adsDelta += d.adsFovDelta;
+      if (d.sightType) {
+        sightType = d.sightType;
+        zoomMult = d.zoomMult || 1.45;
+        opticLabel = d.short || d.name;
+      }
       if (d.silenced) silenced = true;
     }
     if (dmgM !== 1) {
@@ -107,7 +113,25 @@ export class Player {
     s.attDamageMult = dmgM;
     s.hipSpreadMult = hipM;
     s.recoilMult = recM;
-    s.adsZoomBonus = adsDelta; // zoom optique supplémentaire sans cacher le modèle 3D
+    s.adsZoomBonus = adsDelta;
+    if (sightType) {
+      s.sightType = sightType;
+      s.zoomMult = zoomMult;
+      s.opticLabel = opticLabel;
+    } else if (base.cat === 'sniper' || base.adsFov) {
+      s.sightType = 'sniper';
+      s.zoomMult = base.zoomMult || 5.0;
+      s.opticLabel = `LUNETTE ×${s.zoomMult}`;
+    } else if (s.zoom) {
+      s.sightType = 'acog';
+      s.zoomMult = 3.0;
+      s.opticLabel = 'ACOG ×3';
+    } else {
+      s.sightType = 'iron';
+      s.zoomMult = 1.25;
+      s.opticLabel = '';
+    }
+    s.fullScope = s.sightType === 'acog' || s.sightType === 'scope4x' || s.sightType === 'sniper' || s.sightType === 'thermal';
     s.silenced = silenced || (lv >= 3 && (base.cat === 'pistol' || base.cat === 'smg' || base.cat === 'sniper'));
     s.attLabels = attLabels;
 
@@ -450,7 +474,8 @@ export class Player {
     document.addEventListener('contextmenu', (e) => e.preventDefault());
     document.addEventListener('mousemove', (e) => {
       if (!this.game.playing || this.game.chat?.open) return; // saisie : la souris est libérée, elle ne tourne plus la caméra
-      const zoom = this.aim > 0.5 ? (this.curCfg.adsFov ? 0.3 : this.curCfg.adsZoomBonus <= -12 ? 0.42 : this.curCfg.zoom ? 0.45 : 0.6) : 1;
+      const baseFov = Math.max(40, this.game.settings.fov || 75);
+      const zoom = this.aim > 0.05 ? Math.max(0.14, Math.min(1, this.camera.fov / baseFov)) : 1;
       const sens = 0.0022 * this.game.settings.sens * zoom;
       this.yaw -= e.movementX * sens;
       this.pitch -= e.movementY * sens;
@@ -632,21 +657,52 @@ export class Player {
       if (w.gl) w.gl = cfg.gl?.shells || 0;
     }
 
-    // ---- visée (ADS) & vision nocturne ----
+    // ---- visée (ADS), zoom optique & vision nocturne ----
     this.nvgK += ((this.nvgOn ? 1 : 0) - this.nvgK) * Math.min(1, dt * 10);
-    this.aim += ((this.aiming && !this.downed ? 1 : 0) - this.aim) * Math.min(1, dt * 12);
+    const canAim = this.aiming && !this.downed && !this.dead && !this.driving && !this.locked && !w.reloading && !this.ride.external;
+    this.aim += ((canAim ? 1 : 0) - this.aim) * Math.min(1, dt * (cfg.fullScope ? 10 : 14));
     const base = this.game.settings.fov;
-    const adsDelta = cfg.adsFov || cfg.zoom ? base - (cfg.adsFov || cfg.zoom) : ADS_DELTA - (cfg.adsZoomBonus || 0);
+    const zMult = cfg.zoomMult || 1.25;
+    // Grossissement optique réel : tan(fov / 2) = tan(base / 2) / zoomMult
+    const targetAdsFov = Math.max(8, (2 * Math.atan(Math.tan((base * Math.PI) / 360) / zMult) * 180) / Math.PI);
+    const adsDelta = base - targetAdsFov;
     const fov = base - adsDelta * this.aim + (veh ? Math.min(12, Math.abs(veh.v.speed) * 0.55) * (1 - 0.5 * this.ride.k) : 0);
     if (!this.game.camLock && Math.abs(fov - this.camera.fov) > 0.01) {
       this.camera.fov = fov;
       this.camera.updateProjectionMatrix();
     }
-    // lunette : on cache l'arme quand on vise au fusil de précision
-    // (on cache le modèle de l'arme, pas le groupe entier qui contient la lumière de tir)
+    // Lunettes tubulaires (ACOG, ×4, Sniper, Balistique ×8) : on cache le modèle 3D dès qu'on regarde dans l'oculaire
     // (jamais le groupe entier : il porte la lumière de tir, et masquer une lumière recompile tous les shaders)
-    const showVm = !this.locked && !(cfg.adsFov && this.aim > 0.8) && !this.driving && !this.ride.external;
+    const inFullScope = !!(cfg.fullScope && this.aim > 0.65 && !this.locked && !this.driving && !this.ride.external);
+    const showVm = !this.locked && !inFullScope && !this.driving && !this.ride.external;
     this.vms[w.id].visible = showVm; // vue externe : c'est le personnage qui tient l'arme
+    // Mise à jour du viseur optique HUD (point rouge, holo, ACOG, ×4, sniper, balistique ×8)
+    let rangeMeters = null;
+    if (cfg.sightType === 'thermal' && this.aim > 0.45 && this.world.rayHit) {
+      if (now - (this._rfAt || 0) > 0.1) {
+        this._rfAt = now;
+        const dir = this._rfDir || (this._rfDir = new THREE.Vector3());
+        this.camera.getWorldDirection(dir);
+        const cp = this.camera.position;
+        const hitD = this.world.rayHit(cp.x, cp.y, cp.z, dir.x, dir.y, dir.z, 260);
+        this._rfDist = Number.isFinite(hitD) && hitD < 259 ? Math.round(hitD) : null;
+      }
+      rangeMeters = this._rfDist;
+    }
+    const swayAmt = cfg.fullScope ? 6 : 3.5;
+    const swayX = Math.sin(now * 1.45) * swayAmt * (moving ? 1.8 : 1) * this.aim;
+    const swayY = (Math.cos(now * 2.1) * swayAmt * 0.65 - this.kick * 28) * this.aim;
+    this.game.hud?.setOptic?.({
+      type: cfg.sightType || 'iron',
+      zoom: zMult,
+      label: cfg.opticLabel || '',
+      aim: this.aim,
+      fullScope: !!cfg.fullScope,
+      swayX,
+      swayY,
+      range: rangeMeters,
+      active: !this.driving && !this.ride.external && !this.downed && !this.dead,
+    });
     const pk = papPulse(w.pap | 0, now); // niveau III : le reflet pulse
     if (pk !== 1 && this.tintMats) for (const m of this.tintMats) m.emissiveIntensity = PAP_INTENSITY * pk;
     const bolts = this.bolts[w.id];
@@ -729,9 +785,12 @@ export class Player {
       visible: showVm,
     }) : { dx: 0, dy: 0, dz: 0, rx: 0, ry: 0, rz: 0 };
 
+    const isOpenOptic = cfg.sightType === 'redDot' || cfg.sightType === 'holo';
+    const optAcc = wGrp?.getObjectByName('opticAcc');
+    if (optAcc) optAcc.visible = !(isOpenOptic && a > 0.35);
     let x = 0.22 * (1 - a) + hAnim.dx;
-    let y = -0.22 + 0.06 * a - 0.018 * this.crouchK * (1 - a) + hAnim.dy;
-    let z = -0.45 + 0.05 * a + 0.012 * this.crouchK * (1 - a) + hAnim.dz;
+    let y = -0.22 + (isOpenOptic ? 0.088 : 0.06) * a - 0.018 * this.crouchK * (1 - a) + hAnim.dy;
+    let z = -0.45 + (isOpenOptic ? 0.11 : 0.05) * a + 0.012 * this.crouchK * (1 - a) + hAnim.dz;
     const recM = cfg.recoilMult ?? 1;
     let rx = this.kick * recM * (cfg.type === 'launcher' ? 0.45 : cfg.type === 'shotgun' || cfg.type === 'semi' ? 0.2 : 0.11) + hAnim.rx;
     let ry = (sprinting ? 0.35 : 0) + hAnim.ry;
@@ -984,7 +1043,7 @@ export class Player {
     // Raycast(s)
     this.camera.updateMatrixWorld(true);
     const hipM = this.aiming ? 1 : (cfg.hipSpreadMult ?? 1);
-    const mul = (this.aiming ? (cfg.adsFov ? 0.05 : 0.4) : 1) * hipM * (moving ? 1.8 : 1) * (this.crouching ? 0.7 : 1);
+    const mul = (this.aiming ? (cfg.fullScope ? 0.05 : cfg.sightType !== 'iron' ? 0.25 : 0.4) : 1) * hipM * (moving ? 1.8 : 1) * (this.crouching ? 0.7 : 1);
     if (cfg.type === 'launcher') { this.fireLauncher(cfg, mul); return; }
     // origine visuelle des traçantes : la bouche de l'arme (de la vue, ou du personnage en vue externe)
     const origin = this.shotOrigin(ext);

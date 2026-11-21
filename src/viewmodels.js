@@ -98,8 +98,8 @@ function mats() {
   }
   m.beam = new THREE.MeshBasicMaterial({ color: 0xff2828, transparent: true, opacity: 0.45, depthWrite: false });
   m.smoke.transparent = true; m.smoke.opacity = 0.72;
-  m.lens.emissive = new THREE.Color(0x0b223d);
-  m.lens.transparent = true; m.lens.opacity = 0.86;
+  m.lens.emissive = new THREE.Color(0x0b2c4a);
+  m.lens.transparent = true; m.lens.opacity = 0.24; m.lens.depthWrite = false;
   return m;
 }
 
@@ -383,31 +383,31 @@ const CX = (r, len, x, y, z, mat, seg = 18, ...tags) => ['Y', r, len, x, y, z, m
 const SP = (r, x, y, z, mat, ...tags) => ['S', r, x, y, z, mat, ...tags];
 
 const ACC = {
-  // ---- viseurs
+  // ---- viseurs (châssis ouverts pour voir à travers en vue FPS)
   redDot: (a) => {
     const [, y, z] = a.top, k = a.k;
     return [
-      B(0.03 * k, 0.007, 0.072 * k, 0, y + 0.0035, z, 'black'),
-      B(0.028 * k, 0.024, 0.046 * k, 0, y + 0.018, z, 'gun'),
-      B(0.03 * k, 0.006, 0.048 * k, 0, y + 0.032, z - 0.006 * k, 'black'),
-      B(0.005, 0.024, 0.044 * k, 0.013 * k, y + 0.02, z - 0.006 * k, 'black'),
-      B(0.005, 0.024, 0.044 * k, -0.013 * k, y + 0.02, z - 0.006 * k, 'black'),
-      B(0.019 * k, 0.017, 0.002, 0, y + 0.02, z - 0.024 * k, 'lens'),
-      SP(0.003 * k, 0, y + 0.02, z + 0.016 * k, 'dot'),
+      B(0.032 * k, 0.008, 0.068 * k, 0, y + 0.004, z, 'black'),         // rail de fixation bas
+      B(0.026 * k, 0.005, 0.022 * k, 0, y + 0.009, z + 0.018 * k, 'gun'), // boîtier diode arrière bas
+      B(0.032 * k, 0.0045, 0.018 * k, 0, y + 0.034, z - 0.014 * k, 'black'), // arche supérieure fine
+      B(0.0045, 0.028, 0.018 * k, 0.0145 * k, y + 0.02, z - 0.014 * k, 'black'), // montant droit
+      B(0.0045, 0.028, 0.018 * k, -0.0145 * k, y + 0.02, z - 0.014 * k, 'black'), // montant gauche
+      B(0.024 * k, 0.023, 0.002, 0, y + 0.021, z - 0.014 * k, 'lens'),   // vitre transparente antireflet
+      SP(0.0022 * k, 0, y + 0.021, z - 0.012 * k, 'dot'),                // point rouge flottant
     ];
   },
   holo: (a) => {
     const [, y, z] = a.top, k = a.k;
     return [
       B(0.036 * k, 0.009, 0.094 * k, 0, y + 0.0045, z, 'black'),
-      B(0.034 * k, 0.012, 0.032 * k, 0, y + 0.014, z - 0.028 * k, 'gun'), // compartiment pile avant
-      B(0.006, 0.036, 0.074 * k, 0.0165 * k, y + 0.026, z, 'black'),
-      B(0.006, 0.036, 0.074 * k, -0.0165 * k, y + 0.026, z, 'black'),
-      B(0.04 * k, 0.008, 0.092 * k, 0, y + 0.047, z, 'black'),
-      B(0.027 * k, 0.031, 0.003, 0, y + 0.027, z - 0.034 * k, 'lens'),
-      SP(0.003 * k, 0, y + 0.027, z + 0.028 * k, 'dot'),
-      B(0.009 * k, 0.002, 0.002, 0, y + 0.027, z + 0.028 * k, 'dot'),
-      B(0.002, 0.009 * k, 0.002, 0, y + 0.027, z + 0.028 * k, 'dot'),
+      B(0.034 * k, 0.011, 0.032 * k, 0, y + 0.012, z - 0.028 * k, 'gun'), // compartiment pile avant bas
+      B(0.005, 0.036, 0.068 * k, 0.017 * k, y + 0.026, z, 'black'),
+      B(0.005, 0.036, 0.068 * k, -0.017 * k, y + 0.026, z, 'black'),
+      B(0.04 * k, 0.006, 0.078 * k, 0, y + 0.045, z, 'black'),
+      B(0.028 * k, 0.030, 0.0025, 0, y + 0.027, z - 0.024 * k, 'lens'),
+      SP(0.0022 * k, 0, y + 0.027, z + 0.014 * k, 'dot'),
+      B(0.009 * k, 0.0018, 0.0018, 0, y + 0.027, z + 0.014 * k, 'dot'),
+      B(0.0018, 0.009 * k, 0.0018, 0, y + 0.027, z + 0.014 * k, 'dot'),
     ];
   },
   acog: (a) => {
@@ -417,10 +417,25 @@ const ACC = {
       CZ(0.019, 0.125, 0, y + 0.031, z, 'gun', 16),
       CZ(0.019, 0.038, 0, y + 0.031, z - 0.08, 'black', 16, 0.028 * k),
       CZ(0.023, 0.032, 0, y + 0.031, z + 0.078, 'black', 16),
-      CZ(0.025, 0.004, 0, y + 0.031, z - 0.1, 'lens', 14),
-      CZ(0.018, 0.004, 0, y + 0.031, z + 0.095, 'lens', 14),
+      CZ(0.025, 0.003, 0, y + 0.031, z - 0.1, 'lens', 14),
+      CZ(0.018, 0.003, 0, y + 0.031, z + 0.095, 'lens', 14),
       B(0.006, 0.005, 0.064, 0, y + 0.053, z, 'orange'), // fibre lumineuse
       B(0.012, 0.014, 0.012, 0.022, y + 0.031, z, 'black'), // tourelle de réglage
+    ];
+  },
+  scope4x: (a) => {
+    const [, y, z] = a.top, k = a.k;
+    return [
+      B(0.026, 0.022, 0.016, 0, y + 0.012, z - 0.038, 'black'),         // collier avant
+      B(0.026, 0.022, 0.016, 0, y + 0.012, z + 0.042, 'black'),         // collier arrière
+      CZ(0.0165, 0.175, 0, y + 0.034, z - 0.006, 'parker', 16),         // tube principal long
+      CZ(0.018, 0.052, 0, y + 0.034, z - 0.112, 'black', 16, 0.027 * k), // cloche objectif + pare-soleil
+      CZ(0.022, 0.044, 0, y + 0.034, z + 0.096, 'black', 16),           // oculaire
+      CZ(0.024 * k, 0.003, 0, y + 0.034, z - 0.138, 'lens', 14),
+      CZ(0.018, 0.003, 0, y + 0.034, z + 0.118, 'lens', 14),
+      B(0.013, 0.016, 0.013, 0, y + 0.055, z + 0.002, 'black'),         // tourelle élévation
+      B(0.014, 0.013, 0.013, 0.021, y + 0.034, z + 0.002, 'black'),     // tourelle dérive
+      CZ(0.0195, 0.012, 0, y + 0.034, z + 0.068, 'tritium', 14),        // bague zoom verte
     ];
   },
   // ---- bouche
@@ -595,7 +610,7 @@ const ACC = {
 
 // Slot mapping so attachments & Pack-a-Punch accessories never overlap on the same mount
 const ACC_SLOT = {
-  redDot: 'optic', holo: 'optic', acog: 'optic', thermal: 'optic',
+  redDot: 'optic', holo: 'optic', acog: 'optic', scope4x: 'optic', thermal: 'optic',
   suppressor: 'muzzle', compensator: 'muzzle', muzzleBrake: 'muzzle', heavyBarrel: 'muzzle', choke: 'muzzle', dragon: 'muzzle', bigMuzzle: 'muzzle', warhead: 'muzzle', fragWarhead: 'muzzle', coil: 'muzzle',
   extMag: 'mag', fastMag: 'mag', drum: 'mag', tubeExt: 'mag', speedloader: 'mag', belt: 'mag', quiver: 'mag', m79Drum: 'mag', twinBulb: 'mag',
   foregrip: 'under', glauncher: 'under', shells: 'under',
@@ -606,7 +621,7 @@ const ACC_SLOT = {
 function canMount(id, accName) {
   const def = DEFS[id], a = def?.anchors;
   if (!a || !ACC[accName]) return false;
-  if ((accName === 'redDot' || accName === 'holo' || accName === 'acog') && !a.top) return false;
+  if ((accName === 'redDot' || accName === 'holo' || accName === 'acog' || accName === 'scope4x') && !a.top) return false;
   if (accName === 'thermal' && !a.sf) return false;
   if ((accName === 'suppressor' || accName === 'compensator' || accName === 'muzzleBrake' || accName === 'heavyBarrel' || accName === 'choke' || accName === 'bigMuzzle') && !a.muz) return false;
   if (accName === 'warhead' && !a.tip) return false;
@@ -622,7 +637,7 @@ function canMount(id, accName) {
   return true;
 }
 
-// Retourne la liste des accessoires compatibles groupés par emplacement pour une arme donnée (utilisé par l'atelier [T] et le tirage aléatoire)
+// Retourne la liste des accessoires compatibles groupés par emplacement (triés par niveau de déblocage croissant)
 export function compatibleAttachments(id) {
   const A = CONFIG.attachments, W = CONFIG.weapons[id];
   const bySlot = {};
@@ -634,14 +649,19 @@ export function compatibleAttachments(id) {
     if (!match || !canMount(id, accId)) continue;
     (bySlot[d.slot] ||= []).push(accId);
   }
+  for (const s of A.slots) {
+    bySlot[s].sort((a, b) => ((A.defs[a]?.unlockLevel ?? 1) - (A.defs[b]?.unlockLevel ?? 1)) || ((A.defs[a]?.price ?? 0) - (A.defs[b]?.price ?? 0)));
+  }
   return bySlot;
 }
 
-// Tire un ensemble aléatoire d'accessoires compatibles pour une arme (source: 'start' | 'wall' | 'box')
-export function rollAttachments(id, source = 'wall') {
+// Retourne [] par défaut (plus d'accessoires aléatoires gratuits au départ : déblocage par niveau + achat en points dans l'Atelier [T]).
+// L'option { force: true } reste utilisable par le menu Mods (F9) pour tester des configurations aléatoires.
+export function rollAttachments(id, source = 'wall', { force = false } = {}) {
   const A = CONFIG.attachments;
   if (!A) return [];
-  const profile = A.roll[source] || A.roll.wall;
+  if (!force && !A.roll?.enabled) return [];
+  const profile = force ? { min: 1, max: 3, slotChance: 0.75 } : (A.roll[source] || A.roll.wall);
   const bySlot = compatibleAttachments(id);
   const availSlots = A.slots.filter((s) => bySlot[s]?.length);
   if (!availSlots.length) return [];
@@ -743,17 +763,24 @@ export function attachAccessories(target, id, level, base = target, opts = {}) {
   let entry = c[key];
   if (!entry) {
     const def = DEFS[id], a = { k: 1, magRx: 0, ...def.anchors };
-    const staticParts = [], magParts = [];
+    const staticParts = [], opticParts = [], magParts = [];
     for (const name of list) {
       if (!ACC[name]) continue;
       const built = ACC[name](a, { level: level | 0, local: !!opts.local, ...(a.acc?.[name]) });
+      const isOpt = ACC_SLOT[name] === 'optic';
       for (const p of built) {
         if (p.includes('mag')) magParts.push(p);
+        else if (isOpt) opticParts.push(p);
         else staticParts.push(p);
       }
     }
     const proto = new THREE.Group(); proto.name = 'acc';
     if (staticParts.length) build(proto, MATS.get(base), staticParts);
+    if (opticParts.length) {
+      const optGrp = new THREE.Group(); optGrp.name = 'opticAcc';
+      build(optGrp, MATS.get(base), opticParts);
+      proto.add(optGrp);
+    }
     const magProto = magParts.length ? new THREE.Group() : null;
     if (magProto) { magProto.name = 'magAcc'; build(magProto, MATS.get(base), magParts); }
     entry = { proto, magProto };
@@ -771,7 +798,7 @@ export function attachAccessories(target, id, level, base = target, opts = {}) {
     if (magPiv) for (const ch of magPiv.children) if (ch.name !== 'magAcc') ch.visible = false;
   }
   if (list.includes('shortStock')) target.traverse((o) => { if (o.userData.stock) o.visible = false; });
-  if (list.includes('acog') || list.includes('redDot') || list.includes('holo')) target.traverse((o) => { if (o.userData.optic) o.visible = false; });
+  if (list.includes('acog') || list.includes('scope4x') || list.includes('redDot') || list.includes('holo')) target.traverse((o) => { if (o.userData.optic) o.visible = false; });
 }
 
 export function buildWeaponModels(parentGroup) {
