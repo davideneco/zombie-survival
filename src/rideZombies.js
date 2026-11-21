@@ -106,14 +106,14 @@ export function installRideZombies(game, { world, scene, sfx }) {
     winFx(i, st);
     if (game.isHost && game.isMultiplayer) game.net?.send({ t: 'tn_win', i, st });
   };
-  // landing spot inside, under window i : walkable landing spot in the aisle clear of furniture blocks
+  // landing spot inside, under window i : dead-center in the open aisle clear of seats
   const landing = (i, out) => {
     t.winOf(i, wo);
     const v = t.veh[wo.ci];
     let best = wo.u, bd = Infinity;
     for (const lg of v.Q.legroom) { const d = Math.abs(v.uc + lg.u - wo.u); if (d < bd) { bd = d; best = v.uc + lg.u; } }
     out.u = best;
-    out.w = v.Q.kind === 'coachR2' ? (0.10 + wo.sd * 0.05) : (wo.sd * 0.15);
+    out.w = v.Q.kind === 'coachR2' ? 0.10 : 0;
     return out;
   };
 
@@ -143,12 +143,13 @@ export function installRideZombies(game, { world, scene, sfx }) {
     sendSpawn(z);
     return z;
   };
-  // a breacher : runs alongside on side sd, toward a free window, from behind it (back) or ahead
+  // a breacher : runs alongside on side sd, toward a free window, visibly running up before grabbing glass
   const spawnBreacher = (sd, back) => {
     const wi = pickWindow(sd, midU());
     if (wi < 0) return null;
     t.winOf(wi, wo);
-    const u = wo.u + (back ? -1 : 1) * rnd(B.from[0], B.from[1]), w = sd * (Wd + B.out);
+    const minRun = Math.max(6.5, B.from[0]), maxRun = Math.max(minRun + 4, B.from[1]);
+    const u = wo.u + (back ? -1 : 1) * rnd(minRun, maxRun), w = sd * (Wd + B.out + 0.4);
     t.walkToWorld(u, w, 0, wp);
     const z = make('brch', wp.x, groundAt(w), wp.z);
     z.onTrain = { v: t, u, w, y: groundAt(w), st: 'run', sd, win: wi, t: 0 };
@@ -157,20 +158,37 @@ export function installRideZombies(game, { world, scene, sfx }) {
     sendSpawn(z, { tn: [wo.ci, sd, wo.k] });
     return z;
   };
-  // a gangway zombie : enters from an adjacent coach vestibule across the bellows and walks into the players' coach
+  // a gangway zombie : spawns far inside an adjacent coach (>= 13 m from any player so it never pops in front of them)
+  // and immediately tracks players through the gangway instead of marching blindly to a fixed point
   const spawnGang = (idx = 0) => {
-    const pCi = clamp(t.moduleAt(midU()), 1, Math.max(1, t.n - 2));
-    const dir = idx % 2 === 0 ? -1 : 1; // -1 : smaller index (+u forward), +1 : larger index (-u rear)
-    const adjCi = clamp(pCi + dir, 0, t.n - 1);
-    const vAdj = t.veh[adjCi], vPl = t.veh[pCi];
-    const toPl = Math.sign(vPl.uc - vAdj.uc) || 1; // +u when vPl is forward of vAdj, -u when rear
-    const u = vAdj.uc + toPl * Math.min(6.0, vAdj.len / 2 - 1.8);
-    const gu = vPl.uc - toPl * Math.min(6.0, vPl.len / 2 - 2.4);
-    const w = rnd(-0.16, 0.16), fy = t.floorAt(u, w, t.railY + T.floor);
+    playerUs(_pu);
+    const pu = midU();
+    const pCi = clamp(t.moduleAt(pu), 1, Math.max(1, t.n - 2));
+    const preferDir = idx % 2 === 0 ? -1 : 1;
+    const minU = -t.L / 2 + 6, maxU = t.L / 2 - 6;
+    let bestU = null, bestScore = -Infinity;
+    for (const dir of [preferDir, -preferDir]) {
+      for (const step of [1, 2]) {
+        const ci = pCi + dir * step;
+        if (ci < 0 || ci >= t.n) continue;
+        const vAdj = t.veh[ci];
+        // Pick the saloon center of the distant coach (clear of vestibules & players)
+        const candU = clamp(vAdj.uc + rnd(-1.5, 1.5), minU, maxU);
+        let minDist = Infinity;
+        for (const q of _pu) minDist = Math.min(minDist, Math.abs(candU - q));
+        if (!_pu.length) minDist = Math.abs(candU - pu);
+        // Prefer 13..28 m away: out of instant pop-in view, but close enough to arrive quickly
+        const score = minDist >= 12.5 ? (40 - Math.abs(minDist - 18)) : (minDist - 50);
+        if (score > bestScore) { bestScore = score; bestU = candU; }
+      }
+    }
+    const u = bestU != null ? bestU : clamp(pu + (pu > 0 ? -16 : 16), minU, maxU);
+    const w = rnd(-0.10, 0.10), fy = t.floorAt(u, w, t.railY + T.floor);
     t.walkToWorld(u, w, fy, wp);
     const z = make('gang', wp.x, fy, wp.z);
-    z.onTrain = { v: t, u, w, y: fy, st: 'gang', sd: 1, win: -1, t: 0, gu, stairEnd: 0, stuckT: 0 };
-    z.yaw = frameYaw(u) + (gu < u ? Math.PI : 0); z.group.rotation.set(0, z.yaw, 0);
+    // Enter directly as 'in' so trainZombieStep immediately tracks players across coaches & decks
+    z.onTrain = { v: t, u, w, y: fy, st: 'in', sd: 1, win: -1, t: 0, stairEnd: 0, stuckT: 0 };
+    z.yaw = frameYaw(u) + (pu < u ? Math.PI : 0); z.group.rotation.set(0, z.yaw, 0);
     sendSpawn(z);
     return z;
   };
@@ -270,10 +288,12 @@ export function installRideZombies(game, { world, scene, sfx }) {
       pose = 'climb';
       if (k >= 1) { O.st = 'in'; O.y = t.floorAt(O.u, O.w, landY); release(z); pose = 'walk'; }
     } else if (O.st === 'gang') {
-      const gDir = Math.sign((O.gu ?? O.u) - O.u) || 1;
-      O.u += gDir * z.speed * T.zombie.speedK * dt; O.w *= Math.max(0, 1 - dt * 2); O.y = t.floorAt(O.u, O.w, O.y);
+      const pu = nearestPU(O.u);
+      const gDir = Math.sign(pu - O.u) || 1;
+      O.t = (O.t || 0) + dt;
+      O.u += gDir * z.speed * T.zombie.speedK * dt; O.w *= Math.max(0, 1 - dt * 3); O.y = t.floorAt(O.u, O.w, O.y);
       z.yaw = frameYaw(O.u) + (gDir < 0 ? Math.PI : 0);
-      if ((gDir > 0 && O.u >= O.gu) || (gDir < 0 && O.u <= O.gu)) O.st = 'in';
+      if (O.t > 0.8 || Math.abs(pu - O.u) < 8) O.st = 'in';
     }
     t.walkToWorld(O.u, O.w, O.y, z.pos);
     z.group.rotation.y = z.yaw; if (pose !== 'climb' && pose !== 'hang') z.group.rotation.x = 0;

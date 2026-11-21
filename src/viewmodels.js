@@ -606,21 +606,36 @@ const ACC = {
     const [x, y, z] = a.side;
     return [CZ(0.011, 0.09, x + 0.011, y + 0.012, z, 'ether', 8), B(0.008, 0.026, 0.016, x + 0.004, y + 0.012, z - 0.03, 'black'), B(0.008, 0.026, 0.016, x + 0.004, y + 0.012, z + 0.03, 'black')];
   },
+  // Détente FRT (Forced Reset Trigger) : queue de détente rouge anodisée + barre de réarmement forcé et sélecteur auto à l'arrière
+  frt: (a) => {
+    const sx = (a.side?.[0] || 0.018) + 0.0025;
+    const sy = (a.side?.[1] || 0) - 0.01;
+    const k = a.k || 1;
+    return [
+      B(0.007, 0.026 * k, 0.012 * k, 0, -0.034 * k, 0.006, 'red', 0.28),
+      B(0.009, 0.008 * k, 0.014 * k, 0, -0.044 * k, 0.002, 'gold', 0.2),
+      B(0.004, 0.010, 0.056 * k, sx, sy, 0.012, 'gun'),
+      B(0.005, 0.012, 0.014, sx + 0.001, sy + 0.006, 0.038 * k, 'red'),
+      B(0.005, 0.006, 0.012, -sx, sy + 0.006, 0.038 * k, 'gold'),
+      CZ(0.004, 0.010, sx + 0.003, sy + 0.006, 0.038 * k, 'gold', 8),
+    ];
+  },
 };
 
-// Slot mapping so attachments & Pack-a-Punch accessories never overlap on the same mount
+// Slot mapping so attachments & Pack-a-Punch accessories never overlap on the same mount (1 max par emplacement)
 const ACC_SLOT = {
   redDot: 'optic', holo: 'optic', acog: 'optic', scope4x: 'optic', thermal: 'optic',
   suppressor: 'muzzle', compensator: 'muzzle', muzzleBrake: 'muzzle', heavyBarrel: 'muzzle', choke: 'muzzle', dragon: 'muzzle', bigMuzzle: 'muzzle', warhead: 'muzzle', fragWarhead: 'muzzle', coil: 'muzzle',
   extMag: 'mag', fastMag: 'mag', drum: 'mag', tubeExt: 'mag', speedloader: 'mag', belt: 'mag', quiver: 'mag', m79Drum: 'mag', twinBulb: 'mag',
-  foregrip: 'under', glauncher: 'under', shells: 'under',
-  laser: 'tac', tacLight: 'tac', flashlight: 'tac',
+  foregrip: 'under', glauncher: 'under', shells: 'under', laser: 'under', tacLight: 'under', flashlight: 'under',
+  frt: 'trigger',
 };
 
 // Vérifie qu'un accessoire dispose bien de ses ancres sur cette arme
 function canMount(id, accName) {
   const def = DEFS[id], a = def?.anchors;
   if (!a || !ACC[accName]) return false;
+  if (accName === 'frt') return CONFIG.weapons[id]?.cat === 'pistol';
   if ((accName === 'redDot' || accName === 'holo' || accName === 'acog' || accName === 'scope4x') && !a.top) return false;
   if (accName === 'thermal' && !a.sf) return false;
   if ((accName === 'suppressor' || accName === 'compensator' || accName === 'muzzleBrake' || accName === 'heavyBarrel' || accName === 'choke' || accName === 'bigMuzzle') && !a.muz) return false;

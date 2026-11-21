@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { CONFIG, PAP_LEVELS, falloffMult, papPulse, papStats } from './config.js';
+import { CONFIG, PAP_LEVELS, falloffMult, papPulse, papStats, sanitizeAttachmentsBySlot } from './config.js';
 import { buildWeaponModels, attachAccessories, rollAttachments } from './viewmodels.js';
 import { FPHands } from './fpHands.js';
 import { RideCam } from './rideCam.js';
@@ -64,7 +64,8 @@ export class Player {
   // overrideAtts (optionnel) : permet à l'atelier [T] de prévisualiser les stats avant achat/équipement sans muter l'arme.
   statsOf(w, overrideAtts = null) {
     const lv = w.pap | 0;
-    const atts = Array.isArray(overrideAtts) ? overrideAtts : (Array.isArray(w.atts) ? w.atts : []);
+    const rawAtts = Array.isArray(overrideAtts) ? overrideAtts : (Array.isArray(w.atts) ? w.atts : []);
+    const atts = sanitizeAttachmentsBySlot(rawAtts);
     const useCache = overrideAtts == null;
     const cs = this.charStats();
     const key = `${lv}|${atts.join(',')}|${this.statsVersion}|${this.ch?.id || ''}`;
@@ -72,7 +73,7 @@ export class Player {
     const base = CONFIG.weapons[w.id];
     const s = { ...base, ...papStats(base, lv) };
     // Accessoires d'arme : dégâts, tête, cadence, chargeur, réserve, rechargement, précision, recul, portée…
-    let dmgM = 1, headM = 1, rateM = 1, magM = 1, resM = 1, relM = 1, sprM = 1, hipM = 1, recM = 1, rngM = 1, adsDelta = 0, silenced = false;
+    let dmgM = 1, headM = 1, rateM = 1, magM = 1, resM = 1, relM = 1, sprM = 1, hipM = 1, recM = 1, rngM = 1, adsDelta = 0, silenced = false, fullAuto = false;
     let sightType = null, zoomMult = 0, opticLabel = '';
     const attLabels = [];
     const defs = CONFIG.attachments?.defs || {};
@@ -97,6 +98,11 @@ export class Player {
         opticLabel = d.short || d.name;
       }
       if (d.silenced) silenced = true;
+      if (d.fullAuto) fullAuto = true;
+    }
+    if (fullAuto) {
+      s.type = 'auto';
+      s.fullAuto = true;
     }
     if (dmgM !== 1) {
       s.damage = Math.round(s.damage * dmgM);
@@ -209,7 +215,7 @@ export class Player {
 
   newWeapon(id, source = 'wall', forcedAtts = null) {
     const cfg = CONFIG.weapons[id];
-    const atts = Array.isArray(forcedAtts) ? forcedAtts.slice() : rollAttachments(id, source);
+    const atts = sanitizeAttachmentsBySlot(Array.isArray(forcedAtts) ? forcedAtts : rollAttachments(id, source));
     const w = { id, ammo: cfg.magSize, reserve: cfg.startReserve, reloading: false, reloadT: 0, pap: 0, gl: 0, atts, ownedAtts: atts.slice() };
     const s = this.statsOf(w);
     w.ammo = s.magSize;
@@ -221,7 +227,7 @@ export class Player {
   setWeaponAttachments(w, nextAtts, { newlyBought = false } = {}) {
     if (!w) return;
     const prevS = this.statsOf(w);
-    w.atts = Array.isArray(nextAtts) ? nextAtts.slice() : [];
+    w.atts = sanitizeAttachmentsBySlot(Array.isArray(nextAtts) ? nextAtts : []);
     if (!Array.isArray(w.ownedAtts)) w.ownedAtts = w.atts.slice();
     for (const a of w.atts) if (!w.ownedAtts.includes(a)) w.ownedAtts.push(a);
     w._statsKey = null;
@@ -297,7 +303,7 @@ export class Player {
     const existing = this.inventory.findIndex((x) => x.id === id);
     if (existing >= 0) {
       w = this.inventory[existing];
-      if (Array.isArray(forcedAtts)) { w.atts = forcedAtts.slice(); w._statsKey = null; }
+      if (Array.isArray(forcedAtts)) { w.atts = sanitizeAttachmentsBySlot(forcedAtts); w._statsKey = null; }
       this.switchWeapon(existing);
     } else {
       w = this.newWeapon(id, source, forcedAtts);

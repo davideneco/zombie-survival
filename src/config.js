@@ -217,12 +217,13 @@ export const CONFIG = {
       wall:  { min: 0, max: 0, slotChance: 0 },
       box:   { min: 0, max: 0, slotChance: 0 },
     },
-    slots: ['optic', 'muzzle', 'mag', 'under'],
+    slots: ['optic', 'muzzle', 'mag', 'under', 'trigger'],
     slotLabels: {
-      optic:  'VISEUR / OPTIQUE',
-      muzzle: 'BOUCHE / CANON',
-      mag:    'CHARGEUR / MUNITIONS',
-      under:  'SOUS-CANON / TACTIQUE',
+      optic:   'VISEUR / OPTIQUE',
+      muzzle:  'BOUCHE / CANON',
+      mag:     'CHARGEUR / MUNITIONS',
+      under:   'SOUS-CANON / TACTIQUE',
+      trigger: 'DÉTENTE / MÉCANISME',
     },
     defs: {
       // ---- viseurs / optiques (chaque optique a sa propre visée et son niveau de zoom)
@@ -255,6 +256,8 @@ export const CONFIG = {
       laser:       { slot: 'under',  unlockLevel: 2,  price: 600,  name: 'Pointeur laser',        short: 'LASER',         hipSpreadMult: 0.58, spreadMult: 0.92, headMult: 1.08, cats: ['pistol', 'ar', 'smg', 'mg', 'sniper', 'shotgun', 'special'] },
       foregrip:    { slot: 'under',  unlockLevel: 4,  price: 650,  name: 'Poignée verticale',     short: 'POIGNÉE',       recoilMult: 0.72, spreadMult: 0.84, fireRateMult: 1.05, cats: ['ar', 'smg', 'mg'] },
       shells:      { slot: 'under',  unlockLevel: 7,  price: 900,  name: 'Cartouchière de crosse', short: 'CARTOUCHIÈRE', reloadMult: 0.74, reserveMult: 1.25, damageMult: 1.06, ids: ['shotgun', 'saiga', 'sniper', 'svd', 'barrett'] },
+      // ---- détente / mécanisme
+      frt:         { slot: 'trigger', unlockLevel: 5, price: 1150, name: 'Détente FRT (Auto)',    short: 'FRT AUTO',      fullAuto: true, fireRateMult: 1.40, recoilMult: 1.15, spreadMult: 1.10, cats: ['pistol'] },
     },
   },
 
@@ -1142,17 +1145,17 @@ export const CONFIG = {
   // Système de compte, expérience et grades de carrière (src/account.js, server/accounts.mjs)
   account: {
     maxLevel: 50,
-    xpBase: 150,
-    xpPow: 1.35,
+    xpBase: 550,
+    xpPow: 1.22,
     maxHistory: 8,
     xp: {
-      kill: 15,
-      headshotBonus: 10,
+      kill: 12,
+      headshotBonus: 6,
       bossKill: 150,
-      roundBase: 60,
+      roundBase: 50,
       roundStep: 15,
-      revive: 75,
-      victory: 500,
+      revive: 65,
+      victory: 450,
     },
     ranks: [
       { level: 1, name: 'Recrue', icon: '🪖', color: '#94a3b8' },
@@ -1360,6 +1363,20 @@ export function isAttachmentUnlocked(accId, level = 1, unlockAll = false) {
   if (unlockAll) return true;
   const req = CONFIG.attachments?.defs?.[accId]?.unlockLevel ?? 1;
   return (level | 0) >= req;
+}
+
+// Garantit au plus 1 accessoire par emplacement (impossible d'avoir silencieux + compensateur, 2 viseurs, 2 chargeurs, etc.)
+// En cas de doublon dans le même emplacement, le dernier accessoire de la liste l'emporte.
+export function sanitizeAttachmentsBySlot(atts) {
+  if (!Array.isArray(atts) || !atts.length) return [];
+  const defs = CONFIG.attachments?.defs || {};
+  const bySlot = new Map();
+  for (const id of atts) {
+    const d = defs[id];
+    if (!d || !d.slot) continue;
+    bySlot.set(d.slot, id);
+  }
+  return [...bySlot.values()];
 }
 
 // Contrôle de cohérence, en mode ?debug uniquement

@@ -710,9 +710,16 @@ export class Zombie {
 
       if (moved < sp * dt * 0.35) {
         this.stuckT += dt;
-        if (this.stuckT > 0.35 && this.sidestepT <= 0) {
-          this.sidestepT = 1.0;
-          this.sidestepDir = Math.random() < 0.5 ? -1 : 1;
+        if (this.stuckT > 0.30 && this.sidestepT <= 0) {
+          this.sidestepT = 0.85;
+          // Choisit la tangente qui contourne l'obstacle vers la cible plutôt qu'un tirage aléatoire qui peut s'en éloigner
+          if (colOut.push > 0.01 && (colOut.nx || colOut.nz)) {
+            const cross = colOut.nx * dz - colOut.nz * dx;
+            const smartDir = Math.abs(cross) > 0.05 ? Math.sign(cross) : ((this.sidestepDir || 1) * -1);
+            this.sidestepDir = (this.noProgress > 2.0) ? ((this.sidestepDir || 1) * -1) : smartDir;
+          } else {
+            this.sidestepDir = (this.sidestepDir || (this.id % 2 ? 1 : -1)) * -1;
+          }
           this.stuckT = 0;
         }
       } else {

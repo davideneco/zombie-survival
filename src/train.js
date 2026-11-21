@@ -533,26 +533,43 @@ export function installTrain(game, { world, hud }) {
       const relY = O.y - t.railY, zUpper = relY > 1.45, tgtUpper = tgtIn ? (target.pos.y - t.railY) > 1.45 : false;
       const vIdx = t.moduleAt(O.u), vc = t.veh[vIdx], tIdx = tgtIn ? t.moduleAt(loc2.u) : vIdx;
       const du0 = O.u - vc.uc, au = Math.abs(du0), sameCoach = tgtIn ? vIdx === tIdx : false;
-      // Clear stair commitment once cleanly back in a saloon/vestibule or switching coach targets
-      if (!vc.Q.duplex || (sameCoach && zUpper === tgtUpper && au < 3.60) || (!tgtIn && O.st !== 'leave')) O.stairEnd = 0;
+      // Clear stale stair commitment whenever target switches coach/deck or zombie returns cleanly to a saloon/vestibule
+      if (
+        !vc.Q.duplex ||
+        O.lastTgtCoach !== tIdx ||
+        O.lastTgtUpper !== tgtUpper ||
+        (sameCoach && zUpper === tgtUpper && au < 3.60) ||
+        (!tgtIn && O.st !== 'leave')
+      ) {
+        O.stairEnd = 0;
+        O.lastTgtCoach = tIdx;
+        O.lastTgtUpper = tgtUpper;
+      }
       const pickEnd = (wantU) => {
         if (O.stairEnd === 1 || O.stairEnd === -1) return O.stairEnd;
         const d = wantU != null ? (wantU >= vc.uc ? 1 : -1) : (du0 >= 0 ? 1 : -1);
         O.stairEnd = d;
         return d;
       };
+      // Guaranteed-open corridor centerline at the zombie's current (u, deck) for unsticking
+      const safeCorridorW = () => {
+        if (!vc.Q.duplex) return 0;
+        if (zUpper) return (au >= 3.65 && O.w < -0.35) ? -0.82 : 0;
+        if (au >= 3.40 && au < 5.75) return O.w < -0.35 ? -0.82 : 0.52;
+        return 0;
+      };
       // Lower-deck Duplex waypoint helper toward target u `wantU` without colliding with divider wall, under-stair bulkhead, or seats
       const duplexLowerGoal = (wantU, finalW) => {
         const wantAu = Math.abs(wantU - vc.uc);
         const crossBulkhead = (au < 3.85 && wantAu > 3.65) || (au >= 3.85 && (wantAu < 3.85 || Math.sign(wantU - vc.uc) !== Math.sign(du0)));
-        // In or approaching the stairwell zone [3.05..5.68]: shift to open right ramp w = +0.52 first if crossing bulkhead
-        if (au >= 3.05 && au < 5.68 && (au >= 3.75 || crossBulkhead)) {
-          return [wantU, 0.52, O.w < 0.36];
+        // In or approaching the stairwell zone [3.05..5.72]: align to open right ramp w = +0.52 BEFORE crossing bulkhead
+        if (au >= 3.05 && au < 5.72 && (au >= 3.70 || crossBulkhead)) {
+          return [wantU, 0.52, Math.abs(O.w - 0.52) > 0.16];
         }
-        // Through the lower saloon seats (|du0| < 3.25), keep in the open central aisle
-        if (au < 3.25) return [wantU, Math.abs(wantU - O.u) > 0.9 ? 0 : finalW, Math.abs(wantU - O.u) > 0.9];
+        // Through the lower saloon seats (|du0| < 3.25), keep cleanly in the central aisle
+        if (au < 3.25) return [wantU, Math.abs(wantU - O.u) > 0.85 ? 0 : finalW, Math.abs(wantU - O.u) > 0.85];
         // Outside stairwell zone in vestibule/gangway: center through gangway [-0.66..+0.66]
-        return [wantU, 0, Math.abs(wantU - O.u) > 0.9];
+        return [wantU, 0, Math.abs(wantU - O.u) > 0.85];
       };
       // goal in (u, w)
       let gu, gw, aisle = false;
@@ -562,8 +579,8 @@ export function installTrain(game, { world, hud }) {
       } else if (O.st === 'leave') {
         if (zUpper && vc.Q.duplex) {
           const sDir = pickEnd(O.door);
-          if (au < 3.65 && O.w > -0.45) { gu = vc.uc + sDir * 3.35; gw = -0.82; }
-          else { gu = vc.uc + sDir * 6.05; gw = -0.82; }
+          if (au < 3.65 && O.w > -0.45) { gu = vc.uc + sDir * 3.35; gw = -0.82; aisle = true; }
+          else { gu = vc.uc + sDir * 6.05; gw = -0.82; aisle = Math.abs(O.w + 0.82) > 0.22; }
         } else {
           const sameDoor = t.moduleAt(O.door) === vIdx;
           if (!sameDoor || (vc.Q.duplex && au < 5.65 && Math.abs(O.u - O.door) > 0.5)) {
@@ -576,30 +593,31 @@ export function installTrain(game, { world, hud }) {
       } else if (!tgtIn) {
         gu = O.u; gw = 0; aisle = Math.abs(O.w) > 0.18;
       } else if (zUpper && (!tgtUpper || !sameCoach) && vc.Q.duplex) {
-        // Upper deck zombie descending Duplex left stairs (w = -0.82) to vestibule (to reach lower deck or another coach)
-        const sDir = !sameCoach ? pickEnd(loc2.u) : pickEnd(null);
-        if (au < 3.65 && O.w > -0.45) { gu = vc.uc + sDir * 3.35; gw = -0.82; }
-        else { gu = vc.uc + sDir * 6.05; gw = -0.82; }
+        // Upper deck zombie descending Duplex left stairs (w = -0.82) to vestibule (always picking end toward target!)
+        const sDir = pickEnd(!sameCoach ? loc2.u : (au > 1.2 ? O.u : loc2.u));
+        if (au < 3.65 && O.w > -0.45) { gu = vc.uc + sDir * 3.35; gw = -0.82; aisle = true; }
+        else { gu = vc.uc + sDir * 6.05; gw = -0.82; aisle = Math.abs(O.w + 0.82) > 0.22; }
       } else if (!zUpper && tgtUpper && sameCoach && vc.Q.duplex) {
         // Lower/vestibule deck zombie climbing Duplex left stairs up to target's coach upper deck
-        const sDir = pickEnd(null);
+        // If already in a vestibule, climb that vestibule's stairs; otherwise head toward the end closest to the player
+        const sDir = pickEnd(au >= 5.2 ? O.u : loc2.u);
         if (au < 3.70) {
-          // Inside lower saloon: must route right past bulkhead through right lower ramp to vestibule first
-          gu = vc.uc + (O.w < 0.25 ? sDir * 3.25 : sDir * 6.05); gw = 0.52;
+          // Inside lower saloon: shift onto open right ramp line w = +0.52 cleanly before crossing bulkhead toward vestibule
+          gu = vc.uc + sDir * 6.05; gw = 0.52; aisle = O.w < 0.36;
         } else if (au < 5.68 && O.w >= -0.05) {
           // Currently in right lower ramp heading outward to vestibule
-          gu = vc.uc + sDir * 6.05; gw = 0.52;
-        } else if (au >= 5.68 && O.w > -0.45) {
-          // In open vestibule: cross safely at au >= 5.75 onto left stair line w = -0.82
-          gu = vc.uc + sDir * 6.00; gw = -0.82;
+          gu = vc.uc + sDir * 6.05; gw = 0.52; aisle = Math.abs(O.w - 0.52) > 0.18;
+        } else if (au >= 5.68 && O.w > -0.48) {
+          // In open vestibule: cross safely onto left stair line w = -0.82
+          gu = vc.uc + sDir * 6.00; gw = -0.82; aisle = true;
         } else {
-          // On left stair line (w <= -0.45): climb INWARD up staircase onto upper landing!
-          gu = vc.uc + sDir * 3.20; gw = -0.82;
+          // On left stair line (w <= -0.48): climb INWARD up staircase onto upper landing!
+          gu = vc.uc + sDir * 3.15; gw = -0.82; aisle = Math.abs(O.w + 0.82) > 0.2;
         }
       } else if (zUpper && vc.Q.duplex && O.w < -0.50 && au >= 3.70) {
         // Finishing climb onto the upper landing before walking into upper saloon
         const sDir = du0 >= 0 ? 1 : -1;
-        gu = vc.uc + sDir * 3.20; gw = -0.82;
+        gu = vc.uc + sDir * 3.15; gw = -0.82;
       } else if (!sameCoach) {
         // Cross-coach traversal on lower/vestibule deck
         [gu, gw, aisle] = vc.Q.duplex ? duplexLowerGoal(loc2.u, 0) : [loc2.u, 0, Math.abs(loc2.u - O.u) > 0.6];
@@ -624,12 +642,18 @@ export function installTrain(game, { world, hud }) {
         gu = loc2.u; gw = loc2.w; aisle = Math.abs(loc2.u - O.u) > 0.75;
         if (aisle) gw = 0;
       }
-      // Stuck sidestep relief if blocked by geometry or another zombie in tight gangways
+      // Unstick relief: steer cleanly back onto the guaranteed-open corridor centerline (never into walls/seats)
       if ((O.tryT = Math.max(0, (O.tryT || 0) - dt)) > 0) {
-        gw = clamp(gw + (O.trySign || 1) * 0.34, -W.wall + 0.35, W.wall - 0.35);
+        gw = safeCorridorW();
+        aisle = Math.abs(O.w - gw) > 0.14;
       }
       let du = gu - O.u, dw = gw - O.w;
-      if (aisle && Math.abs(O.w - gw) > 0.15) { du = Math.sign(du) * Math.min(Math.abs(du), 0.35); dw = (gw - O.w) * 3; } // back to the aisle first
+      if (aisle && Math.abs(dw) > 0.16) {
+        // Align into the open corridor FIRST when significantly offset so zombies never ram diagonally into seat backs or bulkheads
+        const uScale = Math.abs(dw) > 0.28 ? 0 : 0.35;
+        du = Math.sign(du) * Math.min(Math.abs(du), uScale);
+        dw = Math.sign(dw) * Math.max(Math.abs(dw) * 3, 0.8);
+      }
       const dl = Math.hypot(du, dw);
       const inRange = !!tgtIn && O.st === 'in' && Math.hypot(target.pos.x - z.pos.x, target.pos.z - z.pos.z) < CONFIG.zombie.attackRange && Math.abs(target.pos.y - z.pos.y) < 1.35;
       if (!inRange && z.attackWindup >= 0 && !target) z.attackWindup = -1; // (its target fell : no blow in the air)
@@ -637,23 +661,39 @@ export function installTrain(game, { world, hud }) {
       if (!inRange && z.attackWindup < 0 && dl > 0.05) {
         const sp = (z.limp ? z.speed * 0.8 : z.speed) * (z.slowT > 0 ? z.slowK : 1) * Z.speedK, k = Math.min(dl, sp * dt) / dl;
         pt.u = O.u + du * k; pt.w = O.w + dw * k;
-        // other zombies in the train : keep apart softly (gentler during sidestep so crowds don't deadlock in corridors)
-        const sepK = O.tryT > 0 ? 0.18 : 0.42;
+        // Soft corridor-aligned zombie separation (push mostly along u, minimal w push so crowds never wedge each other into seats)
+        const sepK = O.tryT > 0 ? 0.12 : 0.32;
         for (const o of game.zombies) {
           if (o === z || o.dead || !o.onTrain || o.onTrain.v !== t) continue;
+          if (Math.abs(o.onTrain.y - O.y) > 1.2) continue;
           const eu = pt.u - o.onTrain.u, ew = pt.w - o.onTrain.w, d = Math.hypot(eu, ew);
-          if (d > 0.001 && d < 0.56) {
-            const pPush = (0.56 - d) * sepK;
-            pt.u += (eu / d) * pPush; pt.w += (ew / d) * pPush * 0.5;
+          if (d > 0.001 && d < 0.52) {
+            const pPush = (0.52 - d) * sepK;
+            pt.u += (eu / d) * pPush; pt.w += (ew / d) * pPush * 0.18;
           }
         }
         pushOut(t.walkLists(pt.u, O.st !== 'in' && !zUpper, O.y), pt, Z.radius);
         moving = Math.hypot(pt.u - O.u, pt.w - O.w) > sp * dt * 0.2;
-        if (!moving && dl > 0.25) {
-          O.stuckT = (O.stuckT || 0) + dt;
-          if (O.stuckT > 0.35) { O.tryT = 0.75; O.trySign = (O.trySign || (z.id % 2 ? 1 : -1)) * -1; O.stuckT = 0; }
-        } else {
-          O.stuckT = Math.max(0, (O.stuckT || 0) - dt);
+
+        // Real progress tracking over time so zombies can NEVER get permanently stuck behind seats/corners/stairs
+        if (O.progU == null) { O.progU = O.u; O.progW = O.w; O.progT = 0; O.hardStuck = 0; }
+        O.progT += dt;
+        if (Math.hypot(pt.u - O.progU, pt.w - O.progW) > 0.45) {
+          O.progU = pt.u; O.progW = pt.w; O.progT = 0; O.hardStuck = 0; O.stuckT = 0;
+        } else if (O.progT > 1.0 && dl > 0.35) {
+          O.hardStuck = (O.hardStuck || 0) + O.progT;
+          O.progT = 0;
+          O.tryT = 0.85;
+          O.stairEnd = 0;
+          if (O.hardStuck >= 2.2) {
+            // Escalated smooth slide onto the open corridor centerline toward target
+            const sw = safeCorridorW();
+            pt.w += (sw - pt.w) * 0.65;
+            pt.u += Math.sign(gu - pt.u) * 0.42;
+            pushOut(t.walkLists(pt.u, O.st !== 'in' && !zUpper, O.y), pt, Z.radius);
+            O.hardStuck = 0;
+            O.progU = pt.u; O.progW = pt.w;
+          }
         }
         if (moving) { // face the way it walks (world)
           t.frame(pt.u, tmp);
@@ -662,7 +702,7 @@ export function installTrain(game, { world, hud }) {
         }
         O.u = pt.u; O.w = pt.w;
       } else if (inRange) { // face the target
-        O.stuckT = 0;
+        O.stuckT = 0; O.progT = 0; O.hardStuck = 0;
         let d = Math.atan2(target.pos.x - z.pos.x, target.pos.z - z.pos.z) - z.yaw; d = Math.atan2(Math.sin(d), Math.cos(d)); z.yaw += d * Math.min(1, dt * 8);
       }
       const inside = Math.abs(O.w) < T.width / 2;

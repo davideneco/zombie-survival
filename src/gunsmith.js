@@ -21,6 +21,7 @@ const fmtZoom = (z) => `×${String(z).replace('.', ',')}`;
 
 function describeBonuses(def) {
   const tags = [];
+  if (def.fullAuto) tags.push({ txt: 'Tir automatique', good: true });
   if (def.zoomMult) tags.push({ txt: `Zoom ${fmtZoom(def.zoomMult)}`, good: true });
   else if (def.adsFovDelta) tags.push({ txt: 'Zoom optique', good: true });
   if (def.damageMult) tags.push({ txt: `${pct(def.damageMult)} Dégâts`, good: def.damageMult > 1 });
@@ -228,8 +229,11 @@ export function installGunsmith(game, { hud, sfx }) {
         this.render();
         return;
       }
-      const def = CONFIG.attachments?.defs?.[accId];
+      const defs = CONFIG.attachments?.defs || {};
+      const def = defs[accId];
       if (!def) return;
+      const prevId = (w.atts || []).find((a) => defs[a]?.slot === slot && a !== accId) || null;
+      const prevName = prevId ? (defs[prevId]?.name || prevId) : '';
       const owned = w.ownedAtts.includes(accId);
       if (!owned) {
         const info = game.account ? game.account.levelInfo() : { level: 1, totalXp: 0 };
@@ -252,11 +256,12 @@ export function installGunsmith(game, { hud, sfx }) {
         const next = withSlotAtt(w.atts, slot, accId);
         p.setWeaponAttachments(w, next, { newlyBought: true });
         sfx.buy?.();
-        hud.toast(`${def.name} acheté et monté (-${price} pts)`, 2200);
+        hud.toast(prevName ? `${def.name} monté — remplace ${prevName} (-${price} pts)` : `${def.name} acheté et monté (-${price} pts)`, 2400);
       } else {
         const next = withSlotAtt(w.atts, slot, accId);
         p.setWeaponAttachments(w, next, { newlyBought: false });
         sfx.tick?.(0.8);
+        if (prevName) hud.toast(`${def.name} monté — remplace ${prevName}`, 1800);
       }
       this.hoverAtts = null;
       this.render();
@@ -287,6 +292,7 @@ export function installGunsmith(game, { hud, sfx }) {
         { label: 'PORTÉE', cur: curS.range, prev: prevS.range, max: 200, fmt: (v) => `${v} m`, higherGood: true },
       ];
       const badges = [];
+      if (prevS.fullAuto) badges.push('<span class="gs-spec on">⚡ TIR AUTOMATIQUE (FRT)</span>');
       if (prevS.silenced) badges.push('<span class="gs-spec on">🔇 SILENCIEUX</span>');
       if (prevS.zoomMult && prevS.zoomMult > 1.25) badges.push(`<span class="gs-spec on">🎯 ZOOM ${fmtZoom(prevS.zoomMult)}${prevS.opticLabel ? ` (${esc(prevS.opticLabel)})` : ''}</span>`);
       if (prevS.hipSpreadMult < 0.99) badges.push(`<span class="gs-spec on">⚡ TIR AU JUGÉ +${Math.round((1 - prevS.hipSpreadMult) * 100)}%</span>`);
@@ -383,7 +389,7 @@ export function installGunsmith(game, { hud, sfx }) {
               return `
                 <div class="gs-slot-section">
                   <div class="gs-slot-head">
-                    <span class="gs-slot-name">${esc(A.slotLabels?.[slot] || slot.toUpperCase())}</span>
+                    <span class="gs-slot-name">${esc(A.slotLabels?.[slot] || slot.toUpperCase())} <small style="opacity:.6;font-weight:500">(1 max)</small></span>
                     <span class="gs-slot-cur">${equippedId ? `✅ ${esc(eqName)}` : 'Standard'}</span>
                     ${equippedId ? `<button class="gs-unequip-btn" data-gs-unequip="${slot}">Retirer</button>` : ''}
                   </div>
@@ -397,15 +403,16 @@ export function installGunsmith(game, { hud, sfx }) {
                       const price = d.price ?? 500;
                       const canAfford = game.points >= price;
                       const bonuses = describeBonuses(d);
+                      const willReplace = !!equippedId && !isEq;
                       const cls = isEq ? 'equipped' : isOwned ? 'owned' : !unlocked ? 'level-locked' : canAfford ? 'buyable' : 'locked';
                       const badge = isEq ? 'ÉQUIPÉ' : isOwned ? 'ACQUIS' : !unlocked ? `🔒 NIV. ${reqLv}` : `${price} pts`;
                       const btnText = isEq
                         ? 'RETIRER'
                         : isOwned
-                          ? 'ÉQUIPER (GRATUIT)'
+                          ? (willReplace ? 'REMPLACER (GRATUIT)' : 'ÉQUIPER (GRATUIT)')
                           : !unlocked
                             ? `DÉBLOQUÉ NIV. ${reqLv} · ${price} PTS`
-                            : `ACHETER · ${price} PTS`;
+                            : (willReplace ? `REMPLACER · ${price} PTS` : `ACHETER · ${price} PTS`);
                       return `
                         <button class="gs-att-card ${cls}" data-gs-slot="${slot}" data-gs-att="${accId}">
                           <div class="gs-att-top">

@@ -76,15 +76,21 @@ export function buildTransferRoute({ gare, tramC, bcf, bcfStopS, terrainY, R }) 
   // 5) the island track to past Homme de Fer
   const bFrom = bS + 1;
   for (let s = bFrom; s <= Math.min(bcf.L, bcfStopS + R.extra); s += 1) { bcf.at(s, o); pts.push([o.x, o.z]); }
-  // light smoothing of the two blends (moving average) : no kink where the sources meet
+  // Fairing du tronçon de transfert (lisse le crénelage 0,1 m des échantillons OSM qui faisait zigzaguer les rails et la rame,
+  // tout en laissant intacts les rails fixes des quais Gare Centrale et de la ligne B / C / F de l'île)
   const sm = pts.map((p) => p.slice());
-  for (const [i0, i1] of [[aEnd - 4, aEnd + R.gareBlend + 6], [iB0 - 6, iB0 + R.bcfBlend + 2]]) {
-    for (let pass = 0; pass < 3; pass++) {
-      const src = sm.map((p) => p.slice());
-      for (let i = Math.max(2, i0); i <= Math.min(pts.length - 3, i1); i++) for (const c of [0, 1]) sm[i][c] = (src[i - 2][c] + src[i - 1][c] + src[i][c] + src[i + 1][c] + src[i + 2][c]) / 5;
+  const smStart = Math.max(2, aEnd - 2);
+  const smEnd = Math.min(pts.length - 3, iB0 + R.bcfBlend + 4);
+  for (let pass = 0; pass < 12; pass++) {
+    const src = sm.map((p) => p.slice());
+    for (let i = smStart; i <= smEnd; i++) {
+      for (const c of [0, 1]) {
+        sm[i][c] = (src[i - 2][c] + 4 * src[i - 1][c] + 6 * src[i][c] + 4 * src[i + 1][c] + src[i + 2][c]) / 16;
+      }
     }
   }
-  const track = new Track({ id: 'C-transfer', name: 'Ligne C (transfert)', samples: { x: sm.map((p) => p[0]), z: sm.map((p) => p[1]) } });
+  const clean = resample(sm, 1);
+  const track = new Track({ id: 'C-transfer', name: 'Ligne C (transfert)', samples: { x: clean.map((p) => p[0]), z: clean.map((p) => p[1]) } });
   const sOf = (x, z) => track.project(x, z, 30, {}).s;
   // abscissae of the landmarks
   const sGare = sOf(gare.at[0], gare.at[1]);
