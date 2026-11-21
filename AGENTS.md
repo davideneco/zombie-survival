@@ -19,6 +19,12 @@ Claude owns everything, sound included (`src/audio.js`, `src/music.js`, `public/
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md): conventions, rendering pipeline, performance mechanisms and budgets, city/building/interior generation, progression systems, scaling limits.
 - Official docs pinned to the versions used: branch `reference-docs` (`git fetch origin reference-docs`, then `git show origin/reference-docs:three-r170/api/en/objects/InstancedMesh.html`). Prefer them to memory for three.js r170 APIs.
 - Performance budgets and how to measure: `.claude/skills/perf-check/SKILL.md` (`tools/perf-probe.js`).
+- **CPU & RAM discipline (mandatory for every future update)**:
+  - Keep the FPS cap (`settings.maxFps`, default 60), idle/menu/pause/gunsmith 3D throttling (~15 FPS, no shadow re-renders), and `document.hidden` render pause intact — never run unbounded 144 Hz rendering in menus or background tabs.
+  - Stream long audio/music via `<audio>` (`MediaElementAudioSourceNode`), NEVER `decodeAudioData` full multi-minute OGG/MP3 tracks into RAM.
+  - Keep static scenery `matrixAutoUpdate = false`, wrap tiled LOD meshes in static parent `THREE.Group`s, call `gpuOnly()` on static geometry, and free temporary canvas/typed-array buffers right after GPU upload.
+  - Cap `pixelRatio <= 1.5`, keep post MSAA `samples <= 2`, keep facade atlas slices power-of-two height (`<= 640×512`), and never mutate DOM `.style` / `.textContent` every frame without a dirty check.
+  - Stay within ≤ 300 draw calls, ≤ 1.5 M triangles, ≤ 60 shader programs, `game.update` p95 ≤ 4 ms, and JS heap ≤ 400 MB.
 
 ## Rules for everyone
 - Be honest about what was verified (build, headless run, screenshots) and what was not.

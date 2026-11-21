@@ -394,6 +394,7 @@ export function createProps() {
           im.computeBoundingSphere();
           im.castShadow = !!shadowFn(type, pi, mat);
           im.receiveShadow = true;
+          im.matrixAutoUpdate = false;
           im.name = prefix + type;
           parent.add(im);
           meshes.push(im);

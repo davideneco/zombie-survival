@@ -90,7 +90,7 @@ scene.add(moon, moon.target);
 const MOON_OFFSET = new THREE.Vector3(25, 55, 15);
 
 // ------------------------------------------------------- Options (client)
-const DEFAULT_SETTINGS = { brightness: 1.4, fov: 80, sens: 1, volume: 1, music: 0.5, quality: 1, tpVehicle: true, chat: true, cinema: true, halo: true, manualGearbox: false, dayCycle: 'auto' }; // chat : afficher le chat écrit (Options) ; tpVehicle : vue à la troisième personne ; manualGearbox : boîte manuelle ou automatique
+const DEFAULT_SETTINGS = { brightness: 1.4, fov: 80, sens: 1, volume: 1, music: 0.5, quality: 1, maxFps: 60, tpVehicle: true, chat: true, cinema: true, halo: true, manualGearbox: false, dayCycle: 'auto' }; // chat : afficher le chat écrit (Options) ; tpVehicle : vue à la troisième personne ; manualGearbox : boîte manuelle ou automatique ; maxFps : limite FPS (30/60/120/0)
 const settings = { ...DEFAULT_SETTINGS };
 try { Object.assign(settings, JSON.parse(localStorage.getItem('zombie_settings') || '{}')); } catch {}
 
@@ -3126,6 +3126,28 @@ window.addEventListener('keydown', (e) => {
   }
 });
 
+// Limite FPS (économie CPU/GPU sur écrans 120-240 Hz : défaut 60 FPS)
+const btnMaxFps = document.getElementById('btnMaxFps');
+const FPS_STEPS = [30, 60, 120, 0];
+const syncMaxFps = () => {
+  if (!btnMaxFps) return;
+  const v = Number.isFinite(settings.maxFps) ? settings.maxFps : 60;
+  btnMaxFps.textContent = `LIMITE FPS : ${v > 0 ? `${v} FPS` : 'ILLIMITÉ'}`;
+  btnMaxFps.classList.toggle('is-on', v > 0 && v <= 60);
+  btnMaxFps.classList.toggle('is-alt', v > 60);
+  btnMaxFps.classList.toggle('is-off', v === 0);
+};
+if (btnMaxFps) {
+  btnMaxFps.addEventListener('click', () => {
+    const cur = Number.isFinite(settings.maxFps) ? settings.maxFps : 60;
+    const idx = FPS_STEPS.indexOf(cur);
+    settings.maxFps = FPS_STEPS[(idx + 1) % FPS_STEPS.length];
+    syncMaxFps();
+    game.saveSettings();
+  });
+}
+syncMaxFps();
+
 // « Effets cinéma » : vignette et grain (CSS) et, en qualité Haute, la table de couleurs
 const btnCinema = document.getElementById('btnCinema');
 const syncCinema = () => {
@@ -3194,6 +3216,7 @@ document.getElementById('btnOptReset')?.addEventListener('click', (e) => {
   applyVisualSettings();
   sfx.setVolume(settings.volume);
   sfx.setMusicVolume(settings.music);
+  syncMaxFps();
   syncCinema(); gfx.applyCinema();
   syncHalo(); gfx.applyHalo();
   syncDay();
@@ -3359,11 +3382,22 @@ function updateMusicMood() {
 }
 
 const clock = new THREE.Clock();
-function frame() {
+let shadowFrame = 0;
+let lastFrameMs = 0;
+function frame(now = performance.now()) {
   requestAnimationFrame(frame);
+  // Onglet caché : aucune dépense CPU/GPU de rendu
+  if (document.hidden) return;
+  const frozen = !game.isMultiplayer && !game.playing && game.started && !game.over && !q.has('debug');
+  const idleUi = !q.has('debug') && (!game.started || game.over || frozen || (!game.isMultiplayer && !!game.gunsmith?.open));
+  const capFps = idleUi ? 15 : (Number.isFinite(settings.maxFps) ? settings.maxFps : 60);
+  if (capFps > 0 && lastFrameMs > 0) {
+    const minInterval = (1000 / capFps) - 1.5;
+    if (now - lastFrameMs < minInterval) return;
+  }
+  lastFrameMs = now;
   const dt = Math.min(clock.getDelta(), 0.05);
   // Solo : le menu pause fige le jeu. En multijoueur la partie continue.
-  const frozen = !game.isMultiplayer && !game.playing && game.started && !game.over && !q.has('debug');
   if (game.started && !game.over && !frozen) game.update(dt);
   else if (frozen) { game.summitFx?.step(dt, true); game.introFrozen?.(); } // le ciel de l'Aube continue pendant la pause du solo (the train intro's rolling sound stops)
   hud.update(dt);
@@ -3372,13 +3406,14 @@ function frame() {
   game.chat?.update(dt);
   updateMusicMood();
   game.ambienceFrame?.(dt);
-  // ombres de la lune : recalculées une image sur deux (à chaque image en qualité haute) : ~20 % de rendu en moins
-  shadowFrame++;
-  if (shadowFrame % (gfx.level?.shadowEvery ?? 2) === 0) renderer.shadowMap.needsUpdate = true;
+  // ombres : ignorées quand la scène est figée/menu, recalculées une image sur deux en jeu
+  if (!idleUi) {
+    shadowFrame++;
+    if (shadowFrame % (gfx.level?.shadowEvery ?? 2) === 0) renderer.shadowMap.needsUpdate = true;
+  }
   gfx.update(dt);
   gfx.render();
 }
-let shadowFrame = 0;
 frame();
 
 window.game = game;

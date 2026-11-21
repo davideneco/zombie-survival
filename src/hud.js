@@ -1019,11 +1019,19 @@ export class Hud {
   update(dt) {
     this.damageFlash = Math.max(0, this.damageFlash - dt * 1.5);
     const low = Math.max(0, (this.lowHealth ?? 0) - 0.3) * 1.2;
-    this.el.vignette.style.opacity = Math.min(1, this.damageFlash * 0.9 + low);
+    const vig = Math.round(Math.min(1, this.damageFlash * 0.9 + low) * 100) / 100;
+    if (vig !== this._lastVig) {
+      this._lastVig = vig;
+      this.el.vignette.style.opacity = vig;
+    }
 
-    if (this.nukeFlash > 0) {
+    if (this.nukeFlash > 0 || this._lastNuke > 0) {
       this.nukeFlash = Math.max(0, this.nukeFlash - dt * 1.6);
-      this.el.nukeflash.style.opacity = this.nukeFlash;
+      const nf = Math.round(this.nukeFlash * 100) / 100;
+      if (nf !== this._lastNuke) {
+        this._lastNuke = nf;
+        this.el.nukeflash.style.opacity = nf;
+      }
     }
   }
 

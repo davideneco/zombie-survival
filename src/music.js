@@ -209,6 +209,37 @@ export class Music {
     }
   }
 
+  _ensureStreamEl() {
+    if (this._streamEl) return this._streamEl;
+    const el = document.createElement('audio');
+    el.preload = 'none';
+    el.crossOrigin = 'anonymous';
+    const src = this.ctx.createMediaElementSource(el);
+    const g = this.ctx.createGain();
+    g.gain.value = 1.0;
+    src.connect(g).connect(this.customBus || this.lp);
+    el.addEventListener('ended', () => {
+      if (this.isCustom && this.currentSource === this._streamEl && this.playlist.length > 1) {
+        this.nextTrack();
+      }
+    });
+    this._streamEl = el;
+    this._streamNode = src;
+    this._streamGain = g;
+    return el;
+  }
+
+  setTabHidden(hidden) {
+    this._tabHidden = !!hidden;
+    if (!this._streamEl) return;
+    if (hidden) {
+      if (!this._streamEl.paused) { this._resumeStream = true; this._streamEl.pause(); }
+    } else if (this._resumeStream && this.isCustom && this.currentSource === this._streamEl) {
+      this._resumeStream = false;
+      this._streamEl.play().catch(() => {});
+    }
+  }
+
   addTrack(track) {
     if (!track) return;
     this.playlist.push(track);
@@ -217,10 +248,12 @@ export class Music {
       // Si la première piste tournait en boucle seule, on l'autorise à enchaîner
       if (this.playlist.length > 1) {
         this.currentSource.loop = false;
-        const src = this.currentSource;
-        this.currentSource.onended = () => {
-          if (this.currentSource === src) this.nextTrack();
-        };
+        if (this.currentSource !== this._streamEl) {
+          const src = this.currentSource;
+          this.currentSource.onended = () => {
+            if (this.currentSource === src) this.nextTrack();
+          };
+        }
       }
     } else if (!this.timer) {
       this.playTrackIndex(this.playlist.length - 1);
@@ -240,35 +273,58 @@ export class Music {
     }
     const t = c.currentTime;
 
-    // Fondu sortant propre de la piste précédente
-    if (this.currentGain && this.currentSource) {
+    // Stoppe proprement une éventuelle piste BufferSource précédente
+    if (this.currentSource && this.currentSource !== this._streamEl) {
       const oldGain = this.currentGain;
       const oldSrc = this.currentSource;
       oldSrc.onended = null;
       try {
-        oldGain.gain.setValueAtTime(oldGain.gain.value, t);
-        oldGain.gain.linearRampToValueAtTime(0.0001, t + 0.8);
+        if (oldGain) {
+          oldGain.gain.setValueAtTime(oldGain.gain.value, t);
+          oldGain.gain.linearRampToValueAtTime(0.0001, t + 0.6);
+        }
         setTimeout(() => {
-          try {
-            oldSrc.stop();
-            oldSrc.disconnect();
-            oldGain.disconnect();
-          } catch {}
-        }, 900);
+          try { oldSrc.stop(); oldSrc.disconnect(); oldGain?.disconnect(); } catch {}
+        }, 650);
       } catch {
         try { oldSrc.stop(); } catch {}
       }
     }
 
+    // Mode streaming <audio> (mémoire quasi nulle, pas de décodage PCM complet)
+    if (track.url && !track.buffer && !track.buf) {
+      const el = this._ensureStreamEl();
+      el.pause();
+      el.src = track.url;
+      el.loop = this.playlist.length === 1;
+      el.currentTime = 0;
+      const g = this._streamGain;
+      g.gain.cancelScheduledValues(t);
+      g.gain.setValueAtTime(0.01, t);
+      g.gain.setTargetAtTime(1.15, t, 0.35);
+      if (!this._tabHidden) el.play().catch(() => {});
+      else this._resumeStream = true;
+
+      this.currentSource = el;
+      this.currentGain = g;
+      this.track = el;
+      this.currentTrack = track;
+      console.log(`[AUDIO] Lecture streaming démarrée : ${track.name} (état audio: ${c.state})`);
+      if (typeof this.onTrackChange === 'function') {
+        try { this.onTrackChange(this.getCurrentTrack()); } catch (err) { console.warn('[AUDIO] Erreur callback onTrackChange :', err); }
+      }
+      return;
+    }
+
+    if (this._streamEl && !this._streamEl.paused) this._streamEl.pause();
     const buf = track.buffer || track.buf;
     if (!buf) return;
 
-    // Normalisation RMS pour un volume riche et bien audible
+    // Normalisation RMS pour un volume riche et bien audible (fallback AudioBuffer)
     const d = buf.getChannelData(0);
     let sum = 0, n = 0;
     for (let i = 0; i < d.length; i += 4) { sum += d[i] * d[i]; n++; }
     const rms = Math.sqrt(sum / Math.max(1, n));
-    // Niveau sonore optimal avant passage par le filtre et le contrôle de volume
     const targetGain = rms > 1e-4 ? Math.min(4, Math.max(0.6, 0.75 / rms)) : 1.2;
 
     const g = c.createGain();
@@ -288,13 +344,12 @@ export class Music {
       };
     }
 
-    // Connecte directement au bus dédié musique personnalisée pour une clarté et un volume parfaits
     src.connect(g).connect(this.customBus || this.lp);
     src.start();
 
     this.currentSource = src;
     this.currentGain = g;
-    this.track = src; // compatibilité
+    this.track = src;
     this.currentTrack = track;
     console.log(`[AUDIO] Lecture démarrée : ${track.name} (volume x${targetGain.toFixed(2)}, état audio: ${c.state})`);
 
@@ -309,17 +364,19 @@ export class Music {
 
   playOriginalRock() {
     // Stoppe la piste personnalisée actuelle et relance le rock synthétisé d'origine
-    if (this.currentGain && this.currentSource) {
+    if (this.currentSource === this._streamEl && this._streamEl) {
+      try { this._streamEl.pause(); } catch {}
+      this._resumeStream = false;
+      this.currentSource = null;
+      this.currentGain = null;
+    } else if (this.currentGain && this.currentSource) {
       try {
+        const oldSrc = this.currentSource, oldGain = this.currentGain;
         const t = this.ctx.currentTime;
-        this.currentGain.gain.setValueAtTime(this.currentGain.gain.value, t);
-        this.currentGain.gain.linearRampToValueAtTime(0.0001, t + 0.4);
+        oldGain.gain.setValueAtTime(oldGain.gain.value, t);
+        oldGain.gain.linearRampToValueAtTime(0.0001, t + 0.4);
         setTimeout(() => {
-          try {
-            this.currentSource?.stop();
-            this.currentSource?.disconnect();
-            this.currentGain?.disconnect();
-          } catch {}
+          try { oldSrc.stop(); oldSrc.disconnect(); oldGain.disconnect(); } catch {}
         }, 450);
       } catch {}
       this.currentSource = null;
@@ -392,17 +449,22 @@ export class Music {
 
   stop() {
     this.stopSynth();
-    if (this.currentSource) {
+    this._resumeStream = false;
+    if (this.currentSource === this._streamEl && this._streamEl) {
+      try { this._streamEl.pause(); } catch {}
+      this.currentSource = null;
+      this.currentGain = null;
+    } else if (this.currentSource) {
       try {
         this.currentSource.onended = null;
         this.currentSource.stop();
         this.currentSource.disconnect();
       } catch {}
       this.currentSource = null;
-    }
-    if (this.currentGain) {
-      try { this.currentGain.disconnect(); } catch {}
-      this.currentGain = null;
+      if (this.currentGain) {
+        try { this.currentGain.disconnect(); } catch {}
+        this.currentGain = null;
+      }
     }
   }
   _tick() {

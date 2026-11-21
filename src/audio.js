@@ -161,7 +161,8 @@ export class Sfx {
       });
     }
     document.addEventListener('visibilitychange', () => {
-      if (document.hidden) c.suspend(); else c.resume();
+      if (document.hidden) { c.suspend(); this.music?.setTabHidden?.(true); }
+      else { c.resume(); this.music?.setTabHidden?.(false); }
     });
   }
 
@@ -170,22 +171,25 @@ export class Sfx {
     this._loadStarted = true;
     const loaded = [];
 
-    const fetchCandidate = async (entry) => {
+    // Détection légère par HEAD (évite de décoder 11 Mo d'OGG en ~200 Mo de PCM float32 dans la RAM)
+    const probeCandidate = async (entry) => {
       for (const url of entry.urls) {
         try {
-          const res = await fetch(url);
-          if (!res.ok || /text\/html/.test(res.headers.get('content-type') || '')) continue;
-          const ab = await res.arrayBuffer();
-          const buffer = await this.ctx.decodeAudioData(ab);
-          console.log(`[AUDIO] Morceau prêt : ${entry.name} (${Math.round(buffer.duration)}s) depuis ${url}`);
-          return { name: entry.name, buffer };
-        } catch { /* format non trouvé ou illisible : on passe au format/chemin suivant */ }
+          let res = await fetch(url, { method: 'HEAD' });
+          if (res.status === 405 || res.status === 501) {
+            res = await fetch(url, { headers: { Range: 'bytes=0-31' } });
+          }
+          const ct = res.headers.get('content-type') || '';
+          if (!res.ok || /text\/html/i.test(ct)) continue;
+          console.log(`[AUDIO] Morceau en streaming prêt : ${entry.name} depuis ${url}`);
+          return { name: entry.name, url };
+        } catch { /* format non trouvé ou inaccessible : on passe au suivant */ }
       }
       return null;
     };
 
     for (const entry of TRACK_DEFINITIONS) {
-      const track = await fetchCandidate(entry);
+      const track = await probeCandidate(entry);
       if (track) {
         loaded.push(track);
         if (loaded.length === 1) {

@@ -179,6 +179,8 @@ export function createRelief() {
       const balMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.55, metalness: 0.5, side: THREE.DoubleSide });
       const staticMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, side: THREE.DoubleSide });
       const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0), pos = new THREE.Vector3(), sc = new THREE.Vector3(), col = new THREE.Color();
+      const root = new THREE.Group(); root.name = 'relief:root'; root.matrixAutoUpdate = false;
+      scene.add(root);
       const inst = (list, geo, mat, name, T) => {
         if (!list.length) return 0;
         const n = list.length / 9;
@@ -193,36 +195,39 @@ export function createRelief() {
         mesh.computeBoundingSphere();
         mesh.receiveShadow = true; mesh.castShadow = false;
         mesh.name = name; mesh.matrixAutoUpdate = false; mesh.userData.lod = true;
-        scene.add(mesh);
+        T.group.add(mesh);
         T.meshes.push(mesh);
+        if (name === 'relief:quoins') T.quoin = mesh;
         return n;
       };
       count = { windows: 0, balconies: 0, cornices: 0, plinths: 0, quoins: 0, staticTris: 0 };
       api.tiles = [];
       for (const t of fine.values()) {
-        const T = { cx: t.cx, cz: t.cz, half: t.half, meshes: [] };
+        const g = new THREE.Group(); g.matrixAutoUpdate = false; g.userData.lod = true;
+        const T = { cx: t.cx, cz: t.cz, half: t.half, group: g, meshes: [], quoin: null };
         count.windows += inst(t.win, trim, trimMat, 'relief:windows', T);
-        if (T.meshes.length) api.tiles.push(T);
+        if (T.meshes.length) { root.add(g); api.tiles.push(T); }
       }
       for (const t of coarse.values()) {
-        const T = { cx: t.cx, cz: t.cz, half: t.half, meshes: [] };
+        const g = new THREE.Group(); g.matrixAutoUpdate = false; g.userData.lod = true;
+        const T = { cx: t.cx, cz: t.cz, half: t.half, group: g, meshes: [], quoin: null };
         count.balconies += inst(t.bal, balc, balMat, 'relief:balconies', T);
         count.cornices += inst(t.cor, corn, trimMat, 'relief:cornices', T);
         count.plinths += inst(t.pl, plin, trimMat, 'relief:plinths', T);
         count.quoins += inst(t.qu, quo, trimMat, 'relief:quoins', T);
         if (t.idx.length) {
-          const g = new THREE.BufferGeometry();
-          g.setAttribute('position', new THREE.Float32BufferAttribute(t.pos, 3));
-          g.setAttribute('normal', new THREE.Float32BufferAttribute(t.nor, 3));
-          g.setAttribute('color', new THREE.Float32BufferAttribute(t.col, 3));
-          g.setIndex(t.idx);
-          g.computeBoundingSphere();
-          const m = new THREE.Mesh(g, staticMat);
+          const geo = new THREE.BufferGeometry();
+          geo.setAttribute('position', new THREE.Float32BufferAttribute(t.pos, 3));
+          geo.setAttribute('normal', new THREE.Float32BufferAttribute(t.nor, 3));
+          geo.setAttribute('color', new THREE.Float32BufferAttribute(t.col, 3));
+          geo.setIndex(t.idx);
+          geo.computeBoundingSphere();
+          const m = new THREE.Mesh(geo, staticMat);
           gpuOnly(m); m.receiveShadow = true; m.name = 'relief:static'; m.matrixAutoUpdate = false; m.userData.lod = true;
-          scene.add(m); T.meshes.push(m);
+          g.add(m); T.meshes.push(m);
           count.staticTris += t.idx.length / 3;
         }
-        if (T.meshes.length) api.tiles.push(T);
+        if (T.meshes.length) { root.add(g); api.tiles.push(T); }
       }
       fine.clear(); coarse.clear();
       api.px = 1e9; api.pz = 1e9;
@@ -232,18 +237,21 @@ export function createRelief() {
     range: 60, px: 1e9, pz: 1e9, tiles: [],
     // Distance de coupure (m) : 0 = aucun relief
     setRange(r) { api.range = r; api.apply(); },
-    // Les tuiles dont le bord est à plus de `range` m du joueur ne sont pas dessinées
-    update(px, pz) { api.px = px; api.pz = pz; api.apply(); },
+    // Les tuiles dont le bord est à plus de `range` m du joueur ne sont pas dessinées (seuil 2 m pour éviter le travail inutile)
+    update(px, pz) {
+      if ((px - api.px) ** 2 + (pz - api.pz) ** 2 < 4) return;
+      api.px = px; api.pz = pz; api.apply();
+    },
     apply() {
       const r = api.range;
       const qr = Math.min(r, 42); // chaînages d'angle de 4 cm : sous-pixel au-delà de 42 m
       for (const T of api.tiles) {
         const d = Math.hypot(T.cx - api.px, T.cz - api.pz) - T.half;
         const vis = r > 0 && d < r;
-        const visQ = qr > 0 && d < qr;
-        for (const m of T.meshes) {
-          const want = m.name === 'relief:quoins' ? visQ : vis;
-          if (m.visible !== want) m.visible = want;
+        if (T.group.visible !== vis) T.group.visible = vis;
+        if (vis && T.quoin) {
+          const visQ = qr > 0 && d < qr;
+          if (T.quoin.visible !== visQ) T.quoin.visible = visQ;
         }
       }
     },

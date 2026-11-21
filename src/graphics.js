@@ -370,7 +370,7 @@ export function createGraphics({ renderer, scene, camera, hemi, moon, settings }
     const L = G().levels[Math.max(0, Math.min(G().levels.length - 1, q | 0))];
     const changed = api.q !== q;
     api.q = q; api.level = L;
-    renderer.setPixelRatio(L.pixelRatio === 'device' ? Math.min(window.devicePixelRatio, 2) : L.pixelRatio);
+    renderer.setPixelRatio(L.pixelRatio === 'device' ? Math.min(window.devicePixelRatio, 1.5) : L.pixelRatio);
     renderer.setSize(window.innerWidth, window.innerHeight);
     if (moon.shadow.mapSize.x !== L.shadowSize) { moon.shadow.mapSize.set(L.shadowSize, L.shadowSize); moon.shadow.map?.dispose(); moon.shadow.map = null; }
     renderer.shadowMap.enabled = L.shadows;

@@ -11,7 +11,7 @@ import * as THREE from 'three';
 //  The vertex patch also serves the roof material (`patchDepth`): roofs have no layer, only the depth step.
 // =====================================================================
 
-export const LAYER_W = 768, LAYER_H = 640; // one array slice (bump = half, emissive = quarter)
+export const LAYER_W = 640, LAYER_H = 512; // one array slice (PBR normal+rough = half 320x256, emissive = quarter 160x128 ; power-of-two height avoids GPU padding)
 const MAX_FLOOD = 64;
 
 export function createFacadeAtlas({ renderer, detailTex, depthBias }) {

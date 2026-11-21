@@ -1088,7 +1088,7 @@ export const CONFIG = {
     levels: [
       { name: 'Rapide', pixelRatio: 0.75, shadows: false, softShadows: false, shadowSize: 1024, shadowEvery: 2, clouds: false, post: false, facade: 30, trees: 'ball', particles: 0.5, decals: 16 },
       { name: 'Normale', pixelRatio: 1, shadows: true, softShadows: false, shadowSize: 1024, shadowEvery: 2, clouds: true, post: false, facade: 60, trees: 'cards', particles: 1, decals: 36 },
-      { name: 'Haute', pixelRatio: 'device', shadows: true, softShadows: true, shadowSize: 2048, shadowEvery: 1, clouds: true, post: true, facade: 110, trees: 'cards+branches', particles: 1, decals: 64 },
+      { name: 'Haute', pixelRatio: 'device', shadows: true, softShadows: true, shadowSize: 2048, shadowEvery: 2, clouds: true, post: true, facade: 110, trees: 'cards+branches', particles: 1, decals: 64 },
     ],
     // tone mapping : 'aces' | 'agx' | 'neutral' ; exposition de base (multipliée par Luminosité des Options et par la zone)
     tone: { type: 'agx', exposure: 0.96 },
@@ -1134,7 +1134,7 @@ export const CONFIG = {
     sky: { moonElevation: 0.72, moonAzimuth: 0.53, moonSize: 0.034, cloudCover: 1, cloudNight: '#26344e' },
     // Haute : rendu dans une cible multi-échantillonnée (samples) + passe finale (SSAO, halo, étalonnage LUT, netteté) ; désactivable ici
     // (au-delà de maxPixels : rendu direct sans étalonnage, la cible multi-échantillonnée coûterait trop de mémoire ; au-delà de msaa2Pixels : 2 échantillons)
-    post: { enabled: true, samples: 4, msaa2Pixels: 2400000, maxPixels: 4300000, sharpen: 0.14, haze: 0.18 },
+    post: { enabled: true, samples: 2, msaa2Pixels: 2400000, maxPixels: 4300000, sharpen: 0.14, haze: 0.18 },
     // occlusion ambiante en espace écran (SSAO demi-résolution, Haute uniquement, depuis le DepthTexture natif : 0 appel géométrique de plus)
     ao: { enabled: true, strength: 0.82, radius: 1.85, bias: 0.022 },
     // halo lumineux (Haute seulement, graphics.js) : seuil et adoucissement sur l'image tone-mappée (0..1), intensité, rayon du flou (texels à demi-résolution),

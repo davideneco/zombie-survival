@@ -31,7 +31,13 @@ export function warmUpload(scene, renderer, render, meshes = null) {
   if (meshes) { for (const o of meshes) if (want(o)) todo.push([o, o.visible, o.frustumCulled]); }
   else scene.traverse((o) => { if (want(o) && !o.userData.shadowProxy) todo.push([o, o.visible, o.frustumCulled]); });
   if (!todo.length) return 0;
-  for (const [o] of todo) { o.visible = true; o.frustumCulled = false; }
+  const hiddenParents = [];
+  for (const [o] of todo) {
+    o.visible = true; o.frustumCulled = false;
+    for (let p = o.parent; p && p !== scene; p = p.parent) {
+      if (!p.visible) { hiddenParents.push(p); p.visible = true; }
+    }
+  }
   const sm = renderer.shadowMap, auto = sm.autoUpdate, need = sm.needsUpdate;
   sm.autoUpdate = false; sm.needsUpdate = false;
   renderer.setScissorTest(true); renderer.setScissor(0, 0, 1, 1);
@@ -39,5 +45,6 @@ export function warmUpload(scene, renderer, render, meshes = null) {
   renderer.setScissorTest(false);
   sm.autoUpdate = auto; sm.needsUpdate = need;
   for (const [o, v, f] of todo) { o.visible = v; o.frustumCulled = f; }
+  for (let i = hiddenParents.length - 1; i >= 0; i--) hiddenParents[i].visible = false;
   return todo.length;
 }

@@ -19,16 +19,19 @@ const OTHER_MAPS = ['normalMap', 'bumpMap', 'roughnessMap', 'metalnessMap', 'emi
 const checked = new WeakSet();
 
 function canon(m) {
-  if (m.transparent && m.side === THREE.DoubleSide) m.forceSinglePass = true; // may be toggled at runtime: checked every call
-  if (checked.has(m)) return;
-  checked.add(m);
+  if (m.transparent && m.side === THREE.DoubleSide) m.forceSinglePass = true; // may be toggled at runtime
+  if (m._psCanon) return;
+  m._psCanon = true;
   if (m.map || !(m.isMeshStandardMaterial || m.isMeshBasicMaterial) || m.isMeshPhysicalMaterial) return;
   if (Object.prototype.hasOwnProperty.call(m, 'onBeforeCompile')) return; // custom shaders keep their own program
   for (let i = 0; i < OTHER_MAPS.length; i++) if (m[OTHER_MAPS[i]]) return;
   m.map = WHITE; m.needsUpdate = true;
 }
 
-THREE.Material.prototype.onBeforeRender = function () { canon(this); };
+THREE.Material.prototype.onBeforeRender = function () {
+  if (this._psCanon && !(this.transparent && this.side === THREE.DoubleSide)) return;
+  canon(this);
+};
 
 export function shareProgramFlags(root) {
   root.traverse((o) => {
