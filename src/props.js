@@ -110,48 +110,76 @@ export function merge(list) {
   return out;
 }
 
+const stoneTex = (baseHex, grainA = 0.14, veinA = 0.1) => canvasTex(128, 128, (x, w, h) => {
+  let s = 4131; const R = () => ((s = (s * 16807) % 2147483647) / 2147483647);
+  x.fillStyle = baseHex; x.fillRect(0, 0, w, h);
+  for (let i = 0; i < 18; i++) {
+    const px = R() * w, py = R() * h, rad = 10 + R() * 24;
+    const g = x.createRadialGradient(px, py, 0, px, py, rad);
+    g.addColorStop(0, `rgba(${R() < 0.5 ? '20,16,14' : '240,232,220'},${veinA})`);
+    g.addColorStop(1, 'rgba(0,0,0,0)');
+    x.fillStyle = g; x.fillRect(px - rad, py - rad, rad * 2, rad * 2);
+  }
+  for (let i = 0; i < 1400; i++) {
+    x.fillStyle = `rgba(${R() < 0.5 ? '18,14,12' : '245,238,228'},${R() * grainA})`;
+    x.fillRect(R() * w, R() * h, 1 + R() * 2, 1 + R() * 2);
+  }
+});
+
 // ------------------------------------------------------------------ Bibliothèque
 export function createProps() {
   const M = {
-    iron: reflective(new THREE.MeshStandardMaterial({ color: 0x222629, roughness: 0.65, metalness: 0.75 }), 0.7),
-    darkGreen: reflective(new THREE.MeshStandardMaterial({ color: 0x1e2e24, roughness: 0.68, metalness: 0.45 }), 0.6),
-    wood: new THREE.MeshStandardMaterial({ color: 0xffffff, map: plankTex(), roughness: 0.85 }),
+    iron: reflective(new THREE.MeshStandardMaterial({ color: 0x222629, roughness: 0.45, metalness: 0.82 }), 1.1),
+    darkGreen: reflective(new THREE.MeshStandardMaterial({ color: 0x1e2e24, roughness: 0.52, metalness: 0.48 }), 0.85),
+    wood: new THREE.MeshStandardMaterial({ color: 0xffffff, map: plankTex(), roughness: 0.84 }),
     woodPlain: new THREE.MeshStandardMaterial({ color: 0x5a3c24, roughness: 0.82 }),
-    pewWood: new THREE.MeshStandardMaterial({ color: 0xffffff, map: oakTex(), roughness: 0.6 }),
-    carPaint: reflective(new THREE.MeshStandardMaterial({ color: 0xd8d8d8, roughness: 0.52, metalness: 0.48 }), 0.8),
-    glass: reflective(new THREE.MeshStandardMaterial({ color: 0x090e14, roughness: 0.12, metalness: 0.88 }), 1.4),
-    tyre: new THREE.MeshStandardMaterial({ color: 0x141416, roughness: 0.92 }),
-    chrome: reflective(new THREE.MeshStandardMaterial({ color: 0x9da3aa, roughness: 0.32, metalness: 0.85 }), 1.3),
-    lightsF: new THREE.MeshStandardMaterial({ color: 0xfff0d0, emissive: 0xffc866, emissiveIntensity: 1.8, roughness: 0.35 }),
-    lightsR: new THREE.MeshStandardMaterial({ color: 0x6e0e0e, emissive: 0x4a0000, emissiveIntensity: 1.2, roughness: 0.35 }),
-    concrete: new THREE.MeshStandardMaterial({ color: 0x78756e, roughness: 0.92, metalness: 0.05 }),
-    sandstone: new THREE.MeshStandardMaterial({ color: 0x8e6e62, roughness: 0.88 }),
-    bronze: reflective(new THREE.MeshStandardMaterial({ color: 0x36483c, roughness: 0.52, metalness: 0.72 }), 0.9),
-    water: reflective(new THREE.MeshStandardMaterial({ color: 0x14283c, roughness: 0.06, metalness: 0.55 }), 1.2),
+    pewWood: new THREE.MeshStandardMaterial({ color: 0xffffff, map: oakTex(), roughness: 0.58 }),
+    carPaint: reflective(new THREE.MeshStandardMaterial({ color: 0xc8c8c8, roughness: 0.28, metalness: 0.14 }), 0.85),
+    glass: reflective(new THREE.MeshStandardMaterial({ color: 0x05080d, roughness: 0.04, metalness: 0.85 }), 2.2),
+    tyre: new THREE.MeshStandardMaterial({ color: 0x16171a, roughness: 0.88 }),
+    chrome: reflective(new THREE.MeshStandardMaterial({ color: 0xb2b8c0, roughness: 0.20, metalness: 0.92 }), 1.6),
+    lightsF: new THREE.MeshStandardMaterial({ color: 0xfff0d0, emissive: 0xffc866, emissiveIntensity: 1.8, roughness: 0.25 }),
+    lightsR: new THREE.MeshStandardMaterial({ color: 0x7e1212, emissive: 0x5a0606, emissiveIntensity: 1.3, roughness: 0.28 }),
+    concrete: new THREE.MeshStandardMaterial({ color: 0xffffff, map: stoneTex('#6c6962', 0.22, 0.20), roughness: 0.90, metalness: 0.04 }),
+    sandstone: new THREE.MeshStandardMaterial({ color: 0xffffff, map: stoneTex('#7e5d50', 0.24, 0.22), roughness: 0.86 }),
+    bronze: reflective(new THREE.MeshStandardMaterial({ color: 0x36483c, roughness: 0.40, metalness: 0.78 }), 1.2),
+    water: reflective(new THREE.MeshStandardMaterial({ color: 0x102438, roughness: 0.04, metalness: 0.62 }), 1.8),
     leaf: new THREE.MeshStandardMaterial({ color: 0x2e4624, roughness: 0.95, flatShading: true }),
     flower: new THREE.MeshStandardMaterial({ color: 0x8e1a22, roughness: 0.8 }),
-    sandbag: new THREE.MeshStandardMaterial({ color: 0xffffff, map: sandbagTex(), roughness: 0.98 }),
-    hazard: new THREE.MeshStandardMaterial({ color: 0xffffff, map: hazardTex(), roughness: 0.65 }),
-    redWhite: reflective(new THREE.MeshStandardMaterial({ color: 0xb0b0b0, roughness: 0.48, metalness: 0.55 }), 0.7),
+    sandbag: new THREE.MeshStandardMaterial({ color: 0xffffff, map: sandbagTex(), roughness: 0.96 }),
+    hazard: new THREE.MeshStandardMaterial({ color: 0xffffff, map: hazardTex(), roughness: 0.62 }),
+    redWhite: reflective(new THREE.MeshStandardMaterial({ color: 0xb0b0b0, roughness: 0.42, metalness: 0.58 }), 0.9),
     roofRed: new THREE.MeshStandardMaterial({ color: 0x68221c, roughness: 0.82 }),
     awning: new THREE.MeshStandardMaterial({ color: 0xffffff, map: awningTex(), roughness: 0.9, side: THREE.DoubleSide }),
     warm: new THREE.MeshStandardMaterial({ color: 0xffd890, emissive: 0xff9933, emissiveIntensity: 1.6 }),
-    poster: new THREE.MeshStandardMaterial({ color: 0xffffff, map: posterTex(), roughness: 0.75 }),
-    postYellow: reflective(new THREE.MeshStandardMaterial({ color: 0xba8c22, roughness: 0.68, metalness: 0.3 }), 0.6),
+    poster: new THREE.MeshStandardMaterial({ color: 0xffffff, map: posterTex(), roughness: 0.72 }),
+    postYellow: reflective(new THREE.MeshStandardMaterial({ color: 0xba8c22, roughness: 0.45, metalness: 0.35 }), 0.9),
   };
   M.wood.map.repeat.set(1, 1);
 
   // ---- prototypes : liste de [géométrie, matériau]
   const P = {};
-  // Voiture : profil latéral arrondi extrudé, vitres, roues avec jantes, phares
+  // Voiture : profil latéral arrondi extrudé, vitres réfléchissantes, pare-chocs/calandre/rétros, roues avec jantes, phares
   {
     const L = 4.2, W = 1.72;
     const body = extrude([[-2.1, 0.32], [2.1, 0.32], [2.12, 0.62], [2.0, 0.86], [1.15, 0.94], [0.55, 1.42], [-0.95, 1.46], [-1.6, 0.98], [-2.08, 0.9], [-2.14, 0.6]], W - 0.1, 0.05);
     const win = extrude([[0.5, 0.96], [0.98, 0.96], [0.5, 1.36], [-0.9, 1.4], [-1.45, 0.98]], W - 0.02, 0);
-    const wheels = [], rims = [];
+    const wheels = [
+      // pare-chocs avant/arrière, calandre sombre et bas de caisse (casse la silhouette monobloc)
+      box(0.14, 0.20, W - 0.04, 2.13, 0.42, 0),
+      box(0.14, 0.22, W - 0.04, -2.14, 0.43, 0),
+      box(0.06, 0.16, 0.84, 2.13, 0.68, 0),
+      box(2.0, 0.08, W - 0.02, 0, 0.31, 0),
+      box(0.10, 0.09, 0.16, 0.72, 1.04, W * 0.52),
+      box(0.10, 0.09, 0.16, 0.72, 1.04, -W * 0.52),
+    ];
+    const rims = [
+      box(0.04, 0.04, 0.88, 2.15, 0.75, 0), // jonc chromé de calandre
+      box(0.03, 0.08, 0.44, -2.18, 0.60, 0), // plaque arrière
+    ];
     for (const [x, z] of [[1.32, 0.78], [1.32, -0.78], [-1.3, 0.78], [-1.3, -0.78]]) {
-      wheels.push(cyl(0.33, 0.33, 0.24, 14, x, 0.33, z, Math.PI / 2));
-      rims.push(cyl(0.18, 0.18, 0.26, 10, x, 0.33, z, Math.PI / 2));
+      wheels.push(cyl(0.33, 0.33, 0.24, 12, x, 0.33, z, Math.PI / 2));
+      rims.push(cyl(0.18, 0.18, 0.26, 8, x, 0.33, z, Math.PI / 2));
     }
     P.car = [[body, M.carPaint], [win, M.glass], [merge(wheels), M.tyre], [merge(rims), M.chrome],
       [merge([box(0.05, 0.12, 0.3, 2.13, 0.72, 0.55), box(0.05, 0.12, 0.3, 2.13, 0.72, -0.55)]), M.lightsF],
@@ -167,15 +195,14 @@ export function createProps() {
     P.bench = [[merge(slats), M.wood], [merge(legs), M.iron]];
     P.bench.size = [1.9, 0.6];
   }
-  // Poubelle (vert foncé), potelet, borne
-  // corps nervuré, couvercle bombé à poignée, deux roulettes : 22 segments, profil arrondi (plus de facettes)
-  P.bin = [[merge([lathe([[0.001, 0.06], [0.2, 0.06], [0.225, 0.1], [0.232, 0.45], [0.226, 0.47], [0.236, 0.5], [0.24, 0.62], [0.234, 0.64], [0.244, 0.67], [0.256, 0.84], [0.272, 0.865], [0.262, 0.885], [0.001, 0.885]], 22),
-    lathe([[0.001, 0.885], [0.274, 0.885], [0.268, 0.915], [0.23, 0.95], [0.14, 0.99], [0.05, 1.0], [0.001, 1.0]], 22), cyl(0.012, 0.012, 0.16, 6, 0, 0.99, 0, 0, Math.PI / 2),
-    cyl(0.05, 0.05, 0.04, 10, -0.15, 0.06, -0.22, 0, Math.PI / 2), cyl(0.05, 0.05, 0.04, 10, 0.15, 0.06, -0.22, 0, Math.PI / 2)]), M.darkGreen]];
+  // Poubelle (vert foncé), potelet, borne : 12 segments lissés (même silhouette ronde, -60 % de triangles)
+  P.bin = [[merge([lathe([[0.001, 0.06], [0.2, 0.06], [0.225, 0.1], [0.236, 0.5], [0.256, 0.84], [0.272, 0.865], [0.262, 0.885], [0.001, 0.885]], 12),
+    lathe([[0.001, 0.885], [0.274, 0.885], [0.25, 0.935], [0.16, 0.985], [0.001, 1.0]], 12), cyl(0.012, 0.012, 0.16, 6, 0, 0.99, 0, 0, Math.PI / 2),
+    cyl(0.05, 0.05, 0.04, 8, -0.15, 0.06, -0.22, 0, Math.PI / 2), cyl(0.05, 0.05, 0.04, 8, 0.15, 0.06, -0.22, 0, Math.PI / 2)]), M.darkGreen]];
   P.bollard = [[lathe([[0.001, 0], [0.09, 0], [0.09, 0.75], [0.07, 0.86], [0.001, 0.92]], 10), M.iron]];
   // Vélo : deux roues (tores) + cadre
   {
-    const wheels = [new THREE.TorusGeometry(0.33, 0.025, 6, 16).translate(0.52, 0.34, 0), new THREE.TorusGeometry(0.33, 0.025, 6, 16).translate(-0.52, 0.34, 0)];
+    const wheels = [new THREE.TorusGeometry(0.33, 0.025, 5, 12).translate(0.52, 0.34, 0), new THREE.TorusGeometry(0.33, 0.025, 5, 12).translate(-0.52, 0.34, 0)];
     const frame = [cyl(0.02, 0.02, 0.62, 5, 0, 0.6, 0, 0, Math.PI / 2), cyl(0.02, 0.02, 0.5, 5, -0.22, 0.48, 0, 0, -0.9), cyl(0.02, 0.02, 0.5, 5, 0.26, 0.48, 0, 0, 0.9),
       cyl(0.018, 0.018, 0.3, 5, 0.52, 0.5, 0, 0, 0.3), box(0.22, 0.04, 0.08, -0.3, 0.78, 0), box(0.04, 0.04, 0.45, 0.48, 0.86, 0)];
     P.bike = [[merge(wheels), M.tyre], [merge(frame), M.redWhite]];
@@ -226,11 +253,11 @@ export function createProps() {
   // Barrière de police (métal) : 2 m
   P.crowd = [[merge([cyl(0.025, 0.025, 2, 6, 0, 1.0, 0, 0, Math.PI / 2), cyl(0.025, 0.025, 2, 6, 0, 0.25, 0, 0, Math.PI / 2), cyl(0.025, 0.025, 1.0, 6, -0.98, 0.6, 0), cyl(0.025, 0.025, 1.0, 6, 0.98, 0.6, 0),
     ...Array.from({ length: 12 }, (_, i) => cyl(0.012, 0.012, 0.75, 4, -0.85 + i * 0.155, 0.62, 0)), box(0.5, 0.03, 0.06, -0.98, 0.02, 0), box(0.5, 0.03, 0.06, 0.98, 0.02, 0)]), M.redWhite]];
-  // Mur de sacs de sable (2 m)
+  // Mur de sacs de sable (2 m) : capsules 2x6 (aspect arrondi identique, -65 % de triangles)
   {
     const bags = [];
     for (let row = 0; row < 3; row++) for (let i = 0; i < 4 - (row === 2 ? 1 : 0); i++) {
-      const g = new THREE.CapsuleGeometry(0.16, 0.38, 3, 8).rotateZ(Math.PI / 2).scale(1, 0.75, 1.15);
+      const g = new THREE.CapsuleGeometry(0.16, 0.38, 2, 6).rotateZ(Math.PI / 2).scale(1, 0.75, 1.15);
       g.translate(-0.75 + i * 0.5 + (row % 2) * 0.25, 0.13 + row * 0.24, (row % 2 ? 0.04 : -0.04));
       bags.push(g);
     }
@@ -323,7 +350,7 @@ export function createProps() {
     }
   }
 
-  // ---- instances (regroupées par type/matériau via InstancedMesh)
+  // ---- instances (regroupées par type/matériau via InstancedMesh, découpées en secteurs 320 m pour le frustum culling)
   const inst = {}; // type -> [{ m: Matrix4, c: Color|null }]
   const tmpM = new THREE.Matrix4(), q = new THREE.Quaternion();
   function place(type, x, z, rotY = 0, scale = 1, color = null, y = 0, tilt = 0) {
@@ -331,27 +358,46 @@ export function createProps() {
     (inst[type] ||= []).push({ m: new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), q.setFromEuler(new THREE.Euler(tilt, rotY, 0, 'YXZ')).clone(), new THREE.Vector3(scale, scale, scale)), c: color });
   }
 
+  const PROP_CELL = 320;
   function emit(entries, parent, prefix = 'prop:', shadowFn = (type, pi) => CONFIG.graphics.propShadows.includes(type) && pi === 0, defaultCarHex = 0x777777) {
     const meshes = [];
     const defCol = new THREE.Color(defaultCarHex);
     for (const [type, list] of entries) {
       if (!list?.length || !P[type]) continue;
-      for (const [pi, [geo, mat]] of P[type].entries()) {
-        const im = new THREE.InstancedMesh(geo, mat, list.length);
-        const useColor = mat === M.carPaint;
-        for (let i = 0; i < list.length; i++) {
-          const entry = list[i];
-          im.setMatrixAt(i, entry.isMatrix4 ? entry : entry.m);
-          if (useColor) im.setColorAt(i, (!entry.isMatrix4 && entry.c) || defCol);
+      // Découpe spatiale pour les types nombreux afin que le frustum culling ignore les props derrière la caméra
+      let buckets;
+      if (list.length >= 40) {
+        const map = new Map();
+        for (const entry of list) {
+          const mat4 = entry.isMatrix4 ? entry : entry.m;
+          const e = mat4.elements;
+          const k = `${Math.floor(e[12] / PROP_CELL)},${Math.floor(e[14] / PROP_CELL)}`;
+          let b = map.get(k);
+          if (!b) map.set(k, b = []);
+          b.push(entry);
         }
-        im.instanceMatrix.needsUpdate = true;
-        if (im.instanceColor) im.instanceColor.needsUpdate = true;
-        im.computeBoundingSphere();
-        im.castShadow = !!shadowFn(type, pi, mat);
-        im.receiveShadow = true;
-        im.name = prefix + type;
-        parent.add(im);
-        meshes.push(im);
+        buckets = [...map.values()];
+      } else {
+        buckets = [list];
+      }
+      for (const bucket of buckets) {
+        for (const [pi, [geo, mat]] of P[type].entries()) {
+          const im = new THREE.InstancedMesh(geo, mat, bucket.length);
+          const useColor = mat === M.carPaint;
+          for (let i = 0; i < bucket.length; i++) {
+            const entry = bucket[i];
+            im.setMatrixAt(i, entry.isMatrix4 ? entry : entry.m);
+            if (useColor) im.setColorAt(i, (!entry.isMatrix4 && entry.c) || defCol);
+          }
+          im.instanceMatrix.needsUpdate = true;
+          if (im.instanceColor) im.instanceColor.needsUpdate = true;
+          im.computeBoundingSphere();
+          im.castShadow = !!shadowFn(type, pi, mat);
+          im.receiveShadow = true;
+          im.name = prefix + type;
+          parent.add(im);
+          meshes.push(im);
+        }
       }
     }
     return meshes;

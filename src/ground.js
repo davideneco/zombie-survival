@@ -120,6 +120,10 @@ function apronTexture() {
   x.strokeStyle = 'rgba(14,12,10,0.9)'; x.lineWidth = 3; // joints
   for (let r = 0; r <= rows; r++) { x.beginPath(); x.moveTo(0, r * rh); x.lineTo(W, r * rh); x.stroke(); }
   for (let r = 0; r < rows; r++) for (let i = -1; i < 5; i++) { const ox = i * cw + (r % 2) * cw / 2; x.beginPath(); x.moveTo(ox, r * rh); x.lineTo(ox, (r + 1) * rh); x.stroke(); }
+  // ombre de contact au pied du mur (y = 0) : ancre les bâtiments sur le trottoir
+  const wallAo = x.createLinearGradient(0, 0, 0, y1 * 0.55);
+  wallAo.addColorStop(0, 'rgba(10,8,6,0.58)'); wallAo.addColorStop(0.38, 'rgba(10,8,6,0.22)'); wallAo.addColorStop(1, 'rgba(10,8,6,0)');
+  x.fillStyle = wallAo; x.fillRect(0, 0, W, y1 * 0.55);
   // bordure : granit clair, arête éclairée côté mur, ombre côté rue, joints rares
   x.fillStyle = '#7a776f'; x.fillRect(0, y1, W, y2 - y1);
   for (let k = 0; k < 800; k++) { x.fillStyle = `rgba(${R() < 0.5 ? '0,0,0' : '255,255,255'},${R() * 0.12})`; x.fillRect(R() * W, y1 + R() * (y2 - y1), 1 + R() * 3, 1 + R() * 2); }
@@ -129,8 +133,8 @@ function apronTexture() {
   // caniveau : pavés sombres mouillés, trait d'eau au milieu
   x.fillStyle = '#2a2a28'; x.fillRect(0, y2, W, H - y2);
   for (let k = 0; k < 120; k++) { x.fillStyle = `rgba(${R() < 0.5 ? '0,0,0' : '120,120,115'},${0.1 + R() * 0.15})`; x.fillRect(R() * W, y2 + R() * (H - y2), 8 + R() * 14, 4 + R() * 8); }
-  const g = x.createLinearGradient(0, y2, 0, H); g.addColorStop(0, 'rgba(0,0,0,0.5)'); g.addColorStop(0.4, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(0,0,0,0.0)'); x.fillStyle = g; x.fillRect(0, y2, W, H - y2);
-  x.fillStyle = 'rgba(150,170,190,0.15)'; x.fillRect(0, y2 + (H - y2) * 0.45, W, 3);
+  const g = x.createLinearGradient(0, y2, 0, H); g.addColorStop(0, 'rgba(0,0,0,0.62)'); g.addColorStop(0.45, 'rgba(0,0,0,0.12)'); g.addColorStop(1, 'rgba(0,0,0,0.0)'); x.fillStyle = g; x.fillRect(0, y2, W, H - y2);
+  x.fillStyle = 'rgba(150,170,190,0.18)'; x.fillRect(0, y2 + (H - y2) * 0.45, W, 3);
   const t = new THREE.CanvasTexture(c);
   t.colorSpace = THREE.SRGBColorSpace; t.wrapS = THREE.RepeatWrapping; t.wrapT = THREE.ClampToEdgeWrapping; t.anisotropy = 8;
   return t;
@@ -168,7 +172,7 @@ function buildApron(scene, polys, api, onIsland) {
   g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
   const nor = new Float32Array(pos.length); for (let i = 1; i < nor.length; i += 3) nor[i] = 1; g.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
   g.setIndex(pos.length / 3 > 65000 ? new THREE.Uint32BufferAttribute(idx, 1) : new THREE.Uint16BufferAttribute(idx, 1));
-  const m = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ map: apronTexture(), roughness: 0.75, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 }));
+  const m = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ map: apronTexture(), roughness: 0.72, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 }));
   m.frustumCulled = false; m.receiveShadow = true; m.name = 'apron'; gpuOnly(m);
   scene.add(m);
   return m;
@@ -207,7 +211,7 @@ export function createGround(scene, { mesh, polys, bounds, onIsland, tramDist })
         varying vec3 vGPos;
         uniform sampler2D tSdf; uniform sampler2D tNoise; uniform vec2 uOrigin; uniform vec2 uSize; uniform float uTexel; uniform float uCell;
         uniform vec4 uApron; uniform vec4 uPuddle;
-        float gSd; float gApron; float gKerb; float gGutter; float gPud; float gWet;
+        float gSd; float gApron; float gKerb; float gGutter; float gPud; float gWet; float gCobbleLum;
         float sdfAt(vec2 p) { return texture2D(tSdf, (p - uOrigin) / uSize).r * ${SDF_RANGE.toFixed(1)} + (${SDF_MIN.toFixed(1)}); }
         float h21(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }`)
       .replace('#include <map_fragment>', `#include <map_fragment>
@@ -216,6 +220,7 @@ export function createGround(scene, { mesh, polys, bounds, onIsland, tramDist })
           vec2 suv = (gp - uOrigin) / uSize;
           bool inside = suv.x > 0.0 && suv.y > 0.0 && suv.x < 1.0 && suv.y < 1.0;
           gSd = inside ? sdfAt(gp) : 99.0;
+          gCobbleLum = dot(diffuseColor.rgb, vec3(0.299, 0.587, 0.114));
           // bruit : grandes taches (90 m), moyennes (23 m), fines (5,5 m), grain (1,3 m)
           float nL = texture2D(tNoise, gp / 90.0).r, nM = texture2D(tNoise, gp / 23.0 + 0.37).g, nF = texture2D(tNoise, gp / 5.5 + 0.61).b, nG = texture2D(tNoise, gp / 1.3).a;
           // rupture de la répétition des pavés : luminosité d'une seconde échelle, désalignée
@@ -223,6 +228,10 @@ export function createGround(scene, { mesh, polys, bounds, onIsland, tramDist })
           diffuseColor.rgb *= 0.78 + 0.5 * clamp(l2 * 1.6, 0.0, 1.0) * 0.8;
           // variation à grande échelle : plus clair / plus sombre, un peu plus chaud ou plus froid
           diffuseColor.rgb *= vec3(0.80 + 0.40 * nL) * mix(vec3(0.96, 1.0, 1.06), vec3(1.07, 1.0, 0.92), smoothstep(0.3, 0.7, nM));
+          // occlusion ambiante de contact au pied des murs et bordures (SDF) : ancre les immeubles au sol
+          float wallAo = mix(0.44, 1.0, smoothstep(0.0, 2.5, max(0.0, gSd)));
+          float gutterAo = 1.0 - 0.22 * exp(-pow((gSd - uApron.w) * 1.9, 2.0));
+          diffuseColor.rgb *= wallAo * gutterAo;
           // mousse au pied des murs
           float nearWall = 1.0 - smoothstep(0.4, 4.0, gSd);
           float moss = smoothstep(0.6, 0.8, nM * 0.6 + nF * 0.4) * nearWall * step(0.0, gSd);
@@ -236,19 +245,32 @@ export function createGround(scene, { mesh, polys, bounds, onIsland, tramDist })
           float openG = smoothstep(uApron.w, uApron.w + 0.6, gSd);
           float pd = smoothstep(uPuddle.x, uPuddle.y, pn + (nG - 0.5) * 0.04) * openG * (1.0 - gKerb);
           gPud = pd;
-          gWet = smoothstep(uPuddle.x - 0.07, uPuddle.y, pn) * openG;
-          diffuseColor.rgb *= 1.0 - 0.28 * gWet;           // pavé mouillé : plus sombre
+          gWet = smoothstep(uPuddle.x - 0.08, uPuddle.y, pn) * openG;
+          diffuseColor.rgb *= 1.0 - 0.30 * gWet;           // pavé mouillé : plus sombre
           diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * uPuddle.w, pd);
         }`)
       .replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>
+        // Pavés usés plus lisses au sommet, joints sablonneux mats
+        float stoneCrown = smoothstep(0.18, 0.46, gCobbleLum);
+        roughnessFactor = mix(0.95, 0.60, stoneCrown);
         roughnessFactor = mix(roughnessFactor, 0.5, gApron * 0.7);
-        roughnessFactor = mix(roughnessFactor, roughnessFactor * 0.72, gWet);
-        roughnessFactor = mix(roughnessFactor, 0.045, gPud);`)
+        roughnessFactor = mix(roughnessFactor, roughnessFactor * 0.58, gWet);
+        roughnessFactor = mix(roughnessFactor, 0.038, gPud);`)
       .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
-        vec3 waterNorm = nonPerturbedNormal + vec3(sin(vGPos.x * 5.0 + vGPos.z * 3.5) * 0.025, 0.0, cos(vGPos.z * 5.0 - vGPos.x * 3.5) * 0.025) * gPud;
-        normal = normalize(mix(normal, normalize(waterNorm), clamp(gApron * 0.85 + gKerb * 0.5 + gPud * 0.92, 0.0, 1.0)));`)
+        {
+          // Micro-relief directionnel des pavés (dérivées écran de la luminance des pierres)
+          float cDx = dFdx(gCobbleLum);
+          float cDy = dFdy(gCobbleLum);
+          vec3 vRight = normalize(dFdx(-vViewPosition.xyz) + vec3(1e-6));
+          vec3 vUp = normalize(dFdy(-vViewPosition.xyz) + vec3(1e-6));
+          vec3 cobbleN = normalize(normal - (vRight * cDx + vUp * cDy) * (3.2 * (1.0 - gPud)));
+          vec3 waterNorm = nonPerturbedNormal + vec3(sin(vGPos.x * 5.0 + vGPos.z * 3.5) * 0.022, 0.0, cos(vGPos.z * 5.0 - vGPos.x * 3.5) * 0.022) * gPud;
+          normal = normalize(mix(cobbleN, normalize(waterNorm), clamp(gApron * 0.85 + gKerb * 0.5 + gPud * 0.94, 0.0, 1.0)));
+        }`)
       .replace('#include <lights_fragment_end>', `#include <lights_fragment_end>
-        reflectedLight.indirectSpecular *= 1.0 + gPud * uPuddle.z;`);
+        float gNdv = clamp(dot(normal, normalize(vViewPosition)), 0.0, 1.0);
+        float gFres = 0.25 + 0.75 * pow(1.0 - gNdv, 3.5);
+        reflectedLight.indirectSpecular *= 1.0 + gPud * uPuddle.z * gFres + gWet * 0.45 * gFres;`);
   };
   mat.customProgramCacheKey = () => 'ground-v1';
   mat.needsUpdate = true;

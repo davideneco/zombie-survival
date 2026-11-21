@@ -61,6 +61,11 @@ const POST_FRAG = /* glsl */`
   precision highp float;
   uniform sampler2D tDiffuse; uniform sampler2D tLut; uniform float uGrade;
   uniform float uNvg; uniform float uTime;
+  uniform vec2 uInvSize; uniform float uSharpen;
+  #ifdef USE_AO
+  uniform sampler2D tAo; uniform float uAoStrength;
+  uniform sampler2D tDepth; uniform vec2 uNearFar; uniform vec3 uHazeCol; uniform float uHaze;
+  #endif
   #ifdef HALO
   uniform sampler2D tHalo; uniform float uHalo;
   #endif
@@ -75,8 +80,29 @@ const POST_FRAG = /* glsl */`
     return mix(a, d, f);
   }
   void main() {
-    // l'image est DÉJÀ tone-mappée (voir makePost) : conversion sRGB, puis table de couleurs
+    // l'image est DÉJÀ tone-mappée (voir makePost) : micro-netteté, SSAO, perspective atmosphérique, halo, sRGB, LUT
     vec4 base = texture2D(tDiffuse, vUv);
+    if (uSharpen > 0.001) {
+      vec3 n = texture2D(tDiffuse, vUv + vec2(0.0, uInvSize.y)).rgb;
+      vec3 s = texture2D(tDiffuse, vUv - vec2(0.0, uInvSize.y)).rgb;
+      vec3 e = texture2D(tDiffuse, vUv + vec2(uInvSize.x, 0.0)).rgb;
+      vec3 w = texture2D(tDiffuse, vUv - vec2(uInvSize.x, 0.0)).rgb;
+      vec3 blur4 = (n + s + e + w) * 0.25;
+      base.rgb = clamp(base.rgb + (base.rgb - blur4) * uSharpen, 0.0, 4.0);
+    }
+    #ifdef USE_AO
+    float ao = texture2D(tAo, vUv).r;
+    base.rgb *= mix(1.0, ao, uAoStrength);
+    if (uHaze > 0.001) {
+      float rawD = texture2D(tDepth, vUv).r;
+      if (rawD < 0.9994) {
+        float zNdc = rawD * 2.0 - 1.0;
+        float linZ = (2.0 * uNearFar.x * uNearFar.y) / (uNearFar.y + uNearFar.x - zNdc * (uNearFar.y - uNearFar.x));
+        float hf = smoothstep(38.0, 165.0, linZ) * uHaze;
+        base.rgb = mix(base.rgb, uHazeCol, hf);
+      }
+    }
+    #endif
     #ifdef HALO
     base.rgb += texture2D(tHalo, vUv).rgb * uHalo;
     #endif
@@ -93,6 +119,96 @@ const POST_FRAG = /* glsl */`
       nvg += vec3(0.26, 0.36, 0.22) * pow(clamp(amp, 0.0, 1.0), 3.4);
       gl_FragColor.rgb = mix(gl_FragColor.rgb, nvg, uNvg);
     }
+  }`;
+
+// SSAO demi-résolution (Haute) : spirale 10 échantillons à angle tournant, reconstruction de normale par dérivées de profondeur (sans halos sur les silhouettes)
+const SSAO_FRAG = /* glsl */`
+  precision highp float;
+  uniform sampler2D tDepth;
+  uniform vec2 uInvSize;
+  uniform vec2 uProjScale;
+  uniform vec2 uNearFar;
+  uniform float uRadius;
+  uniform float uBias;
+  varying vec2 vUv;
+  float linZ(float d) {
+    float z = d * 2.0 - 1.0;
+    return (2.0 * uNearFar.x * uNearFar.y) / (uNearFar.y + uNearFar.x - z * (uNearFar.y - uNearFar.x));
+  }
+  vec3 viewPos(vec2 uv, float d) {
+    float z = linZ(d);
+    return vec3((uv * 2.0 - 1.0) * uProjScale * z, -z);
+  }
+  void main() {
+    float d0 = texture2D(tDepth, vUv).r;
+    if (d0 >= 0.9992) { gl_FragColor = vec4(1.0); return; }
+    vec3 p = viewPos(vUv, d0);
+    float z = -p.z;
+    // Atténue l'AO sur l'arme en main (< 1 m) et à très grande distance (> 85 m)
+    float fade = smoothstep(0.65, 1.25, z) * (1.0 - smoothstep(65.0, 105.0, z));
+    if (fade < 0.01) { gl_FragColor = vec4(1.0); return; }
+    vec2 dxUv = vec2(uInvSize.x, 0.0), dyUv = vec2(0.0, uInvSize.y);
+    vec3 pL = viewPos(vUv - dxUv, texture2D(tDepth, vUv - dxUv).r);
+    vec3 pR = viewPos(vUv + dxUv, texture2D(tDepth, vUv + dxUv).r);
+    vec3 pD = viewPos(vUv - dyUv, texture2D(tDepth, vUv - dyUv).r);
+    vec3 pU = viewPos(vUv + dyUv, texture2D(tDepth, vUv + dyUv).r);
+    vec3 ddx = abs(pR.z - p.z) < abs(p.z - pL.z) ? (pR - p) : (p - pL);
+    vec3 ddy = abs(pU.z - p.z) < abs(p.z - pD.z) ? (pU - p) : (p - pD);
+    vec3 N = normalize(cross(ddx, ddy) + vec3(0.0, 0.0, 1e-6));
+    // Rayon projeté en UV (borné entre 2,5 px et 34 px pour éviter les sauts de cache)
+    float radUvY = clamp(uRadius / (z * uProjScale.y * 2.0), uInvSize.y * 2.5, uInvSize.y * 34.0);
+    vec2 radUv = vec2(radUvY * (uProjScale.y / uProjScale.x), radUvY);
+    float ang0 = fract(sin(dot(floor(gl_FragCoord.xy), vec2(12.9898, 78.233))) * 43758.5453) * 6.2831853;
+    float occ = 0.0;
+    for (int i = 0; i < 10; i++) {
+      float fi = (float(i) + 0.5) / 10.0;
+      float ang = ang0 + float(i) * 2.3999632; // angle d'or
+      vec2 off = vec2(cos(ang), sin(ang)) * radUv * (0.25 + 0.75 * fi);
+      vec2 suv = clamp(vUv + off, vec2(0.002), vec2(0.998));
+      float sd = texture2D(tDepth, suv).r;
+      if (sd >= 0.9992) continue;
+      vec3 sp = viewPos(suv, sd);
+      vec3 v = sp - p;
+      float dist2 = dot(v, v) + 1e-4;
+      float dist = sqrt(dist2);
+      float ndv = max(0.0, dot(N, v / dist) - uBias);
+      float att = smoothstep(uRadius * 2.1, uRadius * 0.12, dist);
+      occ += ndv * att;
+    }
+    float rawAo = clamp(1.0 - (occ / 10.0) * 4.2 * fade, 0.18, 1.0);
+    float ao = pow(rawAo, 1.25);
+    gl_FragColor = vec4(ao, ao, ao, 1.0);
+  }`;
+
+// Flou bilatéral séparable respectant les arêtes de profondeur (nettoyage de la spirale SSAO sans bavures)
+const AO_BLUR_FRAG = /* glsl */`
+  precision highp float;
+  uniform sampler2D tAo;
+  uniform sampler2D tDepth;
+  uniform vec2 uDir;
+  uniform vec2 uNearFar;
+  varying vec2 vUv;
+  float linZ(float d) {
+    float z = d * 2.0 - 1.0;
+    return (2.0 * uNearFar.x * uNearFar.y) / (uNearFar.y + uNearFar.x - z * (uNearFar.y - uNearFar.x));
+  }
+  void main() {
+    float d0 = texture2D(tDepth, vUv).r;
+    float ao0 = texture2D(tAo, vUv).r;
+    if (d0 >= 0.9992) { gl_FragColor = vec4(1.0); return; }
+    float z0 = linZ(d0);
+    float invTol = 1.0 / (z0 * 0.045 + 0.08);
+    float sum = ao0 * 0.28, wSum = 0.28;
+    for (int i = -2; i <= 2; i++) {
+      if (i == 0) continue;
+      vec2 suv = clamp(vUv + uDir * float(i), vec2(0.001), vec2(0.999));
+      float zi = linZ(texture2D(tDepth, suv).r);
+      float w = ((i == 1 || i == -1) ? 0.24 : 0.12) * exp(-abs(zi - z0) * invTol);
+      sum += texture2D(tAo, suv).r * w;
+      wSum += w;
+    }
+    float ao = sum / wSum;
+    gl_FragColor = vec4(ao, ao, ao, 1.0);
   }`;
 
 // Halo lumineux (Haute) : passe de seuil à demi-résolution (l'image est déjà tone-mappée : valeurs 0..1), flou gaussien séparable, ajout à l'image finale.
@@ -127,7 +243,7 @@ export function createGraphics({ renderer, scene, camera, hemi, moon, settings }
   // ------------------------------------------------------------ tone mapping
   api.setTone = (name = G().tone.type) => {
     api.tone = name;
-    renderer.toneMapping = TONES[name] ?? THREE.ACESFilmicToneMapping;
+    renderer.toneMapping = TONES[name] ?? THREE.AgXToneMapping;
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     scene.traverse((o) => { if (o.material) for (const m of [].concat(o.material)) m.needsUpdate = true; });
   };
@@ -137,18 +253,28 @@ export function createGraphics({ renderer, scene, camera, hemi, moon, settings }
     renderer.toneMappingExposure = G().tone.exposure * settings.brightness * api.zoneK.exposure * (1 + nvgK * (CONFIG.nvg?.exposureBoost || 0));
   };
 
-  // ------------------------------------------------------------ reflets d'ambiance (PMREM d'un petit ciel)
+  // ------------------------------------------------------------ reflets d'ambiance (PMREM d'un ciel enrichi)
   const pmrem = new THREE.PMREMGenerator(renderer);
   const envCanvas = document.createElement('canvas'); envCanvas.width = 512; envCanvas.height = 256;
   const buildEnv = (k = 0) => {
     const E = G().env, x = envCanvas.getContext('2d'), W = 512, H = 256;
     const gr = x.createLinearGradient(0, 0, 0, H);
-    gr.addColorStop(0, pickCss(E.top, k)); gr.addColorStop(0.42, pickCss(E.mid, k)); gr.addColorStop(0.5, pickCss(E.horizon, k)); gr.addColorStop(0.56, pickCss(E.ground, k)); gr.addColorStop(1, pickCss(E.ground, k));
+    gr.addColorStop(0, pickCss(E.top, k)); gr.addColorStop(0.38, pickCss(E.mid, k)); gr.addColorStop(0.49, pickCss(E.horizon, k)); gr.addColorStop(0.55, pickCss(E.ground, k)); gr.addColorStop(1, pickCss(E.ground, k));
     x.globalCompositeOperation = 'source-over'; x.fillStyle = gr; x.fillRect(0, 0, W, H);
     const glowK = 1 - sm(Math.min(1, k * 1.4)); // les lampadaires s'éteignent à l'aube
     const blob = (u, v, r, col, a) => { const g = x.createRadialGradient(u, v, 0, u, v, r); g.addColorStop(0, col.replace('A', a)); g.addColorStop(1, col.replace('A', 0)); x.fillStyle = g; x.fillRect(u - r, v - r, r * 2, r * 2); };
+    // Bande nuageuse claire + lobe solaire de jour pour des reflets crédibles dans les vitres et carrosseries
+    if (k > 0.15) {
+      const dayK = sm(Math.min(1, (k - 0.15) / 0.75));
+      for (let i = 0; i < 8; i++) {
+        const cu = ((i + 0.35 + Math.sin(i * 4.7) * 0.25) / 8) * W;
+        const cv = H * (0.28 + 0.12 * Math.cos(i * 3.1));
+        blob(cu, cv, 42 + (i % 3) * 18, 'rgba(255,252,245,A)', 0.42 * dayK);
+      }
+      blob(W * 0.62, H * (0.46 - 0.18 * dayK), 56, 'rgba(255,244,218,A)', 0.95 * dayK);
+    }
     if (glowK > 0.01) for (let i = 0; i < E.lamps; i++) { // lueurs sodium au ras de l'horizon, à des azimuts fixes
-      const u = ((i + 0.5 + Math.sin(i * 12.9898) * 0.3) / E.lamps) * W; blob(u, H * (0.5 + 0.02 * Math.sin(i * 7.1)), 28 + (i % 3) * 10, 'rgba(255,170,80,A)', E.lampStrength * glowK);
+      const u = ((i + 0.5 + Math.sin(i * 12.9898) * 0.3) / E.lamps) * W; blob(u, H * (0.5 + 0.02 * Math.sin(i * 7.1)), 30 + (i % 3) * 10, 'rgba(255,175,85,A)', E.lampStrength * glowK);
     }
     const mu = ((G().sky.moonAzimuth / (Math.PI * 2)) + 0.5) * W, mv = H * (0.5 - G().sky.moonElevation / Math.PI);
     const moonK = 1 - sm(Math.min(1, k / 0.35));
@@ -175,21 +301,49 @@ export function createGraphics({ renderer, scene, camera, hemi, moon, settings }
   const makePost = () => {
     const size = renderer.getDrawingBufferSize(new THREE.Vector2());
     const samples = Math.min(size.x * size.y > G().post.msaa2Pixels ? 2 : G().post.samples, renderer.capabilities.maxSamples); // écrans très grands : 2 échantillons (mémoire)
-    // Cible multi-échantillonnée en demi-flottants (précision dans les noirs). Astuce : `isXRRenderTarget` fait appliquer à CHAQUE matériau le tone
-    // mapping avant l'écriture (comme pour l'écran) : la résolution MSAA moyenne des valeurs déjà ramenées dans [0, 1]. Une cible HDR ordinaire
-    // moyennerait des valeurs > 1 AVANT le tone mapping et laisserait des « lucioles » blanches le long des arêtes très contrastées (bords de toits
-    // sur le ciel). La conversion sRGB et la table de couleurs viennent ensuite (passe finale).
-    const rt = new THREE.WebGLRenderTarget(size.x, size.y, { type: THREE.HalfFloatType, samples, depthBuffer: true, colorSpace: THREE.LinearSRGBColorSpace });
+    const AO = G().ao;
+    const useAo = !!(AO?.enabled && renderer.capabilities.isWebGL2);
+    const depthTex = useAo ? new THREE.DepthTexture(size.x, size.y, THREE.UnsignedIntType) : null;
+    if (depthTex) { depthTex.minFilter = depthTex.magFilter = THREE.NearestFilter; }
+    // Cible multi-échantillonnée en demi-flottants (précision dans les noirs) + résolution native du DepthTexture en WebGL2 (SSAO sans double géométrie)
+    const rt = new THREE.WebGLRenderTarget(size.x, size.y, { type: THREE.HalfFloatType, samples, depthBuffer: true, depthTexture: depthTex || undefined, colorSpace: THREE.LinearSRGBColorSpace });
     rt.isXRRenderTarget = true;
     const lut = buildLut();
     const H = G().halo, halo = H.enabled && settings.halo !== false && (api.level?.halo ?? true);
-    const mat = new THREE.RawShaderMaterial({ uniforms: { tDiffuse: { value: rt.texture }, tLut: { value: lut }, uGrade: { value: 1 }, uNvg: { value: 0 }, uTime: { value: 0 }, tHalo: { value: null }, uHalo: { value: H.intensity } }, defines: halo ? { HALO: 1 } : {}, vertexShader: POST_VERT, fragmentShader: POST_FRAG, depthTest: false, depthWrite: false });
-    api.post = { rt, mat, lut, quad: new FullScreenQuad(mat), w: size.x, h: size.y, halo: null };
+    const defines = {};
+    if (halo) defines.HALO = 1;
+    if (useAo) defines.USE_AO = 1;
+    const mat = new THREE.RawShaderMaterial({
+      uniforms: {
+        tDiffuse: { value: rt.texture }, tLut: { value: lut }, uGrade: { value: 1 }, uNvg: { value: 0 }, uTime: { value: 0 },
+        uInvSize: { value: new THREE.Vector2(1 / size.x, 1 / size.y) }, uSharpen: { value: G().post.sharpen ?? 0.14 },
+        tHalo: { value: null }, uHalo: { value: H.intensity },
+        tAo: { value: null }, uAoStrength: { value: AO?.strength ?? 0.72 },
+        tDepth: { value: depthTex }, uNearFar: { value: new THREE.Vector2(camera.near, camera.far) },
+        uHazeCol: { value: new THREE.Color(0x9ab4cc) }, uHaze: { value: G().post.haze ?? 0.18 },
+      },
+      defines, vertexShader: POST_VERT, fragmentShader: POST_FRAG, depthTest: false, depthWrite: false,
+    });
+    api.post = { rt, depthTex, mat, lut, quad: new FullScreenQuad(mat), w: size.x, h: size.y, halo: null, ao: null };
+    const hw = Math.max(2, Math.floor(size.x / 2)), hh = Math.max(2, Math.floor(size.y / 2));
+    const mkHalf = () => new THREE.WebGLRenderTarget(hw, hh, { type: THREE.UnsignedByteType, depthBuffer: false, minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, colorSpace: THREE.LinearSRGBColorSpace });
+    const raw = (frag, uniforms) => new THREE.RawShaderMaterial({ uniforms, vertexShader: POST_VERT, fragmentShader: frag, depthTest: false, depthWrite: false });
+    if (useAo) {
+      const a = mkHalf(), b = mkHalf();
+      const ssao = raw(SSAO_FRAG, {
+        tDepth: { value: depthTex }, uInvSize: { value: new THREE.Vector2(1 / hw, 1 / hh) },
+        uProjScale: { value: new THREE.Vector2(1, 1) }, uNearFar: { value: new THREE.Vector2(camera.near, camera.far) },
+        uRadius: { value: AO.radius ?? 1.35 }, uBias: { value: AO.bias ?? 0.035 },
+      });
+      const blur = raw(AO_BLUR_FRAG, {
+        tAo: { value: a.texture }, tDepth: { value: depthTex },
+        uDir: { value: new THREE.Vector2() }, uNearFar: { value: new THREE.Vector2(camera.near, camera.far) },
+      });
+      api.post.ao = { a, b, ssao, blur, qSsao: new FullScreenQuad(ssao), qBlur: new FullScreenQuad(blur), w: hw, h: hh };
+      mat.uniforms.tAo.value = a.texture;
+    }
     if (halo) {
-      const hw = Math.max(2, Math.floor(size.x / 2)), hh = Math.max(2, Math.floor(size.y / 2));
-      const mk = () => new THREE.WebGLRenderTarget(hw, hh, { type: THREE.UnsignedByteType, depthBuffer: false, minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, colorSpace: THREE.LinearSRGBColorSpace });
-      const a = mk(), b = mk();
-      const raw = (frag, uniforms) => new THREE.RawShaderMaterial({ uniforms, vertexShader: POST_VERT, fragmentShader: frag, depthTest: false, depthWrite: false });
+      const a = mkHalf(), b = mkHalf();
       const bright = raw(BRIGHT_FRAG, { tDiffuse: { value: rt.texture }, uThr: { value: new THREE.Vector2(H.threshold, H.knee) } });
       const blur = raw(BLUR_FRAG, { tDiffuse: { value: null }, uDir: { value: new THREE.Vector2() } });
       api.post.halo = { a, b, bright, blur, qBright: new FullScreenQuad(bright), qBlur: new FullScreenQuad(blur), w: hw, h: hh };
@@ -200,6 +354,9 @@ export function createGraphics({ renderer, scene, camera, hemi, moon, settings }
     if (!api.post) return;
     const h = api.post.halo;
     if (h) { h.a.dispose(); h.b.dispose(); h.bright.dispose(); h.blur.dispose(); h.qBright.dispose(); h.qBlur.dispose(); }
+    const ao = api.post.ao;
+    if (ao) { ao.a.dispose(); ao.b.dispose(); ao.ssao.dispose(); ao.blur.dispose(); ao.qSsao.dispose(); ao.qBlur.dispose(); }
+    api.post.depthTex?.dispose();
     api.post.rt.dispose(); api.post.mat.dispose(); api.post.lut.dispose(); api.post.quad.dispose(); api.post = null;
   };
   const wantPost = () => { // la passe finale ne sert qu'à l'étalonnage (Effets cinéma) ; pas sur les très grands écrans (mémoire de la cible MSAA)
@@ -239,7 +396,16 @@ export function createGraphics({ renderer, scene, camera, hemi, moon, settings }
 
   api.resize = () => {
     renderer.setSize(window.innerWidth, window.innerHeight);
-    if (api.post) { const s = renderer.getDrawingBufferSize(new THREE.Vector2()); api.post.rt.setSize(s.x, s.y); api.post.w = s.x; api.post.h = s.y; const h = api.post.halo; if (h) { h.w = Math.max(2, s.x >> 1); h.h = Math.max(2, s.y >> 1); h.a.setSize(h.w, h.h); h.b.setSize(h.w, h.h); } }
+    if (api.post) {
+      const s = renderer.getDrawingBufferSize(new THREE.Vector2());
+      api.post.rt.setSize(s.x, s.y); api.post.w = s.x; api.post.h = s.y;
+      api.post.mat.uniforms.uInvSize.value.set(1 / s.x, 1 / s.y);
+      const hw = Math.max(2, s.x >> 1), hh = Math.max(2, s.y >> 1);
+      const ao = api.post.ao;
+      if (ao) { ao.w = hw; ao.h = hh; ao.a.setSize(hw, hh); ao.b.setSize(hw, hh); ao.ssao.uniforms.uInvSize.value.set(1 / hw, 1 / hh); }
+      const h = api.post.halo;
+      if (h) { h.w = hw; h.h = hh; h.a.setSize(hw, hh); h.b.setSize(hw, hh); }
+    }
   };
 
   // ------------------------------------------------------------ monde (après sa construction)
@@ -341,6 +507,23 @@ export function createGraphics({ renderer, scene, camera, hemi, moon, settings }
     const P = api.post;
     renderer.setRenderTarget(P.rt);
     renderer.render(scene, camera);
+    const AO = P.ao;
+    if (AO) {
+      const tanHalfFov = Math.tan((camera.fov * Math.PI) / 360);
+      AO.ssao.uniforms.uProjScale.value.set(tanHalfFov * camera.aspect, tanHalfFov);
+      AO.ssao.uniforms.uNearFar.value.set(camera.near, camera.far);
+      AO.blur.uniforms.uNearFar.value.set(camera.near, camera.far);
+      P.mat.uniforms.uNearFar.value.set(camera.near, camera.far);
+      if (scene.fog?.color) P.mat.uniforms.uHazeCol.value.copy(scene.fog.color);
+      // 1) SSAO demi-résolution depuis le DepthTexture résolu
+      renderer.setRenderTarget(AO.a); AO.qSsao.render(renderer);
+      // 2) Flou bilatéral séparable (respecte les arêtes de profondeur)
+      AO.blur.uniforms.tAo.value = AO.a.texture; AO.blur.uniforms.uDir.value.set(1.5 / AO.w, 0);
+      renderer.setRenderTarget(AO.b); AO.qBlur.render(renderer);
+      AO.blur.uniforms.tAo.value = AO.b.texture; AO.blur.uniforms.uDir.value.set(0, 1.5 / AO.h);
+      renderer.setRenderTarget(AO.a); AO.qBlur.render(renderer);
+      P.mat.uniforms.tAo.value = AO.a.texture;
+    }
     const H = P.halo;
     if (H) { // halo : seuil -> flou horizontal -> flou vertical (demi-résolution), puis ajouté par la passe finale
       const R = G().halo.radius, au = 1 - G().halo.dawnFade * Math.min(1, api.skyK * 1.6);

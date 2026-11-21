@@ -72,7 +72,7 @@ function plinthGeometry() {
 // Origine : l'angle du mur au pied du motif ; les pierres s'étendent vers -x local (= le long du mur, depuis son point de départ) ; z vers l'extérieur
 function quoinGeometry() {
   const parts = [];
-  for (let i = 0; i < 4; i++) { const w = i % 2 ? 0.32 : 0.5; parts.push(boxFaces(w, 0.4, 0.04, -w / 2, i * 0.45 + 0.2, 0.02, [4, 2, 0, 1])); }
+  for (let i = 0; i < 4; i++) { const w = i % 2 ? 0.32 : 0.5; parts.push(boxFaces(w, 0.4, 0.04, -w / 2, i * 0.45 + 0.2, 0.02, [4, 2, 0])); }
   return merge(parts);
 }
 
@@ -236,9 +236,15 @@ export function createRelief() {
     update(px, pz) { api.px = px; api.pz = pz; api.apply(); },
     apply() {
       const r = api.range;
+      const qr = Math.min(r, 42); // chaînages d'angle de 4 cm : sous-pixel au-delà de 42 m
       for (const T of api.tiles) {
-        const vis = r > 0 && Math.hypot(T.cx - api.px, T.cz - api.pz) - T.half < r;
-        for (const m of T.meshes) if (m.visible !== vis) m.visible = vis;
+        const d = Math.hypot(T.cx - api.px, T.cz - api.pz) - T.half;
+        const vis = r > 0 && d < r;
+        const visQ = qr > 0 && d < qr;
+        for (const m of T.meshes) {
+          const want = m.name === 'relief:quoins' ? visQ : vis;
+          if (m.visible !== want) m.visible = want;
+        }
       }
     },
   };

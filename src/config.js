@@ -1091,31 +1091,31 @@ export const CONFIG = {
       { name: 'Haute', pixelRatio: 'device', shadows: true, softShadows: true, shadowSize: 2048, shadowEvery: 1, clouds: true, post: true, facade: 110, trees: 'cards+branches', particles: 1, decals: 64 },
     ],
     // tone mapping : 'aces' | 'agx' | 'neutral' ; exposition de base (multipliée par Luminosité des Options et par la zone)
-    tone: { type: 'aces', exposure: 1.05 },
+    tone: { type: 'agx', exposure: 0.96 },
     // lampe torche (player.js) : intensité renforcée pour bien voir de nuit, cône large et portée accrue
     torch: { intensity: 26, angle: 0.64, penumbra: 0.72, decay: 1.0, distance: 62, color: 0xfff0d6 },
     // armes (viewmodels.js) : chanfrein des boîtes (m), segments d'arrondi, usure des arêtes (gain de clarté, seuil), intensité des reflets d'ambiance
     weapons: { bevel: 0.0038, bevelSegments: 2, wear: 3.4, wearFrom: 0.05, env: 2.0 },
     // pieds de murs assombris (architecture.js, couleurs de sommet) : [hauteur au-dessus de la base (m), facteur de luminosité]
-    footAO: [[0, 0.5], [2.4, 1]],
+    footAO: [[0, 0.42], [2.8, 1]],
     // réglages par zone (nom de zone de sector.zones) : exposition, reflets d'ambiance, torche (multiplicateurs, lissés sur ~1/zoneBlend s)
     zoneBlend: 2.5,
     zones: {
       default: { exposure: 1, env: 1, torch: 1 },
-      'Intérieur de la Cathédrale': { exposure: 0.92, env: 0.3, torch: 1 }, // elle garde sa pénombre : peu de reflets d'ambiance
-      'Cathédrale': { exposure: 1, env: 0.8, torch: 1 },
+      'Intérieur de la Cathédrale': { exposure: 0.92, env: 0.25, torch: 1 }, // elle garde sa pénombre : peu de reflets d'ambiance
+      'Cathédrale': { exposure: 1, env: 0.85, torch: 1 },
     },
-    // reflets d'ambiance : ciel dessiné sur un canevas 256x128 (dégradés [nuit, aube, jour]) + lueurs sodium + lune, converti en PMREM
+    // reflets d'ambiance : ciel dessiné sur un canevas 512x256 (dégradés [nuit, aube, jour]) + lueurs sodium + lune/soleil, converti en PMREM
     env: {
-      enabled: true, intensity: 0.16, phaseIntensity: [1, 1.1, 1.25],
-      top: ['#0a1222', '#3a3660', '#5a8ad0'], mid: ['#22304a', '#9a7080', '#9cc0e8'], horizon: ['#4a3a2c', '#e0a070', '#d8e4f0'], ground: ['#141210', '#3a3028', '#5a5a52'],
-      lamps: 9, lampStrength: 0.6, moonStrength: 0.7,
+      enabled: true, intensity: 0.36, phaseIntensity: [0.85, 1.05, 1.35],
+      top: ['#0a1222', '#3a3660', '#3d74c8'], mid: ['#22304a', '#9a7080', '#8cb8e6'], horizon: ['#524030', '#e8a472', '#dce8f4'], ground: ['#12100e', '#322922', '#444038'],
+      lamps: 10, lampStrength: 0.75, moonStrength: 0.85,
     },
     // arbres (trees.js) : range = only the trees within this many m of the camera are drawn (rebuilt every `rebuild` m of camera travel) ; cartes de feuillage par arbre [Normale, Haute], taille des cartes (m), rayon et hauteur de la couronne (m), atlas (px), branches par arbre (Haute), amplitude du vent (m)
     trees: { range: 185, rebuild: 12, cards: [14, 24], cardSize: [2.1, 3.1], crownRadius: 2.3, crownHeight: 1.0, atlas: 512, branches: 5, sway: 0.035 },
     // sol (ground.js) : pixel du champ de distance aux façades (m), largeur du trottoir / de la bordure / du caniveau (m), hauteur d'une rangée de dalles (m),
     // flaques (seuil du bruit de ... à ..., gain des reflets, assombrissement), plaques d'égout (maille en m, probabilité par maille)
-    ground: { cell: 1, apron: 0.95, kerb: 0.16, gutter: 0.4, slab: 0.45, puddle: { from: 0.66, to: 0.72, reflect: 3.5, darken: 0.4 }, manholeGrid: 34, manholeChance: 0.9 },
+    ground: { cell: 1, apron: 0.95, kerb: 0.16, gutter: 0.4, slab: 0.45, puddle: { from: 0.66, to: 0.72, reflect: 2.6, darken: 0.38 }, manholeGrid: 34, manholeChance: 0.9 },
     // vitraux (cathedral.js, cath/) : intensité des taches de lumière colorée au sol (couleur de matériau, additive : la cathédrale garde sa pénombre)
     glass: { poolColor: 0x3c3c3c },
     // distance de coupure des détails (detailCull.js, tous les 0,25 s) : tuiles de bâtiments, machines, armes murales, bornes au-delà de fog / densité du brouillard m
@@ -1129,17 +1129,19 @@ export const CONFIG = {
     // props instanciés qui projettent une ombre (seule leur première pièce : carrosserie, toit…) ; les autres sont trop petits pour valoir un appel de dessin dans la passe d'ombres
     propShadows: ['car', 'chalet', 'kiosk', 'column', 'statue', 'fountain'],
     // ombres de contact : tache sous chaque objet / arbre (fixe) et sous les zombies, coéquipiers, véhicules (mobiles, à moins de maxDist m)
-    contact: { enabled: true, opacity: 0.8, dynamicMax: 160, maxDist: 45, zombie: 0.55, vehicle: 0.5, tree: 0.55 },
+    contact: { enabled: true, opacity: 0.85, dynamicMax: 160, maxDist: 45, zombie: 0.58, vehicle: 0.55, tree: 0.58 },
     // ciel : lune (élévation et azimut en rad, rayon angulaire), nuages
     sky: { moonElevation: 0.72, moonAzimuth: 0.53, moonSize: 0.034, cloudCover: 1, cloudNight: '#26344e' },
-    // Haute : rendu dans une cible multi-échantillonnée (samples) + passe finale (tone mapping + table de couleurs) ; désactivable ici
+    // Haute : rendu dans une cible multi-échantillonnée (samples) + passe finale (SSAO, halo, étalonnage LUT, netteté) ; désactivable ici
     // (au-delà de maxPixels : rendu direct sans étalonnage, la cible multi-échantillonnée coûterait trop de mémoire ; au-delà de msaa2Pixels : 2 échantillons)
-    post: { enabled: true, samples: 4, msaa2Pixels: 2400000, maxPixels: 4300000 },
+    post: { enabled: true, samples: 4, msaa2Pixels: 2400000, maxPixels: 4300000, sharpen: 0.14, haze: 0.18 },
+    // occlusion ambiante en espace écran (SSAO demi-résolution, Haute uniquement, depuis le DepthTexture natif : 0 appel géométrique de plus)
+    ao: { enabled: true, strength: 0.82, radius: 1.85, bias: 0.022 },
     // halo lumineux (Haute seulement, graphics.js) : seuil et adoucissement sur l'image tone-mappée (0..1), intensité, rayon du flou (texels à demi-résolution),
     // atténuation à l'Aube (le ciel clair ne doit pas voiler l'écran). Désactivable dans Options (« Halo lumineux ») ; cibles RGBA8 à demi-résolution.
-    halo: { enabled: true, threshold: 0.62, knee: 0.15, intensity: 0.85, radius: 1.8, dawnFade: 0.85 },
+    halo: { enabled: true, threshold: 0.64, knee: 0.16, intensity: 0.85, radius: 1.8, dawnFade: 0.82 },
     // étalonnage (table de couleurs 32^3, Haute + « Effets cinéma ») : contraste en S (0..1), saturation, teintes des ombres / hautes lumières
-    grade: { contrast: 0.45, saturation: 0.92, shadows: [0, 0.012, 0.03], highlights: [0.03, 0.012, -0.02] },
+    grade: { contrast: 0.36, saturation: 0.96, shadows: [-0.008, 0.006, 0.024], highlights: [0.024, 0.012, -0.014] },
   },
 
   // Système de compte, expérience et grades de carrière (src/account.js, server/accounts.mjs)

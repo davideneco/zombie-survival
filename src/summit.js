@@ -19,18 +19,18 @@ const cl01 = (x) => Math.max(0, Math.min(1, x));
 
 // Réglages du ciel à trois instants : nuit (k = 0), aube dorée (k = 0,5), plein jour (k = 1)
 const SKY = {
-  bg: [0x070b12, 0x6a5058, 0x9ec8f0],
-  fog: [0x0b121c, 0xc88a68, 0xbcd4e8],
-  density: [0.019, 0.016, 0.011],
-  hemiSky: [0x6677aa, 0xd4a888, 0xcfe2ff],
-  hemiGround: [0x222018, 0x5a4a3a, 0x6a6458],
-  hemi: [1.1, 1.5, 1.9],
-  sun: [0x9fb4ff, 0xffb070, 0xfff0d8],
-  sunI: [1.4, 1.8, 2.6],
-  sunPos: [[25, 55, 15], [70, 22, 10], [35, 60, 15]],
-  domeTop: ['#04070d', '#2a2f5a', '#3f78c8'],
-  domeMid: ['#0c1522', '#b8706a', '#7fb2e8'],
-  domeBot: ['#1b2535', '#f3b074', '#c9e0f4'],
+  bg: [0x070b12, 0x6a5058, 0x7cb0e0],
+  fog: [0x0b121c, 0xc88a68, 0xa2c0da],
+  density: [0.019, 0.0155, 0.010],
+  hemiSky: [0x586ea8, 0xc29072, 0x8cb8eb],
+  hemiGround: [0x181612, 0x382c22, 0x35302a],
+  hemi: [0.80, 0.72, 0.68],
+  sun: [0x9fb4ff, 0xffa658, 0xffeed0],
+  sunI: [1.45, 2.35, 3.10],
+  sunPos: [[25, 55, 15], [70, 22, 10], [46, 48, 20]],
+  domeTop: ['#04070d', '#242c58', '#2258ac'],
+  domeMid: ['#0c1522', '#b46860', '#649cdc'],
+  domeBot: ['#1b2535', '#f0a868', '#bad6ee'],
 };
 
 export function installSummit(game, { world, scene, hud, sfx, fx, hemi, moon, moonOffset, camera }) {
